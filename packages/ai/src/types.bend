@@ -1,11 +1,12 @@
 import Base
 import ../../runtime/src/f64.bend as Number
 import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/record.bend as Record
 import ./utils/diagnostics.bend as Diagnostics
 
 # Source: pi-mono packages/ai/src/types.ts, revision 46c9de402.
-# This module remains partial: Model, system/transcript/schema contracts and
-# provider options remain open. Opaque record payloads use explicit generics.
+# This module remains partial: Model, schema constraints and provider options
+# remain open. Opaque record payloads use explicit generics.
 # JavaScript number fields use binary64; optional fields use Maybe.
 
 # Upstream permits arbitrary extension identifiers as well as known literals.
@@ -51,17 +52,14 @@ type ModelCost is Data:
   ModelCost{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, tiers: Maybe<&2, List<&2, ModelCostTier>>}
 
 # Only explicitly JSON-valued upstream fields use this recursive value type.
-# Objects retain their field order; codecs must enforce object-key semantics.
-type JsonProperty<-Value: Data> is Data:
-  JsonProperty{key: String, value: Value}
-
+# Own string property ordering is provided by the runtime Record type.
 type JsonValue is Data:
   JsonNull{}
   JsonBoolean{value: Bool}
   JsonNumber{value: Number.F64}
   JsonString{value: String}
   JsonArray{values: List<&2, JsonValue>}
-  JsonObject{fields: List<&2, JsonProperty<JsonValue>>}
+  JsonObject{fields: Record.Record<JsonValue>}
 
 type DeferredHandle is Data:
   DeferredHandle{provider: String, modelId: String, api: String, id: String, expiresAt: Maybe<&2, Number.F64>, pollAfterMs: Maybe<&2, Number.F64>, data: Maybe<&2, JsonValue>}
@@ -142,3 +140,54 @@ type ImagesContext is Data:
 
 type AssistantImages is Data:
   AssistantImages{api: ImagesApi(), provider: ImagesProviderId(), model: String, output: List<&2, ImagesOutputContent()>, responseId: Maybe<&2, String>, usage: Maybe<&2, Usage>, stopReason: ImagesStopReason, errorMessage: Maybe<&2, String>, timestamp: Number.F64}
+
+
+# Tool schema values retain their concrete type. The TypeBox-equivalent schema
+# kind/validation relationship is still pending; this is not an untyped JSON tool.
+type GrammarFormat is Data:
+  OpenAILark{}
+  OpenAIRegex{}
+
+type GrammarVariants is Data:
+  GrammarVariants{openai_lark: Maybe<&2, String>, openai_regex: Maybe<&2, String>}
+
+type SamplingStrictness is Data:
+  Prefer{}
+  Require{}
+
+type ConstrainedSamplingConfig is Data:
+  JsonSchemaSampling{strict: SamplingStrictness}
+  GrammarSampling{variants: GrammarVariants}
+
+# Absent, explicitly false, and a supplied configuration are distinct.
+type ToolConstrainedSampling is Data:
+  SamplingDisabled{}
+  SamplingConfigured{config: ConstrainedSamplingConfig}
+
+type Tool<-Parameters: Data> is Data:
+  Tool{name: String, description: String, parameters: Parameters, constrainedSampling: Maybe<&2, ToolConstrainedSampling>}
+
+type ToolReference is Data:
+  ToolReference{name: String}
+
+type SystemContent is Data:
+  SystemText{value: String}
+  SystemBlocks{values: List<&2, TextContent>}
+
+type SystemMessage<-Parameters: Data> is Data:
+  SystemMessage{content: SystemContent, sections: Maybe<&2, Record.Record<Maybe<&2, String>>>, toolsAdded: Maybe<&2, List<&2, Ref.Ref<Tool<Parameters>>>>, toolsRemoved: Maybe<&2, List<&2, ToolReference>>, timestamp: Number.F64}
+
+type Message<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
+  System{value: Ref.Ref<SystemMessage<Parameters>>}
+  User{value: Ref.Ref<UserMessage>}
+  Assistant{value: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
+  ToolResult{value: Ref.Ref<ToolResultMessage<ToolDetails>>}
+
+type Context<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
+  Context{systemPrompt: Maybe<&2, String>, messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>, tools: Maybe<&2, List<&2, Ref.Ref<Tool<Parameters>>>>}
+
+# Nominally distinct from raw Context: provider APIs can require normalization.
+# As with an upstream type assertion, explicitly constructing this wrapper is
+# possible, but an unnormalized Context cannot be passed implicitly.
+type TranscriptContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
+  TranscriptContext{messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>}

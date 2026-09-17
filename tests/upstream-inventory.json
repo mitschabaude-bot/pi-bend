@@ -1107,9 +1107,12 @@
     },
     {
       "source": "packages/ai/test/system-message-replay.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2c608b26f7608ba608c652ea8f6daee8916a4562b971a30972b556906480544a"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/system-message-replay.bend"
+      ],
+      "sha256": "2c608b26f7608ba608c652ea8f6daee8916a4562b971a30972b556906480544a",
+      "notes": "Two of nine named cases ported: renders complete prompts and framed updates; normalizes the legacy prompt and tool fields into a leading system message. All original assertions in those cases pass; seven replay/declaration-change cases remain pending. EmptyObject is an opaque typed fixture for Type.Object({}), not an implemented schema validator. Supplemental retained-message identity and text/record tests are tracked separately."
     },
     {
       "source": "packages/ai/test/telemetry-options.test.ts",
