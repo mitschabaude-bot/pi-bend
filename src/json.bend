@@ -20,6 +20,9 @@ def comma(rest: String) -> String:
 def hex(+n: U32) -> Char:
   Char.from_u32(Bool.pick(U32, U32.is_lt(n, 10), (48 + n : U32), (87 + n : U32)))
 
+def escape_hex(+c: U32) -> String:
+  "\\u" ++ SCon{hex((c / 4096 : U32)), SCon{hex(((c / 256) % 16 : U32)), SCon{hex(((c / 16) % 16 : U32)), SCon{hex((c % 16 : U32)), SNil{}}}}}
+
 def escape_code(+c: U32) -> String:
   match c:
     case 34: "\\\""
@@ -29,7 +32,7 @@ def escape_code(+c: U32) -> String:
     case 10: "\\n"
     case 12: "\\f"
     case 13: "\\r"
-    case _: Bool.pick(String, U32.is_lt(c, 32), "\\u00" ++ SCon{hex((c / 16 : U32)), SCon{hex((c % 16 : U32)), SNil{}}}, SCon{Char.from_u32(c), SNil{}})
+    case _: Bool.pick(String, U32.is_lt(c, 32) || (U32.is_ge(c, 55296) && U32.is_le(c, 57343)), escape_hex(c), SCon{Char.from_u32(c), SNil{}})
 
 def escape(s: String) -> String:
   match s:
@@ -134,8 +137,13 @@ type StrStep is Data:
   Stop{out: String}
   Invalid{}
 
-def finish_hex(+code: U32, +out: String) -> StrStep:
-  Bool.pick(StrStep, U32.is_ge(code, 55296) && U32.is_le(code, 56319), More{SurSlash{code}, out}, Bool.pick(StrStep, U32.is_ge(code, 56320) && U32.is_le(code, 57343), Invalid{}, More{Plain{}, SCon{Chr{code}, out}}))
+def finish_hex(+code: U32, out: String) -> StrStep:
+  match out:
+    case SNil{}: More{Plain{}, SCon{Chr{code}, SNil{}}}
+    case SCon{+previous, +rest}:
+      +high = Char.to_u32(previous)
+      +paired = U32.is_ge(high, 55296) && U32.is_le(high, 56319) && U32.is_ge(code, 56320) && U32.is_le(code, 57343)
+      More{Plain{}, Bool.pick(String, paired, SCon{Chr{(65536 + (high - 55296) * 1024 + code - 56320 : U32)}, rest}, SCon{Chr{code}, SCon{previous, rest}})}
 
 def string_step(st: StrState, +c: U32, out: String) -> StrStep:
   match st c:
