@@ -43,6 +43,8 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - Raw/normalized contexts, system messages and generic tool declarations now have canonical types. Context normalization, prompt rendering, system replay and collapse pass six of nine upstream replay-suite cases, plus native separator/ordering/identity and transport-tool regressions. Own-property records and insertion-ordered maps each pass 50 JavaScript differential mutation sequences. Declaration comparison, schema validation and custom-role integration remain pending.
 
+- Exact unsigned arbitrary-precision arithmetic now passes 179 independent vectors plus power and input cases, including values needed for extreme binary64 exponents. Integer decimal parsing/formatting is implemented in pure Bend. Shortest binary64 formatting and schema declaration serialization/comparison remain pending.
+
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
 
 The final port must replace the prototype libcurl/ICU/custom C dependencies with pure Bend implementations and missing Bend primitives. Bootstrap demonstrations above do not satisfy this requirement. `scripts/build-pure.sh` compiles canonical Bend tests without prototype effects, generated-entry-point patching, libcurl or ICU.
