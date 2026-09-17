@@ -1,0 +1,5 @@
+build/
+vendor/
+*.o
+__pycache__/
+.pi/
