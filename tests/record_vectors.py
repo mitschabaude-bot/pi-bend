@@ -23,10 +23,12 @@ for _ in range(48):
 oracle = '''const cases = JSON.parse(process.argv[1]);
 console.log(JSON.stringify(cases.map(ops => {
   const value = Object.create(null);
+  const map = new Map();
   for (const [op,key,item] of ops) {
-    if (op === 'set') value[key] = item; else delete value[key];
+    if (op === 'set') { value[key] = item; map.set(key,item); }
+    else { delete value[key]; map.delete(key); }
   }
-  return Object.entries(value);
+  return {record:Object.entries(value), map:[...map.entries()]};
 })));'''
 expected = json.loads(subprocess.check_output(
     ['node', '-e', oracle, json.dumps(sequences)], text=True))
@@ -39,6 +41,7 @@ def bend_list(items):
 
 source = '''import Base
 import ../packages/runtime/src/record.bend as R
+import ../packages/runtime/src/ordered-map.bend as M
 
 type Operation is Data:
   Set{key: String, value: U32}
@@ -49,6 +52,12 @@ def apply(operations: List<&2, Operation>, record: R.Record<U32>) -> R.Record<U3
     case Nil{}: record
     case Set{key, value} <> rest: apply(rest, R.set(U32, record, key, value))
     case Delete{key} <> rest: apply(rest, R.remove(U32, record, key))
+
+def applyMap(operations: List<&2, Operation>, map: M.OrderedMap<U32>) -> M.OrderedMap<U32>:
+  match operations:
+    case Nil{}: map
+    case Set{key, value} <> rest: applyMap(rest, M.set(U32, map, key, value))
+    case Delete{key} <> rest: applyMap(rest, M.remove(U32, map, key))
 
 def equal(actual: List<&2, R.Property<U32>>, expected: List<&2, R.Property<U32>>) -> Bool:
   match actual expected:
@@ -68,9 +77,11 @@ def main() -> IO(Unit):
 for operations, result in zip(sequences, expected, strict=True):
     ops = bend_list([f'Set{{{string(op[1])}, {op[2]}}}' if op[0] == 'set'
                      else f'Delete{{{string(op[1])}}}' for op in operations])
-    props = bend_list([f'R.Property{{{string(key)}, {value}}}' for key, value in result])
+    props = bend_list([f'R.Property{{{string(key)}, {value}}}' for key, value in result['record']])
     source += f'    assertion(equal(R.entries(U32, apply({ops}, R.new(U32))), {props}))\n'
-source += f'    IO.print("record: {len(sequences)} JavaScript differential sequences passed")\n'
+    map_props = bend_list([f'R.Property{{{string(key)}, {value}}}' for key, value in result['map']])
+    source += f'    assertion(equal(M.entries(U32, applyMap({ops}, M.new(U32))), {map_props}))\n'
+source += f'    IO.print("record and ordered map: {len(sequences)} JavaScript differential sequences each passed")\n'
 entry = BUILD / 'record-vectors.bend'
 entry.write_text(source)
 subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/record-vectors'], cwd=ROOT, check=True)
