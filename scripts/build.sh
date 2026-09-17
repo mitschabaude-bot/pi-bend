@@ -16,4 +16,5 @@ else
   CURL_LIBS=-l:libcurl.so.4
 fi
 # pkg-config returns compiler word lists, intentionally split here.
-"${CC:-clang}" -std=c11 "${PI_BEND_OPT:--O1}" -g $CURL_CFLAGS "$OUTPUT.c" -lpthread -lm $CURL_LIBS -o "$OUTPUT"
+ICU_FLAGS=$(pkg-config --cflags --libs icu-uc icu-i18n)
+"${CC:-clang}" -std=c11 "${PI_BEND_OPT:--O1}" -g $CURL_CFLAGS "$OUTPUT.c" -lpthread -lm $CURL_LIBS $ICU_FLAGS -o "$OUTPUT"

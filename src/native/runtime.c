@@ -7,6 +7,11 @@
 #include <termios.h>
 #include <signal.h>
 #include <dirent.h>
+#include <unicode/ubrk.h>
+#include <unicode/utext.h>
+#include <unicode/uchar.h>
+#include <unicode/ustring.h>
+#include <unicode/utf8.h>
 
 typedef struct {
   char *data;
@@ -98,6 +103,88 @@ static int pb_parents(const char *path) {
 
 static void pb_num(PbBuffer *b, long long n) {
   char s[32]; int k = snprintf(s, sizeof s, "%lld", n); pb_add(b, s, (size_t)k);
+}
+
+static void pb_json_string(PbBuffer *b, const char *text, size_t n) {
+  pb_add(b, "\"", 1);
+  for (size_t i = 0; i < n; ++i) {
+    unsigned char c = (unsigned char)text[i];
+    if (c == '"' || c == '\\') { pb_add(b, "\\", 1); pb_add(b, &c, 1); }
+    else if (c < 32) { char escaped[7]; snprintf(escaped, sizeof escaped, "\\u%04x", c); pb_add(b, escaped, 6); }
+    else pb_add(b, &c, 1);
+  }
+  pb_add(b, "\"", 1);
+}
+
+static bool pb_spacing_mark(UChar32 c) {
+  return (u_charType(c) == U_COMBINING_SPACING_MARK && c != 0x1734 && c != 0x302e && c != 0x302f)
+    || c == 0x65f || c == 0xf7f || c == 0x102b || c == 0x102c || c == 0x1031
+    || (c >= 0x1033 && c <= 0x1035) || c == 0x1038 || (c >= 0x103a && c <= 0x103e);
+}
+
+static bool pb_mark(UChar32 c) {
+  int t = u_charType(c);
+  return t == U_NON_SPACING_MARK || t == U_COMBINING_SPACING_MARK || t == U_ENCLOSING_MARK;
+}
+
+static bool pb_nonprinting(UChar32 c) {
+  int t = u_charType(c);
+  return pb_mark(c) || t == U_CONTROL_CHAR || t == U_FORMAT_CHAR || t == U_SURROGATE
+    || u_hasBinaryProperty(c, UCHAR_DEFAULT_IGNORABLE_CODE_POINT);
+}
+
+static int pb_east_width(UChar32 c) {
+  int w = u_getIntPropertyValue(c, UCHAR_EAST_ASIAN_WIDTH);
+  return w == U_EA_WIDE || w == U_EA_FULLWIDTH ? 2 : 1;
+}
+
+/* pi's width policy, using ICU for Unicode properties and RGI sequences. */
+static int pb_cluster_width(const char *text, int32_t len) {
+  if (len == 1 && *text == '\t') return 3;
+  bool all_spacing = true; int count = 0;
+  for (int32_t i = 0; i < len;) { UChar32 c; U8_NEXT(text, i, len, c); ++count; if (!pb_spacing_mark(c)) all_spacing = false; }
+  if (all_spacing) return count;
+  UErrorCode err = U_ZERO_ERROR; UChar *utf16 = io_mem(malloc(((size_t)len + 1) * sizeof(UChar))); int32_t ulen;
+  u_strFromUTF8(utf16, len + 1, &ulen, text, len, &err);
+  bool emoji = U_SUCCESS(err) && u_stringHasBinaryProperty(utf16, ulen, UCHAR_RGI_EMOJI);
+  free(utf16);
+  if (emoji) return 2;
+  int width = 0; bool base = false, follows_mark = false;
+  for (int32_t i = 0; i < len;) {
+    UChar32 c; U8_NEXT(text, i, len, c);
+    if (!base) {
+      if (pb_nonprinting(c)) continue;
+      if (c >= 0x1f1e6 && c <= 0x1f1ff) return 2;
+      width = pb_east_width(c); base = true;
+    } else if (pb_spacing_mark(c)) { width++; follows_mark = false; }
+    else if (pb_mark(c)) follows_mark = true;
+    else if (!pb_nonprinting(c)) {
+      if (follows_mark || (c >= 0xff00 && c <= 0xffef)) width += pb_east_width(c);
+      else if (c == 0xe33 || c == 0xeb3) width++;
+      follows_mark = false;
+    }
+  }
+  return width;
+}
+
+static void pb_segments(PbCall *c) {
+  UErrorCode error = U_ZERO_ERROR;
+  UText *text = utext_openUTF8(NULL, c->a, (int64_t)c->alen, &error);
+  UBreakIterator *iter = ubrk_open(c->n ? UBRK_WORD : UBRK_CHARACTER, "en", NULL, 0, &error);
+  if (U_FAILURE(error)) { c->error = EINVAL; if (text) utext_close(text); if (iter) ubrk_close(iter); return; }
+  ubrk_setUText(iter, text, &error);
+  if (U_FAILURE(error)) { c->error = EINVAL; ubrk_close(iter); utext_close(text); return; }
+  pb_add(&c->out, "[", 1);
+  int32_t start = ubrk_first(iter), end;
+  while ((end = ubrk_next(iter)) != UBRK_DONE) {
+    if (start) pb_add(&c->out, ",", 1);
+    pb_add(&c->out, "{\"text\":", 8); pb_json_string(&c->out, c->a + start, end - start);
+    pb_add(&c->out, ",\"width\":", 9); pb_num(&c->out, pb_cluster_width(c->a + start, end - start));
+    pb_add(&c->out, ",\"word\":", 8); pb_add(&c->out, ubrk_getRuleStatus(iter) >= UBRK_WORD_NUMBER ? "true}" : "false}", ubrk_getRuleStatus(iter) >= UBRK_WORD_NUMBER ? 5 : 6);
+    start = end;
+  }
+  pb_add(&c->out, "]", 1);
+  ubrk_close(iter); utext_close(text);
 }
 
 static PbStream *pb_handle(const char *id) {
@@ -351,6 +438,14 @@ static void pb_dispatch(IoWork *w) {
     if (c->error) unlink(tmp);
     free(tmp); break;
   }
+  case 46: {
+    struct timespec now; struct tm utc; char text[40];
+    clock_gettime(CLOCK_REALTIME, &now); gmtime_r(&now.tv_sec, &utc);
+    size_t n = strftime(text, sizeof text, "%Y-%m-%dT%H:%M:%S", &utc);
+    snprintf(text + n, sizeof text - n, ".%03ldZ", now.tv_nsec / 1000000);
+    pb_add(&c->out, text, strlen(text)); break;
+  }
+  case 50: pb_segments(c); break;
   default: c->error = ENOSYS;
   }
 }

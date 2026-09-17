@@ -2,6 +2,10 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
+if ! pkg-config --exists icu-uc icu-i18n; then
+  echo "ICU development libraries are required (Debian/Ubuntu: libicu-dev)." >&2
+  exit 1
+fi
 if pkg-config --exists libcurl; then
   exit 0
 fi

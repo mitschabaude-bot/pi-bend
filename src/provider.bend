@@ -7,6 +7,7 @@ import ./auth.bend as A
 
 type EventKind is Data:
   TextDelta{}
+  OutputDone{}
   Completed{}
   Failed{}
   Other{}
@@ -18,16 +19,43 @@ type Scan is Data:
   Scan{parser: S.State, outcome: Outcome}
 
 def event_kind(+kind: String) -> EventKind:
-  Bool.pick(EventKind, String.eq(kind, "response.output_text.delta"), TextDelta{}, Bool.pick(EventKind, String.eq(kind, "response.completed") || String.eq(kind, "response.done"), Completed{}, Bool.pick(EventKind, String.eq(kind, "error") || String.eq(kind, "response.failed") || String.eq(kind, "protocol_error") || String.eq(kind, "response.incomplete"), Failed{}, Other{})))
+  Bool.pick(EventKind, String.eq(kind, "response.output_text.delta"), TextDelta{}, Bool.pick(EventKind, String.eq(kind, "response.output_item.done"), OutputDone{}, Bool.pick(EventKind, String.eq(kind, "response.completed") || String.eq(kind, "response.done"), Completed{}, Bool.pick(EventKind, String.eq(kind, "error") || String.eq(kind, "response.failed") || String.eq(kind, "protocol_error") || String.eq(kind, "response.incomplete"), Failed{}, Other{}))))
+
+def add_item(out: Outcome, item: J.Json) -> Outcome:
+  match out:
+    case Outcome{+response, error, done}: Outcome{J.set(response, "output", J.Array{J.append(J.array(J.get(response, "output")), J.Item{item, J.End{}})}), error, done}
+
+def completed_output(items: J.Json, +response: J.Json) -> J.Json:
+  match items:
+    case J.End{}: response
+    case _: J.set(response, "output", J.Array{items})
+
+def completed(out: Outcome, response: J.Json) -> Outcome:
+  match out:
+    case Outcome{prior, error, done}: Outcome{completed_output(J.array(J.get(prior, "output")), response), error, True{}}
+
+def event_error(+event: J.Json) -> String:
+  +nested = J.get(J.get(event, "response"), "error")
+  +message = U.field(nested, "message")
+  Bool.pick(String, String.is_empty(message), "Provider error: " ++ U.field(event, "message"), U.field(nested, "code") ++ ": " ++ message)
+
+def text_started(out: Outcome) -> Outcome:
+  match out:
+    case Outcome{response, error, done}: Outcome{J.set(response, "_pi_bend_text_started", J.Boolean{True{}}), error, done}
+
+def failed(out: Outcome, error: String) -> Outcome:
+  match out:
+    case Outcome{response, _, _}: Outcome{response, error, False{}}
 
 def handle_event(kind: EventKind, +event: J.Json, out: Outcome) -> IO(Outcome):
   match kind:
     case TextDelta{}:
       do IO<Outcome>:
         IO.write(U.field(event, "delta"))
-        return out
-    case Completed{}: IO.pure(Outcome, Outcome{J.get(event, "response"), "", True{}})
-    case Failed{}: IO.pure(Outcome, Outcome{J.Null{}, "Provider stream failed: " ++ J.encode(event), False{}})
+        return text_started(out)
+    case OutputDone{}: IO.pure(Outcome, add_item(out, J.get(event, "item")))
+    case Completed{}: IO.pure(Outcome, completed(out, J.get(event, "response")))
+    case Failed{}: IO.pure(Outcome, failed(out, event_error(event)))
     case Other{}: IO.pure(Outcome, out)
 
 def events(xs: J.Json, out: Outcome) -> IO(Outcome):
@@ -70,6 +98,35 @@ def receive(+handle: String) -> IO(J.Json):
     closed : String <- N.close(handle)
     finish_outcome(out, status)
 
+def mark_http(out: Outcome, +status: String) -> Outcome:
+  match out:
+    case Outcome{response, SNil{}, False{}}: Outcome{response, "Provider stream ended without completion (HTTP " ++ status ++ ")", False{}}
+    case _: out
+
+def receive_outcome(+handle: String) -> IO(Outcome):
+  do IO<Outcome>:
+    first : Result<&1, &1, U32 & String, String> <- N.next(handle)
+    out : Outcome <- stream_loop(U32.to_nat(1048576), first, handle, Scan{S.empty(), Outcome{J.Null{}, "", False{}}})
+    status : String <- N.status(handle)
+    closed : String <- N.close(handle)
+    return mark_http(out, status)
+
+def retryable(out: Outcome) -> Bool:
+  match out:
+    case Outcome{J.Null{}, +error, False{}}: String.contains(error, "overloaded") || String.contains(error, "HTTP 429") || String.contains(error, "HTTP 500") || String.contains(error, "HTTP 502") || String.contains(error, "HTTP 503") || String.contains(error, "HTTP 504")
+    case _: False{}
+
+def attempts(fuel: Nat, again: Bool, out: Outcome, +url: String, +headers: String, +body: String, +delay: U32) -> IO(J.Json):
+  match fuel again:
+    case 0n _: finish_outcome(out, "unknown")
+    case 1n+n False{}: finish_outcome(out, "unknown")
+    case 1n+n True{}:
+      do IO<J.Json>:
+        IO.sleep(delay)
+        handle : String <- N.http(url, headers, body, U32.to_nat(600000))
+        +next : Outcome <- receive_outcome(handle)
+        attempts(n, retryable(next), next, url, headers, body, Bool.pick(U32, U32.is_eq(delay, 0), 1000, (delay * 2 : U32)))
+
 def request_body(model: String, instructions: String, input: J.Json, tools: J.Json, session: String, effort: String) -> J.Json:
   base = J.str_field("model", model, J.str_field("instructions", instructions, J.str_field("prompt_cache_key", session, J.End{})))
   flags = {J.Field{"store", J.Boolean{False{}}, J.Field{"stream", J.Boolean{True{}}, J.Field{"parallel_tool_calls", J.Boolean{True{}}, base}}} : J.Json}
@@ -79,8 +136,8 @@ def request_body(model: String, instructions: String, input: J.Json, tools: J.Js
 
 def call(auth: A.Credential, +session: String, model: String, instructions: String, input: J.Json, tools: J.Json, effort: String) -> IO(J.Json):
   do IO<J.Json>:
-    handle : String <- N.http("https://chatgpt.com/backend-api/codex/responses", A.headers(auth, session), J.encode(request_body(model, instructions, input, tools, session, effort)), U32.to_nat(600000))
-    receive(handle)
+    endpoint : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_BEND_RESPONSES_URL")
+    attempts(4n, True{}, Outcome{J.Null{}, "No provider response", False{}}, U.either_text(endpoint, "https://chatgpt.com/backend-api/codex/responses"), A.headers(auth, session), J.encode(request_body(model, instructions, input, tools, session, effort)), 0)
 
 def user_message(text: String) -> J.Json:
   J.Object{J.str_field("role", "user", J.str_field("content", text, J.End{}))}

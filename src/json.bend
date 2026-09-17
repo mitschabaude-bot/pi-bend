@@ -91,6 +91,18 @@ def append(xs: Json, ys: Json) -> Json:
 def str_field(key: String, value: String, rest: Json) -> Json:
   Field{key, Text{value}, rest}
 
+def remove_field(fields: Json, +key: String) -> Json:
+  match fields:
+    case Field{+k, value, rest}:
+      +tail = remove_field(rest, key)
+      Bool.pick(Json, String.eq(k, key), tail, Field{k, value, tail})
+    case _: End{}
+
+def set(j: Json, +key: String, value: Json) -> Json:
+  match j:
+    case Object{fields}: Object{Field{key, value, remove_field(fields, key)}}
+    case _: Object{Field{key, value, End{}}}
+
 type Token is Data:
   Atom{value: Json}
   Punct{c: Char}

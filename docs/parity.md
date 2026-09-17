@@ -16,7 +16,7 @@ Reference: pi 0.85.1, commit `46c9de402`. This checklist describes the requested
 - [ ] Bend extension interface, discovery, hooks and custom tools/UI
 - [ ] Native Linux/macOS portability; account for upstream Windows support
 - [ ] Upstream-derived behavioral and terminal snapshot tests
-- [ ] Live pi-bend subagent develops and tests a feature
+- [x] Live pi-bend subagent develops and tests a feature
 
 Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-sol` using the existing private auth file on 2026-09-17. No interactive login was required. This is not yet evidence for authentication implemented in Bend.
 
@@ -27,5 +27,9 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 - SSE parser: split events, CRLF, comments, multiline data and terminal marker tested.
 - Native OpenAI call succeeded with `PI_BEND_OPENAI_OK`. Credential loading and streaming execute in the native executable. Refresh/persistence is implemented but has not yet been exercised against expired live credentials.
 - Print-mode agent loop and read/write/exact-edit/bash tools compile. Tests cover files, offsets, rejected ambiguous edits, exit codes and timeouts. Fuzzy/multi-edit, image reading and exact truncation parity remain open.
+- Native session persistence and explicit-file resume pass a local provider fixture. Entries have version-3 session headers, linked IDs, canonical messages, and custom raw-provider transcript snapshots. Full upstream session import, branching, compaction and recovery remain open.
+- Provider fixture verifies transient-error retry, tool items preserved when completion omits them, continued tool conversations, and disabled tools refusing unsolicited calls.
+- A live native pi-bend process implemented a Python slugify function and three passing tests in a disposable project. A subsequent invocation developed the Bend truncation module in this repository; review and parity validation are separate from that execution proof.
+- Native Unicode segmentation covers combining marks, emoji sequences, CJK, controls and word boundaries through ICU. Terminal rendering is not implemented yet.
 
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.

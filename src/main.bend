@@ -3,16 +3,24 @@ import ./cli.bend as C
 import ./agent.bend as Agent
 import ./native.bend as N
 import ./json.bend as J
+import ./session.bend as S
 
-def run_mode(supported: Bool, +config: C.Config) -> IO(Unit):
+def run_session(+config: C.Config, +cwd: String, id: String) -> IO(Unit):
+  match config:
+    case C.Config{_, _, _, _, _, _, no_session, file, _, _}:
+      do IO<Unit>:
+        +session : S.Session <- S.open(no_session, file, id, cwd)
+        finished : S.Session <- Agent.start(config, Agent.context(config, S.get_id(session), cwd), session)
+        IO.pure(Unit, Unit{})
+
+def run_mode(supported: Bool, config: C.Config) -> IO(Unit):
   match supported:
     case False{}: IO.die(Unit, 1, "This milestone supports text print mode; JSON/RPC and terminal UI are still being ported")
     case True{}:
       do IO<Unit>:
         cwd : String <- N.cwd()
-        session : String <- N.uuid()
-        history : J.Json <- Agent.start(config, Agent.context(config, session, cwd))
-        IO.pure(Unit, Unit{})
+        id : String <- N.uuid()
+        run_session(config, cwd, id)
 
 def run_action(help: Bool, version: Bool, empty: Bool, supported: Bool, config: C.Config) -> IO(Unit):
   match help version empty:
