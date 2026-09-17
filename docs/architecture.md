@@ -21,7 +21,7 @@ Typed upstream records and unions become Bend records and algebraic data types, 
 
 Upstream generic tools, custom messages and schema-validated arguments must retain their type relationships. Promise/callback/async-iterator APIs need documented Bend IO equivalents with the same cancellation, error, callback ordering, backpressure and settlement contracts. JavaScript declaration merging needs a typed Bend extension mechanism. These are implementation requirements, not reasons to discard extension points.
 
-The C layer supplies native operating-system and dependency interfaces. Agent decisions, provider mapping, session semantics and rendering policy belong in Bend libraries. Native adapters must remain injectable through the ported library interfaces so upstream mocked/conformance tests have equivalents.
+Complex dependencies belong in pure Bend, including HTTP/TLS, cryptographic operations, Unicode algorithms and numeric support. Missing language primitives should be added to Bend instead of replacing these libraries with C or JavaScript glue. The prototype C adapters are temporary migration liabilities. Operating-system primitives must remain injectable through the ported library interfaces so upstream mocked/conformance tests have equivalents.
 
 ## Module acceptance
 
@@ -32,6 +32,8 @@ The first canonical leaf module is `packages/agent/src/harness/utils/truncate.be
 ## Runtime prerequisites for the core types
 
 Bend 2.0.4 provides `F32`, while TypeScript numbers use binary64. Provider costs, sampling values and other numeric APIs require a binary64 solution before those types can be considered faithful; silently substituting F32 is not acceptable. The prototype's decimal JSON tokens only preserve serialization and do not solve numeric operations.
+
+`packages/runtime/src/u64.bend` now provides pure-Bend 64-bit integer operations, and `f64.bend` uses them for binary64 addition/subtraction. The independent vector tests pass; the remaining numeric operations and conversions are still prerequisites for the core types. This package is a language support dependency, not a replacement for pi's library boundaries.
 
 `AssistantMessageEvent.partial` is a shared live response object in upstream, not an event-time snapshot. Immutable copies alone would change that contract. The event-stream port therefore needs an explicit shared-state representation and tests for consumers that retain event references. `EventStream.result()` settlement and queued-consumer termination also need distinct tests.
 

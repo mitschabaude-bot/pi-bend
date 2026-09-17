@@ -4,6 +4,8 @@ The user requires a close port of pi-mono's modular libraries, internal main typ
 
 Reference: sibling `../pi-mono`, commit `46c9de402`. Preserve the upstream package/module boundaries under `packages/`. Preserve public type, field, function and event names where Bend permits them. Document language-driven changes individually; do not collapse typed models into generic JSON, flatten library layers into the CLI, omit hooks, or replace injectable interfaces with hard-coded implementations.
 
+Complex dependencies must be implemented in pure Bend, without C or JavaScript glue. Add missing primitives to Bend where necessary. The prototype's libcurl and ICU adapters are migration liabilities, not approved dependencies for the finished port. Test-only host-language oracles may validate Bend results, but must not supply production behavior.
+
 The current `src/` executable is a bootstrap prototype. Its networking/authentication checks and live subagent demonstrations are useful evidence for the native runtime, not acceptance evidence for the library port. Do not grow this prototype into a separate approximate architecture. Introduce canonical library modules with upstream tests and migrate the entry points onto those modules.
 
 Port pi-mono tests with their original assertions, test names, edge cases and event ordering. Keep a source-to-port map in `tests/upstream-inventory.json`. Distinguish pending, partial and fully ported suites. Supplement with differential tests and native tests where runtime differences require them. Never weaken expectations to fit the implementation or mark skipped cases as complete.

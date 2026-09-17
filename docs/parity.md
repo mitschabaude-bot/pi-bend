@@ -16,7 +16,7 @@ Reference: pi 0.85.1, commit `46c9de402`. This checklist describes the requested
 - [ ] Bend extension interface, discovery, hooks and custom tools/UI
 - [ ] Native Linux/macOS portability; account for upstream Windows support
 - [ ] Upstream-derived behavioral and terminal snapshot tests
-- [x] Live pi-bend subagent develops and tests a feature
+- [ ] Final pure-Bend pi-bend subagent develops and tests a feature
 
 Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-sol` using the existing private auth file on 2026-09-17. No interactive login was required. This is not yet evidence for authentication implemented in Bend.
 
@@ -33,5 +33,8 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 - Native Unicode segmentation covers combining marks, emoji sequences, CJK, controls and word boundaries through ICU. Terminal rendering is not implemented yet.
 - The subagent-written truncation module, subsequently reviewed and adapted to the canonical package/API layout, passes all nine upstream cases, including the 300,000-character regression and 57,405 byte-limit checks. Review removed a redundant tail copy that made large inputs quadratic and added UTF-16 compatibility. The module has not yet replaced the prototype tool truncation paths.
 - Upstream tests are inventoried by source hash: 549 suites discovered across pi-mono, with applicability review still needed for auxiliary packages. The truncation suite has a full native port; regional-indicator width coverage is partial; the remaining suites are pending. See `tests/UPSTREAM.md` for the acceptance rules and current gaps.
+- Pure-Bend runtime foundations: 64-bit unsigned arithmetic passes 272 independent vectors; binary64 addition/subtraction passes 821 vectors covering signed zero, subnormals, rounding ties, cancellation, overflow, infinities and NaNs. These modules use no custom C/JS effects. Binary64 multiplication/division/conversions and integration with pi's types remain open.
 
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
+
+The final port must replace the prototype libcurl/ICU/custom C dependencies with pure Bend implementations and missing Bend primitives. Bootstrap demonstrations above do not satisfy this requirement. `scripts/build-pure.sh` compiles canonical Bend tests without prototype effects, generated-entry-point patching, libcurl or ICU.
