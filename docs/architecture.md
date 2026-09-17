@@ -37,4 +37,6 @@ Bend 2.0.4 provides `F32`, while TypeScript numbers use binary64. Provider costs
 
 `AssistantMessageEvent.partial` is a shared live response object in upstream, not an event-time snapshot. Immutable copies alone would change that contract. The event-stream port therefore needs an explicit shared-state representation and tests for consumers that retain event references. `EventStream.result()` settlement and queued-consumer termination also need distinct tests.
 
+Pure-Bend `Ref`, `Deferred` and reusable `Callback` primitives now provide the shared identity, settlement and callback foundations. They use standard Bend channels rather than custom foreign code. Native concurrency tests cover retained identities, atomic updates, fan-out and concurrent callback invocation. Their explicit disposal requirement is a temporary mismatch with JavaScript garbage collection; managed shared-object reclamation remains required. The upstream event-stream suite is still pending and is not covered merely by these primitive tests.
+
 `AgentTool` exposes argument preparation, schema validation, streaming updates, abort signals, structured details, tool usage, replay policy and execution-mode overrides. The prototype's `ToolResult{text,error}` is insufficient and is not the target tool API.
