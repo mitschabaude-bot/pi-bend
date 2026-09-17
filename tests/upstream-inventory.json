@@ -606,9 +606,12 @@
     },
     {
       "source": "packages/ai/test/event-stream.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4bd0da838196e7030b3df87160e6a09faf07b157de3571c308cd94bdde153b5c"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/event-stream.bend"
+      ],
+      "sha256": "4bd0da838196e7030b3df87160e6a09faf07b157de3571c308cd94bdde153b5c",
+      "notes": "All five original cases and assertions pass with one and four Bend runtime threads. Exact small integer inputs specialize the generic stream to U32; the explicit string-result case remains distinct. Four additional native lifecycle/shared-identity regressions supplement these cases. This suite does not establish full async-generator protocol, scheduler or AssistantMessageEventStream parity."
     },
     {
       "source": "packages/ai/test/faux-provider.test.ts",
