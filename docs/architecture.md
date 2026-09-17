@@ -33,7 +33,7 @@ The first canonical leaf module is `packages/agent/src/harness/utils/truncate.be
 
 Bend 2.0.4 provides `F32`, while TypeScript numbers use binary64. Provider costs, sampling values and other numeric APIs require a binary64 solution before those types can be considered faithful; silently substituting F32 is not acceptable. The prototype's decimal JSON tokens only preserve serialization and do not solve numeric operations.
 
-`packages/runtime/src/u64.bend` now provides pure-Bend 64-bit integer operations, and `f64.bend` uses them for binary64 addition/subtraction. The independent vector tests pass; the remaining numeric operations and conversions are still prerequisites for the core types. This package is a language support dependency, not a replacement for pi's library boundaries.
+`packages/runtime/src/u64.bend` provides pure-Bend 64-bit integer operations, `u128.bend` supplies exact products, and `f64.bend` uses them for binary64 arithmetic, comparison and unsigned integer conversion. Independent vector tests pass; decimal parsing/formatting and remaining numeric operations are still prerequisites for complete integration. This package is a language support dependency, not a replacement for pi's library boundaries. Initial faithful content, usage and model-cost records now live in `packages/ai/src/types.bend`; that module remains explicitly partial.
 
 `AssistantMessageEvent.partial` is a shared live response object in upstream, not an event-time snapshot. Immutable copies alone would change that contract. The event-stream port therefore needs an explicit shared-state representation and tests for consumers that retain event references. `EventStream.result()` settlement and queued-consumer termination also need distinct tests.
 

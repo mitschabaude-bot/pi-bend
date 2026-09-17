@@ -29,10 +29,12 @@ for index, (a, b, shift) in enumerate(vectors):
     q, r = divmod(a, b) if b else (0, 0)
     ordering = 0 if a < b else 1 if a == b else 2
     values = ' <> '.join(map(word, expected)) + ' <> Nil{}'
-    source.append(f'def case{index}() -> H.Case:\n  H.Case{{"vector {index}", {word(a)}, {word(b)}, {shift}n, {values}, {word(q)}, {word(r)}, {ordering}}}')
+    product = a * b
+    jam = (product >> shift) | int((product & ((1 << shift)-1)) != 0)
+    source.append(f'def case{index}() -> H.Case:\n  H.Case{{"vector {index}", {word(a)}, {word(b)}, {shift}n, {values}, {word(q)}, {word(r)}, {ordering}, {word(product >> 64)}, {word(product)}, {word(jam >> 64)}, {word(jam)}}}')
 source.append('def main() -> IO(Unit):\n  H.checkAll(' + ' <> '.join(f'case{i}()' for i in range(len(vectors))) + ' <> Nil{})')
 pathlib.Path('build').mkdir(exist_ok=True)
 pathlib.Path('build/u64-vectors.bend').write_text('\n\n'.join(source) + '\n')
 subprocess.run(['sh', 'scripts/build-pure.sh', 'build/u64-vectors.bend', 'build/test-u64'], check=True)
 subprocess.run(['build/test-u64', '--threads', '1'], check=True, timeout=60)
-print(f'u64: {len(vectors)} vectors, arithmetic/bitwise/shifts/rotations/division/comparison passed')
+print(f'u64/u128: {len(vectors)} vectors, arithmetic/bitwise/shifts/rotations/division/comparison/full products/jam passed')

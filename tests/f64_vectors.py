@@ -14,6 +14,13 @@ def floating(word):
 def literal(word):
     return f'F.fromBits({word >> 32}, {word & 0xFFFFFFFF})'
 
+def divide(x, y):
+    if y == 0:
+        if x == 0 or math.isnan(x):
+            return math.nan
+        return math.copysign(math.inf, math.copysign(1, x) * math.copysign(1, y))
+    return x / y
+
 edges = [0, 1 << 63, 1, (1 << 63) | 1, (1 << 52) - 1, 1 << 52,
          bits(1.0), bits(-1.0), bits(2.0), 0x7FEFFFFFFFFFFFFF,
          0xFFEFFFFFFFFFFFFF, bits(math.inf), bits(-math.inf),
@@ -35,11 +42,23 @@ for exponent in [-1022, -1000, -53, 0, 52, 900, 1023]:
         for delta in [half, -half, math.nextafter(half, 0), math.nextafter(half, math.inf)]:
             vectors.append((bits(base), bits(delta)))
 
-source = ['import Base', 'import ../packages/runtime/src/f64.bend as F',
+# Densely sample gradual underflow and normal/subnormal transitions.
+for _ in range(256):
+    a = (rng.getrandbits(1) << 63) | (rng.randrange(5) << 52) | rng.getrandbits(52)
+    b = (rng.getrandbits(1) << 63) | (rng.randrange(1018, 1028) << 52) | rng.getrandbits(52)
+    vectors.append((a, b))
+# Integer conversion must round both sides of the 53-bit precision boundary.
+integer_edges = [0, 1, (1 << 53)-1, 1 << 53, (1 << 53)+1, (1 << 53)+2,
+                 (1 << 53)+3, (1 << 64)-1]
+
+source = ['import Base', 'import ../packages/runtime/src/f64.bend as F', 'import ../packages/runtime/src/u64.bend as W',
           'import ../packages/runtime/test/f64-support.bend as H']
 for index, (a, b) in enumerate(vectors):
     x, y = floating(a), floating(b)
-    source.append(f'def case{index}() -> H.Case:\n  H.Case{{"vector {index}", {literal(a)}, {literal(b)}, {literal(bits(x+y))}, {literal(bits(x-y))}}}')
+    order = 3 if math.isnan(x) or math.isnan(y) else 0 if x < y else 1 if x == y else 2
+    integer = integer_edges[index] if index < len(integer_edges) else rng.getrandbits(64)
+    integer_literal = f'W.U64{{{integer >> 32}, {integer & 0xFFFFFFFF}}}'
+    source.append(f'def case{index}() -> H.Case:\n  H.Case{{"vector {index}", {literal(a)}, {literal(b)}, {literal(bits(x+y))}, {literal(bits(x-y))}, {literal(bits(x*y))}, {literal(bits(divide(x,y)))}, {order}, {integer_literal}, {literal(bits(float(integer)))}}}')
 source.append('def main() -> IO(Unit):\n  H.checkAll(' + ' <> '.join(f'case{i}()' for i in range(len(vectors))) + ' <> Nil{})')
 pathlib.Path('build').mkdir(exist_ok=True)
 pathlib.Path('build/f64-vectors.bend').write_text('\n\n'.join(source) + '\n')
