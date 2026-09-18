@@ -1,0 +1,145 @@
+import Base
+import ../src/agent-loop.bend as Loop
+import ../src/types.bend as T
+import ../../ai/src/types.bend as Ai
+import ../../runtime/src/ref.bend as R
+import ../../runtime/src/f64.bend as N
+
+type Payload is Data:
+  NullPayload{}
+  FalsePayload{}
+  ZeroPayload{}
+  TextPayload{text: String}
+  ObjectPayload{reference: R.Ref<String>}
+
+def assertion(ok: Bool, label: String) -> IO(Unit):
+  match ok:
+    case True{}: IO.pure(Unit, Unit{})
+    case False{}: IO.die(Unit, 1, label)
+
+def nullish(payload: Payload) -> Bool:
+  match payload:
+    case NullPayload{}: True{}
+    case _: False{}
+
+def details(index: U32, object: R.Ref<String>) -> Maybe<&2, Payload>:
+  match index:
+    case 0: None{}
+    case 1: Some{NullPayload{}}
+    case 2: Some{FalsePayload{}}
+    case 3: Some{ZeroPayload{}}
+    case 4: Some{TextPayload{""}}
+    case _: Some{ObjectPayload{object}}
+
+def content(index: U32) -> Maybe<&2, List<&2, Ai.TextImageContent>>:
+  match index:
+    case 0: None{}
+    case 1: Some{Nil{}}
+    case _: Some{Ai.TextImageText{Ai.TextContent{"new", None{}}} <> Nil{}}
+
+def terminate(flags: U32) -> Maybe<&2, Bool>:
+  match flags:
+    case 0: None{}
+    case 4: None{}
+    case 1: Some{True{}}
+    case _: Some{False{}}
+
+def originalTerminate(flags: U32) -> Maybe<&2, Bool>:
+  match flags:
+    case 0: None{}
+    case 3: None{}
+    case 2: Some{True{}}
+    case 4: Some{True{}}
+    case _: Some{False{}}
+
+def error(flags: U32) -> Maybe<&2, Bool>:
+  match flags:
+    case 0: None{}
+    case 4: None{}
+    case 2: Some{True{}}
+    case _: Some{False{}}
+
+def usage(cost: R.Ref<Ai.UsageCost>) -> Ai.Usage:
+  +zero = N.fromU32(0)
+  Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}
+
+def optionalUsage(flags: U32, value: Ai.Usage) -> Maybe<&2, Ai.Usage>:
+  match flags:
+    case 1: Some{value}
+    case 3: Some{value}
+    case 5: Some{value}
+    case _: None{}
+
+def checkDetails(payload: Payload, expected: U32, old: R.Ref<String>, fresh: R.Ref<String>) -> Bool:
+  match payload expected:
+    case FalsePayload{} 2: True{}
+    case ZeroPayload{} 3: True{}
+    case TextPayload{text} 4: String.eq(text, "")
+    case ObjectPayload{ref} 5: R.same(String, ref, fresh)
+    case ObjectPayload{ref} 6: R.same(String, ref, old)
+    case _ _: False{}
+
+def showContent(values: List<&2, Ai.TextImageContent>) -> String:
+  match values:
+    case Nil{}: ""
+    case Ai.TextImageText{Ai.TextContent{text, _}} <> Nil{}: text
+    case _: "unexpected content"
+
+def sameOptional(a: Maybe<&2, Bool>, b: Maybe<&2, Bool>) -> Bool:
+  match a b:
+    case None{} None{}: True{}
+    case Some{True{}} Some{True{}}: True{}
+    case Some{False{}} Some{False{}}: True{}
+    case _ _: False{}
+
+def sameUsage(value: Maybe<&2, Ai.Usage>, cost: R.Ref<Ai.UsageCost>) -> Bool:
+  match value:
+    case Some{Ai.Usage{_, _, _, _, _, _, _, actual}}: R.same(Ai.UsageCost, actual, cost)
+    case _: False{}
+
+def checkAbsent(original: R.Ref<T.AgentToolResult<Payload>>, beforeError: Bool, outcome: Loop.ExecutedToolCallOutcome<Payload>) -> IO(Unit):
+  match outcome:
+    case Loop.ExecutedToolCallOutcome{result, isError}:
+      assertion(R.same(T.AgentToolResult<Payload>, original, result) && sameOptional(Some{beforeError}, Some{isError}), "absent hook result must preserve object and error flag")
+
+def checkRecord(value: T.AgentToolResult<Payload>, expectedDetails: U32, old: R.Ref<String>, fresh: R.Ref<String>, expectedContent: String, expectedCost: R.Ref<Ai.UsageCost>, expectedTerminate: Maybe<&2, Bool>) -> IO(Unit):
+  match value:
+    case T.AgentToolResult{contentValue, detailValue, usageValue, terminateValue}:
+      assertion(String.eq(showContent(contentValue), expectedContent) && checkDetails(detailValue, expectedDetails, old, fresh) && sameUsage(usageValue, expectedCost) && sameOptional(terminateValue, expectedTerminate), "hook override fields differ from upstream nullish merge")
+
+def unchangedContent(value: T.AgentToolResult<Payload>) -> IO(Unit):
+  match value:
+    case T.AgentToolResult{contentValue, _, _, _}: assertion(String.eq(showContent(contentValue), "old"), "hook merge mutated the original result")
+
+def checkPatched(+original: R.Ref<T.AgentToolResult<Payload>>, outcome: Loop.ExecutedToolCallOutcome<Payload>, expectedDetails: U32, old: R.Ref<String>, fresh: R.Ref<String>, expectedContent: String, expectedCost: R.Ref<Ai.UsageCost>, expectedTerminate: Maybe<&2, Bool>, expectedError: Bool) -> IO(Unit):
+  match outcome:
+    case Loop.ExecutedToolCallOutcome{+result, isError}:
+      do IO<Unit>:
+        assertion(Bool.not(R.same(T.AgentToolResult<Payload>, original, result)), "even an empty hook object must allocate a new result")
+        assertion(sameOptional(Some{isError}, Some{expectedError}), "hook isError override differs from upstream")
+        value : T.AgentToolResult<Payload> <- R.read(T.AgentToolResult<Payload>, result)
+        checkRecord(value, expectedDetails, old, fresh, expectedContent, expectedCost, expectedTerminate)
+        oldValue : T.AgentToolResult<Payload> <- R.read(T.AgentToolResult<Payload>, original)
+        unchangedContent(oldValue)
+        previous : T.AgentToolResult<Payload> <- R.dispose(T.AgentToolResult<Payload>, result)
+        return Unit{}
+
+def run(contentIndex: U32, detailsIndex: U32, +flags: U32, expectedDetails: U32, expectedContent: String, newUsage: Bool, expectedTerminate: Maybe<&2, Bool>, expectedError: Bool) -> IO(Unit):
+  do IO<Unit>:
+    +zero : N.F64 = N.fromU32(0)
+    +oldCost : R.Ref<Ai.UsageCost> <- R.new(Ai.UsageCost, Ai.UsageCost{zero, zero, zero, zero, zero})
+    +newCost : R.Ref<Ai.UsageCost> <- R.new(Ai.UsageCost, Ai.UsageCost{zero, zero, zero, zero, zero})
+    +oldDetails : R.Ref<String> <- R.new(String, "old")
+    +newDetails : R.Ref<String> <- R.new(String, "new")
+    +original : R.Ref<T.AgentToolResult<Payload>> <- R.new(T.AgentToolResult<Payload>, T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"old", None{}}} <> Nil{}, ObjectPayload{oldDetails}, Some{usage(oldCost)}, originalTerminate(flags)})
+    +beforeError : Bool = U32.is_eq(flags, 0) || U32.is_eq(flags, 2) || U32.is_eq(flags, 4)
+    unchanged : Loop.ExecutedToolCallOutcome<Payload> <- Loop.applyAfterToolCallResult(Payload, Loop.ExecutedToolCallOutcome{original, beforeError}, None{}, nullish)
+    checkAbsent(original, beforeError, unchanged)
+    patched : Loop.ExecutedToolCallOutcome<Payload> <- Loop.applyAfterToolCallResult(Payload, Loop.ExecutedToolCallOutcome{original, beforeError}, Some{T.AfterToolCallResult{content(contentIndex), details(detailsIndex, newDetails), error(flags), optionalUsage(flags, usage(newCost)), terminate(flags)}}, nullish)
+    checkPatched(original, patched, expectedDetails, oldDetails, newDetails, expectedContent, Bool.pick(R.Ref<Ai.UsageCost>, newUsage, newCost, oldCost), expectedTerminate, expectedError)
+    oldResult : T.AgentToolResult<Payload> <- R.dispose(T.AgentToolResult<Payload>, original)
+    old : String <- R.dispose(String, oldDetails)
+    fresh : String <- R.dispose(String, newDetails)
+    cost1 : Ai.UsageCost <- R.dispose(Ai.UsageCost, oldCost)
+    cost2 : Ai.UsageCost <- R.dispose(Ai.UsageCost, newCost)
+    return Unit{}
