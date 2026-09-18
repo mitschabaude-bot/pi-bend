@@ -811,3 +811,62 @@ def beforeToolCallDecision(aborted: Bool, result: Maybe<&2, T.BeforeToolCallResu
     case False{} Some{reference}:
       value = {reference : T.BeforeToolCallResult}
       blockedToolCallDecision(value)
+
+# Error values remain typed; formatting occurs only at the tool-result boundary.
+def failedToolOutcome(-Details: Data, -Error: Data, details: Details, renderError: Error -> String, error: Error) -> ExecutedToolCallOutcome<Details>:
+  ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{renderError(error), None{}}} <> Nil{}, details, None{}, None{}}, True{}}
+
+def resolveToolHookResult(-Details: Data, -Error: Data, executed: ExecutedToolCallOutcome<Details>, failureDetails: Details, renderError: Error -> String, outcome: Result<&2, &2, Error, Maybe<&2, T.AfterToolCallResult<Details>>>) -> ExecutedToolCallOutcome<Details>:
+  match outcome:
+    case Fail{error}: failedToolOutcome(Details, Error, failureDetails, renderError, error)
+    case Done{patch}: applyAfterToolCallResult(Details, executed, patch)
+
+def finalizeToolOutcome(-Arguments: Data, -Details: Data, call: Ai.ToolCall<Arguments>, executed: ExecutedToolCallOutcome<Details>) -> FinalizedToolCallOutcome<Arguments, Details>:
+  match executed:
+    case ExecutedToolCallOutcome{result, isError}: FinalizedToolCallOutcome{call, result, isError}
+
+def selectedAfterToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, Signal>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hook}: hook
+
+def invokeAfterToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, hook: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, Signal>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>>>, input: T.ToolHookInput<T.AfterToolCallContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, Signal>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>):
+  match hook:
+    case None{}: IO.pure(Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>, Done{None{}})
+    case Some{callback}: C.call(T.ToolHookInput<T.AfterToolCallContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, Signal>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>, callback, input)
+
+# The hook sees validated execution arguments alongside the original call.
+# Failure becomes an error tool result; it is not an event-listener failure.
+def finalizeExecutedToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, assistant: Ai.AssistantMessage<Arguments, DiagnosticDetails>, prepared: PreparedToolCall<Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError>, executed: ExecutedToolCallOutcome<ToolDetails>, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, signal: Maybe<&2, Signal>, failureDetails: ToolDetails, renderError: ExecutionError -> String) -> IO(FinalizedToolCallOutcome<Arguments, ToolDetails>):
+  match prepared executed:
+    case PreparedToolCall{+call, _, args} ExecutedToolCallOutcome{+result, +isError}:
+      do IO<FinalizedToolCallOutcome<Arguments, ToolDetails>>:
+        outcome : Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>> <- invokeAfterToolCall(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, selectedAfterToolCall(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config), T.ToolHookInput{T.AfterToolCallContext{assistant, call, args, result, isError, context}, signal})
+        return finalizeToolOutcome(Arguments, ToolDetails, call, resolveToolHookResult(ToolDetails, ExecutionError, ExecutedToolCallOutcome{result, isError}, failureDetails, renderError, outcome))
+
+# Agent-end settles the returned message history independently of consumption.
+def AgentEventStream(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data) -> Data:
+  Stream.EventStream<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>
+
+def agentStreamComplete(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, unused: Unit, event: T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>) -> IO(Bool):
+  match event:
+    case T.AgentEnd{_}: IO.pure(Bool, True{})
+    case _: IO.pure(Bool, False{})
+
+def agentStreamExtract(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, unused: Unit, event: T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>) -> IO(T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)):
+  match event:
+    case T.AgentEnd{messages}: IO.pure(T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), messages)
+    case _: IO.pure(T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), Nil{})
+
+def createAgentStream(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~ToolDetails: Data, ~Custom: Data, ~PartialResult: Data, ~ExecutionResult: Data) -> IO(AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)):
+  do IO<AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)>:
+    check : C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Bool> <- C.create(~Unit, ~T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, ~Bool, ~(agentStreamComplete(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)), Unit{})
+    extract : C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)> <- C.create(~Unit, ~T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, ~T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), ~(agentStreamExtract(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)), Unit{})
+    Stream.create(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), check, extract)
+
+def disposeAgentStream(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, +stream: AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)) -> IO(Unit):
+  match stream:
+    case Stream.EventStream{_, _, check, extract}:
+      do IO<Unit>:
+        Stream.dispose(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), stream)
+        C.dispose(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Bool, check)
+        C.dispose(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), extract)

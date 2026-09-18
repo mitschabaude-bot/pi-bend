@@ -1,6 +1,6 @@
 # Native Bend cleanup
 
-The full port is paused while the existing implementation is purged of JavaScript object and array emulation. Preserve pi's modular libraries, meaningful typed interfaces, algorithms, tool behavior and event ordering. Use immutable values and explicit state transitions. Synchronization belongs to effectful stream/agent machinery, not ordinary nested records.
+This records the completed cleanup of JavaScript object and array emulation, performed before resuming the full port. Preserve pi's modular libraries, meaningful typed interfaces, algorithms, tool behavior and event ordering. Use immutable values and explicit state transitions. Synchronization belongs to effectful stream/agent machinery, not ordinary nested records.
 
 ## Decisions
 
@@ -40,4 +40,4 @@ The original five event-stream tests and nine replay tests retain their names an
 
 The former supplemental identity/mutation harnesses for API keys, context conversion, turn preparation, queues, stopping, assistant responses, tool preparation/emission and truncated calls were replaced with native contract checks. Their historical vector counts are not current coverage claims, and not every old supplemental scheduler scenario has been retained. Reflection/DOM behavior is intentionally no longer an acceptance target.
 
-This completes the native-representation cleanup of the existing code, not the full port. The upstream inventory remains 3 ported, 3 partial and 543 pending suites. Full validation, providers, the complete agent executor, terminal parity and Bend extensions remain unfinished. The main goal remains paused.
+This completes the native-representation cleanup of the existing code, not the full port. The upstream inventory remains 3 ported, 3 partial and 543 pending suites. Full validation, providers, the complete agent executor, terminal parity and Bend extensions remain unfinished. Gregor resumed the main goal after accepting this cleanup.

@@ -1,6 +1,6 @@
 # Port status
 
-The full-port goal is paused during the native Bend cleanup requested on 2026-09-18. See [native-bend.md](native-bend.md) for current decisions and unfinished migration work. The native cleanup replaces earlier object-compatibility milestones; Git history retains their implementation history.
+The full-port goal resumed after the native Bend cleanup on 2026-09-18. See [native-bend.md](native-bend.md) for the approved representation decisions. The native cleanup replaces earlier object-compatibility milestones; Git history retains their implementation history.
 
 Reference: pi 0.85.1, commit `46c9de402`. This checklist describes the requested destination, not completed features. JavaScript extension compatibility is explicitly excluded by the user.
 
@@ -39,3 +39,5 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 - `packages/ai/src/types.bend` starts the typed library port with faithful content, usage, model-cost records and stop reasons. Numeric fields use binary64, and optional values remain distinct. The module is partial; model data records are implemented, while schema and provider-option contracts remain open; schema-data declaration comparison is implemented separately.
 - Native library data now uses immutable Bend values and explicit returned updates. Structural tool equality and immutable event snapshots are approved adaptations. The JS reflection/dynamic-object and DOM event compatibility layers have been removed; historical milestone claims for them are retired. See [native-bend.md](native-bend.md).
 - Current supplemental coverage includes typed option/configuration projection, pricing, schema primitive coercion, transcript/tool history, agent policy and request/event sequencing. These checks do not complete the full agent or validation suites. See [tests/UPSTREAM.md](../tests/UPSTREAM.md) for the current commands and counts.
+
+- Resumed canonical agent integration: after-tool finalization invokes and awaits hooks, applies overrides and converts hook failures to error results. Nine native scenarios pass with channel-gated async checks. The agent event-stream factory now settles message histories on agent_end and owns its callback cleanup. Public loop entry points, tool execution/update tracking, preparation/validation and batch scheduling remain unfinished; upstream suite statuses are unchanged.
