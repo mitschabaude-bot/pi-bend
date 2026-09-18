@@ -4,6 +4,7 @@ import ../../runtime/src/f64.bend as F
 import ../../ai/src/types.bend as Ai
 import ./types.bend as T
 import ./agent-options.bend as Options
+import ./agent-settings.bend as Settings
 import ./agent-state.bend as State
 import ./agent-runtime.bend as Runtime
 import ./agent-run.bend as Run
@@ -226,24 +227,56 @@ def getFollowUpMode(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, 
     queues : Queues.Queues<Run.Message(A, G, D, M)> <- queueSnapshot(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
     return Queues.getMode(Run.Message(A, G, D, M), queues, Queues.FollowUp{})
 
-def sessionConfig(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, String>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+def configSettings(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Settings.Settings:
   match config:
-    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, value, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
-def changedSession(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, String>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, maxRetryDelayMs, _, _, _, transport, _, sessionId, _, _, _, _, _, thinkingBudgets, _, _, _, _, _, _, _, _, toolExecution, _, _}: Settings.Settings{sessionId, thinkingBudgets, Maybe.default(&2, Ai.Transport, transport, Ai.AutoTransport{}), maxRetryDelayMs, Maybe.default(&2, T.ToolExecutionMode, toolExecution, T.Parallel{})}
+def settingsConfig(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), settings: Settings.Settings) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config settings:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, _, temperature, samplingParams, maxTokens, _, cacheRetention, _, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, _, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, _, beforeToolCall, afterToolCall} Settings.Settings{sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, Some{transport}, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, Some{toolExecution}, beforeToolCall, afterToolCall}
+def changedSettings(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, change: Settings.Change) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
   match options:
-    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{sessionConfig(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
-def setSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, String>) -> IO(Unit):
+    case Run.Options{+config, provider, validate, emptyDetails}: (Run.Options{settingsConfig(A, G, D, M, V, E, J, Telemetry, Fetch, config, Settings.apply(configSettings(A, G, D, M, V, E, J, Telemetry, Fetch, config), change)), provider, validate, emptyDetails}, Unit{})
+def updateSettings(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, change: Settings.Change) -> IO(Unit):
   match agent:
-    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedSession(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
-def configSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, String>:
-  match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, sessionId, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: sessionId
-def optionsSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, String>:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedSettings(A, G, D, M, V, E, J, Telemetry, Fetch, current, change))
+def optionsSettings(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Settings.Settings:
   match options:
-    case Run.Options{config, _, _, _}: configSessionId(A, G, D, M, V, E, J, Telemetry, Fetch, config)
-def getSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, String>):
+    case Run.Options{config, _, _, _}: configSettings(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getSettings(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Settings.Settings):
   match agent:
     case Agent{_, _, options, _, _, _}:
-      do IO<Maybe<&2, String>>:
+      do IO<Settings.Settings>:
         current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
-        return optionsSessionId(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+        return optionsSettings(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+def setSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, String>) -> IO(Unit):
+  updateSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent, Settings.SetSessionId{value})
+def getSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, String>):
+  do IO<Maybe<&2, String>>:
+    settings : Settings.Settings <- getSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Settings.getSessionId(settings)
+def setThinkingBudgets(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Ai.ThinkingBudgets>) -> IO(Unit):
+  updateSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent, Settings.SetThinkingBudgets{value})
+def getThinkingBudgets(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, Ai.ThinkingBudgets>):
+  do IO<Maybe<&2, Ai.ThinkingBudgets>>:
+    settings : Settings.Settings <- getSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Settings.getThinkingBudgets(settings)
+def setTransport(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Ai.Transport) -> IO(Unit):
+  updateSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent, Settings.SetTransport{value})
+def getTransport(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Ai.Transport):
+  do IO<Ai.Transport>:
+    settings : Settings.Settings <- getSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Settings.getTransport(settings)
+def setMaxRetryDelayMs(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, F.F64>) -> IO(Unit):
+  updateSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent, Settings.SetMaxRetryDelayMs{value})
+def getMaxRetryDelayMs(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, F.F64>):
+  do IO<Maybe<&2, F.F64>>:
+    settings : Settings.Settings <- getSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Settings.getMaxRetryDelayMs(settings)
+def setToolExecution(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: T.ToolExecutionMode) -> IO(Unit):
+  updateSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent, Settings.SetToolExecution{value})
+def getToolExecution(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(T.ToolExecutionMode):
+  do IO<T.ToolExecutionMode>:
+    settings : Settings.Settings <- getSettings(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Settings.getToolExecution(settings)
+def configSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, String>:
+  Settings.getSessionId(configSettings(A, G, D, M, V, E, J, Telemetry, Fetch, config))
