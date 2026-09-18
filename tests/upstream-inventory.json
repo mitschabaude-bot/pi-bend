@@ -24,16 +24,19 @@
     },
     {
       "source": "packages/agent/test/agent.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/agent/test/agent.bend",
         "packages/agent/test/agent-behavior.bend",
         "packages/agent/test/agent-await.bend",
         "packages/agent/test/agent-signal.bend",
         "packages/agent/test/agent-busy.bend",
-        "packages/agent/test/agent-declarations.bend"
+        "packages/agent/test/agent-declarations.bend",
+        "packages/agent/test/agent-turn-options.bend",
+        "packages/agent/test/agent-late-updates.bend"
       ],
-      "sha256": "c749bae5d7d9787b9f64009c065210c51622ad04dfd941388fee6b668c5b29f4"
+      "sha256": "c749bae5d7d9787b9f64009c065210c51622ad04dfd941388fee6b668c5b29f4",
+      "notes": "All 27 named upstream cases mapped across eight native fixtures; all pass together on one and four threads with exact upstream names checked once per run. Meaningful original assertions retained. Typed errors, immutable snapshots, explicit optional callbacks and channel/abort barriers replace JS exceptions, reference assertions and timer polling. Empty argument/detail fixture adapters use Unit where their values are not asserted; declaration schema structure is retained. This status covers the pinned Agent test suite, not full Agent API/configuration accessors, complete schema validation/inference, providers or package parity."
     },
     {
       "source": "packages/agent/test/e2e.test.ts",
