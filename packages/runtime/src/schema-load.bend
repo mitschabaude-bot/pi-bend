@@ -189,41 +189,28 @@ def countNode(array: Bool, lower: Bool, result: Result<&2, &2, Error, B.BigNat>)
       +bounds = boundedCount(lower, value)
       Done{Push{Bool.pick(S.Schema, array, S.ItemCount{bounds}, S.PropertyCount{bounds})} <> Nil{}}
 
-def checkedCount(result: Result<&2, &2, Error, B.BigNat>) -> Scheduled():
-  match result:
-    case Fail{error}: Fail{error}
-    case Done{_}: Done{Push{S.Accept{}} <> Nil{}}
-
-def optionalCount(value: Maybe<&2, V.Value>, path: List<&2, String>, fallback: B.BigNat) -> Result<&2, &2, Error, B.BigNat>:
-  match value:
-    case None{}: Done{fallback}
-    case Some{value}: readCount(value, path)
-
-def countMaximum(result: Result<&2, &2, Error, B.BigNat>) -> Result<&2, &2, Error, Maybe<&2, B.BigNat>>:
-  match result:
-    case Fail{error}: Fail{error}
-    case Done{value}: Done{Some{value}}
-
-def optionalMaximum(value: Maybe<&2, V.Value>, path: List<&2, String>) -> Result<&2, &2, Error, Maybe<&2, B.BigNat>>:
-  match value:
-    case None{}: Done{None{}}
-    case Some{value}: countMaximum(readCount(value, path))
-
 def parentPath(path: List<&2, String>) -> List<&2, String>:
   match path:
     case Nil{}: Nil{}
     case _ <> Nil{}: Nil{}
     case first <> second <> rest: first <> parentPath(second <> rest)
 
-def containing(value: V.Value, path: List<&2, String>, minimum: Result<&2, &2, Error, B.BigNat>, maximum: Result<&2, &2, Error, Maybe<&2, B.BigNat>>) -> Scheduled():
-  match minimum maximum:
-    case Fail{error} _: Fail{error}
-    case _ Fail{error}: Fail{error}
-    case Done{minimum} Done{maximum}: Done{Read{value, path} <> Build{Containing{S.CountBounds{minimum, maximum}}, 1n} <> Nil{}}
+def zeroMinimum(value: Maybe<&2, V.Value>) -> Bool:
+  match value:
+    case Some{value}: V.equal(value, V.Number{F.fromU32(0)})
+    case None{}: False{}
 
-def contains(value: V.Value, +whole: R.Record<V.Value>, +path: List<&2, String>) -> Scheduled():
-  +parent = parentPath(path)
-  containing(value, path, optionalCount(R.get(V.Value, whole, "minContains"), child(parent, "minContains"), B.one()), optionalMaximum(R.get(V.Value, whole, "maxContains"), child(parent, "maxContains")))
+# Keep the three contains constraints separate: their validity combines, but
+# upstream emits a distinct issue for each failed keyword.
+def contains(value: V.Value, whole: R.Record<V.Value>, path: List<&2, String>) -> Scheduled():
+  minimum = Bool.pick(B.BigNat, zeroMinimum(R.get(V.Value, whole, "minContains")), B.zero(), B.one())
+  Done{Read{value, path} <> Build{Containing{S.CountBounds{minimum, None{}}}, 1n} <> Nil{}}
+
+def containsBound(lower: Bool, value: Result<&2, &2, Error, B.BigNat>, inner: Maybe<&2, V.Value>, path: List<&2, String>) -> Scheduled():
+  match value inner:
+    case Fail{error} _: Fail{error}
+    case Done{_} None{}: Done{Push{S.Accept{}} <> Nil{}}
+    case Done{limit} Some{schema}: Done{Read{schema, child(parentPath(path), "contains")} <> Build{Containing{boundedCount(lower, limit)}, 1n} <> Nil{}}
 
 type KeywordKind is Data:
   TypeKeyword{}
@@ -289,8 +276,8 @@ def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record
     case MinPropertiesKeyword{}: countNode(False{}, True{}, readCount(value, path))
     case MaxPropertiesKeyword{}: countNode(False{}, False{}, readCount(value, path))
     case ContainsKeyword{}: contains(value, whole, path)
-    case MinContainsKeyword{}: checkedCount(readCount(value, path))
-    case MaxContainsKeyword{}: checkedCount(readCount(value, path))
+    case MinContainsKeyword{}: containsBound(True{}, readCount(value, path), R.get(V.Value, whole, "contains"), path)
+    case MaxContainsKeyword{}: containsBound(False{}, readCount(value, path), R.get(V.Value, whole, "contains"), path)
     case AnnotationKeyword{}: Done{Push{S.Accept{}} <> Nil{}}
     case UnknownKeyword{}: Fail{Error{path, UnsupportedKeyword{key}}}
 
@@ -385,7 +372,7 @@ def construct(constructor: Constructor, schemas: List<&2, S.Schema>) -> Loaded()
     case Additional{fields} schema <> Nil{}: Done{S.Object{fields, Nil{}, schema}}
     case TupleItems{} schemas: Done{S.Array{schemas, S.Accept{}}}
     case AllItems{} schema <> Nil{}: Done{S.Array{Nil{}, schema}}
-    case ExtraItems{prefix} schema <> Nil{}: Done{S.Array{prefix, schema}}
+    case ExtraItems{prefix} schema <> Nil{}: Done{S.AdditionalItems{List.length(&2, S.Schema, prefix), schema}}
     case Containing{bounds} schema <> Nil{}: Done{S.Contains{schema, bounds}}
     case _ _: Fail{Error{Nil{}, InvalidConstruction{}}}
 

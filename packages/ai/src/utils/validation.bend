@@ -1,4 +1,6 @@
 import Base
+import ./validation-errors.bend as Errors
+import ../../../runtime/src/schema-errors.bend as NativeErrors
 import ../types.bend as Ai
 import ./validation-normalize.bend as Normalize
 import ../../../runtime/src/schema.bend as Schema
@@ -286,21 +288,26 @@ def coerceWithJsonSchema(value: V.Value, schema: V.Value) -> Coercion():
   coerceTasks(Coerce{schema} <> Nil{}, Done{value})
 
 # Plain JSON declarations use this complete checking sequence. Builder-specific
-# conversion and upstream diagnostic text remain separate, unfinished layers.
+# conversion remains a separate, unfinished layer.
 # Retain the received value independently for later validation diagnostics.
 type ToolValidationError is Data:
   ToolNotFound{name: String}
   InvalidToolSchema{toolName: String, error: Loader.Error}
   NormalizationFailed{toolName: String, error: Normalize.Error}
   CoercionFailed{toolName: String, error: CoercionError}
-  InvalidToolArguments{toolName: String, schema: V.Value, received: V.Value, converted: V.Value}
+  InvalidToolArguments{toolName: String, schema: V.Value, received: V.Value, converted: V.Value, issues: List<&2, NativeErrors.Issue>}
 
 def ToolValidation() -> Data: Result<&2, &2, ToolValidationError, V.Value>
 
-def checkedToolArguments(name: String, schema: V.Value, received: V.Value, compiled: Schema.Schema, coerced: Coercion()) -> ToolValidation():
+def toolArgumentsChecked(valid: Bool, name: String, schema: V.Value, received: V.Value, compiled: Schema.Schema, +converted: V.Value) -> ToolValidation():
+  match valid:
+    case True{}: Done{converted}
+    case False{}: Fail{InvalidToolArguments{name, schema, received, converted, NativeErrors.errorsLimited(compiled, converted, Errors.issueLimit())}}
+
+def checkedToolArguments(name: String, schema: V.Value, received: V.Value, +compiled: Schema.Schema, coerced: Coercion()) -> ToolValidation():
   match coerced:
     case Fail{error}: Fail{CoercionFailed{name, error}}
-    case Done{+converted}: Bool.pick(ToolValidation(), Schema.check(compiled, converted), Done{converted}, Fail{InvalidToolArguments{name, schema, received, converted}})
+    case Done{+converted}: toolArgumentsChecked(Schema.check(compiled, converted), name, schema, received, compiled, converted)
 
 def compiledToolArguments(name: String, +schema: V.Value, received: V.Value, normalized: V.Value, compiled: Loader.Loaded()) -> ToolValidation():
   match compiled:
@@ -331,3 +338,11 @@ def validatePlainToolCall(tools: List<&2, Ai.Tool<V.Value>>, +call: Ai.ToolCall<
     case +tool <> tail:
       selected = Bool.pick(Unit -> ToolValidation(), String.eq(declaredToolName(tool), declaredCallName(call)), unused => validatePlainToolArguments(tool, call), unused => validatePlainToolCall(tail, call))
       selected(Unit{})
+
+# Internal/unsupported-schema failures retain their typed categories; this
+# formatter handles public missing-tool and invalid-argument messages.
+def formatToolValidationError(error: ToolValidationError) -> Maybe<&2, String>:
+  match error:
+    case ToolNotFound{name}: Some{Errors.formatToolNotFound(name)}
+    case InvalidToolArguments{name, _, received, _, issues}: Errors.formatNativeValidationFailure(name, received, issues)
+    case _: None{}

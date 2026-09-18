@@ -1,4 +1,6 @@
 import Base
+import ../src/utils/validation.bend as Validation
+import ../src/types.bend as Ai
 import ../src/utils/validation-errors.bend as Errors
 import ../src/utils/json.bend as Json
 import ../src/utils/schema-json.bend as SchemaJson
@@ -20,6 +22,14 @@ def path(location: Errors.Location, expected: String) -> IO(Unit):
 
 def pretty(input: V.Value, expected: String) -> IO(Unit):
   rendered(Json.stringifyPretty(SchemaJson.toJson(input)), expected, "indented original argument JSON")
+
+def rejected(result: Validation.ToolValidation(), expected: String) -> IO(Unit):
+  match result:
+    case Fail{error}: rendered(Validation.formatToolValidationError(error), expected, "complete native validation error text")
+    case Done{_}: T.assertion(False{}, "invalid fixture unexpectedly accepted")
+
+def validated(+name: String, schema: V.Value, input: V.Value, expected: String) -> IO(Unit):
+  rejected(Validation.validatePlainToolArguments(Ai.Tool{name, "", schema, None{}}, Ai.ToolCall{"id", name, input, None{}, None{}}), expected)
 
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -36,6 +36,7 @@ type Schema is Data:
   Contains{schema: Schema, bounds: CountBounds}
   Object{properties: R.Record<Schema>, required: List<&2, String>, additional: Schema}
   Array{prefix: List<&2, Schema>, items: Schema}
+  AdditionalItems{offset: Nat, items: Schema}
 
 # Tests pair child schemas with their own instance values. Keeping the work
 # tree explicit avoids callbacks, mutable traversal state and object cloning.
@@ -96,6 +97,12 @@ def propertyTests(values: List<&2, R.Property<V.Value>>, +properties: R.Record<S
   match values:
     case Nil{}: Nil{}
     case R.Property{key, value} <> tail: Check{propertySchema(R.get(Schema, properties, key), additional), value} <> propertyTests(tail, properties, additional)
+
+def dropItems(values: List<&2, V.Value>, offset: Nat) -> List<&2, V.Value>:
+  match values offset:
+    case values Zero{}: values
+    case Nil{} _: Nil{}
+    case _ <> rest Succ{offset}: dropItems(rest, offset)
 
 def itemTests(values: List<&2, V.Value>, prefix: List<&2, Schema>, +items: Schema) -> List<&2, Test>:
   match values prefix:
@@ -167,6 +174,8 @@ def evaluate(test: Test) -> Bool:
     case Check{Object{_, _, _}, _}: True{}
     case Check{Array{prefix, items}, V.ArrayValue{values}}: evaluate(Every{itemTests(values, prefix, items)})
     case Check{Array{_, _}, _}: True{}
+    case Check{AdditionalItems{offset, items}, V.ArrayValue{values}}: evaluate(Every{itemTests(dropItems(values, offset), Nil{}, items)})
+    case Check{AdditionalItems{_, _}, _}: True{}
     case Every{Nil{}}: True{}
     case Every{head <> tail}: evaluate(head) && evaluate(Every{tail})
     case SomeTest{Nil{}}: False{}

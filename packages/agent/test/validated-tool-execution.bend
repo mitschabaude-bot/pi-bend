@@ -28,12 +28,15 @@ def field(value: V.Value) -> V.Value: V.ObjectValue{R.Record{R.Property{"value",
 def convert(unused: Unit, messages: Messages()) -> IO(Converted()):
   IO.die(Converted(), 1, "tool preparation must not call message conversion")
 
+def rejected(message: Maybe<&2, String>) -> IO(Checked()):
+  match message:
+    case Some{message}: IO.pure(Checked(), Fail{message})
+    case None{}: IO.die(Checked(), 1, "unexpected native validation failure category or rendering failure")
+
 def validationResult(result: Validation.ToolValidation()) -> IO(Checked()):
   match result:
     case Done{value}: IO.pure(Checked(), Done{value})
-    # Test-only rendering: exact upstream diagnostic text is still pending.
-    case Fail{Validation.InvalidToolArguments{_, _, _, _}}: IO.pure(Checked(), Fail{"invalid arguments"})
-    case _: IO.die(Checked(), 1, "unexpected native validation failure category")
+    case Fail{error}: rejected(Validation.formatToolValidationError(error))
 
 def validate(unused: Unit, input: Input()) -> IO(Checked()):
   match input:
@@ -72,7 +75,7 @@ def runPrepared(+prepared: Loop.PreparedToolCall<V.Value, V.Value, String, V.Val
 def check(valid: Bool, state: Preparation(), emitter: C.Callback<EventValue(), E.Emission<String>>) -> IO(Unit):
   match valid state:
     case True{} Loop.ToolPreparationState{_, Loop.Prepared{prepared}}: runPrepared(prepared, emitter)
-    case False{} Loop.ToolPreparationState{_, Loop.Immediate{Loop.ImmediateToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, _}} <> Nil{}, _, _, _}, True{}}}}: Test.assertion(String.eq(message, "invalid arguments"), "preparation must expose native argument rejection")
+    case False{} Loop.ToolPreparationState{_, Loop.Immediate{Loop.ImmediateToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, _}} <> Nil{}, _, _, _}, True{}}}}: Test.assertion(String.eq(message, "Validation failed for tool \"echo\":\n  - value: must be number\n\nReceived arguments:\n{\n  \"value\": \"bad\"\n}"), "preparation must expose native argument rejection")
     case _ _: Test.assertion(False{}, "validation/preparation outcome differs")
 
 def run(+valid: Bool) -> IO(Unit):

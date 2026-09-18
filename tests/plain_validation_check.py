@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 import subprocess
-from schema_literals import value
+from schema_literals import value, string
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 dependency = BUILD / 'schema-reference/node_modules/typebox/package.json'
@@ -46,9 +46,9 @@ for i,(fixture,result) in enumerate(zip(cases,expected,strict=True)):
         lines.append(f'  T.check({args}, {value(result["value"])}, {value(fixture["value"])}, {label})')
     else:
         assert result['message'].startswith('Validation failed for tool "echo":')
-        lines.append(f'  T.reject({args}, {value(fixture["value"])}, {label})')
+        lines.append(f'  T.reject({args}, {value(fixture["value"])}, {string(result["message"])}, {label})')
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(len(cases))]
-lines += [f'    IO.print("PASS {len(cases)} composed plain-schema validation cases against upstream")']
+lines += [f'    IO.print("PASS {len(cases)} composed plain-schema validation cases, including exact failure text, against upstream")']
 source=BUILD/'plain-validation-check.bend'
 source.write_text('\n'.join(lines)+'\n')
 for source,name in [(source,'plain-validation-check'),('packages/ai/test/plain-validation.bend','plain-validation-errors'),('packages/ai/test/plain-validation-upstream.bend','plain-validation-upstream')]:

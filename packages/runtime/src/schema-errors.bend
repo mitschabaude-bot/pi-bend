@@ -108,6 +108,16 @@ def arrayTasks(values: List<&2, V.Value>, prefix: List<&2, S.Schema>, +items: S.
     case head <> tail Nil{}: Visit{items, head, child(path, Nat.show(index))} <> arrayTasks(tail, Nil{}, items, path, index + 1n)
     case head <> tail schema <> rest: Visit{schema, head, child(path, Nat.show(index))} <> arrayTasks(tail, rest, items, path, index + 1n)
 
+# Upstream reports all tuple-prefix failures but stops at the first invalid
+# additional item. The native node names that validation boundary explicitly.
+def additionalTasks(values: List<&2, V.Value>, +items: S.Schema, +path: List<&2, String>, +index: Nat) -> List<&2, Task>:
+  match values:
+    case Nil{}: Nil{}
+    case +head <> tail:
+      Bool.pick(Unit -> List<&2, Task>, S.check(items, head),
+        _ => additionalTasks(tail, items, path, index + 1n),
+        _ => Visit{items, head, child(path, Nat.show(index))} <> Nil{})(Unit{})
+
 def contained(values: List<&2, V.Value>, +schema: S.Schema) -> B.BigNat:
   match values:
     case Nil{}: B.zero()
@@ -142,6 +152,8 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
       emitUnless(S.inBounds(actual, bounds), path, ContainsCount{actual, bounds})
     case S.Object{declared, required, additional} V.ObjectValue{values}: objectTasks(declared, required, additional, values, path)
     case S.Array{prefix, items} V.ArrayValue{values}: arrayTasks(values, prefix, items, path, 0n)
+    case S.AdditionalItems{+offset, items} V.ArrayValue{values}: additionalTasks(S.dropItems(values, offset), items, path, offset)
+    case S.AdditionalItems{_, _} _: Nil{}
     case S.Minimum{_, _} _: Nil{}
     case S.Maximum{_, _} _: Nil{}
     case S.ItemCount{_} _: Nil{}
@@ -150,14 +162,24 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
     case S.Object{_, _, _} _: Nil{}
     case S.Array{_, _} _: Nil{}
 
+def afterEmission(remaining: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
+  match remaining:
+    case None{}: None{}
+    case Some{Zero{}}: Some{0n}
+    case Some{Succ{rest}}: Some{rest}
+
 # Every expansion consumes a finite schema child or instance element. Results
 # accumulate in reverse so emitting another issue never copies prior issues.
 @unsafe
-def run(tasks: List<&2, Task>, issues: List<&2, Issue>) -> List<&2, Issue>:
-  match tasks:
-    case Nil{}: List.reverse(&2, Issue, issues)
-    case EmitIssue{issue} <> rest: run(rest, issue <> issues)
-    case Visit{schema, value, path} <> rest: run(List.append(&2, Task, expand(schema, value, path), rest), issues)
+def collect(tasks: List<&2, Task>, issues: List<&2, Issue>, remaining: Maybe<&2, Nat>) -> List<&2, Issue>:
+  match tasks remaining:
+    case _ Some{Zero{}}: List.reverse(&2, Issue, issues)
+    case Nil{} _: List.reverse(&2, Issue, issues)
+    case EmitIssue{issue} <> rest remaining: collect(rest, issue <> issues, afterEmission(remaining))
+    case Visit{schema, value, path} <> rest remaining: collect(List.append(&2, Task, expand(schema, value, path), rest), issues, remaining)
 
 def errors(schema: S.Schema, value: V.Value) -> List<&2, Issue>:
-  run(Visit{schema, value, Nil{}} <> Nil{}, Nil{})
+  collect(Visit{schema, value, Nil{}} <> Nil{}, Nil{}, None{})
+
+def errorsLimited(schema: S.Schema, value: V.Value, limit: Nat) -> List<&2, Issue>:
+  collect(Visit{schema, value, Nil{}} <> Nil{}, Nil{}, Some{limit})

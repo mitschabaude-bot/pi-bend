@@ -1,4 +1,5 @@
 import Base
+import ../../runtime/src/utf16.bend as U
 import ../src/utils/validation.bend as Validation
 import ../src/types.bend as Ai
 import ../../runtime/src/schema-value.bend as V
@@ -13,7 +14,7 @@ def outcome(result: Validation.ToolValidation(), expected: V.Value, label: Strin
 
 def failure(result: Validation.ToolValidation(), received: V.Value, label: String) -> IO(Unit):
   match result:
-    case Fail{Validation.InvalidToolArguments{name, _, original, _}}: T.assertion(String.eq(name, "echo") && V.equal(original, received), label)
+    case Fail{Validation.InvalidToolArguments{name, _, original, _, _}}: T.assertion(String.eq(name, "echo") && V.equal(original, received), label)
     case _: T.assertion(False{}, "expected structured argument rejection: " ++ label)
 
 def check(+input: V.Value, schema: V.Value, expected: V.Value, original: V.Value, label: String) -> IO(Unit):
@@ -21,9 +22,21 @@ def check(+input: V.Value, schema: V.Value, expected: V.Value, original: V.Value
     outcome(Validation.validatePlainToolArguments(Ai.Tool{"echo", "", schema, None{}}, Ai.ToolCall{"id", "echo", input, None{}, None{}}), expected, label)
     T.assertion(V.equal(input, original), "plain validation must preserve original arguments")
 
-def reject(+input: V.Value, schema: V.Value, original: V.Value, label: String) -> IO(Unit):
+def messageMatches(message: Maybe<&2, String>, expected: String, label: String) -> IO(Unit):
+  match message:
+    case Some{actual}: T.assertion(U.equal(actual, expected), "complete validation failure: " ++ label)
+    case None{}: T.assertion(False{}, "missing argument error rendering: " ++ label)
+
+def failureMessage(result: Validation.ToolValidation(), expected: String, label: String) -> IO(Unit):
+  match result:
+    case Fail{error}: messageMatches(Validation.formatToolValidationError(error), expected, label)
+    case Done{_}: T.assertion(False{}, "expected argument failure: " ++ label)
+
+def reject(+input: V.Value, schema: V.Value, original: V.Value, message: String, +label: String) -> IO(Unit):
   do IO<Unit>:
-    failure(Validation.validatePlainToolArguments(Ai.Tool{"echo", "", schema, None{}}, Ai.ToolCall{"id", "echo", input, None{}, None{}}), original, label)
+    +result : Validation.ToolValidation() = Validation.validatePlainToolArguments(Ai.Tool{"echo", "", schema, None{}}, Ai.ToolCall{"id", "echo", input, None{}, None{}})
+    failure(result, original, label)
+    failureMessage(result, message, label)
 
 
 def missing(result: Validation.ToolValidation()) -> IO(Unit):

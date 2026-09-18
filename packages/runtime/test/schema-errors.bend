@@ -93,4 +93,6 @@ def main() -> IO(Unit):
     T.assertion(loadedPropertyOrder(E.errors(ordered, V.ObjectValue{R.Record{R.Property{"2", V.Null{}} <> R.Property{"10", V.Null{}} <> Nil{}}})), "property diagnostics retain schema declaration order, including numeric-looking keys")
     +bounds : S.Schema <- L.loaded(Loader.compile(V.ObjectValue{R.Record{R.Property{"minimum", V.Number{F.fromU32(2)}} <> R.Property{"maximum", V.Number{F.fromU32(0)}} <> Nil{}}}))
     T.assertion(loadedKeywordOrder(E.errors(bounds, V.Number{F.fromU32(1)})), "diagnostic keyword order is independent of declaration order")
+    T.assertion(empty(E.errorsLimited(S.Reject{}, V.Null{}, 0n)), "zero diagnostic budget emits nothing")
+    T.assertion(exclusiveFailure(E.errorsLimited(S.One{integer <> S.JsonKind{S.NumberType{}} <> Nil{}}, V.Number{F.fromU32(1)}, 1n)), "limited collection retains complete issue metadata")
     IO.print("PASS native structured schema diagnostics, paths, union isolation and exact counts")
