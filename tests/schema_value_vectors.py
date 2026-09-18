@@ -4,6 +4,7 @@ from pathlib import Path
 import random
 import subprocess
 from typebox_fixtures import fixtures
+from schema_test_values import bend, string
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
@@ -70,30 +71,6 @@ expected = json.loads(subprocess.check_output(['node', '-e', oracle, json.dumps(
 # Confirm the descriptor-tree transport itself preserves actual TypeBox JSON.
 for case, result in zip(typebox, expected[-len(typebox):], strict=True):
     assert result[0] == 'value' and result[2] == case['json']
-
-def string(points):
-    result = 'SNil{}'
-    for point in reversed(list(points)): result = f'SCon{{Chr{{{point}}}, {result}}}'
-    return result
-
-def bend(v):
-    kind = v[0]
-    if kind == 'undefined': return 'V.Undefined{}'
-    if kind == 'null': return 'V.Null{}'
-    if kind == 'boolean': return 'V.Boolean{' + ('True{}' if v[1] else 'False{}') + '}'
-    if kind == 'number':
-        raw=int(v[1],16)
-        return f'V.Number{{F.fromBits({raw >> 32}, {raw & 0xffffffff})}}'
-    if kind == 'string': return 'V.Text{' + string(v[1]) + '}'
-    if kind == 'symbol': return f'V.Symbol{{{v[1]}}}'
-    if kind == 'callable': return f'V.Callable{{{v[1]}}}'
-    if kind == 'bigint': return 'V.BigInteger{False{}, B.one()}'
-    if kind == 'array': return 'V.ArrayValue{' + ' <> '.join([bend(x) for x in v[1]]+['Nil{}']) + '}'
-    record='R.new(V.Property<V.Value<U32>>)'
-    for key, value, enumerable in v[1]:
-        record=f'R.set(V.Property<V.Value<U32>>, {record}, {string(map(ord,key))}, V.Property{{{bend(value)}, '+('True{}' if enumerable else 'False{}')+'})'
-    symbols=' <> '.join([f'V.SymbolProperty{{{key}, {bend(value)}}}' for key,value in v[2]]+['Nil{}'])
-    return f'V.ObjectValue{{{record}, {symbols}}}'
 
 source=['import Base','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/big-nat.bend as B','import ../packages/runtime/test/schema-value.bend as H','import ../packages/ai/test/schema-json.bend as J','def main() -> IO(Unit):\n  do IO<Unit>:']
 for index,(value,result) in enumerate(zip(values,expected,strict=True)):

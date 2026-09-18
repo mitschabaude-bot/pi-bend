@@ -1,6 +1,8 @@
 import Base
 import ../types.bend as T
 import ./text.bend as Text
+import ./tool-declaration.bend as Declaration
+import ../../../runtime/src/schema-value.bend as Schema
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/ordered-map.bend as M
 import ../../../runtime/src/ref.bend as Ref
@@ -253,3 +255,10 @@ def resolveTranscriptTools(-P: Data, -A: Data, -G: Data, -H: Data, +messages: Li
       do IO<TranscriptTools<P>>:
         nonAdditive : Bool <- hasNonAdditiveToolChanges(P, A, G, H, messages)
         resolveToolMode(P, A, G, H, messages, Bool.not(nonAdditive))
+
+# Schema-data entry points. The TypeBox static-schema adapter is still pending.
+def toToolDeclaration(-Metadata: Data, tool: T.Tool<Schema.Value<Metadata>>) -> Declaration.DeclarationResult<T.Tool<Schema.Value<Metadata>>>:
+  Declaration.toToolDeclaration(Metadata, tool)
+
+def declarationsEqual(-Metadata: Data, left: T.Tool<Schema.Value<Metadata>>, right: T.Tool<Schema.Value<Metadata>>) -> Declaration.DeclarationResult<Bool>:
+  Declaration.declarationsEqual(Metadata, left, right)
