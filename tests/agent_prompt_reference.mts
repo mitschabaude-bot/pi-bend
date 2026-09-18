@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const start=source.indexOf('\tprivate normalizePromptInput(');
+const end=source.indexOf('\n\tprivate async runPromptMessages(',start);
+const body=stripTypeScriptTypes('class Prompt {'+source.slice(start,end)+'}');
+const Prompt=new Function(body+';return Prompt;')();
+const user={role:'user',content:'existing',timestamp:17};
+const custom={role:'custom',content:'custom'};
+const images=[{type:'image',data:'one',mimeType:'image/png'},{type:'image',data:'two',mimeType:'image/jpeg'}];
+const fixtures=[['',undefined],['hello',images],[user,undefined],[custom,undefined],[[user,custom],undefined],[[],undefined]];
+const old=Date.now;Date.now=()=>555;
+const outputs=fixtures.map(args=>new Prompt().normalizePromptInput(...args));Date.now=old;
+const key=messages=>messages.map(m=>m.role==='custom'?'custom('+m.content+');':typeof m.content==='string'?'user('+m.content+');':m.content.map(p=>p.type==='text'?'text('+p.text+')':'image('+p.data+','+p.mimeType+')').join('')+';').join('');
+if(outputs[0][0].timestamp!==555||outputs[1][0].timestamp!==555||outputs[2][0].timestamp!==17)throw Error('timestamp mismatch');
+process.stdout.write(JSON.stringify(outputs.map(key)));

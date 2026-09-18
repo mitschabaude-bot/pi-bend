@@ -36,7 +36,13 @@ for(let mode=0;mode<10;mode++){
   return {result:async()=>final,async *[Symbol.asyncIterator](){yield {type:'start',partial:final};yield {type:'done',reason:final.stopReason,message:final};}};
  };
  agent=new Agent({streamFn:provider,initialState:{systemPrompt:'base',...(mode===9?{tools:[{name:'echo',label:'Echo',description:'Echo',parameters:{type:'object'},execute:async(id,args,signal)=>{assert.equal(id,'call');assert.equal(signal.aborted,false);return {content:[],details:null};}}]}:{}),...(mode===6?{messages:[user('old')]}:mode===7?{messages:[assistant()]}:{})}});
- agent.subscribe(event=>{
+ agent.subscribe(async event=>{
+  if(event.type==='agent_start'){
+   await assert.rejects(agent.prompt('busy'),{message:'Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.'});
+   await assert.rejects(agent.continue(),{message:'Agent is already processing. Wait for completion before continuing.'});
+   assert.throws(()=>agent.reset(),{message:'Agent is already processing. Wait for completion before resetting.'});
+   assert.ok(agent.signal);
+  }
   trace+=eventName(event)+'@'+key(agent)+';';
   if(mode===2&&event.type==='agent_start'||mode===8&&event.type==='message_start'&&event.message.role==='assistant')throw Error('listener failed');
  });

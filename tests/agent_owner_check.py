@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""Compare the Agent owner with actual pinned Agent and loop execution."""
+import json
+import re
+from pathlib import Path
+import subprocess
+root = Path(__file__).resolve().parents[1]
+source = (root.parent / 'pi-mono/packages/agent/src/agent.ts').read_text()
+source_options = source.split('export interface AgentOptions {', 1)[1].split('\n}', 1)[0]
+expected_fields = re.findall(r'^\t(\w+)\??:', source_options, re.M)
+native = (root / 'packages/agent/src/agent-options.bend').read_text()
+native_options = re.search(r'^  AgentOptions\{([^\n]+)\}', native, re.M).group(1)
+actual_fields = re.findall(r'(?:^|, )(\w+):', native_options)
+assert actual_fields == expected_fields, (actual_fields, expected_fields)
+expected = json.loads(subprocess.check_output(['node', 'tests/agent_run_reference.mts'], cwd=root, text=True))
+assert len(expected) == 10
+lines = ['import Base', 'import ../packages/agent/test/agent-owner.bend as T', 'def main() -> IO(Unit):', '  do IO<Unit>:']
+for mode, value in enumerate(expected):
+    lines.append(f'    T.scenario({mode}, {json.dumps(value)})')
+lines.append('    IO.print("PASS 10 Agent owner source comparisons, constructor defaults and borrowed ownership")')
+source = root / 'build/agent-owner-check.bend'
+source.write_text('\n'.join(lines) + '\n')
+subprocess.run(['sh', 'scripts/build-pure.sh', str(source), 'build/agent-owner-check'], cwd=root, check=True)
+for threads in ['1', '4']:
+    subprocess.run(['build/agent-owner-check', '--threads', threads], cwd=root, check=True, timeout=120)
