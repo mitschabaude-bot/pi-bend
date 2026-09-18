@@ -12,6 +12,7 @@ def array(p): return dict(kind='array',item=p)
 def tuple_(*p): return dict(kind='tuple',items=list(p))
 def union(*p): return dict(kind='union',items=list(p))
 def literal(v): return dict(kind='literal',value=v)
+def object_(*fields): return dict(kind='object',fields=list(fields))
 policies=[dict(kind='preserve'),dict(kind='never'),tuple_(),union()]
 for i in range(5):
     p=scalar(i)
@@ -20,10 +21,22 @@ policies += [literal(x) for x in [True,False,0,-0.0,1,1.5,'','x']]
 policies += [array(union(scalar(1),scalar(4))),tuple_(scalar(1),array(scalar(0))),union(tuple_(scalar(1),scalar(1)),tuple_(scalar(3),scalar(0))),union(array(scalar(1)),array(scalar(0)))]
 values=[None,False,True,0,-0.0,1,'1','-0','true','bad',[],['1'],['1','true'],['1','bad'],[1,None],[['true']],{}, {'x':1}]
 cases=[dict(policy=p,value=v) for p in policies for v in values]
+object_policies=[object_(),object_(('x',scalar(1),False)),object_(('x',scalar(1),True)),
+    object_(('x',scalar(1),False),('flag',scalar(0),True)),
+    object_(('x',union(scalar(1),scalar(4)),True)),
+    object_(('x',array(scalar(1)),True)),
+    object_(('x',object_(('flag',scalar(0),True)),False)),
+    array(object_(('x',scalar(1),True))),
+    union(object_(('x',literal(1),False)),object_(('x',scalar(0),False))),
+    object_(('path',scalar(3),False),('offset',scalar(1),True),('nullable',union(scalar(3),scalar(4)),True),('metadata',object_(('enabled',scalar(0),True)),False))]
+object_values=values+[{'x':'1'},{'x':None},{'x':'bad','extra':'2'},{'x':'1','flag':'TRUE'}, {'x':{'flag':'false'}},[{'x':'1'},{'x':None}], {'path':'file.txt','offset':None,'nullable':None,'metadata':{'enabled':None}}, {'flag':None}, {'extra':'1'}, {'x':['1','2']}, {'x':1}, {'x':True}]
+for p in object_policies: cases += [dict(policy=p,value=v) for v in object_values]
+
 expected=json.loads(subprocess.check_output(['node','tests/schema_builder_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
 def seq(items): return ''.join(x+' <> ' for x in items)+'Nil{}'
 def declaration(p):
     k=p['kind']
+    if k=='object': return 'D.object(R.Record{'+seq('R.Property{'+string(key)+', D.'+('optional' if optional else 'required')+'('+declaration(child)+')}' for key,child,optional in p['fields'])+'})'
     if k=='never': return 'D.never()'
     if k=='scalar': return 'D.'+['boolean','number','integer','string','null'][p['index']]+'()'
     if k=='array': return 'D.array('+declaration(p['item'])+')'

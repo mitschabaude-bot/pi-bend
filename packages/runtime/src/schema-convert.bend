@@ -1,5 +1,6 @@
 import Base
 import ./schema-value.bend as V
+import ./record.bend as R
 import ./schema.bend as S
 import ./f64.bend as F
 import ./f64-decimal.bend as Decimal
@@ -167,10 +168,12 @@ type Policy is Data:
   Scalar{primitive: Primitive}
   ArrayItems{item: Policy}
   TupleItems{items: List<&2, Policy>}
+  ObjectFields{fields: R.Record<Policy>}
 
 type Task is Data:
   Visit{policy: Policy, value: V.Value}
   FinishArray{count: Nat}
+  FinishObject{keys: List<&2, String>}
   ConvertedValue{result: Converted()}
   TryAlternative{schema: S.Schema, branches: List<&2, Branch<Policy>>, original: V.Value}
   SelectAlternative{schema: S.Schema, remaining: List<&2, Branch<Policy>>, original: V.Value}
@@ -196,6 +199,32 @@ def tupleTasks(policies: List<&2, Policy>, values: List<&2, V.Value>) -> List<&2
     case _ Nil{}: Nil{}
     case Nil{} head <> tail: Visit{Preserve{}, head} <> tupleTasks(Nil{}, tail)
     case policy <> policies head <> tail: Visit{policy, head} <> tupleTasks(policies, tail)
+
+def fieldPolicy(selected: Maybe<&2, Policy>) -> Policy:
+  match selected:
+    case None{}: Preserve{}
+    case Some{policy}: policy
+
+def objectTasks(+fields: R.Record<Policy>, values: List<&2, R.Property<V.Value>>) -> List<&2, Task>:
+  match values:
+    case Nil{}: Nil{}
+    case R.Property{key, value} <> rest: Visit{fieldPolicy(R.get(Policy, fields, key)), value} <> objectTasks(fields, rest)
+
+def reverseKeys(values: List<&2, R.Property<V.Value>>, keys: List<&2, String>) -> List<&2, String>:
+  match values:
+    case Nil{}: keys
+    case R.Property{key, _} <> rest: reverseKeys(rest, key <> keys)
+
+def scheduleObject(fields: R.Record<Policy>, value: V.Value, rest: List<&2, Task>) -> List<&2, Task>:
+  match value:
+    case V.ObjectValue{R.Record{+values}}: List.append(&2, Task, objectTasks(fields, values), FinishObject{reverseKeys(values, Nil{})} <> rest)
+    case other: Visit{Preserve{}, other} <> rest
+
+def finishObject(keys: List<&2, String>, values: List<&2, V.Value>, fields: List<&2, R.Property<V.Value>>) -> List<&2, V.Value>:
+  match keys values:
+    case Nil{} rest: V.ObjectValue{R.Record{fields}} <> rest
+    case key <> keys value <> rest: finishObject(keys, rest, R.Property{key, value} <> fields)
+    case _ Nil{}: Nil{}
 
 def arrayInput(value: V.Value) -> List<&2, V.Value>:
   match value:
@@ -226,6 +255,8 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
   match tasks values:
     case Nil{} value <> Nil{}: Done{value}
     case Nil{} _: Fail{InvalidConversionState{}}
+    case FinishObject{keys} <> rest values: run(rest, finishObject(keys, values, Nil{}))
+    case Visit{ObjectFields{fields}, value} <> rest values: run(scheduleObject(fields, value, rest), values)
     case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
     case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
     case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convert(literalPrimitive(literal), original))} <> rest, values)

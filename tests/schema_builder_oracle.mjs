@@ -2,6 +2,7 @@ import { Type } from '../build/schema-reference/node_modules/typebox/build/index
 const primitives=[Type.Boolean(),Type.Number(),Type.Integer(),Type.String(),Type.Null()];
 export function schema(p) {
   if (p.kind==='scalar') return primitives[p.index];
+  if (p.kind==='object') return Type.Object(Object.fromEntries(p.fields.map(([key,p,optional])=>[key,optional ? Type.Optional(schema(p)) : schema(p)])));
   if (p.kind==='never') return Type.Never();
   if (p.kind==='literal') return Type.Literal(p.value);
   if (p.kind==='union') return Type.Union(p.items.map(schema));

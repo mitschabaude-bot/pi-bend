@@ -88,3 +88,60 @@ def check(declaration: Declaration, value: V.Value) -> Bool:
 
 def convert(declaration: Declaration, value: V.Value) -> C.Converted():
   C.apply(conversion(declaration), value)
+
+# Optionality belongs to a declared field, rather than hidden metadata on the
+# schema value. Required and optional fields share the same value constraint.
+type Field is Data:
+  Required{declaration: Declaration}
+  Optional{declaration: Declaration}
+
+def required(declaration: Declaration) -> Field: Required{declaration}
+def optional(declaration: Declaration) -> Field: Optional{declaration}
+
+def fieldDeclaration(field: Field) -> Declaration:
+  match field:
+    case Required{declaration}: declaration
+    case Optional{declaration}: declaration
+
+def requiredKeys(fields: List<&2, R.Property<Field>>) -> List<&2, String>:
+  match fields:
+    case Nil{}: Nil{}
+    case R.Property{key, Required{_}} <> rest: key <> requiredKeys(rest)
+    case R.Property{_, Optional{_}} <> rest: requiredKeys(rest)
+
+def fieldSchemas(fields: List<&2, R.Property<Field>>) -> List<&2, R.Property<V.Value>>:
+  match fields:
+    case Nil{}: Nil{}
+    case R.Property{key, field} <> rest: R.Property{key, schema(fieldDeclaration(field))} <> fieldSchemas(rest)
+
+def fieldConstraints(fields: List<&2, R.Property<Field>>) -> List<&2, R.Property<S.Schema>>:
+  match fields:
+    case Nil{}: Nil{}
+    case R.Property{key, field} <> rest: R.Property{key, constraint(fieldDeclaration(field))} <> fieldConstraints(rest)
+
+def fieldConversions(fields: List<&2, R.Property<Field>>) -> List<&2, R.Property<C.Policy>>:
+  match fields:
+    case Nil{}: Nil{}
+    case R.Property{key, field} <> rest: R.Property{key, conversion(fieldDeclaration(field))} <> fieldConversions(rest)
+
+def textValues(keys: List<&2, String>) -> List<&2, V.Value>:
+  match keys:
+    case Nil{}: Nil{}
+    case key <> rest: V.Text{key} <> textValues(rest)
+
+def requiredSchema(keys: List<&2, String>) -> List<&2, R.Property<V.Value>>:
+  match keys:
+    case Nil{}: Nil{}
+    case keys: R.Property{"required", V.ArrayValue{textValues(keys)}} <> Nil{}
+
+# Literal-key conversion is the proposed native policy. Its known differences
+# from TypeBox's regexp-key behavior await approval before public integration.
+# This factory uses the default unconstrained, unconverted additional fields.
+def object(fields: R.Record<Field>) -> Declaration:
+  match fields:
+    case R.Record{+fields}:
+      +keys = requiredKeys(fields)
+      Declaration{
+        V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> List.append(&2, R.Property<V.Value>, requiredSchema(keys), R.Property{"properties", V.ObjectValue{R.Record{fieldSchemas(fields)}}} <> Nil{})}},
+        S.All{S.JsonKind{S.ObjectType{}} <> S.Object{R.Record{fieldConstraints(fields)}, keys, S.Accept{}} <> Nil{}},
+        C.ObjectFields{R.Record{fieldConversions(fields)}}}
