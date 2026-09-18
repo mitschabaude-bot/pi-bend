@@ -47,6 +47,8 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - Pure-Bend shortest binary64 formatting matches JavaScript on 1,092 bit patterns, including dense subnormal cases, exponent boundaries and decimal midpoint ties in both directions. JSON numeric spelling also handles non-finite values and signed zero. Decimal parsing, full JSON/schema serialization and performance evaluation remain pending.
 
+- Explicit canonical `JsonValue` serialization matches JavaScript on 892 string cases and 114 structured values, with native checks for 2,000 nested arrays and UTF-16-equivalent map keys. Arbitrary dynamic-value/schema serialization and typed message/tool wire codecs remain pending.
+
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
 
 The final port must replace the prototype libcurl/ICU/custom C dependencies with pure Bend implementations and missing Bend primitives. Bootstrap demonstrations above do not satisfy this requirement. `scripts/build-pure.sh` compiles canonical Bend tests without prototype effects, generated-entry-point patching, libcurl or ICU.

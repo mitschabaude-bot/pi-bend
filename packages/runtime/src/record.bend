@@ -1,4 +1,5 @@
 import Base
+import ./utf16.bend as U
 
 # Own enumerable string properties, with JavaScript object enumeration order:
 # canonical array-index keys first numerically, then other keys by insertion.
@@ -40,7 +41,7 @@ def getProperties(-V: Data, properties: List<&2, Property<V>>, +key: String) -> 
 
 def get(-V: Data, record: Record<V>, key: String) -> Maybe<&2, V>:
   match record:
-    case Record{properties}: getProperties(V, properties, key)
+    case Record{properties}: getProperties(V, properties, U.normalize(key))
 
 # Pure recursive insertion preserves position on replacement and moves a
 # deleted/re-added non-index key to the end, matching ordinary object keys.
@@ -53,7 +54,7 @@ def setProperties(-V: Data, properties: List<&2, Property<V>>, +key: String, +va
 
 def set(-V: Data, record: Record<V>, key: String, value: V) -> Record<V>:
   match record:
-    case Record{properties}: Record{setProperties(V, properties, key, value)}
+    case Record{properties}: Record{setProperties(V, properties, U.normalize(key), value)}
 
 def removeProperties(-V: Data, properties: List<&2, Property<V>>, +key: String) -> List<&2, Property<V>>:
   match properties:
@@ -64,7 +65,7 @@ def removeProperties(-V: Data, properties: List<&2, Property<V>>, +key: String) 
 
 def remove(-V: Data, record: Record<V>, key: String) -> Record<V>:
   match record:
-    case Record{properties}: Record{removeProperties(V, properties, key)}
+    case Record{properties}: Record{removeProperties(V, properties, U.normalize(key))}
 
 def entries(-V: Data, record: Record<V>) -> List<&2, Property<V>>:
   match record:
