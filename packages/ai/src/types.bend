@@ -101,7 +101,7 @@ type AssistantContent<-Arguments: Data> is Data:
   AssistantToolCall{value: Ref.Ref<ToolCall<Arguments>>}
 
 type AssistantMessage<-Arguments: Data, -DiagnosticDetails: Data> is Data:
-  AssistantMessage{content: List<&2, AssistantContent<Arguments>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: Number.F64}
+  AssistantMessage{content: Ref.Ref<List<&2, AssistantContent<Arguments>>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: Number.F64}
 
 # Restricted terminal reasons preserve upstream Extract<StopReason, ...>.
 type DoneReason is Data:

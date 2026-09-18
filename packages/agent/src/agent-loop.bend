@@ -535,3 +535,11 @@ def resolveRequestConfig(-Parameters: Data, -Arguments: Data, -DiagnosticDetails
   do IO<Result<&2, &2, ExecutionError, R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>>>:
     resolved : Result<&2, &2, ExecutionError, Maybe<&2, String>> <- resolveApiKey(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config)
     snapshotRequestConfig(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config, requestSignal, resolved)
+
+# message_start/message_update carry a fresh top-level assistant record. Its
+# content array and content objects remain shared with the provider message.
+# The receiver owns the snapshot cell; borrowed nested handles keep their owners.
+def snapshotAssistantMessage(-Arguments: Data, -DiagnosticDetails: Data, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>) -> IO(R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>):
+  do IO<R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>:
+    value : Ai.AssistantMessage<Arguments, DiagnosticDetails> <- R.read(Ai.AssistantMessage<Arguments, DiagnosticDetails>, message)
+    R.new(Ai.AssistantMessage<Arguments, DiagnosticDetails>, value)

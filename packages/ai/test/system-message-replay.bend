@@ -136,9 +136,17 @@ def createFixture() -> IO(Fixture):
     +text : Ref.Ref<T.TextContent> <- Ref.new(T.TextContent, T.TextContent{"ok", None{}})
     +zero : N.F64 = N.fromU32(0)
     +cost : Ref.Ref<T.UsageCost> <- Ref.new(T.UsageCost, T.UsageCost{zero, zero, zero, zero, zero})
-    assistant : Ref.Ref<T.AssistantMessage<Unit, Unit>> <- Ref.new(T.AssistantMessage<Unit, Unit>, T.AssistantMessage{T.AssistantText{text} <> Nil{}, "", "", "", None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}, T.Stop{}, None{}, None{}, None{}, None{}, N.fromU32(13)})
+    contents : Ref.Ref<List<&2, T.AssistantContent<Unit>>> <- Ref.new(List<&2, T.AssistantContent<Unit>>, T.AssistantText{text} <> Nil{})
+    assistant : Ref.Ref<T.AssistantMessage<Unit, Unit>> <- Ref.new(T.AssistantMessage<Unit, Unit>, T.AssistantMessage{contents, "", "", "", None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}, T.Stop{}, None{}, None{}, None{}, None{}, N.fromU32(13)})
     last : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, Some{patch}, Some{second <> Nil{}}, Some{T.ToolReference{"first"} <> Nil{}}, N.fromU32(14)})
     return Fixture{T.System{head} <> T.User{user} <> T.System{append} <> T.Assistant{assistant} <> T.System{last} <> Nil{}, first <> second <> Nil{}, text, cost}
+
+def disposeAssistantContent(value: T.AssistantMessage<Unit, Unit>) -> IO(Unit):
+  match value:
+    case T.AssistantMessage{contents, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      do IO<Unit>:
+        old : List<&2, T.AssistantContent<Unit>> <- Ref.dispose(List<&2, T.AssistantContent<Unit>>, contents)
+        return Unit{}
 
 def disposeMessages(messages: List<&2, Message()>) -> IO(Unit):
   match messages:
@@ -154,6 +162,7 @@ def disposeMessages(messages: List<&2, Message()>) -> IO(Unit):
     case T.Assistant{reference} <> rest:
       do IO<Unit>:
         previous : T.AssistantMessage<Unit, Unit> <- Ref.dispose(T.AssistantMessage<Unit, Unit>, reference)
+        disposeAssistantContent(previous)
         disposeMessages(rest)
     case T.ToolResult{reference} <> rest:
       do IO<Unit>:
@@ -217,14 +226,21 @@ def checkReplayText(value: T.TextContent) -> IO(Unit):
     case T.TextContent{text, None{}}: assertion(String.eq(text, "ok"), "collapsed assistant text changed")
     case _: assertion(False{}, "collapsed assistant text signature changed")
 
-def checkReplayAssistant(value: T.AssistantMessage<Unit, Unit>) -> IO(Unit):
+def checkReplayContents(value: List<&2, T.AssistantContent<Unit>>, timestamp: N.F64) -> IO(Unit):
   match value:
-    case T.AssistantMessage{T.AssistantText{text} <> Nil{}, _, _, _, _, _, _, _, _, _, _, _, _, _, timestamp}:
+    case T.AssistantText{text} <> Nil{}:
       do IO<Unit>:
         assertion(sameNumber(timestamp, N.fromU32(13)), "collapsed assistant timestamp changed")
         content : T.TextContent <- Ref.read(T.TextContent, text)
         checkReplayText(content)
     case _: assertion(False{}, "collapsed assistant content changed")
+
+def checkReplayAssistant(value: T.AssistantMessage<Unit, Unit>) -> IO(Unit):
+  match value:
+    case T.AssistantMessage{contents, _, _, _, _, _, _, _, _, _, _, _, _, _, timestamp}:
+      do IO<Unit>:
+        value : List<&2, T.AssistantContent<Unit>> <- Ref.read(List<&2, T.AssistantContent<Unit>>, contents)
+        checkReplayContents(value, timestamp)
 
 def checkCollapsed(value: Normalized()) -> IO(Unit):
   match value:
