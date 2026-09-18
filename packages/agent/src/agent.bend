@@ -364,3 +364,47 @@ def getGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J:
       do IO<Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>>:
         current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
         return optionsGetApiKey(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def configOnPayload(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, value, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: value
+def replaceOnPayload(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, _, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, value, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedOnPayload(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceOnPayload(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setOnPayload(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedOnPayload(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsOnPayload(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>:
+  match options:
+    case Run.Options{config, _, _, _}: configOnPayload(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getOnPayload(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, Ai.PayloadCallback(J, Ai.Model<J>, E)>>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsOnPayload(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def configOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, value, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: value
+def replaceOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, _, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, value, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceOnResponse(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedOnResponse(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>:
+  match options:
+    case Run.Options{config, _, _, _}: configOnResponse(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsOnResponse(A, G, D, M, V, E, J, Telemetry, Fetch, current)
