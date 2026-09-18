@@ -1,11 +1,13 @@
 """Compare the native typed schema evaluator with pi-ai's pinned TypeBox.
 
-The fixture translator is deliberately test-only. Production JSON Schema
-compilation, remaining keywords and diagnostics are still pending.
+The typed fixture translator is test-only. Loaded mode uses the production
+native loader and verifies explicit rejection of unsupported constraints.
+Remaining loader vocabulary, diagnostics and full tool integration are pending.
 """
 import json
 from pathlib import Path
 import struct
+import sys
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,28 +149,76 @@ def schema(s):
     return 'S.All{' + seq(nodes) + '}'
 
 
+LOADED = '--loaded' in sys.argv
+SUPPORTED = {'type', 'const', 'enum', 'allOf', 'anyOf', 'oneOf', 'not',
+             'properties', 'required', 'additionalProperties', 'items', 'additionalItems',
+             'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum',
+             'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly'}
+
+
+def unsupported(s, path=()):
+    if isinstance(s, bool):
+        return None
+    for key, v in s.items():
+        if key not in SUPPORTED:
+            return (*path, key), key
+        children = []
+        if key == 'properties':
+            children = [((*path, key, k), child) for k, child in v.items()]
+        elif key in {'allOf', 'anyOf', 'oneOf'} or (key == 'items' and isinstance(v, list)):
+            children = [((*path, key, str(i)), child) for i, child in enumerate(v)]
+        elif key in {'not', 'additionalProperties', 'items'}:
+            children = [((*path, key), v)]
+        elif key == 'additionalItems' and isinstance(s.get('items'), list):
+            children = [((*path, key), v)]
+        for child_path, child in children:
+            issue = unsupported(child, child_path)
+            if issue:
+                return issue
+    return None
+
+
 lines = ['import Base', 'import ../packages/runtime/src/schema.bend as S',
          'import ../packages/runtime/src/schema-value.bend as V',
          'import ../packages/runtime/src/record.bend as R',
          'import ../packages/runtime/src/f64.bend as F',
+         'import ../packages/runtime/test/schema-load.bend as L',
+         'import ../packages/runtime/src/schema-load.bend as Loader',
          'import ../packages/agent/test/message-events.bend as T']
+checks = 0
+rejections = 0
 for i, (s, results) in enumerate(zip(schemas, expected, strict=True)):
-    lines += [f'def case{i}() -> IO(Unit):', '  do IO<Unit>:', f'    +schema : S.Schema = {schema(s)}']
+    lines += [f'def case{i}() -> IO(Unit):', '  do IO<Unit>:']
+    issue = unsupported(s) if LOADED else None
+    if issue:
+        path, key = issue
+        lines.append(f'    L.unsupported(Loader.compile({value(s)}), {json.dumps("/".join(path))}, {json.dumps(key)})')
+        rejections += 1
+        continue
+    if LOADED:
+        lines.append(f'    +schema : S.Schema <- L.loaded(Loader.compile({value(s)}))')
+    else:
+        lines.append(f'    +schema : S.Schema = {schema(s)}')
     for j, (v, result) in enumerate(zip(values, results, strict=True)):
         literal = 'True{}' if result else 'False{}'
         lines.append(f'    T.assertion(Bool.not(Bool.xor(S.check(schema, {value(v)}), {literal})), "schema {i}, value {j}")')
+        checks += 1
 lines += ['def main() -> IO(Unit):', '  do IO<Unit>:']
 lines += [f'    case{i}()' for i in range(len(schemas))]
-lines += [f'    IO.print("PASS {len(schemas) * len(values)} native typed-schema checks against TypeBox 1.3.27")']
-source = BUILD / 'schema-check.bend'
+mode = 'loaded' if LOADED else 'typed'
+lines += [f'    IO.print("PASS {checks} native {mode}-schema checks against TypeBox 1.3.27; {rejections} explicit unsupported rejections")']
+source = BUILD / f'schema-{mode}-check.bend'
 source.write_text('\n'.join(lines) + '\n')
-output = BUILD / 'test-schema-check'
+output = BUILD / f'test-schema-{mode}-check'
 subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     subprocess.run([str(output), '--threads', threads], cwd=ROOT, check=True, timeout=120)
 
-# Native dictionary and IEEE edge contracts intentionally avoid JS reflection.
-native = BUILD / "test-native-schema-check"
-subprocess.run(["sh", "scripts/build-pure.sh", "packages/runtime/test/schema.bend", str(native)], cwd=ROOT, check=True)
-for threads in ["1", "4"]:
-    subprocess.run([str(native), "--threads", threads], cwd=ROOT, check=True, timeout=120)
+# Native dictionary, IEEE and loader-error contracts avoid JS reflection.
+entry = 'schema-load' if LOADED else 'schema'
+native = BUILD / f'test-native-{entry}'
+subprocess.run(['sh', 'scripts/build-pure.sh', f'packages/runtime/test/{entry}.bend', str(native)], cwd=ROOT, check=True)
+for threads in ['1', '4']:
+    subprocess.run([str(native), '--threads', threads], cwd=ROOT, check=True, timeout=120)
+if not LOADED:
+    subprocess.run([sys.executable, str(Path(__file__)), '--loaded'], cwd=ROOT, check=True)
