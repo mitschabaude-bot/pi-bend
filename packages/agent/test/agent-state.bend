@@ -93,6 +93,7 @@ def step(index: U32, state: Value()) -> Value():
     case 19: State.finishRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
     case 20: State.beginRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
     case 21: State.finishRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
+    case 22: State.reset(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
     case other: State.processEvent(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit, state, event((other - 2 : U32)))
 
 @unsafe def checkSteps(+index: U32, +state: Value(), expected: List<&2, String>) -> IO(Unit):

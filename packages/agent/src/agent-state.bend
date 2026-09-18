@@ -73,3 +73,11 @@ def processEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, 
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} T.TurnEnd{message, _}: T.AgentState{model, thinking, tools, messages, streaming, partial, pending, turnError(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, error, message)}
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} T.AgentEnd{_}: T.AgentState{model, thinking, tools, messages, streaming, None{}, pending, error}
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} _: T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error}
+
+# Replays the transcript baseline, retaining model/thinking and executable tools.
+# The synchronized owner rejects reset during a run and clears both queues.
+def reset(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, state: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
+  match state:
+    case T.AgentState{model, thinking, tools, messages, _, _, _, _}:
+      baseline = Transcript.getCurrentSystemMessage(Parameters, Arguments, DiagnosticDetails, Details, defaultConvertToLlm(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, messages))
+      T.AgentState{model, thinking, tools, prependInitial(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, baseline, Nil{}), False{}, None{}, Set.empty(), None{}}

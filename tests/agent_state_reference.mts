@@ -39,6 +39,7 @@ for(const mode of JSON.parse(input)){
  for(const event of events){await agent.processEvents(event);states.push(key(agent.state));}
  agent.finishRun();states.push(key(agent.state));
  begin.call(agent);states.push(key(agent.state));agent.finishRun();states.push(key(agent.state));
+ agent.reset();states.push(key(agent.state));
  results.push(states);
 }
 process.stdout.write(JSON.stringify(results));

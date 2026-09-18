@@ -63,6 +63,17 @@ def claim(-State: Data, -Error: Data, -Value: Data, owner: Lifecycle<State>, pre
         +candidate : ActiveRun <- createRun()
         result : Result<&2, &2, ClaimError<Error>, Claimed<Value>> <- R.modify(Cell<State>, Result<&2, &2, ClaimError<Error>, Claimed<Value>>, cell, current => claimState(State, Error, Value, current, candidate, prepare))
         claimed(Error, Value, candidate, result)
+def modified(-State: Data, -Value: Type, active: Maybe<&2, ActiveRun>, retired: List<&2, ActiveRun>, result: State & Value) -> Cell<State> & Value:
+  match result:
+    case Tuple{next, value}: (Cell{next, active, retired}, value)
+def modifyState(-State: Data, -Value: Type, cell: Cell<State>, transform: State -> Maybe<&2, ActiveRun> -> State & Value) -> Cell<State> & Value:
+  match cell:
+    case Cell{state, +active, retired}: modified(State, Value, active, retired, transform(state, active))
+# Event reductions, queue updates and reset share the run-claim transaction.
+def modify(-State: Data, -Value: Type, owner: Lifecycle<State>, transform: State -> Maybe<&2, ActiveRun> -> State & Value) -> IO(Value):
+  match owner:
+    case Lifecycle{cell}: R.modify(Cell<State>, Value, cell, current => modifyState(State, Value, current, transform))
+
 def readValue(-State: Data, cell: Cell<State>) -> State:
   match cell:
     case Cell{value, _, _}: value
