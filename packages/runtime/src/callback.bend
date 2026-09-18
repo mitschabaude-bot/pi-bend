@@ -9,6 +9,11 @@ type Factory<-A: Type> is Type:
 type Callback<-Input: Type, -Output: Type> is Data:
   Callback{factory: R.Ref<Factory<(Input -> IO(Output))>>}
 
+# Two factories with identical code/captures are still distinct callbacks.
+def same(-Input: Type, -Output: Type, left: Callback<Input, Output>, right: Callback<Input, Output>) -> Bool:
+  match left right:
+    case Callback{a} Callback{b}: R.same(Factory<(Input -> IO(Output))>, a, b)
+
 # Guarded corecursion: constructing a factory constructs one closure, without
 # running it. A call constructs exactly one successor. There is no background
 # task, fuel limit or eager infinite structure. Bend's structural termination

@@ -5,6 +5,11 @@ import Base
 type Ref<-A: Type> is Data:
   Ref{channel: Chan(A)}
 
+# Pure identity comparison, including affine contents; never reads the value.
+def same(-A: Type, left: Ref<A>, right: Ref<A>) -> Bool:
+  match left right:
+    case Ref{a} Ref{b}: Chan.same(A, a, b)
+
 def requireSent(sent: Bool) -> IO(Unit):
   match sent:
     case True{}: IO.pure(Unit, Unit{})

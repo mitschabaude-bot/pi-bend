@@ -1,0 +1,27 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -107,6 +107,13 @@
+ law Chan:
+   for -A: Type
+   Data
++
++# Identity of opaque handles, without observing or consuming channel contents.
++law Chan.same:
++  for -A: Type
++  for left: Chan(A)
++  for right: Chan(A)
++  Bool
+ 
+ type IO.OP<-R: Type> is Type:
+   Emit{value: R}
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -172,6 +172,8 @@
+ const CMPS = "is_eq:==:=== is_ne:!=:!== is_lt:< is_le:<= is_gt:> is_ge:>=";
+ 
+ const OPERATIONS: Record<string, Intr> = Object.setPrototypeOf({
++  // Channel handles are opaque values: native index/generation or JS object.
++  chan_same: { C: "($0 == $1)", JS: "($0 === $1)" },
+   ...tpl_ops("u32_", "add:+ sub:- and:& or:| xor:^",
+     "U32_BIN($0, $o, $1)", "(($0 $o $1) >>> 0)"),
+   ...tpl_ops("u32_", CMPS, "U32_BIN($0, $o, $1)", "($0 $o $1)"),
