@@ -1,4 +1,4 @@
-import { toToolDeclaration, declarationsEqual, getToolStateChanges } from '../../pi-mono/packages/ai/src/utils/transcript.ts';
+import { toToolDeclaration, declarationsEqual, getToolStateChanges, hasToolRedefinitions, hasNonAdditiveToolChanges } from '../../pi-mono/packages/ai/src/utils/transcript.ts';
 import type { Tool } from '../../pi-mono/packages/ai/src/types.ts';
 import { readFileSync } from 'node:fs';
 
@@ -35,7 +35,15 @@ function result(fn: () => unknown) {
   }
 }
 const cases = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-const output = process.argv[3] === 'state'
+const output = process.argv[3] === 'history'
+  ? cases.map(([values, entries]: any[]) => {
+      const pool = values.map(tool);
+      const messages = entries.map(([role, added, removed]: any[]) => ({
+        role, toolsAdded: added.map((index: number) => pool[index]), toolsRemoved: removed.map((name: string) => ({name})),
+      }));
+      return { redefined: result(() => hasToolRedefinitions(messages)), nonAdditive: hasNonAdditiveToolChanges(messages) };
+    })
+  : process.argv[3] === 'state'
   ? cases.map(([previous, current]: any[]) => result(() => {
       const changes = getToolStateChanges(previous.map(tool), current.map(tool));
       return { toolsAdded: changes.toolsAdded.map(value => JSON.stringify(value)), toolsRemoved: changes.toolsRemoved.map(value => value.name) };

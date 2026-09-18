@@ -338,3 +338,59 @@ def getToolStateChanges(-Metadata: Data, +previous: List<&2, T.Tool<Schema.Value
   previousIndex = indexToolValues(Schema.Value<Metadata>, previous, M.new(T.Tool<Schema.Value<Metadata>>))
   currentIndex = indexToolValues(Schema.Value<Metadata>, current, M.new(T.Tool<Schema.Value<Metadata>>))
   finishAdded(Metadata, previous, currentIndex, projectSelected(Metadata, selectChanged(Metadata, current, previousIndex, True{}, Declaration.Success{Nil{}})))
+
+type RedefinitionState<-Metadata: Data> is Data:
+  Definitions{tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>}
+  Redefined{}
+  RedefinitionFailure{error: Declaration.DeclarationError}
+
+def retainDefinition(-Metadata: Data, tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>, name: String, reference: Ref.Ref<T.Tool<Schema.Value<Metadata>>>, equal: Declaration.DeclarationResult<Bool>) -> RedefinitionState<Metadata>:
+  match equal:
+    case Declaration.Failure{error}: RedefinitionFailure{error}
+    case Declaration.Success{False{}}: Redefined{}
+    case Declaration.Success{True{}}: Definitions{M.set(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, tools, name, reference)}
+
+def compareDefinition(-Metadata: Data, previous: Maybe<&2, Ref.Ref<T.Tool<Schema.Value<Metadata>>>>, current: T.Tool<Schema.Value<Metadata>>, reference: Ref.Ref<T.Tool<Schema.Value<Metadata>>>, name: String, tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>) -> IO(RedefinitionState<Metadata>):
+  match previous:
+    case None{}: IO.pure(RedefinitionState<Metadata>, Definitions{M.set(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, tools, name, reference)})
+    case Some{value}:
+      do IO<RedefinitionState<Metadata>>:
+        previousTool : T.Tool<Schema.Value<Metadata>> <- Ref.read(T.Tool<Schema.Value<Metadata>>, value)
+        return retainDefinition(Metadata, tools, name, reference, declarationsEqual(Metadata, previousTool, current))
+
+def inspectDefinition(-Metadata: Data, +reference: Ref.Ref<T.Tool<Schema.Value<Metadata>>>, +tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>) -> IO(RedefinitionState<Metadata>):
+  do IO<RedefinitionState<Metadata>>:
+    +current : T.Tool<Schema.Value<Metadata>> <- Ref.read(T.Tool<Schema.Value<Metadata>>, reference)
+    +name : String = toolName(Schema.Value<Metadata>, current)
+    compareDefinition(Metadata, M.get(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, tools, name), current, reference, name, tools)
+
+def inspectDefinitions(-Metadata: Data, remaining: List<&2, Ref.Ref<T.Tool<Schema.Value<Metadata>>>>, state: RedefinitionState<Metadata>) -> IO(RedefinitionState<Metadata>):
+  match remaining state:
+    case _ Redefined{}: IO.pure(RedefinitionState<Metadata>, Redefined{})
+    case _ RedefinitionFailure{error}: IO.pure(RedefinitionState<Metadata>, RedefinitionFailure{error})
+    case Nil{} state: IO.pure(RedefinitionState<Metadata>, state)
+    case head <> tail Definitions{tools}:
+      do IO<RedefinitionState<Metadata>>:
+        updated : RedefinitionState<Metadata> <- inspectDefinition(Metadata, head, tools)
+        inspectDefinitions(Metadata, tail, updated)
+
+def messageDefinitions(-Metadata: Data, message: T.SystemMessage<Schema.Value<Metadata>>, tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>) -> IO(RedefinitionState<Metadata>):
+  match message:
+    case T.SystemMessage{_, _, added, _, _}: inspectDefinitions(Metadata, listValue(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, added), Definitions{tools})
+
+# Retain live tool references, ignore removals, and stop immediately after a
+# changed same-name definition. A first declaration never serializes its schema.
+def scanRedefinitions(-Metadata: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<Schema.Value<Metadata>, A, G, H>>, state: RedefinitionState<Metadata>) -> IO(Declaration.DeclarationResult<Bool>):
+  match messages state:
+    case _ Redefined{}: IO.pure(Declaration.DeclarationResult<Bool>, Declaration.Success{True{}})
+    case _ RedefinitionFailure{error}: IO.pure(Declaration.DeclarationResult<Bool>, Declaration.Failure{error})
+    case Nil{} Definitions{_}: IO.pure(Declaration.DeclarationResult<Bool>, Declaration.Success{False{}})
+    case T.System{reference} <> rest Definitions{tools}:
+      do IO<Declaration.DeclarationResult<Bool>>:
+        message : T.SystemMessage<Schema.Value<Metadata>> <- Ref.read(T.SystemMessage<Schema.Value<Metadata>>, reference)
+        updated : RedefinitionState<Metadata> <- messageDefinitions(Metadata, message, tools)
+        scanRedefinitions(Metadata, A, G, H, rest, updated)
+    case _ <> rest state: scanRedefinitions(Metadata, A, G, H, rest, state)
+
+def hasToolRedefinitions(-Metadata: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<Schema.Value<Metadata>, A, G, H>>) -> IO(Declaration.DeclarationResult<Bool>):
+  scanRedefinitions(Metadata, A, G, H, messages, Definitions{M.new(Ref.Ref<T.Tool<Schema.Value<Metadata>>>)})

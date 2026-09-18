@@ -41,7 +41,7 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - Canonical user/assistant/tool-result messages and all twelve assistant-event variants now have typed declarations, including shared live message/content references and opaque caller-typed payloads. The assistant stream factory passes native tests for all variants, success/error extraction, setup failure and retained identities on one and four threads. These tests supplement existing upstream coverage; schema relationships, dynamic-value integration, serialization and provider composition remain open.
 
-- Raw/normalized contexts, system messages and generic tool declarations now have canonical types. Context normalization, prompt rendering, system replay and collapse pass seven of nine upstream replay-suite cases, plus native separator/ordering/identity and transport-tool regressions. Own-property records and insertion-ordered maps each pass 50 JavaScript differential mutation sequences. Full schema-object declaration comparison, schema validation and custom-role integration remain pending.
+- Raw/normalized contexts, system messages and generic tool declarations now have canonical types. Context normalization, prompt rendering, system replay and collapse pass eight of nine upstream replay-suite cases, plus native separator/ordering/identity and transport-tool regressions. Own-property records and insertion-ordered maps each pass 50 JavaScript differential mutation sequences. Full schema-object declaration comparison, schema validation and custom-role integration remain pending.
 
 - Exact unsigned arbitrary-precision arithmetic now passes 179 independent vectors plus power and input cases, including values needed for extreme binary64 exponents. Integer decimal parsing/formatting is implemented in pure Bend. Schema-data declaration serialization/comparison is covered below.
 
@@ -53,9 +53,11 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - Constrained-sampling configurations retain required-field and grammar-variant insertion order. Their typed JSON codec and grammar mutations pass 115 JavaScript comparisons, with existing transcript tests passing on one and four threads. Extra runtime fields, shared mutable configurations and full declaration integration remain pending.
 
-- `toToolDeclaration` and `declarationsEqual` now handle schema-data tools through canonical JSON. Serialized declarations and comparisons match the actual upstream functions for 53 tool pairs, including ordering and error precedence. Full schema types, extended tool projection, mutable identities and redefinition integration remain pending; the replay suite is still partial.
+- `toToolDeclaration` and `declarationsEqual` now handle schema-data tools through canonical JSON. Serialized declarations and comparisons match the actual upstream functions for 53 tool pairs, including ordering and error precedence. Full schema types, extended tool projection and complete mutable identity semantics remain pending; the replay suite is still partial.
 
-- `getToolStateChanges` preserves upstream filter/map sequencing, last-definition lookups and duplicate/output order for schema-data tools. All 79 direct upstream cases pass; the original changed-definition and unchanged-state assertions are included in the replay suite. Mutable adapters, full schema types and redefinition detection remain pending.
+- `getToolStateChanges` preserves upstream filter/map sequencing, last-definition lookups and duplicate/output order for schema-data tools. All 79 direct upstream cases pass; the original changed-definition and unchanged-state assertions are included in the replay suite. Mutable adapters and full schema types remain pending.
+
+- `hasToolRedefinitions` now retains shared tool references and preserves lazy comparison/error behavior. Both history predicates match upstream for 61 histories on one and four threads. Eight of nine original replay-suite cases pass; extended-tool declaration projection and full schema-object integration remain open.
 
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
 
