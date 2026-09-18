@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/schema.bend as Schema
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/models.bend as Models
 import ../packages/ai/src/utils/transcript.bend as Transcript
