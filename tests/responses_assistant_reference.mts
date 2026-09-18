@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const base='../pi-mono/packages/ai/src/';
+const source=fs.readFileSync(base+'api/openai-responses-shared.ts','utf8');
+const sampling=fs.readFileSync(base+'api/constrained-sampling.ts','utf8');
+const start=source.indexOf('\n\t\t\tconst output: ResponseInput = []');
+const end=source.indexOf('\n\t\t} else if (msg.role === "toolResult")',start);
+if(start<0||end<0)throw new Error('Assistant source boundary missing');
+const body=source.slice(start,end);
+const signatures=source.slice(source.indexOf('function encodeTextSignatureV1('),source.indexOf('type ToolResultOutputContent'));
+const grammar=sampling.slice(sampling.indexOf('export function getGrammarToolInput('),sampling.indexOf('export function appendGrammarToolInputJsonDelta('));
+const helper=signatures+'\n'+grammar+'\n'+fs.readFileSync(base+'utils/hash.ts','utf8')+'\n'+fs.readFileSync(base+'utils/sanitize-unicode.ts','utf8');
+const wrapper='function replay(c){const messages=[];const model={provider:"openai",api:"openai-responses",id:"target"};const options={grammarToolInputProperties:new Map(Object.entries(c.grammar))};const msgIndex=c.index;const msg={content:c.content,provider:c.relation==="foreign"?"other":"openai",api:"openai-responses",model:c.relation==="same"?"target":"other"};for(const unused of [0]){'+body+'}return messages;}';
+const replay=new Function(stripTypeScriptTypes(helper+'\n'+wrapper).replace(/^export /gm,'')+';return replay;')();
+let input='';for await(const chunk of process.stdin)input+=chunk;
+process.stdout.write(JSON.stringify(JSON.parse(input).map(c=>{try{return {output:JSON.stringify(replay(c))};}catch(e){return {error:e instanceof SyntaxError?'reasoning':e.message};}})));
