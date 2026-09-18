@@ -175,3 +175,15 @@ The first named `agent.test.ts` cases are ported through the actual native Agent
 Complete typed tool/message fixtures replace upstream's partial `as any` values. Model preservation is checked structurally using complete deterministic model fixtures instead of reference identity; array-copy assertions become immutable input/snapshot checks, as approved. Additional queue-query/clear/mode checks exercise native accessors. The composed owner regression now changes thinking level from every event listener, checking that these updates preserve active streaming state, partial messages, pending tool IDs, queues and recovery error state throughout real runs. Remaining named cases stay pending; these tests do not establish full Agent or package completion.
 
 All eight mapped Agent cases and supplemental queue-mode checks pass on one/four threads after fresh builds. The Agent suite is now partial: inventory totals are 4 ported, 5 partial and 540 pending suites. Model and message fixtures use deterministic supplied values; model preservation checks every field in the fixture, while immutable snapshots replace reference-identity expectations.
+
+Five further named Agent cases are mapped below. `agent-behavior.bend` uses a done-only provider stream, as the upstream tests do, through actual public prompt/continuation calls. The optional stream function and explicitly owned default-provider registry replace reflective construction with an omitted JS argument. Fixture timestamps and assistant text are deterministic because these cases assert queue processing, roles and request counts rather than those values.
+
+| Upstream name | Native assertion group |
+| --- | --- |
+| restores the transcript baseline when reset | `agent.bend:resetBaseline` checks exactly one system message, original prompt and echo declaration; additionally checks queue clearing |
+| uses the configured default when a legacy caller omits streamFn | `agent-behavior.bend:legacyDefault` checks one fallback provider call |
+| forwards sessionId to streamFunction options | `agent-behavior.bend:sessionId` checks constructor value, setter/getter and both request values |
+| continue() should process queued follow-up messages after an assistant turn | `agent-behavior.bend:followUp` checks retained queued user text and final assistant message |
+| continue() should keep one-at-a-time steering semantics from assistant tail | `agent-behavior.bend:steering` checks exact alternating history roles and two provider calls |
+
+All 13 mapped Agent cases and the supplemental queue-mode checks pass on one/four threads after fresh builds. Fourteen named Agent cases remain pending. The library type check and all six compiler-patch regression scripts pass on Bend 2.0.7 after compatible patches were reapplied following its automatic update. Suite totals remain 4 ported, 5 partial and 540 pending.

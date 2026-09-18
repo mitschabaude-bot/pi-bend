@@ -34,6 +34,7 @@ def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState
   match mode:
     case 1: Some{State.AgentInitialState{Some{"You are a helpful assistant."}, Some{Models.model(Ai.OpenAIResponsesApi{}, None{})}, Some{Ai.Thinking{Ai.Low{}}}, None{}, None{}}}
     case 2: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), None{}}}
+    case 3: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), Some{H.user("old") <> Nil{}}}}
     case _: None{}
 def options(initial: Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
   Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
@@ -231,11 +232,28 @@ def queueModes() -> IO(Unit):
     Test.assertion(isAll(follow), "follow-up mode is readable after setting")
     dispose(fixture)
     IO.print("PASS native Agent queue-mode accessors")
+def resetResult(value: Result<&2, &2, String, Unit>) -> Bool:
+  match value:
+    case Done{_}: True{}
+    case _: False{}
+def resetBaseline() -> IO(Unit):
+  do IO<Unit>:
+    +fixture : Fixture <- create(3)
+    +agent : Owner.Owner() = getAgent(fixture)
+    Agent.steer(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("queued"))
+    result : Result<&2, &2, String, Unit> <- Agent.reset(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    +value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Test.assertion(resetResult(result) && Nat.is_eq(List.length(&2, H.Message(), getMessages(value)), 1n) && declaredState(value), "reset restores the exact prompt and tool declaration baseline")
+    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Test.assertion(Bool.not(queued), "reset clears queued messages")
+    dispose(fixture)
+    IO.print("PASS restores the transcript baseline when reset")
 def main() -> IO(Unit):
   do IO<Unit>:
     constructor(0, "should create an agent instance with default state")
     constructor(1, "should create an agent instance with custom initial state")
     constructor(2, "converts initial prompt and tools into transcript state")
+    resetBaseline()
     subscription()
     mutators()
     queueCase(False{}, "should support steering message queue")
