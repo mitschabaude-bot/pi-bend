@@ -1,4 +1,5 @@
 import Base
+import ./validation-normalize.bend as Normalize
 import ../../../runtime/src/number-string.bend as NumberString
 import ../../../runtime/src/f64-decimal.bend as Decimal
 import ../../../runtime/src/schema-value.bend as V
@@ -154,3 +155,8 @@ def coerceUnmatchedTypes(matched: Bool, types: List<&2, String>, value: V.Value)
 # and before object/array traversal. This is not the complete schema algorithm.
 def coerceSchemaTypes(+value: V.Value, +types: List<&2, String>) -> Coercion():
   coerceUnmatchedTypes(matchesTypeUnion(types, value), types, value)
+
+# Native normalization returns a new value; unsupported nullability decisions
+# remain explicit until the full schema vocabulary is implemented.
+def normalizeOptionalNulls(value: V.Value, schema: V.Value) -> Normalize.Outcome():
+  Normalize.normalizeOptionalNulls(value, schema)
