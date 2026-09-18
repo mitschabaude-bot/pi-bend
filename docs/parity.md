@@ -49,6 +49,8 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - Explicit canonical `JsonValue` serialization matches JavaScript on 892 string cases and 114 structured values, with native checks for 2,000 nested arrays and UTF-16-equivalent map keys. Arbitrary dynamic-value/schema serialization and typed message/tool wire codecs remain pending.
 
+- Schema-data snapshots match JavaScript JSON round trips on 144 cases covering omitted metadata, non-enumerable and symbol properties, array omissions, numbers and Unicode. Native checks cover explicit unsupported hooks and 2,000-level nesting. Live-object hooks, cycles, schema builders/validation and declaration integration remain pending; no additional upstream suite is complete.
+
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
 
 The final port must replace the prototype libcurl/ICU/custom C dependencies with pure Bend implementations and missing Bend primitives. Bootstrap demonstrations above do not satisfy this requirement. `scripts/build-pure.sh` compiles canonical Bend tests without prototype effects, generated-entry-point patching, libcurl or ICU.
