@@ -33,6 +33,11 @@ def check(+declaration: D.Declaration, +input: V.Value, raw: V.Value, converted:
     loaded(L.compile(D.schema(declaration)), D.constraint(declaration), input, expected, label)
     C.converted(D.convert(declaration, input), converted, "builder conversion: " ++ label)
 
+def configured(result: D.Configured(), input: V.Value, raw: V.Value, converted: V.Value, expected: Bool, label: String) -> IO(Unit):
+  match result:
+    case Fail{_}: T.assertion(False{}, "builder options failed: " ++ label)
+    case Done{declaration}: check(declaration, input, raw, converted, expected, label)
+
 def normalized(result: Normalize.Outcome(), +declaration: D.Declaration, expected: V.Value) -> IO(Unit):
   match result:
     case Fail{_}: T.assertion(False{}, "builder optional-null normalization failed")

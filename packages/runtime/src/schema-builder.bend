@@ -1,5 +1,6 @@
 import Base
 import ./schema.bend as S
+import ./schema-load.bend as Loader
 import ./schema-value.bend as V
 import ./schema-convert.bend as C
 import ./record.bend as R
@@ -81,7 +82,7 @@ def branches(items: List<&2, Declaration>) -> List<&2, C.Branch<C.Policy>>:
     case Declaration{_, checker, policy} <> tail: C.Branch{checker, policy} <> branches(tail)
 
 def union(+items: List<&2, Declaration>) -> Declaration:
-  Declaration{V.ObjectValue{R.Record{R.Property{"anyOf", V.ArrayValue{schemas(items)}} <> Nil{}}}, S.Any{constraints(items)}, C.Union{branches(items)}}
+  Declaration{V.ObjectValue{R.Record{R.Property{"anyOf", V.ArrayValue{schemas(items)}} <> Nil{}}}, S.Any{constraints(items)}, C.union(branches(items))}
 
 def check(declaration: Declaration, value: V.Value) -> Bool:
   S.check(constraint(declaration), value)
@@ -145,3 +146,61 @@ def object(fields: R.Record<Field>) -> Declaration:
         V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> List.append(&2, R.Property<V.Value>, requiredSchema(keys), R.Property{"properties", V.ObjectValue{R.Record{fieldSchemas(fields)}}} <> Nil{})}},
         S.All{S.JsonKind{S.ObjectType{}} <> S.Object{R.Record{fieldConstraints(fields)}, keys, S.Accept{}} <> Nil{}},
         C.ObjectFields{R.Record{fieldConversions(fields)}}}
+
+# Options that only constrain or annotate a declaration do not change its
+# conversion operations. Union candidate selection also uses the new whole
+# schema constraint. Structural replacements need their own builder operation.
+type OptionError is Data:
+  UnsupportedOption{name: String}
+  InvalidOptionSchema{error: Loader.Error}
+  ExpectedObjectSchema{}
+
+def Configured() -> Data: Result<&2, &2, OptionError, Declaration>
+
+def booleanOption(value: V.Value) -> Bool:
+  match value:
+    case V.Boolean{_}: True{}
+    case _: False{}
+
+def supportedOption(kind: Loader.KeywordKind, value: V.Value) -> Bool:
+  match kind:
+    case Loader.AnnotationKeyword{}: True{}
+    case Loader.MinimumKeyword{}: True{}
+    case Loader.MaximumKeyword{}: True{}
+    case Loader.ExclusiveMinimumKeyword{}: True{}
+    case Loader.ExclusiveMaximumKeyword{}: True{}
+    case Loader.MinItemsKeyword{}: True{}
+    case Loader.MaxItemsKeyword{}: True{}
+    case Loader.MinPropertiesKeyword{}: True{}
+    case Loader.MaxPropertiesKeyword{}: True{}
+    case Loader.UniqueItemsKeyword{}: True{}
+    case Loader.AdditionalPropertiesKeyword{}: booleanOption(value)
+    case _: False{}
+
+def mergeOptions(options: List<&2, R.Property<V.Value>>, state: Result<&2, &2, OptionError, R.Record<V.Value>>) -> Result<&2, &2, OptionError, R.Record<V.Value>>:
+  match options state:
+    case _ Fail{error}: Fail{error}
+    case Nil{} Done{fields}: Done{fields}
+    case R.Property{+key, +value} <> rest Done{fields}:
+      mergeOptions(rest, Bool.pick(Unit -> Result<&2, &2, OptionError, R.Record<V.Value>>, supportedOption(Loader.keywordKind(key), value),
+        _ => Done{R.set(V.Value, fields, key, value)}, _ => Fail{UnsupportedOption{key}})(Unit{}))
+
+def configuredConversion(policy: C.Policy, checker: S.Schema) -> C.Policy:
+  match policy:
+    case C.Union{choices, _}: C.Union{choices, checker}
+    case other: other
+
+def configuredSchema(raw: V.Value, policy: C.Policy, loaded: Loader.Loaded()) -> Configured():
+  match loaded:
+    case Fail{error}: Fail{InvalidOptionSchema{error}}
+    case Done{+checker}: Done{Declaration{raw, checker, configuredConversion(policy, checker)}}
+
+def configuredFields(fields: Result<&2, &2, OptionError, R.Record<V.Value>>, policy: C.Policy) -> Configured():
+  match fields:
+    case Fail{error}: Fail{error}
+    case Done{+fields}: configuredSchema(V.ObjectValue{fields}, policy, Loader.compile(V.ObjectValue{fields}))
+
+def withOptions(declaration: Declaration, options: R.Record<V.Value>) -> Configured():
+  match declaration:
+    case Declaration{V.ObjectValue{fields}, _, policy}: configuredFields(mergeOptions(R.entries(V.Value, options), Done{fields}), policy)
+    case _: Fail{ExpectedObjectSchema{}}

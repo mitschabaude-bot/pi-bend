@@ -164,7 +164,7 @@ type Branch<-P: Data> is Data:
 type Policy is Data:
   Preserve{}
   Literal{value: LiteralValue}
-  Union{branches: List<&2, Branch<Policy>>}
+  Union{branches: List<&2, Branch<Policy>>, candidateConstraint: S.Schema}
   Scalar{primitive: Primitive}
   ArrayItems{item: Policy}
   TupleItems{items: List<&2, Policy>}
@@ -183,11 +183,15 @@ def branchSchemas(branches: List<&2, Branch<Policy>>) -> List<&2, S.Schema>:
     case Nil{}: Nil{}
     case Branch{schema, _} <> rest: schema <> branchSchemas(rest)
 
-def scheduleUnion(+branches: List<&2, Branch<Policy>>, +original: V.Value, +rest: List<&2, Task>) -> List<&2, Task>:
-  +schema = {S.Any{branchSchemas(branches)} : S.Schema}
-  Bool.pick(Unit -> List<&2, Task>, S.check(schema, original),
+def union(+branches: List<&2, Branch<Policy>>) -> Policy:
+  Union{branches, S.Any{branchSchemas(branches)}}
+
+# An already-valid branch preserves the original input. Converted candidates
+# must satisfy the whole configured union, including its outer constraints.
+def scheduleUnion(+branches: List<&2, Branch<Policy>>, accepted: S.Schema, +original: V.Value, +rest: List<&2, Task>) -> List<&2, Task>:
+  Bool.pick(Unit -> List<&2, Task>, S.check(S.Any{branchSchemas(branches)}, original),
     _ => Visit{Preserve{}, original} <> rest,
-    _ => TryAlternative{schema, branches, original} <> rest)(Unit{})
+    _ => TryAlternative{accepted, branches, original} <> rest)(Unit{})
 
 def arrayTasks(+policy: Policy, values: List<&2, V.Value>) -> List<&2, Task>:
   match values:
@@ -260,7 +264,7 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
     case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
     case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
     case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convert(literalPrimitive(literal), original))} <> rest, values)
-    case Visit{Union{branches}, original} <> rest values: run(scheduleUnion(branches, original, rest), values)
+    case Visit{Union{branches, accepted}, original} <> rest values: run(scheduleUnion(branches, accepted, original, rest), values)
     case TryAlternative{_, Nil{}, original} <> rest values: run(rest, original <> values)
     case TryAlternative{+schema, Branch{_, policy} <> remaining, +original} <> rest values: run(Visit{policy, original} <> SelectAlternative{schema, remaining, original} <> rest, values)
     case SelectAlternative{+schema, remaining, original} <> +rest +candidate <> +values:

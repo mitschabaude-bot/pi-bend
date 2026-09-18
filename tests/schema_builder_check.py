@@ -32,6 +32,23 @@ object_policies=[object_(),object_(('x',scalar(1),False)),object_(('x',scalar(1)
 object_values=values+[{'x':'1'},{'x':None},{'x':'bad','extra':'2'},{'x':'1','flag':'TRUE'}, {'x':{'flag':'false'}},[{'x':'1'},{'x':None}], {'path':'file.txt','offset':None,'nullable':None,'metadata':{'enabled':None}}, {'flag':None}, {'extra':'1'}, {'x':['1','2']}, {'x':1}, {'x':True}]
 for p in object_policies: cases += [dict(policy=p,value=v) for v in object_values]
 
+option_policies=[
+    dict(**union(tuple_(scalar(1)),array(scalar(1))),options={'minItems':2}),
+    dict(**scalar(1),options={'minimum':1,'maximum':5}),
+    dict(**scalar(1),options={'exclusiveMinimum':0,'exclusiveMaximum':2}),
+    dict(**scalar(2),options={'minimum':0,'maximum':5}),
+    dict(**scalar(3),options={'title':'Text','description':'Tool input','default':'x','examples':['x','y'],'deprecated':True,'readOnly':False,'writeOnly':True}),
+    dict(**array(scalar(1)),options={'minItems':1,'maxItems':2,'uniqueItems':True}),
+    dict(**array(scalar(1)),options={'uniqueItems':False}),
+    dict(**tuple_(scalar(1)),options={'minItems':0}),
+    dict(**object_(('x',scalar(1),True)),options={'additionalProperties':False}),
+    dict(**object_(('x',scalar(1),True)),options={'minProperties':1,'maxProperties':1}),
+    dict(**union(scalar(1),scalar(4)),options={'description':'Nullable number'}),
+    dict(**literal(1),options={'description':'One'}),
+    dict(kind='preserve',options={'default':None,'examples':[None,False,{'x':1}]}),
+]
+option_values=object_values+[2,5,6,0.5,1.5,[1,1],[1,2],[1,2,3],{'x':1,'y':2}]
+for p in option_policies: cases += [dict(policy=p,value=v) for v in option_values]
 expected=json.loads(subprocess.check_output(['node','tests/schema_builder_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
 def seq(items): return ''.join(x+' <> ' for x in items)+'Nil{}'
 def declaration(p):
@@ -55,14 +72,18 @@ def decoded(v):
     return value(v['scalar'])
 lines=['import Base','import ../packages/runtime/test/schema-builder.bend as T','import ../packages/runtime/src/schema-builder.bend as D','import ../packages/runtime/src/schema-convert.bend as C','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(c,e) in enumerate(zip(cases,expected,strict=True)):
-    lines += [f'def case{i}() -> IO(Unit):',f'  T.check({declaration(c["policy"])}, {value(c["value"])}, {value(e["schema"])}, {decoded(e["converted"])}, '+('True{}' if e['valid'] else 'False{}')+f', "builder {i}")']
+    expression=declaration(c['policy']); method='check'
+    if 'options' in c['policy']:
+        options=value(c['policy']['options'])[len('V.ObjectValue{'):-1]
+        expression='D.withOptions('+expression+', '+options+')';method='configured'
+    lines += [f'def case{i}() -> IO(Unit):',f'  T.{method}({expression}, {value(c["value"])}, {value(e["schema"])}, {decoded(e["converted"])}, '+('True{}' if e['valid'] else 'False{}')+f', "builder {i}")']
 groups=[]
 for start in range(0,len(cases),60):
     name=f'group{start}';groups.append(name)
     lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+60,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name in groups]+[f'    IO.print("PASS {len(cases)} builder declarations, checks and conversions")']
 source=BUILD/'schema-builder-check.bend';source.write_text('\n'.join(lines)+'\n')
-for src,name in [(source,'schema-builder-check'),('packages/runtime/test/schema-builder.bend','schema-builder-native')]:
+for src,name in [(source,'schema-builder-check'),('packages/runtime/test/schema-builder.bend','schema-builder-native'),('packages/runtime/test/schema-builder-options.bend','schema-builder-options-native')]:
     output=BUILD/name
     subprocess.run(['sh','scripts/build-pure.sh',str(src),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']: subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)
