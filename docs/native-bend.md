@@ -7,6 +7,7 @@ This records the completed cleanup of JavaScript object and array emulation, per
 - Remove descriptors, reflective property inspection/definition/deletion, prototypes, symbols, sparse JS arrays, object extensibility, JavaScript `typeof` and object identity comparisons. These were supplemental compatibility work, not established pi contracts.
 - Dictionaries retain insertion order, with no numeric-key sorting. Ordinary strings such as `__proto__` have no special meaning.
 - Tool declaration equality is structural: dictionary order does not matter, list order and values do. Gregor explicitly approved this on 2026-09-18. Upstream `packages/ai/src/utils/transcript.ts:140` compares serialized declarations; the adaptation means reordering schema fields alone no longer triggers tool redefinition/provider fallback.
+- Numeric structural equality treats `0` and `-0` as equal, including inside nested values. Gregor explicitly approved treating `[0, -0]` as non-unique on 2026-09-18. Schema `uniqueItems` therefore rejects it, unlike the pinned TypeBox implementation; `tests/unique_items_check.py` records direct and nested signed-zero cases as approved differences.
 - Schemas and arguments use immutable JSON-compatible data. Optional configuration lives in typed `Maybe` fields; tool callbacks live in the executable tool record. No stringify/parse cloning or callable schema hooks.
 - Constrained sampling uses ordinary variants and a record with optional grammar strings. Property insertion order and an extra distinction between missing/undefined grammar entries are removed.
 - Cost calculation returns its computed value rather than mutating an aliased cost record. Numerical behavior is retained.
@@ -32,7 +33,7 @@ Canonical AI/agent records now contain ordinary values: messages, content, usage
 
 Cancellation uses a typed reason and a first-settled deferred value, with removable observations. Dictionary keys use native string equality and insertion order, including numeric-looking keys. JSON quoting handles Unicode at the codec boundary; it does not redefine dictionary key identity.
 
-Meaningful behavior changes are the two approved decisions above. Other changes are native API adaptations: cost functions return values; hooks return updates; configuration absence uses `Maybe`; cancellation uses typed observations. In-place mutations by JS extensions are outside the requested extension scope. The upstream before-tool argument-update capability remains represented explicitly, but integration with the complete executor was already pending and remains so.
+Meaningful behavior changes include the approved structural equality, signed-zero uniqueness and immutable snapshot decisions above. Other changes are native API adaptations: cost functions return values; hooks return updates; configuration absence uses `Maybe`; cancellation uses typed observations. In-place mutations by JS extensions are outside the requested extension scope. The upstream before-tool argument-update capability remains represented explicitly, but integration with the complete executor was already pending and remains so.
 
 ## Verification and scope
 
