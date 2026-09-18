@@ -45,7 +45,7 @@ def run(+failAt: String, expectedTrace: String) -> IO(Unit):
   do IO<Unit>:
     +log : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
     +emit : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~State, ~EventValue(), ~Result<&2, &2, String, Unit>, ~sink, State{log, failAt})
-    result : BatchResult() <- Loop.failToolCallsFromTruncatedMessage(Unit, String, Unit, String, Unit, String, Unit, Loop.TruncatedToolCallRun{emit}, Ai.ToolCall{"a", "echo", "incomplete", None{}, None{}} <> Ai.ToolCall{"b", "echo", "incomplete", None{}, None{}} <> Nil{})
+    result : BatchResult() <- Loop.failToolCallsFromTruncatedMessage(Unit, String, Unit, String, Unit, String, Details(), Loop.TruncatedToolCallRun{emit, Record.new(Unit)}, Ai.ToolCall{"a", "echo", "incomplete", None{}, None{}} <> Ai.ToolCall{"b", "echo", "incomplete", None{}, None{}} <> Nil{})
     check(result, failAt)
     trace : List<&2, String> <- R.read(List<&2, String>, log)
     Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), expectedTrace), "truncated-call events must be awaited in order and stop on failure")

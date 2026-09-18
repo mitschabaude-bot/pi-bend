@@ -1,4 +1,5 @@
 import Base
+import ../packages/agent/src/main-loop.bend as MainLoop
 import ../packages/agent/src/turn-preparation.bend as TurnPreparation
 import ../packages/agent/src/tool-changes.bend as ToolChanges
 import ../packages/agent/src/turn-completion.bend as TurnCompletion
