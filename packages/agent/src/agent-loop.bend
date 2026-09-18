@@ -1,6 +1,7 @@
 import Base
 import ./types.bend as T
 import ../../runtime/src/ref.bend as R
+import ../../runtime/src/record.bend as Record
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/date.bend as Date
 import ../../runtime/src/f64.bend as Number
@@ -757,3 +758,105 @@ def recordAssistantCompletion(-Parameters: Data, -Arguments: Data, -DiagnosticDe
     R.modify(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>, Unit, messages, values => (List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, values, T.LlmMessage{Ai.Assistant{message}} <> Nil{}), Unit{}))
     value : Ai.AssistantMessage<Arguments, DiagnosticDetails> <- R.read(Ai.AssistantMessage<Arguments, DiagnosticDetails>, message)
     endFailedAssistantTurn(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, message, messages, emit, arrays, assistantFailed(Arguments, DiagnosticDetails, value))
+
+type ExecutedToolCallBatch<-Details: Data> is Data:
+  ExecutedToolCallBatch{messages: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<Details>>>>, terminate: Bool}
+
+type TruncatedToolCallScope<-DetailValue: Data> is Data:
+  TruncatedToolCallScope{details: R.Ref<List<&2, R.Ref<Record.Record<DetailValue>>>>, results: R.Ref<List<&2, R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>>>, messages: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>, batches: R.Ref<List<&2, R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>>>}
+
+type TruncatedToolCallRun<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -DetailValue: Data> is Data:
+  TruncatedToolCallRun{emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, R.Ref<Record.Record<DetailValue>>, Custom, PartialResult, R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>, ExecutionError), scope: TruncatedToolCallScope<DetailValue>}
+
+# Error details are a fresh ordinary object. DetailValue is the caller's object
+# property domain; no JSON conversion or reuse of one shared empty object occurs.
+def createErrorToolResult(-DetailValue: Data, scope: TruncatedToolCallScope<DetailValue>, message: String) -> IO(R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>):
+  match scope:
+    case TruncatedToolCallScope{details, results, _, _}:
+      do IO<R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>>:
+        +empty : R.Ref<Record.Record<DetailValue>> <- R.new(Record.Record<DetailValue>, Record.new(DetailValue))
+        R.modify(List<&2, R.Ref<Record.Record<DetailValue>>>, Unit, details, values => (empty <> values, Unit{}))
+        +result : R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>> <- R.new(T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>, T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, None{}}} <> Nil{}, empty, None{}, None{}})
+        R.modify(List<&2, R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>>, Unit, results, values => (result <> values, Unit{}))
+        return result
+
+def truncatedCallError(-Arguments: Data, call: Ai.ToolCall<Arguments>) -> String:
+  match call:
+    case Ai.ToolCall{_, name, _, _, _}: "Tool call \"" ++ name ++ "\" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments."
+
+def toolExecutionStartEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -DetailValue: Data, call: Ai.ToolCall<Arguments>) -> T.AgentEvent<Parameters, Arguments, DiagnosticDetails, R.Ref<Record.Record<DetailValue>>, Custom, PartialResult, R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>>:
+  match call:
+    case Ai.ToolCall{id, name, arguments, _, _}: T.ToolExecutionStart{id, name, arguments}
+
+def appendTruncatedResult(-DetailValue: Data, -ExecutionError: Data, batch: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>, message: R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>, emitted: Result<&2, &2, ExecutionError, Unit>) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  match emitted:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Unit>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, ExecutionError, Unit>>:
+        R.modify(List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>, Unit, batch, values => (List.append(&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>, values, message <> Nil{}), Unit{}))
+        return Done{Unit{}}
+
+def afterTruncatedExecutionEnd(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -DetailValue: Data, run: TruncatedToolCallRun<Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue>, batch: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>, finalized: FinalizedToolCallOutcome<Arguments, R.Ref<Record.Record<DetailValue>>>, emitted: Result<&2, &2, ExecutionError, Unit>) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  match run emitted:
+    case _ Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Unit>, Fail{error})
+    case TruncatedToolCallRun{emit, TruncatedToolCallScope{_, _, messages, _}} Done{_}:
+      do IO<Result<&2, &2, ExecutionError, Unit>>:
+        +message : R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>> <- createToolResultMessage(Arguments, R.Ref<Record.Record<DetailValue>>, finalized)
+        R.modify(List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>, Unit, messages, values => (message <> values, Unit{}))
+        delivered : Result<&2, &2, ExecutionError, Unit> <- emitToolResultMessage(Parameters, Arguments, DiagnosticDetails, R.Ref<Record.Record<DetailValue>>, Custom, PartialResult, R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>, ExecutionError, message, emit)
+        appendTruncatedResult(DetailValue, ExecutionError, batch, message, delivered)
+
+def afterTruncatedStart(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -DetailValue: Data, +run: TruncatedToolCallRun<Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue>, batch: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>, +call: T.AgentToolCall(Arguments), emitted: Result<&2, &2, ExecutionError, Unit>) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  match run emitted:
+    case _ Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Unit>, Fail{error})
+    case TruncatedToolCallRun{emit, scope} Done{_}:
+      do IO<Result<&2, &2, ExecutionError, Unit>>:
+        current : Ai.ToolCall<Arguments> <- R.read(Ai.ToolCall<Arguments>, call)
+        result : R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>> <- createErrorToolResult(DetailValue, scope, truncatedCallError(Arguments, current))
+        +finalized : FinalizedToolCallOutcome<Arguments, R.Ref<Record.Record<DetailValue>>> = FinalizedToolCallOutcome{call, result, True{}}
+        ended : Result<&2, &2, ExecutionError, Unit> <- emitToolExecutionEnd(Parameters, Arguments, DiagnosticDetails, R.Ref<Record.Record<DetailValue>>, Custom, PartialResult, ExecutionError, finalized, emit)
+        afterTruncatedExecutionEnd(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue, run, batch, finalized, ended)
+
+def failTruncatedToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -DetailValue: Data, +run: TruncatedToolCallRun<Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue>, batch: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>, +call: T.AgentToolCall(Arguments)) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  match run:
+    case TruncatedToolCallRun{emit, _}:
+      do IO<Result<&2, &2, ExecutionError, Unit>>:
+        current : Ai.ToolCall<Arguments> <- R.read(Ai.ToolCall<Arguments>, call)
+        emitted : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, R.Ref<Record.Record<DetailValue>>, Custom, PartialResult, R.Ref<T.AgentToolResult<R.Ref<Record.Record<DetailValue>>>>>, Result<&2, &2, ExecutionError, Unit>, emit, toolExecutionStartEvent(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, DetailValue, current))
+        afterTruncatedStart(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue, run, batch, call, emitted)
+
+# Read each index from the live array, matching for-of when listeners append.
+def truncatedCallAt(-Arguments: Data, values: List<&2, T.AgentToolCall(Arguments)>, +index: Nat) -> Maybe<&2, T.AgentToolCall(Arguments)>:
+  match values:
+    case Nil{}: None{}
+    case head <> tail: Bool.pick(Maybe<&2, T.AgentToolCall(Arguments)>, Nat.is_eq(index, 0n), Some{head}, truncatedCallAt(Arguments, tail, (index - 1n : Nat)))
+
+def nextTruncatedCall(-Arguments: Data, -ExecutionError: Data, calls: R.Ref<List<&2, T.AgentToolCall(Arguments)>>, index: Nat, previous: Result<&2, &2, ExecutionError, Unit>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>>):
+  match previous:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>>>:
+        values : List<&2, T.AgentToolCall(Arguments)> <- R.read(List<&2, T.AgentToolCall(Arguments)>, calls)
+        return Done{truncatedCallAt(Arguments, values, index)}
+
+# Guarded IO recursion advances an index after one fully awaited call sequence.
+@unsafe
+def failTruncatedCalls(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -DetailValue: Data, +run: TruncatedToolCallRun<Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue>, +calls: R.Ref<List<&2, T.AgentToolCall(Arguments)>>, +batch: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>, +index: Nat, next: Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>>) -> IO(Result<&2, &2, ExecutionError, ExecutedToolCallBatch<R.Ref<Record.Record<DetailValue>>>>):
+  match next:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, ExecutedToolCallBatch<R.Ref<Record.Record<DetailValue>>>>, Fail{error})
+    case Done{None{}}: IO.pure(Result<&2, &2, ExecutionError, ExecutedToolCallBatch<R.Ref<Record.Record<DetailValue>>>>, Done{ExecutedToolCallBatch{batch, False{}}})
+    case Done{Some{call}}:
+      do IO<Result<&2, &2, ExecutionError, ExecutedToolCallBatch<R.Ref<Record.Record<DetailValue>>>>>:
+        emitted : Result<&2, &2, ExecutionError, Unit> <- failTruncatedToolCall(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue, run, batch, call)
+        +followingIndex : Nat = (index + 1n : Nat)
+        following : Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>> <- nextTruncatedCall(Arguments, ExecutionError, calls, followingIndex, emitted)
+        failTruncatedCalls(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue, run, calls, batch, followingIndex, following)
+
+def failToolCallsFromTruncatedMessage(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -DetailValue: Data, +run: TruncatedToolCallRun<Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue>, +calls: R.Ref<List<&2, T.AgentToolCall(Arguments)>>) -> IO(Result<&2, &2, ExecutionError, ExecutedToolCallBatch<R.Ref<Record.Record<DetailValue>>>>):
+  match run:
+    case TruncatedToolCallRun{_, TruncatedToolCallScope{_, _, _, batches}}:
+      do IO<Result<&2, &2, ExecutionError, ExecutedToolCallBatch<R.Ref<Record.Record<DetailValue>>>>>:
+        +batch : R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>> <- R.new(List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>, Nil{})
+        R.modify(List<&2, R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>>, Unit, batches, values => (batch <> values, Unit{}))
+        first : Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>> <- nextTruncatedCall(Arguments, ExecutionError, calls, 0n, Done{Unit{}})
+        failTruncatedCalls(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue, run, calls, batch, 0n, first)
