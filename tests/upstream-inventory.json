@@ -1191,9 +1191,12 @@
     },
     {
       "source": "packages/ai/test/transform-messages-copilot-openai-to-anthropic.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9ca82608662c28f5b23ee353b9b9ad0d93313895141ebfe948fca195e599f11d"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/transform-messages-copilot-openai-to-anthropic.bend"
+      ],
+      "sha256": "9ca82608662c28f5b23ee353b9b9ad0d93313895141ebfe948fca195e599f11d",
+      "notes": "All four original named cases pass through the public native transformMessages on one/four threads: thinking-to-text migration, thought-signature removal, trailing orphan synthesis as the final message, and partial-result repair. Supplemental actual-source comparisons cover 87 composed transforms and callback traces, in addition to prior image/replay/repair stage checks. Normalizers are borrowed typed callbacks; failures become typed Result errors. This does not establish provider serialization/networking or untyped-session decoding parity."
     },
     {
       "source": "packages/ai/test/unicode-surrogate.test.ts",

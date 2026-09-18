@@ -6,7 +6,7 @@ The target is pi-mono revision `46c9de402`, including its library design. The cu
 
 | Upstream package | Library responsibilities to preserve | Current gap |
 | --- | --- | --- |
-| `ai` | Typed messages, content, usage, models, provider factories, transcript normalization, credentials, injectable transports, streaming events and stream results | Prototype passes generic JSON through a single hard-coded provider |
+| `ai` | Typed messages, content, usage, models, provider factories, transcript normalization, credentials, injectable transports, streaming events and stream results | Native typed transcripts and the shared replay transform exist; provider APIs, serialization and transport integration remain unported |
 | `agent` | `Agent`, `AgentState`, `AgentContext`, `AgentMessage`, `AgentTool`, `AgentToolResult`, `AgentLoopConfig`, `StreamFn`, event subscriptions, tool hooks, queues, concurrent execution and settlement | Native Agent orchestration, loop entry points, streaming wrappers and tool lifecycle are assembled; full schema integration and broader package parity remain pending |
 | `agent/harness` | Execution environment, filesystem/shell interfaces, resources, reducer/drive layers, typed results, session storage and conformance, compaction | Native OS calls exist; harness interfaces and lifecycle are unported |
 | `tui` | `Component`, `Terminal`, editor interfaces, reusable components, screen implementations, differential renderer, input protocols and themes | Unicode/native terminal primitives exist; the library is unported |
