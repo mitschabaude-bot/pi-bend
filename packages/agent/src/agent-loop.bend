@@ -2,6 +2,8 @@ import Base
 import ./types.bend as T
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
+import ../../runtime/src/date.bend as Date
+import ../../runtime/src/f64.bend as Number
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/utf16.bend as U
 
@@ -168,3 +170,21 @@ def emitToolResultMessage(-Parameters: Data, -Arguments: Data, -DiagnosticDetail
   do IO<Result<&2, &2, ListenerError, Unit>>:
     started : Result<&2, &2, ListenerError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ListenerError, Unit>, emit, T.MessageStart{T.LlmMessage{Ai.ToolResult{toolResultMessage}}})
     finishToolResultMessage(Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult, ListenerError, toolResultMessage, emit, started)
+
+# The canonical typed result always supplies content. Dynamic null/absent
+# content normalization still belongs at the untyped runtime boundary.
+def toolResultMessageAt(-Arguments: Data, -Details: Data, call: Ai.ToolCall<Arguments>, result: T.AgentToolResult<Details>, isError: Bool, timestamp: Number.F64) -> Ai.ToolResultMessage<Details>:
+  match call result:
+    case Ai.ToolCall{id, name, _, _, _} T.AgentToolResult{content, details, usage, _}:
+      Ai.ToolResultMessage{id, name, content, Some{details}, usage, isError, timestamp}
+
+# Date.now is read after projecting the finalized call/result, as upstream.
+# The new message is owned by its caller; payload references stay shared.
+def createToolResultMessage(-Arguments: Data, -Details: Data, finalized: FinalizedToolCallOutcome<Arguments, Details>) -> IO(R.Ref<Ai.ToolResultMessage<Details>>):
+  match finalized:
+    case FinalizedToolCallOutcome{toolCall, result, isError}:
+      do IO<R.Ref<Ai.ToolResultMessage<Details>>>:
+        call : Ai.ToolCall<Arguments> <- R.read(Ai.ToolCall<Arguments>, toolCall)
+        value : T.AgentToolResult<Details> <- R.read(T.AgentToolResult<Details>, result)
+        timestamp : Number.F64 <- Date.now()
+        R.new(Ai.ToolResultMessage<Details>, toolResultMessageAt(Arguments, Details, call, value, isError, timestamp))

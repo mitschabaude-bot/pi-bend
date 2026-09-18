@@ -1,0 +1,39 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -214,6 +214,11 @@
+ def IO.sleep(ms: U32) -> IO(Unit):
+   import "./effs/sleep.c"
+   import "./effs/sleep.js"
++
++# Signed Unix epoch milliseconds as a two's-complement high/low word pair.
++def IO.unixMilliseconds() -> IO(U32 & U32):
++  import "./effs/unix_milliseconds.c"
++  import "./effs/unix_milliseconds.js"
+ 
+ def IO.now() -> IO(Nat):
+   import "./effs/now.c"
+--- /dev/null
++++ b/bend2/effs/unix_milliseconds.c
+@@ -0,0 +1,14 @@
++// OS wall-clock boundary only; signed conversion and policy live in Bend.
++Term io_unixmilliseconds_run(Env e, Term* f, IoWork* w) {
++  struct timespec ts;
++  if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
++    perror("IO.unixMilliseconds");
++    exit(1);
++  }
++  u64 value = (u64)ts.tv_sec * 1000ull + (u64)ts.tv_nsec / 1000000ull;
++  return io_tup(e, (u32)(value >> 32), (u32)value);
++}
++
++static void __attribute__((constructor)) io_unixmilliseconds_use(void) {
++  io_eff(CID_IO_UNIXMILLISECONDS, io_unixmilliseconds_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/unix_milliseconds.js
+@@ -0,0 +1,5 @@
++// Separate compiler-backend implementation; native programs never invoke JS.
++function io_unixmilliseconds() {
++  const value = BigInt.asUintN(64, BigInt(Date.now()));
++  return io_tup(Number(value >> 32n), Number(value & 0xffffffffn));
++}

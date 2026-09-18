@@ -1,0 +1,14 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -2895,7 +2895,10 @@
+ // ==
+ 
+ function js_sat(k: Bend.Name): string {
+-  return "$" + k.replace(/[./~]/g, "$") + "$";
++  // Escape punctuation (including the escape marker) injectively. Module
++  // paths may contain hyphens or Unicode that cannot be emitted verbatim.
++  return "$" + k.replace(/[^A-Za-z0-9_]/g,
++    (ch) => "$" + ch.charCodeAt(0).toString(16) + "$") + "$";
+ }
+ 
+ function js_call(fl: File, k: Bend.Name, args: HTerm[],
