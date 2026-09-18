@@ -1,5 +1,7 @@
 import Base
 import ./validation-normalize.bend as Normalize
+import ../../../runtime/src/schema.bend as Schema
+import ../../../runtime/src/schema-load.bend as Loader
 import ../../../runtime/src/number-string.bend as NumberString
 import ../../../runtime/src/f64-decimal.bend as Decimal
 import ../../../runtime/src/schema-value.bend as V
@@ -36,6 +38,8 @@ def matchesJsonType(value: V.Value, +kind: String) -> Bool:
 # retain a number or fabricate a string if that dependency cannot format it.
 type CoercionError is Data:
   NumberFormattingFailure{}
+  UnionSchemaFailure{error: Loader.Error}
+  PendingBooleanUnion{}
 
 def Coercion() -> Data: Result<&2, &2, CoercionError, V.Value>
 
@@ -160,3 +164,122 @@ def coerceSchemaTypes(+value: V.Value, +types: List<&2, String>) -> Coercion():
 # remain explicit until the full schema vocabulary is implemented.
 def normalizeOptionalNulls(value: V.Value, schema: V.Value) -> Normalize.Outcome():
   Normalize.normalizeOptionalNulls(value, schema)
+
+# Recursive coercion keeps each union candidate separate from the original.
+# Continuations hold immutable values; no clone/mutate/rollback layer exists.
+type CoercionTask is Data:
+  Coerce{schema: V.Value}
+  Union{schemas: List<&2, V.Value>}
+  OriginalMembers{remaining: List<&2, V.Value>, all: List<&2, V.Value>, original: V.Value}
+  OriginalChecked{matches: Result<&2, &2, CoercionError, Bool>, remaining: List<&2, V.Value>, all: List<&2, V.Value>, original: V.Value}
+  Candidates{remaining: List<&2, V.Value>, original: V.Value}
+  CandidateResult{schema: V.Value, remaining: List<&2, V.Value>, original: V.Value}
+  CandidateChecked{matches: Result<&2, &2, CoercionError, Bool>, remaining: List<&2, V.Value>, original: V.Value}
+  Scalars{types: List<&2, String>}
+  Structure{schema: R.Record<V.Value>, types: List<&2, String>}
+  ObjectFields{remaining: List<&2, R.Property<V.Value>>, properties: R.Record<V.Value>, additional: Maybe<&2, V.Value>, built: List<&2, R.Property<V.Value>>}
+  ObjectFieldResult{key: String, remaining: List<&2, R.Property<V.Value>>, properties: R.Record<V.Value>, additional: Maybe<&2, V.Value>, built: List<&2, R.Property<V.Value>>}
+  ArrayItems{remaining: List<&2, V.Value>, schemas: Normalize.Items, built: List<&2, V.Value>}
+  ArrayItemResult{remaining: List<&2, V.Value>, schemas: Normalize.Items, built: List<&2, V.Value>}
+
+def coercionTasks(schemas: List<&2, V.Value>) -> List<&2, CoercionTask>:
+  match schemas:
+    case Nil{}: Nil{}
+    case schema <> tail: Coerce{schema} <> coercionTasks(tail)
+
+def schemaList(value: Maybe<&2, V.Value>) -> List<&2, V.Value>:
+  match value:
+    case Some{V.ArrayValue{schemas}}: schemas
+    case _: Nil{}
+
+def coercionPlan(schema: V.Value, rest: List<&2, CoercionTask>) -> List<&2, CoercionTask>:
+  match schema:
+    case V.ObjectValue{+fields}:
+      +types = getSchemaTypes(fields)
+      List.append(&2, CoercionTask, coercionTasks(schemaList(R.get(V.Value, fields, "allOf"))), Union{schemaList(R.get(V.Value, fields, "anyOf"))} <> Union{schemaList(R.get(V.Value, fields, "oneOf"))} <> Scalars{types} <> Structure{fields, types} <> rest)
+    case _: rest
+
+def unionChecked(compiled: Loader.Loaded(), value: V.Value) -> Result<&2, &2, CoercionError, Bool>:
+  match compiled:
+    case Fail{error}: Fail{UnionSchemaFailure{error}}
+    case Done{schema}: Done{Schema.check(schema, value)}
+
+def unionMatches(schema: V.Value, value: V.Value) -> Result<&2, &2, CoercionError, Bool>:
+  match schema:
+    # Upstream's boolean-key cache failure affects true union arms. The native
+    # behavior is part of the pending boolean-schema decision, not emulated.
+    case V.Boolean{True{}}: Fail{PendingBooleanUnion{}}
+    case schema: unionChecked(Loader.compile(schema), value)
+
+def namedType(+name: String, types: List<&2, String>) -> Bool:
+  match types:
+    case Nil{}: False{}
+    case head <> tail: String.eq(name, head) || namedType(name, tail)
+
+def propertySchemas(value: Maybe<&2, V.Value>) -> R.Record<V.Value>:
+  match value:
+    case Some{V.ObjectValue{fields}}: fields
+    case _: R.new(V.Value)
+
+def additionalSchema(value: Maybe<&2, V.Value>) -> Maybe<&2, V.Value>:
+  match value:
+    case Some{V.ObjectValue{fields}}: Some{V.ObjectValue{fields}}
+    case _: None{}
+
+def structures(value: V.Value, +schema: R.Record<V.Value>, +types: List<&2, String>, +rest: List<&2, CoercionTask>) -> List<&2, CoercionTask>:
+  match value:
+    case V.ObjectValue{fields}: Bool.pick(List<&2, CoercionTask>, namedType("object", types), ObjectFields{R.entries(V.Value, fields), propertySchemas(R.get(V.Value, schema, "properties")), additionalSchema(R.get(V.Value, schema, "additionalProperties")), Nil{}} <> rest, rest)
+    case V.ArrayValue{items}: Bool.pick(List<&2, CoercionTask>, namedType("array", types), ArrayItems{items, Normalize.itemSchemas(R.get(V.Value, schema, "items")), Nil{}} <> rest, rest)
+    case _: rest
+
+def fieldSchema(declared: Maybe<&2, V.Value>, additional: Maybe<&2, V.Value>) -> Maybe<&2, V.Value>:
+  match declared:
+    case Some{schema}: Some{schema}
+    case None{}: additional
+
+def fieldTasks(selected: Maybe<&2, V.Value>, +key: String, tail: List<&2, R.Property<V.Value>>, properties: R.Record<V.Value>, additional: Maybe<&2, V.Value>, built: List<&2, R.Property<V.Value>>, rest: List<&2, CoercionTask>) -> List<&2, CoercionTask>:
+  match selected:
+    case None{}: ObjectFieldResult{key, tail, properties, additional, built} <> rest
+    case Some{schema}: Coerce{schema} <> ObjectFieldResult{key, tail, properties, additional, built} <> rest
+
+def itemTasks(schemas: Normalize.Items, tail: List<&2, V.Value>, built: List<&2, V.Value>, rest: List<&2, CoercionTask>) -> List<&2, CoercionTask>:
+  match schemas:
+    case Normalize.NoItems{}: ArrayItemResult{tail, Normalize.NoItems{}, built} <> rest
+    case Normalize.EachItem{+schema}: Coerce{schema} <> ArrayItemResult{tail, Normalize.EachItem{schema}, built} <> rest
+    case Normalize.TupleItems{Nil{}}: ArrayItemResult{tail, Normalize.NoItems{}, built} <> rest
+    case Normalize.TupleItems{schema <> schemas}: Coerce{schema} <> ArrayItemResult{tail, Normalize.TupleItems{schemas}, built} <> rest
+
+# Every task consumes a schema/instance child or one finite union alternative.
+@unsafe
+def coerceTasks(tasks: List<&2, CoercionTask>, result: Coercion()) -> Coercion():
+  match tasks result:
+    case _ Fail{error}: Fail{error}
+    case Nil{} Done{value}: Done{value}
+    case Coerce{schema} <> rest Done{value}: coerceTasks(coercionPlan(schema, rest), Done{value})
+    case Union{+schemas} <> rest Done{+value}: coerceTasks(OriginalMembers{schemas, schemas, value} <> rest, Done{value})
+    case OriginalMembers{Nil{}, all, original} <> rest _:
+      coerceTasks(Candidates{all, original} <> rest, Done{V.Null{}})
+    case OriginalMembers{schema <> tail, all, +original} <> rest _:
+      coerceTasks(OriginalChecked{unionMatches(schema, original), tail, all, original} <> rest, Done{V.Null{}})
+    case OriginalChecked{Fail{error}, _, _, _} <> _ _: Fail{error}
+    case OriginalChecked{Done{True{}}, _, _, original} <> rest _: coerceTasks(rest, Done{original})
+    case OriginalChecked{Done{False{}}, tail, all, original} <> rest _: coerceTasks(OriginalMembers{tail, all, original} <> rest, Done{V.Null{}})
+    case Candidates{Nil{}, original} <> rest _: coerceTasks(rest, Done{original})
+    case Candidates{+schema <> tail, +original} <> rest _: coerceTasks(Coerce{schema} <> CandidateResult{schema, tail, original} <> rest, Done{original})
+    case CandidateResult{schema, tail, original} <> rest Done{+value}:
+      coerceTasks(CandidateChecked{unionMatches(schema, value), tail, original} <> rest, Done{value})
+    case CandidateChecked{Fail{error}, _, _} <> _ _: Fail{error}
+    case CandidateChecked{Done{True{}}, _, _} <> rest Done{value}: coerceTasks(rest, Done{value})
+    case CandidateChecked{Done{False{}}, tail, original} <> rest _: coerceTasks(Candidates{tail, original} <> rest, Done{V.Null{}})
+    case Scalars{types} <> rest Done{value}: coerceTasks(rest, coerceSchemaTypes(value, types))
+    case Structure{schema, types} <> rest Done{+value}: coerceTasks(structures(value, schema, types, rest), Done{value})
+    case ObjectFields{Nil{}, _, _, built} <> rest _: coerceTasks(rest, Done{V.ObjectValue{R.Record{List.reverse(&2, R.Property<V.Value>, built)}}})
+    case ObjectFields{R.Property{+key, value} <> tail, +properties, +additional, built} <> rest _:
+      coerceTasks(fieldTasks(fieldSchema(R.get(V.Value, properties, key), additional), key, tail, properties, additional, built, rest), Done{value})
+    case ObjectFieldResult{key, tail, properties, additional, built} <> rest Done{value}: coerceTasks(ObjectFields{tail, properties, additional, R.Property{key, value} <> built} <> rest, Done{V.Null{}})
+    case ArrayItems{Nil{}, _, built} <> rest _: coerceTasks(rest, Done{V.ArrayValue{List.reverse(&2, V.Value, built)}})
+    case ArrayItems{value <> tail, schemas, built} <> rest _: coerceTasks(itemTasks(schemas, tail, built, rest), Done{value})
+    case ArrayItemResult{tail, schemas, built} <> rest Done{value}: coerceTasks(ArrayItems{tail, schemas, value <> built} <> rest, Done{V.Null{}})
+
+def coerceWithJsonSchema(value: V.Value, schema: V.Value) -> Coercion():
+  coerceTasks(Coerce{schema} <> Nil{}, Done{value})

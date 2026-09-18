@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
+import { Compile } from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
+const source = fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts', 'utf8');
+const start = source.indexOf('const validatorCache =');
+const end = source.indexOf('\nfunction formatValidationPath(', start);
+if (start < 0 || end <= start) throw new Error('upstream coercion/cache helpers missing');
+const coerce = new Function('Compile', stripTypeScriptTypes(source.slice(start, end)) + '\nreturn coerceWithJsonSchema;')(Compile);
+let input = '';
+for await (const chunk of process.stdin) input += chunk;
+process.stdout.write(JSON.stringify(JSON.parse(input).map(({schema, value}) => coerce(structuredClone(value), schema))));
