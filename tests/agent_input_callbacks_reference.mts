@@ -1,0 +1,47 @@
+// Actual pinned Agent methods and full loop helpers; only the provider is a fixture.
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {stripTypeScriptTypes} from 'node:module';
+import {createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,getCurrentTools,getToolStateChanges,toToolDeclaration,normalizeContext} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
+import {getDefaultStreamFn} from '../../pi-mono/packages/agent/src/stream-fn.ts';
+import {Compile} from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
+import {Value} from '../build/schema-reference/node_modules/typebox/build/value/index.mjs';
+const validationSource=fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts','utf8');
+const validationBody=stripTypeScriptTypes(validationSource.slice(validationSource.indexOf('const validatorCache ='))).replace(/^export /gm,'');
+const validateToolArguments=new Function('Compile','Value',validationBody+';return validateToolArguments;')(Compile,Value);
+const loopSource=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const entries=loopSource.slice(loopSource.indexOf('export async function runAgentLoop('),loopSource.indexOf('function createAgentStream('));
+const loopBody=stripTypeScriptTypes(entries+loopSource.slice(loopSource.indexOf('async function runLoop('))).replace(/^export /gm,'');
+const {runAgentLoop,runAgentLoopContinue}=new Function('getCurrentTools','getToolStateChanges','toToolDeclaration','normalizeContext','validateToolArguments','getDefaultStreamFn',loopBody+';return {runAgentLoop,runAgentLoopContinue};')(getCurrentTools,getToolStateChanges,toToolDeclaration,normalizeContext,validateToolArguments,getDefaultStreamFn);
+const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const body=stripTypeScriptTypes(source.slice(source.indexOf('function defaultConvertToLlm('))).replace(/^export /gm,'');
+const {Agent}=new Function('createInitialSystemMessage','getCurrentSystemMessage','getCurrentSystemPrompt','toToolDeclaration','getDefaultStreamFn','runAgentLoop','runAgentLoopContinue',body+';return {Agent};')(createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration,getDefaultStreamFn,runAgentLoop,runAgentLoopContinue);
+
+const trace=[];
+let calls=0,agent;
+const assistant=()=>({role:'assistant',content:[{type:'text',text:'answer'}],api:'unknown',provider:'unknown',model:'unknown',stopReason:'stop',timestamp:0});
+const convertA=messages=>{trace.push('ca');return messages.filter(m=>['system','user','assistant','toolResult'].includes(m.role));};
+const convertB=messages=>{trace.push('cb');return messages.filter(m=>['system','user','assistant','toolResult'].includes(m.role));};
+const transformA=async messages=>{trace.push('ta');return messages;};
+const transformB=async messages=>{trace.push('tb');return messages;};
+const provider=name=>async()=>{
+ trace.push(name);
+ const first=calls++===0;
+ if(first) Object.assign(agent,{streamFunction:streamB,convertToLlm:convertB,transformContext:transformB});
+ const message=first?{...assistant(),content:[{type:'toolCall',id:'call',name:'echo',arguments:{}}],stopReason:'toolUse'}:assistant();
+ return {result:async()=>message,async *[Symbol.asyncIterator](){yield {type:'done',reason:message.stopReason,message};}};
+};
+const streamA=provider('pa'),streamB=provider('pb');
+agent=new Agent({streamFn:streamA,initialState:{tools:[{name:'echo',label:'Echo',description:'Echo',parameters:{type:'object'},execute:async()=>({content:[],details:null})}]}});
+const original=agent.convertToLlm;
+assert.equal(agent.transformContext,undefined);
+Object.assign(agent,{streamFunction:streamA,convertToLlm:convertA,transformContext:transformA});
+assert.equal(agent.streamFunction,streamA);assert.equal(agent.convertToLlm,convertA);assert.equal(agent.transformContext,transformA);
+await agent.prompt('first');
+assert.equal(agent.streamFunction,streamB);assert.equal(agent.convertToLlm,convertB);assert.equal(agent.transformContext,transformB);
+await agent.prompt('next');
+agent.transformContext=undefined;
+await agent.prompt('without transform');
+assert.deepEqual(original([{role:'custom'}]),[]);
+assert.equal(trace.join(';')+';','ta;ca;pa;ta;ca;pa;tb;cb;pb;cb;pb;');
+console.log('PASS upstream Agent provider/converter/transform replacement and per-run capture');

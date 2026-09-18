@@ -280,3 +280,65 @@ def getToolExecution(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data,
     return Settings.getToolExecution(settings)
 def configSessionId(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, String>:
   Settings.getSessionId(configSettings(A, G, D, M, V, E, J, Telemetry, Fetch, config))
+
+# Replacement borrows the new callback. Keep old and new caller-owned handles
+# alive through every run that captured them. The owned default converter stays
+# alive until Agent disposal, even after replacement.
+def changedStreamFunction(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E)) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, _, validate, emptyDetails}: (Run.Options{config, Provider.Explicit{value}, validate, emptyDetails}, Unit{})
+def setStreamFunction(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E)) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedStreamFunction(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsStreamFunction(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E)):
+  match options:
+    case Run.Options{_, Provider.Explicit{value}, _, _}: IO.pure(T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E), value)
+    case _: IO.die(T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E), 1, "Agent provider selection must be resolved at construction")
+def getStreamFunction(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E)):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<T.StreamFn(Schema.Value, A, G, D, J, Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), E)>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        optionsStreamFunction(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+def configConvertToLlm(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Options.Converter(A, G, D, M, E):
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, value, _, _, _, _, _, _, _, _, _}: value
+def replaceConvertToLlm(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Options.Converter(A, G, D, M, E)) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, _, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, value, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedConvertToLlm(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Options.Converter(A, G, D, M, E)) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceConvertToLlm(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setConvertToLlm(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Options.Converter(A, G, D, M, E)) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedConvertToLlm(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsConvertToLlm(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Options.Converter(A, G, D, M, E):
+  match options:
+    case Run.Options{config, _, _, _}: configConvertToLlm(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getConvertToLlm(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Options.Converter(A, G, D, M, E)):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Options.Converter(A, G, D, M, E)>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsConvertToLlm(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+def configTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, value, _, _, _, _, _, _, _, _}: value
+def replaceTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, _, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, value, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceTransformContext(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedTransformContext(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>:
+  match options:
+    case Run.Options{config, _, _, _}: configTransformContext(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsTransformContext(A, G, D, M, V, E, J, Telemetry, Fetch, current)
