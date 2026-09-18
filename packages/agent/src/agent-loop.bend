@@ -1,6 +1,7 @@
 import Base
 import ./types.bend as T
 import ../../runtime/src/ref.bend as R
+import ../../runtime/src/callback.bend as C
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/utf16.bend as U
 
@@ -140,3 +141,30 @@ def shouldTerminateToolBatch(-Arguments: Data, -Details: Data, finalizedCalls: L
   match finalizedCalls:
     case Nil{}: IO.pure(Bool, False{})
     case +head <> +tail: allTerminate(Arguments, Details, head <> tail)
+
+# Promise<void> | void becomes an awaited reusable IO callback. Recoverable
+# listener failures are explicit; callers must propagate them without emitting
+# later events. This does not establish host Promise microtask scheduling.
+def AgentEventSink(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ListenerError: Data) -> Data:
+  C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ListenerError, Unit>>
+
+def toolExecutionEndEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -PartialResult: Data, call: Ai.ToolCall<Arguments>, result: R.Ref<T.AgentToolResult<Details>>, isError: Bool) -> T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, R.Ref<T.AgentToolResult<Details>>>:
+  match call:
+    case Ai.ToolCall{id, name, _, _, _}: T.ToolExecutionEnd{id, name, result, isError}
+
+def emitToolExecutionEnd(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -PartialResult: Data, -ListenerError: Data, finalized: FinalizedToolCallOutcome<Arguments, Details>, emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, R.Ref<T.AgentToolResult<Details>>, ListenerError)) -> IO(Result<&2, &2, ListenerError, Unit>):
+  match finalized:
+    case FinalizedToolCallOutcome{toolCall, result, isError}:
+      do IO<Result<&2, &2, ListenerError, Unit>>:
+        call : Ai.ToolCall<Arguments> <- R.read(Ai.ToolCall<Arguments>, toolCall)
+        C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, R.Ref<T.AgentToolResult<Details>>>, Result<&2, &2, ListenerError, Unit>, emit, toolExecutionEndEvent(Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, call, result, isError))
+
+def finishToolResultMessage(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ListenerError: Data, toolResultMessage: R.Ref<Ai.ToolResultMessage<Details>>, emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult, ListenerError), started: Result<&2, &2, ListenerError, Unit>) -> IO(Result<&2, &2, ListenerError, Unit>):
+  match started:
+    case Fail{error}: IO.pure(Result<&2, &2, ListenerError, Unit>, Fail{error})
+    case Done{Unit{}}: C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ListenerError, Unit>, emit, T.MessageEnd{T.LlmMessage{Ai.ToolResult{toolResultMessage}}})
+
+def emitToolResultMessage(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ListenerError: Data, +toolResultMessage: R.Ref<Ai.ToolResultMessage<Details>>, +emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult, ListenerError)) -> IO(Result<&2, &2, ListenerError, Unit>):
+  do IO<Result<&2, &2, ListenerError, Unit>>:
+    started : Result<&2, &2, ListenerError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ListenerError, Unit>, emit, T.MessageStart{T.LlmMessage{Ai.ToolResult{toolResultMessage}}})
+    finishToolResultMessage(Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult, ListenerError, toolResultMessage, emit, started)
