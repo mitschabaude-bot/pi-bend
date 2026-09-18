@@ -40,6 +40,16 @@ def exactCount(result: Result<&2, &2, L.Error, B.BigNat>, expected: String) -> I
     case Done{value}: T.assertion(String.eq(B.toDecimal(value), expected), "count conversion must preserve the exact binary64 integer")
     case Fail{_}: T.assertion(False{}, "valid integer count rejected")
 
+def referenceCycle(result: L.Loaded()) -> IO(Unit):
+  match result:
+    case Fail{L.Error{_, L.UnsupportedReferenceCycle{_}}}: IO.pure(Unit, Unit{})
+    case _: T.assertion(False{}, "recursive references must remain explicit unsupported errors")
+
+def externalReference(result: L.Loaded()) -> IO(Unit):
+  match result:
+    case Fail{L.Error{_, L.UnsupportedReference{_}}}: IO.pure(Unit, Unit{})
+    case _: T.assertion(False{}, "external/anchor references must remain explicit unsupported errors")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +accept : S.Schema <- loaded(L.compile(V.Boolean{True{}}))
@@ -57,7 +67,8 @@ def main() -> IO(Unit):
     invalid(L.compile(object("items", V.ArrayValue{V.Boolean{True{}} <> V.Null{} <> Nil{}})), "items/1")
     invalid(L.compile(object("properties", object("x", object("minimum", V.Text{"1"})))), "properties/x/minimum")
     invalid(L.compile(object("maximum", V.Number{F.infinity(False{})})), "maximum")
-    unsupported(L.compile(object("$ref", V.Text{"#/$defs/x"})), "$ref", "$ref")
+    unresolved : S.Schema <- loaded(L.compile(object("$ref", V.Text{"#/$defs/x"})))
+    T.assertion(Bool.not(S.check(unresolved, V.Null{})), "unresolved local references reject")
     unsupported(L.compile(object("minLength", V.Number{F.fromU32(1)})), "minLength", "minLength")
     unsupported(L.compile(object("anyOf", V.ArrayValue{V.Boolean{True{}} <> object("pattern", V.Text{"x"}) <> Nil{}})), "anyOf/1/pattern", "pattern")
     unsupported(L.compile(object("properties", object("x", object("format", V.Text{"email"})))), "properties/x/format", "format")
@@ -80,4 +91,12 @@ def main() -> IO(Unit):
     ordinaryKey("toString")
     ignored : S.Schema <- loaded(L.compile(object("default", object("pattern", V.Text{"not a schema"}))))
     T.assertion(S.check(ignored, V.Null{}), "annotation values are not interpreted as schemas")
+    nativeKey : S.Schema <- loaded(L.compile(V.ObjectValue{R.Record{R.Property{"$ref", V.Text{"#/$defs/__proto__"}} <> R.Property{"$defs", object("__proto__", object("type", V.Text{"integer"}))} <> Nil{}}}))
+    T.assertion(S.check(nativeKey, V.Number{F.fromU32(1)}), "reference pointers traverse ordinary native dictionary keys")
+    referenceCycle(L.compile(object("$ref", V.Text{"#"})))
+    referenceCycle(L.compile(V.ObjectValue{R.Record{R.Property{"$ref", V.Text{"#/$defs/a"}} <> R.Property{"$defs", object("a", object("$ref", V.Text{"#/%24defs/a"}))} <> Nil{}}}))
+    externalReference(L.compile(object("$ref", V.Text{"other.json#/$defs/x"})))
+    externalReference(L.compile(object("$ref", V.Text{"#anchor"})))
+    invalid(L.compile(object("$ref", V.Null{})), "$ref")
+    invalid(L.compile(object("$defs", V.Null{})), "$defs")
     IO.print("PASS native schema loading, malformed/unsupported paths, immutable inputs and ordinary dictionary keys")

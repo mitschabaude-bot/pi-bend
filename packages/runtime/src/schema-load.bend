@@ -1,4 +1,5 @@
 import Base
+import ./json-pointer.bend as Pointer
 import ./schema.bend as S
 import ./schema-value.bend as V
 import ./record.bend as R
@@ -11,6 +12,8 @@ type Issue is Data:
   UnsupportedKeyword{keyword: String}
   InvalidSchema{expected: String}
   InvalidConstruction{}
+  UnsupportedReference{reference: String}
+  UnsupportedReferenceCycle{reference: String}
 
 type Error is Data:
   Error{path: List<&2, String>, issue: Issue}
@@ -30,8 +33,17 @@ type Constructor is Data:
   ExtraItems{prefix: List<&2, S.Schema>}
   Containing{bounds: S.CountBounds}
 
+type Resolved is Data:
+  Resolved{value: V.Value, path: List<&2, String>, key: String}
+  Unresolved{}
+
+def Resolution() -> Data: Result<&2, &2, Error, Resolved>
+
 type Task is Data:
   Read{value: V.Value, path: List<&2, String>}
+  ResolveReference{reference: String, path: List<&2, String>}
+  ReferenceResult{resolution: Resolution()}
+  EndReference{}
   Keyword{key: String, value: V.Value, whole: R.Record<V.Value>, path: List<&2, String>}
   TypeName{value: V.Value, path: List<&2, String>}
   Push{schema: S.Schema}
@@ -212,7 +224,19 @@ def containsBound(lower: Bool, value: Result<&2, &2, Error, B.BigNat>, inner: Ma
     case Done{_} None{}: Done{Push{S.Accept{}} <> Nil{}}
     case Done{limit} Some{schema}: Done{Read{schema, child(parentPath(path), "contains")} <> Build{Containing{boundedCount(lower, limit)}, 1n} <> Nil{}}
 
+def reference(value: V.Value, path: List<&2, String>) -> Scheduled():
+  match value:
+    case V.Text{text}: Done{ResolveReference{text, path} <> Nil{}}
+    case _: invalid(List<&2, Task>, path, "a schema reference string")
+
+def definitions(value: V.Value, path: List<&2, String>) -> Scheduled():
+  match value:
+    case V.ObjectValue{_}: Done{Push{S.Accept{}} <> Nil{}}
+    case _: invalid(List<&2, Task>, path, "a schema definition dictionary")
+
 type KeywordKind is Data:
+  ReferenceKeyword{}
+  DefinitionsKeyword{}
   TypeKeyword{}
   ConstKeyword{}
   EnumKeyword{}
@@ -245,13 +269,15 @@ def selectedKeyword(value: Maybe<&2, KeywordKind>) -> KeywordKind:
     case None{}: UnknownKeyword{}
 
 def keywordKind(key: String) -> KeywordKind:
-  entries = {R.Record{R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
+  entries = {R.Record{R.Property{"$ref", ReferenceKeyword{}} <> R.Property{"$defs", DefinitionsKeyword{}} <> R.Property{"definitions", DefinitionsKeyword{}} <> R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
   selectedKeyword(R.get(KeywordKind, entries, key))
 
 # Each keyword contributes one conjunct. Cross-keyword rules consult the whole
 # schema explicitly, so dictionary enumeration order cannot change validation.
 def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record<V.Value>, +path: List<&2, String>) -> Scheduled():
   match selected:
+    case ReferenceKeyword{}: reference(value, path)
+    case DefinitionsKeyword{}: definitions(value, path)
     case TypeKeyword{}: typed(value, path)
     case ConstKeyword{}: Done{Push{S.Constant{value}} <> Nil{}}
     case EnumKeyword{}:
@@ -305,14 +331,16 @@ def keywordOrder(selected: KeywordKind) -> U32:
     case ExclusiveMinimumKeyword{}: 14
     case MaximumKeyword{}: 15
     case MinimumKeyword{}: 16
-    case ConstKeyword{}: 17
-    case EnumKeyword{}: 18
-    case NotKeyword{}: 19
-    case AllOfKeyword{}: 20
-    case AnyOfKeyword{}: 21
-    case OneOfKeyword{}: 22
-    case AnnotationKeyword{}: 23
-    case UnknownKeyword{}: 23
+    case ReferenceKeyword{}: 17
+    case DefinitionsKeyword{}: 24
+    case ConstKeyword{}: 18
+    case EnumKeyword{}: 19
+    case NotKeyword{}: 20
+    case AllOfKeyword{}: 21
+    case AnyOfKeyword{}: 22
+    case OneOfKeyword{}: 23
+    case AnnotationKeyword{}: 24
+    case UnknownKeyword{}: 24
 
 def insertKeyword(+key: String, +value: V.Value, fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   match fields:
@@ -400,19 +428,54 @@ def appendTasks(scheduled: Scheduled(), rest: List<&2, Task>) -> Scheduled():
     case Fail{error}: Fail{error}
     case Done{tasks}: Done{List.append(&2, Task, tasks, rest)}
 
-# Each read consumes a finite schema child; Build consumes completed children.
+def referenceActive(keys: List<&2, String>, +key: String) -> Bool:
+  match keys:
+    case Nil{}: False{}
+    case head <> rest: String.eq(head, key) || referenceActive(rest, key)
+
+def located(target: Maybe<&2, V.Value>, path: List<&2, String>, key: String) -> Resolution():
+  match target:
+    case None{}: Done{Unresolved{}}
+    case Some{value}: Done{Resolved{value, path, key}}
+
+def resolvedPointer(cyclic: Bool, root: V.Value, pointer: Pointer.Pointer, key: String, ref: String, sourcePath: List<&2, String>) -> Resolution():
+  match cyclic pointer:
+    case True{} _: Fail{Error{sourcePath, UnsupportedReferenceCycle{ref}}}
+    case False{} Pointer.Pointer{+path}: located(Pointer.get(root, Pointer.Pointer{path}), path, key)
+
+def parsedReference(root: V.Value, pointer: Maybe<&2, Pointer.Pointer>, ref: String, sourcePath: List<&2, String>, active: List<&2, String>) -> Resolution():
+  match pointer:
+    case None{}: Fail{Error{sourcePath, UnsupportedReference{ref}}}
+    case Some{+pointer}:
+      +key = Pointer.render(pointer)
+      resolvedPointer(referenceActive(active, key), root, pointer, key, ref, sourcePath)
+
+def resolve(root: V.Value, +ref: String, sourcePath: List<&2, String>, active: List<&2, String>) -> Resolution():
+  parsedReference(root, Pointer.parseFragment(ref), ref, sourcePath, active)
+
+# Structural reads descend through a finite schema. References may revisit
+# other branches, so active canonical pointer paths reject cycles explicitly
+# until the graph evaluator supports recursive schemas.
 @unsafe
-def run(scheduled: Scheduled(), compiled: Result<&2, &2, Error, List<&2, S.Schema>>) -> Loaded():
+def run(scheduled: Scheduled(), compiled: Result<&2, &2, Error, List<&2, S.Schema>>, +root: V.Value, +active: List<&2, String>) -> Loaded():
   match scheduled compiled:
     case Fail{error} _: Fail{error}
     case _ Fail{error}: Fail{error}
     case Done{Nil{}} Done{schema <> Nil{}}: Done{schema}
     case Done{Nil{}} _: Fail{Error{Nil{}, InvalidConstruction{}}}
-    case Done{TypeName{value, path} <> rest} Done{stack}: run(appendTasks(pushed(atomicType(value, path)), rest), Done{stack})
-    case Done{Push{schema} <> rest} Done{stack}: run(Done{rest}, Done{schema <> stack})
-    case Done{Read{value, path} <> rest} Done{stack}: run(appendTasks(read(value, path), rest), Done{stack})
-    case Done{Keyword{key, value, whole, path} <> rest} Done{stack}: run(appendTasks(keyword(key, value, whole, path), rest), Done{stack})
-    case Done{Build{constructor, count} <> rest} Done{stack}: run(Done{rest}, build(constructor, pop(count, stack, Nil{})))
+    case Done{ResolveReference{ref, path} <> rest} Done{stack}: run(Done{ReferenceResult{resolve(root, ref, path, active)} <> rest}, Done{stack}, root, active)
+    case Done{ReferenceResult{Fail{error}} <> _} _: Fail{error}
+    case Done{ReferenceResult{Done{Unresolved{}}} <> rest} Done{stack}: run(Done{Push{S.Reject{}} <> rest}, Done{stack}, root, active)
+    case Done{ReferenceResult{Done{Resolved{value, path, key}}} <> rest} Done{stack}: run(Done{Read{value, path} <> EndReference{} <> rest}, Done{stack}, root, key <> active)
+    case Done{EndReference{} <> rest} Done{stack}:
+      match active:
+        case _ <> tail: run(Done{rest}, Done{stack}, root, tail)
+        case Nil{}: Fail{Error{Nil{}, InvalidConstruction{}}}
+    case Done{TypeName{value, path} <> rest} Done{stack}: run(appendTasks(pushed(atomicType(value, path)), rest), Done{stack}, root, active)
+    case Done{Push{schema} <> rest} Done{stack}: run(Done{rest}, Done{schema <> stack}, root, active)
+    case Done{Read{value, path} <> rest} Done{stack}: run(appendTasks(read(value, path), rest), Done{stack}, root, active)
+    case Done{Keyword{key, value, whole, path} <> rest} Done{stack}: run(appendTasks(keyword(key, value, whole, path), rest), Done{stack}, root, active)
+    case Done{Build{constructor, count} <> rest} Done{stack}: run(Done{rest}, build(constructor, pop(count, stack, Nil{})), root, active)
 
-def compile(schema: V.Value) -> Loaded():
-  run(Done{Read{schema, Nil{}} <> Nil{}}, Done{Nil{}})
+def compile(+schema: V.Value) -> Loaded():
+  run(Done{Read{schema, Nil{}} <> Nil{}}, Done{Nil{}}, schema, "" <> Nil{})

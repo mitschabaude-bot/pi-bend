@@ -31,9 +31,11 @@ def main() -> IO(Unit):
     # equivalent checks the compiled schema directly before the public path.
     Assert.assertion(Schema.check(validator, nullArgument), "accepts null for nullable array schemas with items: compiled checker")
     T.check(nullArgument, arraySchema, nullArgument, nullArgument, "accepts null for nullable array schemas with items")
+    referenceSchema : V.Value = V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", object("value", object("$ref", V.Text{"#/$defs/value"}))} <> R.Property{"$defs", object("value", object("anyOf", arms))} <> Nil{}}}
+    T.check(nullArgument, referenceSchema, nullArgument, nullArgument, "preserves optional nulls whose referenced schema is nullable")
     # Original named case: rejects invalid coercions for serialized plain JSON schemas.
     rejected("boolean", "1")
     rejected("boolean", "0")
     rejected("null", "null")
     rejected("integer", "42.1")
-    IO.print("PASS four original validation cases: nullable oneOf, union coercion, nullable array and invalid coercions (8 assertions)")
+    IO.print("PASS five original validation cases: nullable references, oneOf, union coercion, nullable array and invalid coercions (9 assertions)")
