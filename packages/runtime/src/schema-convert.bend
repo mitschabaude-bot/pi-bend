@@ -17,6 +17,7 @@ type Primitive is Data:
 
 type Error is Data:
   NumberFormattingFailed{}
+  InvalidConversionState{}
 
 def Converted() -> Data: Result<&2, &2, Error, V.Value>
 
@@ -127,3 +128,66 @@ def convert(primitive: Primitive, +value: V.Value) -> Converted():
     case ToInteger{}: convertedOrOriginal(value, integerResult(tryNumber(value)))
     case ToString{}: convertString(value)
     case ToNull{}: convertedOrOriginal(value, tryNull(value))
+
+# Conversion policy is explicit data, separate from schema validation. Tuple
+# conversion does not pad missing positions or drop additional positions.
+type Policy is Data:
+  Preserve{}
+  Scalar{primitive: Primitive}
+  ArrayItems{item: Policy}
+  TupleItems{items: List<&2, Policy>}
+
+type Task is Data:
+  Visit{policy: Policy, value: V.Value}
+  FinishArray{count: Nat}
+  ConvertedValue{result: Converted()}
+
+def arrayTasks(+policy: Policy, values: List<&2, V.Value>) -> List<&2, Task>:
+  match values:
+    case Nil{}: Nil{}
+    case head <> tail: Visit{policy, head} <> arrayTasks(policy, tail)
+
+def tupleTasks(policies: List<&2, Policy>, values: List<&2, V.Value>) -> List<&2, Task>:
+  match policies values:
+    case _ Nil{}: Nil{}
+    case Nil{} head <> tail: Visit{Preserve{}, head} <> tupleTasks(Nil{}, tail)
+    case policy <> policies head <> tail: Visit{policy, head} <> tupleTasks(policies, tail)
+
+def arrayInput(value: V.Value) -> List<&2, V.Value>:
+  match value:
+    case V.ArrayValue{items}: items
+    case other: other <> Nil{}
+
+def scheduleArray(policy: Policy, +items: List<&2, V.Value>, rest: List<&2, Task>) -> List<&2, Task>:
+  List.append(&2, Task, arrayTasks(policy, items), FinishArray{List.length(&2, V.Value, items)} <> rest)
+
+def scheduleTuple(policies: List<&2, Policy>, value: V.Value, rest: List<&2, Task>) -> List<&2, Task>:
+  match value:
+    case V.ArrayValue{+items}: List.append(&2, Task, tupleTasks(policies, items), FinishArray{List.length(&2, V.Value, items)} <> rest)
+    case other: Visit{Preserve{}, other} <> rest
+
+# Child results arrive in reverse traversal order. Reassemble their original
+# order without changing any input value or exposing intermediate mutations.
+def finishArray(count: Nat, values: List<&2, V.Value>, items: List<&2, V.Value>) -> List<&2, V.Value>:
+  match count values:
+    case Zero{} rest: V.ArrayValue{items} <> rest
+    case Succ{count} head <> tail: finishArray(count, tail, head <> items)
+    case Succ{_} Nil{}: Nil{}
+
+# Every Visit consumes a finite policy/value node; FinishArray consumes its
+# completed children. The explicit work list also handles deeply nested inputs.
+@unsafe
+def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
+  match tasks values:
+    case Nil{} value <> Nil{}: Done{value}
+    case Nil{} _: Fail{InvalidConversionState{}}
+    case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
+    case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
+    case Visit{Scalar{primitive}, value} <> rest values: run(ConvertedValue{convert(primitive, value)} <> rest, values)
+    case ConvertedValue{Done{converted}} <> rest values: run(rest, converted <> values)
+    case ConvertedValue{Fail{error}} <> _ _: Fail{error}
+    case Visit{ArrayItems{policy}, value} <> rest values: run(scheduleArray(policy, arrayInput(value), rest), values)
+    case Visit{TupleItems{policies}, value} <> rest values: run(scheduleTuple(policies, value, rest), values)
+
+def apply(policy: Policy, value: V.Value) -> Converted():
+  run(Visit{policy, value} <> Nil{}, Nil{})
