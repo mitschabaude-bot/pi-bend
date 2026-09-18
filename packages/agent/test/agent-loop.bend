@@ -10,6 +10,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
+import ../../runtime/src/u64.bend as Bits
 import ./main-loop.bend as H
 import ./validated-tool-execution.bend as Validation
 import ./message-events.bend as Test
@@ -108,6 +109,112 @@ def scenario(name: String, +mode: U32, useDefault: Bool, +reply: String, expecte
     discarded : U32 <- R.dispose(U32, calls)
     IO.print("PASS " ++ name)
 
+def TransformInput() -> Data: T.TransformContextInput<Validation.Messages(), Unit>
+def TransformResult() -> Data: Result<&2, &2, String, Validation.Messages()>
+
+type TranscriptFixture is Data:
+  TranscriptFixture{mode: U32, log: H.Log(), streams: R.Ref<List<&2, H.StreamValue()>>}
+
+def promptText(value: String) -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
+  T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{value}, F.fromU32(0)}}}
+
+def transcriptPrompts(mode: U32) -> Validation.Messages():
+  match mode:
+    case 0: T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"Transcript prompt"}, None{}, Some{Nil{}}, None{}, F.fromU32(1)}}} <> user() <> Nil{}
+    case 1: user() <> Nil{}
+    case _: promptText("new message") <> Nil{}
+
+def transcriptContext(mode: U32) -> Validation.Context():
+  match mode:
+    case 0: T.AgentContext{Nil{}, Some{Nil{}}}
+    case 1: T.AgentContext{T.CustomMessage{"This is a notification"} <> Nil{}, Some{Nil{}}}
+    case _: T.AgentContext{promptText("old message 1") <> T.LlmMessage{Ai.Assistant{H.assistant(H.text("old response 1"), Ai.Stop{})}} <> promptText("old message 2") <> T.LlmMessage{Ai.Assistant{H.assistant(H.text("old response 2"), Ai.Stop{})}} <> Nil{}, Some{Nil{}}}
+
+def filterNotifications(messages: Validation.Messages()) -> List<&2, Ai.Message<V.Value, V.Value, Unit, String>>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.CustomMessage{_} <> rest: filterNotifications(rest)
+    case T.LlmMessage{message} <> rest: message <> filterNotifications(rest)
+
+def lastTwo(messages: Validation.Messages()) -> Validation.Messages():
+  match messages:
+    case first <> second <> Nil{}: first <> second <> Nil{}
+    case first <> Nil{}: first <> Nil{}
+    case _ <> rest: lastTwo(rest)
+    case Nil{}: Nil{}
+
+def transcriptTransform(recording: H.Log(), input: TransformInput()) -> IO(TransformResult()):
+  match input:
+    case T.TransformContextInput{+messages, _}:
+      do IO<TransformResult()>:
+        Test.assertion(String.eq(H.names(messages), "old message 1|assistant:old response 1|old message 2|assistant:old response 2|new message|"), "transform sees original history followed by prompt")
+        H.log(recording, "transform")
+        +pruned : Validation.Messages() = lastTwo(messages)
+        Test.assertion(String.eq(H.names(pruned), "assistant:old response 2|new message|"), "transform retains last two messages")
+        return Done{pruned}
+
+def transcriptConvert(environment: TranscriptFixture, messages: Validation.Messages()) -> IO(Validation.Converted()):
+  match environment:
+    case TranscriptFixture{mode, recording, _}:
+      +messages = messages
+      do IO<Validation.Converted()>:
+        H.log(recording, "convert:" ++ H.names(messages))
+        return Done{filterNotifications(messages)}
+
+def transcriptMatches(mode: U32, messages: List<&2, Ai.Message<V.Value, V.Value, Unit, String>>) -> Bool:
+  match mode messages:
+    case 0 Ai.System{Ai.SystemMessage{Ai.SystemText{content}, None{}, Some{Nil{}}, None{}, timestamp}} <> Ai.User{Ai.UserMessage{Ai.UserText{text}, _}} <> Nil{}:
+      String.eq(content, "Transcript prompt") && String.eq(text, "Hello") && Bits.equal(F.toBits(timestamp), F.toBits(F.fromU32(1)))
+    case 1 Ai.User{Ai.UserMessage{Ai.UserText{text}, _}} <> Nil{}: String.eq(text, "Hello")
+    case 2 Ai.Assistant{message} <> Ai.User{Ai.UserMessage{Ai.UserText{text}, _}} <> Nil{}:
+      String.eq(H.assistantName(message), "assistant:old response 2") && String.eq(text, "new message")
+    case _ _: False{}
+
+def transcriptProvider(environment: TranscriptFixture, input: H.ProviderInput()) -> IO(H.StreamValue()):
+  match environment input:
+    case TranscriptFixture{mode, recording, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, _}:
+      do IO<H.StreamValue()>:
+        Test.assertion(transcriptMatches(mode, messages), "provider receives exact converted transcript and preserved system fields")
+        H.log(recording, "provider")
+        +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
+        R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
+        S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant(H.text("Response"), Ai.Stop{})})
+        return stream
+
+def transcriptOutcome(+mode: U32, outcome: H.Outcome()) -> IO(Unit):
+  match outcome:
+    case Fail{_}: Test.assertion(False{}, "transcript loop succeeds")
+    case Done{messages}:
+      Test.assertion(String.eq(H.names(messages), Bool.pick(String, U32.is_eq(mode, 0), "system|Hello|assistant:Response|", Bool.pick(String, U32.is_eq(mode, 1), "Hello|assistant:Response|", "new message|assistant:Response|"))), "transformation changes provider input without replacing generated history")
+
+def transcriptScenario(name: String, +mode: U32, expectedLog: String) -> IO(Unit):
+  do IO<Unit>:
+    +recording : H.Log() <- R.new(List<&2, String>, Nil{})
+    +streams : R.Ref<List<&2, H.StreamValue()>> <- R.new(List<&2, H.StreamValue()>, Nil{})
+    +providerCallback : H.ProviderFunction() <- C.create(~TranscriptFixture, ~H.ProviderInput(), ~H.StreamValue(), ~transcriptProvider, TranscriptFixture{mode, recording, streams})
+    +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~TranscriptFixture, ~Validation.Messages(), ~Validation.Converted(), ~transcriptConvert, TranscriptFixture{mode, recording, streams})
+    +transformer : C.Callback<TransformInput(), TransformResult()> <- C.create(~H.Log(), ~TransformInput(), ~TransformResult(), ~transcriptTransform, recording)
+    +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
+    +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
+    config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, Bool.pick(Maybe<&2, C.Callback<TransformInput(), TransformResult()>>, U32.is_eq(mode, 2), Some{transformer}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+    +run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, transcriptPrompts(mode), transcriptContext(mode), config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
+    outcome : H.Outcome() <- W.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    transcriptOutcome(mode, outcome)
+    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
+    S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
+    W.dispose(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    entries : List<&2, String> <- R.dispose(List<&2, String>, recording)
+    Test.assertion(String.eq(String.join(List.reverse(&2, String, entries), ";"), expectedLog), "transform precedes conversion; converter receives expected messages; provider runs once")
+    C.dispose(H.ProviderInput(), H.StreamValue(), providerCallback)
+    C.dispose(Validation.Messages(), Validation.Converted(), converter)
+    C.dispose(TransformInput(), TransformResult(), transformer)
+    C.dispose(Validation.Input(), Validation.Checked(), validator)
+    C.dispose(Maybe<&2, Unit>, Bool, aborted)
+    owned : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
+    H.disposeStreams(owned)
+    IO.print("PASS " ++ name)
+
 def main() -> IO(Unit):
   do IO<Unit>:
     scenario("uses the configured default when a legacy caller omits streamFn", 0, True{}, "fallback", "agent_start|turn_start|message_start:Hello|message_end:Hello|message_start:assistant:fallback|message_end:assistant:fallback|turn_end|agent_end")
@@ -115,3 +222,6 @@ def main() -> IO(Unit):
     scenario("should throw when context has no messages", 3, False{}, "", "")
     scenario("should continue from existing context without emitting user message events", 1, False{}, "Response", "agent_start|turn_start|message_start:assistant:Response|message_end:assistant:Response|turn_end|agent_end")
     scenario("should allow custom message types as last message (caller responsibility)", 2, False{}, "Response to custom message", "agent_start|turn_start|message_start:assistant:Response to custom message|message_end:assistant:Response to custom message|turn_end|agent_end")
+    transcriptScenario("should build provider context exclusively from transcript messages", 0, "convert:system|Hello|;provider")
+    transcriptScenario("should handle custom message types via convertToLlm", 1, "convert:This is a notification|Hello|;provider")
+    transcriptScenario("should apply transformContext before convertToLlm", 2, "transform;convert:assistant:old response 2|new message|;provider")

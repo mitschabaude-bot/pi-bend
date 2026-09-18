@@ -14,7 +14,7 @@
         "packages/agent/test/agent-loop.bend"
       ],
       "sha256": "47cdde0c9b42b99baed7d2d8aeca2409b9465b1155b3b060b59ae20535cf9f53",
-      "notes": "Five of 24 named upstream cases ported: default stream fallback, AgentMessage events, empty continuation rejection, existing-context continuation, and custom last-message continuation. Native typed errors and explicit fallback selection adapt exceptions and omitted arguments. Remaining 19 cases pending. Supplemental 204 wrapper comparisons are not full-suite coverage."
+      "notes": "Eight of 24 named upstream cases ported: default stream fallback, AgentMessage events, transcript-only provider context, custom message conversion, transform-before-convert ordering, empty continuation rejection, existing-context continuation, and custom last-message continuation. Native typed errors and explicit fallback selection adapt exceptions and omitted arguments; immutable system field equality replaces JS reference identity. Remaining 16 cases pending. Supplemental 204 wrapper comparisons are not full-suite coverage."
     },
     {
       "source": "packages/agent/test/agent.test.ts",
