@@ -765,9 +765,12 @@
     },
     {
       "source": "packages/ai/test/max-thinking.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ce3f28d5754c29e4550398227f271f6e26ce0d3914822f27297805acd3932baa"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/model-thinking.bend"
+      ],
+      "sha256": "ce3f28d5754c29e4550398227f271f6e26ce0d3914822f27297805acd3932baa",
+      "notes": "Two standalone named cases are ported with original model fields/assertions: ordinary reasoning models opt in to max, and a hole between high and max clamps upward. Catalog-backed cases and Codex provider payload cases remain pending. Supplemental direct-upstream helper tests cover 212 configurations and every typed requested level; model registry/provider parity is not claimed."
     },
     {
       "source": "packages/ai/test/mistral-http-transport.test.ts",
