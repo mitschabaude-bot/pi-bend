@@ -13,6 +13,23 @@ import ../../runtime/src/utf16.bend as U
 # Internal outcome records from upstream agent-loop.ts. The result is a shared
 # object: an absent hook return preserves it, while any supplied override
 # object causes the source's spread expression to allocate a new result.
+# Prepared arguments remain distinct from the raw provider call. Preparation
+# retains the original tool/call objects, not an adapted or validated call copy.
+type PreparedToolCall<-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -ExecutionError: Data> is Data:
+  PreparedToolCall{toolCall: T.AgentToolCall(RawArguments), tool: R.Ref<T.AgentTool<Parameters, Arguments, Details, RawArguments, Signal, ExecutionError>>, args: Arguments}
+
+type ImmediateToolCallOutcome<-Details: Data> is Data:
+  ImmediateToolCallOutcome{result: R.Ref<T.AgentToolResult<Details>>, isError: Bool}
+
+type ToolCallPreparation<-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -ExecutionError: Data> is Data:
+  Prepared{value: PreparedToolCall<Parameters, Arguments, Details, RawArguments, Signal, ExecutionError>}
+  Immediate{value: ImmediateToolCallOutcome<Details>}
+
+def preparationKind(-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -ExecutionError: Data, preparation: ToolCallPreparation<Parameters, Arguments, Details, RawArguments, Signal, ExecutionError>) -> String:
+  match preparation:
+    case Prepared{_}: "prepared"
+    case Immediate{_}: "immediate"
+
 type ExecutedToolCallOutcome<-Details: Data> is Data:
   ExecutedToolCallOutcome{result: R.Ref<T.AgentToolResult<Details>>, isError: Bool}
 
@@ -904,3 +921,29 @@ def prepareToolCallBatch(-Parameters: Data, -Arguments: Data, -DiagnosticDetails
     currentConfig : T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch> <- R.read(T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, config)
     mode : T.ToolExecutionMode = Bool.pick(T.ToolExecutionMode, sequential || isSequential(configuredToolExecution(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, currentConfig)), T.Sequential{}, T.Parallel{})
     return PreparedToolCallBatch{calls, mode}
+
+# The before-hook decision block after successful argument validation. The
+# runtime supplies the current aborted state after the callback has settled.
+type BeforeToolCallDecision is Data:
+  ProceedWithToolCall{}
+  RejectToolCall{message: String, terminate: Bool}
+
+def toolBlockReason(reason: Maybe<&2, String>) -> String:
+  match reason:
+    case None{}: "Tool execution was blocked"
+    case Some{+value}: Bool.pick(String, String.is_empty(value), "Tool execution was blocked", value)
+
+def blockedToolCallDecision(result: T.BeforeToolCallResult) -> BeforeToolCallDecision:
+  match result:
+    case T.BeforeToolCallResult{Some{True{}}, reason, Some{True{}}}: RejectToolCall{toolBlockReason(reason), True{}}
+    case T.BeforeToolCallResult{Some{True{}}, reason, _}: RejectToolCall{toolBlockReason(reason), False{}}
+    case _: ProceedWithToolCall{}
+
+def beforeToolCallDecision(aborted: Bool, result: Maybe<&2, R.Ref<T.BeforeToolCallResult>>) -> IO(BeforeToolCallDecision):
+  match aborted result:
+    case True{} _: IO.pure(BeforeToolCallDecision, RejectToolCall{"Operation aborted", False{}})
+    case False{} None{}: IO.pure(BeforeToolCallDecision, ProceedWithToolCall{})
+    case False{} Some{reference}:
+      do IO<BeforeToolCallDecision>:
+        value : T.BeforeToolCallResult <- R.read(T.BeforeToolCallResult, reference)
+        return blockedToolCallDecision(value)
