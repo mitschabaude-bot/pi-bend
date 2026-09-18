@@ -342,3 +342,25 @@ def getTransformContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Da
       do IO<Maybe<&2, C.Callback<T.TransformContextInput<List<&2, Run.Message(A, G, D, M)>, Run.Signal()>, Result<&2, &2, E, List<&2, Run.Message(A, G, D, M)>>>>>:
         current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
         return optionsTransformContext(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def configGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, value, _, _, _, _, _, _, _}: value
+def replaceGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, _, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, value, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceGetApiKey(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedGetApiKey(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>:
+  match options:
+    case Run.Options{config, _, _, _}: configGetApiKey(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getGetApiKey(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsGetApiKey(A, G, D, M, V, E, J, Telemetry, Fetch, current)
