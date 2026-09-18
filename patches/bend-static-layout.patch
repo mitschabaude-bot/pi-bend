@@ -1,0 +1,45 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -1611,10 +1611,18 @@
+   return nd;
+ }
+ 
++function node_value(fl: File, k: Bend.Name, vs: Val[]): Val {
++  const fs = lay_node(fl.book, k).arms![0].fs;
++  const fields = vs.map((v, j) => val_to(fl, v, fs[j].lay));
++  // Layout conversion can emit local temporaries even for literal inputs.
++  // Only converted fields can determine whether a node belongs in STAT_IMG.
++  const stat = fields.every((v) => v.stat);
++  return val_new([ctr_build(fl, k, fields.flatMap((v) => val_own(fl, v)),
++    stat)], BOX, stat);
++}
++
+ function node_build(fl: File, k: Bend.Name, vs: Val[]): string {
+-  const fs = lay_node(fl.book, k).arms![0].fs;
+-  return ctr_build(fl, k, vs.flatMap((v, j) =>
+-    val_own(fl, val_to(fl, v, fs[j].lay))), vs.every((v) => v.stat));
++  return val_word(node_value(fl, k, vs));
+ }
+ 
+ function node_fields(fl: File, t: string, node: Lay,
+@@ -2230,15 +2238,16 @@
+       : `blk_node(e, ${val_own(fl, vs[0])[0]}, ${val_own(fl, vs[1])[0]})`],
+     BOX);
+   }
+-  const stat = vs.every((v) => v.stat);
+   if (lay_box(lay)) {
+-    return val_new([node_build(fl, x.k, vs)], BOX, stat);
++    return node_value(fl, x.k, vs);
+   }
+   const arm = lay_arm(lay, x.k);
++  const fields = vs.map((v, j) => val_to(fl, v, arm.fs[j].lay));
++  const stat = fields.every((v) => v.stat);
+   const ws = lay.ks.map((_, j) => j === 0 && lay.arms!.length > 1
+     ? String(lay.arms!.indexOf(arm)) : "0");
+-  vs.forEach((v, j) => {
+-    val_to(fl, v, arm.fs[j].lay).ws.forEach((w, n) => {
++  fields.forEach((v, j) => {
++    v.ws.forEach((w, n) => {
+       ws[arm.fs[j].at + n] = w;
+     });
+   });

@@ -19,6 +19,8 @@ type ObjectState<-M: Data, -V: Data> is Data:
 
 # Sparse array indices are descriptors in the same property table as ordinary
 # keys. Length is independent of present indices, so a hole is not undefined.
+# Valid storage excludes "length" from the property table, and every present
+# array index is below length. Future mutation operations must enforce these.
 type ArrayState<-M: Data, -V: Data> is Data:
   ArrayState{object: ObjectState<M, V>, length: U32, lengthWritable: Bool}
 

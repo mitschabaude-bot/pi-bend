@@ -27,7 +27,7 @@ python3 tests/clock_vectors.py
 
 The clock tests compare 276 interval vectors bit-for-bit and exercise both primitive backends, monotonic progress, concurrent reads and Event timestamps. The JS test runs in Bun, as required by the existing sleep effect; Node supplies the numeric oracle. The origin is explicitly owned by a runtime `Clock`; canonical application startup must initialize and share it. A separate clock per Event would change the source contract and is not the intended composition.
 
-All five patches are currently applied locally. Bend automatic updates remain enabled, so a future release may remove them or implement the changes upstream. The module regression checks both diamond-import orders and cycle rejection; `sh tests/transcript.sh` additionally exercises the real ai/agent/runtime dependency graph. The build script does not silently modify the compiler.
+All six patches are currently applied locally. Bend automatic updates remain enabled, so a future release may remove them or implement the changes upstream. The module regression checks both diamond-import orders and cycle rejection; `sh tests/transcript.sh` additionally exercises the real ai/agent/runtime dependency graph. The build script does not silently modify the compiler.
 
 `bend-unix-milliseconds.patch` adds `IO.unixMilliseconds() -> IO(U32 & U32)`. It returns signed Unix epoch milliseconds as two's-complement high/low words. The native effect reads `CLOCK_REALTIME` and reduces its normalized seconds/nanoseconds pair to integer milliseconds without host floating point. An OS clock failure terminates with an explicit diagnostic. The JS backend uses `Date.now()` and the same word representation. `IO.now` and the monotonic primitive are unchanged. The pure-Bend `date.bend` module handles signed conversion to binary64. This is a small OS primitive, not a foreign Date library.
 
@@ -41,3 +41,13 @@ python3 tests/date_vectors.py
 ```
 
 Date checks cover 146 signed integer conversion vectors, native one/four-thread readings and the Bun-hosted JS backend. Live readings are bounded by the host wall clock around each process call; they do not assume wall time is monotonic or provide clock-adjustment/timer guarantees. Compiler symbol tests separately cover hyphen, underscore, escape-marker and Unicode paths.
+
+`bend-static-layout.patch` fixes native constant-image emission for nested generic constructors. Field-layout conversion can emit local temporaries even when its inputs are literal constants. The compiler previously checked the inputs' static flags and inserted those local names into global `STAT_IMG`, producing undeclared-identifier C errors. Both boxed and unboxed constructor paths now derive static eligibility from the converted fields, and boxed-node emission propagates that result to its parent. Literal data whose converted fields remain static can still enter the constant image. No production foreign effect or library is added.
+
+```sh
+patch --forward -p1 -d "$HOME/.bend/current" < patches/bend-static-layout.patch
+python3 tests/static_layout.py
+python3 tests/object_inspection_vectors.py
+```
+
+The reduced regression (`tests/static-layout.bend`) was verified to fail native compilation with the unpatched compiler and to pass with the patch on one/four threads; the JS backend also passes. It nests generic data/accessor descriptors with optional fields inside a list. The original property-inspection fixture likewise reproduces the failure before the patch. Shared runtime values, primitive coercion and generic/assistant event-stream regressions pass with the patch applied.
