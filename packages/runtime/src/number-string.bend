@@ -1,12 +1,12 @@
 import Base
+import ./text-space.bend as Space
 import ./f64.bend as F
 import ./big-nat.bend as B
 import ./f64-ratio.bend as Ratio
 
 # ECMAScript StringNumericLiteral conversion. This is Number(string), not
 # parseFloat: every non-whitespace character must belong to the grammar.
-def whitespace(+code: U32) -> Bool:
-  (U32.is_ge(code, 9) && U32.is_le(code, 13)) || U32.is_eq(code, 32) || U32.is_eq(code, 160) || U32.is_eq(code, 5760) || (U32.is_ge(code, 8192) && U32.is_le(code, 8202)) || U32.is_eq(code, 8232) || U32.is_eq(code, 8233) || U32.is_eq(code, 8239) || U32.is_eq(code, 8287) || U32.is_eq(code, 12288) || U32.is_eq(code, 65279)
+def whitespace(code: U32) -> Bool: Space.whitespace(code)
 
 def reverseInto(text: String, result: String) -> String:
   match text:
