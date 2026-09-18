@@ -1,3 +1,4 @@
+import ../packages/ai/src/utils/estimate.bend as Estimate
 import ../packages/ai/src/api/simple-options.bend as SimpleOptions
 import ../packages/ai/src/api/transform-tool-results.bend as TransformToolResults
 import ../packages/ai/src/api/transform-messages.bend as TransformMessages

@@ -26,11 +26,16 @@ values[simple.index('deferred')]='Some{T.DeferredBoolean{False{}}}'
 values[simple.index('reasoning')]='Some{T.Max{}}'
 values[simple.index('headers')]='Some{headers}'
 values[simple.index('onPayload')]='Some{adapter}'
-lines=['import Base','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/record.bend as Record','import ../packages/runtime/src/ref.bend as R','import ../packages/runtime/src/callback.bend as C',
+values[simple.index('onResponse')]='Some{responseAdapter}'
+lines=['import Base','import ../packages/ai/src/api/simple-options.bend as Options','import ../packages/ai/test/api/transform-images.bend as ModelFixture','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/record.bend as Record','import ../packages/runtime/src/ref.bend as R','import ../packages/runtime/src/callback.bend as C',
 'def Input() -> Data: T.PayloadInput<Unit, T.Model<Unit>>',
 'def Output() -> Data: Result<&2, &2, String, Maybe<&2, Unit>>',
 'def forbidden(unused: Unit, input: Input()) -> IO(Output()):',
 '  IO.die(Output(), 1, "options projection invoked payload callback")',
+'def ResponseInput() -> Data: T.ResponseInput<T.Model<Unit>>',
+'def ResponseOutput() -> Data: Result<&2, &2, String, Unit>',
+'def forbiddenResponse(unused: Unit, input: ResponseInput()) -> IO(ResponseOutput()):',
+'  IO.die(ResponseOutput(), 1, "options projection invoked response callback")',
 'def verify(ok: Bool) -> IO(Unit):',
 '  Bool.pick(IO(Unit), ok, IO.pure(Unit, Unit{}), IO.die(Unit, 1, "option projection lost identity or nullable header values"))',
 'def suppressed(value: Maybe<&2, T.Nullable<String>>) -> Bool:',
@@ -43,20 +48,23 @@ lines=['import Base','import ../packages/ai/src/types.bend as T','import ../pack
 '    case _: False{}',
 'def checkHeaders(+headers: Record.Record<T.Nullable<String>>) -> IO(Unit):',
 '  verify(suppressed(Record.get(T.Nullable<String>, headers, "remove")) && emptyHeader(Record.get(T.Nullable<String>, headers, "empty")) && Maybe.is_none(&2, T.Nullable<String>, Record.get(T.Nullable<String>, headers, "missing")))',
-'def check(options: T.ProviderRequestOptions<T.Model<Unit>, Unit, Unit, Unit, Unit, String>, expected: T.ProviderHeaders(), callback: T.PayloadCallback(Unit, T.Model<Unit>, String)) -> IO(Unit):','  match options:',
-'    case T.ProviderRequestOptions{_, _, _, _, _, Some{actualCallback}, _, Some{+actual}, _, _, _}:',
+'def check(options: T.ProviderRequestOptions<T.Model<Unit>, Unit, Unit, Unit, Unit, String>, expected: T.ProviderHeaders(), callback: T.PayloadCallback(Unit, T.Model<Unit>, String), responseCallback: T.ResponseCallback(T.Model<Unit>, String)) -> IO(Unit):','  match options:',
+'    case T.ProviderRequestOptions{_, _, _, _, _, Some{actualCallback}, Some{actualResponse}, Some{+actual}, _, _, _}:',
 '      do IO<Unit>:',
-'        verify(C.same(Input(), Output(), callback, actualCallback))',
+'        verify(C.same(Input(), Output(), callback, actualCallback) && C.same(ResponseInput(), ResponseOutput(), responseCallback, actualResponse))',
 '        headers : Record.Record<T.Nullable<String>> <- IO.pure(Record.Record<T.Nullable<String>>, actual)',
 '        checkHeaders(headers)',
 '    case _: IO.die(Unit, 1, "headers omitted in projection")',
 'def main() -> IO(Unit):','  do IO<Unit>:',
 '    +adapter : T.PayloadCallback(Unit, T.Model<Unit>, String) <- C.create(~Unit, ~Input(), ~Output(), ~forbidden, Unit{})',
+'    +responseAdapter : T.ResponseCallback(T.Model<Unit>, String) <- C.create(~Unit, ~ResponseInput(), ~ResponseOutput(), ~forbiddenResponse, Unit{})',
 '    +headers : T.ProviderHeaders() <- IO.pure(Record.Record<T.Nullable<String>>, Record.Record{Record.Property{"remove", T.NullValue{}} <> Record.Property{"empty", T.PresentValue{""}} <> Nil{}})',
-'    options : T.SimpleStreamOptions<'+params+'> = T.SimpleStreamOptions{'+', '.join(values)+'}',
-'    check(T.toProviderRequestOptions('+params+', T.toStreamOptions('+params+', options)), headers, adapter)',
+'    +options : T.SimpleStreamOptions<'+params+'> = T.SimpleStreamOptions{'+', '.join(values)+'}',
+'    check(T.toProviderRequestOptions('+params+', T.toStreamOptions('+params+', options)), headers, adapter, responseAdapter)',
+'    check(T.toProviderRequestOptions('+params+', Options.buildBaseOptions(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, ~Unit, ~String, ModelFixture.model(False{}), T.TranscriptContext{Nil{}}, Some{options}, None{})), headers, adapter, responseAdapter)',
 '    old : Record.Record<T.Nullable<String>> <- IO.pure(Record.Record<T.Nullable<String>>, headers)',
 '    C.dispose(Input(), Output(), adapter)',
+'    C.dispose(ResponseInput(), ResponseOutput(), responseAdapter)',
 '    IO.print("PASS option inheritance, callback handles and header contents and null/empty/missing headers")']
 path=BUILD/'provider-option-types.bend'
 path.write_text('\n'.join(lines)+'\n')

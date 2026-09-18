@@ -1,0 +1,9 @@
+import fs from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const read = name => stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/'+name+'.ts','utf8')).replace(/^export /gm,'');
+const text = read('text');
+const estimate = read('estimate').replace(/^import .*text.*;$/m,'');
+const helpers = new Function(text+'\n'+estimate+';return {estimateContextTokens,estimateMessageTokens};')();
+let input='';for await(const chunk of process.stdin)input+=chunk;
+const encode = x => Number.isNaN(x)?'nan':x===Infinity?'infinity':x===-Infinity?'-infinity':x;
+process.stdout.write(JSON.stringify(JSON.parse(input).map(messages => ({context:helpers.estimateContextTokens(messages), individual:messages.map(helpers.estimateMessageTokens)})), (_,v)=>typeof v==='number'?encode(v):v));

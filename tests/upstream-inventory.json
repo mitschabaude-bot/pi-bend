@@ -589,9 +589,12 @@
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "06813cdd42212146a8589c0c05691d2ff0778ad7eeb9cc5d8795943ff8577631"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/context-estimate.bend"
+      ],
+      "sha256": "06813cdd42212146a8589c0c05691d2ff0778ad7eeb9cc5d8795943ff8577631",
+      "notes": "Both original named cases pass on one/four threads through normalizeContext and the public context estimator, including the exact buildBaseOptions maxTokens assertion. Supplemental source comparisons cover message/token accounting and base-option construction; native record encoders preserve application-specific parameter/argument types. Provider serialization/dispatch and transports remain pending."
     },
     {
       "source": "packages/ai/test/context-overflow.test.ts",
