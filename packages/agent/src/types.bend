@@ -1,4 +1,5 @@
 import Base
+import ../../runtime/src/string-set.bend as Set
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/f64.bend as Number
@@ -6,8 +7,8 @@ import ../../runtime/src/record.bend as Record
 import ../../ai/src/utils/event-stream.bend as Stream
 
 # Source: pi-mono packages/agent/src/types.ts at 46c9de402. This initial portion
-# covers tool definitions/results, messages, events and hook result records.
-# Agent state accessors and complete loop behavior remain pending.
+# covers tool definitions/results, messages, events, state and hook records.
+# Agent orchestration is separate from the immutable state and loop types.
 # Raw arguments, abort signals and thrown errors retain explicit
 # caller types until their runtime interfaces are integrated.
 type ToolExecutionMode is Data:
@@ -157,3 +158,8 @@ type StreamInput<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, 
 
 def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data) -> Data:
   Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Options>, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>
+
+# systemPrompt is derived from messages by agent-state.systemPrompt.
+# Runtime ownership and borrowed callbacks remain outside this value snapshot.
+type AgentState<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data> is Data:
+  AgentState{model: Ai.Model<Value>, thinkingLevel: ThinkingLevel(), tools: List<&2, AgentTool<Parameters, Validated, Details, Arguments, Signal, Error>>, messages: List<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, isStreaming: Bool, streamingMessage: Maybe<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, pendingToolCalls: Set.Set, errorMessage: Maybe<&2, String>}
