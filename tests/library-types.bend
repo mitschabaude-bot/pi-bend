@@ -1,4 +1,5 @@
 import Base
+import ../packages/agent/src/tool-batch-parallel.bend as ParallelBatch
 import ../packages/runtime/src/concurrent-all.bend as ConcurrentAll
 import ../packages/agent/src/tool-call.bend as ToolCall
 import ../packages/agent/src/tool-batch.bend as ToolBatch
