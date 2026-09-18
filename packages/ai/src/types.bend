@@ -148,16 +148,27 @@ type GrammarFormat is Data:
   OpenAILark{}
   OpenAIRegex{}
 
+# Optional grammar fields retain insertion order, including explicit undefined.
+# Constructors/updates in utils/grammar-variants.bend maintain unique keys.
+type GrammarVariant is Data:
+  GrammarVariant{format: GrammarFormat, value: Maybe<&2, String>}
+
 type GrammarVariants is Data:
-  GrammarVariants{openai_lark: Maybe<&2, String>, openai_regex: Maybe<&2, String>}
+  GrammarVariants{properties: List<&2, GrammarVariant>}
+
+# Both configuration branches have two required fields. Their object insertion
+# order is observable through upstream declaration comparison.
+type SamplingPropertyOrder is Data:
+  TypeFirst{}
+  TypeLast{}
 
 type SamplingStrictness is Data:
   Prefer{}
   Require{}
 
 type ConstrainedSamplingConfig is Data:
-  JsonSchemaSampling{strict: SamplingStrictness}
-  GrammarSampling{variants: GrammarVariants}
+  JsonSchemaSampling{strict: SamplingStrictness, propertyOrder: SamplingPropertyOrder}
+  GrammarSampling{variants: GrammarVariants, propertyOrder: SamplingPropertyOrder}
 
 # Absent, explicitly false, and a supplied configuration are distinct.
 type ToolConstrainedSampling is Data:
