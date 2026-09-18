@@ -1,3 +1,5 @@
+import ../packages/runtime/src/json-parse.bend as JsonParse
+import ../packages/ai/src/api/openai-text-signature.bend as OpenAITextSignature
 import ../packages/ai/src/api/openai-responses-ids.bend as OpenAIResponsesIds
 import ../packages/ai/src/utils/sanitize-unicode.bend as SanitizeUnicode
 import ../packages/ai/src/api/openai-responses-shared.bend as OpenAIResponsesShared
