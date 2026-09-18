@@ -1,6 +1,5 @@
 import Base
 import ../src/clock.bend as C
-import ../src/event.bend as E
 import ../src/u64.bend as W
 import ../src/f64.bend as F
 
@@ -53,14 +52,6 @@ def main() -> IO(Unit):
     end : W.U64 <- C.ticks()
     assertion(within(concurrent, later, end), "concurrent ticks must share the same epoch")
     +lower : F.F64 <- C.now(clock)
-    +event : E.WebEvent<Unit> <- E.new(Unit, clock, "clock", E.defaultInit())
     +upper : F.F64 <- C.now(clock)
-    +stamp : F.F64 <- E.timeStamp(Unit, event)
-    assertion(finiteOrder(F.compare(lower, stamp)) && finiteOrder(F.compare(stamp, upper)), "Event timestamp must use the supplied runtime clock")
-    E.initEvent(Unit, event, "changed", True{}, True{})
-    retained : F.F64 <- E.timeStamp(Unit, event)
-    assertion(W.equal(F.toBits(stamp), F.toBits(retained)), "clock-backed Event timestamp changed after construction")
-    trusted : Bool <- E.isTrusted(Unit, event)
-    assertion(Bool.not(trusted), "clock-backed public constructor must create an untrusted Event")
-    E.dispose(Unit, event)
-    IO.print("PASS exact monotonic tick ordering, shared epoch and clock-backed Event construction")
+    assertion(finiteOrder(F.compare(lower, upper)), "elapsed clock moved backwards")
+    IO.print("PASS exact monotonic tick ordering, shared epoch and elapsed time")

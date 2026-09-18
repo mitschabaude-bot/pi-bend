@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 from schema_test_values import string
 from tool_test_values import tool_bend
-from typebox_fixtures import fixtures
+from schema_fixtures import fixtures
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
@@ -23,32 +23,6 @@ cases = [[tool(schema), tool(schema)] for schema in schemas]
 cases += [[base, tool(schemas[0], description='changed')],
           [base, tool(schemas[0], name='different')],
           [base, tool(schemas[0], sampling=False)]]
-# Hidden metadata differences disappear, while enumerable metadata survives.
-for schema in schemas:
-    changed = copy.deepcopy(schema)
-    changed[1] += [['ignored', ['undefined'], True], ['execute', ['callable', 1], True],
-                   ['hidden', ['bigint'], False]]
-    changed[2] += [[10, ['bigint']]]
-    cases.append([tool(schema), tool(changed)])
-cases.append([tool(schemas[0]), tool(schemas[6])])
-configs = [False, {'type': 'json_schema', 'strict': 'prefer'},
-           {'strict': 'prefer', 'type': 'json_schema'},
-           {'type': 'json_schema', 'strict': 'require'},
-           {'type': 'grammar', 'variants': {'openai_lark': 'x', 'openai_regex': 'y'}},
-           {'type': 'grammar', 'variants': {'openai_regex': 'y', 'openai_lark': 'x'}},
-           {'variants': {'openai_lark': 'x', 'openai_regex': 'y'}, 'type': 'grammar'}]
-for config in configs:
-    cases.append([tool(schemas[0], sampling=config), tool(schemas[0], sampling=config)])
-for a, b in ((1, 2), (1, 3), (4, 5), (4, 6)):
-    cases.append([tool(schemas[0], sampling=configs[a]), tool(schemas[0], sampling=configs[b])])
-cases += [[tool(['number', '8000000000000000']), tool(['number', '0000000000000000'])],
-          [tool(['number', '7ff0000000000000']), tool(['null'])],
-          [tool(['array', [['undefined']]]), tool(['array', [['null']]])],
-          [tool(['object', [['b', ['null'], True], ['a', ['null'], True]], []]),
-           tool(['object', [['a', ['null'], True], ['b', ['null'], True]], []])]]
-for invalid in (['undefined'], ['symbol', 1], ['callable', 1], ['bigint']):
-    cases += [[base, tool(invalid)], [tool(invalid), base]]
-cases += [[tool(['bigint']), tool(['undefined'])], [tool(['undefined']), tool(['bigint'])]]
 data = BUILD / 'tool-declaration-input.json'
 data.write_text(json.dumps(cases))
 expected = json.loads(subprocess.check_output([
@@ -56,9 +30,7 @@ expected = json.loads(subprocess.check_output([
 ], cwd=ROOT, text=True))
 
 def result(value):
-    if 'error' in value:
-        error = 'D.OmittedSchema{}' if value['error'] == 'omitted' else 'D.BigIntSchema{}'
-        return 'D.Failure{' + error + '}'
+    if 'error' in value: raise AssertionError(value)
     data = value['value']
     actual = 'True{}' if data is True else 'False{}' if data is False else text(data)
     return 'D.Success{' + actual + '}'

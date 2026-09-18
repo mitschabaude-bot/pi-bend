@@ -54,7 +54,7 @@ for index, ((prices, tiers, values), want) in enumerate(zip(cases, expected, str
     counters = 'H.Counters{' + ', '.join([number(v) for v in values[:4]]+[optional(values[4]),optional(values[5]),number(values[6])])+'}'
     cost = 'T.UsageCost{' + ', '.join(number(v) for v in want)+'}'
     source.append(f'    H.check({pricing(prices, tiers)}, {counters}, {cost}, "model cost {index}")')
-source.append(f'    IO.print("PASS {len(cases)} upstream cost vectors and returned-object identity checks")')
+source.append(f'    IO.print("PASS {len(cases)} upstream cost vectors with pure returned costs")')
 entry = BUILD / 'model-cost-vectors.bend'
 entry.write_text('\n'.join(source)+'\n')
 subprocess.run(['sh','scripts/build-pure.sh',str(entry),'build/test-model-cost'],cwd=ROOT,check=True)

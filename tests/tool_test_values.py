@@ -9,16 +9,15 @@ def sampling(config):
         return 'None{}'
     if config is False:
         return 'Some{T.SamplingDisabled{}}'
-    order = 'T.TypeFirst{}' if next(iter(config)) == 'type' else 'T.TypeLast{}'
     if config['type'] == 'json_schema':
         strict = 'T.Prefer{}' if config['strict'] == 'prefer' else 'T.Require{}'
-        value = f'T.JsonSchemaSampling{{{strict}, {order}}}'
+        value = f'T.JsonSchemaSampling{{{strict}}}'
     else:
         variants = 'G.empty()'
         for key, value in config['variants'].items():
             format_value = 'T.OpenAILark{}' if key == 'openai_lark' else 'T.OpenAIRegex{}'
             variants = f'G.set({variants}, {format_value}, Some{{{text(value)}}})'
-        value = f'T.GrammarSampling{{{variants}, {order}}}'
+        value = f'T.GrammarSampling{{{variants}}}'
     return f'Some{{T.SamplingConfigured{{{value}}}}}'
 
 def tool_bend(value):

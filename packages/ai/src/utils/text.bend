@@ -1,6 +1,5 @@
 import Base
 import ../types.bend as T
-import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/record.bend as Record
 
 # The upstream helper accepts every content kind, extracting only text blocks.
@@ -60,9 +59,9 @@ def renderComplete(-P: Data, message: T.SystemMessage<P>) -> String:
   match message:
     case T.SystemMessage{content, sections, _, _, _}: String.join(nonEmpty(systemContentText(content) <> sectionValues(sectionEntries(sections))), "\n\n")
 
-def getSystemMessageText(-P: Data, message: Ref.Ref<T.SystemMessage<P>>) -> IO(String):
+def getSystemMessageText(-P: Data, message: T.SystemMessage<P>) -> IO(String):
   do IO<String>:
-    value : T.SystemMessage<P> <- Ref.read(T.SystemMessage<P>, message)
+    value : T.SystemMessage<P> = message
     return renderComplete(P, value)
 
 def sectionUpdates(properties: List<&2, Record.Property<Maybe<&2, String>>>) -> List<&2, String>:
@@ -75,7 +74,7 @@ def renderUpdate(-P: Data, message: T.SystemMessage<P>) -> String:
   match message:
     case T.SystemMessage{content, sections, _, _, _}: String.join(List.append(&2, String, nonEmpty(systemContentText(content) <> Nil{}), sectionUpdates(sectionEntries(sections))), "\n\n")
 
-def renderSystemMessageUpdate(-P: Data, message: Ref.Ref<T.SystemMessage<P>>) -> IO(String):
+def renderSystemMessageUpdate(-P: Data, message: T.SystemMessage<P>) -> IO(String):
   do IO<String>:
-    value : T.SystemMessage<P> <- Ref.read(T.SystemMessage<P>, message)
+    value : T.SystemMessage<P> = message
     return renderUpdate(P, value)

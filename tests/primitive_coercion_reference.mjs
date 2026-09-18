@@ -7,16 +7,12 @@ if(start<0||end<=start)throw new Error('upstream primitive coercion block missin
 const coerce=new Function(stripTypeScriptTypes(source.slice(start,end))+';return coercePrimitiveByType;')();
 function build(v){
  switch(v[0]){
-  case 'undefined': return undefined;
   case 'null': return null;
   case 'boolean': return v[1];
   case 'number': return Buffer.from(v[1],'hex').readDoubleBE();
   case 'string': return String.fromCodePoint(...v[1]);
   case 'array': return v[1].map(build);
-  case 'object': {const o=Object.create(null);for(const [k,x,e] of v[1])Object.defineProperty(o,k,{value:build(x),enumerable:e});for(const [k,x]of v[2])o[Symbol.for(String(k))]=build(x);return o;}
-  case 'symbol': return Symbol.for(String(v[1]));
-  case 'callable': return ()=>{throw new Error('coercion invoked callable')};
-  case 'bigint': return 1n;
+  case 'object': return Object.fromEntries(v[1].map(([key, value]) => [key, build(value)]));
  }
 }
 function wire(v){

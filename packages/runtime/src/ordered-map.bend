@@ -1,9 +1,7 @@
 import Base
-import ./utf16.bend as U
 import ./record.bend as R
 
-# String-keyed Map ordering differs from object property enumeration: numeric
-# keys retain insertion order too. Replacement keeps position; reinsertion moves.
+# Persistent ordered map. Replacement keeps position; reinsertion appends.
 type OrderedMap<-V: Data> is Data:
   OrderedMap{properties: List<&2, R.Property<V>>}
 
@@ -11,7 +9,7 @@ def new(-V: Data) -> OrderedMap<V>: OrderedMap{Nil{}}
 
 def get(-V: Data, map: OrderedMap<V>, key: String) -> Maybe<&2, V>:
   match map:
-    case OrderedMap{properties}: R.getProperties(V, properties, U.normalize(key))
+    case OrderedMap{properties}: R.getProperties(V, properties, key)
 
 def put(-V: Data, properties: List<&2, R.Property<V>>, +key: String, +value: V) -> List<&2, R.Property<V>>:
   match properties:
@@ -21,11 +19,11 @@ def put(-V: Data, properties: List<&2, R.Property<V>>, +key: String, +value: V) 
 
 def set(-V: Data, map: OrderedMap<V>, key: String, value: V) -> OrderedMap<V>:
   match map:
-    case OrderedMap{properties}: OrderedMap{put(V, properties, U.normalize(key), value)}
+    case OrderedMap{properties}: OrderedMap{put(V, properties, key, value)}
 
 def remove(-V: Data, map: OrderedMap<V>, key: String) -> OrderedMap<V>:
   match map:
-    case OrderedMap{properties}: OrderedMap{R.removeProperties(V, properties, U.normalize(key))}
+    case OrderedMap{properties}: OrderedMap{R.removeProperties(V, properties, key)}
 
 def propertyValues(-V: Data, properties: List<&2, R.Property<V>>) -> List<&2, V>:
   match properties:

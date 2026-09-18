@@ -289,7 +289,7 @@ def dispose(-T: Data, -R: Data, stream: EventStream<T, R>) -> IO(Unit):
 # The upstream subclass adds only its fixed completion/extraction callbacks.
 # A type alias preserves all generic EventStream operations without wrappers.
 def AssistantMessageEventStream(-Arguments: Data, -DiagnosticDetails: Data) -> Data:
-  EventStream<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>>
+  EventStream<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Types.AssistantMessage<Arguments, DiagnosticDetails>>
 
 def assistantComplete(-Arguments: Data, -DiagnosticDetails: Data, unused: Unit, event: Types.AssistantMessageEvent<Arguments, DiagnosticDetails>) -> IO(Bool):
   match event:
@@ -297,17 +297,17 @@ def assistantComplete(-Arguments: Data, -DiagnosticDetails: Data, unused: Unit, 
     case Types.StreamError{_, _}: IO.pure(Bool, True{})
     case _: IO.pure(Bool, False{})
 
-def assistantExtract(-Arguments: Data, -DiagnosticDetails: Data, unused: Unit, event: Types.AssistantMessageEvent<Arguments, DiagnosticDetails>) -> IO(Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>):
+def assistantExtract(-Arguments: Data, -DiagnosticDetails: Data, unused: Unit, event: Types.AssistantMessageEvent<Arguments, DiagnosticDetails>) -> IO(Types.AssistantMessage<Arguments, DiagnosticDetails>):
   match event:
-    case Types.StreamDone{_, message}: IO.pure(Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, message)
-    case Types.StreamError{_, error}: IO.pure(Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, error)
-    case _: IO.die(Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, 1, "Unexpected event type for final result")
+    case Types.StreamDone{_, message}: IO.pure(Types.AssistantMessage<Arguments, DiagnosticDetails>, message)
+    case Types.StreamError{_, error}: IO.pure(Types.AssistantMessage<Arguments, DiagnosticDetails>, error)
+    case _: IO.die(Types.AssistantMessage<Arguments, DiagnosticDetails>, 1, "Unexpected event type for final result")
 
 def createAssistantMessageEventStream(~Arguments: Data, ~DiagnosticDetails: Data) -> IO(AssistantMessageEventStream(Arguments, DiagnosticDetails)):
   do IO<AssistantMessageEventStream(Arguments, DiagnosticDetails)>:
     check : C.Callback<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Bool> <- C.create(~Unit, ~Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, ~Bool, ~(assistantComplete(Arguments, DiagnosticDetails)), Unit{})
-    extract : C.Callback<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>> <- C.create(~Unit, ~Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, ~Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, ~(assistantExtract(Arguments, DiagnosticDetails)), Unit{})
-    create(Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, check, extract)
+    extract : C.Callback<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Types.AssistantMessage<Arguments, DiagnosticDetails>> <- C.create(~Unit, ~Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, ~Types.AssistantMessage<Arguments, DiagnosticDetails>, ~(assistantExtract(Arguments, DiagnosticDetails)), Unit{})
+    create(Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Types.AssistantMessage<Arguments, DiagnosticDetails>, check, extract)
 
 # The factory above owns its callbacks; unlike generic dispose, release them.
 def disposeAssistantMessageEventStream(-Arguments: Data, -DiagnosticDetails: Data, +stream: AssistantMessageEventStream(Arguments, DiagnosticDetails)) -> IO(Unit):
@@ -315,6 +315,6 @@ def disposeAssistantMessageEventStream(-Arguments: Data, -DiagnosticDetails: Dat
     case EventStream{state, finalResult, check, extract}:
       do IO<Unit>:
         previous : State<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>> <- Ref.dispose(State<Types.AssistantMessageEvent<Arguments, DiagnosticDetails>>, state)
-        D.dispose(Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, finalResult)
+        D.dispose(Types.AssistantMessage<Arguments, DiagnosticDetails>, finalResult)
         C.dispose(Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Bool, check)
-        C.dispose(Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Ref.Ref<Types.AssistantMessage<Arguments, DiagnosticDetails>>, extract)
+        C.dispose(Types.AssistantMessageEvent<Arguments, DiagnosticDetails>, Types.AssistantMessage<Arguments, DiagnosticDetails>, extract)

@@ -4,6 +4,8 @@ Native Bend port of pi, based on `earendil-works/pi` revision `46c9de402` (0.85.
 
 The final libraries and complex dependencies must use pure Bend. The bootstrap executable still uses C adapters for networking and Unicode; replacing them is required work. Pure-Bend numeric foundations are under [packages/runtime](packages/runtime/README.md). JavaScript/TypeScript extension compatibility is intentionally excluded; extensions will use Bend.
 
+The existing library code now uses immutable Bend records/lists and explicit updates; the JavaScript object/array compatibility layer has been removed. Structural tool equality and immutable event snapshots are approved adaptations. The full port remains paused; see [native cleanup](docs/native-bend.md).
+
 See [docs/parity.md](docs/parity.md) for the implementation and validation status. Credentials remain in the existing private `~/.pi/agent/auth.json`; never copy credentials into this repository.
 
 Upstream test parity is tracked in [tests/UPSTREAM.md](tests/UPSTREAM.md) and a source-hashed inventory. Unported and partially ported suites remain explicit; passing local smoke tests does not imply full compatibility.

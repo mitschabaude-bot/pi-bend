@@ -17,7 +17,6 @@ for case in reference['modes']:
 for case in reference['terminations']:
     values=items('None{}' if value is None else 'Some{' + flag(value) + '}' for value in case['values'])
     lines.append('    T.termination(' + values + ', ' + flag(case['expected']) + ')')
-lines.append('    T.liveState()')
 lines.append(f'    IO.print("PASS {len(reference["modes"])} mode and {len(reference["terminations"])} termination cases")')
 source=BUILD/'tool-batch-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')

@@ -1,7 +1,6 @@
 import Base
 import ../types.bend as T
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/ref.bend as Ref
 
 # Preserve binary64 evaluation order from models.ts calculateCost. Tier rates
 # apply to the entire request, not just tokens above the selected threshold.
@@ -52,16 +51,10 @@ def compute(cost: T.ModelCost, usage: T.Usage) -> T.UsageCost:
       selected = rates(cost, F.add(F.add(input, cacheRead), cacheWrite))
       atRates(selected, input, output, cacheRead, cacheWrite, optionalNumber(longWrite))
 
-def reference(usage: T.Usage) -> Ref.Ref<T.UsageCost>:
-  match usage:
-    case T.Usage{_, _, _, _, _, _, _, cost}: cost
-
 def modelCost(-SamplingValue: Data, model: T.Model<SamplingValue>) -> T.ModelCost:
   match model:
     case T.Model{_, _, _, _, _, _, _, _, cost, _, _, _, _, _}: cost
 
-def calculate(-SamplingValue: Data, model: T.Model<SamplingValue>, +usage: T.Usage) -> IO(Ref.Ref<T.UsageCost>):
-  do IO<Ref.Ref<T.UsageCost>>:
-    +original : Ref.Ref<T.UsageCost> = reference(usage)
-    Ref.write(T.UsageCost, original, compute(modelCost(SamplingValue, model), usage))
-    return original
+# Return the computed value; the caller decides where to retain it.
+def calculate(-SamplingValue: Data, model: T.Model<SamplingValue>, usage: T.Usage) -> T.UsageCost:
+  compute(modelCost(SamplingValue, model), usage)

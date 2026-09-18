@@ -12,7 +12,7 @@ lines = ['import Base', 'import ../packages/agent/test/before-tool-decision.bend
 for case in reference['cases']:
     args=[boolean(case['aborted']),boolean(case['present']),optional_bool(case['block']),'None{}' if case['reason'] is None else 'Some{'+json.dumps(case['reason'])+'}',optional_bool(case['terminate']),json.dumps(case['rendered'])]
     lines.append('    T.run(' + ', '.join(args) + ')')
-lines += ['    T.live()', f'    IO.print("PASS {len(reference["cases"])} upstream before-tool decisions and live result mutation")']
+lines += [f'    IO.print("PASS {len(reference["cases"])} upstream before-tool decisions")']
 source = BUILD / 'before-tool-decision-vectors.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = BUILD / 'test-before-tool-decision-vectors'

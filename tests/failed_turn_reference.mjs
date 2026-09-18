@@ -11,9 +11,8 @@ for(const reason of ['pending','stop','length','toolUse','deferred','error','abo
   const emit=async event=>{
     trace.push(event.type);
     if(event.type==='turn_end') {
-      if(event.message!==message || event.toolResults.length!==0 || messages[1]!==message) throw new Error('turn event identity/order changed');
-      messages.push(extra);message.stopReason='stop';
-    } else if(event.messages!==messages || messages.length!==3) throw new Error('agent end array changed');
+      if(event.message.stopReason!==reason || event.toolResults.length!==0 || messages.length!==2) throw new Error('turn event/order changed');
+    } else if(event.messages.length!==2) throw new Error('agent end history changed');
     if(calls++===failAt) throw 'listener failure';
   };
   let result;

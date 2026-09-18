@@ -4,21 +4,12 @@ import { readFileSync } from 'node:fs';
 
 function schema(v: any): any {
   switch (v[0]) {
-    case 'undefined': return undefined;
     case 'null': return null;
     case 'boolean': return v[1];
     case 'number': { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt('0x' + v[1])); return b.readDoubleBE(); }
     case 'string': return String.fromCodePoint(...v[1]);
-    case 'symbol': return Symbol.for(String(v[1]));
-    case 'callable': return () => { throw new Error('unexpected callback'); };
-    case 'bigint': return 1n;
     case 'array': return v[1].map(schema);
-    case 'object': {
-      const out = Object.create(null);
-      for (const [key, value, enumerable] of v[1]) Object.defineProperty(out, key, { value: schema(value), enumerable, configurable: true });
-      for (const [key, value] of v[2]) out[Symbol.for(String(key))] = schema(value);
-      return out;
-    }
+    case 'object': return Object.fromEntries(v[1].map(([key, value]: any[]) => [key, schema(value)]));
     default: throw new Error('unknown fixture');
   }
 }
@@ -28,11 +19,7 @@ function tool(v: any): Tool {
 }
 function result(fn: () => unknown) {
   try { return { value: fn() }; }
-  catch (error) {
-    if (error instanceof SyntaxError) return { error: 'omitted' };
-    if (error instanceof TypeError) return { error: 'bigint' };
-    throw error;
-  }
+  catch (error) { throw error; }
 }
 const cases = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const output = process.argv[3] === 'history'

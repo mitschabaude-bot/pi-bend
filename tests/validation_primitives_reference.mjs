@@ -7,16 +7,12 @@ if(start<0||end<=start)throw new Error('validation helper block missing');
 const helpers=new Function(stripTypeScriptTypes(source.slice(start,end))+';return {getSchemaTypes,matchesJsonType};')();
 function build(v){
  switch(v[0]){
-  case 'undefined': return undefined;
   case 'null': return null;
   case 'boolean': return v[1];
   case 'number': {const b=Buffer.from(v[1],'hex');return b.readDoubleBE();}
   case 'string': return String.fromCodePoint(...v[1]);
   case 'array': return v[1].map(build);
   case 'object': return {};
-  case 'symbol': return Symbol();
-  case 'callable': return ()=>{};
-  case 'bigint': return 1n;
  }
 }
 const input=JSON.parse(fs.readFileSync(0,'utf8'));

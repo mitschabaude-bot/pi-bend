@@ -17,6 +17,6 @@ def main() -> IO(Unit):
     assertion(String.eq(Text.contentText(Unit, Text.ContentString{"unchanged\ntext"}, "::"), "unchanged\ntext"), "string content passes through unchanged")
     sections : R.Record<Maybe<&2, String>> = R.set(Maybe<&2, String>, R.set(Maybe<&2, String>, R.set(Maybe<&2, String>, R.set(Maybe<&2, String>, R.new(Maybe<&2, String>), "a", Some{"last"}), "10", Some{"ten"}), "2", Some{"two"}), "empty", Some{""})
     +message : T.SystemMessage<Unit> = T.SystemMessage{T.SystemBlocks{T.TextContent{"", None{}} <> T.TextContent{"base", None{}} <> Nil{}}, Some{sections}, None{}, None{}, N.fromU32(0)}
-    assertion(String.eq(Text.renderComplete(Unit, message), "\nbase\n\ntwo\n\nten\n\nlast"), "numeric key order and omitted empty sections")
-    assertion(String.eq(Text.renderUpdate(Unit, message), "\nbase\n\nUpdated system prompt section \"2\":\n\ntwo\n\nUpdated system prompt section \"10\":\n\nten\n\nUpdated system prompt section \"a\":\n\nlast\n\nUpdated system prompt section \"empty\":\n\n"), "empty updates still include their framing")
+    assertion(String.eq(Text.renderComplete(Unit, message), "\nbase\n\nlast\n\nten\n\ntwo"), "insertion order and omitted empty sections")
+    assertion(String.eq(Text.renderUpdate(Unit, message), "\nbase\n\nUpdated system prompt section \"a\":\n\nlast\n\nUpdated system prompt section \"10\":\n\nten\n\nUpdated system prompt section \"2\":\n\ntwo\n\nUpdated system prompt section \"empty\":\n\n"), "empty updates still include their framing")
     IO.print("PASS text filtering, separators, section enumeration and empty update framing")

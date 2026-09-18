@@ -4,9 +4,7 @@ import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/json-string.bend as S
 import ../../../runtime/src/f64-decimal.bend as Number
 
-# This codec accepts the upstream JsonValue domain, not arbitrary extension
-# values. Undefined, callbacks, symbol metadata and cyclic objects require a
-# distinct dynamic-value/schema conversion layer; they are not silently erased.
+# Provider JSON serialization consumes an immutable data tree.
 type Task is Data:
   RenderValue{value: T.JsonValue}
   RenderArray{values: List<&2, T.JsonValue>, first: Bool}

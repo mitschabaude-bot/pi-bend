@@ -64,4 +64,4 @@ subprocess.run([BEND, 'packages/runtime/test/clock.bend', '-o', str(BUILD / 'tes
 # supported Bun host. Node remains the independent numeric reference above.
 bun = shutil.which('bun') or str(Path.home() / '.bun/bin/bun')
 subprocess.run([bun, str(BUILD / 'test-clock.js')], check=True, timeout=30)
-print('PASS exact clock arithmetic, native/JS primitive and clock-backed Event constructor')
+print('PASS exact clock arithmetic, native/JS primitive and elapsed time')

@@ -27,7 +27,7 @@ values[simple.index('reasoning')]='Some{T.Max{}}'
 values[simple.index('headers')]='Some{headers}'
 values[simple.index('onPayload')]='Some{adapter}'
 lines=['import Base','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/record.bend as Record','import ../packages/runtime/src/ref.bend as R','import ../packages/runtime/src/callback.bend as C',
-'def Input() -> Data: T.PayloadInput<Unit, R.Ref<T.Model<Unit>>>',
+'def Input() -> Data: T.PayloadInput<Unit, T.Model<Unit>>',
 'def Output() -> Data: Result<&2, &2, String, Maybe<&2, Unit>>',
 'def forbidden(unused: Unit, input: Input()) -> IO(Output()):',
 '  IO.die(Output(), 1, "options projection invoked payload callback")',
@@ -43,21 +43,21 @@ lines=['import Base','import ../packages/ai/src/types.bend as T','import ../pack
 '    case _: False{}',
 'def checkHeaders(+headers: Record.Record<T.Nullable<String>>) -> IO(Unit):',
 '  verify(suppressed(Record.get(T.Nullable<String>, headers, "remove")) && emptyHeader(Record.get(T.Nullable<String>, headers, "empty")) && Maybe.is_none(&2, T.Nullable<String>, Record.get(T.Nullable<String>, headers, "missing")))',
-'def check(options: T.ProviderRequestOptions<R.Ref<T.Model<Unit>>, Unit, Unit, Unit, Unit, String>, expected: T.ProviderHeaders(), callback: T.PayloadCallback(Unit, R.Ref<T.Model<Unit>>, String)) -> IO(Unit):','  match options:',
+'def check(options: T.ProviderRequestOptions<T.Model<Unit>, Unit, Unit, Unit, Unit, String>, expected: T.ProviderHeaders(), callback: T.PayloadCallback(Unit, T.Model<Unit>, String)) -> IO(Unit):','  match options:',
 '    case T.ProviderRequestOptions{_, _, _, _, _, Some{actualCallback}, _, Some{+actual}, _, _, _}:',
 '      do IO<Unit>:',
-'        verify(R.same(Record.Record<T.Nullable<String>>, actual, expected) && C.same(Input(), Output(), callback, actualCallback))',
-'        headers : Record.Record<T.Nullable<String>> <- R.read(Record.Record<T.Nullable<String>>, actual)',
+'        verify(C.same(Input(), Output(), callback, actualCallback))',
+'        headers : Record.Record<T.Nullable<String>> <- IO.pure(Record.Record<T.Nullable<String>>, actual)',
 '        checkHeaders(headers)',
 '    case _: IO.die(Unit, 1, "headers omitted in projection")',
 'def main() -> IO(Unit):','  do IO<Unit>:',
-'    +adapter : T.PayloadCallback(Unit, R.Ref<T.Model<Unit>>, String) <- C.create(~Unit, ~Input(), ~Output(), ~forbidden, Unit{})',
-'    +headers : T.ProviderHeaders() <- R.new(Record.Record<T.Nullable<String>>, Record.Record{Record.Property{"remove", T.NullValue{}} <> Record.Property{"empty", T.PresentValue{""}} <> Nil{}})',
+'    +adapter : T.PayloadCallback(Unit, T.Model<Unit>, String) <- C.create(~Unit, ~Input(), ~Output(), ~forbidden, Unit{})',
+'    +headers : T.ProviderHeaders() <- IO.pure(Record.Record<T.Nullable<String>>, Record.Record{Record.Property{"remove", T.NullValue{}} <> Record.Property{"empty", T.PresentValue{""}} <> Nil{}})',
 '    options : T.SimpleStreamOptions<'+params+'> = T.SimpleStreamOptions{'+', '.join(values)+'}',
 '    check(T.toProviderRequestOptions('+params+', T.toStreamOptions('+params+', options)), headers, adapter)',
-'    old : Record.Record<T.Nullable<String>> <- R.dispose(Record.Record<T.Nullable<String>>, headers)',
+'    old : Record.Record<T.Nullable<String>> <- IO.pure(Record.Record<T.Nullable<String>>, headers)',
 '    C.dispose(Input(), Output(), adapter)',
-'    IO.print("PASS option inheritance, callback/header identity and null/empty/missing headers")']
+'    IO.print("PASS option inheritance, callback handles and header contents and null/empty/missing headers")']
 path=BUILD/'provider-option-types.bend'
 path.write_text('\n'.join(lines)+'\n')
 subprocess.run(['sh','scripts/build-pure.sh',str(path),'build/test-provider-option-types'],cwd=ROOT,check=True)

@@ -1,37 +1,30 @@
 import Base
 import ../types.bend as T
-import ./grammar-variants.bend as G
 import ../../../runtime/src/record.bend as R
 
-# Wire codec for the typed constrained-sampling domain. Object field order is
-# retained because transcript declarations are compared by JSON serialization.
-def grammarFields(properties: List<&2, T.GrammarVariant>, fields: R.Record<T.JsonValue>) -> R.Record<T.JsonValue>:
-  match properties:
-    case Nil{}: fields
-    case T.GrammarVariant{_, None{}} <> rest: grammarFields(rest, fields)
-    case T.GrammarVariant{format, Some{value}} <> rest:
-      grammarFields(rest, R.set(T.JsonValue, fields, G.name(format), T.JsonString{value}))
+def optionalField(fields: R.Record<T.JsonValue>, key: String, value: Maybe<&2, String>) -> R.Record<T.JsonValue>:
+  match value:
+    case None{}: fields
+    case Some{text}: R.set(T.JsonValue, fields, key, T.JsonString{text})
 
 def grammarVariants(value: T.GrammarVariants) -> T.JsonValue:
   match value:
-    case T.GrammarVariants{properties}: T.JsonObject{grammarFields(properties, R.new(T.JsonValue))}
+    case T.GrammarVariants{lark, regex}: T.JsonObject{optionalField(optionalField(R.new(T.JsonValue), "openai_lark", lark), "openai_regex", regex)}
 
 def strictness(value: T.SamplingStrictness) -> String:
   match value:
     case T.Prefer{}: "prefer"
     case T.Require{}: "require"
 
-def configFields(order: T.SamplingPropertyOrder, tag: String, key: String, value: T.JsonValue) -> R.Record<T.JsonValue>:
-  match order:
-    case T.TypeFirst{}: R.set(T.JsonValue, R.set(T.JsonValue, R.new(T.JsonValue), "type", T.JsonString{tag}), key, value)
-    case T.TypeLast{}: R.set(T.JsonValue, R.set(T.JsonValue, R.new(T.JsonValue), key, value), "type", T.JsonString{tag})
+def configFields(tag: String, key: String, value: T.JsonValue) -> R.Record<T.JsonValue>:
+  R.set(T.JsonValue, R.set(T.JsonValue, R.new(T.JsonValue), "type", T.JsonString{tag}), key, value)
 
 def config(value: T.ConstrainedSamplingConfig) -> T.JsonValue:
   match value:
-    case T.JsonSchemaSampling{strict, order}: T.JsonObject{configFields(order, "json_schema", "strict", T.JsonString{strictness(strict)})}
-    case T.GrammarSampling{variants, order}: T.JsonObject{configFields(order, "grammar", "variants", grammarVariants(variants))}
+    case T.JsonSchemaSampling{strict}: T.JsonObject{configFields("json_schema", "strict", T.JsonString{strictness(strict)})}
+    case T.GrammarSampling{variants}: T.JsonObject{configFields("grammar", "variants", grammarVariants(variants))}
 
 def toJson(value: T.ToolConstrainedSampling) -> T.JsonValue:
   match value:
     case T.SamplingDisabled{}: T.JsonBoolean{False{}}
-    case T.SamplingConfigured{settings}: config(settings)
+    case T.SamplingConfigured{value}: config(value)

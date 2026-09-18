@@ -47,7 +47,7 @@ Date checks cover 146 signed integer conversion vectors, native one/four-thread 
 ```sh
 patch --forward -p1 -d "$HOME/.bend/current" < patches/bend-static-layout.patch
 python3 tests/static_layout.py
-python3 tests/object_inspection_vectors.py
+python3 tests/static_layout.py
 ```
 
 The reduced regression (`tests/static-layout.bend`) was verified to fail native compilation with the unpatched compiler and to pass with the patch on one/four threads; the JS backend also passes. It nests generic data/accessor descriptors with optional fields inside a list. The original property-inspection fixture likewise reproduces the failure before the patch. Shared runtime values, primitive coercion and generic/assistant event-stream regressions pass with the patch applied.

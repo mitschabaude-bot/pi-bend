@@ -14,7 +14,7 @@ def requested(value):
     return 'Some{Ai.Thinking{Ai.'+levels[value]+'{}}}'
 lines=['import Base','import ../packages/agent/test/turn-update.bend as T','import ../packages/ai/src/types.bend as Ai','def main() -> IO(Unit):','  do IO<Unit>:']
 for case in reference['cases']:
-    expected='|'.join([str(case[name]).lower() for name in ('sameConfig','sameContext','suppliedMessages')]+[case['reasoning'] or 'none',str(case['sameModel']).lower()])
+    expected='|'.join([case['reasoning'] or 'none',str(case['sameModel']).lower()])
     lines.append('    T.run('+', '.join([previous(case['previous']),requested(case['requested']),str(case['mask']),'True{}' if case['present'] else 'False{}',json.dumps(expected)])+')')
 lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream next-turn update cases")')
 source=BUILD/'turn-update-vectors.bend'

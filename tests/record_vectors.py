@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Use JavaScript's actual own-property behavior as a test-only oracle."""
+"""Check persistent dictionaries against an insertion-ordered value model."""
 import json
 from pathlib import Path
 import random
@@ -20,18 +20,16 @@ for _ in range(48):
     sequences.append([(['delete', rng.choice(keys)] if rng.randrange(4) == 0
                        else ['set', rng.choice(keys), rng.randrange(10000)])
                       for _ in range(rng.randrange(1, 100))])
-oracle = '''const cases = JSON.parse(process.argv[1]);
-console.log(JSON.stringify(cases.map(ops => {
-  const value = Object.create(null);
-  const map = new Map();
-  for (const [op,key,item] of ops) {
-    if (op === 'set') { value[key] = item; map.set(key,item); }
-    else { delete value[key]; map.delete(key); }
-  }
-  return {record:Object.entries(value), map:[...map.entries()]};
-})));'''
-expected = json.loads(subprocess.check_output(
-    ['node', '-e', oracle, json.dumps(sequences)], text=True))
+expected = []
+for operations in sequences:
+    model = {}
+    for operation in operations:
+        if operation[0] == 'set':
+            model[operation[1]] = operation[2]
+        else:
+            model.pop(operation[1], None)
+    entries = list(model.items())
+    expected.append({'record': entries, 'map': entries})
 
 def string(value):
     return json.dumps(value, ensure_ascii=False)
@@ -69,7 +67,7 @@ def equal(actual: List<&2, R.Property<U32>>, expected: List<&2, R.Property<U32>>
 def assertion(ok: Bool) -> IO(Unit):
   match ok:
     case True{}: IO.pure(Unit, Unit{})
-    case False{}: IO.die(Unit, 1, "record differs from JavaScript own properties")
+    case False{}: IO.die(Unit, 1, "dictionary differs from insertion-order model")
 
 def main() -> IO(Unit):
   do IO<Unit>:
@@ -81,7 +79,7 @@ for operations, result in zip(sequences, expected, strict=True):
     source += f'    assertion(equal(R.entries(U32, apply({ops}, R.new(U32))), {props}))\n'
     map_props = bend_list([f'R.Property{{{string(key)}, {value}}}' for key, value in result['map']])
     source += f'    assertion(equal(M.entries(U32, applyMap({ops}, M.new(U32))), {map_props}))\n'
-source += f'    IO.print("record and ordered map: {len(sequences)} JavaScript differential sequences each passed")\n'
+source += f'    IO.print("record and ordered map: {len(sequences)} persistent dictionary sequences each passed")\n'
 entry = BUILD / 'record-vectors.bend'
 entry.write_text(source)
 subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/record-vectors'], cwd=ROOT, check=True)

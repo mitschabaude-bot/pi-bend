@@ -24,40 +24,40 @@ stream_params='Unit, String, Unit, String, Unit, Ai.SimpleStreamOptions<Unit, Un
 values={name:'None{}' for name in actual}
 values.update(model='model',convertToLlm='convert',beforeToolCall='Some{before}',headers='Some{headerMap}')
 config_pattern=[{'model':'model','convertToLlm':'convert','beforeToolCall':'Some{before}'}.get(name,'_') for name in actual]
-lines=['import Base','import ../packages/agent/src/types.bend as T','import ../packages/ai/src/types.bend as Ai','import ../packages/ai/src/utils/event-stream.bend as E','import ../packages/ai/test/model-types.bend as Model','import ../packages/runtime/src/ref.bend as R','import ../packages/runtime/src/callback.bend as C','import ../packages/runtime/src/record.bend as Record',
+lines=['import Base','import ../packages/agent/src/types.bend as T','import ../packages/ai/src/models.bend as Models','import ../packages/ai/src/types.bend as Ai','import ../packages/ai/src/utils/event-stream.bend as E','import ../packages/ai/test/model-types.bend as Model','import ../packages/runtime/src/ref.bend as R','import ../packages/runtime/src/callback.bend as C','import ../packages/runtime/src/record.bend as Record',
 'def Config() -> Data: T.AgentLoopConfig<'+params+'>',
 'def Messages() -> Data: T.AgentMessageArray(Unit, String, Unit, String, String)',
-'def LlmMessages() -> Data: R.Ref<List<&2, Ai.Message<Unit, String, Unit, String>>>',
+'def LlmMessages() -> Data: List<&2, Ai.Message<Unit, String, Unit, String>>',
 'def ConvertOutput() -> Data: Result<&2, &2, String, LlmMessages()>',
 'def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Unit, String, Unit, String, String, U32, Unit, String>, Unit>',
-'def BeforeOutput() -> Data: Result<&2, &2, String, Maybe<&2, R.Ref<T.BeforeToolCallResult>>>',
+'def BeforeOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<U32, T.AgentContext<Unit, String, Unit, String, String, U32, Unit, String>>>',
 'def forbiddenConvert(unused: Unit, input: Messages()) -> IO(ConvertOutput()): IO.die(ConvertOutput(), 1, "configuration projection invoked converter")',
 'def forbiddenBefore(unused: Unit, input: BeforeInput()) -> IO(BeforeOutput()): IO.die(BeforeOutput(), 1, "configuration projection invoked hook")',
 'def verify(ok: Bool) -> IO(Unit): Bool.pick(IO(Unit), ok, IO.pure(Unit, Unit{}), IO.die(Unit, 1, "configuration field identity changed"))',
-'def identity(config: Config(), expectedModel: R.Ref<Ai.Model<Unit>>, expectedConvert: C.Callback<Messages(), ConvertOutput()>, expectedBefore: C.Callback<BeforeInput(), BeforeOutput()>) -> IO(Unit):','  match config:',
-'    case T.AgentLoopConfig{'+', '.join(config_pattern)+'}: verify(R.same(Ai.Model<Unit>, model, expectedModel) && C.same(Messages(), ConvertOutput(), convert, expectedConvert) && C.same(BeforeInput(), BeforeOutput(), before, expectedBefore))',
+'def identity(config: Config(), expectedModel: Ai.Model<Unit>, expectedConvert: C.Callback<Messages(), ConvertOutput()>, expectedBefore: C.Callback<BeforeInput(), BeforeOutput()>) -> IO(Unit):','  match config:',
+'    case T.AgentLoopConfig{'+', '.join(config_pattern)+'}: verify(Models.modelsAreEqual(Unit, Some{Ai.PresentValue{model}}, Some{Ai.PresentValue{expectedModel}}) && C.same(Messages(), ConvertOutput(), convert, expectedConvert) && C.same(BeforeInput(), BeforeOutput(), before, expectedBefore))',
 '    case _: IO.die(Unit, 1, "before hook omitted")',
 'def headers(options: Ai.SimpleStreamOptions<Unit, Unit, Unit, Unit, String>, expected: Ai.ProviderHeaders()) -> IO(Unit):','  match options:',
-'    case Ai.SimpleStreamOptions{'+', '.join('Some{actual}' if name=='headers' else '_' for name in inherited)+'}: verify(R.same(Record.Record<Ai.Nullable<String>>, actual, expected))',
+'    case Ai.SimpleStreamOptions{'+', '.join('Some{actual}' if name=='headers' else '_' for name in inherited)+'}: verify(Nat.is_eq(List.length(&2, Record.Property<Ai.Nullable<String>>, Record.entries(Ai.Nullable<String>, actual)), List.length(&2, Record.Property<Ai.Nullable<String>>, Record.entries(Ai.Nullable<String>, expected))))',
 '    case _: IO.die(Unit, 1, "inherited headers omitted")',
 'def main() -> IO(Unit):','  do IO<Unit>:',
-'    +model : R.Ref<Ai.Model<Unit>> <- R.new(Ai.Model<Unit>, Model.model(Ai.CustomModelApi{"custom"}, None{}))',
-'    +headerMap : Ai.ProviderHeaders() <- R.new(Record.Record<Ai.Nullable<String>>, Record.Record{Nil{}})',
+'    +model : Ai.Model<Unit> <- IO.pure(Ai.Model<Unit>, Model.model(Ai.CustomModelApi{"custom"}, None{}))',
+'    +headerMap : Ai.ProviderHeaders() <- IO.pure(Record.Record<Ai.Nullable<String>>, Record.Record{Nil{}})',
 '    +convert : C.Callback<Messages(), ConvertOutput()> <- C.create(~Unit, ~Messages(), ~ConvertOutput(), ~forbiddenConvert, Unit{})',
 '    +before : C.Callback<BeforeInput(), BeforeOutput()> <- C.create(~Unit, ~BeforeInput(), ~BeforeOutput(), ~forbiddenBefore, Unit{})',
 '    +config : Config() = T.AgentLoopConfig{'+', '.join(values[name] for name in actual)+'}']
 lines+=['    identity(config, model, convert, before)','    headers(T.toSimpleStreamOptions('+params+', config), headerMap)',
 '    C.dispose(Messages(), ConvertOutput(), convert)','    C.dispose(BeforeInput(), BeforeOutput(), before)',
-'    oldModel : Ai.Model<Unit> <- R.dispose(Ai.Model<Unit>, model)',
-'    oldHeaders : Record.Record<Ai.Nullable<String>> <- R.dispose(Record.Record<Ai.Nullable<String>>, headerMap)',
-'    IO.print("PASS inherited loop configuration and model/converter/hook/header identity")']
+'    oldModel : Ai.Model<Unit> <- IO.pure(Ai.Model<Unit>, model)',
+'    oldHeaders : Record.Record<Ai.Nullable<String>> <- IO.pure(Record.Record<Ai.Nullable<String>>, headerMap)',
+'    IO.print("PASS inherited loop configuration and model values, callback handles and header contents")']
 path=BUILD/'loop-config-types.bend'
 path.write_text('\n'.join(lines)+'\n')
 subprocess.run(['sh','scripts/build-pure.sh',str(path),'build/test-loop-config-types'],cwd=ROOT,check=True)
 for threads in ('1','4'): subprocess.run(['build/test-loop-config-types','--threads',threads],cwd=ROOT,check=True,timeout=30)
 bend=os.environ.get('BEND',str(Path.home()/'.bend/bin/bend'))
 preamble='\n'.join(lines[:8])+'\n'
-invalids=[('raw-context',f'''def bad(model: R.Ref<Ai.Model<Unit>>, context: R.Ref<Ai.Context<Unit, String, Unit, String>>) -> T.StreamInput<{stream_params}>:
+invalids=[('raw-context',f'''def bad(model: Ai.Model<Unit>, context: Ai.Context<Unit, String, Unit, String>) -> T.StreamInput<{stream_params}>:
   T.StreamInput{{model, context, None{{}}}}
 ''','TranscriptContext','Context'),('stream-error',f'''def Input() -> Data: T.StreamInput<{stream_params}>
 def bad(value: C.Callback<Input(), Result<&2, &2, String, E.AssistantMessageEventStream(String, Unit)>>) -> T.StreamFn({stream_params}):

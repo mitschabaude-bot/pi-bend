@@ -5,7 +5,6 @@ import ./tool-declaration.bend as Declaration
 import ../../../runtime/src/schema-value.bend as Schema
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/ordered-map.bend as M
-import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/f64.bend as Number
 
 # Initial normalization from transcript.ts. It does not implicitly replay
@@ -15,49 +14,44 @@ def promptValue(prompt: Maybe<&2, String>) -> String:
     case None{}: ""
     case Some{value}: value
 
-def nonEmptyTools(-P: Data, tools: Maybe<&2, List<&2, Ref.Ref<T.Tool<P>>>>) -> Maybe<&2, List<&2, Ref.Ref<T.Tool<P>>>>:
+def nonEmptyTools(-P: Data, tools: Maybe<&2, List<&2, T.Tool<P>>>) -> Maybe<&2, List<&2, T.Tool<P>>>:
   match tools:
     case None{}: None{}
     case Some{Nil{}}: None{}
     case Some{head <> tail}: Some{head <> tail}
 
-def hasTools(-P: Data, tools: Maybe<&2, List<&2, Ref.Ref<T.Tool<P>>>>) -> Bool:
+def hasTools(-P: Data, tools: Maybe<&2, List<&2, T.Tool<P>>>) -> Bool:
   match tools:
     case None{}: False{}
     case Some{_}: True{}
 
-def createInitial(-P: Data, needed: Bool, prompt: String, tools: Maybe<&2, List<&2, Ref.Ref<T.Tool<P>>>>) -> IO(Maybe<&2, Ref.Ref<T.SystemMessage<P>>>):
+def createInitial(-P: Data, needed: Bool, prompt: String, tools: Maybe<&2, List<&2, T.Tool<P>>>) -> Maybe<&2, T.SystemMessage<P>>:
   match needed:
-    case False{}: IO.pure(Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, None{})
+    case False{}: None{}
     case True{}:
-      do IO<Maybe<&2, Ref.Ref<T.SystemMessage<P>>>>:
-        value : Ref.Ref<T.SystemMessage<P>> <- Ref.new(T.SystemMessage<P>, T.SystemMessage{T.SystemText{prompt}, None{}, tools, None{}, Number.fromU32(0)})
-        return Some{value}
+      value = {T.SystemMessage{T.SystemText{prompt}, None{}, tools, None{}, Number.fromU32(0)} : T.SystemMessage<P>}
+      Some{value}
 
-def createInitialSystemMessage(-P: Data, systemPrompt: Maybe<&2, String>, tools: Maybe<&2, List<&2, Ref.Ref<T.Tool<P>>>>) -> IO(Maybe<&2, Ref.Ref<T.SystemMessage<P>>>):
+def createInitialSystemMessage(-P: Data, systemPrompt: Maybe<&2, String>, tools: Maybe<&2, List<&2, T.Tool<P>>>) -> Maybe<&2, T.SystemMessage<P>>:
   +prompt = promptValue(systemPrompt)
   +available = nonEmptyTools(P, tools)
   createInitial(P, Bool.not(String.is_empty(prompt)) || hasTools(P, available), prompt, available)
 
-# No initial message preserves the original array. Prepending allocates only
-# the array cell; existing message objects retain their shared identities.
-def prependInitial(-P: Data, -A: Data, -G: Data, -H: Data, initial: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, messages: Ref.Ref<List<&2, T.Message<P, A, G, H>>>) -> IO(T.TranscriptContext<P, A, G, H>):
+def prependInitial(-P: Data, -A: Data, -G: Data, -H: Data, initial: Maybe<&2, T.SystemMessage<P>>, messages: List<&2, T.Message<P, A, G, H>>) -> T.TranscriptContext<P, A, G, H>:
   match initial:
-    case None{}: IO.pure(T.TranscriptContext<P, A, G, H>, T.TranscriptContext{messages})
+    case None{}: T.TranscriptContext{messages}
     case Some{value}:
-      do IO<T.TranscriptContext<P, A, G, H>>:
-        original : List<&2, T.Message<P, A, G, H>> <- Ref.read(List<&2, T.Message<P, A, G, H>>, messages)
-        copied : Ref.Ref<List<&2, T.Message<P, A, G, H>>> <- Ref.new(List<&2, T.Message<P, A, G, H>>, T.System{value} <> original)
-        return T.TranscriptContext{copied}
+      original = {messages : List<&2, T.Message<P, A, G, H>>}
+      copied = {T.System{value} <> original : List<&2, T.Message<P, A, G, H>>}
+      T.TranscriptContext{copied}
 
-def normalizeContext(-P: Data, -A: Data, -G: Data, -H: Data, context: T.Context<P, A, G, H>) -> IO(T.TranscriptContext<P, A, G, H>):
+def normalizeContext(-P: Data, -A: Data, -G: Data, -H: Data, context: T.Context<P, A, G, H>) -> T.TranscriptContext<P, A, G, H>:
   match context:
     case T.Context{systemPrompt, messages, tools}:
-      do IO<T.TranscriptContext<P, A, G, H>>:
-        initial : Maybe<&2, Ref.Ref<T.SystemMessage<P>>> <- createInitialSystemMessage(P, systemPrompt, tools)
-        prependInitial(P, A, G, H, initial, messages)
+      initial = {createInitialSystemMessage(P, systemPrompt, tools) : Maybe<&2, T.SystemMessage<P>>}
+      prependInitial(P, A, G, H, initial, messages)
 
-def getInitialSystemMessage(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> Maybe<&2, Ref.Ref<T.SystemMessage<P>>>:
+def getInitialSystemMessage(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> Maybe<&2, T.SystemMessage<P>>:
   match messages:
     case T.System{value} <> _: Some{value}
     case _: None{}
@@ -72,44 +66,42 @@ def toolName(-P: Data, tool: T.Tool<P>) -> String:
   match tool:
     case T.Tool{name, _, _, _}: name
 
-def removeTools(-P: Data, removed: List<&2, T.ToolReference>, tools: M.OrderedMap<Ref.Ref<T.Tool<P>>>) -> M.OrderedMap<Ref.Ref<T.Tool<P>>>:
+def removeTools(-P: Data, removed: List<&2, T.ToolReference>, tools: M.OrderedMap<T.Tool<P>>) -> M.OrderedMap<T.Tool<P>>:
   match removed:
     case Nil{}: tools
-    case T.ToolReference{name} <> rest: removeTools(P, rest, M.remove(Ref.Ref<T.Tool<P>>, tools, name))
+    case T.ToolReference{name} <> rest: removeTools(P, rest, M.remove(T.Tool<P>, tools, name))
 
-def addTools(-P: Data, added: List<&2, Ref.Ref<T.Tool<P>>>, tools: M.OrderedMap<Ref.Ref<T.Tool<P>>>) -> IO(M.OrderedMap<Ref.Ref<T.Tool<P>>>):
+def addTools(-P: Data, added: List<&2, T.Tool<P>>, tools: M.OrderedMap<T.Tool<P>>) -> M.OrderedMap<T.Tool<P>>:
   match added:
-    case Nil{}: IO.pure(M.OrderedMap<Ref.Ref<T.Tool<P>>>, tools)
+    case Nil{}: tools
     case +head <> rest:
-      do IO<M.OrderedMap<Ref.Ref<T.Tool<P>>>>:
-        value : T.Tool<P> <- Ref.read(T.Tool<P>, head)
-        addTools(P, rest, M.set(Ref.Ref<T.Tool<P>>, tools, toolName(P, value), head))
+      value = {head : T.Tool<P>}
+      addTools(P, rest, M.set(T.Tool<P>, tools, toolName(P, value), head))
 
 def listValue(-V: Data, value: Maybe<&2, List<&2, V>>) -> List<&2, V>:
   match value:
     case None{}: Nil{}
     case Some{items}: items
 
-def replayTools(-P: Data, message: T.SystemMessage<P>, tools: M.OrderedMap<Ref.Ref<T.Tool<P>>>, includeRemoved: Bool) -> IO(M.OrderedMap<Ref.Ref<T.Tool<P>>>):
+def replayTools(-P: Data, message: T.SystemMessage<P>, tools: M.OrderedMap<T.Tool<P>>, includeRemoved: Bool) -> M.OrderedMap<T.Tool<P>>:
   match message:
     case T.SystemMessage{_, _, added, removed, _}:
-      addTools(P, listValue(Ref.Ref<T.Tool<P>>, added), removeTools(P, Bool.pick(List<&2, T.ToolReference>, includeRemoved, listValue(T.ToolReference, removed), Nil{}), tools))
+      addTools(P, listValue(T.Tool<P>, added), removeTools(P, Bool.pick(List<&2, T.ToolReference>, includeRemoved, listValue(T.ToolReference, removed), Nil{}), tools))
 
-def collectTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, tools: M.OrderedMap<Ref.Ref<T.Tool<P>>>, +includeRemoved: Bool) -> IO(List<&2, Ref.Ref<T.Tool<P>>>):
+def collectTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, tools: M.OrderedMap<T.Tool<P>>, +includeRemoved: Bool) -> List<&2, T.Tool<P>>:
   match messages:
-    case Nil{}: IO.pure(List<&2, Ref.Ref<T.Tool<P>>>, M.values(Ref.Ref<T.Tool<P>>, tools))
+    case Nil{}: M.values(T.Tool<P>, tools)
     case T.System{reference} <> rest:
-      do IO<List<&2, Ref.Ref<T.Tool<P>>>>:
-        message : T.SystemMessage<P> <- Ref.read(T.SystemMessage<P>, reference)
-        updated : M.OrderedMap<Ref.Ref<T.Tool<P>>> <- replayTools(P, message, tools, includeRemoved)
-        collectTools(P, A, G, H, rest, updated, includeRemoved)
+      message = {reference : T.SystemMessage<P>}
+      updated = {replayTools(P, message, tools, includeRemoved) : M.OrderedMap<T.Tool<P>>}
+      collectTools(P, A, G, H, rest, updated, includeRemoved)
     case _ <> rest: collectTools(P, A, G, H, rest, tools, includeRemoved)
 
-def getCurrentTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> IO(List<&2, Ref.Ref<T.Tool<P>>>):
-  collectTools(P, A, G, H, messages, M.new(Ref.Ref<T.Tool<P>>), True{})
+def getCurrentTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> List<&2, T.Tool<P>>:
+  collectTools(P, A, G, H, messages, M.new(T.Tool<P>), True{})
 
-def getDeclaredTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> IO(List<&2, Ref.Ref<T.Tool<P>>>):
-  collectTools(P, A, G, H, messages, M.new(Ref.Ref<T.Tool<P>>), False{})
+def getDeclaredTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> List<&2, T.Tool<P>>:
+  collectTools(P, A, G, H, messages, M.new(T.Tool<P>), False{})
 
 type ReplayState is Data:
   ReplayState{content: List<&2, String>, sections: R.Record<Maybe<&2, String>>, timestamp: Maybe<&2, Number.F64>}
@@ -133,13 +125,12 @@ def replayMessage(-P: Data, message: T.SystemMessage<P>, state: ReplayState) -> 
     case T.SystemMessage{content, sections, _, _, timestamp} ReplayState{parts, currentSections, initialTimestamp}:
       ReplayState{appendContent(Text.systemContentText(content), parts), applySections(Text.sectionEntries(sections), currentSections), firstTimestamp(initialTimestamp, timestamp)}
 
-def replayMessages(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, state: ReplayState) -> IO(ReplayState):
+def replayMessages(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, state: ReplayState) -> ReplayState:
   match messages:
-    case Nil{}: IO.pure(ReplayState, state)
+    case Nil{}: state
     case T.System{reference} <> rest:
-      do IO<ReplayState>:
-        message : T.SystemMessage<P> <- Ref.read(T.SystemMessage<P>, reference)
-        replayMessages(P, A, G, H, rest, replayMessage(P, message, state))
+      message = {reference : T.SystemMessage<P>}
+      replayMessages(P, A, G, H, rest, replayMessage(P, message, state))
     case _ <> rest: replayMessages(P, A, G, H, rest, state)
 
 def optionalSections(properties: List<&2, R.Property<Maybe<&2, String>>>) -> Maybe<&2, R.Record<Maybe<&2, String>>>:
@@ -152,33 +143,28 @@ def timestampValue(timestamp: Maybe<&2, Number.F64>) -> Number.F64:
     case None{}: Number.fromU32(0)
     case Some{value}: value
 
-def finishReplay(-P: Data, state: ReplayState, tools: List<&2, Ref.Ref<T.Tool<P>>>) -> IO(Maybe<&2, Ref.Ref<T.SystemMessage<P>>>):
+def finishReplay(-P: Data, state: ReplayState, tools: List<&2, T.Tool<P>>) -> Maybe<&2, T.SystemMessage<P>>:
   match state tools:
-    case ReplayState{_, _, None{}} Nil{}: IO.pure(Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, None{})
+    case ReplayState{_, _, None{}} Nil{}: None{}
     case ReplayState{content, sections, timestamp} tools:
-      do IO<Maybe<&2, Ref.Ref<T.SystemMessage<P>>>>:
-        message : Ref.Ref<T.SystemMessage<P>> <- Ref.new(T.SystemMessage<P>, T.SystemMessage{T.SystemText{String.join(List.reverse(&2, String, content), "\n\n")}, optionalSections(R.entries(Maybe<&2, String>, sections)), nonEmptyTools(P, Some{tools}), None{}, timestampValue(timestamp)})
-        return Some{message}
+      message = {T.SystemMessage{T.SystemText{String.join(List.reverse(&2, String, content), "\n\n")}, optionalSections(R.entries(Maybe<&2, String>, sections)), nonEmptyTools(P, Some{tools}), None{}, timestampValue(timestamp)} : T.SystemMessage<P>}
+      Some{message}
 
-def getCurrentSystemMessage(-P: Data, -A: Data, -G: Data, -H: Data, +messages: List<&2, T.Message<P, A, G, H>>) -> IO(Maybe<&2, Ref.Ref<T.SystemMessage<P>>>):
-  do IO<Maybe<&2, Ref.Ref<T.SystemMessage<P>>>>:
-    state : ReplayState <- replayMessages(P, A, G, H, messages, ReplayState{Nil{}, R.new(Maybe<&2, String>), None{}})
-    tools : List<&2, Ref.Ref<T.Tool<P>>> <- getCurrentTools(P, A, G, H, messages)
-    finishReplay(P, state, tools)
+def getCurrentSystemMessage(-P: Data, -A: Data, -G: Data, -H: Data, +messages: List<&2, T.Message<P, A, G, H>>) -> Maybe<&2, T.SystemMessage<P>>:
+  state = {replayMessages(P, A, G, H, messages, ReplayState{Nil{}, R.new(Maybe<&2, String>), None{}}) : ReplayState}
+  tools = {getCurrentTools(P, A, G, H, messages) : List<&2, T.Tool<P>>}
+  finishReplay(P, state, tools)
 
-# The temporary replayed message belongs to this helper; do not leak its Ref.
-def currentPrompt(-P: Data, message: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>) -> IO(String):
+def currentPrompt(-P: Data, message: Maybe<&2, T.SystemMessage<P>>) -> String:
   match message:
-    case None{}: IO.pure(String, "")
+    case None{}: ""
     case Some{reference}:
-      do IO<String>:
-        value : T.SystemMessage<P> <- Ref.dispose(T.SystemMessage<P>, reference)
-        return Text.renderComplete(P, value)
+      value = {reference : T.SystemMessage<P>}
+      Text.renderComplete(P, value)
 
-def getCurrentSystemPrompt(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> IO(String):
-  do IO<String>:
-    message : Maybe<&2, Ref.Ref<T.SystemMessage<P>>> <- getCurrentSystemMessage(P, A, G, H, messages)
-    currentPrompt(P, message)
+def getCurrentSystemPrompt(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> String:
+  message = {getCurrentSystemMessage(P, A, G, H, messages) : Maybe<&2, T.SystemMessage<P>>}
+  currentPrompt(P, message)
 
 def withoutSystemMessages(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> List<&2, T.Message<P, A, G, H>>:
   match messages:
@@ -186,23 +172,22 @@ def withoutSystemMessages(-P: Data, -A: Data, -G: Data, -H: Data, messages: List
     case T.System{_} <> rest: withoutSystemMessages(P, A, G, H, rest)
     case head <> rest: head <> withoutSystemMessages(P, A, G, H, rest)
 
-def collapsedMessages(-P: Data, -A: Data, -G: Data, -H: Data, head: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, messages: List<&2, T.Message<P, A, G, H>>) -> List<&2, T.Message<P, A, G, H>>:
+def collapsedMessages(-P: Data, -A: Data, -G: Data, -H: Data, head: Maybe<&2, T.SystemMessage<P>>, messages: List<&2, T.Message<P, A, G, H>>) -> List<&2, T.Message<P, A, G, H>>:
   match head:
     case None{}: messages
     case Some{value}: T.System{value} <> messages
 
-def collapseSystemMessages(-P: Data, -A: Data, -G: Data, -H: Data, context: T.TranscriptContext<P, A, G, H>) -> IO(T.TranscriptContext<P, A, G, H>):
+def collapseSystemMessages(-P: Data, -A: Data, -G: Data, -H: Data, context: T.TranscriptContext<P, A, G, H>) -> T.TranscriptContext<P, A, G, H>:
   match context:
     case T.TranscriptContext{reference}:
-      do IO<T.TranscriptContext<P, A, G, H>>:
-        +messages : List<&2, T.Message<P, A, G, H>> <- Ref.read(List<&2, T.Message<P, A, G, H>>, reference)
-        head : Maybe<&2, Ref.Ref<T.SystemMessage<P>>> <- getCurrentSystemMessage(P, A, G, H, messages)
-        copied : Ref.Ref<List<&2, T.Message<P, A, G, H>>> <- Ref.new(List<&2, T.Message<P, A, G, H>>, collapsedMessages(P, A, G, H, head, withoutSystemMessages(P, A, G, H, messages)))
-        return T.TranscriptContext{copied}
+      +messages = {reference : List<&2, T.Message<P, A, G, H>>}
+      head = {getCurrentSystemMessage(P, A, G, H, messages) : Maybe<&2, T.SystemMessage<P>>}
+      copied = {collapsedMessages(P, A, G, H, head, withoutSystemMessages(P, A, G, H, messages)) : List<&2, T.Message<P, A, G, H>>}
+      T.TranscriptContext{copied}
 
-def resolveTranscript(-P: Data, -A: Data, -G: Data, -H: Data, context: T.TranscriptContext<P, A, G, H>, supportsMidConvoSystemMessages: Maybe<&2, Bool>) -> IO(T.TranscriptContext<P, A, G, H>):
+def resolveTranscript(-P: Data, -A: Data, -G: Data, -H: Data, context: T.TranscriptContext<P, A, G, H>, supportsMidConvoSystemMessages: Maybe<&2, Bool>) -> T.TranscriptContext<P, A, G, H>:
   match supportsMidConvoSystemMessages:
-    case Some{True{}}: IO.pure(T.TranscriptContext<P, A, G, H>, context)
+    case Some{True{}}: context
     case _: collapseSystemMessages(P, A, G, H, context)
 
 def present(-V: Data, value: Maybe<&2, V>) -> Bool:
@@ -210,71 +195,66 @@ def present(-V: Data, value: Maybe<&2, V>) -> Bool:
     case None{}: False{}
     case Some{_}: True{}
 
-def addNames(-P: Data, added: List<&2, Ref.Ref<T.Tool<P>>>, +seen: M.OrderedMap<Unit>) -> IO(M.OrderedMap<Unit> & Bool):
+def addNames(-P: Data, added: List<&2, T.Tool<P>>, +seen: M.OrderedMap<Unit>) -> M.OrderedMap<Unit> & Bool:
   match added:
-    case Nil{}: IO.pure(M.OrderedMap<Unit> & Bool, (seen, False{}))
+    case Nil{}: (seen, False{})
     case reference <> rest:
-      do IO<M.OrderedMap<Unit> & Bool>:
-        tool : T.Tool<P> <- Ref.read(T.Tool<P>, reference)
-        +name : String = toolName(P, tool)
-        Bool.pick(IO(M.OrderedMap<Unit> & Bool), present(Unit, M.get(Unit, seen, name)), IO.pure(M.OrderedMap<Unit> & Bool, (seen, True{})), addNames(P, rest, M.set(Unit, seen, name, Unit{})))
+      tool = {reference : T.Tool<P>}
+      +name = {toolName(P, tool) : String}
+      Bool.pick(M.OrderedMap<Unit> & Bool, present(Unit, M.get(Unit, seen, name)), (seen, True{}), addNames(P, rest, M.set(Unit, seen, name, Unit{})))
 
-def nameChanges(-P: Data, message: T.SystemMessage<P>, seen: M.OrderedMap<Unit>) -> IO(M.OrderedMap<Unit> & Bool):
+def nameChanges(-P: Data, message: T.SystemMessage<P>, seen: M.OrderedMap<Unit>) -> M.OrderedMap<Unit> & Bool:
   match message:
-    case T.SystemMessage{_, _, _, Some{_ <> _}, _}: IO.pure(M.OrderedMap<Unit> & Bool, (seen, True{}))
-    case T.SystemMessage{_, _, added, _, _}: addNames(P, listValue(Ref.Ref<T.Tool<P>>, added), seen)
+    case T.SystemMessage{_, _, _, Some{_ <> _}, _}: (seen, True{})
+    case T.SystemMessage{_, _, added, _, _}: addNames(P, listValue(T.Tool<P>, added), seen)
 
-def scanNonAdditive(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, state: M.OrderedMap<Unit> & Bool) -> IO(Bool):
+def scanNonAdditive(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, state: M.OrderedMap<Unit> & Bool) -> Bool:
   match messages state:
-    case _ Tuple{_, True{}}: IO.pure(Bool, True{})
-    case Nil{} Tuple{_, False{}}: IO.pure(Bool, False{})
+    case _ Tuple{_, True{}}: True{}
+    case Nil{} Tuple{_, False{}}: False{}
     case T.System{reference} <> rest Tuple{seen, False{}}:
-      do IO<Bool>:
-        message : T.SystemMessage<P> <- Ref.read(T.SystemMessage<P>, reference)
-        updated : M.OrderedMap<Unit> & Bool <- nameChanges(P, message, seen)
-        scanNonAdditive(P, A, G, H, rest, updated)
+      message = {reference : T.SystemMessage<P>}
+      updated = {nameChanges(P, message, seen) : M.OrderedMap<Unit> & Bool}
+      scanNonAdditive(P, A, G, H, rest, updated)
     case _ <> rest state: scanNonAdditive(P, A, G, H, rest, state)
 
-def hasNonAdditiveToolChanges(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> IO(Bool):
+def hasNonAdditiveToolChanges(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> Bool:
   scanNonAdditive(P, A, G, H, messages, (M.new(Unit), False{}))
 
 type TranscriptTools<-P: Data> is Data:
-  TranscriptTools{requestTools: List<&2, Ref.Ref<T.Tool<P>>>, anchorsAdditions: Bool}
+  TranscriptTools{requestTools: List<&2, T.Tool<P>>, anchorsAdditions: Bool}
 
-def initialToolsValue(-P: Data, message: T.SystemMessage<P>) -> List<&2, Ref.Ref<T.Tool<P>>>:
+def initialToolsValue(-P: Data, message: T.SystemMessage<P>) -> List<&2, T.Tool<P>>:
   match message:
-    case T.SystemMessage{_, _, added, _, _}: listValue(Ref.Ref<T.Tool<P>>, added)
+    case T.SystemMessage{_, _, added, _, _}: listValue(T.Tool<P>, added)
 
-def initialTools(-P: Data, message: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>) -> IO(TranscriptTools<P>):
+def initialTools(-P: Data, message: Maybe<&2, T.SystemMessage<P>>) -> TranscriptTools<P>:
   match message:
-    case None{}: IO.pure(TranscriptTools<P>, TranscriptTools{Nil{}, True{}})
+    case None{}: TranscriptTools{Nil{}, True{}}
     case Some{reference}:
-      do IO<TranscriptTools<P>>:
-        value : T.SystemMessage<P> <- Ref.read(T.SystemMessage<P>, reference)
-        return TranscriptTools{initialToolsValue(P, value), True{}}
+      value = {reference : T.SystemMessage<P>}
+      TranscriptTools{initialToolsValue(P, value), True{}}
 
-def resolveToolMode(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, anchors: Bool) -> IO(TranscriptTools<P>):
+def resolveToolMode(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>, anchors: Bool) -> TranscriptTools<P>:
   match anchors:
     case True{}: initialTools(P, getInitialSystemMessage(P, A, G, H, messages))
     case False{}:
-      do IO<TranscriptTools<P>>:
-        tools : List<&2, Ref.Ref<T.Tool<P>>> <- getCurrentTools(P, A, G, H, messages)
-        return TranscriptTools{tools, False{}}
+      tools = {getCurrentTools(P, A, G, H, messages) : List<&2, T.Tool<P>>}
+      TranscriptTools{tools, False{}}
 
-def resolveTranscriptTools(-P: Data, -A: Data, -G: Data, -H: Data, +messages: List<&2, T.Message<P, A, G, H>>, supportsToolAdditions: Bool) -> IO(TranscriptTools<P>):
+def resolveTranscriptTools(-P: Data, -A: Data, -G: Data, -H: Data, +messages: List<&2, T.Message<P, A, G, H>>, supportsToolAdditions: Bool) -> TranscriptTools<P>:
   match supportsToolAdditions:
     case False{}: resolveToolMode(P, A, G, H, messages, False{})
     case True{}:
-      do IO<TranscriptTools<P>>:
-        nonAdditive : Bool <- hasNonAdditiveToolChanges(P, A, G, H, messages)
-        resolveToolMode(P, A, G, H, messages, Bool.not(nonAdditive))
+      nonAdditive = {hasNonAdditiveToolChanges(P, A, G, H, messages) : Bool}
+      resolveToolMode(P, A, G, H, messages, Bool.not(nonAdditive))
 
 # Schema-data entry points. The TypeBox static-schema adapter is still pending.
-def toToolDeclaration(-Metadata: Data, tool: T.Tool<Schema.Value<Metadata>>) -> Declaration.DeclarationResult<T.Tool<Schema.Value<Metadata>>>:
-  Declaration.toToolDeclaration(Metadata, tool)
+def toToolDeclaration(tool: T.Tool<Schema.Value>) -> Declaration.DeclarationResult<T.Tool<Schema.Value>>:
+  Declaration.toToolDeclaration(tool)
 
-def declarationsEqual(-Metadata: Data, left: T.Tool<Schema.Value<Metadata>>, right: T.Tool<Schema.Value<Metadata>>) -> Declaration.DeclarationResult<Bool>:
-  Declaration.declarationsEqual(Metadata, left, right)
+def declarationsEqual(left: T.Tool<Schema.Value>, right: T.Tool<Schema.Value>) -> Declaration.DeclarationResult<Bool>:
+  Declaration.declarationsEqual(left, right)
 
 # Upstream transcript.ts ToolStateChanges. Schema-data entry points currently
 # use value lists; mutable/extended-tool adapters remain a separate boundary.
@@ -291,17 +271,17 @@ def unequal(result: Declaration.DeclarationResult<Bool>) -> Declaration.Declarat
     case Declaration.Failure{error}: Declaration.Failure{error}
     case Declaration.Success{same}: Declaration.Success{Bool.not(same)}
 
-def compareIndexed(-Metadata: Data, existing: T.Tool<Schema.Value<Metadata>>, item: T.Tool<Schema.Value<Metadata>>, existingFirst: Bool) -> Declaration.DeclarationResult<Bool>:
+def compareIndexed(existing: T.Tool<Schema.Value>, item: T.Tool<Schema.Value>, existingFirst: Bool) -> Declaration.DeclarationResult<Bool>:
   match existingFirst:
-    case True{}: unequal(declarationsEqual(Metadata, existing, item))
-    case False{}: unequal(declarationsEqual(Metadata, item, existing))
+    case True{}: unequal(declarationsEqual(existing, item))
+    case False{}: unequal(declarationsEqual(item, existing))
 
-def changedAgainst(-Metadata: Data, existing: Maybe<&2, T.Tool<Schema.Value<Metadata>>>, item: T.Tool<Schema.Value<Metadata>>, existingFirst: Bool) -> Declaration.DeclarationResult<Bool>:
+def changedAgainst(existing: Maybe<&2, T.Tool<Schema.Value>>, item: T.Tool<Schema.Value>, existingFirst: Bool) -> Declaration.DeclarationResult<Bool>:
   match existing:
     case None{}: Declaration.Success{True{}}
-    case Some{value}: compareIndexed(Metadata, value, item, existingFirst)
+    case Some{value}: compareIndexed(value, item, existingFirst)
 
-def retainChanged(-Metadata: Data, item: T.Tool<Schema.Value<Metadata>>, selected: List<&2, T.Tool<Schema.Value<Metadata>>>, changed: Declaration.DeclarationResult<Bool>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+def retainChanged(item: T.Tool<Schema.Value>, selected: List<&2, T.Tool<Schema.Value>>, changed: Declaration.DeclarationResult<Bool>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>:
   match changed:
     case Declaration.Failure{error}: Declaration.Failure{error}
     case Declaration.Success{True{}}: Declaration.Success{item <> selected}
@@ -309,101 +289,97 @@ def retainChanged(-Metadata: Data, item: T.Tool<Schema.Value<Metadata>>, selecte
 
 # Keep duplicates and source order. The maps are lookup indexes, not the lists
 # returned by filter. Complete filtering before projecting any added schemas.
-def selectChanged(-Metadata: Data, remaining: List<&2, T.Tool<Schema.Value<Metadata>>>, +indexed: M.OrderedMap<T.Tool<Schema.Value<Metadata>>>, +existingFirst: Bool, state: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+def selectChanged(remaining: List<&2, T.Tool<Schema.Value>>, +indexed: M.OrderedMap<T.Tool<Schema.Value>>, +existingFirst: Bool, state: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>:
   match remaining state:
     case _ Declaration.Failure{error}: Declaration.Failure{error}
-    case Nil{} Declaration.Success{selected}: Declaration.Success{List.reverse(&2, T.Tool<Schema.Value<Metadata>>, selected)}
+    case Nil{} Declaration.Success{selected}: Declaration.Success{List.reverse(&2, T.Tool<Schema.Value>, selected)}
     case +head <> tail Declaration.Success{selected}:
-      selectChanged(Metadata, tail, indexed, existingFirst, retainChanged(Metadata, head, selected, changedAgainst(Metadata, M.get(T.Tool<Schema.Value<Metadata>>, indexed, toolName(Schema.Value<Metadata>, head)), head, existingFirst)))
+      selectChanged(tail, indexed, existingFirst, retainChanged(head, selected, changedAgainst(M.get(T.Tool<Schema.Value>, indexed, toolName(Schema.Value, head)), head, existingFirst)))
 
-def retainDeclaration(-Metadata: Data, selected: List<&2, T.Tool<Schema.Value<Metadata>>>, result: Declaration.DeclarationResult<T.Tool<Schema.Value<Metadata>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+def retainDeclaration(selected: List<&2, T.Tool<Schema.Value>>, result: Declaration.DeclarationResult<T.Tool<Schema.Value>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>:
   match result:
     case Declaration.Failure{error}: Declaration.Failure{error}
     case Declaration.Success{value}: Declaration.Success{value <> selected}
 
-def projectAdded(-Metadata: Data, remaining: List<&2, T.Tool<Schema.Value<Metadata>>>, state: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+def projectAdded(remaining: List<&2, T.Tool<Schema.Value>>, state: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>:
   match remaining state:
     case _ Declaration.Failure{error}: Declaration.Failure{error}
-    case Nil{} Declaration.Success{selected}: Declaration.Success{List.reverse(&2, T.Tool<Schema.Value<Metadata>>, selected)}
-    case head <> tail Declaration.Success{selected}: projectAdded(Metadata, tail, retainDeclaration(Metadata, selected, toToolDeclaration(Metadata, head)))
+    case Nil{} Declaration.Success{selected}: Declaration.Success{List.reverse(&2, T.Tool<Schema.Value>, selected)}
+    case head <> tail Declaration.Success{selected}: projectAdded(tail, retainDeclaration(selected, toToolDeclaration(head)))
 
-def projectSelected(-Metadata: Data, selected: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+def projectSelected(selected: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>:
   match selected:
     case Declaration.Failure{error}: Declaration.Failure{error}
-    case Declaration.Success{values}: projectAdded(Metadata, values, Declaration.Success{Nil{}})
+    case Declaration.Success{values}: projectAdded(values, Declaration.Success{Nil{}})
 
 def toolReferences(-P: Data, values: List<&2, T.Tool<P>>) -> List<&2, T.ToolReference>:
   match values:
     case Nil{}: Nil{}
     case head <> tail: T.ToolReference{toolName(P, head)} <> toolReferences(P, tail)
 
-def finishRemoved(-Metadata: Data, added: List<&2, T.Tool<Schema.Value<Metadata>>>, removed: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value<Metadata>>>:
+def finishRemoved(added: List<&2, T.Tool<Schema.Value>>, removed: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value>>:
   match removed:
     case Declaration.Failure{error}: Declaration.Failure{error}
-    case Declaration.Success{values}: Declaration.Success{ToolStateChanges{added, toolReferences(Schema.Value<Metadata>, values)}}
+    case Declaration.Success{values}: Declaration.Success{ToolStateChanges{added, toolReferences(Schema.Value, values)}}
 
-def finishAdded(-Metadata: Data, previous: List<&2, T.Tool<Schema.Value<Metadata>>>, currentIndex: M.OrderedMap<T.Tool<Schema.Value<Metadata>>>, added: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value<Metadata>>>:
+def finishAdded(previous: List<&2, T.Tool<Schema.Value>>, currentIndex: M.OrderedMap<T.Tool<Schema.Value>>, added: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value>>:
   match added:
     case Declaration.Failure{error}: Declaration.Failure{error}
-    case Declaration.Success{values}: finishRemoved(Metadata, values, selectChanged(Metadata, previous, currentIndex, False{}, Declaration.Success{Nil{}}))
+    case Declaration.Success{values}: finishRemoved(values, selectChanged(previous, currentIndex, False{}, Declaration.Success{Nil{}}))
 
-def getToolStateChanges(-Metadata: Data, +previous: List<&2, T.Tool<Schema.Value<Metadata>>>, +current: List<&2, T.Tool<Schema.Value<Metadata>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value<Metadata>>>:
-  previousIndex = indexToolValues(Schema.Value<Metadata>, previous, M.new(T.Tool<Schema.Value<Metadata>>))
-  currentIndex = indexToolValues(Schema.Value<Metadata>, current, M.new(T.Tool<Schema.Value<Metadata>>))
-  finishAdded(Metadata, previous, currentIndex, projectSelected(Metadata, selectChanged(Metadata, current, previousIndex, True{}, Declaration.Success{Nil{}})))
+def getToolStateChanges(+previous: List<&2, T.Tool<Schema.Value>>, +current: List<&2, T.Tool<Schema.Value>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value>>:
+  previousIndex = indexToolValues(Schema.Value, previous, M.new(T.Tool<Schema.Value>))
+  currentIndex = indexToolValues(Schema.Value, current, M.new(T.Tool<Schema.Value>))
+  finishAdded(previous, currentIndex, projectSelected(selectChanged(current, previousIndex, True{}, Declaration.Success{Nil{}})))
 
-type RedefinitionState<-Metadata: Data> is Data:
-  Definitions{tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>}
+type RedefinitionState is Data:
+  Definitions{tools: M.OrderedMap<T.Tool<Schema.Value>>}
   Redefined{}
   RedefinitionFailure{error: Declaration.DeclarationError}
 
-def retainDefinition(-Metadata: Data, tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>, name: String, reference: Ref.Ref<T.Tool<Schema.Value<Metadata>>>, equal: Declaration.DeclarationResult<Bool>) -> RedefinitionState<Metadata>:
+def retainDefinition(tools: M.OrderedMap<T.Tool<Schema.Value>>, name: String, reference: T.Tool<Schema.Value>, equal: Declaration.DeclarationResult<Bool>) -> RedefinitionState:
   match equal:
     case Declaration.Failure{error}: RedefinitionFailure{error}
     case Declaration.Success{False{}}: Redefined{}
-    case Declaration.Success{True{}}: Definitions{M.set(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, tools, name, reference)}
+    case Declaration.Success{True{}}: Definitions{M.set(T.Tool<Schema.Value>, tools, name, reference)}
 
-def compareDefinition(-Metadata: Data, previous: Maybe<&2, Ref.Ref<T.Tool<Schema.Value<Metadata>>>>, current: T.Tool<Schema.Value<Metadata>>, reference: Ref.Ref<T.Tool<Schema.Value<Metadata>>>, name: String, tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>) -> IO(RedefinitionState<Metadata>):
+def compareDefinition(previous: Maybe<&2, T.Tool<Schema.Value>>, current: T.Tool<Schema.Value>, reference: T.Tool<Schema.Value>, name: String, tools: M.OrderedMap<T.Tool<Schema.Value>>) -> RedefinitionState:
   match previous:
-    case None{}: IO.pure(RedefinitionState<Metadata>, Definitions{M.set(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, tools, name, reference)})
+    case None{}: Definitions{M.set(T.Tool<Schema.Value>, tools, name, reference)}
     case Some{value}:
-      do IO<RedefinitionState<Metadata>>:
-        previousTool : T.Tool<Schema.Value<Metadata>> <- Ref.read(T.Tool<Schema.Value<Metadata>>, value)
-        return retainDefinition(Metadata, tools, name, reference, declarationsEqual(Metadata, previousTool, current))
+      previousTool = {value : T.Tool<Schema.Value>}
+      retainDefinition(tools, name, reference, declarationsEqual(previousTool, current))
 
-def inspectDefinition(-Metadata: Data, +reference: Ref.Ref<T.Tool<Schema.Value<Metadata>>>, +tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>) -> IO(RedefinitionState<Metadata>):
-  do IO<RedefinitionState<Metadata>>:
-    +current : T.Tool<Schema.Value<Metadata>> <- Ref.read(T.Tool<Schema.Value<Metadata>>, reference)
-    +name : String = toolName(Schema.Value<Metadata>, current)
-    compareDefinition(Metadata, M.get(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, tools, name), current, reference, name, tools)
+def inspectDefinition(+reference: T.Tool<Schema.Value>, +tools: M.OrderedMap<T.Tool<Schema.Value>>) -> RedefinitionState:
+  +current = {reference : T.Tool<Schema.Value>}
+  +name = {toolName(Schema.Value, current) : String}
+  compareDefinition(M.get(T.Tool<Schema.Value>, tools, name), current, reference, name, tools)
 
-def inspectDefinitions(-Metadata: Data, remaining: List<&2, Ref.Ref<T.Tool<Schema.Value<Metadata>>>>, state: RedefinitionState<Metadata>) -> IO(RedefinitionState<Metadata>):
+def inspectDefinitions(remaining: List<&2, T.Tool<Schema.Value>>, state: RedefinitionState) -> RedefinitionState:
   match remaining state:
-    case _ Redefined{}: IO.pure(RedefinitionState<Metadata>, Redefined{})
-    case _ RedefinitionFailure{error}: IO.pure(RedefinitionState<Metadata>, RedefinitionFailure{error})
-    case Nil{} state: IO.pure(RedefinitionState<Metadata>, state)
+    case _ Redefined{}: Redefined{}
+    case _ RedefinitionFailure{error}: RedefinitionFailure{error}
+    case Nil{} state: state
     case head <> tail Definitions{tools}:
-      do IO<RedefinitionState<Metadata>>:
-        updated : RedefinitionState<Metadata> <- inspectDefinition(Metadata, head, tools)
-        inspectDefinitions(Metadata, tail, updated)
+      updated = {inspectDefinition(head, tools) : RedefinitionState}
+      inspectDefinitions(tail, updated)
 
-def messageDefinitions(-Metadata: Data, message: T.SystemMessage<Schema.Value<Metadata>>, tools: M.OrderedMap<Ref.Ref<T.Tool<Schema.Value<Metadata>>>>) -> IO(RedefinitionState<Metadata>):
+def messageDefinitions(message: T.SystemMessage<Schema.Value>, tools: M.OrderedMap<T.Tool<Schema.Value>>) -> RedefinitionState:
   match message:
-    case T.SystemMessage{_, _, added, _, _}: inspectDefinitions(Metadata, listValue(Ref.Ref<T.Tool<Schema.Value<Metadata>>>, added), Definitions{tools})
+    case T.SystemMessage{_, _, added, _, _}: inspectDefinitions(listValue(T.Tool<Schema.Value>, added), Definitions{tools})
 
 # Retain live tool references, ignore removals, and stop immediately after a
 # changed same-name definition. A first declaration never serializes its schema.
-def scanRedefinitions(-Metadata: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<Schema.Value<Metadata>, A, G, H>>, state: RedefinitionState<Metadata>) -> IO(Declaration.DeclarationResult<Bool>):
+def scanRedefinitions(-A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<Schema.Value, A, G, H>>, state: RedefinitionState) -> Declaration.DeclarationResult<Bool>:
   match messages state:
-    case _ Redefined{}: IO.pure(Declaration.DeclarationResult<Bool>, Declaration.Success{True{}})
-    case _ RedefinitionFailure{error}: IO.pure(Declaration.DeclarationResult<Bool>, Declaration.Failure{error})
-    case Nil{} Definitions{_}: IO.pure(Declaration.DeclarationResult<Bool>, Declaration.Success{False{}})
+    case _ Redefined{}: Declaration.Success{True{}}
+    case _ RedefinitionFailure{error}: Declaration.Failure{error}
+    case Nil{} Definitions{_}: Declaration.Success{False{}}
     case T.System{reference} <> rest Definitions{tools}:
-      do IO<Declaration.DeclarationResult<Bool>>:
-        message : T.SystemMessage<Schema.Value<Metadata>> <- Ref.read(T.SystemMessage<Schema.Value<Metadata>>, reference)
-        updated : RedefinitionState<Metadata> <- messageDefinitions(Metadata, message, tools)
-        scanRedefinitions(Metadata, A, G, H, rest, updated)
-    case _ <> rest state: scanRedefinitions(Metadata, A, G, H, rest, state)
+      message = {reference : T.SystemMessage<Schema.Value>}
+      updated = {messageDefinitions(message, tools) : RedefinitionState}
+      scanRedefinitions(A, G, H, rest, updated)
+    case _ <> rest state: scanRedefinitions(A, G, H, rest, state)
 
-def hasToolRedefinitions(-Metadata: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<Schema.Value<Metadata>, A, G, H>>) -> IO(Declaration.DeclarationResult<Bool>):
-  scanRedefinitions(Metadata, A, G, H, messages, Definitions{M.new(Ref.Ref<T.Tool<Schema.Value<Metadata>>>)})
+def hasToolRedefinitions(-A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<Schema.Value, A, G, H>>) -> Declaration.DeclarationResult<Bool>:
+  scanRedefinitions(A, G, H, messages, Definitions{M.new(T.Tool<Schema.Value>)})

@@ -43,17 +43,22 @@ values += [['object', [[[0xd83d, 0xde00], ['boolean', False]], [[0x1f600], ['boo
 values += [tree(4) for _ in range(96)]
 oracle = '''const input = JSON.parse(process.argv[1]);
 const str = points => String.fromCodePoint(...points);
-function value(item) {
+function encode(item) {
   switch(item[0]) {
-    case 'null': return null;
-    case 'boolean': return item[1];
-    case 'string': return str(item[1]);
-    case 'number': { const data=Buffer.alloc(8); data.writeBigUInt64BE(BigInt('0x'+item[1])); return data.readDoubleBE(); }
-    case 'array': return item[1].map(value);
-    case 'object': { const out=Object.create(null); for(const [key,child] of item[1]) out[str(key)]=value(child); return out; }
+    case 'null': return 'null';
+    case 'boolean': return JSON.stringify(item[1]);
+    case 'string': return JSON.stringify(str(item[1]));
+    case 'number': { const data=Buffer.alloc(8); data.writeBigUInt64BE(BigInt('0x'+item[1])); return JSON.stringify(data.readDoubleBE()); }
+    case 'array': return '['+item[1].map(encode).join(',')+']';
+    case 'object': {
+      // Native dictionary equality compares code points, not UTF-16 aliases.
+      const fields=new Map();
+      for(const [key,child] of item[1]) fields.set(JSON.stringify(key),[key,child]);
+      return '{'+[...fields.values()].map(([key,child])=>JSON.stringify(str(key))+':'+encode(child)).join(',')+'}';
+    }
   }
 }
-console.log(JSON.stringify({strings: input.strings.map(x=>JSON.stringify(str(x))), values: input.values.map(x=>JSON.stringify(value(x)))}));'''
+console.log(JSON.stringify({strings: input.strings.map(x=>JSON.stringify(str(x))), values: input.values.map(encode)}));'''
 expected = json.loads(subprocess.check_output(['node', '-e', oracle, json.dumps({'strings': strings, 'values': values})], text=True))
 
 def string(points):
@@ -95,7 +100,7 @@ for index, (points, output) in enumerate(zip(strings, expected['strings'], stric
     source += f'    check(Some{{S.quote({string(points)})}}, {json.dumps(output, ensure_ascii=False)}, "quote {index}")\n'
 for index, (value, output) in enumerate(zip(values, expected['values'], strict=True)):
     source += f'    check(J.stringify({bend(value)}), {json.dumps(output, ensure_ascii=False)}, "JSON {index}")\n'
-source += f'    IO.print("JSON: {len(strings)} quoting and {len(values)} structured JavaScript vectors passed")\n'
+source += f'    IO.print("JSON: {len(strings)} quoting and {len(values)} native structured JSON vectors passed")\n'
 entry = BUILD / 'json-stringify-vectors.bend'
 entry.write_text(source)
 subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-json-stringify'], cwd=ROOT, check=True)

@@ -4,7 +4,8 @@ from pathlib import Path
 import random
 import subprocess
 from tool_test_values import tool_bend, text
-from typebox_fixtures import fixtures
+from schema_fixtures import fixtures
+from schema_test_values import valid
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
@@ -22,15 +23,7 @@ cases += [([], []), ([], [tool('a'), tool('a')]),
           ([tool('a'), tool('a')], []),
           ([tool('a', 'old'), tool('a', 'new')], [tool('a', 'new')]),
           ([tool('a', 'old')], [tool('a', 'new'), tool('a', 'old')]),
-          ([tool('10'), tool('2')], [tool('2', 'changed'), tool('10', 'changed')]),
-          ([tool('a', schema=['undefined'])], []),
-          ([tool('a', schema=['bigint'])], []),
-          ([], [tool('a', schema=['undefined'])]),
-          ([], [tool('a', schema=['bigint'])]),
-          # .filter completes before .map(toToolDeclaration): BigInt must win.
-          ([tool('b')], [tool('new', schema=['undefined']), tool('b', schema=['bigint'])]),
-          ([tool('a', schema=['undefined'])], [tool('a', schema=['bigint'])]),
-          ([tool('a', schema=['bigint'])], [tool('a', schema=['undefined'])])]
+          ([tool('10'), tool('2')], [tool('2', 'changed'), tool('10', 'changed')])]
 rng = random.Random(851150)
 for _ in range(64):
     states = []
@@ -51,8 +44,7 @@ def items(values, encode):
     return ' <> '.join([encode(value) for value in values] + ['Nil{}'])
 
 def result(value):
-    if 'error' in value:
-        return 'D.Failure{' + ('D.OmittedSchema{}' if value['error'] == 'omitted' else 'D.BigIntSchema{}') + '}'
+    if 'error' in value: raise AssertionError(value)
     changes = value['value']
     return 'D.Success{H.ExpectedChanges{' + items(changes['toolsAdded'], text) + ', ' + items(changes['toolsRemoved'], text) + '}}'
 

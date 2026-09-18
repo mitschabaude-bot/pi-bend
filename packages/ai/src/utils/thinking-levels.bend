@@ -24,7 +24,7 @@ def name(level: T.ModelThinkingLevel) -> String:
 def all() -> List<&2, T.ModelThinkingLevel>:
   T.Off{} <> T.Thinking{T.Minimal{}} <> T.Thinking{T.Low{}} <> T.Thinking{T.Medium{}} <> T.Thinking{T.High{}} <> T.Thinking{T.XHigh{}} <> T.Thinking{T.Max{}} <> Nil{}
 
-# An absent property and an own undefined value both read as undefined. Null
+# Missing configuration uses None. Explicit null
 # stays distinct and disables the level. Ordered mappings require unique keys.
 def lookup(properties: List<&2, T.ThinkingLevelMapping>, +level: T.ModelThinkingLevel) -> Maybe<&2, T.Nullable<String>>:
   match properties:

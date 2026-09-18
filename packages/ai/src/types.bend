@@ -1,6 +1,5 @@
 import Base
 import ../../runtime/src/f64.bend as Number
-import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/record.bend as Record
 import ./utils/diagnostics.bend as Diagnostics
@@ -31,7 +30,7 @@ type UsageCost is Data:
   UsageCost{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, total: Number.F64}
 
 type Usage is Data:
-  Usage{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, cacheWrite1h: Maybe<&2, Number.F64>, reasoning: Maybe<&2, Number.F64>, totalTokens: Number.F64, cost: Ref.Ref<UsageCost>}
+  Usage{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, cacheWrite1h: Maybe<&2, Number.F64>, reasoning: Maybe<&2, Number.F64>, totalTokens: Number.F64, cost: UsageCost}
 
 type StopReason is Data:
   Pending{}
@@ -93,15 +92,14 @@ type UserMessage is Data:
 type ToolResultMessage<-Details: Data> is Data:
   ToolResultMessage{toolCallId: String, toolName: String, content: List<&2, TextImageContent>, details: Maybe<&2, Details>, usage: Maybe<&2, Usage>, isError: Bool, timestamp: Number.F64}
 
-# Content objects can be retained independently by event consumers. Their
-# handles preserve identity while the provider updates the message in place.
+# Events carry immutable content values; subsequent updates create new values.
 type AssistantContent<-Arguments: Data> is Data:
-  AssistantText{value: Ref.Ref<TextContent>}
-  AssistantThinking{value: Ref.Ref<ThinkingContent>}
-  AssistantToolCall{value: Ref.Ref<ToolCall<Arguments>>}
+  AssistantText{value: TextContent}
+  AssistantThinking{value: ThinkingContent}
+  AssistantToolCall{value: ToolCall<Arguments>}
 
 type AssistantMessage<-Arguments: Data, -DiagnosticDetails: Data> is Data:
-  AssistantMessage{content: Ref.Ref<List<&2, AssistantContent<Arguments>>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, Ref.Ref<List<&2, Ref.Ref<Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>>>, usage: Ref.Ref<Usage>, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: Number.F64}
+  AssistantMessage{content: List<&2, AssistantContent<Arguments>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: Number.F64}
 
 # Restricted terminal reasons preserve upstream Extract<StopReason, ...>.
 type DoneReason is Data:
@@ -115,18 +113,18 @@ type ErrorReason is Data:
   ErrorError{}
 
 type AssistantMessageEvent<-Arguments: Data, -DiagnosticDetails: Data> is Data:
-  Start{partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  TextStart{contentIndex: Number.F64, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  TextDelta{contentIndex: Number.F64, delta: String, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  TextEnd{contentIndex: Number.F64, content: String, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ThinkingStart{contentIndex: Number.F64, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ThinkingDelta{contentIndex: Number.F64, delta: String, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ThinkingEnd{contentIndex: Number.F64, content: String, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ToolcallStart{contentIndex: Number.F64, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ToolcallDelta{contentIndex: Number.F64, delta: String, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ToolcallEnd{contentIndex: Number.F64, toolCall: Ref.Ref<ToolCall<Arguments>>, partial: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  StreamDone{reason: DoneReason, message: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  StreamError{reason: ErrorReason, error: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
+  Start{partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  TextStart{contentIndex: Number.F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  TextDelta{contentIndex: Number.F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  TextEnd{contentIndex: Number.F64, content: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ThinkingStart{contentIndex: Number.F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ThinkingDelta{contentIndex: Number.F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ThinkingEnd{contentIndex: Number.F64, content: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolcallStart{contentIndex: Number.F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolcallDelta{contentIndex: Number.F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolcallEnd{contentIndex: Number.F64, toolCall: ToolCall<Arguments>, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  StreamDone{reason: DoneReason, message: AssistantMessage<Arguments, DiagnosticDetails>}
+  StreamError{reason: ErrorReason, error: AssistantMessage<Arguments, DiagnosticDetails>}
 
 type ImagesStopReason is Data:
   ImagesStop{}
@@ -149,27 +147,17 @@ type GrammarFormat is Data:
   OpenAILark{}
   OpenAIRegex{}
 
-# Optional grammar fields retain insertion order, including explicit undefined.
-# Constructors/updates in utils/grammar-variants.bend maintain unique keys.
-type GrammarVariant is Data:
-  GrammarVariant{format: GrammarFormat, value: Maybe<&2, String>}
-
+# Each supported grammar has an explicit optional value.
 type GrammarVariants is Data:
-  GrammarVariants{properties: List<&2, GrammarVariant>}
-
-# Both configuration branches have two required fields. Their object insertion
-# order is observable through upstream declaration comparison.
-type SamplingPropertyOrder is Data:
-  TypeFirst{}
-  TypeLast{}
+  GrammarVariants{openaiLark: Maybe<&2, String>, openaiRegex: Maybe<&2, String>}
 
 type SamplingStrictness is Data:
   Prefer{}
   Require{}
 
 type ConstrainedSamplingConfig is Data:
-  JsonSchemaSampling{strict: SamplingStrictness, propertyOrder: SamplingPropertyOrder}
-  GrammarSampling{variants: GrammarVariants, propertyOrder: SamplingPropertyOrder}
+  JsonSchemaSampling{strict: SamplingStrictness}
+  GrammarSampling{variants: GrammarVariants}
 
 # Absent, explicitly false, and a supplied configuration are distinct.
 type ToolConstrainedSampling is Data:
@@ -187,22 +175,22 @@ type SystemContent is Data:
   SystemBlocks{values: List<&2, TextContent>}
 
 type SystemMessage<-Parameters: Data> is Data:
-  SystemMessage{content: SystemContent, sections: Maybe<&2, Record.Record<Maybe<&2, String>>>, toolsAdded: Maybe<&2, List<&2, Ref.Ref<Tool<Parameters>>>>, toolsRemoved: Maybe<&2, List<&2, ToolReference>>, timestamp: Number.F64}
+  SystemMessage{content: SystemContent, sections: Maybe<&2, Record.Record<Maybe<&2, String>>>, toolsAdded: Maybe<&2, List<&2, Tool<Parameters>>>, toolsRemoved: Maybe<&2, List<&2, ToolReference>>, timestamp: Number.F64}
 
 type Message<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
-  System{value: Ref.Ref<SystemMessage<Parameters>>}
-  User{value: Ref.Ref<UserMessage>}
-  Assistant{value: Ref.Ref<AssistantMessage<Arguments, DiagnosticDetails>>}
-  ToolResult{value: Ref.Ref<ToolResultMessage<ToolDetails>>}
+  System{value: SystemMessage<Parameters>}
+  User{value: UserMessage}
+  Assistant{value: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolResult{value: ToolResultMessage<ToolDetails>}
 
 type Context<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
-  Context{systemPrompt: Maybe<&2, String>, messages: Ref.Ref<List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>, tools: Maybe<&2, List<&2, Ref.Ref<Tool<Parameters>>>>}
+  Context{systemPrompt: Maybe<&2, String>, messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>, tools: Maybe<&2, List<&2, Tool<Parameters>>>}
 
 # Nominally distinct from raw Context: provider APIs can require normalization.
 # As with an upstream type assertion, explicitly constructing this wrapper is
 # possible, but an unnormalized Context cannot be passed implicitly.
 type TranscriptContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
-  TranscriptContext{messages: Ref.Ref<List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>}
+  TranscriptContext{messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>}
 
 # Model metadata and API-dependent compatibility from types.ts. Nullable values
 # stay distinct from omitted optional fields, including explicit off mappings.
@@ -387,17 +375,17 @@ type DeferredRequest is Data:
   DeferredBoolean{value: Bool}
   DeferredConfig{window: Maybe<&2, DeferredWindow>}
 
-def ProviderEnv() -> Data: Ref.Ref<Record.Record<String>>
-def ProviderHeaders() -> Data: Ref.Ref<Record.Record<Nullable<String>>>
+def ProviderEnv() -> Data: Record.Record<String>
+def ProviderHeaders() -> Data: Record.Record<Nullable<String>>
 
 type ProviderResponse is Data:
-  ProviderResponse{status: Number.F64, headers: Ref.Ref<Record.Record<String>>}
+  ProviderResponse{status: Number.F64, headers: Record.Record<String>}
 
 type PayloadInput<-Payload: Data, -RequestModel: Data> is Data:
   PayloadInput{payload: Payload, model: RequestModel}
 
 type ResponseInput<-RequestModel: Data> is Data:
-  ResponseInput{response: Ref.Ref<ProviderResponse>, model: RequestModel}
+  ResponseInput{response: ProviderResponse, model: RequestModel}
 
 def PayloadCallback(-Payload: Data, -RequestModel: Data, -Error: Data) -> Data:
   Callback.Callback<PayloadInput<Payload, RequestModel>, Result<&2, &2, Error, Maybe<&2, Payload>>>
@@ -409,10 +397,10 @@ type ProviderRequestOptions<-RequestModel: Data, -Signal: Data, -Telemetry: Data
   ProviderRequestOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Payload, RequestModel, Error)>, onResponse: Maybe<&2, ResponseCallback(RequestModel, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>}
 
 type StreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
-  StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Ref.Ref<Model<Value>>, Error)>, onResponse: Maybe<&2, ResponseCallback(Ref.Ref<Model<Value>>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Ref.Ref<Record.Record<Value>>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Ref.Ref<Record.Record<Value>>>}
+  StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Record.Record<Value>>}
 
 type SimpleStreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
-  SimpleStreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Ref.Ref<Model<Value>>, Error)>, onResponse: Maybe<&2, ResponseCallback(Ref.Ref<Model<Value>>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Ref.Ref<Record.Record<Value>>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Ref.Ref<Record.Record<Value>>>, toolChoice: Maybe<&2, ToolChoice>, reasoning: Maybe<&2, ThinkingLevel>, deferred: Maybe<&2, DeferredRequest>, thinkingBudgets: Maybe<&2, ThinkingBudgets>}
+  SimpleStreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Record.Record<Value>>, toolChoice: Maybe<&2, ToolChoice>, reasoning: Maybe<&2, ThinkingLevel>, deferred: Maybe<&2, DeferredRequest>, thinkingBudgets: Maybe<&2, ThinkingBudgets>}
 
 # Explicit structural projections preserve every inherited field and shared
 # callback/map handle. They neither apply defaults nor invoke user callbacks.
@@ -420,6 +408,6 @@ def toStreamOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data,
   match options:
     case SimpleStreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, _, _, _, _}: StreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata}
 
-def toProviderRequestOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: StreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> ProviderRequestOptions<Ref.Ref<Model<Value>>, Signal, Telemetry, Fetch, Value, Error>:
+def toProviderRequestOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: StreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> ProviderRequestOptions<Model<Value>, Signal, Telemetry, Fetch, Value, Error>:
   match options:
     case StreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, _, _, _, _, _, _, _, _}: ProviderRequestOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs}
