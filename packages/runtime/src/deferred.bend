@@ -81,11 +81,24 @@ def resolve(-A: Data, deferred: Deferred<A>, +value: A) -> IO(Bool):
         waiters : Maybe<&2, List<&2, Chan(A)>> <- R.modify(State<A>, Maybe<&2, List<&2, Chan(A)>>, state, current => settleState(A, current, value))
         notifySettlement(A, waiters, value)
 
-# Low-level lifetime boundary: the owner must first settle the Deferred,
-# finish all observations and retire aliases. This is not promise cancellation.
+# Low-level lifetime boundary: finish all observations and retire aliases first.
+# Pending values may be retired only with no observers. This is not cancellation.
 def dispose(-A: Data, deferred: Deferred<A>) -> IO(Unit):
   match deferred:
     case Deferred{state}:
       do IO<Unit>:
         previous : State<A> <- R.dispose(State<A>, state)
         return Unit{}
+
+# Non-blocking observation; a pending value stays distinct from a resolved value.
+def peekState(-A: Data, state: State<A>) -> Maybe<&2, A>:
+  match state:
+    case Pending{_}: None{}
+    case Resolved{value}: Some{value}
+
+def peek(-A: Data, deferred: Deferred<A>) -> IO(Maybe<&2, A>):
+  match deferred:
+    case Deferred{state}:
+      do IO<Maybe<&2, A>>:
+        value : State<A> <- R.read(State<A>, state)
+        return peekState(A, value)

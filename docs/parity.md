@@ -67,6 +67,8 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - `calculateCost` now updates and returns the original nested cost reference. All five charges match upstream for 159 cases on one and four threads, including tier order/boundaries, one-hour writes and extreme numbers; alias mutation is checked separately. The original models-runtime pricing-tier case passes. The remaining runtime suite and provider integration remain pending.
 
+- Abort-state foundations now preserve first settlement, preflight failures, falsy supplied reasons and shared reason identity. Native tests pass on one and four threads, including 100 competing abort calls; the existing shared-reference, deferred and callback concurrency checks also pass. EventTarget listeners, cleanup, dependent/timeout signals, full default-error behavior and model-store integration remain pending. No upstream suite status changes for this prerequisite.
+
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
 
 The final port must replace the prototype libcurl/ICU/custom C dependencies with pure Bend implementations and missing Bend primitives. Bootstrap demonstrations above do not satisfy this requirement. `scripts/build-pure.sh` compiles canonical Bend tests without prototype effects, generated-entry-point patching, libcurl or ICU.
