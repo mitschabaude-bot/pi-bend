@@ -30,4 +30,14 @@ for(let mode=0;mode<9;mode++) for(const failAt of [-1,0,1]) {
   try {result=(await consume(context,response,emit))===f?'final':'bad result';} catch(error) {result=error;}
   cases.push({mode,failAt,result,trace:trace.join('|'),messages:context.messages.map(m=>m.id).join('|'),count});
 }
-console.log(JSON.stringify({cases}));
+const prefixStart=source.indexOf('let messages = context.messages;');
+const prefixEnd=source.indexOf('let partialMessage: AssistantMessage | null',prefixStart);
+if(prefixStart<0 || prefixEnd<=prefixStart) throw new Error('upstream request prefix missing');
+const prepare=new AsyncFunction('context','config','signal','streamFunction','normalizeContext',source.slice(prefixStart,prefixEnd)+'return response;');
+let conversionCalls=0, conversionFailure;
+const forbidden=()=>{throw new Error('conversion failure must skip normalization/provider');};
+try {
+  await prepare({messages:[]},{convertToLlm:async()=>{conversionCalls++;throw 'conversion failure';}},undefined,forbidden,forbidden);
+} catch(error) {conversionFailure=error;}
+if(conversionCalls!==1 || conversionFailure!=='conversion failure') throw new Error('unexpected failed conversion behavior');
+console.log(JSON.stringify({cases,conversionFailure}));

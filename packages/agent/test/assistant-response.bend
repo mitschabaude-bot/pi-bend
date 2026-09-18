@@ -1,4 +1,6 @@
 import Base
+import ./turn-update.bend as U
+import ../../ai/test/model-types.bend as Model
 import ../src/types.bend as T
 import ../src/agent-loop.bend as Loop
 import ./context.bend as H
@@ -18,6 +20,16 @@ def Emitted() -> Data: Result<&2, &2, String, Unit>
 def Sink() -> Data: Loop.AgentEventSink(Unit, String, Unit, String, String, Unit, Unit, String)
 def Stream() -> Data: E.AssistantMessageEventStream(String, Unit)
 def Consumer() -> Data: Loop.AssistantResponseConsumer<Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit>
+def Request() -> Data: Loop.AssistantRequest<Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, Unit, Unit>
+def ProviderInput() -> Data: T.StreamInput<Unit, String, Unit, String, Unit, U.Config()>
+def Provider() -> Data: T.StreamFn(Unit, String, Unit, String, Unit, U.Config())
+def Normalized() -> Data: Ai.TranscriptContext<Unit, String, Unit, String>
+def LlmMessages() -> Data: R.Ref<List<&2, Ai.Message<Unit, String, Unit, String>>>
+type ConverterEnvironment is Data:
+  ConverterEnvironment{expected: H.Messages(), output: LlmMessages(), count: R.Ref<U32>, fail: Bool}
+type ProviderEnvironment is Data:
+  ProviderEnvironment{stream: Stream(), model: R.Ref<Ai.Model<Unit>>, config: R.Ref<U.Config()>, converter: U.Converter(), llm: LlmMessages(), ready: Chan(Unit), release: Chan(Unit), count: R.Ref<U32>}
+
 type Environment is Data:
   Environment{mode: U32, failAt: U32, partial: R.Ref<Message()>, update: R.Ref<Message()>, final: R.Ref<Message()>, messages: H.Messages(), extra: R.Ref<String>, trace: R.Ref<String>, count: R.Ref<U32>, ready: Chan(Unit), release: Chan(Unit)}
 
@@ -98,9 +110,38 @@ def terminal(mode: U32, stream: Stream(), final: R.Ref<Message()>) -> IO(Unit):
     case 7: E.push(SourceEvent(), R.Ref<Message()>, stream, Ai.StreamError{Ai.ErrorError{}, final})
     case _: E.push(SourceEvent(), R.Ref<Message()>, stream, Ai.StreamDone{Ai.DoneStop{}, final})
 
-def task(consumer: Consumer(), done: D.Deferred<Unit>) -> IO(Output()):
+def convert(environment: ConverterEnvironment, messages: H.Messages()) -> IO(U.Output()):
+  match environment:
+    case ConverterEnvironment{expected, output, count, fail}:
+      do IO<U.Output()>:
+        Test.assertion(R.same(List<&2, H.Message()>, messages, expected), "full request conversion input changed")
+        R.modify(U32, Unit, count, n => (U32.add(n, 1), Unit{}))
+        return Bool.pick(U.Output(), fail, Fail{"conversion failure"}, Done{output})
+
+def checkNormalized(value: Normalized(), expected: LlmMessages()) -> IO(Unit):
+  match value:
+    case Ai.TranscriptContext{messages}: Test.assertion(R.same(List<&2, Ai.Message<Unit, String, Unit, String>>, messages, expected), "full request normalized array changed")
+
+def provide(environment: ProviderEnvironment, input: ProviderInput()) -> IO(Stream()):
+  match environment input:
+    case ProviderEnvironment{stream, +model, config, converter, llm, ready, release, count} T.StreamInput{actualModel, normalized, Some{+options}}:
+      do IO<Stream()>:
+        Test.assertion(R.same(Ai.Model<Unit>, actualModel, model), "provider model identity changed")
+        Test.assertion(Bool.not(R.same(U.Config(), options, config)), "provider received original config instead of snapshot")
+        normalizedValue : Normalized() <- R.read(Normalized(), normalized)
+        checkNormalized(normalizedValue, llm)
+        value : U.Config() <- R.read(U.Config(), options)
+        retained : String <- U.view(value, model, converter)
+        Test.assertion(String.eq(retained, "none|true"), "full request dropped agent-only converter or session fields")
+        R.modify(U32, Unit, count, n => (U32.add(n, 1), Unit{}))
+        sent : Bool <- Chan.send(Unit, ready, Unit{})
+        token : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return stream
+    case _ _: IO.die(Stream(), 1, "full request omitted provider options")
+
+def task(consumer: Consumer(), request: Request(), full: Bool, done: D.Deferred<Unit>) -> IO(Output()):
   do IO<Output()>:
-    result : Output() <- Loop.consumeAssistantResponse(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, consumer)
+    result : Output() <- Bool.pick(IO(Output()), full, Loop.streamAssistantResponse(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, Unit, Unit, request), Loop.consumeAssistantResponse(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, consumer))
     won : Bool <- D.resolve(Unit, done, Unit{})
     return result
 
@@ -144,7 +185,29 @@ def disposeSnapshots(values: List<&2, R.Ref<Message()>>) -> IO(Unit):
         old : Message() <- R.dispose(Message(), reference)
         disposeSnapshots(rest)
 
-def run(+mode: U32, failAt: U32, expected: String, expectedTrace: String, expectedMessages: String, +expectedCount: U32) -> IO(Unit):
+def checkOwnerCount(-Value: Data, values: List<&2, Value>, expectedOne: Bool) -> IO(Unit):
+  match values expectedOne:
+    case Nil{} False{}: IO.pure(Unit, Unit{})
+    case _ <> Nil{} True{}: IO.pure(Unit, Unit{})
+    case _ _: IO.die(Unit, 1, "request allocation count differs")
+
+def disposeContexts(values: List<&2, R.Ref<Normalized()>>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case reference <> rest:
+      do IO<Unit>:
+        old : Normalized() <- R.dispose(Normalized(), reference)
+        disposeContexts(rest)
+
+def disposeConfigurations(values: List<&2, R.Ref<U.Config()>>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case reference <> rest:
+      do IO<Unit>:
+        old : U.Config() <- R.dispose(U.Config(), reference)
+        disposeConfigurations(rest)
+
+def runCase(+full: Bool, +mode: U32, failAt: U32, expected: String, expectedTrace: String, expectedMessages: String, +expectedCount: U32) -> IO(Unit):
   do IO<Unit>:
     +zero : F.F64 = F.fromU32(0)
     +cost : R.Ref<Ai.UsageCost> <- R.new(Ai.UsageCost, Ai.UsageCost{zero, zero, zero, zero, zero})
@@ -168,8 +231,16 @@ def run(+mode: U32, failAt: U32, expected: String, expectedTrace: String, expect
     pushStart(stream, partial, Bool.not(U32.is_eq(mode, 0) || U32.is_eq(mode, 2) || U32.is_eq(mode, 4)))
     pushMiddle(mode, stream, update, call)
     terminal(mode, stream, final)
-    running : Chan(Output()) <- IO.fork(Output(), task(Loop.AssistantResponseConsumer{context, sink, snapshots, stream}, done))
-    drive(expectedCount, ready, release, done)
+    +preparedContexts : R.Ref<List<&2, R.Ref<Normalized()>>> <- R.new(List<&2, R.Ref<Normalized()>>, Nil{})
+    +preparedConfigurations : R.Ref<List<&2, R.Ref<U.Config()>>> <- R.new(List<&2, R.Ref<U.Config()>>, Nil{})
+    +llm : LlmMessages() <- R.new(List<&2, Ai.Message<Unit, String, Unit, String>>, Nil{})
+    +model : R.Ref<Ai.Model<Unit>> <- R.new(Ai.Model<Unit>, Model.model(Ai.CustomModelApi{"custom"}, None{}))
+    +preparationCount : R.Ref<U32> <- R.new(U32, 0)
+    +converter : U.Converter() <- C.create(~ConverterEnvironment, ~H.Messages(), ~U.Output(), ~convert, ConverterEnvironment{messages, llm, preparationCount, U32.is_eq(mode, 9)})
+    +config : R.Ref<U.Config()> <- R.new(U.Config(), U.config(model, None{}, converter))
+    +provider : Provider() <- C.create(~ProviderEnvironment, ~ProviderInput(), ~Stream(), ~provide, ProviderEnvironment{stream, model, config, converter, llm, ready, release, preparationCount})
+    running : Chan(Output()) <- IO.fork(Output(), task(Loop.AssistantResponseConsumer{context, sink, snapshots, stream}, Loop.AssistantRequest{context, config, None{}, sink, provider, preparedContexts, preparedConfigurations, snapshots}, full, done))
+    drive(U32.add(expectedCount, Bool.pick(U32, full && Bool.not(U32.is_eq(mode, 9)), 1, 0)), ready, release, done)
     result : Output() <- IO.join(Output(), running)
     checkResult(result, final, expected)
     observedTrace : String <- R.dispose(String, trace)
@@ -181,6 +252,19 @@ def run(+mode: U32, failAt: U32, expected: String, expectedTrace: String, expect
     Test.assertion(String.eq(observedMessages, expectedMessages), "assistant transcript updates differ from upstream")
     retained : List<&2, R.Ref<Message()>> <- R.dispose(List<&2, R.Ref<Message()>>, snapshots)
     disposeSnapshots(retained)
+    preparationCalls : U32 <- R.dispose(U32, preparationCount)
+    Test.assertion(U32.is_eq(preparationCalls, Bool.pick(U32, full, Bool.pick(U32, U32.is_eq(mode, 9), 1, 2), 0)), "conversion/provider invocation count differs")
+    +oldPreparedContexts : List<&2, R.Ref<Normalized()>> <- R.dispose(List<&2, R.Ref<Normalized()>>, preparedContexts)
+    checkOwnerCount(R.Ref<Normalized()>, oldPreparedContexts, full && Bool.not(U32.is_eq(mode, 9)))
+    disposeContexts(oldPreparedContexts)
+    +oldPreparedConfigurations : List<&2, R.Ref<U.Config()>> <- R.dispose(List<&2, R.Ref<U.Config()>>, preparedConfigurations)
+    checkOwnerCount(R.Ref<U.Config()>, oldPreparedConfigurations, full && Bool.not(U32.is_eq(mode, 9)))
+    disposeConfigurations(oldPreparedConfigurations)
+    C.dispose(ProviderInput(), Stream(), provider)
+    C.dispose(H.Messages(), U.Output(), converter)
+    oldConfig : U.Config() <- R.dispose(U.Config(), config)
+    oldModel : Ai.Model<Unit> <- R.dispose(Ai.Model<Unit>, model)
+    oldLlm : List<&2, Ai.Message<Unit, String, Unit, String>> <- R.dispose(List<&2, Ai.Message<Unit, String, Unit, String>>, llm)
     C.dispose(AgentEvent(), Emitted(), sink)
     E.disposeAssistantMessageEventStream(String, Unit, stream)
     Chan.close(Unit, ready)
@@ -196,3 +280,11 @@ def run(+mode: U32, failAt: U32, expected: String, expectedTrace: String, expect
     oldUsage : Ai.Usage <- R.dispose(Ai.Usage, usage)
     oldCost : Ai.UsageCost <- R.dispose(Ai.UsageCost, cost)
     return Unit{}
+
+def run(+mode: U32, +failAt: U32, +expected: String, +expectedTrace: String, +expectedMessages: String, +expectedCount: U32) -> IO(Unit):
+  do IO<Unit>:
+    runCase(False{}, mode, failAt, expected, expectedTrace, expectedMessages, expectedCount)
+    runCase(True{}, mode, failAt, expected, expectedTrace, expectedMessages, expectedCount)
+
+def runConversionFailure(expected: String) -> IO(Unit):
+  runCase(True{}, 9, 4294967295, expected, "", "", 0)

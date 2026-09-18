@@ -20,7 +20,7 @@ record=re.search(r'^  AgentLoopConfig\{([^\n]*)\}',native,re.M).group(1)
 actual={name:ty.startswith('Maybe<') for name,ty in re.findall(r'(\w+):\s*([^,}]+)',record)}
 assert actual==expected,(expected,actual)
 params='Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit'
-stream_params='Unit, String, Unit, String, Unit, Unit, Unit, Unit, String'
+stream_params='Unit, String, Unit, String, Unit, Ai.SimpleStreamOptions<Unit, Unit, Unit, Unit, String>'
 values={name:'None{}' for name in actual}
 values.update(model='model',convertToLlm='convert',beforeToolCall='Some{before}',headers='Some{headerMap}')
 config_pattern=[{'model':'model','convertToLlm':'convert','beforeToolCall':'Some{before}'}.get(name,'_') for name in actual]
@@ -63,6 +63,9 @@ invalids=[('raw-context',f'''def bad(model: R.Ref<Ai.Model<Unit>>, context: R.Re
 def bad(value: C.Callback<Input(), Result<&2, &2, String, E.AssistantMessageEventStream(String, Unit)>>) -> T.StreamFn({stream_params}):
   value
 ''','EventStream','Result')]
+invalids.append(('option-erasure', f"""def bad(value: T.StreamFn(Unit, String, Unit, String, Unit, T.AgentLoopConfig<{params}>)) -> T.StreamFn({stream_params}):
+  value
+""", 'SimpleStreamOptions', 'AgentLoopConfig'))
 for name,body,required,observed in invalids:
     bad=BUILD/f'invalid-loop-{name}.bend'
     bad.write_text(preamble+body+'def main() -> IO(Unit):\n  IO.print("unreachable")\n')
@@ -72,4 +75,4 @@ for name,body,required,observed in invalids:
     assert result.returncode != 0, 'invalid stream contract accepted'
     assert re.search(r'- expected : [^\n]*'+required,output),output
     assert re.search(r'- observed : [^\n]*'+observed,output),output
-print(f'PASS {len(expected)} inherited loop fields, normalized stream input and in-stream request-error contract')
+print(f'PASS {len(expected)} inherited loop fields, normalized stream input and in-stream request-error contract and explicit option typing')

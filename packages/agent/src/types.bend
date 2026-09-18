@@ -147,10 +147,12 @@ def toSimpleStreamOptions(-Parameters: Data, -Arguments: Data, -DiagnosticDetail
   match config:
     case AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, _, _, _, _, _, _, _, _, _, _, _}: Ai.SimpleStreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}
 
-# Agent stream contract: errors must be encoded in the returned event stream,
-# so StreamFn has no out-of-band recoverable request-failure result.
-type StreamInput<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -ExecutionError: Data> is Data:
-  StreamInput{model: Ref.Ref<Ai.Model<Value>>, context: Ref.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>, options: Maybe<&2, Ref.Ref<Ai.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, ExecutionError>>>}
+# Options is explicit because Bend lacks TypeScript structural subtyping.
+# Standalone providers instantiate SimpleStreamOptions; the agent uses its full
+# configuration snapshot, preserving extra fields visible to injected streams.
+# Recoverable request errors still belong in the returned stream.
+type StreamInput<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data> is Data:
+  StreamInput{model: Ref.Ref<Ai.Model<Value>>, context: Ref.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>, options: Maybe<&2, Ref.Ref<Options>>}
 
-def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -ExecutionError: Data) -> Data:
-  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Signal, Telemetry, Fetch, ExecutionError>, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>
+def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data) -> Data:
+  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Options>, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>

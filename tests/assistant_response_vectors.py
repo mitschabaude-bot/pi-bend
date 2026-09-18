@@ -10,7 +10,8 @@ lines = ['import Base', 'import ../packages/agent/test/assistant-response.bend a
 for case in reference['cases']:
     args = [str(case['mode']), str(case['failAt'] if case['failAt']>=0 else 4294967295), json.dumps(case['result']), json.dumps(case['trace']+'|' if case['trace'] else ''), json.dumps(case['messages']+'|' if case['messages'] else ''), str(case['count'])]
     lines.append('    T.run(' + ', '.join(args) + ')')
-lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream assistant-response traces")')
+lines.append('    T.runConversionFailure(' + json.dumps(reference['conversionFailure']) + ')')
+lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream assistant-response traces through direct and full request paths")')
 source = BUILD / 'assistant-response-vectors.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = BUILD / 'test-assistant-response-vectors'
