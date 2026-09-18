@@ -29,7 +29,9 @@
         "packages/agent/test/agent.bend",
         "packages/agent/test/agent-behavior.bend",
         "packages/agent/test/agent-await.bend",
-        "packages/agent/test/agent-signal.bend"
+        "packages/agent/test/agent-signal.bend",
+        "packages/agent/test/agent-busy.bend",
+        "packages/agent/test/agent-declarations.bend"
       ],
       "sha256": "c749bae5d7d9787b9f64009c065210c51622ad04dfd941388fee6b668c5b29f4"
     },

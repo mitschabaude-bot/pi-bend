@@ -200,3 +200,18 @@ The Agent failure and subscriber cases use the public owner, prompt, subscribe, 
 A typed provider `Fail` represents the thrown provider error; the stateful Agent still recovers with the original full lifecycle, distinct from the approved low-level stream-wrapper error contract. Subscriber tests use channel entry/release barriers and retain upstream's 10 ms observation window for negative completion assertions. The abort test uses a registered native abort observation instead of repeated timer polling; provider partial/terminal content is deterministic because the source assertions concern the signal. All public prompt calls and producer tasks join before resources are disposed. These tests do not establish full Agent or provider completion.
 
 All four new named cases pass after fresh builds on one/four threads, bringing the mapped Agent suite to 17 of 27 cases. Ten named cases remain pending: three tool-declaration updates, two late tool-update cases, three busy-operation guards, and two AgentOptions turn-hook cases. Suite totals remain 4 ported, 5 partial and 540 pending.
+
+The busy-operation and declaration cases are mapped through the real public Agent:
+
+| Upstream name | Native assertion group |
+| --- | --- |
+| should reject reset while processing without corrupting the transcript | `agent-busy.bend:scenario(0)` checks the full busy-reset error, active/user-only history before and after rejection, and idle user/assistant history after release |
+| should throw when prompt() called while streaming | `agent-busy.bend:scenario(1)` checks active state and exact second-prompt rejection, then aborts and joins the original run |
+| should throw when continue() called while streaming | `agent-busy.bend:scenario(2)` checks active state and exact continuation rejection, then aborts and joins the original run |
+| declares tool loadout changes to the model before the next request | `agent-declarations.bend:scenario(0)` checks all three provider declaration histories and the complete added/removed system-message payload |
+| merges tool changes into a pending system message | `agent-declarations.bend:scenario(1)` checks exactly two provider system messages, the merged tool name/description/schema and preserved skills section/timestamp |
+| rewrites pending tool declarations to match the executable set | `agent-declarations.bend:scenario(2)` checks removal of conflicting pending declarations, preserved note section/timestamp and the current executable tool set |
+
+Busy exceptions become typed `ClaimFailed`/reset errors. Channel barriers replace timer guesses about whether the first provider has started; cancellation waits on the native abort observation. The reset fixture returns a normal response after explicit release. Tool declarations use the same empty-object schema structure and preserve descriptions. The source's no-`execute` property assertion is guaranteed by the distinct `Ai.Tool` declaration type, which contains no executor; no reflective property inspection is introduced.
+
+All six new named cases pass after fresh builds on one/four threads, bringing Agent coverage to 23 of 27 mapped cases. The two late tool-update cases and two AgentOptions turn-hook cases remain pending. The existing production implementation satisfied these cases without changes. Suite totals remain 4 ported, 5 partial and 540 pending.
