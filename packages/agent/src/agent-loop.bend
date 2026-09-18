@@ -246,3 +246,47 @@ def copyContextMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetails:
         previous : List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>> <- R.read(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, messages)
         copied : T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, Details, Custom) <- R.new(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>, previous, initialMessages))
         R.new(T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, ExecutionError>, T.AgentContext{copied, tools})
+
+# Only omission preserves prior reasoning; explicit off removes the provider
+# field. This is the next-turn update rule, not model thinking-level clamping.
+def turnReasoning(previous: Maybe<&2, Ai.ThinkingLevel>, requested: Maybe<&2, T.ThinkingLevel()>) -> Maybe<&2, Ai.ThinkingLevel>:
+  match requested:
+    case None{}: previous
+    case Some{Ai.Off{}}: None{}
+    case Some{Ai.Thinking{level}}: Some{level}
+
+def withTurnConfig(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, replacementModel: Maybe<&2, R.Ref<Ai.Model<Value>>>, requestedThinking: Maybe<&2, T.ThinkingLevel()>) -> T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>:
+  match config:
+    case T.AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, turnReasoning(reasoning, requestedThinking), deferred, thinkingBudgets, choose(R.Ref<Ai.Model<Value>>, model, replacementModel), convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+
+type PreparedTurnState<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data> is Data:
+  PreparedTurnState{context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, messages: T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)}
+
+def preparedMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, supplied: Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>) -> IO(T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)):
+  match supplied:
+    case Some{messages}: IO.pure(T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), messages)
+    case None{}: R.new(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>, Nil{})
+
+def applyTurnSnapshot(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, currentContext: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, snapshot: T.AgentLoopTurnUpdate<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value>) -> IO(PreparedTurnState<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>):
+  match snapshot:
+    case T.AgentLoopTurnUpdate{context, messages, model, thinkingLevel}:
+      do IO<PreparedTurnState<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>:
+        prepared : T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom) <- preparedMessages(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, messages)
+        previous : T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch> <- R.read(T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, config)
+        next : R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>> <- R.new(T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, withTurnConfig(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, previous, model, thinkingLevel))
+        return PreparedTurnState{choose(R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, currentContext, context), next, prepared}
+
+# Absent update retains config/context identity. Any supplied update object,
+# even an empty one, causes the source's config spread to allocate a new object.
+# Returned empty message arrays and replacement configs are caller-owned; all
+# supplied context/model/message/callback handles retain their original owners.
+def applyTurnUpdate(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, update: Maybe<&2, R.Ref<T.AgentLoopTurnUpdate<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value>>>) -> IO(PreparedTurnState<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>):
+  match update:
+    case None{}:
+      do IO<PreparedTurnState<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>:
+        messages : T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom) <- preparedMessages(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, None{})
+        return PreparedTurnState{context, config, messages}
+    case Some{value}:
+      do IO<PreparedTurnState<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>:
+        snapshot : T.AgentLoopTurnUpdate<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value> <- R.read(T.AgentLoopTurnUpdate<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value>, value)
+        applyTurnSnapshot(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, context, config, snapshot)
