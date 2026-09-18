@@ -12,6 +12,13 @@ native = (root / 'packages/agent/src/agent-options.bend').read_text()
 native_options = re.search(r'^  AgentOptions\{([^\n]+)\}', native, re.M).group(1)
 actual_fields = re.findall(r'(?:^|, )(\w+):', native_options)
 assert actual_fields == expected_fields, (actual_fields, expected_fields)
+# Public mutable configuration fields have explicit native accessors.
+public_fields = re.findall(r'^\tpublic (\w+)\??:', source.split('export class Agent {', 1)[1], re.M)
+agent_module = (root / 'packages/agent/src/agent.bend').read_text()
+for field in public_fields:
+    for prefix in ('get', 'set'):
+        accessor = prefix + field[0].upper() + field[1:]
+        assert re.search(r'^def ' + accessor + r'\(', agent_module, re.M), accessor
 expected = json.loads(subprocess.check_output(['node', 'tests/agent_run_reference.mts'], cwd=root, text=True))
 assert len(expected) == 10
 lines = ['import Base', 'import ../packages/agent/test/agent-owner.bend as T', 'def main() -> IO(Unit):', '  do IO<Unit>:']

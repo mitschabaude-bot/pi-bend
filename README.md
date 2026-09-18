@@ -8,7 +8,7 @@ The existing library code now uses immutable Bend records/lists and explicit upd
 
 See [docs/parity.md](docs/parity.md) for the implementation and validation status. Credentials remain in the existing private `~/.pi/agent/auth.json`; never copy credentials into this repository.
 
-Upstream test parity is tracked in [tests/UPSTREAM.md](tests/UPSTREAM.md) and a source-hashed inventory. Unported and partially ported suites remain explicit; passing local smoke tests does not imply full compatibility. The pinned Agent suite now has all 27 named cases ported and passing on one/four threads; this does not establish complete Agent API or provider parity.
+Upstream test parity is tracked in [tests/UPSTREAM.md](tests/UPSTREAM.md) and a source-hashed inventory. Unported and partially ported suites remain explicit; passing local smoke tests does not imply full compatibility. The pinned Agent suite now has all 27 named cases ported and passing on one/four threads; this does not establish complete Agent API or provider parity. All 16 public mutable configuration fields have native getter/setter accessors, with supplemental upstream comparisons for capture and replacement behavior.
 
 ## Build and test
 

@@ -453,3 +453,51 @@ def getAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data,
       do IO<Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>>:
         current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
         return optionsAfterToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def changedShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: Options.TurnHooks(A, G, D, M, V, E, J), value: Maybe<&2, Hooks.StopHook(Options.Turn(A, G, D, M, V, E), E)>) -> Options.TurnHooks(A, G, D, M, V, E, J) & Unit:
+  match hooks:
+    case Hooks.Hooks{_, legacy, context}: (Hooks.Hooks{value, legacy, context}, Unit{})
+def setShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Hooks.StopHook(Options.Turn(A, G, D, M, V, E), E)>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, _, hooks, _, _}: R.modify(Options.TurnHooks(A, G, D, M, V, E, J), Unit, hooks, current => changedShouldStopAfterTurn(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def hooksShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: Options.TurnHooks(A, G, D, M, V, E, J)) -> Maybe<&2, Hooks.StopHook(Options.Turn(A, G, D, M, V, E), E)>:
+  match hooks:
+    case Hooks.Hooks{value, _, _}: value
+def getShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, Hooks.StopHook(Options.Turn(A, G, D, M, V, E), E)>):
+  match agent:
+    case Agent{_, _, _, hooks, _, _}:
+      do IO<Maybe<&2, Hooks.StopHook(Options.Turn(A, G, D, M, V, E), E)>>:
+        current : Options.TurnHooks(A, G, D, M, V, E, J) <- R.read(Options.TurnHooks(A, G, D, M, V, E, J), hooks)
+        return hooksShouldStopAfterTurn(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def changedPrepareNextTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: Options.TurnHooks(A, G, D, M, V, E, J), value: Maybe<&2, Hooks.LegacyHook(Options.Update(A, G, D, M, V, E, J), E)>) -> Options.TurnHooks(A, G, D, M, V, E, J) & Unit:
+  match hooks:
+    case Hooks.Hooks{stop, _, context}: (Hooks.Hooks{stop, value, context}, Unit{})
+def setPrepareNextTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Hooks.LegacyHook(Options.Update(A, G, D, M, V, E, J), E)>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, _, hooks, _, _}: R.modify(Options.TurnHooks(A, G, D, M, V, E, J), Unit, hooks, current => changedPrepareNextTurn(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def hooksPrepareNextTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: Options.TurnHooks(A, G, D, M, V, E, J)) -> Maybe<&2, Hooks.LegacyHook(Options.Update(A, G, D, M, V, E, J), E)>:
+  match hooks:
+    case Hooks.Hooks{_, value, _}: value
+def getPrepareNextTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, Hooks.LegacyHook(Options.Update(A, G, D, M, V, E, J), E)>):
+  match agent:
+    case Agent{_, _, _, hooks, _, _}:
+      do IO<Maybe<&2, Hooks.LegacyHook(Options.Update(A, G, D, M, V, E, J), E)>>:
+        current : Options.TurnHooks(A, G, D, M, V, E, J) <- R.read(Options.TurnHooks(A, G, D, M, V, E, J), hooks)
+        return hooksPrepareNextTurn(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def changedPrepareNextTurnWithContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: Options.TurnHooks(A, G, D, M, V, E, J), value: Maybe<&2, Hooks.ContextHook(Options.Turn(A, G, D, M, V, E), Options.Update(A, G, D, M, V, E, J), E)>) -> Options.TurnHooks(A, G, D, M, V, E, J) & Unit:
+  match hooks:
+    case Hooks.Hooks{stop, legacy, _}: (Hooks.Hooks{stop, legacy, value}, Unit{})
+def setPrepareNextTurnWithContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, Hooks.ContextHook(Options.Turn(A, G, D, M, V, E), Options.Update(A, G, D, M, V, E, J), E)>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, _, hooks, _, _}: R.modify(Options.TurnHooks(A, G, D, M, V, E, J), Unit, hooks, current => changedPrepareNextTurnWithContext(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def hooksPrepareNextTurnWithContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: Options.TurnHooks(A, G, D, M, V, E, J)) -> Maybe<&2, Hooks.ContextHook(Options.Turn(A, G, D, M, V, E), Options.Update(A, G, D, M, V, E, J), E)>:
+  match hooks:
+    case Hooks.Hooks{_, _, value}: value
+def getPrepareNextTurnWithContext(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, Hooks.ContextHook(Options.Turn(A, G, D, M, V, E), Options.Update(A, G, D, M, V, E, J), E)>):
+  match agent:
+    case Agent{_, _, _, hooks, _, _}:
+      do IO<Maybe<&2, Hooks.ContextHook(Options.Turn(A, G, D, M, V, E), Options.Update(A, G, D, M, V, E, J), E)>>:
+        current : Options.TurnHooks(A, G, D, M, V, E, J) <- R.read(Options.TurnHooks(A, G, D, M, V, E, J), hooks)
+        return hooksPrepareNextTurnWithContext(A, G, D, M, V, E, J, Telemetry, Fetch, current)
