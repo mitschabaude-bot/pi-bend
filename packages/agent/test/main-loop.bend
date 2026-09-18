@@ -2,6 +2,7 @@ import Base
 import ../src/main-loop.bend as Main
 import ../src/loop-entry.bend as Entry
 import ../src/stream-fn.bend as StreamFn
+import ../src/loop-stream.bend as Wrapper
 import ../src/types.bend as T
 import ../src/agent-loop.bend as Loop
 import ../src/tool-call.bend as Call
@@ -30,18 +31,25 @@ def Outcome() -> Data: Result<&2, &2, String, H.Messages()>
 def ProviderFunction() -> Data: T.StreamFn(V.Value, V.Value, Unit, String, Unit, H.Config())
 def Registry() -> Data: StreamFn.Registry(V.Value, V.Value, Unit, String, Unit, H.Config())
 def Selection() -> Data: StreamFn.Selection<V.Value, V.Value, Unit, String, Unit, H.Config()>
+def StreamRun() -> Data: Wrapper.Run<V.Value, Unit, String, String, V.Value, Unit, String>
+def StreamOptions() -> Data: Wrapper.Options<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>
 def Log() -> Data: R.Ref<List<&2, String>>
+
+type Gates is Data:
+  Gates{started: Chan(Unit), release: Chan(Unit)}
 
 type Defaults is Data:
   Defaults{policy: U32, registry: Registry(), provider: ProviderFunction(), replacement: ProviderFunction()}
 type Provider is Data:
-  Provider{kind: U32, count: R.Ref<U32>, log: Log(), requests: Log(), streams: R.Ref<List<&2, StreamValue()>>, label: String}
+  Provider{kind: U32, count: R.Ref<U32>, log: Log(), requests: Log(), streams: R.Ref<List<&2, StreamValue()>>, label: String, gate: Maybe<&2, Gates>}
 type Execution is Data:
   Execution{terminate: Bool, count: R.Ref<U32>}
 type Queue is Data:
   Queue{name: String, enabled: Bool, count: R.Ref<U32>, log: Log(), defaults: Defaults}
 type Stopping is Data:
-  Stopping{stop: Bool, log: Log(), baseline: String}
+  Stopping{stop: Bool, log: Log(), baseline: String, fail: Bool}
+type Conversion is Data:
+  Conversion{log: Log(), fail: Bool}
 type Preparing is Data:
   Preparing{log: Log(), baseline: String}
 type Recording is Data:
@@ -143,20 +151,51 @@ def converted(messages: H.Messages()) -> List<&2, Ai.Message<V.Value, V.Value, U
     case T.LlmMessage{message} <> rest: message <> converted(rest)
     case T.CustomMessage{value} <> rest: Ai.User{Ai.UserMessage{Ai.UserText{value}, F.fromU32(0)}} <> converted(rest)
 
-def convert(recording: Log(), messages: H.Messages()) -> IO(H.Converted()):
-  do IO<H.Converted()>:
-    log(recording, "convert")
-    return Done{converted(messages)}
+def convert(environment: Conversion, messages: H.Messages()) -> IO(H.Converted()):
+  match environment:
+    case Conversion{recording, fail}:
+      do IO<H.Converted()>:
+        log(recording, "convert")
+        return Bool.pick(H.Converted(), fail, Fail{"conversion failed"}, Done{converted(messages)})
+
+def createGate(enabled: Bool) -> IO(Maybe<&2, Gates>):
+  match enabled:
+    case False{}: IO.pure(Maybe<&2, Gates>, None{})
+    case True{}:
+      do IO<Maybe<&2, Gates>>:
+        started : Chan(Unit) <- Chan.new(Unit, 1)
+        release : Chan(Unit) <- Chan.new(Unit, 1)
+        return Some{Gates{started, release}}
+
+def waitForRelease(gate: Maybe<&2, Gates>, index: U32) -> IO(Unit):
+  match gate index:
+    case Some{Gates{started, release}} 0:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        R.requireSent(sent)
+        released : Unit <- IO.join(Unit, release)
+        return Unit{}
+    case _ _: IO.pure(Unit, Unit{})
+
+def releaseProvider(gate: Maybe<&2, Gates>) -> IO(Unit):
+  match gate:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{Gates{started, release}}:
+      do IO<Unit>:
+        entered : Unit <- IO.join(Unit, started)
+        sent : Bool <- Chan.send(Unit, release, Unit{})
+        R.requireSent(sent)
 
 def provider(environment: Provider, input: ProviderInput()) -> IO(StreamValue()):
   match environment input:
-    case Provider{kind, count, recording, requests, streams, label} T.StreamInput{model, Ai.TranscriptContext{messages}, _}:
+    case Provider{kind, count, recording, requests, streams, label, gate} T.StreamInput{model, Ai.TranscriptContext{messages}, _}:
       do IO<StreamValue()>:
         +index : U32 <- bump(count)
         Test.assertion(U32.is_lt(index, 4), "loop must settle rather than spin")
         Test.assertion(String.eq(Api.name(Api.modelApi(Unit, model)), Bool.pick(String, U32.is_eq(index, 0), "original", "changed")), "next-turn model reaches the provider")
         log(requests, llmNames(messages))
         log(recording, label)
+        waitForRelease(gate, index)
         +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, Ai.Start{assistant(text("partial"), Ai.Pending{})})
@@ -190,11 +229,11 @@ def queue(environment: Queue, unused: Unit) -> IO(QueueOutput()):
 
 def stop(environment: Stopping, input: Turn()) -> IO(Result<&2, &2, String, Bool>):
   match environment input:
-    case Stopping{shouldStop, recording, baseline} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
+    case Stopping{shouldStop, recording, baseline, fail} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
       do IO<Result<&2, &2, String, Bool>>:
         Test.assertion(String.eq(names(context), baseline ++ names(history)), "stop hook sees committed context and generated history")
         log(recording, "stop")
-        return Done{shouldStop}
+        return Bool.pick(Result<&2, &2, String, Bool>, fail, Fail{"stop failed"}, Done{shouldStop})
 
 def prepare(environment: Preparing, input: Turn()) -> IO(PrepareOutput()):
   match environment input:
@@ -258,7 +297,52 @@ def invoke(mode: U32, policy: U32, registry: Registry(), capture: Main.Capture<V
     case 1: Entry.runAgentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, T.CustomMessage{"prompt"} <> Nil{}, context, config, entryCapture(policy, registry, capture))
     case _: Entry.runAgentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, ~Entry.errorMessage, context, config, entryCapture(policy, registry, capture))
 
-def scenarioSelection(+mode: U32, +policy: U32, +kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
+@unsafe
+def collectEvents(+iterator: Stream.Iterator<H.EventValue(), Outcome()>, reversed: List<&2, String>, step: Maybe<&2, Stream.Iteration<H.EventValue()>>) -> IO(List<&2, String>):
+  match step:
+    case None{}:
+      do IO<List<&2, String>>:
+        next : Stream.Iteration<H.EventValue()> <- Stream.nextValue(H.EventValue(), Outcome(), iterator)
+        collectEvents(iterator, reversed, Some{next})
+    case Some{Stream.End{}}: IO.pure(List<&2, String>, List.reverse(&2, String, reversed))
+    case Some{Stream.Yield{event}}: collectEvents(iterator, key(event) <> reversed, None{})
+
+def consumeRun(gate: Maybe<&2, Gates>, created: Result<&2, &2, String, StreamRun()>, expectedEvents: String, expectedHistory: String, expectedError: String) -> IO(Outcome()):
+  match created:
+    case Fail{error}:
+      do IO<Outcome()>:
+        Test.assertion(String.is_empty(expectedEvents), "invalid continuation creates no stream events")
+        return Fail{error}
+    case Done{+run}:
+      do IO<Outcome()>:
+        releaseProvider(gate)
+        outcome : Outcome() <- Wrapper.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        repeated : Outcome() <- Wrapper.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        checked(repeated, expectedHistory, expectedError)
+        +iterator : Stream.Iterator<H.EventValue(), Outcome()> <- Wrapper.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        events : List<&2, String> <- collectEvents(iterator, Nil{}, None{})
+        Test.assertion(String.eq(String.join(events, "|"), expectedEvents), "buffered stream events and closure after result settlement")
+        Stream.disposeIterator(H.EventValue(), Outcome(), iterator)
+        Wrapper.dispose(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        return outcome
+
+def launchStream(mode: U32, options: StreamOptions(), context: H.Context(), config: H.Config()) -> IO(Result<&2, &2, String, StreamRun()>):
+  match mode:
+    case 1:
+      do IO<Result<&2, &2, String, StreamRun()>>:
+        run : StreamRun() <- Wrapper.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, ~Entry.errorMessage, T.CustomMessage{"prompt"} <> Nil{}, context, config, options)
+        return Done{run}
+    case _: Wrapper.agentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, ~Entry.errorMessage, context, config, options)
+
+def invokeRuntime(streamed: Bool, gate: Maybe<&2, Gates>, mode: U32, policy: U32, registry: Registry(), capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config(), expectedEvents: String, expectedHistory: String, expectedError: String) -> IO(Outcome()):
+  match streamed capture:
+    case False{} value: invoke(mode, policy, registry, value, context, config)
+    case True{} Main.Capture{Main.Services{signal, validatorFn, aborted, _, _, _, _, emptyDetails}, providerFn}:
+      do IO<Outcome()>:
+        created : Result<&2, &2, String, StreamRun()> <- launchStream(mode, Wrapper.Options{signal, validatorFn, aborted, emptyDetails, selection(policy, registry, providerFn)}, context, config)
+        consumeRun(gate, created, expectedEvents, expectedHistory, expectedError)
+
+def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, +expectedHistory: String, +expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32, expectedEvents: String) -> IO(Unit):
   do IO<Unit>:
     +recording : Log() <- R.new(List<&2, String>, Nil{})
     +requests : Log() <- R.new(List<&2, String>, Nil{})
@@ -270,13 +354,14 @@ def scenarioSelection(+mode: U32, +policy: U32, +kind: U32, terminate: Bool, ste
     +followCount : R.Ref<U32> <- R.new(U32, 0)
     +executor : C.Callback<H.ExecuteInput(), H.ExecuteOutput()> <- C.create(~Execution, ~H.ExecuteInput(), ~H.ExecuteOutput(), ~execute, Execution{terminate, executionCount})
     +validator : C.Callback<H.Input(), H.Checked()> <- C.create(~R.Ref<U32>, ~H.Input(), ~H.Checked(), ~validate, validationCount)
-    +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Log(), ~H.Messages(), ~H.Converted(), ~convert, recording)
+    +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Conversion, ~H.Messages(), ~H.Converted(), ~convert, Conversion{recording, U32.is_eq(kind, 5)})
+    +gate : Maybe<&2, Gates> <- createGate(streamed && U32.is_eq(kind, 7))
     +registry : Registry() <- StreamFn.create(V.Value, V.Value, Unit, String, Unit, H.Config())
-    +providerCallback : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider"})
-    +replacement : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider:replacement"})
+    +providerCallback : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider", gate})
+    +replacement : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider:replacement", gate})
     StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), registry, initialDefault(policy, providerCallback, replacement))
     +defaults : Defaults = Defaults{policy, registry, providerCallback, replacement}
-    +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording, baseline(mode)})
+    +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording, baseline(mode), U32.is_eq(kind, 6)})
     +prepareHook : C.Callback<Turn(), PrepareOutput()> <- C.create(~Preparing, ~Turn(), ~PrepareOutput(), ~prepare, Preparing{recording, baseline(mode)})
     +steering : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"steering", steeringEnabled, steeringCount, recording, defaults})
     +follow : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"follow", followEnabled, followCount, recording, defaults})
@@ -288,7 +373,7 @@ def scenarioSelection(+mode: U32, +policy: U32, +kind: U32, terminate: Bool, ste
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = entryContext(mode, T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{})
     config : H.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
-    outcome : Outcome() <- invoke(mode, policy, registry, Main.Capture{Main.Services{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config)
+    outcome : Outcome() <- invokeRuntime(streamed, gate, mode, policy, registry, Main.Capture{Main.Services{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config, expectedEvents, expectedHistory, expectedError)
     checked(outcome, expectedHistory, expectedError)
     Main.disposeBatches(V.Value, Unit, String, String, V.Value, Unit, String, batches)
     Call.disposeOwners(String, String, updates)
@@ -323,6 +408,9 @@ def scenarioSelection(+mode: U32, +policy: U32, +kind: U32, terminate: Bool, ste
     discarded : U32 <- R.dispose(U32, steeringCount)
     discarded : U32 <- R.dispose(U32, followCount)
     return Unit{}
+
+def scenarioSelection(+mode: U32, +policy: U32, +kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
+  scenarioRuntime(False{}, mode, policy, kind, terminate, steeringEnabled, followEnabled, shouldStop, failAt, expectedHistory, expectedError, expectedTrace, expectedRequests, expectedProviders, expectedExecutions, expectedValidations, "")
 
 def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
   scenarioSelection(mode, 0, kind, terminate, steeringEnabled, followEnabled, shouldStop, failAt, expectedHistory, expectedError, expectedTrace, expectedRequests, expectedProviders, expectedExecutions, expectedValidations)

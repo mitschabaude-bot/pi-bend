@@ -1,3 +1,4 @@
+import ../packages/agent/src/loop-stream.bend as LoopStream
 import ../packages/agent/src/stream-fn.bend as StreamFunction
 import ../packages/agent/src/loop-entry.bend as LoopEntry
 import Base

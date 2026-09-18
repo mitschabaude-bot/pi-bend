@@ -12,33 +12,36 @@ type Iteration<-T: Data> is Data:
   End{}
 
 type State<-T: Data> is Data:
-  State{queue: Q.Queue<T>, waiting: Q.Queue<Chan(Iteration<T>)>, done: Bool}
+  State{queue: Q.Queue<T>, waiting: Q.Queue<Chan(Iteration<T>)>, done: Bool, resultClaimed: Bool}
 
 type EventStream<-T: Data, -R: Data> is Data:
   EventStream{state: Ref.Ref<State<T>>, finalResult: D.Deferred<R>, isComplete: C.Callback<T, Bool>, extractResult: C.Callback<T, R>}
 
 def create(-T: Data, -R: Data, isComplete: C.Callback<T, Bool>, extractResult: C.Callback<T, R>) -> IO(EventStream<T, R>):
   do IO<EventStream<T, R>>:
-    state : Ref.Ref<State<T>> <- Ref.new(State<T>, State{Q.new(T), Q.new(Chan(Iteration<T>)), False{}})
+    state : Ref.Ref<State<T>> <- Ref.new(State<T>, State{Q.new(T), Q.new(Chan(Iteration<T>)), False{}, False{}})
     finalResult : D.Deferred<R> <- D.new(R)
     return EventStream{state, finalResult, isComplete, extractResult}
 
 def doneState(-T: Data, state: State<T>) -> State<T> & Bool:
   match state:
-    case State{queue, waiting, +done}: (State{queue, waiting, done}, done)
+    case State{queue, waiting, +done, claimed}: (State{queue, waiting, done, claimed}, done)
 
-def markDone(-T: Data, state: State<T>) -> State<T> & Unit:
-  match state:
-    case State{queue, waiting, _}: (State{queue, waiting, True{}}, Unit{})
+type Commit<-T: Data> is Data:
+  Ignored{}
+  Delivered{reply: Maybe<&2, Chan(Iteration<T>)>}
 
-def enqueueDelivery(-T: Data, queue: Q.Queue<T>, done: Bool, event: T, popped: Q.Queue<Chan(Iteration<T>)> & Maybe<&2, Chan(Iteration<T>)>) -> State<T> & Maybe<&2, Chan(Iteration<T>)>:
+def enqueueDelivery(-T: Data, queue: Q.Queue<T>, done: Bool, claimed: Bool, event: T, popped: Q.Queue<Chan(Iteration<T>)> & Maybe<&2, Chan(Iteration<T>)>) -> State<T> & Commit<T>:
   match popped:
-    case Tuple{waiting, None{}}: (State{Q.enqueue(T, queue, event), waiting, done}, None{})
-    case Tuple{waiting, Some{+reply}}: (State{queue, waiting, done}, Some{reply})
+    case Tuple{waiting, None{}}: (State{Q.enqueue(T, queue, event), waiting, done, claimed}, Delivered{None{}})
+    case Tuple{waiting, Some{+reply}}: (State{queue, waiting, done, claimed}, Delivered{Some{reply}})
 
-def deliverState(-T: Data, state: State<T>, event: T) -> State<T> & Maybe<&2, Chan(Iteration<T>)>:
+# Commit the event and its terminal flag together. IO callbacks may suspend,
+# so recheck closure here and reserve the first final result in the same state.
+def commitPush(-T: Data, state: State<T>, event: T, +complete: Bool) -> State<T> & Commit<T>:
   match state:
-    case State{queue, waiting, done}: enqueueDelivery(T, queue, done, event, Q.dequeue(Chan(Iteration<T>), waiting))
+    case State{queue, waiting, True{}, claimed}: (State{queue, waiting, True{}, claimed}, Ignored{})
+    case State{queue, waiting, False{}, claimed}: enqueueDelivery(T, queue, complete, claimed || complete, event, Q.dequeue(Chan(Iteration<T>), waiting))
 
 def notify(-T: Data, reply: Maybe<&2, Chan(Iteration<T>)>, item: Iteration<T>) -> IO(Unit):
   match reply:
@@ -56,27 +59,31 @@ def settleOptional(-R: Data, deferred: D.Deferred<R>, value: Maybe<&2, R>) -> IO
         won : Bool <- D.resolve(R, deferred, resultValue)
         return Unit{}
 
-def extractIfComplete(-T: Data, -R: Data, complete: Bool, state: Ref.Ref<State<T>>, extract: C.Callback<T, R>, event: T) -> IO(Maybe<&2, R>):
+def extractIfComplete(-T: Data, -R: Data, complete: Bool, extract: C.Callback<T, R>, event: T) -> IO(Maybe<&2, R>):
   match complete:
     case False{}: IO.pure(Maybe<&2, R>, None{})
     case True{}:
       do IO<Maybe<&2, R>>:
-        Ref.modify(State<T>, Unit, state, current => markDone(T, current))
         value : R <- C.call(T, R, extract, event)
         return Some{value}
 
-def pushOpen(-T: Data, -R: Data, closed: Bool, +state: Ref.Ref<State<T>>, finalResult: D.Deferred<R>, predicate: C.Callback<T, Bool>, extract: C.Callback<T, R>, +event: T) -> IO(Unit):
+def publishCommitted(-T: Data, -R: Data, finalResult: D.Deferred<R>, event: T, value: Maybe<&2, R>, commit: Commit<T>) -> IO(Unit):
+  match commit:
+    case Ignored{}: IO.pure(Unit, Unit{})
+    case Delivered{reply}:
+      do IO<Unit>:
+        settleOptional(R, finalResult, value)
+        notify(T, reply, Yield{event})
+
+def pushOpen(-T: Data, -R: Data, closed: Bool, state: Ref.Ref<State<T>>, finalResult: D.Deferred<R>, predicate: C.Callback<T, Bool>, extract: C.Callback<T, R>, +event: T) -> IO(Unit):
   match closed:
     case True{}: IO.pure(Unit, Unit{})
     case False{}:
       do IO<Unit>:
-        complete : Bool <- C.call(T, Bool, predicate, event)
-        resultValue : Maybe<&2, R> <- extractIfComplete(T, R, complete, state, extract, event)
-        reply : Maybe<&2, Chan(Iteration<T>)> <- Ref.modify(State<T>, Maybe<&2, Chan(Iteration<T>)>, state, current => deliverState(T, current, event))
-        # Commit the buffered event before publishing the final result, as
-        # JS promise observers run after the synchronous push has finished.
-        settleOptional(R, finalResult, resultValue)
-        notify(T, reply, Yield{event})
+        +complete : Bool <- C.call(T, Bool, predicate, event)
+        value : Maybe<&2, R> <- extractIfComplete(T, R, complete, extract, event)
+        commit : Commit<T> <- Ref.modify(State<T>, Commit<T>, state, current => commitPush(T, current, event, complete))
+        publishCommitted(T, R, finalResult, event, value, commit)
 
 def push(-T: Data, -R: Data, stream: EventStream<T, R>, event: T) -> IO(Unit):
   match stream:
@@ -85,9 +92,21 @@ def push(-T: Data, -R: Data, stream: EventStream<T, R>, event: T) -> IO(Unit):
         closed : Bool <- Ref.modify(State<T>, Bool, state, current => doneState(T, current))
         pushOpen(T, R, closed, state, finalResult, predicate, extract, event)
 
-def endState(-T: Data, state: State<T>) -> State<T> & List<&2, Chan(Iteration<T>)>:
+def hasResult(-R: Data, value: Maybe<&2, R>) -> Bool:
+  match value:
+    case None{}: False{}
+    case Some{_}: True{}
+
+def endState(-T: Data, state: State<T>, +provided: Bool) -> State<T> & (List<&2, Chan(Iteration<T>)> & Bool):
   match state:
-    case State{queue, waiting, _}: (State{queue, Q.new(Chan(Iteration<T>)), True{}}, Q.drain(Chan(Iteration<T>), waiting))
+    case State{queue, waiting, _, +claimed}: (State{queue, Q.new(Chan(Iteration<T>)), True{}, claimed || provided}, (Q.drain(Chan(Iteration<T>), waiting), provided && Bool.not(claimed)))
+
+# The atomic state transition owns result settlement. A later end cannot win
+# merely because the terminal push's continuation has not run yet.
+def settleClaimed(-R: Data, claimed: Bool, deferred: D.Deferred<R>, value: Maybe<&2, R>) -> IO(Unit):
+  match claimed:
+    case False{}: IO.pure(Unit, Unit{})
+    case True{}: settleOptional(R, deferred, value)
 
 def wakeEnded(-T: Data, waiting: List<&2, Chan(Iteration<T>)>) -> IO(Unit):
   match waiting:
@@ -97,13 +116,19 @@ def wakeEnded(-T: Data, waiting: List<&2, Chan(Iteration<T>)>) -> IO(Unit):
         notify(T, Some{reply}, End{})
         wakeEnded(T, rest)
 
-def end(-T: Data, -R: Data, stream: EventStream<T, R>, value: Maybe<&2, R>) -> IO(Unit):
+def publishEnd(-T: Data, -R: Data, finalResult: D.Deferred<R>, value: Maybe<&2, R>, ended: List<&2, Chan(Iteration<T>)> & Bool) -> IO(Unit):
+  match ended:
+    case Tuple{waiting, claimed}:
+      do IO<Unit>:
+        settleClaimed(R, claimed, finalResult, value)
+        wakeEnded(T, waiting)
+
+def end(-T: Data, -R: Data, stream: EventStream<T, R>, +value: Maybe<&2, R>) -> IO(Unit):
   match stream:
     case EventStream{state, finalResult, _, _}:
       do IO<Unit>:
-        waiting : List<&2, Chan(Iteration<T>)> <- Ref.modify(State<T>, List<&2, Chan(Iteration<T>)>, state, current => endState(T, current))
-        settleOptional(R, finalResult, value)
-        wakeEnded(T, waiting)
+        ended : List<&2, Chan(Iteration<T>)> & Bool <- Ref.modify(State<T>, List<&2, Chan(Iteration<T>)> & Bool, state, current => endState(T, current, hasResult(R, value)))
+        publishEnd(T, R, finalResult, value, ended)
 
 # Like the upstream method, return the same final-result promise immediately.
 def result(-T: Data, -R: Data, stream: EventStream<T, R>) -> D.Deferred<R>:
@@ -114,19 +139,19 @@ def result(-T: Data, -R: Data, stream: EventStream<T, R>) -> D.Deferred<R>:
 def resultValue(-T: Data, -R: Data, stream: EventStream<T, R>) -> IO(R):
   D.result(R, result(T, R, stream))
 
-def subscribeEmpty(-T: Data, done: Bool, queue: Q.Queue<T>, waiting: Q.Queue<Chan(Iteration<T>)>, reply: Chan(Iteration<T>)) -> State<T> & Maybe<&2, Iteration<T>>:
+def subscribeEmpty(-T: Data, done: Bool, claimed: Bool, queue: Q.Queue<T>, waiting: Q.Queue<Chan(Iteration<T>)>, reply: Chan(Iteration<T>)) -> State<T> & Maybe<&2, Iteration<T>>:
   match done:
-    case True{}: (State{queue, waiting, True{}}, Some{End{}})
-    case False{}: (State{queue, Q.enqueue(Chan(Iteration<T>), waiting, reply), False{}}, None{})
+    case True{}: (State{queue, waiting, True{}, claimed}, Some{End{}})
+    case False{}: (State{queue, Q.enqueue(Chan(Iteration<T>), waiting, reply), False{}, claimed}, None{})
 
-def subscribePopped(-T: Data, waiting: Q.Queue<Chan(Iteration<T>)>, done: Bool, reply: Chan(Iteration<T>), popped: Q.Queue<T> & Maybe<&2, T>) -> State<T> & Maybe<&2, Iteration<T>>:
+def subscribePopped(-T: Data, waiting: Q.Queue<Chan(Iteration<T>)>, done: Bool, claimed: Bool, reply: Chan(Iteration<T>), popped: Q.Queue<T> & Maybe<&2, T>) -> State<T> & Maybe<&2, Iteration<T>>:
   match popped:
-    case Tuple{queue, None{}}: subscribeEmpty(T, done, queue, waiting, reply)
-    case Tuple{queue, Some{value}}: (State{queue, waiting, done}, Some{Yield{value}})
+    case Tuple{queue, None{}}: subscribeEmpty(T, done, claimed, queue, waiting, reply)
+    case Tuple{queue, Some{value}}: (State{queue, waiting, done, claimed}, Some{Yield{value}})
 
 def subscribeState(-T: Data, state: State<T>, reply: Chan(Iteration<T>)) -> State<T> & Maybe<&2, Iteration<T>>:
   match state:
-    case State{queue, waiting, done}: subscribePopped(T, waiting, done, reply, Q.dequeue(T, queue))
+    case State{queue, waiting, done, claimed}: subscribePopped(T, waiting, done, claimed, reply, Q.dequeue(T, queue))
 
 def subscribeReady(-T: Data, reply: Chan(Iteration<T>), ready: Maybe<&2, Iteration<T>>) -> IO(Unit):
   match ready:
