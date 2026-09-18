@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
@@ -36,7 +37,9 @@ def action(value, indices):
     return f'T.Add{{{string(event_type)}, {indices[callback]}n, {flags}}}'
 
 
-lines = ['import Base', 'import ../packages/runtime/test/listener-fixture.bend as T',
+target = '--event-target' in sys.argv
+fixture_module = 'event-target-fixture' if target else 'listener-fixture'
+lines = ['import Base', f'import ../packages/runtime/test/{fixture_module}.bend as T',
          'import ../packages/runtime/src/listener-registry.bend as L',
          'def main() -> IO(Unit):', '  do IO<Unit>:']
 for fixture in reference['cases']:
@@ -47,10 +50,12 @@ for fixture in reference['cases']:
     expected = string(','.join(fixture['trace']))
     lines.append(f'    T.run({string(fixture["name"])}, {callbacks}, {actions}, {expected})')
 lines.append(f'    IO.print("PASS {len(reference["cases"])} Node listener traversal traces")')
-source = BUILD / 'listener-vectors.bend'
+stem = 'event-target-listener-vectors' if target else 'listener-vectors'
+source = BUILD / (stem + '.bend')
 source.write_text('\n'.join(lines) + '\n')
-output = BUILD / 'test-listener-vectors'
+output = BUILD / ('test-' + stem)
 subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run([str(output), '--threads', threads], check=True, timeout=30)
-print(f'PASS listener reference {reference["node"]}; EventTarget flags/error handling remain pending')
+layer = 'EventTarget dispatcher' if target else 'listener registry'
+print(f'PASS {layer} reference {reference["node"]}; complete EventTarget API remains pending')
