@@ -188,3 +188,50 @@ def createToolResultMessage(-Arguments: Data, -Details: Data, finalized: Finaliz
         value : T.AgentToolResult<Details> <- R.read(T.AgentToolResult<Details>, result)
         timestamp : Number.F64 <- Date.now()
         R.new(Ai.ToolResultMessage<Details>, toolResultMessageAt(Arguments, Details, call, value, isError, timestamp))
+
+# Raw and adapter-output argument types may differ. This explicit union retains
+# the original call handle when unchanged, without an unsafe reference cast.
+# Neither branch means that schema validation has happened yet.
+type PreparedToolCallArguments<-RawArguments: Data, -Arguments: Data> is Data:
+  OriginalCall{value: T.AgentToolCall(RawArguments)}
+  ReplacedCall{value: T.AgentToolCall(Arguments)}
+
+def callArguments(-RawArguments: Data, call: Ai.ToolCall<RawArguments>) -> RawArguments:
+  match call:
+    case Ai.ToolCall{_, _, arguments, _, _}: arguments
+
+def replaceCallArguments(-RawArguments: Data, -Arguments: Data, call: Ai.ToolCall<RawArguments>, arguments: Arguments) -> Ai.ToolCall<Arguments>:
+  match call:
+    case Ai.ToolCall{id, name, _, signature, namespace}: Ai.ToolCall{id, name, arguments, signature, namespace}
+
+def preparedCall(-RawArguments: Data, -Arguments: Data, -ExecutionError: Data, original: T.AgentToolCall(RawArguments), current: Ai.ToolCall<RawArguments>, arguments: Arguments, same: Bool) -> IO(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>):
+  match same:
+    case True{}: IO.pure(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>, Done{OriginalCall{original}})
+    case False{}:
+      do IO<Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>>:
+        replacement : T.AgentToolCall(Arguments) <- R.new(Ai.ToolCall<Arguments>, replaceCallArguments(RawArguments, Arguments, current, arguments))
+        return Done{ReplacedCall{replacement}}
+
+# Compare against the call's arguments AFTER the adapter returns. Adapters can
+# mutate their captured call; replacement metadata also comes from this live
+# post-callback state. Strict equality is supplied by the typed value adapter.
+def afterPrepareArguments(-RawArguments: Data, -Arguments: Data, -ExecutionError: Data, +original: T.AgentToolCall(RawArguments), outcome: Result<&2, &2, ExecutionError, Arguments>, sameArguments: Arguments -> RawArguments -> Bool) -> IO(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>):
+  match outcome:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>, Fail{error})
+    case Done{+arguments}:
+      do IO<Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>>:
+        +current : Ai.ToolCall<RawArguments> <- R.read(Ai.ToolCall<RawArguments>, original)
+        preparedCall(RawArguments, Arguments, ExecutionError, original, current, arguments, sameArguments(arguments, callArguments(RawArguments, current)))
+
+def prepareArgumentsWith(-RawArguments: Data, -Arguments: Data, -ExecutionError: Data, callback: Maybe<&2, C.Callback<RawArguments, Result<&2, &2, ExecutionError, Arguments>>>, +toolCall: T.AgentToolCall(RawArguments), sameArguments: Arguments -> RawArguments -> Bool) -> IO(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>):
+  match callback:
+    case None{}: IO.pure(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>, Done{OriginalCall{toolCall}})
+    case Some{prepare}:
+      do IO<Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>>:
+        current : Ai.ToolCall<RawArguments> <- R.read(Ai.ToolCall<RawArguments>, toolCall)
+        outcome : Result<&2, &2, ExecutionError, Arguments> <- C.call(RawArguments, Result<&2, &2, ExecutionError, Arguments>, prepare, callArguments(RawArguments, current))
+        afterPrepareArguments(RawArguments, Arguments, ExecutionError, toolCall, outcome, sameArguments)
+
+def prepareToolCallArguments(-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -ExecutionError: Data, tool: T.AgentTool<Parameters, Arguments, Details, RawArguments, Signal, ExecutionError>, toolCall: T.AgentToolCall(RawArguments), sameArguments: Arguments -> RawArguments -> Bool) -> IO(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>):
+  match tool:
+    case T.AgentTool{_, _, _, _, _, prepare, _, _, _}: prepareArgumentsWith(RawArguments, Arguments, ExecutionError, prepare, toolCall, sameArguments)
