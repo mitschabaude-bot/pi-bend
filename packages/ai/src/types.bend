@@ -5,8 +5,8 @@ import ../../runtime/src/record.bend as Record
 import ./utils/diagnostics.bend as Diagnostics
 
 # Source: pi-mono packages/ai/src/types.ts, revision 46c9de402.
-# This module remains partial: Model, schema constraints and provider options
-# remain open. Opaque record payloads use explicit generics.
+# This module remains partial: schema constraints, provider options and
+# provider contracts remain open; model data records are declared below. Opaque record payloads use explicit generics.
 # JavaScript number fields use binary64; optional fields use Maybe.
 
 # Upstream permits arbitrary extension identifiers as well as known literals.
@@ -202,3 +202,160 @@ type Context<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Too
 # possible, but an unnormalized Context cannot be passed implicitly.
 type TranscriptContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
   TranscriptContext{messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>}
+
+# Model metadata and API-dependent compatibility from types.ts. Nullable values
+# stay distinct from omitted optional fields, including explicit off mappings.
+type Nullable<-Value: Data> is Data:
+  NullValue{}
+  PresentValue{value: Value}
+
+type ThinkingLevel is Data:
+  Minimal{}
+  Low{}
+  Medium{}
+  High{}
+  XHigh{}
+  Max{}
+
+type ModelThinkingLevel is Data:
+  Off{}
+  Thinking{level: ThinkingLevel}
+
+type ThinkingLevelMapping is Data:
+  ThinkingLevelMapping{level: ModelThinkingLevel, value: Maybe<&2, Nullable<String>>}
+
+type ThinkingLevelMap is Data:
+  ThinkingLevelMap{properties: List<&2, ThinkingLevelMapping>}
+
+type ThinkingVariable is Data:
+  ThinkingEnabled{}
+  ThinkingEffort{}
+  ThinkingBudget{}
+
+type ChatTemplateKwargValue is Data:
+  TemplateString{value: String}
+  TemplateNumber{value: Number.F64}
+  TemplateBoolean{value: Bool}
+  TemplateNull{}
+  TemplateVariable{variable: ThinkingVariable, omitWhenOff: Maybe<&2, Bool>}
+
+type ThinkingTokenBudgetField is Data:
+  ThinkingTokenBudget{}
+  ThinkingBudgetField{}
+  ThinkingBudgetTokens{}
+
+type ThinkingBudgets is Data:
+  ThinkingBudgets{minimal: Maybe<&2, Number.F64>, low: Maybe<&2, Number.F64>, medium: Maybe<&2, Number.F64>, high: Maybe<&2, Number.F64>}
+
+type SessionAffinityFormat is Data:
+  OpenAISession{}
+  OpenAINoSession{}
+  OpenRouterSession{}
+
+type DataCollection is Data:
+  DenyCollection{}
+  AllowCollection{}
+
+type RoutingSort is Data:
+  SortByName{value: String}
+  SortByOptions{by: Maybe<&2, String>, partition: Maybe<&2, Nullable<String>>}
+
+type PriceValue is Data:
+  NumericPrice{value: Number.F64}
+  StringPrice{value: String}
+
+type RoutingMaxPrice is Data:
+  RoutingMaxPrice{prompt: Maybe<&2, PriceValue>, completion: Maybe<&2, PriceValue>, image: Maybe<&2, PriceValue>, audio: Maybe<&2, PriceValue>, request: Maybe<&2, PriceValue>}
+
+type RoutingPercentiles is Data:
+  RoutingPercentiles{p50: Maybe<&2, Number.F64>, p75: Maybe<&2, Number.F64>, p90: Maybe<&2, Number.F64>, p99: Maybe<&2, Number.F64>}
+
+type RoutingPreference is Data:
+  OverallPreference{value: Number.F64}
+  PercentilePreference{values: RoutingPercentiles}
+
+type OpenRouterRouting is Data:
+  OpenRouterRouting{allow_fallbacks: Maybe<&2, Bool>, require_parameters: Maybe<&2, Bool>, data_collection: Maybe<&2, DataCollection>, zdr: Maybe<&2, Bool>, enforce_distillable_text: Maybe<&2, Bool>, order: Maybe<&2, List<&2, String>>, only: Maybe<&2, List<&2, String>>, ignore: Maybe<&2, List<&2, String>>, quantizations: Maybe<&2, List<&2, String>>, sort: Maybe<&2, RoutingSort>, max_price: Maybe<&2, RoutingMaxPrice>, preferred_min_throughput: Maybe<&2, RoutingPreference>, preferred_max_latency: Maybe<&2, RoutingPreference>}
+
+type VercelGatewayRouting is Data:
+  VercelGatewayRouting{only: Maybe<&2, List<&2, String>>, order: Maybe<&2, List<&2, String>>}
+
+type MaxTokensField is Data:
+  MaxCompletionTokens{}
+  MaxTokens{}
+
+type ThinkingFormat is Data:
+  OpenAIThinking{}
+  OpenRouterThinking{}
+  DeepSeekThinking{}
+  TogetherThinking{}
+  BasetenThinking{}
+  ZaiThinking{}
+  QwenThinking{}
+  ChatTemplateThinking{}
+  QwenChatTemplateThinking{}
+  StringThinking{}
+  AntLingThinking{}
+
+type CacheControlFormat is Data:
+  AnthropicCacheControl{}
+
+type OpenAICompletionsCompat is Data:
+  OpenAICompletionsCompat{supportsStore: Maybe<&2, Bool>, supportsDeveloperRole: Maybe<&2, Bool>, supportsReasoningEffort: Maybe<&2, Bool>, supportsUsageInStreaming: Maybe<&2, Bool>, supportsFinishReason: Maybe<&2, Bool>, maxTokensField: Maybe<&2, MaxTokensField>, requiresToolResultName: Maybe<&2, Bool>, requiresAssistantAfterToolResult: Maybe<&2, Bool>, requiresThinkingAsText: Maybe<&2, Bool>, requiresReasoningContentOnAssistantMessages: Maybe<&2, Bool>, thinkingFormat: Maybe<&2, ThinkingFormat>, chatTemplateKwargs: Maybe<&2, Record.Record<ChatTemplateKwargValue>>, chatTemplateArgs: Maybe<&2, Record.Record<ChatTemplateKwargValue>>, openRouterRouting: Maybe<&2, OpenRouterRouting>, vercelGatewayRouting: Maybe<&2, VercelGatewayRouting>, zaiToolStream: Maybe<&2, Bool>, thinkingTokenBudgetField: Maybe<&2, ThinkingTokenBudgetField>, supportsThinkingTokenBudget: Maybe<&2, Bool>, supportsOpenAIGrammarTools: Maybe<&2, Bool>, supportsMidConvoSystemMessages: Maybe<&2, Bool>, supportsMidConvoToolAdditions: Maybe<&2, Bool>, supportsStrictMode: Maybe<&2, Bool>, cacheControlFormat: Maybe<&2, CacheControlFormat>, sendSessionAffinityHeaders: Maybe<&2, Bool>, sessionAffinityFormat: Maybe<&2, SessionAffinityFormat>, supportsLongCacheRetention: Maybe<&2, Bool>, vllmPriority: Maybe<&2, Number.F64>}
+
+type OpenAIResponsesCompat is Data:
+  OpenAIResponsesCompat{supportsDeveloperRole: Maybe<&2, Bool>, supportsMidConvoSystemMessages: Maybe<&2, Bool>, sessionAffinityFormat: Maybe<&2, SessionAffinityFormat>, supportsLongCacheRetention: Maybe<&2, Bool>, supportsStrictMode: Maybe<&2, Bool>, supportsOpenAIGrammarTools: Maybe<&2, Bool>, supportsAdditionalTools: Maybe<&2, Bool>, supportsToolSearch: Maybe<&2, Bool>, supportsExplicitPromptCacheMode: Maybe<&2, Bool>, supportsMaxOutputTokens: Maybe<&2, Bool>}
+
+type AnthropicSessionAffinityFormat is Data:
+  AnthropicOpenRouterSession{}
+
+type AnthropicAllowedFallbackModel is Data:
+  AnthropicAllowedFallbackModel{provider: ProviderId(), model: String, cost: ModelCost}
+
+type AnthropicMessagesCompat is Data:
+  AnthropicMessagesCompat{supportsEagerToolInputStreaming: Maybe<&2, Bool>, supportsLongCacheRetention: Maybe<&2, Bool>, sendSessionAffinityHeaders: Maybe<&2, Bool>, sessionAffinityFormat: Maybe<&2, AnthropicSessionAffinityFormat>, supportsCacheControlOnTools: Maybe<&2, Bool>, supportsTemperature: Maybe<&2, Bool>, forceAdaptiveThinking: Maybe<&2, Bool>, allowEmptySignature: Maybe<&2, Bool>, supportsStrictTools: Maybe<&2, Bool>, supportsMidConvoEffort: Maybe<&2, Bool>, supportsMidConvoSystemMessages: Maybe<&2, Bool>, supportsMidConvoToolChanges: Maybe<&2, Bool>, allowedFallbackModels: Maybe<&2, List<&2, AnthropicAllowedFallbackModel>>}
+
+type BedrockCompat is Data:
+  BedrockCompat{supportsStrictMode: Maybe<&2, Bool>}
+
+type MistralConversationsCompat is Data:
+  MistralConversationsCompat{supportsMidConvoSystemMessages: Maybe<&2, Bool>}
+
+# The model API carries the compatibility discriminator. Assistant event API
+# identifiers remain strings; model-api.bend maps between this type and strings.
+type ModelApi is Data:
+  OpenAICompletionsApi{}
+  OpenAIResponsesApi{}
+  AzureOpenAIResponsesApi{}
+  OpenAICodexResponsesApi{}
+  AnthropicMessagesApi{}
+  BedrockConverseStreamApi{}
+  MistralConversationsApi{}
+  GoogleGenerativeAiApi{}
+  GoogleVertexApi{}
+  PiMessagesApi{}
+  CustomModelApi{identifier: String}
+
+def ModelCompatibility(api: ModelApi) -> Data:
+  match api:
+    case OpenAICompletionsApi{}: OpenAICompletionsCompat
+    case OpenAIResponsesApi{}: OpenAIResponsesCompat
+    case AzureOpenAIResponsesApi{}: OpenAIResponsesCompat
+    case OpenAICodexResponsesApi{}: OpenAIResponsesCompat
+    case AnthropicMessagesApi{}: AnthropicMessagesCompat
+    case BedrockConverseStreamApi{}: BedrockCompat
+    case MistralConversationsApi{}: MistralConversationsCompat
+    case _: Empty
+
+type ModelInput is Data:
+  InputText{}
+  InputImage{}
+
+# Compatibility depends on the actual API field, preserving the conditional
+# upstream contract. Sampling values remain caller-typed opaque data; this does
+# not replace provider payloads or validated argument types with untyped JSON.
+type Model<-SamplingValue: Data> is Data:
+  Model{id: String, name: String, api: ModelApi, provider: ProviderId(), baseUrl: String, reasoning: Bool, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, contextWindow: Number.F64, maxTokens: Number.F64, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, compat: Maybe<&2, ModelCompatibility(api)>}
+
+type ImagesModel<-SamplingValue: Data> is Data:
+  ImagesModel{id: String, name: String, api: ImagesApi(), provider: ImagesProviderId(), baseUrl: String, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, output: List<&2, ModelInput>}
