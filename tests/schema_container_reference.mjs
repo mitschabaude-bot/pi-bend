@@ -3,7 +3,9 @@ import { Value } from '../build/schema-reference/node_modules/typebox/build/valu
 const primitives=[Type.Boolean(),Type.Number(),Type.Integer(),Type.String(),Type.Null()];
 function schema(p) {
   if (p.kind==='scalar') return primitives[p.index];
-  if (p.kind==='array') return Type.Array(schema(p.item));
+  if (p.kind==='literal') return Type.Literal(p.value);
+  if (p.kind==='union') return Type.Union(p.items.map(schema));
+  if (p.kind==='array') return Type.Array(schema(p.item),p.options ?? {});
   if (p.kind==='tuple') return Type.Tuple(p.items.map(schema));
   return Type.Unknown();
 }

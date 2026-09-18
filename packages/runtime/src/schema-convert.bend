@@ -129,10 +129,41 @@ def convert(primitive: Primitive, +value: V.Value) -> Converted():
     case ToString{}: convertString(value)
     case ToNull{}: convertedOrOriginal(value, tryNull(value))
 
+# JSON-compatible literals have an explicit conversion kind. Bigint literals
+# are outside JSON tool arguments; there is no host-language bigint value here.
+type LiteralValue is Data:
+  BooleanLiteral{value: Bool}
+  NumberLiteral{value: F.F64}
+  StringLiteral{value: String}
+
+def literalValue(literal: LiteralValue) -> V.Value:
+  match literal:
+    case BooleanLiteral{value}: V.Boolean{value}
+    case NumberLiteral{value}: V.Number{value}
+    case StringLiteral{value}: V.Text{value}
+
+def literalPrimitive(literal: LiteralValue) -> Primitive:
+  match literal:
+    case BooleanLiteral{_}: ToBoolean{}
+    case NumberLiteral{_}: ToNumber{}
+    case StringLiteral{_}: ToString{}
+
+def selectLiteral(+expected: V.Value, +original: V.Value, result: Converted()) -> Converted():
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{+candidate}: Done{Bool.pick(V.Value, V.equal(expected, original), original, Bool.pick(V.Value, V.equal(expected, candidate), candidate, original))}
+
+# Each union branch carries its executable constraint alongside its conversion
+# policy. Candidates are checked against the complete union, in source order.
+type Branch<-P: Data> is Data:
+  Branch{schema: S.Schema, policy: P}
+
 # Conversion policy is explicit data, separate from schema validation. Tuple
 # conversion does not pad missing positions or drop additional positions.
 type Policy is Data:
   Preserve{}
+  Literal{value: LiteralValue}
+  Union{branches: List<&2, Branch<Policy>>}
   Scalar{primitive: Primitive}
   ArrayItems{item: Policy}
   TupleItems{items: List<&2, Policy>}
@@ -141,6 +172,19 @@ type Task is Data:
   Visit{policy: Policy, value: V.Value}
   FinishArray{count: Nat}
   ConvertedValue{result: Converted()}
+  TryAlternative{schema: S.Schema, branches: List<&2, Branch<Policy>>, original: V.Value}
+  SelectAlternative{schema: S.Schema, remaining: List<&2, Branch<Policy>>, original: V.Value}
+
+def branchSchemas(branches: List<&2, Branch<Policy>>) -> List<&2, S.Schema>:
+  match branches:
+    case Nil{}: Nil{}
+    case Branch{schema, _} <> rest: schema <> branchSchemas(rest)
+
+def scheduleUnion(+branches: List<&2, Branch<Policy>>, +original: V.Value, +rest: List<&2, Task>) -> List<&2, Task>:
+  +schema = {S.Any{branchSchemas(branches)} : S.Schema}
+  Bool.pick(Unit -> List<&2, Task>, S.check(schema, original),
+    _ => Visit{Preserve{}, original} <> rest,
+    _ => TryAlternative{schema, branches, original} <> rest)(Unit{})
 
 def arrayTasks(+policy: Policy, values: List<&2, V.Value>) -> List<&2, Task>:
   match values:
@@ -174,7 +218,8 @@ def finishArray(count: Nat, values: List<&2, V.Value>, items: List<&2, V.Value>)
     case Succ{count} head <> tail: finishArray(count, tail, head <> items)
     case Succ{_} Nil{}: Nil{}
 
-# Every Visit consumes a finite policy/value node; FinishArray consumes its
+# Visits consume finite policy/value nodes; alternatives consume a finite
+# branch list, always retrying the original value. FinishArray consumes its
 # completed children. The explicit work list also handles deeply nested inputs.
 @unsafe
 def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
@@ -183,6 +228,15 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
     case Nil{} _: Fail{InvalidConversionState{}}
     case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
     case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
+    case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convert(literalPrimitive(literal), original))} <> rest, values)
+    case Visit{Union{branches}, original} <> rest values: run(scheduleUnion(branches, original, rest), values)
+    case TryAlternative{_, Nil{}, original} <> rest values: run(rest, original <> values)
+    case TryAlternative{+schema, Branch{_, policy} <> remaining, +original} <> rest values: run(Visit{policy, original} <> SelectAlternative{schema, remaining, original} <> rest, values)
+    case SelectAlternative{+schema, remaining, original} <> +rest +candidate <> +values:
+      Bool.pick(Unit -> Converted(), S.check(schema, candidate),
+        _ => run(rest, candidate <> values),
+        _ => run(TryAlternative{schema, remaining, original} <> rest, values))(Unit{})
+    case SelectAlternative{_, _, _} <> _ Nil{}: Fail{InvalidConversionState{}}
     case Visit{Scalar{primitive}, value} <> rest values: run(ConvertedValue{convert(primitive, value)} <> rest, values)
     case ConvertedValue{Done{converted}} <> rest values: run(rest, converted <> values)
     case ConvertedValue{Fail{error}} <> _ _: Fail{error}
