@@ -2,7 +2,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
-for suite in validated-tool-execution tool-preparation-pipeline tool-execution tool-execution-stream agent-event-stream tool-finalization native-loop native-turn-hooks tool-preparation tool-emission truncated-calls assistant-snapshot; do
+for suite in tool-call-sequential validated-tool-execution tool-preparation-pipeline tool-execution tool-execution-stream agent-event-stream tool-finalization native-loop native-turn-hooks tool-preparation tool-emission truncated-calls assistant-snapshot; do
   sh scripts/build-pure.sh "packages/agent/test/$suite.bend" "build/test-$suite"
   for threads in 1 4; do
     timeout 40 "build/test-$suite" --threads "$threads"
