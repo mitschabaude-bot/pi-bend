@@ -76,3 +76,7 @@ def graph() -> IO(Unit):
 
 def checkType(value: V.Value<U32>, expected: String) -> IO(Unit):
   assertion(String.eq(V.typeOf(U32, value), expected), "runtime typeof differs")
+
+def checkSame(a: V.Value<U32>, b: V.Value<U32>, expected: Bool, label: String) -> IO(Unit):
+  actual = V.sameValue(U32, a, b, x => y => U32.is_eq(x, y))
+  assertion(V.sameBoolean(actual, expected), label)

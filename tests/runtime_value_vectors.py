@@ -23,14 +23,15 @@ case 'symbol':return Symbol.for(String(v[1]));
 case 'callable':if(!functions.has(v[1]))functions.set(v[1],()=>{});return functions.get(v[1]);
 case 'bigint':return (v[1]?-1n:1n)*BigInt(v[2]);}}
 const values=JSON.parse(input).map(build);
-console.log(JSON.stringify({equal:values.map(a=>values.map(b=>a===b)),types:values.map(v=>typeof v)}));'''
+console.log(JSON.stringify({equal:values.map(a=>values.map(b=>a===b)),same:values.map(a=>values.map(b=>Object.is(a,b))),types:values.map(v=>typeof v)}));'''
 expected=json.loads(subprocess.check_output(['node','--input-type=module','-e',oracle],input=json.dumps(values),text=True))
 lines=['import Base','import ../packages/runtime/test/value.bend as T','import ../packages/runtime/src/value.bend as V','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/big-nat.bend as B']
 for i,value in enumerate(values):
     lines += [f'def case{i}() -> IO(Unit):','  do IO<Unit>:',f'    T.checkType({bend(value)}, {json.dumps(expected["types"][i])})']
     for j,other in enumerate(values):
         lines.append(f'    T.check({bend(value)}, {bend(other)}, '+('True{}' if expected['equal'][i][j] else 'False{}')+f', "strict equality {i}/{j}")')
-lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(len(values))]+['    T.graph()',f'    IO.print("PASS {len(values)**2} strict-equality and {len(values)} typeof comparisons")']
+        lines.append(f'    T.checkSame({bend(value)}, {bend(other)}, '+('True{}' if expected['same'][i][j] else 'False{}')+f', "SameValue {i}/{j}")')
+lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(len(values))]+['    T.graph()',f'    IO.print("PASS {len(values)**2} strict-equality, {len(values)**2} SameValue and {len(values)} typeof comparisons")']
 source=BUILD/'runtime-value-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')
 output=BUILD/'test-runtime-values'

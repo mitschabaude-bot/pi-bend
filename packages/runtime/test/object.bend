@@ -36,7 +36,7 @@ def sameOptional(a: Maybe<&2, U32>, b: Maybe<&2, U32>) -> Bool:
 def descriptorEqual(a: Maybe<&2, D()>, b: Maybe<&2, D()>) -> Bool:
   match a b:
     case None{} None{}: True{}
-    case Some{V.DataProperty{x, wx, ex, cx}} Some{V.DataProperty{y, wy, ey, cy}}: Test.equal(x, y) && V.sameBoolean(wx, wy) && V.sameBoolean(ex, ey) && V.sameBoolean(cx, cy)
+    case Some{V.DataProperty{x, wx, ex, cx}} Some{V.DataProperty{y, wy, ey, cy}}: V.sameValue(U32, x, y, a => b => U32.is_eq(a, b)) && V.sameBoolean(wx, wy) && V.sameBoolean(ex, ey) && V.sameBoolean(cx, cy)
     case Some{V.AccessorProperty{gx, sx, ex, cx}} Some{V.AccessorProperty{gy, sy, ey, cy}}: sameOptional(gx, gy) && sameOptional(sx, sy) && V.sameBoolean(ex, ey) && V.sameBoolean(cx, cy)
     case _ _: False{}
 

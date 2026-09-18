@@ -1,5 +1,6 @@
 import Base
 import ./value.bend as V
+import ./descriptor.bend as Descriptor
 import ./ref.bend as Ref
 import ./record.bend as Record
 import ./f64.bend as F
@@ -145,3 +146,40 @@ def deleteProperty(~M: Data, ~same: M -> M -> Bool, value: V.Value<M>, key: Prop
         return Done{success}
     case V.Callable{_}: IO.pure(Result<&2, &2, ObjectError, Bool>, Fail{UnsupportedCallableObject{}})
     case _: IO.pure(Result<&2, &2, ObjectError, Bool>, Fail{NotObject{}})
+
+type DefinitionError is Data:
+  DefinitionTargetError{error: ObjectError}
+  InvalidPropertyDescriptor{}
+  UnsupportedArrayDefinition{}
+
+def putSymbol(~M: Data, ~same: M -> M -> Bool, symbols: List<&2, V.SymbolProperty<M, V.Value<M>>>, +key: M, +descriptor: V.Descriptor<M, V.Value<M>>) -> List<&2, V.SymbolProperty<M, V.Value<M>>>:
+  match symbols:
+    case Nil{}: V.SymbolProperty{key, descriptor} <> Nil{}
+    case V.SymbolProperty{+identity, +old} <> +rest: Bool.pick(List<&2, V.SymbolProperty<M, V.Value<M>>>, same(identity, key), V.SymbolProperty{identity, descriptor} <> rest, V.SymbolProperty{identity, old} <> putSymbol(~M, ~same, rest, key, descriptor))
+
+def putOwn(~M: Data, ~same: M -> M -> Bool, state: V.ObjectStorage(M), key: PropertyKey<M>, descriptor: V.Descriptor<M, V.Value<M>>) -> V.ObjectStorage(M):
+  match state key:
+    case V.ObjectState{properties, symbols, prototype, extensible} StringKey{name}: V.ObjectState{Record.set(V.Descriptor<M, V.Value<M>>, properties, name, descriptor), symbols, prototype, extensible}
+    case V.ObjectState{properties, symbols, prototype, extensible} SymbolKey{identity}: V.ObjectState{properties, putSymbol(~M, ~same, symbols, identity, descriptor), prototype, extensible}
+
+def stateExtensible(-M: Data, state: V.ObjectStorage(M)) -> Bool:
+  match state:
+    case V.ObjectState{_, _, _, value}: value
+
+def applyDefinition(~M: Data, ~same: M -> M -> Bool, state: V.ObjectStorage(M), key: PropertyKey<M>, decision: Descriptor.Decision<M>) -> V.ObjectStorage(M) & Result<&2, &2, DefinitionError, Bool>:
+  match decision:
+    case Descriptor.Invalid{}: (state, Fail{InvalidPropertyDescriptor{}})
+    case Descriptor.Reject{}: (state, Done{False{}})
+    case Descriptor.Define{descriptor}: (putOwn(~M, ~same, state, key, descriptor), Done{True{}})
+
+def defineObjectState(~M: Data, ~same: M -> M -> Bool, +state: V.ObjectStorage(M), +key: PropertyKey<M>, definition: Descriptor.Definition<M>) -> V.ObjectStorage(M) & Result<&2, &2, DefinitionError, Bool>:
+  applyDefinition(~M, ~same, state, key, Descriptor.validate(~M, ~same, stateExtensible(M, state), objectDescriptor(~M, ~same, state, key), definition))
+
+# Ordinary-object [[DefineOwnProperty]]. The input is an already-converted
+# partial descriptor; ToPropertyDescriptor and array exotic rules are separate.
+def defineOwnProperty(~M: Data, ~same: M -> M -> Bool, value: V.Value<M>, key: PropertyKey<M>, definition: Descriptor.Definition<M>) -> IO(Result<&2, &2, DefinitionError, Bool>):
+  match value:
+    case V.ObjectValue{storage}: Ref.modify(V.ObjectStorage(M), Result<&2, &2, DefinitionError, Bool>, storage, state => defineObjectState(~M, ~same, state, key, definition))
+    case V.ArrayValue{_}: IO.pure(Result<&2, &2, DefinitionError, Bool>, Fail{UnsupportedArrayDefinition{}})
+    case V.Callable{_}: IO.pure(Result<&2, &2, DefinitionError, Bool>, Fail{DefinitionTargetError{UnsupportedCallableObject{}}})
+    case _: IO.pure(Result<&2, &2, DefinitionError, Bool>, Fail{DefinitionTargetError{NotObject{}}})

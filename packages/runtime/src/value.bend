@@ -2,6 +2,7 @@ import Base
 import ./ref.bend as Ref
 import ./record.bend as Record
 import ./f64.bend as F
+import ./u64.bend as W
 import ./big-nat.bend as B
 import ./utf16.bend as U
 
@@ -86,3 +87,10 @@ def typeOf(-M: Data, value: Value<M>) -> String:
     case BigInteger{_, _}: "bigint"
     case ObjectValue{_}: "object"
     case ArrayValue{_}: "object"
+
+# SameValue is used by non-configurable property validation: NaN equals NaN,
+# while positive and negative zero remain different.
+def sameValue(-M: Data, a: Value<M>, b: Value<M>, sameMetadata: M -> M -> Bool) -> Bool:
+  match a b:
+    case Number{+x} Number{+y}: (F.isNaN(x) && F.isNaN(y)) || W.equal(F.toBits(x), F.toBits(y))
+    case a b: strictEqual(M, a, b, sameMetadata)
