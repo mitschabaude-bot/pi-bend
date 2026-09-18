@@ -96,6 +96,8 @@ def errorCase(+value: V.Value<U32>, +callable: Bool) -> IO(Unit):
     checkFailure(List<&2, O.PropertyKey<U32>>, keys, callable)
     descriptor : Result<&2, &2, O.ObjectError, Maybe<&2, D()>> <- O.getOwnPropertyDescriptor(~U32, ~same, value, O.StringKey{"x"})
     checkFailure(Maybe<&2, D()>, descriptor, callable)
+    deleted : Result<&2, &2, O.ObjectError, Bool> <- O.deleteProperty(~U32, ~same, value, O.StringKey{"x"})
+    checkFailure(Bool, deleted, callable)
 
 def errors() -> IO(Unit):
   do IO<Unit>:

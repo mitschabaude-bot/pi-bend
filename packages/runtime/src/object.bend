@@ -91,3 +91,57 @@ def getOwnPropertyDescriptor(~M: Data, ~same: M -> M -> Bool, value: V.Value<M>,
         return Done{arrayDescriptor(~M, ~same, state, key)}
     case V.Callable{_}: IO.pure(Result<&2, &2, ObjectError, Maybe<&2, V.Descriptor<M, V.Value<M>>>>, Fail{UnsupportedCallableObject{}})
     case _: IO.pure(Result<&2, &2, ObjectError, Maybe<&2, V.Descriptor<M, V.Value<M>>>>, Fail{NotObject{}})
+
+def configurable(-M: Data, descriptor: Maybe<&2, V.Descriptor<M, V.Value<M>>>) -> Bool:
+  match descriptor:
+    case None{}: True{}
+    case Some{V.DataProperty{_, _, _, allowed}}: allowed
+    case Some{V.AccessorProperty{_, _, _, allowed}}: allowed
+
+def removeSymbol(~M: Data, ~same: M -> M -> Bool, symbols: List<&2, V.SymbolProperty<M, V.Value<M>>>, +key: M) -> List<&2, V.SymbolProperty<M, V.Value<M>>>:
+  match symbols:
+    case Nil{}: Nil{}
+    case V.SymbolProperty{+identity, +descriptor} <> +rest: Bool.pick(List<&2, V.SymbolProperty<M, V.Value<M>>>, same(identity, key), rest, V.SymbolProperty{identity, descriptor} <> removeSymbol(~M, ~same, rest, key))
+
+def removeOwn(~M: Data, ~same: M -> M -> Bool, state: V.ObjectStorage(M), key: PropertyKey<M>) -> V.ObjectStorage(M):
+  match state key:
+    case V.ObjectState{properties, symbols, prototype, extensible} StringKey{name}: V.ObjectState{Record.remove(V.Descriptor<M, V.Value<M>>, properties, name), symbols, prototype, extensible}
+    case V.ObjectState{properties, symbols, prototype, extensible} SymbolKey{identity}: V.ObjectState{properties, removeSymbol(~M, ~same, symbols, identity), prototype, extensible}
+
+def deleteAllowed(~M: Data, ~same: M -> M -> Bool, allowed: Bool, state: V.ObjectStorage(M), key: PropertyKey<M>) -> V.ObjectStorage(M) & Bool:
+  match allowed:
+    case False{}: (state, False{})
+    case True{}: (removeOwn(~M, ~same, state, key), True{})
+
+def deleteObjectState(~M: Data, ~same: M -> M -> Bool, +state: V.ObjectStorage(M), +key: PropertyKey<M>) -> V.ObjectStorage(M) & Bool:
+  deleteAllowed(~M, ~same, configurable(M, objectDescriptor(~M, ~same, state, key)), state, key)
+
+def arrayDeleted(-M: Data, length: U32, writable: Bool, result: V.ObjectStorage(M) & Bool) -> V.ArrayStorage(M) & Bool:
+  match result:
+    case Tuple{object, success}: (V.ArrayState{object, length, writable}, success)
+
+def deleteArrayKey(~M: Data, ~same: M -> M -> Bool, isLength: Bool, state: V.ArrayStorage(M), key: PropertyKey<M>) -> V.ArrayStorage(M) & Bool:
+  match isLength state:
+    case True{} state: (state, False{})
+    case False{} V.ArrayState{object, length, writable}: arrayDeleted(M, length, writable, deleteObjectState(~M, ~same, object, key))
+
+def deleteArrayState(~M: Data, ~same: M -> M -> Bool, state: V.ArrayStorage(M), key: PropertyKey<M>) -> V.ArrayStorage(M) & Bool:
+  match key:
+    case StringKey{+name}: deleteArrayKey(~M, ~same, String.eq(name, "length"), state, StringKey{name})
+    case SymbolKey{identity}: deleteArrayKey(~M, ~same, False{}, state, SymbolKey{identity})
+
+# Reflect-style deletion returns false for a non-configurable own property.
+# No prototype access or getter execution occurs. Descriptor check and mutation
+# share one Ref transaction, so aliases cannot observe an intermediate state.
+def deleteProperty(~M: Data, ~same: M -> M -> Bool, value: V.Value<M>, key: PropertyKey<M>) -> IO(Result<&2, &2, ObjectError, Bool>):
+  match value:
+    case V.ObjectValue{storage}:
+      do IO<Result<&2, &2, ObjectError, Bool>>:
+        success : Bool <- Ref.modify(V.ObjectStorage(M), Bool, storage, state => deleteObjectState(~M, ~same, state, key))
+        return Done{success}
+    case V.ArrayValue{storage}:
+      do IO<Result<&2, &2, ObjectError, Bool>>:
+        success : Bool <- Ref.modify(V.ArrayStorage(M), Bool, storage, state => deleteArrayState(~M, ~same, state, key))
+        return Done{success}
+    case V.Callable{_}: IO.pure(Result<&2, &2, ObjectError, Bool>, Fail{UnsupportedCallableObject{}})
+    case _: IO.pure(Result<&2, &2, ObjectError, Bool>, Fail{NotObject{}})
