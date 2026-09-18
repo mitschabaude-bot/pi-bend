@@ -1,4 +1,5 @@
 import Base
+import ../packages/agent/src/turn-completion.bend as TurnCompletion
 import ../packages/agent/src/tool-execution.bend as ToolExecution
 import ../packages/agent/src/tool-batch-parallel.bend as ParallelBatch
 import ../packages/runtime/src/concurrent-all.bend as ConcurrentAll
