@@ -583,9 +583,12 @@
     },
     {
       "source": "packages/ai/test/constrained-sampling.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1c1ba81ee0a026e175bd654b443bfae3093d2003942cb27c9f29a5e6edc5aadf"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/constrained-sampling.bend"
+      ],
+      "sha256": "1c1ba81ee0a026e175bd654b443bfae3093d2003942cb27c9f29a5e6edc5aadf",
+      "notes": "One of six original named cases ported: derives strict provider schemas without changing tool definitions. Uses native schema builders and verifies original required/additional-property policy plus the complete strict schema. Supplemental actual-source tests cover strict conversion, parameter selection and prefer/require policy, including exact errors. The other five named cases still require Responses tool/message conversion or grammar streaming and remain pending."
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",
