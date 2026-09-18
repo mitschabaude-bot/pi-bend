@@ -1,4 +1,5 @@
 import Base
+import ./schema-string.bend as Text
 import ./schema.bend as S
 import ./schema-value.bend as V
 import ./record.bend as R
@@ -18,6 +19,7 @@ type Reason is Data:
   AdditionalFields{keys: List<&2, String>}
   NumericMinimum{limit: F.F64, inclusive: Bool}
   NumericMaximum{limit: F.F64, inclusive: Bool}
+  StringLength{actual: B.BigNat, bounds: S.CountBounds}
   ItemCount{actual: B.BigNat, bounds: S.CountBounds}
   PropertyCount{actual: B.BigNat, bounds: S.CountBounds}
   ContainsCount{actual: B.BigNat, bounds: S.CountBounds}
@@ -144,6 +146,9 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
     case S.Maximum{+limit, +inclusive} V.Number{number}: emitUnless(S.upperBound(F.compare(number, limit), inclusive), path, NumericMaximum{limit, inclusive})
     case S.UniqueItems{} V.ArrayValue{values}: emitUnless(S.unique(values), path, DuplicateItems{})
     case S.UniqueItems{} _: Nil{}
+    case S.StringLength{+bounds} V.Text{text}:
+      +actual = Text.length(text)
+      emitUnless(S.inBounds(actual, bounds), path, StringLength{actual, bounds})
     case S.ItemCount{+bounds} V.ArrayValue{values}:
       +actual = S.cardinality(V.Value, values)
       emitUnless(S.inBounds(actual, bounds), path, ItemCount{actual, bounds})
@@ -159,6 +164,7 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
     case S.AdditionalItems{_, _} _: Nil{}
     case S.Minimum{_, _} _: Nil{}
     case S.Maximum{_, _} _: Nil{}
+    case S.StringLength{_} _: Nil{}
     case S.ItemCount{_} _: Nil{}
     case S.PropertyCount{_} _: Nil{}
     case S.Contains{_, _} _: Nil{}

@@ -117,6 +117,11 @@ def countIssues(+array: Bool, +actual: B.BigNat, bounds: Schema.CountBounds, +pa
       +high = maximumCount(actual, maximum, path, suffix)
       Bool.pick(Maybe<&2, List<&2, Issue>>, array, combine(high, low), combine(low, high))
 
+def lengthIssues(+actual: B.BigNat, bounds: Schema.CountBounds, +path: String) -> Maybe<&2, List<&2, Issue>>:
+  match bounds:
+    case Schema.CountBounds{+minimum, maximum}:
+      combine(maximumCount(actual, maximum, path, " characters"), countBound(Cmp.is_ge(B.compare(actual, minimum)), path, "must not have fewer than ", minimum, " characters"))
+
 def nativeIssue(path: String, reason: Native.Reason) -> Maybe<&2, List<&2, Issue>>:
   match reason:
     case Native.DuplicateItems{}: simple(path, "must not have duplicate items")
@@ -129,6 +134,7 @@ def nativeIssue(path: String, reason: Native.Reason) -> Maybe<&2, List<&2, Issue
     case Native.AdditionalFields{_}: simple(path, "must not have additional properties")
     case Native.NumericMinimum{limit, inclusive}: numericText(path, Bool.pick(String, inclusive, "must be >= ", "must be > "), "", Decimal.toDecimal(limit))
     case Native.NumericMaximum{limit, inclusive}: numericText(path, Bool.pick(String, inclusive, "must be <= ", "must be < "), "", Decimal.toDecimal(limit))
+    case Native.StringLength{actual, bounds}: lengthIssues(actual, bounds, path)
     case Native.ItemCount{actual, bounds}: countIssues(True{}, actual, bounds, path)
     case Native.PropertyCount{actual, bounds}: countIssues(False{}, actual, bounds, path)
     # This is the pinned dependency's literal message for each contains keyword,

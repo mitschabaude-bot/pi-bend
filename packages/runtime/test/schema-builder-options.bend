@@ -51,11 +51,21 @@ def outerUnion(result: D.Configured()) -> IO(Unit):
         C.converted(D.convert(declaration, V.ArrayValue{V.Number{F.fromU32(1)} <> Nil{}}), V.ArrayValue{V.Number{F.fromU32(1)} <> Nil{}}, "original branch match is preserved even when outer constraint fails")
         T.assertion(Bool.not(D.check(declaration, V.ArrayValue{V.Number{F.fromU32(1)} <> Nil{}})), "final validation still enforces outer constraint")
 
+def stringBounds(result: D.Configured()) -> IO(Unit):
+  match result:
+    case Fail{_}: T.assertion(False{}, "configure string bounds failed")
+    case Done{+declaration}:
+      do IO<Unit>:
+        T.assertion(D.check(declaration, V.Text{"e\u{301}"}), "schema combining sequence counts as one cluster")
+        T.assertion(Bool.not(D.check(declaration, V.Text{"ab"})), "configured string rejects excess clusters")
+        C.converted(D.convert(declaration, V.Number{F.fromU32(1)}), V.Text{"1"}, "string bounds preserve builder scalar conversion")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     T.assertion(unsupported(D.withOptions(D.number(), R.Record{R.Property{"type", V.Text{"string"}} <> Nil{}}), "type"), "structural overrides are explicit unsupported options")
     T.assertion(unsupported(D.withOptions(D.object(R.new(D.Field)), R.Record{R.Property{"additionalProperties", D.schema(D.string())} <> Nil{}}), "additionalProperties"), "schema-valued additional conversion remains pending")
     T.assertion(malformed(D.withOptions(D.number(), R.Record{R.Property{"minimum", V.Text{"bad"}} <> Nil{}})), "malformed option preserves schema error path")
+    stringBounds(D.withOptions(D.string(), R.Record{R.Property{"minLength", V.Number{F.fromU32(1)}} <> R.Property{"maxLength", V.Number{F.fromU32(1)}} <> Nil{}}))
     +original : D.Declaration = D.number()
     constrained(D.withOptions(original, R.Record{R.Property{"minimum", V.Number{F.fromU32(1)}} <> Nil{}}), original)
     nestedUnion(D.withOptions(D.array(D.number()), R.Record{R.Property{"minItems", V.Number{F.fromU32(2)}} <> Nil{}}))

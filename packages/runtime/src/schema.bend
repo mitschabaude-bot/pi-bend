@@ -1,5 +1,6 @@
 import Base
 import ./schema-value.bend as V
+import ./schema-string.bend as Text
 import ./record.bend as R
 import ./f64.bend as F
 import ./big-nat.bend as B
@@ -32,6 +33,7 @@ type Schema is Data:
   Minimum{limit: F.F64, inclusive: Bool}
   Maximum{limit: F.F64, inclusive: Bool}
   UniqueItems{}
+  StringLength{bounds: CountBounds}
   ItemCount{bounds: CountBounds}
   PropertyCount{bounds: CountBounds}
   Contains{schema: Schema, bounds: CountBounds}
@@ -172,6 +174,8 @@ def evaluate(test: Test) -> Bool:
     case Check{Maximum{_, _}, _}: True{}
     case Check{UniqueItems{}, V.ArrayValue{values}}: unique(values)
     case Check{UniqueItems{}, _}: True{}
+    case Check{StringLength{bounds}, V.Text{text}}: inBounds(Text.length(text), bounds)
+    case Check{StringLength{_}, _}: True{}
     case Check{ItemCount{bounds}, V.ArrayValue{values}}: inBounds(cardinality(V.Value, values), bounds)
     case Check{ItemCount{_}, _}: True{}
     case Check{PropertyCount{bounds}, V.ObjectValue{values}}: inBounds(cardinality(R.Property<V.Value>, R.entries(V.Value, values)), bounds)

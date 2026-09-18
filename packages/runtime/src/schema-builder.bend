@@ -169,6 +169,8 @@ def supportedOption(kind: Loader.KeywordKind, value: V.Value) -> Bool:
     case Loader.MaximumKeyword{}: True{}
     case Loader.ExclusiveMinimumKeyword{}: True{}
     case Loader.ExclusiveMaximumKeyword{}: True{}
+    case Loader.MinLengthKeyword{}: True{}
+    case Loader.MaxLengthKeyword{}: True{}
     case Loader.MinItemsKeyword{}: True{}
     case Loader.MaxItemsKeyword{}: True{}
     case Loader.MinPropertiesKeyword{}: True{}
