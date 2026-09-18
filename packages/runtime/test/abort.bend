@@ -2,6 +2,8 @@ import Base
 import ../src/abort.bend as A
 import ../src/deferred.bend as D
 import ../src/ref.bend as R
+import ../src/event-target.bend as T
+import ../src/clock.bend as Clock
 
 def assertion(ok: Bool, label: String) -> IO(Unit):
   Bool.pick(IO(Unit), ok, IO.pure(Unit, Unit{}), IO.die(Unit, 1, label))
@@ -39,12 +41,12 @@ def sharedValue(value: A.AbortReason<R.Ref<String>>) -> IO(String):
     case A.Supplied{reference}: R.read(String, reference)
     case _: IO.die(String, 1, "supplied object reason was replaced")
 
-def abortMany(count: Nat, +controller: A.AbortController<U32>) -> IO(List<&2, Chan(Unit)>):
+def abortMany(count: Nat, +controller: A.AbortController<U32, String>) -> IO(List<&2, Chan(Unit)>):
   match count:
     case 0n: IO.pure(List<&2, Chan(Unit)>, Nil{})
     case 1n+ +n:
       do IO<List<&2, Chan(Unit)>>:
-        task : Chan(Unit) <- IO.fork(Unit, A.abort(U32, controller, Some{U32.from_nat(n)}))
+        task : Chan(Unit) <- IO.fork(Unit, A.abort(U32, String, controller, Some{U32.from_nat(n)}))
         tail : List<&2, Chan(Unit)> <- abortMany(n, controller)
         return task <> tail
 
@@ -100,94 +102,97 @@ def emptyObservers(state: D.State<A.AbortReason<Unit>>) -> Bool:
     case D.Pending{_, Nil{}}: True{}
     case _: False{}
 
-def checkCleanup(signal: A.AbortSignal<Unit>) -> IO(Unit):
+def checkCleanup(signal: A.AbortSignal<Unit, String>) -> IO(Unit):
   match signal:
-    case A.AbortSignal{D.Deferred{state}}:
+    case A.AbortSignal{D.Deferred{state}, _, _, _}:
       do IO<Unit>:
         current : D.State<A.AbortReason<Unit>> <- R.read(D.State<A.AbortReason<Unit>>, state)
         assertion(emptyObservers(current), "never-aborted signal must not retain cancelled observers")
 
-def repeatedCleanup(count: Nat, +signal: A.AbortSignal<Unit>) -> IO(Unit):
+def repeatedCleanup(count: Nat, +signal: A.AbortSignal<Unit, String>) -> IO(Unit):
   match count:
     case 0n: checkCleanup(signal)
     case 1n+ n:
       do IO<Unit>:
-        observation : D.Observation<A.AbortReason<Unit>> <- A.observe(Unit, signal)
+        observation : D.Observation<A.AbortReason<Unit>> <- A.observe(Unit, String, signal)
         cancelObservation(observation)
         repeatedCleanup(n, signal)
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +controller : A.AbortController<U32> <- A.new(U32)
-    +signal : A.AbortSignal<U32> = A.signal(U32, controller)
-    before : Bool <- A.aborted(U32, signal)
+    +clock : Clock.Clock <- Clock.new()
+    +reports : T.ReportQueue<String> <- T.newReportQueue(String)
+    +controller : A.AbortController<U32, String> <- A.new(U32, String, clock, reports)
+    +signal : A.AbortSignal<U32, String> = A.signal(U32, String, controller)
+    before : Bool <- A.aborted(U32, String, signal)
     assertion(Bool.not(before), "new controller must not be aborted")
-    beforeCheck : Result<&2, &2, A.AbortReason<U32>, Unit> <- A.throwIfAborted(U32, signal)
+    beforeCheck : Result<&2, &2, A.AbortReason<U32>, Unit> <- A.throwIfAborted(U32, String, signal)
     assertion(unthrown(U32, beforeCheck), "unaborted preflight must succeed")
-    first : D.Observation<A.AbortReason<U32>> <- A.observe(U32, signal)
-    second : D.Observation<A.AbortReason<U32>> <- A.observe(U32, signal)
-    A.abort(U32, controller, Some{0})
-    A.abort(U32, controller, Some{9})
-    A.abort(U32, controller, None{})
-    after : Bool <- A.aborted(U32, signal)
+    first : D.Observation<A.AbortReason<U32>> <- A.observe(U32, String, signal)
+    second : D.Observation<A.AbortReason<U32>> <- A.observe(U32, String, signal)
+    A.abort(U32, String, controller, Some{0})
+    A.abort(U32, String, controller, Some{9})
+    A.abort(U32, String, controller, None{})
+    after : Bool <- A.aborted(U32, String, signal)
     assertion(after, "zero is an abort reason")
-    checked : Result<&2, &2, A.AbortReason<U32>, Unit> <- A.throwIfAborted(U32, signal)
+    checked : Result<&2, &2, A.AbortReason<U32>, Unit> <- A.throwIfAborted(U32, String, signal)
     assertion(zeroResult(checked), "preflight must return the first reason")
     a : A.AbortReason<U32> <- waitReason(U32, first)
     b : A.AbortReason<U32> <- waitReason(U32, second)
-    late : D.Observation<A.AbortReason<U32>> <- A.observe(U32, signal)
+    late : D.Observation<A.AbortReason<U32>> <- A.observe(U32, String, signal)
     c : A.AbortReason<U32> <- waitReason(U32, late)
     assertion(zero(a) && zero(b) && zero(c), "early/late observations must retain the first reason")
-    A.dispose(U32, controller)
-    +defaults : A.AbortController<Unit> <- A.new(Unit)
-    A.abort(Unit, defaults, None{})
-    info : Maybe<&2, A.AbortReason<Unit>> <- A.reason(Unit, A.signal(Unit, defaults))
+    A.dispose(U32, String, controller)
+    +defaults : A.AbortController<Unit, String> <- A.new(Unit, String, clock, reports)
+    A.abort(Unit, String, defaults, None{})
+    info : Maybe<&2, A.AbortReason<Unit>> <- A.reason(Unit, String, A.signal(Unit, String, defaults))
     +error : R.Ref<A.AbortError> <- errorHandle(info)
     details : A.AbortError <- R.read(A.AbortError, error)
     assertion(checkDefault(details), "default error metadata differs from Node")
     R.write(A.AbortError, error, A.AbortError{"AbortError", "retained", 20})
-    A.abort(Unit, defaults, None{})
-    info : Maybe<&2, A.AbortReason<Unit>> <- A.reason(Unit, A.signal(Unit, defaults))
+    A.abort(Unit, String, defaults, None{})
+    info : Maybe<&2, A.AbortReason<Unit>> <- A.reason(Unit, String, A.signal(Unit, String, defaults))
     retained : R.Ref<A.AbortError> <- errorHandle(info)
     details : A.AbortError <- R.read(A.AbortError, retained)
     assertion(changedDefault(details), "repeated abort replaced the default error identity")
-    A.dispose(Unit, defaults)
+    A.dispose(Unit, String, defaults)
     +object : R.Ref<String> <- R.new(String, "before")
-    +objects : A.AbortController<R.Ref<String>> <- A.new(R.Ref<String>)
-    ticket : D.Observation<A.AbortReason<R.Ref<String>>> <- A.observe(R.Ref<String>, A.signal(R.Ref<String>, objects))
-    A.abort(R.Ref<String>, objects, Some{object})
+    +objects : A.AbortController<R.Ref<String>, String> <- A.new(R.Ref<String>, String, clock, reports)
+    ticket : D.Observation<A.AbortReason<R.Ref<String>>> <- A.observe(R.Ref<String>, String, A.signal(R.Ref<String>, String, objects))
+    A.abort(R.Ref<String>, String, objects, Some{object})
     R.write(String, object, "after")
     value : A.AbortReason<R.Ref<String>> <- waitReason(R.Ref<String>, ticket)
     text : String <- sharedValue(value)
     assertion(String.eq(text, "after"), "supplied reason identity was lost")
-    A.dispose(R.Ref<String>, objects)
+    A.dispose(R.Ref<String>, String, objects)
     text : String <- R.read(String, object)
     assertion(String.eq(text, "after"), "disposing the signal must not dispose the supplied reason")
     previous : String <- R.dispose(String, object)
-    +competing : A.AbortController<U32> <- A.new(U32)
+    +competing : A.AbortController<U32, String> <- A.new(U32, String, clock, reports)
     tasks : List<&2, Chan(Unit)> <- abortMany(100n, competing)
     joinAll(tasks)
-    +won : Maybe<&2, A.AbortReason<U32>> <- A.reason(U32, A.signal(U32, competing))
-    A.abort(U32, competing, Some{1000})
-    still : Maybe<&2, A.AbortReason<U32>> <- A.reason(U32, A.signal(U32, competing))
+    +won : Maybe<&2, A.AbortReason<U32>> <- A.reason(U32, String, A.signal(U32, String, competing))
+    A.abort(U32, String, competing, Some{1000})
+    still : Maybe<&2, A.AbortReason<U32>> <- A.reason(U32, String, A.signal(U32, String, competing))
     assertion(sameReason(won, still), "concurrent abort must settle exactly once")
-    A.dispose(U32, competing)
-    +falseController : A.AbortController<Bool> <- A.new(Bool)
-    A.abort(Bool, falseController, Some{False{}})
-    falseCheck : Result<&2, &2, A.AbortReason<Bool>, Unit> <- A.throwIfAborted(Bool, A.signal(Bool, falseController))
+    A.dispose(U32, String, competing)
+    +falseController : A.AbortController<Bool, String> <- A.new(Bool, String, clock, reports)
+    A.abort(Bool, String, falseController, Some{False{}})
+    falseCheck : Result<&2, &2, A.AbortReason<Bool>, Unit> <- A.throwIfAborted(Bool, String, A.signal(Bool, String, falseController))
     assertion(falseResult(falseCheck), "false must remain a supplied reason")
-    A.dispose(Bool, falseController)
-    +nullController : A.AbortController<NullReason> <- A.new(NullReason)
-    A.abort(NullReason, nullController, Some{NullReason{}})
-    nullCheck : Result<&2, &2, A.AbortReason<NullReason>, Unit> <- A.throwIfAborted(NullReason, A.signal(NullReason, nullController))
+    A.dispose(Bool, String, falseController)
+    +nullController : A.AbortController<NullReason, String> <- A.new(NullReason, String, clock, reports)
+    A.abort(NullReason, String, nullController, Some{NullReason{}})
+    nullCheck : Result<&2, &2, A.AbortReason<NullReason>, Unit> <- A.throwIfAborted(NullReason, String, A.signal(NullReason, String, nullController))
     assertion(nullResult(nullCheck), "explicit null must differ from omitted reason")
-    A.dispose(NullReason, nullController)
-    +unused : A.AbortController<Unit> <- A.new(Unit)
-    repeatedCleanup(U32.to_nat(1000), A.signal(Unit, unused))
-    stillPending : Bool <- A.aborted(Unit, A.signal(Unit, unused))
+    A.dispose(NullReason, String, nullController)
+    +unused : A.AbortController<Unit, String> <- A.new(Unit, String, clock, reports)
+    repeatedCleanup(U32.to_nat(1000), A.signal(Unit, String, unused))
+    stillPending : Bool <- A.aborted(Unit, String, A.signal(Unit, String, unused))
     assertion(Bool.not(stillPending), "cancelling observations must not abort their signal")
-    remaining : D.Observation<A.AbortReason<Unit>> <- A.observe(Unit, A.signal(Unit, unused))
-    A.abort(Unit, unused, None{})
+    remaining : D.Observation<A.AbortReason<Unit>> <- A.observe(Unit, String, A.signal(Unit, String, unused))
+    A.abort(Unit, String, unused, None{})
     delivered : A.AbortReason<Unit> <- waitReason(Unit, remaining)
-    A.dispose(Unit, unused)
+    A.dispose(Unit, String, unused)
+    T.disposeReportQueue(String, reports)
     IO.print("PASS abort state, preflight, reason identity, observation and concurrent first settlement")
