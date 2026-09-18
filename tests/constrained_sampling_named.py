@@ -6,7 +6,7 @@ source=(ROOT.parent/'pi-mono/packages/ai/test/constrained-sampling.test.ts').rea
 native=ROOT/'packages/ai/test/constrained-sampling.bend'
 names=re.findall(r'\bit\("([^"\n]+)"',source)
 ported=re.findall(r'IO.print\("PASS ([^"\n]+)"\)',native.read_text())
-assert ported==['derives strict provider schemas without changing tool definitions']
+assert ported==['derives strict provider schemas without changing tool definitions', 'keeps grammar input JSON deltas append-only']
 assert set(ported)<=set(names) and len(names)==6
 output=ROOT/'build/test-constrained-sampling'
 subprocess.run(['sh','scripts/build-pure.sh',str(native),str(output)],cwd=ROOT,check=True)

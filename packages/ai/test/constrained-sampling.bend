@@ -5,6 +5,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/schema.bend as Assert
 import ./api/strict-json-schema.bend as Check
+import ./api/grammar-input.bend as Grammar
 
 def parameters() -> V.Value:
   D.schema(D.object(R.Record{
@@ -45,4 +46,28 @@ def derivesStrictSchemas() -> IO(Unit):
     Assert.assertion(unchanged(schema), "original tool declaration retains its required fields and additionalProperties policy")
     IO.print("PASS derives strict provider schemas without changing tool definitions")
 
-def main() -> IO(Unit): derivesStrictSchemas()
+def completedGrammar(first: String, result: Result<&2, &2, C.Error, C.GrammarToolInputJsonUpdate>) -> IO(Unit):
+  match result:
+    case Done{C.GrammarToolInputJsonUpdate{+buffer, Some{second}}}:
+      do IO<Unit>:
+        Assert.assertion(String.eq(first ++ second, "{\"payload\":\"a\\\"\\nb\"}"), "grammar deltas form the expected JSON object")
+        same : C.GrammarToolInputJsonBuffer <- Grammar.checked(C.appendGrammarToolInputJsonDelta(buffer, "payload", "a\"\nb", True{}), buffer, Done{None{}}, buffer, "repeated close emits no delta")
+        unchanged : C.GrammarToolInputJsonBuffer <- Grammar.checked(C.appendGrammarToolInputJsonDelta(buffer, "payload", "changed", True{}), buffer, Fail{"grammar tool input for property \"payload\" changed after it was closed"}, buffer, "closed grammar input rejects changes")
+        IO.print("PASS keeps grammar input JSON deltas append-only")
+    case _: IO.die(Unit, 1, "closing grammar delta failed")
+
+def startedGrammar(result: Result<&2, &2, C.Error, C.GrammarToolInputJsonUpdate>) -> IO(Unit):
+  match result:
+    case Done{C.GrammarToolInputJsonUpdate{buffer, Some{first}}}: completedGrammar(first, C.appendGrammarToolInputJsonDelta(buffer, "payload", "a\"\nb", True{}))
+    case _: IO.die(Unit, 1, "initial grammar delta failed")
+
+def grammarDeltas() -> IO(Unit):
+  +original = {C.GrammarToolInputJsonBuffer{"", False{}, False{}} : C.GrammarToolInputJsonBuffer}
+  do IO<Unit>:
+    startedGrammar(C.appendGrammarToolInputJsonDelta(original, "payload", "a\"", False{}))
+    Assert.assertion(Grammar.sameBuffer(original, C.GrammarToolInputJsonBuffer{"", False{}, False{}}), "retained grammar buffer remains unchanged")
+
+def main() -> IO(Unit):
+  do IO<Unit>:
+    derivesStrictSchemas()
+    grammarDeltas()
