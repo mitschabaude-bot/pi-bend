@@ -1,4 +1,6 @@
 import Base
+import ../packages/agent/src/turn-preparation.bend as TurnPreparation
+import ../packages/agent/src/tool-changes.bend as ToolChanges
 import ../packages/agent/src/turn-completion.bend as TurnCompletion
 import ../packages/agent/src/tool-execution.bend as ToolExecution
 import ../packages/agent/src/tool-batch-parallel.bend as ParallelBatch
