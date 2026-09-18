@@ -25,6 +25,8 @@ import ../packages/ai/src/utils/validation.bend as Validation
 import ../packages/ai/src/utils/validation-errors.bend as ValidationErrors
 import ../packages/agent/src/types.bend as Agent
 import ../packages/agent/src/agent-state.bend as AgentState
+import ../packages/agent/src/agent-queues.bend as AgentQueues
+import ../packages/agent/src/agent-continuation.bend as AgentContinuation
 import ../packages/agent/src/agent-loop.bend as Loop
 import ../packages/agent/src/tool-update-scope.bend as Updates
 
