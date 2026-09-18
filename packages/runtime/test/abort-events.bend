@@ -141,7 +141,7 @@ def run(+mode: U32, once: Bool, passive: Bool, +expected: String, errors: List<&
   do IO<Unit>:
     +clock : Clock.Clock <- Clock.new()
     +queue : T.ReportQueue<String> <- T.newReportQueue(String)
-    +controller : A.AbortController<U32, String> <- A.new(U32, String, clock, queue)
+    +controller : A.AbortController<U32, String> <- A.new(~U32, ~String, clock, queue)
     +target : Signal() = A.signal(U32, String, controller)
     +log : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
     +retained : R.Ref<Maybe<&2, EventValue()>> <- R.new(Maybe<&2, EventValue()>, None{})
@@ -212,8 +212,8 @@ def concurrent() -> IO(Unit):
   do IO<Unit>:
     +clock : Clock.Clock <- Clock.new()
     +queue : T.ReportQueue<String> <- T.newReportQueue(String)
-    +controller : A.AbortController<U32, String> <- A.new(U32, String, clock, queue)
-    +other : A.AbortController<U32, String> <- A.new(U32, String, clock, queue)
+    +controller : A.AbortController<U32, String> <- A.new(~U32, ~String, clock, queue)
+    +other : A.AbortController<U32, String> <- A.new(~U32, ~String, clock, queue)
     +target : Signal() = A.signal(U32, String, controller)
     assertion(Bool.not(A.same(U32, String, target, A.signal(U32, String, other))), "distinct signals must have distinct identities")
     +counter : R.Ref<U32> <- R.new(U32, 0)

@@ -104,7 +104,7 @@ def emptyObservers(state: D.State<A.AbortReason<Unit>>) -> Bool:
 
 def checkCleanup(signal: A.AbortSignal<Unit, String>) -> IO(Unit):
   match signal:
-    case A.AbortSignal{D.Deferred{state}, _, _, _}:
+    case A.AbortSignal{D.Deferred{state}, _, _, _, _}:
       do IO<Unit>:
         current : D.State<A.AbortReason<Unit>> <- R.read(D.State<A.AbortReason<Unit>>, state)
         assertion(emptyObservers(current), "never-aborted signal must not retain cancelled observers")
@@ -122,7 +122,7 @@ def main() -> IO(Unit):
   do IO<Unit>:
     +clock : Clock.Clock <- Clock.new()
     +reports : T.ReportQueue<String> <- T.newReportQueue(String)
-    +controller : A.AbortController<U32, String> <- A.new(U32, String, clock, reports)
+    +controller : A.AbortController<U32, String> <- A.new(~U32, ~String, clock, reports)
     +signal : A.AbortSignal<U32, String> = A.signal(U32, String, controller)
     before : Bool <- A.aborted(U32, String, signal)
     assertion(Bool.not(before), "new controller must not be aborted")
@@ -143,7 +143,7 @@ def main() -> IO(Unit):
     c : A.AbortReason<U32> <- waitReason(U32, late)
     assertion(zero(a) && zero(b) && zero(c), "early/late observations must retain the first reason")
     A.dispose(U32, String, controller)
-    +defaults : A.AbortController<Unit, String> <- A.new(Unit, String, clock, reports)
+    +defaults : A.AbortController<Unit, String> <- A.new(~Unit, ~String, clock, reports)
     A.abort(Unit, String, defaults, None{})
     info : Maybe<&2, A.AbortReason<Unit>> <- A.reason(Unit, String, A.signal(Unit, String, defaults))
     +error : R.Ref<A.AbortError> <- errorHandle(info)
@@ -157,7 +157,7 @@ def main() -> IO(Unit):
     assertion(changedDefault(details), "repeated abort replaced the default error identity")
     A.dispose(Unit, String, defaults)
     +object : R.Ref<String> <- R.new(String, "before")
-    +objects : A.AbortController<R.Ref<String>, String> <- A.new(R.Ref<String>, String, clock, reports)
+    +objects : A.AbortController<R.Ref<String>, String> <- A.new(~R.Ref<String>, ~String, clock, reports)
     ticket : D.Observation<A.AbortReason<R.Ref<String>>> <- A.observe(R.Ref<String>, String, A.signal(R.Ref<String>, String, objects))
     A.abort(R.Ref<String>, String, objects, Some{object})
     R.write(String, object, "after")
@@ -168,7 +168,7 @@ def main() -> IO(Unit):
     text : String <- R.read(String, object)
     assertion(String.eq(text, "after"), "disposing the signal must not dispose the supplied reason")
     previous : String <- R.dispose(String, object)
-    +competing : A.AbortController<U32, String> <- A.new(U32, String, clock, reports)
+    +competing : A.AbortController<U32, String> <- A.new(~U32, ~String, clock, reports)
     tasks : List<&2, Chan(Unit)> <- abortMany(100n, competing)
     joinAll(tasks)
     +won : Maybe<&2, A.AbortReason<U32>> <- A.reason(U32, String, A.signal(U32, String, competing))
@@ -176,17 +176,17 @@ def main() -> IO(Unit):
     still : Maybe<&2, A.AbortReason<U32>> <- A.reason(U32, String, A.signal(U32, String, competing))
     assertion(sameReason(won, still), "concurrent abort must settle exactly once")
     A.dispose(U32, String, competing)
-    +falseController : A.AbortController<Bool, String> <- A.new(Bool, String, clock, reports)
+    +falseController : A.AbortController<Bool, String> <- A.new(~Bool, ~String, clock, reports)
     A.abort(Bool, String, falseController, Some{False{}})
     falseCheck : Result<&2, &2, A.AbortReason<Bool>, Unit> <- A.throwIfAborted(Bool, String, A.signal(Bool, String, falseController))
     assertion(falseResult(falseCheck), "false must remain a supplied reason")
     A.dispose(Bool, String, falseController)
-    +nullController : A.AbortController<NullReason, String> <- A.new(NullReason, String, clock, reports)
+    +nullController : A.AbortController<NullReason, String> <- A.new(~NullReason, ~String, clock, reports)
     A.abort(NullReason, String, nullController, Some{NullReason{}})
     nullCheck : Result<&2, &2, A.AbortReason<NullReason>, Unit> <- A.throwIfAborted(NullReason, String, A.signal(NullReason, String, nullController))
     assertion(nullResult(nullCheck), "explicit null must differ from omitted reason")
     A.dispose(NullReason, String, nullController)
-    +unused : A.AbortController<Unit, String> <- A.new(Unit, String, clock, reports)
+    +unused : A.AbortController<Unit, String> <- A.new(~Unit, ~String, clock, reports)
     repeatedCleanup(U32.to_nat(1000), A.signal(Unit, String, unused))
     stillPending : Bool <- A.aborted(Unit, String, A.signal(Unit, String, unused))
     assertion(Bool.not(stillPending), "cancelling observations must not abort their signal")
