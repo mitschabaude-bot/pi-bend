@@ -12,10 +12,11 @@
       "status": "partial",
       "ports": [
         "packages/agent/test/agent-loop.bend",
-        "packages/agent/test/agent-loop-tools.bend"
+        "packages/agent/test/agent-loop-tools.bend",
+        "packages/agent/test/agent-loop-arguments.bend"
       ],
       "sha256": "47cdde0c9b42b99baed7d2d8aeca2409b9465b1155b3b060b59ae20535cf9f53",
-      "notes": "Ten of 24 named upstream cases ported: default stream fallback, AgentMessage events, transcript-only provider context, custom message conversion, transform-before-convert ordering, tool calls/results with hook-patched usage, rejection of length-truncated tool calls, empty continuation rejection, existing-context continuation, and custom last-message continuation. Native typed errors and explicit fallback selection adapt exceptions and omitted arguments; immutable system field equality replaces JS reference identity. Remaining 14 cases pending. Supplemental 204 wrapper comparisons are not full-suite coverage."
+      "notes": "Twelve of 24 named upstream cases ported: default stream fallback, AgentMessage events, transcript-only provider context, custom message conversion, transform-before-convert ordering, tool calls/results with hook-patched usage, rejection of length-truncated tool calls, argument preparation before validation, before-hook argument replacement without revalidation, empty continuation rejection, existing-context continuation, and custom last-message continuation. Native typed errors and explicit fallback selection adapt exceptions and omitted arguments; immutable system field equality replaces JS reference identity. Before-hook mutation uses an explicit immutable argument update. Remaining 12 cases pending. Supplemental 204 wrapper comparisons are not full-suite coverage."
     },
     {
       "source": "packages/agent/test/agent.test.ts",
