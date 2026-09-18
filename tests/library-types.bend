@@ -1,3 +1,4 @@
+import ../packages/ai/src/api/transform-messages.bend as TransformMessages
 import ../packages/agent/src/tool-validation.bend as ToolValidation
 import ../packages/agent/src/agent.bend as Agent
 import ../packages/agent/src/agent-run.bend as AgentRun
