@@ -27,6 +27,7 @@ type Reason is Data:
   NoAlternative{}
   ExclusiveAlternatives{matched: B.BigNat}
   NegatedSchema{}
+  ConditionalBranch{consequent: Bool}
 
 type Issue is Data:
   Issue{path: List<&2, String>, reason: Reason}
@@ -40,6 +41,19 @@ def child(path: List<&2, String>, key: String) -> List<&2, String>:
 
 def emitUnless(valid: Bool, path: List<&2, String>, reason: Reason) -> List<&2, Task>:
   Bool.pick(List<&2, Task>, valid, Nil{}, EmitIssue{Issue{path, reason}} <> Nil{})
+
+# The pinned validator reports only the conditional summary for a failed
+# then branch, and branch errors followed by the summary for a failed else.
+def conditionalFailure(valid: Bool, +consequent: Bool, branch: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2, Task>:
+  match valid:
+    case True{}: Nil{}
+    case False{}:
+      +summary = {EmitIssue{Issue{path, ConditionalBranch{consequent}}} <> Nil{} : List<&2, Task>}
+      Bool.pick(List<&2, Task>, consequent, summary, Visit{branch, value, path} <> summary)
+
+def conditionalTasks(+consequent: Bool, thenSchema: S.Schema, elseSchema: S.Schema, +value: V.Value, path: List<&2, String>) -> List<&2, Task>:
+  +branch = Bool.pick(S.Schema, consequent, thenSchema, elseSchema)
+  conditionalFailure(S.check(branch, value), consequent, branch, value, path)
 
 def visits(schemas: List<&2, S.Schema>, +value: V.Value, +path: List<&2, String>) -> List<&2, Task>:
   match schemas:
@@ -142,6 +156,7 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
     case S.One{+schemas} +value:
       +matched = matches(schemas, value)
       unionTasks(B.isZero(matched), True{}, matched, schemas, value, path)
+    case S.Conditional{condition, consequent, alternative} +value: conditionalTasks(S.check(condition, value), consequent, alternative, value, path)
     case S.Not{inner} value: emitUnless(Bool.not(S.check(inner, value)), path, NegatedSchema{})
     case S.Minimum{+limit, +inclusive} V.Number{number}: emitUnless(S.lowerBound(F.compare(number, limit), inclusive), path, NumericMinimum{limit, inclusive})
     case S.Maximum{+limit, +inclusive} V.Number{number}: emitUnless(S.upperBound(F.compare(number, limit), inclusive), path, NumericMaximum{limit, inclusive})

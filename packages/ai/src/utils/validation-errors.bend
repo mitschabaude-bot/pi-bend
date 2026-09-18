@@ -143,6 +143,7 @@ def nativeIssue(path: String, reason: Native.Reason) -> Maybe<&2, List<&2, Issue
     case Native.ContainsCount{_, _}: simple(path, "must contain at least 1 valid item")
     case Native.NoAlternative{}: simple(path, "must match a schema in anyOf")
     case Native.ExclusiveAlternatives{_}: simple(path, "must match exactly one schema in oneOf")
+    case Native.ConditionalBranch{consequent}: simple(path, "must match \"" ++ Bool.pick(String, consequent, "then", "else") ++ "\" schema")
     case Native.NegatedSchema{}: simple(path, "must not be valid")
 
 def fromNative(issues: List<&2, Native.Issue>) -> Maybe<&2, List<&2, Issue>>:

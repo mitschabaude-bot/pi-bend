@@ -26,6 +26,7 @@ type Constructor is Data:
   TypeAlternatives{}
   Exclusive{}
   Negation{}
+  Conditional{}
   Properties{keys: List<&2, String>}
   Additional{properties: R.Record<S.Schema>}
   TupleItems{}
@@ -56,6 +57,19 @@ def child(path: List<&2, String>, key: String) -> List<&2, String>:
 
 def invalid(-A: Data, path: List<&2, String>, expected: String) -> Result<&2, &2, Error, A>:
   Fail{Error{path, InvalidSchema{expected}}}
+
+def parentReversed(path: List<&2, String>) -> List<&2, String>:
+  match path:
+    case Nil{}: Nil{}
+    case _ <> rest: List.reverse(&2, String, rest)
+
+def sibling(path: List<&2, String>, name: String) -> List<&2, String>:
+  child(parentReversed(List.reverse(&2, String, path)), name)
+
+def conditional(value: V.Value, +whole: R.Record<V.Value>, +path: List<&2, String>) -> Scheduled():
+  consequent = Maybe.default(&2, V.Value, R.get(V.Value, whole, "then"), V.Boolean{True{}})
+  alternative = Maybe.default(&2, V.Value, R.get(V.Value, whole, "else"), V.Boolean{True{}})
+  Done{Read{value, path} <> Read{consequent, sibling(path, "then")} <> Read{alternative, sibling(path, "else")} <> Build{Conditional{}, 3n} <> Nil{}}
 
 def kind(+name: String) -> Maybe<&2, S.JsonType>:
   Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "null"), Some{S.NullType{}}, Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "boolean"), Some{S.BooleanType{}}, Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "number"), Some{S.NumberType{}}, Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "integer"), Some{S.IntegerType{}}, Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "string"), Some{S.StringType{}}, Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "array"), Some{S.ArrayType{}}, Bool.pick(Maybe<&2, S.JsonType>, String.eq(name, "object"), Some{S.ObjectType{}}, None{})))))))
@@ -253,6 +267,9 @@ type KeywordKind is Data:
   AllOfKeyword{}
   AnyOfKeyword{}
   OneOfKeyword{}
+  IfKeyword{}
+  ThenKeyword{}
+  ElseKeyword{}
   NotKeyword{}
   PropertiesKeyword{}
   RequiredKeyword{}
@@ -283,7 +300,7 @@ def selectedKeyword(value: Maybe<&2, KeywordKind>) -> KeywordKind:
     case None{}: UnknownKeyword{}
 
 def keywordKind(key: String) -> KeywordKind:
-  entries = {R.Record{R.Property{"$ref", ReferenceKeyword{}} <> R.Property{"$defs", DefinitionsKeyword{}} <> R.Property{"definitions", DefinitionsKeyword{}} <> R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"multipleOf", MultipleOfKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"uniqueItems", UniqueItemsKeyword{}} <> R.Property{"minLength", MinLengthKeyword{}} <> R.Property{"maxLength", MaxLengthKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
+  entries = {R.Record{R.Property{"$ref", ReferenceKeyword{}} <> R.Property{"$defs", DefinitionsKeyword{}} <> R.Property{"definitions", DefinitionsKeyword{}} <> R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"if", IfKeyword{}} <> R.Property{"then", ThenKeyword{}} <> R.Property{"else", ElseKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"multipleOf", MultipleOfKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"uniqueItems", UniqueItemsKeyword{}} <> R.Property{"minLength", MinLengthKeyword{}} <> R.Property{"maxLength", MaxLengthKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
   selectedKeyword(R.get(KeywordKind, entries, key))
 
 # Each keyword contributes one conjunct. Cross-keyword rules consult the whole
@@ -301,6 +318,9 @@ def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record
     case AllOfKeyword{}: group(Conjunction{}, value, path)
     case AnyOfKeyword{}: group(Disjunction{}, value, path)
     case OneOfKeyword{}: group(Exclusive{}, value, path)
+    case IfKeyword{}: conditional(value, whole, path)
+    case ThenKeyword{}: Done{Push{S.Accept{}} <> Nil{}}
+    case ElseKeyword{}: Done{Push{S.Accept{}} <> Nil{}}
     case NotKeyword{}: Done{Read{value, path} <> Build{Negation{}, 1n} <> Nil{}}
     case PropertiesKeyword{}: properties(value, path)
     case RequiredKeyword{}: required(value, path)
@@ -357,15 +377,18 @@ def keywordOrder(selected: KeywordKind) -> U32:
     case MinimumKeyword{}: 19
     case MultipleOfKeyword{}: 20
     case ReferenceKeyword{}: 21
-    case DefinitionsKeyword{}: 28
+    case DefinitionsKeyword{}: 29
     case ConstKeyword{}: 22
     case EnumKeyword{}: 23
-    case NotKeyword{}: 24
-    case AllOfKeyword{}: 25
-    case AnyOfKeyword{}: 26
-    case OneOfKeyword{}: 27
-    case AnnotationKeyword{}: 28
-    case UnknownKeyword{}: 28
+    case IfKeyword{}: 24
+    case ThenKeyword{}: 29
+    case ElseKeyword{}: 29
+    case NotKeyword{}: 25
+    case AllOfKeyword{}: 26
+    case AnyOfKeyword{}: 27
+    case OneOfKeyword{}: 28
+    case AnnotationKeyword{}: 29
+    case UnknownKeyword{}: 29
 
 def insertKeyword(+key: String, +value: V.Value, fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   match fields:
@@ -421,6 +444,7 @@ def construct(constructor: Constructor, schemas: List<&2, S.Schema>) -> Loaded()
     case TypeAlternatives{} schemas: typeAlternatives(compiledTypes(schemas))
     case Exclusive{} schemas: Done{S.One{schemas}}
     case Negation{} schema <> Nil{}: Done{S.Not{schema}}
+    case Conditional{} condition <> consequent <> alternative <> Nil{}: Done{S.Conditional{condition, consequent, alternative}}
     case Properties{keys} schemas: Done{S.Object{R.Record{pairedProperties(keys, schemas)}, Nil{}, S.Accept{}}}
     case Additional{fields} schema <> Nil{}: Done{S.Object{fields, Nil{}, schema}}
     case TupleItems{} schemas: Done{S.Array{schemas, S.Accept{}}}

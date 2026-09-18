@@ -31,6 +31,7 @@ type Schema is Data:
   Any{schemas: List<&2, Schema>}
   One{schemas: List<&2, Schema>}
   Not{schema: Schema}
+  Conditional{condition: Schema, consequent: Schema, alternative: Schema}
   Minimum{limit: F.F64, inclusive: Bool}
   Maximum{limit: F.F64, inclusive: Bool}
   MultipleOf{divisor: F.F64}
@@ -182,6 +183,8 @@ def evaluate(test: Test) -> Bool:
     case Check{Any{schemas}, value}: evaluate(SomeTest{tests(schemas, value)})
     case Check{One{schemas}, value}: evaluate(ExactlyOne{tests(schemas, value), False{}})
     case Check{Not{schema}, value}: Bool.not(evaluate(Check{schema, value}))
+    case Check{Conditional{condition, consequent, alternative}, +value}:
+      evaluate(Check{Bool.pick(Schema, evaluate(Check{condition, value}), consequent, alternative), value})
     case Check{Minimum{limit, inclusive}, V.Number{value}}: lowerBound(F.compare(value, limit), inclusive)
     case Check{Minimum{_, _}, _}: True{}
     case Check{Maximum{limit, inclusive}, V.Number{value}}: upperBound(F.compare(value, limit), inclusive)
