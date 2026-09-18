@@ -40,3 +40,5 @@ Synchronization stays in explicit effect resources: running-agent state, stream 
 Pure-Bend numeric foundations implement binary64 arithmetic, exact integer/rational conversion, parsing and shortest formatting. JSON has its own codec boundary. These dependencies preserve numeric behavior without replacing pi's typed library architecture.
 
 Current module status and limitations are recorded in [pi-ai](../packages/ai/README.md), [pi-agent](../packages/agent/README.md), [runtime](../packages/runtime/README.md) and [test coverage](../tests/UPSTREAM.md).
+
+Native schema builders live in `packages/runtime/src/schema-builder.bend`. A `Declaration` carries the JSON schema sent to providers, an executable schema constraint, and an explicit immutable conversion policy. Composition keeps those three representations together; runtime validation and conversion need no hidden host-language metadata. Primitive types, JSON-compatible literals, arrays, tuples and unions have factories. Object/optional declarations, general options and integration into AI tool validation remain unfinished.

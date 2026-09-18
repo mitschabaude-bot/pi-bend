@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/schema-builder.bend as SchemaBuilder
 import ../packages/runtime/src/schema-convert.bend as SchemaConvert
 import ../packages/runtime/src/json-pointer.bend as JsonPointer
 import ../packages/runtime/src/uri-component.bend as UriComponent
