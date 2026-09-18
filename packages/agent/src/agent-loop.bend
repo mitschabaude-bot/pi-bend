@@ -962,3 +962,85 @@ def startAgentStreamEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetail
 
 def createAgentStreamEmitter(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~ToolDetails: Data, ~Custom: Data, ~PartialResult: Data, ~ExecutionResult: Data, ~Error: Data, stream: AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)) -> IO(StartingAgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)):
   C.create(~AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult), ~T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, ~Emission.Emission<Error>, ~(startAgentStreamEvent(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)), stream)
+
+# Validation remains an explicit required service until the canonical typed
+# schema compiler supplies it. Both raw and adapted calls must be validated.
+type ToolValidationInput<-Parameters: Data, -Raw: Data, -Adapted: Data> is Data:
+  ToolValidationInput{tool: Ai.Tool<Parameters>, call: PreparedToolCallArguments<Raw, Adapted>}
+
+type ToolPreparationState<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data> is Data:
+  ToolPreparationState{context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, preparation: ToolCallPreparation<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>}
+
+def executableToolName(-Parameters: Data, -Arguments: Data, -Details: Data, -Raw: Data, -Signal: Data, -Error: Data, tool: T.AgentTool<Parameters, Arguments, Details, Raw, Signal, Error>) -> String:
+  match tool:
+    case T.AgentTool{name, _, _, _, _, _, _, _, _}: name
+
+def findExecutableTool(-Parameters: Data, -Arguments: Data, -Details: Data, -Raw: Data, -Signal: Data, -Error: Data, +name: String, tools: List<&2, T.AgentTool<Parameters, Arguments, Details, Raw, Signal, Error>>) -> Maybe<&2, T.AgentTool<Parameters, Arguments, Details, Raw, Signal, Error>>:
+  match tools:
+    case Nil{}: None{}
+    case +tool <> rest:
+      matches = String.eq(name, executableToolName(Parameters, Arguments, Details, Raw, Signal, Error, tool))
+      selected = Bool.pick(Unit -> Maybe<&2, T.AgentTool<Parameters, Arguments, Details, Raw, Signal, Error>>, matches, unused => Some{tool}, unused => findExecutableTool(Parameters, Arguments, Details, Raw, Signal, Error, name, rest))
+      selected(Unit{})
+
+def immediatePreparation(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, message: String, details: Details, terminate: Bool) -> ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>:
+  result = {T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, None{}}} <> Nil{}, details, None{}, Bool.pick(Maybe<&2, Bool>, terminate, Some{True{}}, None{})} : T.AgentToolResult<Details>}
+  ToolPreparationState{context, Immediate{ImmediateToolCallOutcome{result, True{}}}}
+
+def checkedArgumentPreparation(-Parameters: Data, -Arguments: Data, -Details: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, tool: T.AgentTool<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>, prepared: Result<&2, &2, Error, PreparedToolCallArguments<Arguments, ValidatedArguments>>, validate: C.Callback<ToolValidationInput<Parameters, Arguments, ValidatedArguments>, Result<&2, &2, Error, ValidatedArguments>>) -> IO(Result<&2, &2, Error, ValidatedArguments>):
+  match prepared:
+    case Fail{error}: IO.pure(Result<&2, &2, Error, ValidatedArguments>, Fail{error})
+    case Done{call}: C.call(ToolValidationInput<Parameters, Arguments, ValidatedArguments>, Result<&2, &2, Error, ValidatedArguments>, validate, ToolValidationInput{T.toTool(Parameters, ValidatedArguments, Details, Arguments, Signal, Error, tool), call})
+
+def selectedBeforeToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, Signal>, Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hook, _}: hook
+
+def invokeBeforeToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, assistant: Ai.AssistantMessage<Arguments, DiagnosticDetails>, call: Ai.ToolCall<Arguments>, args: ValidatedArguments, signal: Maybe<&2, Signal>, hook: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, Signal>, Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>>>) -> IO(Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>):
+  match hook:
+    case None{}: IO.pure(Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>, Done{T.BeforeToolCallUpdate{args, context, None{}}})
+    case Some{callback}: C.call(T.ToolHookInput<T.BeforeToolCallContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, Signal>, Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>, callback, T.ToolHookInput{T.BeforeToolCallContext{assistant, call, args, context}, signal})
+
+def decidedPreparation(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, tool: T.AgentTool<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>, call: Ai.ToolCall<Arguments>, args: ValidatedArguments, failureDetails: Details, decision: BeforeToolCallDecision) -> ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>:
+  match decision:
+    case ProceedWithToolCall{}: ToolPreparationState{context, Prepared{PreparedToolCall{call, tool, args}}}
+    case RejectToolCall{message, terminate}: immediatePreparation(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context, message, failureDetails, terminate)
+
+def afterBeforeToolCall(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, tool: T.AgentTool<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>, call: Ai.ToolCall<Arguments>, before: Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>, signal: Maybe<&2, Signal>, isAborted: (Maybe<&2, Signal> -> IO(Bool)), failureDetails: Details) -> IO(Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>):
+  match before:
+    case Fail{error}: IO.pure(Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>, Fail{error})
+    case Done{T.BeforeToolCallUpdate{args, context, decision}}:
+      do IO<Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>:
+        aborted : Bool <- isAborted(signal)
+        return Done{decidedPreparation(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context, tool, call, args, failureDetails, beforeToolCallDecision(aborted, decision))}
+
+def withValidatedToolArguments(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, assistant: Ai.AssistantMessage<Arguments, DiagnosticDetails>, +call: Ai.ToolCall<Arguments>, tool: T.AgentTool<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>, validated: Result<&2, &2, Error, ValidatedArguments>, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch>, +signal: Maybe<&2, Signal>, isAborted: (Maybe<&2, Signal> -> IO(Bool)), failureDetails: Details) -> IO(Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>):
+  match validated:
+    case Fail{error}: IO.pure(Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>, Fail{error})
+    case Done{args}:
+      do IO<Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>:
+        before : Result<&2, &2, Error, T.BeforeToolCallUpdate<ValidatedArguments, T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>> <- invokeBeforeToolCall(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context, assistant, call, args, signal, selectedBeforeToolCall(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch, config))
+        afterBeforeToolCall(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, tool, call, before, signal, isAborted, failureDetails)
+
+def prepareFoundTool(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, assistant: Ai.AssistantMessage<Arguments, DiagnosticDetails>, +call: Ai.ToolCall<Arguments>, found: Maybe<&2, T.AgentTool<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>>, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch>, signal: Maybe<&2, Signal>, validate: C.Callback<ToolValidationInput<Parameters, Arguments, ValidatedArguments>, Result<&2, &2, Error, ValidatedArguments>>, isAborted: (Maybe<&2, Signal> -> IO(Bool)), failureDetails: Details) -> IO(Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>):
+  match found:
+    case None{}: IO.pure(Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>, Done{immediatePreparation(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context, "Tool " ++ callName(Arguments, call) ++ " not found", failureDetails, False{})})
+    case Some{+tool}:
+      do IO<Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>>:
+        adapted : Result<&2, &2, Error, PreparedToolCallArguments<Arguments, ValidatedArguments>> <- prepareToolCallArguments(Parameters, ValidatedArguments, Details, Arguments, Signal, Error, tool, call)
+        validated : Result<&2, &2, Error, ValidatedArguments> <- checkedArgumentPreparation(Parameters, Arguments, Details, ValidatedArguments, Signal, Error, tool, adapted, validate)
+        withValidatedToolArguments(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch, context, assistant, call, tool, validated, config, signal, isAborted, failureDetails)
+
+def preparationError(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, failureDetails: Details, renderError: Error -> String, outcome: Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>) -> ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>:
+  match outcome:
+    case Done{value}: value
+    case Fail{error}: immediatePreparation(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context, renderError(error), failureDetails, False{})
+
+# No validation bypass: the caller supplies a real validator/typed decoder.
+# The with-suffix marks this injectable path; the default schema-backed entry
+# point remains pending until full validation is implemented.
+def prepareToolCallWith(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -Error: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, +context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>, assistant: Ai.AssistantMessage<Arguments, DiagnosticDetails>, +call: Ai.ToolCall<Arguments>, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch>, signal: Maybe<&2, Signal>, validate: C.Callback<ToolValidationInput<Parameters, Arguments, ValidatedArguments>, Result<&2, &2, Error, ValidatedArguments>>, isAborted: (Maybe<&2, Signal> -> IO(Bool)), +failureDetails: Details, renderError: Error -> String) -> IO(ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>):
+  do IO<ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>>:
+    found : Maybe<&2, T.AgentTool<Parameters, ValidatedArguments, Details, Arguments, Signal, Error>> = findExecutableTool(Parameters, ValidatedArguments, Details, Arguments, Signal, Error, callName(Arguments, call), availableContextTools(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context))
+    outcome : Result<&2, &2, Error, ToolPreparationState<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error>> <- prepareFoundTool(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, Value, Telemetry, Fetch, context, assistant, call, found, config, signal, validate, isAborted, failureDetails)
+    return preparationError(Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, Error, context, failureDetails, renderError, outcome)
