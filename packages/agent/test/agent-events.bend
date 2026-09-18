@@ -1,4 +1,5 @@
 import Base
+import ../src/event-emission.bend as Emission
 import ../src/agent-events.bend as Events
 import ../src/agent-listeners.bend as Listeners
 import ../src/agent-runtime.bend as Runtime
@@ -31,26 +32,30 @@ def isEnd(event: EmittedEvent()) -> Bool:
   match event:
     case T.AgentEnd{_}: True{}
     case _: False{}
-def body(environment: Environment, input: Input()) -> IO(Result<&2, &2, String, Unit>):
+def finishBody(+first: Bool, fail: Bool, entered: Chan(Unit), release: Chan(Unit), signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    gate(first, entered, release)
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    Test.assertion(aborted, "subscribers receive the active signal, including cancellation during await")
+    return Bool.pick(Result<&2, &2, String, Unit>, fail, Fail{Bool.pick(String, first, "first failed", "second failed")}, Done{Unit{}})
+def body(environment: Environment, input: Input()) -> IO(Emission.Emission<String>):
   match environment input:
     case Environment{+first, fail, runtime, entered, release, +log} Listeners.Input{event, signal}:
-      do IO<Result<&2, &2, String, Unit>>:
+      do IO<Emission.Emission<String>>:
         Test.assertion(isEnd(event), "subscriber receives the original event")
         state : Fixture.Owned() <- Runtime.snapshot(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         Test.assertion(String.eq(Fixture.key(state), "base|s|1|-||one:|one:"), "agent_end state commits before listeners without becoming idle")
         name : String = Bool.pick(String, first, "first;", "second;")
         R.modify(String, Unit, log, old => (old ++ name, Unit{}))
-        gate(first, entered, release)
-        aborted : Bool <- Abort.aborted(Unit, signal)
-        Test.assertion(aborted, "subscribers receive the active signal, including cancellation during await")
-        return Bool.pick(Result<&2, &2, String, Unit>, fail, Fail{Bool.pick(String, first, "first failed", "second failed")}, Done{Unit{}})
+        Emission.start(String, finishBody(first, fail, entered, release, signal))
+
 def requireRun(result: Fixture.Claim()) -> IO(Life.ActiveRun):
   match result:
     case Done{Life.Claimed{run, _}}: IO.pure(Life.ActiveRun, run)
     case _: IO.die(Life.ActiveRun, 1, "fixture run failed to start")
-def deliver(+runtime: Fixture.Runtime(), registry: Registry(), run: Life.ActiveRun, reply: Chan(Outcome())) -> IO(Unit):
+def deliver(+runtime: Fixture.Runtime(), run: Life.ActiveRun, delivery: Emission.Emission<Events.DeliveryError<String>>, reply: Chan(Outcome())) -> IO(Unit):
   do IO<Unit>:
-    result : Outcome() <- Events.processEvents(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, String, runtime, registry, T.AgentEnd{Nil{}})
+    result : Outcome() <- Emission.wait(Events.DeliveryError<String>, delivery)
     finished : Bool <- Runtime.finishRun(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, run)
     Test.assertion(finished, "run finalizes after awaited delivery, including failure")
     sent : Bool <- Chan.send(Outcome(), reply, result)
@@ -91,15 +96,18 @@ def scenario(+mode: U32) -> IO(Unit):
     +entered : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +log : R.Ref<String> <- R.new(String, "")
-    +first : Listeners.Handler(EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~Input(), ~Result<&2, &2, String, Unit>, ~body, Environment{True{}, U32.is_eq(mode, 1), runtime, entered, release, log})
-    +second : Listeners.Handler(EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~Input(), ~Result<&2, &2, String, Unit>, ~body, Environment{False{}, U32.is_eq(mode, 2), runtime, entered, release, log})
+    +first : Listeners.Handler(EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~Input(), ~Emission.Emission<String>, ~body, Environment{True{}, U32.is_eq(mode, 1), runtime, entered, release, log})
+    +second : Listeners.Handler(EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~Input(), ~Emission.Emission<String>, ~body, Environment{False{}, U32.is_eq(mode, 2), runtime, entered, release, log})
     ignored : Listeners.Subscription<EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, first)
     ignored : Listeners.Subscription<EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, second)
     claimed : Fixture.Claim() <- Runtime.beginPrompt(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, QueueTest.user("prompt") <> Nil{})
     +run : Life.ActiveRun <- requireRun(claimed)
     active : Result<&2, &2, String, Life.ActiveRun> <- Runtime.recordEvent(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, runtime, T.MessageStart{QueueTest.assistant()})
     +reply : Chan(Outcome()) <- Chan.new(Outcome(), 1)
-    IO.spawn(Unit, deliver(runtime, registry, run, reply))
+    delivery : Emission.Emission<Events.DeliveryError<String>> <- Events.startEvents(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, String, runtime, registry, T.AgentEnd{Nil{}})
+    immediate : String <- R.read(String, log)
+    Test.assertion(String.eq(immediate, "first;"), "first listener starts before event initiation returns")
+    IO.spawn(Unit, deliver(runtime, run, delivery, reply))
     IO.join(Unit, entered)
     trace : String <- R.read(String, log)
     Test.assertion(String.eq(trace, "first;"), "second subscriber cannot overlap the first")
@@ -128,8 +136,8 @@ def scenario(+mode: U32) -> IO(Unit):
     final : Fixture.Owned() <- Runtime.dispose(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     Test.assertion(String.eq(Fixture.key(final), "base|su|0|-||one:|one:"), "finish clears streaming and idle event reduction precedes its error")
     Listeners.dispose(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry)
-    C.dispose(Input(), Result<&2, &2, String, Unit>, first)
-    C.dispose(Input(), Result<&2, &2, String, Unit>, second)
+    C.dispose(Input(), Emission.Emission<String>, first)
+    C.dispose(Input(), Emission.Emission<String>, second)
     old : String <- R.dispose(String, log)
     return Unit{}
 def main() -> IO(Unit):

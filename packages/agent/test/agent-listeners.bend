@@ -1,4 +1,5 @@
 import Base
+import ../src/event-emission.bend as Emission
 import ../src/agent-listeners.bend as L
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
@@ -40,14 +41,15 @@ def editIfFirst(id: U32, registry: Registry(), handles: R.Ref<Maybe<&2, Handles>
         value : Maybe<&2, Handles> <- R.read(Maybe<&2, Handles>, handles)
         editReady(registry, value, mode)
     case _: IO.pure(Unit, Unit{})
-def body(environment: Environment, input: L.Input<String, Bool>) -> IO(Result<&2, &2, String, Unit>):
+def body(environment: Environment, input: L.Input<String, Bool>) -> IO(Emission.Emission<String>):
   match environment input:
     case Environment{+id, +mode, registry, handles, log} L.Input{event, signal}:
-      do IO<Result<&2, &2, String, Unit>>:
+      do IO<Emission.Emission<String>>:
         entry : String = label(id) ++ ":" ++ event ++ ":" ++ Bool.pick(String, signal, "1", "0") ++ ";"
         R.modify(String, Unit, log, old => (old ++ entry, Unit{}))
         editIfFirst(id, registry, handles, mode)
-        return Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 6) && U32.is_eq(id, 0)) || (U32.is_eq(mode, 7) && U32.is_eq(id, 1)), Fail{"error" ++ label(id)}, Done{Unit{}})
+        return Emission.Ready{Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 6) && U32.is_eq(id, 0)) || (U32.is_eq(mode, 7) && U32.is_eq(id, 1)), Fail{"error" ++ label(id)}, Done{Unit{}})}
+
 def resultKey(result: Result<&2, &2, String, Unit>) -> String:
   match result:
     case Done{_}: "ok"
@@ -64,9 +66,9 @@ def scenario(+mode: U32, expected: String) -> IO(Unit):
     +registry : Registry() <- L.new(String, Bool, String)
     +handles : R.Ref<Maybe<&2, Handles>> <- R.new(Maybe<&2, Handles>, None{})
     +log : R.Ref<String> <- R.new(String, "")
-    +first : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Result<&2, &2, String, Unit>, ~body, Environment{0, mode, registry, handles, log})
-    +middle : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Result<&2, &2, String, Unit>, ~body, Environment{1, mode, registry, handles, log})
-    +last : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Result<&2, &2, String, Unit>, ~body, Environment{2, mode, registry, handles, log})
+    +first : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{0, mode, registry, handles, log})
+    +middle : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{1, mode, registry, handles, log})
+    +last : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{2, mode, registry, handles, log})
     R.write(Maybe<&2, Handles>, handles, Some{Handles{first, middle, last}})
     +subscription : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, first)
     optional(registry, first, U32.is_eq(mode, 1))
@@ -85,8 +87,8 @@ def scenario(+mode: U32, expected: String) -> IO(Unit):
     Test.assertion(String.eq(trace ++ "|" ++ resultKey(firstResult) ++ "," ++ resultKey(secondResult) ++ "," ++ resultKey(thirdResult), expected), "ordered listener dispatch differs from upstream")
     L.dispose(String, Bool, String, registry)
     old : Maybe<&2, Handles> <- R.dispose(Maybe<&2, Handles>, handles)
-    C.dispose(L.Input<String, Bool>, Result<&2, &2, String, Unit>, first)
-    C.dispose(L.Input<String, Bool>, Result<&2, &2, String, Unit>, middle)
-    C.dispose(L.Input<String, Bool>, Result<&2, &2, String, Unit>, last)
+    C.dispose(L.Input<String, Bool>, Emission.Emission<String>, first)
+    C.dispose(L.Input<String, Bool>, Emission.Emission<String>, middle)
+    C.dispose(L.Input<String, Bool>, Emission.Emission<String>, last)
     oldLog : String <- R.dispose(String, log)
     return Unit{}

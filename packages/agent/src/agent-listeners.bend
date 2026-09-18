@@ -1,4 +1,5 @@
 import Base
+import ./event-emission.bend as Emission
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/big-nat.bend as N
@@ -9,7 +10,7 @@ import ../../runtime/src/big-nat.bend as N
 type Input<-Event: Data, -Signal: Data> is Data:
   Input{event: Event, signal: Signal}
 def Handler(-Event: Data, -Signal: Data, -Error: Data) -> Data:
-  C.Callback<Input<Event, Signal>, Result<&2, &2, Error, Unit>>
+  C.Callback<Input<Event, Signal>, Emission.Emission<Error>>
 type Entry<-Event: Data, -Signal: Data, -Error: Data> is Data:
   Entry{position: N.BigNat, callback: Handler(Event, Signal, Error)}
 type State<-Event: Data, -Signal: Data, -Error: Data> is Data:
@@ -26,7 +27,7 @@ def new(-Event: Data, -Signal: Data, -Error: Data) -> IO(Listeners<Event, Signal
 def contains(-Event: Data, -Signal: Data, -Error: Data, entries: List<&2, Entry<Event, Signal, Error>>, +callback: Handler(Event, Signal, Error)) -> Bool:
   match entries:
     case Nil{}: False{}
-    case Entry{_, other} <> rest: C.same(Input<Event, Signal>, Result<&2, &2, Error, Unit>, callback, other) || contains(Event, Signal, Error, rest, callback)
+    case Entry{_, other} <> rest: C.same(Input<Event, Signal>, Emission.Emission<Error>, callback, other) || contains(Event, Signal, Error, rest, callback)
 def added(-Event: Data, -Signal: Data, -Error: Data, +next: N.BigNat, entries: List<&2, Entry<Event, Signal, Error>>, callback: Handler(Event, Signal, Error), exists: Bool) -> State<Event, Signal, Error>:
   match exists:
     case True{}: State{next, entries}
@@ -44,7 +45,7 @@ def remove(-Event: Data, -Signal: Data, -Error: Data, entries: List<&2, Entry<Ev
   match entries:
     case Nil{}: Nil{}
     case Entry{position, +other} <> +rest:
-      Bool.pick(List<&2, Entry<Event, Signal, Error>>, C.same(Input<Event, Signal>, Result<&2, &2, Error, Unit>, callback, other), rest, Entry{position, other} <> remove(Event, Signal, Error, rest, callback))
+      Bool.pick(List<&2, Entry<Event, Signal, Error>>, C.same(Input<Event, Signal>, Emission.Emission<Error>, callback, other), rest, Entry{position, other} <> remove(Event, Signal, Error, rest, callback))
 def removeState(-Event: Data, -Signal: Data, -Error: Data, state: State<Event, Signal, Error>, callback: Handler(Event, Signal, Error)) -> State<Event, Signal, Error> & Unit:
   match state:
     case State{next, entries}: (State{next, remove(Event, Signal, Error, entries, callback)}, Unit{})
@@ -78,11 +79,33 @@ def selected(-Event: Data, -Signal: Data, -Error: Data, state: State<Event, Sign
         dispatch(Event, Signal, Error, Listeners{state}, input, None{}, Done{Unit{}}, selected(Event, Signal, Error, current, cursor), False{})
     case Listeners{state} Done{_} Some{Entry{position, callback}} False{}:
       do IO<Result<&2, &2, Error, Unit>>:
-        outcome : Result<&2, &2, Error, Unit> <- C.call(Input<Event, Signal>, Result<&2, &2, Error, Unit>, callback, input)
+        delivery : Emission.Emission<Error> <- C.call(Input<Event, Signal>, Emission.Emission<Error>, callback, input)
+        outcome : Result<&2, &2, Error, Unit> <- Emission.wait(Error, delivery)
         dispatch(Event, Signal, Error, Listeners{state}, input, Some{position}, outcome, None{}, True{})
     case Listeners{_} Done{_} None{} False{}: IO.pure(Result<&2, &2, Error, Unit>, Done{Unit{}})
+# The first callback starts inline, before returning ownership of pending
+# delivery. Subsequent callbacks remain live-selected after each completion.
+def resume(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, input: Input<Event, Signal>, position: N.BigNat, delivery: Emission.Emission<Error>) -> IO(Result<&2, &2, Error, Unit>):
+  do IO<Result<&2, &2, Error, Unit>>:
+    outcome : Result<&2, &2, Error, Unit> <- Emission.wait(Error, delivery)
+    dispatch(Event, Signal, Error, listeners, input, Some{position}, outcome, None{}, True{})
+def startSelected(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, +input: Input<Event, Signal>, selected: Maybe<&2, Entry<Event, Signal, Error>>) -> IO(Emission.Emission<Error>):
+  match selected:
+    case None{}: IO.pure(Emission.Emission<Error>, Emission.Ready{Done{Unit{}}})
+    case Some{Entry{position, callback}}:
+      do IO<Emission.Emission<Error>>:
+        delivery : Emission.Emission<Error> <- C.call(Input<Event, Signal>, Emission.Emission<Error>, callback, input)
+        Emission.start(Error, resume(Event, Signal, Error, listeners, input, position, delivery))
+def start(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, event: Event, signal: Signal) -> IO(Emission.Emission<Error>):
+  match listeners:
+    case Listeners{+state}:
+      do IO<Emission.Emission<Error>>:
+        current : State<Event, Signal, Error> <- R.read(State<Event, Signal, Error>, state)
+        startSelected(Event, Signal, Error, Listeners{state}, Input{event, signal}, selected(Event, Signal, Error, current, None{}))
 def emit(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, event: Event, signal: Signal) -> IO(Result<&2, &2, Error, Unit>):
-  dispatch(Event, Signal, Error, listeners, Input{event, signal}, None{}, Done{Unit{}}, None{}, True{})
+  do IO<Result<&2, &2, Error, Unit>>:
+    delivery : Emission.Emission<Error> <- start(Event, Signal, Error, listeners, event, signal)
+    Emission.wait(Error, delivery)
 # Callbacks are borrowed. Drain in-flight dispatches before disposing the
 # registry, then retire callback handles according to their own ownership.
 def dispose(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>) -> IO(Unit):

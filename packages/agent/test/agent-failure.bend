@@ -1,4 +1,5 @@
 import Base
+import ../src/event-emission.bend as Emission
 import ../src/agent-failure.bend as Failure
 import ../src/agent-events.bend as Events
 import ../src/agent-listeners.bend as Listeners
@@ -80,10 +81,10 @@ def key(+owned: Fixture.Owned()) -> String:
   Fixture.key(owned) ++ "~" ++ stateError(Runtime.stateValue(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, owned))
 type Environment is Data:
   Environment{runtime: Fixture.Runtime(), log: R.Ref<String>, stamp: R.Ref<Maybe<&2, F.F64>>, lower: F.F64, aborted: Bool, error: String, failStage: U32, failListener: U32, listener: U32}
-def body(environment: Environment, input: EventTest.Input()) -> IO(Result<&2, &2, String, Unit>):
+def body(environment: Environment, input: EventTest.Input()) -> IO(Emission.Emission<String>):
   match environment input:
     case Environment{runtime, log, stamp, lower, +aborted, error, failStage, failListener, +listener} Listeners.Input{+event, signal}:
-      do IO<Result<&2, &2, String, Unit>>:
+      do IO<Emission.Emission<String>>:
         +message : Ai.AssistantMessage<Unit, Unit> <- eventMessage(event)
         upper : F.F64 <- Date.now()
         Test.assertion(valid(message, aborted, error, lower, upper), "failure content, metadata, usage, reason, error or wall-clock timestamp differs")
@@ -95,7 +96,8 @@ def body(environment: Environment, input: EventTest.Input()) -> IO(Result<&2, &2
         +index : U32 = stage(event)
         entry : String = stageName(index) ++ "." ++ Bool.pick(String, U32.is_eq(listener, 0), "0", "1") ++ "@" ++ key(owned) ++ ";"
         R.modify(String, Unit, log, previous => (previous ++ entry, Unit{}))
-        return Bool.pick(Result<&2, &2, String, Unit>, U32.is_eq(index, failStage) && U32.is_eq(listener, failListener), Fail{"listener failed"}, Done{Unit{}})
+        return Emission.Ready{Bool.pick(Result<&2, &2, String, Unit>, U32.is_eq(index, failStage) && U32.is_eq(listener, failListener), Fail{"listener failed"}, Done{Unit{}})}
+
 def abortIf(runtime: Fixture.Runtime(), aborted: Bool) -> IO(Unit):
   match aborted:
     case True{}: Runtime.abort(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
@@ -126,8 +128,8 @@ def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32
     +log : R.Ref<String> <- R.new(String, "")
     +stamp : R.Ref<Maybe<&2, F.F64>> <- R.new(Maybe<&2, F.F64>, None{})
     +lower : F.F64 <- Date.now()
-    +first : Listeners.Handler(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~EventTest.Input(), ~Result<&2, &2, String, Unit>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 0})
-    +second : Listeners.Handler(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~EventTest.Input(), ~Result<&2, &2, String, Unit>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 1})
+    +first : Listeners.Handler(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~EventTest.Input(), ~Emission.Emission<String>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 0})
+    +second : Listeners.Handler(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~EventTest.Input(), ~Emission.Emission<String>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 1})
     ignored : Listeners.Subscription<EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, first)
     ignored : Listeners.Subscription<EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, second)
     initialClaim : Fixture.Claim() <- Runtime.beginPrompt(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Nil{})
@@ -140,8 +142,8 @@ def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32
     Test.assertion(String.eq(actual, expected), "failure recovery differs from source: " ++ actual)
     retired : Fixture.Owned() <- Runtime.dispose(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     Listeners.dispose(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry)
-    C.dispose(EventTest.Input(), Result<&2, &2, String, Unit>, first)
-    C.dispose(EventTest.Input(), Result<&2, &2, String, Unit>, second)
+    C.dispose(EventTest.Input(), Emission.Emission<String>, first)
+    C.dispose(EventTest.Input(), Emission.Emission<String>, second)
     oldLog : String <- R.dispose(String, log)
     oldStamp : Maybe<&2, F.F64> <- R.dispose(Maybe<&2, F.F64>, stamp)
     return Unit{}
