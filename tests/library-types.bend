@@ -1,3 +1,4 @@
+import ../packages/agent/src/loop-entry.bend as LoopEntry
 import Base
 import ../packages/agent/src/main-loop.bend as MainLoop
 import ../packages/agent/src/turn-preparation.bend as TurnPreparation

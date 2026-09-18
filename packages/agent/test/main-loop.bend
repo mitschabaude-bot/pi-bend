@@ -1,5 +1,6 @@
 import Base
 import ../src/main-loop.bend as Main
+import ../src/loop-entry.bend as Entry
 import ../src/types.bend as T
 import ../src/agent-loop.bend as Loop
 import ../src/tool-call.bend as Call
@@ -34,7 +35,9 @@ type Execution is Data:
 type Queue is Data:
   Queue{name: String, enabled: Bool, count: R.Ref<U32>, log: Log()}
 type Stopping is Data:
-  Stopping{stop: Bool, log: Log()}
+  Stopping{stop: Bool, log: Log(), baseline: String}
+type Preparing is Data:
+  Preparing{log: Log(), baseline: String}
 type Recording is Data:
   Recording{failAt: String, log: Log()}
 
@@ -146,17 +149,17 @@ def queue(environment: Queue, unused: Unit) -> IO(QueueOutput()):
 
 def stop(environment: Stopping, input: Turn()) -> IO(Result<&2, &2, String, Bool>):
   match environment input:
-    case Stopping{shouldStop, recording} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
+    case Stopping{shouldStop, recording, baseline} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
       do IO<Result<&2, &2, String, Bool>>:
-        Test.assertion(String.eq(names(context), "old|" ++ names(history)), "stop hook sees committed context and generated history")
+        Test.assertion(String.eq(names(context), baseline ++ names(history)), "stop hook sees committed context and generated history")
         log(recording, "stop")
         return Done{shouldStop}
 
-def prepare(recording: Log(), input: Turn()) -> IO(PrepareOutput()):
-  match input:
-    case T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
+def prepare(environment: Preparing, input: Turn()) -> IO(PrepareOutput()):
+  match environment input:
+    case Preparing{recording, baseline} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
       do IO<PrepareOutput()>:
-        Test.assertion(String.eq(names(context), "old|" ++ names(history)), "next-turn hook receives the completed snapshot")
+        Test.assertion(String.eq(names(context), baseline ++ names(history)), "next-turn hook receives the completed snapshot")
         log(recording, "prepare")
         return Done{Some{T.AgentLoopTurnUpdate{None{}, Some{T.CustomMessage{"prepared"} <> Nil{}}, Some{Model.model(Ai.CustomModelApi{"changed"}, None{})}, Some{Ai.Off{}}}}}
 
@@ -195,7 +198,25 @@ def checked(outcome: Outcome(), history: String, error: String) -> IO(Unit):
     case Done{messages}: Test.assertion(String.is_empty(error) && String.eq(names(messages), history), "full loop returns ordered generated history")
     case Fail{value}: Test.assertion(String.eq(value, error), "full loop propagates the first error")
 
-def scenario(kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
+def baseline(mode: U32) -> String:
+  match mode:
+    case 2: "old|prompt|"
+    case _: "old|"
+
+def entryContext(mode: U32, tools: List<&2, T.AgentTool<V.Value, V.Value, String, V.Value, Unit, String>>) -> H.Context():
+  match mode:
+    case 1: T.AgentContext{T.CustomMessage{"old"} <> Nil{}, Some{tools}}
+    case 3: T.AgentContext{Nil{}, Some{tools}}
+    case 4: T.AgentContext{T.CustomMessage{"old"} <> T.LlmMessage{Ai.Assistant{assistant(text("previous"), Ai.Stop{})}} <> Nil{}, Some{tools}}
+    case _: T.AgentContext{T.CustomMessage{"old"} <> T.CustomMessage{"prompt"} <> Nil{}, Some{tools}}
+
+def invoke(mode: U32, capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config()) -> IO(Outcome()):
+  match mode:
+    case 0: Main.runLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, capture, context, config, T.CustomMessage{"prompt"} <> Nil{})
+    case 1: Entry.runAgentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, T.CustomMessage{"prompt"} <> Nil{}, context, config, capture)
+    case _: Entry.runAgentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~Entry.errorMessage, context, config, capture)
+
+def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
   do IO<Unit>:
     +recording : Log() <- R.new(List<&2, String>, Nil{})
     +requests : Log() <- R.new(List<&2, String>, Nil{})
@@ -209,8 +230,8 @@ def scenario(kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: B
     +validator : C.Callback<H.Input(), H.Checked()> <- C.create(~R.Ref<U32>, ~H.Input(), ~H.Checked(), ~validate, validationCount)
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Log(), ~H.Messages(), ~H.Converted(), ~convert, recording)
     +providerCallback : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams})
-    +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording})
-    +prepareHook : C.Callback<Turn(), PrepareOutput()> <- C.create(~Log(), ~Turn(), ~PrepareOutput(), ~prepare, recording)
+    +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording, baseline(mode)})
+    +prepareHook : C.Callback<Turn(), PrepareOutput()> <- C.create(~Preparing, ~Turn(), ~PrepareOutput(), ~prepare, Preparing{recording, baseline(mode)})
     +steering : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"steering", steeringEnabled, steeringCount, recording})
     +follow : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"follow", followEnabled, followCount, recording})
     +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~abort, Unit{})
@@ -219,9 +240,9 @@ def scenario(kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: B
     +updates : Call.Owners(String, String) <- Call.newOwners(String, String)
     +batches : Main.Batches(V.Value, Unit, String, String, V.Value, Unit, String) <- Main.newBatches(V.Value, Unit, String, String, V.Value, Unit, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
-    context : H.Context() = T.AgentContext{T.CustomMessage{"old"} <> T.CustomMessage{"prompt"} <> Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
+    context : H.Context() = entryContext(mode, T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{})
     config : H.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
-    outcome : Outcome() <- Main.runLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, Main.Capture{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty", providerCallback}, context, config, T.CustomMessage{"prompt"} <> Nil{})
+    outcome : Outcome() <- invoke(mode, Main.Capture{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty", providerCallback}, context, config)
     checked(outcome, expectedHistory, expectedError)
     Main.disposeBatches(V.Value, Unit, String, String, V.Value, Unit, String, batches)
     Call.disposeOwners(String, String, updates)
@@ -254,3 +275,6 @@ def scenario(kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: B
     discarded : U32 <- R.dispose(U32, steeringCount)
     discarded : U32 <- R.dispose(U32, followCount)
     return Unit{}
+
+def scenario(kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
+  scenarioMode(0, kind, terminate, steeringEnabled, followEnabled, shouldStop, failAt, expectedHistory, expectedError, expectedTrace, expectedRequests, expectedProviders, expectedExecutions, expectedValidations)

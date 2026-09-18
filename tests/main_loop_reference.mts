@@ -10,7 +10,8 @@ const validationSource = fs.readFileSync('../pi-mono/packages/ai/src/utils/valid
 const validationBody = stripTypeScriptTypes(validationSource.slice(validationSource.indexOf('const validatorCache ='))).replace(/^export /gm, '');
 const validateToolArguments = new Function('Compile', 'Value', validationBody + ';return validateToolArguments;')(Compile, Value);
 const source = fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts', 'utf8');
-const body = stripTypeScriptTypes(source.slice(source.indexOf('async function runLoop(')));
+const entry = source.slice(source.indexOf('export async function runAgentLoop('), source.indexOf('function createAgentStream('));
+const body = stripTypeScriptTypes(entry + source.slice(source.indexOf('async function runLoop('))).replace(/^export /gm, '');
 let input = ''; for await (const chunk of process.stdin) input += chunk;
 const results = [];
 for (const fixture of JSON.parse(input)) {
@@ -38,7 +39,7 @@ for (const fixture of JSON.parse(input)) {
       assert.equal(id, 'call'); assert.deepEqual(args, {value:42});
       return {content:[],details:'tool',terminate:fixture.terminate};
     }};
-  const snapshot = completed => assert.equal(names(completed.context.messages), 'old|' + names(completed.newMessages));
+  const snapshot = completed => assert.equal(names(completed.context.messages), (fixture.entry === 2 ? 'old|prompt|' : 'old|') + names(completed.newMessages));
   const config = {
     model:{api:'original',provider:'custom-provider'},
     convertToLlm: async messages => {trace.push('convert');return messages.map(m => m.role === 'custom' ? {...m,role:'user'} : m);},
@@ -60,10 +61,17 @@ for (const fixture of JSON.parse(input)) {
     }};
   };
   const validate = (tool, call) => {validations++;return validateToolArguments(tool, call);};
-  const run = new Function('getCurrentTools','getToolStateChanges','toToolDeclaration','normalizeContext','validateToolArguments',body + ';return runLoop;')(getCurrentTools,getToolStateChanges,toToolDeclaration,normalizeContext,validate);
-  const history = [custom('prompt')];let error = '';
-  try {await run({messages:[custom('old'),custom('prompt')],tools:[tool]},history,config,undefined,emit,stream);}
-  catch (cause) {if (cause.message !== 'delivery failed') throw cause; error = cause.message;}
+  const run = new Function('getCurrentTools','getToolStateChanges','toToolDeclaration','normalizeContext','validateToolArguments',body + ';return {runLoop, runAgentLoop, runAgentLoopContinue};')(getCurrentTools,getToolStateChanges,toToolDeclaration,normalizeContext,validate);
+  let history = [custom('prompt')], error = '';
+  const messages = fixture.entry === 1 ? [custom('old')] : fixture.entry === 3 ? []
+    : fixture.entry === 4 ? [custom('old'),{role:'assistant'}] : [custom('old'),custom('prompt')];
+  const context = {messages,tools:[tool]};
+  try {
+    if (!fixture.entry) await run.runLoop(context,history,config,undefined,emit,stream);
+    else if (fixture.entry === 1) history = await run.runAgentLoop([custom('prompt')],context,config,emit,undefined,stream);
+    else history = await run.runAgentLoopContinue(context,config,emit,undefined,stream);
+  }
+  catch (cause) {if (!['delivery failed','Cannot continue: no messages in context','Cannot continue from message role: assistant'].includes(cause.message)) throw cause; error = cause.message;}
   results.push({history:error ? '' : names(history),error,trace:trace.join('|'),requests:requests.join(';'),providers,executions,validations});
 }
 process.stdout.write(JSON.stringify(results));
