@@ -360,3 +360,49 @@ def repollSteeringMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetai
   do IO<Result<&2, &2, ExecutionError, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>:
     contents : List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>> <- R.read(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>, pending)
     repollSteeringContents(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config, pending, contents)
+
+# A missing stop hook is false. Recoverable hook errors are not stop requests.
+def invokeShouldStopAfterTurn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, completed: R.Ref<T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, callback: Maybe<&2, C.Callback<R.Ref<T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, Result<&2, &2, ExecutionError, Bool>>>) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  match callback:
+    case None{}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Done{False{}})
+    case Some{selected}: C.call(R.Ref<T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, Result<&2, &2, ExecutionError, Bool>, selected, completed)
+
+def selectedShouldStopAfterTurn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>) -> Maybe<&2, C.Callback<R.Ref<T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, Result<&2, &2, ExecutionError, Bool>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, callback, _, _, _, _, _, _}: callback
+
+def shouldStopAfterTurn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, completed: R.Ref<T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  do IO<Result<&2, &2, ExecutionError, Bool>>:
+    current : T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch> <- R.read(T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, config)
+    invokeShouldStopAfterTurn(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, completed, selectedShouldStopAfterTurn(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, current))
+
+def stoppedTurnResult(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, emitted: Result<&2, &2, ExecutionError, Unit>) -> Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>:
+  match emitted:
+    case Fail{error}: Fail{error}
+    case Done{_}: Done{None{}}
+
+def queuedTurnResult(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, queued: Result<&2, &2, ExecutionError, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>) -> Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>:
+  match queued:
+    case Fail{error}: Fail{error}
+    case Done{messages}: Done{Some{messages}}
+
+def afterTurnDecision(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, -PartialResult: Data, -ExecutionResult: Data, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, newMessages: T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), decision: Result<&2, &2, ExecutionError, Bool>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>):
+  match decision:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>, Fail{error})
+    case Done{True{}}:
+      do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>>:
+        emitted : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.AgentEnd{newMessages})
+        return stoppedTurnResult(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ExecutionError, emitted)
+    case Done{False{}}:
+      do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>>:
+        queued : Result<&2, &2, ExecutionError, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)> <- pollSteeringMessages(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config)
+        return queuedTurnResult(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ExecutionError, queued)
+
+# The runLoop block after turn_end and completed-context construction. None
+# means agent_end settled; Some supplies pending steering to the inner loop.
+# Hook/emit errors skip polling. Retain the original local newMessages array
+# for agent_end even if the callback replaces fields on completed.
+def finishCompletedTurn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, -PartialResult: Data, -ExecutionResult: Data, +config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, completed: R.Ref<T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, newMessages: T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError)) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>):
+  do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>>:
+    decision : Result<&2, &2, ExecutionError, Bool> <- shouldStopAfterTurn(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config, completed)
+    afterTurnDecision(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, PartialResult, ExecutionResult, config, newMessages, emit, decision)
