@@ -71,6 +71,16 @@ schemas += [
     {'minContains': 100, 'maxContains': 0},
 ]
 
+schemas += [
+    {'minItems': int(1e100)}, {'maxItems': int(1e100)},
+    {'minProperties': 4294967296}, {'maxProperties': 4294967296},
+    {'minItems': 9007199254740993}, {'maxItems': 9007199254740993},
+    {'contains': {'type': 'integer'}, 'minContains': int(1e100)},
+    {'contains': {'type': 'integer'}, 'maxContains': int(1e100)},
+    {'maxContains': 0, 'minContains': 0, 'contains': {'type': 'integer'}},
+    {'minItems': -0.0},
+]
+
 # Native maps treat these as ordinary strings. Exclude prototype-sensitive
 # schemas from the JS oracle; dedicated native checks below assert that policy.
 expected = json.loads(subprocess.check_output(
@@ -99,6 +109,18 @@ def value(v):
     if isinstance(v, list):
         return 'V.ArrayValue{' + seq(map(value, v)) + '}'
     return 'V.ObjectValue{R.Record{' + seq('R.Property{' + json.dumps(k) + ', ' + value(x) + '}' for k, x in v.items()) + '}}'
+
+
+def natural(v):
+    # JSON numbers are binary64; encode the exact integer they represent.
+    rounded = float(v)
+    assert rounded.is_integer() and rounded >= 0
+    n = int(rounded)
+    limbs = []
+    while n:
+        limbs.append(str(n & 65535))
+        n >>= 16
+    return 'B.BigNat{' + seq(limbs) + '}'
 
 
 def schema(s):
@@ -133,9 +155,9 @@ def schema(s):
     def bounds(min_key, max_key, default=0):
         minimum = s.get(min_key, default)
         maximum = s.get(max_key)
-        assert isinstance(minimum, int) and minimum >= 0
-        assert maximum is None or (isinstance(maximum, int) and maximum >= 0)
-        return 'S.CountBounds{' + str(minimum) + 'n, ' + ('None{}' if maximum is None else 'Some{' + str(maximum) + 'n}') + '}'
+        assert float(minimum).is_integer() and minimum >= 0
+        assert maximum is None or (float(maximum).is_integer() and maximum >= 0)
+        return 'S.CountBounds{' + natural(minimum) + ', ' + ('None{}' if maximum is None else 'Some{' + natural(maximum) + '}') + '}'
     for lo, hi, node in [('minItems', 'maxItems', 'ItemCount'), ('minProperties', 'maxProperties', 'PropertyCount')]:
         if lo in s or hi in s:
             nodes.append('S.' + node + '{' + bounds(lo, hi) + '}')
@@ -153,7 +175,9 @@ LOADED = '--loaded' in sys.argv
 SUPPORTED = {'type', 'const', 'enum', 'allOf', 'anyOf', 'oneOf', 'not',
              'properties', 'required', 'additionalProperties', 'items', 'additionalItems',
              'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum',
-             'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly'}
+             'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly',
+             'minItems', 'maxItems', 'minProperties', 'maxProperties',
+             'contains', 'minContains', 'maxContains'}
 
 
 def unsupported(s, path=()):
@@ -167,7 +191,7 @@ def unsupported(s, path=()):
             children = [((*path, key, k), child) for k, child in v.items()]
         elif key in {'allOf', 'anyOf', 'oneOf'} or (key == 'items' and isinstance(v, list)):
             children = [((*path, key, str(i)), child) for i, child in enumerate(v)]
-        elif key in {'not', 'additionalProperties', 'items'}:
+        elif key in {'not', 'additionalProperties', 'items', 'contains'}:
             children = [((*path, key), v)]
         elif key == 'additionalItems' and isinstance(s.get('items'), list):
             children = [((*path, key), v)]
@@ -182,6 +206,7 @@ lines = ['import Base', 'import ../packages/runtime/src/schema.bend as S',
          'import ../packages/runtime/src/schema-value.bend as V',
          'import ../packages/runtime/src/record.bend as R',
          'import ../packages/runtime/src/f64.bend as F',
+         'import ../packages/runtime/src/big-nat.bend as B',
          'import ../packages/runtime/test/schema-load.bend as L',
          'import ../packages/runtime/src/schema-load.bend as Loader',
          'import ../packages/agent/test/message-events.bend as T']

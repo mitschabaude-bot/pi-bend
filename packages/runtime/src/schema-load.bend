@@ -3,6 +3,8 @@ import ./schema.bend as S
 import ./schema-value.bend as V
 import ./record.bend as R
 import ./f64.bend as F
+import ./big-nat.bend as B
+import ./u64.bend as W
 
 # Paths are ordered JSON field/index segments, independent of diagnostic text.
 type Issue is Data:
@@ -25,6 +27,7 @@ type Constructor is Data:
   TupleItems{}
   AllItems{}
   ExtraItems{prefix: List<&2, S.Schema>}
+  Containing{bounds: S.CountBounds}
 
 type Task is Data:
   Read{value: V.Value, path: List<&2, String>}
@@ -151,6 +154,76 @@ def numeric(lower: Bool, +inclusive: Bool, value: V.Value, path: List<&2, String
     case V.Number{+limit}: Bool.pick(Scheduled(), S.finite(F.decode(limit)), Done{Push{Bool.pick(S.Schema, lower, S.Minimum{limit, inclusive}, S.Maximum{limit, inclusive})} <> Nil{}}, invalid(List<&2, Task>, path, "a finite numeric bound"))
     case _: invalid(List<&2, Task>, path, "a finite numeric bound")
 
+def integerWord(value: W.U64) -> B.BigNat:
+  match value:
+    case W.U64{high, low}: B.add(B.shiftLeft(B.fromU32(high), 32n), B.fromU32(low))
+
+def scaledInteger(large: Bool, exponent: U32, significand: W.U64) -> B.BigNat:
+  match large:
+    case True{}: B.shiftLeft(integerWord(significand), U32.to_nat((exponent - 1075 : U32)))
+    case False{}: integerWord(W.shiftRight(significand, U32.to_nat((1075 - exponent : U32))))
+
+def decodedCount(value: F.Decoded) -> B.BigNat:
+  match value:
+    case F.Finite{_, +exponent, significand}: scaledInteger(U32.is_ge(exponent, 1075), exponent, significand)
+    case _: B.zero()
+
+def acceptedCount(valid: Bool, value: F.F64, path: List<&2, String>) -> Result<&2, &2, Error, B.BigNat>:
+  match valid:
+    case True{}: Done{decodedCount(F.decode(value))}
+    case False{}: invalid(B.BigNat, path, "a nonnegative finite integer")
+
+def readCount(value: V.Value, path: List<&2, String>) -> Result<&2, &2, Error, B.BigNat>:
+  match value:
+    case V.Number{+number}: acceptedCount(S.finite(F.decode(number)) && F.isInteger(number) && S.lowerBound(F.compare(number, F.fromU32(0)), True{}), number, path)
+    case _: invalid(B.BigNat, path, "a nonnegative finite integer")
+
+def boundedCount(lower: Bool, +value: B.BigNat) -> S.CountBounds:
+  Bool.pick(S.CountBounds, lower, S.CountBounds{value, None{}}, S.CountBounds{B.zero(), Some{value}})
+
+def countNode(array: Bool, lower: Bool, result: Result<&2, &2, Error, B.BigNat>) -> Scheduled():
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{value}:
+      +bounds = boundedCount(lower, value)
+      Done{Push{Bool.pick(S.Schema, array, S.ItemCount{bounds}, S.PropertyCount{bounds})} <> Nil{}}
+
+def checkedCount(result: Result<&2, &2, Error, B.BigNat>) -> Scheduled():
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{_}: Done{Push{S.Accept{}} <> Nil{}}
+
+def optionalCount(value: Maybe<&2, V.Value>, path: List<&2, String>, fallback: B.BigNat) -> Result<&2, &2, Error, B.BigNat>:
+  match value:
+    case None{}: Done{fallback}
+    case Some{value}: readCount(value, path)
+
+def countMaximum(result: Result<&2, &2, Error, B.BigNat>) -> Result<&2, &2, Error, Maybe<&2, B.BigNat>>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{value}: Done{Some{value}}
+
+def optionalMaximum(value: Maybe<&2, V.Value>, path: List<&2, String>) -> Result<&2, &2, Error, Maybe<&2, B.BigNat>>:
+  match value:
+    case None{}: Done{None{}}
+    case Some{value}: countMaximum(readCount(value, path))
+
+def parentPath(path: List<&2, String>) -> List<&2, String>:
+  match path:
+    case Nil{}: Nil{}
+    case _ <> Nil{}: Nil{}
+    case first <> second <> rest: first <> parentPath(second <> rest)
+
+def containing(value: V.Value, path: List<&2, String>, minimum: Result<&2, &2, Error, B.BigNat>, maximum: Result<&2, &2, Error, Maybe<&2, B.BigNat>>) -> Scheduled():
+  match minimum maximum:
+    case Fail{error} _: Fail{error}
+    case _ Fail{error}: Fail{error}
+    case Done{minimum} Done{maximum}: Done{Read{value, path} <> Build{Containing{S.CountBounds{minimum, maximum}}, 1n} <> Nil{}}
+
+def contains(value: V.Value, +whole: R.Record<V.Value>, +path: List<&2, String>) -> Scheduled():
+  +parent = parentPath(path)
+  containing(value, path, optionalCount(R.get(V.Value, whole, "minContains"), child(parent, "minContains"), B.one()), optionalMaximum(R.get(V.Value, whole, "maxContains"), child(parent, "maxContains")))
+
 type KeywordKind is Data:
   TypeKeyword{}
   ConstKeyword{}
@@ -168,6 +241,13 @@ type KeywordKind is Data:
   MaximumKeyword{}
   ExclusiveMinimumKeyword{}
   ExclusiveMaximumKeyword{}
+  MinItemsKeyword{}
+  MaxItemsKeyword{}
+  MinPropertiesKeyword{}
+  MaxPropertiesKeyword{}
+  ContainsKeyword{}
+  MinContainsKeyword{}
+  MaxContainsKeyword{}
   AnnotationKeyword{}
   UnknownKeyword{}
 
@@ -177,7 +257,7 @@ def selectedKeyword(value: Maybe<&2, KeywordKind>) -> KeywordKind:
     case None{}: UnknownKeyword{}
 
 def keywordKind(key: String) -> KeywordKind:
-  entries = {R.Record{R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
+  entries = {R.Record{R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
   selectedKeyword(R.get(KeywordKind, entries, key))
 
 # Each keyword contributes one conjunct. Cross-keyword rules consult the whole
@@ -203,6 +283,13 @@ def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record
     case MaximumKeyword{}: numeric(False{}, True{}, value, path)
     case ExclusiveMinimumKeyword{}: numeric(True{}, False{}, value, path)
     case ExclusiveMaximumKeyword{}: numeric(False{}, False{}, value, path)
+    case MinItemsKeyword{}: countNode(True{}, True{}, readCount(value, path))
+    case MaxItemsKeyword{}: countNode(True{}, False{}, readCount(value, path))
+    case MinPropertiesKeyword{}: countNode(False{}, True{}, readCount(value, path))
+    case MaxPropertiesKeyword{}: countNode(False{}, False{}, readCount(value, path))
+    case ContainsKeyword{}: contains(value, whole, path)
+    case MinContainsKeyword{}: checkedCount(readCount(value, path))
+    case MaxContainsKeyword{}: checkedCount(readCount(value, path))
     case AnnotationKeyword{}: Done{Push{S.Accept{}} <> Nil{}}
     case UnknownKeyword{}: Fail{Error{path, UnsupportedKeyword{key}}}
 
@@ -238,6 +325,7 @@ def construct(constructor: Constructor, schemas: List<&2, S.Schema>) -> Loaded()
     case TupleItems{} schemas: Done{S.Array{schemas, S.Accept{}}}
     case AllItems{} schema <> Nil{}: Done{S.Array{Nil{}, schema}}
     case ExtraItems{prefix} schema <> Nil{}: Done{S.Array{prefix, schema}}
+    case Containing{bounds} schema <> Nil{}: Done{S.Contains{schema, bounds}}
     case _ _: Fail{Error{Nil{}, InvalidConstruction{}}}
 
 type Stack is Data:

@@ -2,6 +2,7 @@ import Base
 import ./schema-value.bend as V
 import ./record.bend as R
 import ./f64.bend as F
+import ./big-nat.bend as B
 
 # Native executable schema vocabulary. JSON-schema loading and diagnostics are
 # separate concerns; no unknown keyword can silently become an accepting node.
@@ -15,7 +16,7 @@ type JsonType is Data:
   ObjectType{}
 
 type CountBounds is Data:
-  CountBounds{minimum: Nat, maximum: Maybe<&2, Nat>}
+  CountBounds{minimum: B.BigNat, maximum: Maybe<&2, B.BigNat>}
 
 type Schema is Data:
   Accept{}
@@ -44,8 +45,8 @@ type Test is Data:
   ExactlyOne{tests: List<&2, Test>, matched: Bool}
   Counted{previous: Bool, current: Bool, remaining: List<&2, Test>}
   Fixed{value: Bool}
-  CountMatches{tests: List<&2, Test>, count: Nat, bounds: CountBounds}
-  CountNext{matched: Bool, remaining: List<&2, Test>, count: Nat, bounds: CountBounds}
+  CountMatches{tests: List<&2, Test>, count: B.BigNat, bounds: CountBounds}
+  CountNext{matched: Bool, remaining: List<&2, Test>, count: B.BigNat, bounds: CountBounds}
 
 def finite(number: F.Decoded) -> Bool:
   match number:
@@ -94,14 +95,21 @@ def itemTests(values: List<&2, V.Value>, prefix: List<&2, Schema>, +items: Schem
     case value <> tail Nil{}: Check{items, value} <> itemTests(tail, Nil{}, items)
     case value <> tail schema <> rest: Check{schema, value} <> itemTests(tail, rest, items)
 
-def belowMaximum(count: Nat, maximum: Maybe<&2, Nat>) -> Bool:
+# Count limits use compact exact integers: a large declared limit must not
+# allocate one successor cell per unit or overflow a machine word.
+def cardinality(-A: Data, values: List<&2, A>) -> B.BigNat:
+  match values:
+    case Nil{}: B.zero()
+    case _ <> tail: B.add(B.one(), cardinality(A, tail))
+
+def belowMaximum(count: B.BigNat, maximum: Maybe<&2, B.BigNat>) -> Bool:
   match maximum:
     case None{}: True{}
-    case Some{limit}: Nat.is_le(count, limit)
+    case Some{limit}: Cmp.is_le(B.compare(count, limit))
 
-def inBounds(+count: Nat, bounds: CountBounds) -> Bool:
+def inBounds(+count: B.BigNat, bounds: CountBounds) -> Bool:
   match bounds:
-    case CountBounds{minimum, maximum}: Nat.is_ge(count, minimum) && belowMaximum(count, maximum)
+    case CountBounds{minimum, maximum}: Cmp.is_ge(B.compare(count, minimum)) && belowMaximum(count, maximum)
 
 def lowerBound(order: Maybe<&2, Cmp>, inclusive: Bool) -> Bool:
   match order:
@@ -139,11 +147,11 @@ def evaluate(test: Test) -> Bool:
     case Check{Minimum{_, _}, _}: True{}
     case Check{Maximum{limit, inclusive}, V.Number{value}}: upperBound(F.compare(value, limit), inclusive)
     case Check{Maximum{_, _}, _}: True{}
-    case Check{ItemCount{bounds}, V.ArrayValue{values}}: inBounds(List.length(&2, V.Value, values), bounds)
+    case Check{ItemCount{bounds}, V.ArrayValue{values}}: inBounds(cardinality(V.Value, values), bounds)
     case Check{ItemCount{_}, _}: True{}
-    case Check{PropertyCount{bounds}, V.ObjectValue{values}}: inBounds(List.length(&2, R.Property<V.Value>, R.entries(V.Value, values)), bounds)
+    case Check{PropertyCount{bounds}, V.ObjectValue{values}}: inBounds(cardinality(R.Property<V.Value>, R.entries(V.Value, values)), bounds)
     case Check{PropertyCount{_}, _}: True{}
-    case Check{Contains{schema, bounds}, V.ArrayValue{values}}: evaluate(CountMatches{containsTests(values, schema), 0n, bounds})
+    case Check{Contains{schema, bounds}, V.ArrayValue{values}}: evaluate(CountMatches{containsTests(values, schema), B.zero(), bounds})
     case Check{Contains{_, _}, _}: True{}
     case Check{Object{properties, required, additional}, V.ObjectValue{+value}}:
       evaluate(Every{requiredTests(required, value)}) && evaluate(Every{propertyTests(R.entries(V.Value, value), properties, additional)})
@@ -160,7 +168,7 @@ def evaluate(test: Test) -> Bool:
     case Counted{previous, current, tail}: evaluate(ExactlyOne{tail, previous || current})
     case CountMatches{Nil{}, count, bounds}: inBounds(count, bounds)
     case CountMatches{head <> tail, count, bounds}: evaluate(CountNext{evaluate(head), tail, count, bounds})
-    case CountNext{matched, tail, count, bounds}: evaluate(CountMatches{tail, count + Bool.pick(Nat, matched, 1n, 0n), bounds})
+    case CountNext{matched, tail, count, bounds}: evaluate(CountMatches{tail, B.add(count, Bool.pick(B.BigNat, matched, B.one(), B.zero())), bounds})
 
 def check(schema: Schema, value: V.Value) -> Bool:
   evaluate(Check{schema, value})
