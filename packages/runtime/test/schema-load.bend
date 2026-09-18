@@ -72,6 +72,7 @@ def main() -> IO(Unit):
     unsupported(L.compile(object("minLength", V.Number{F.fromU32(1)})), "minLength", "minLength")
     unsupported(L.compile(object("anyOf", V.ArrayValue{V.Boolean{True{}} <> object("pattern", V.Text{"x"}) <> Nil{}})), "anyOf/1/pattern", "pattern")
     unsupported(L.compile(object("properties", object("x", object("format", V.Text{"email"})))), "properties/x/format", "format")
+    invalid(L.compile(object("uniqueItems", V.Text{"true"})), "uniqueItems")
     invalid(L.compile(object("minItems", V.Number{F.negate(F.fromU32(1))})), "minItems")
     invalid(L.compile(object("maxItems", V.Number{F.divide(F.fromU32(1), F.fromU32(2))})), "maxItems")
     invalid(L.compile(object("minProperties", V.Text{"2"})), "minProperties")

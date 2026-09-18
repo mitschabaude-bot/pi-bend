@@ -9,6 +9,7 @@ import ./big-nat.bend as B
 # renderer. Paths retain individual field/index segments, including empty keys.
 type Reason is Data:
   Rejected{}
+  DuplicateItems{}
   ExpectedType{expected: S.JsonType}
   ExpectedTypes{expected: List<&2, S.JsonType>}
   ExpectedConstant{expected: V.Value}
@@ -141,6 +142,8 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
     case S.Not{inner} value: emitUnless(Bool.not(S.check(inner, value)), path, NegatedSchema{})
     case S.Minimum{+limit, +inclusive} V.Number{number}: emitUnless(S.lowerBound(F.compare(number, limit), inclusive), path, NumericMinimum{limit, inclusive})
     case S.Maximum{+limit, +inclusive} V.Number{number}: emitUnless(S.upperBound(F.compare(number, limit), inclusive), path, NumericMaximum{limit, inclusive})
+    case S.UniqueItems{} V.ArrayValue{values}: emitUnless(S.unique(values), path, DuplicateItems{})
+    case S.UniqueItems{} _: Nil{}
     case S.ItemCount{+bounds} V.ArrayValue{values}:
       +actual = S.cardinality(V.Value, values)
       emitUnless(S.inBounds(actual, bounds), path, ItemCount{actual, bounds})

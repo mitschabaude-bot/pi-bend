@@ -261,3 +261,24 @@ def integerDecoded(value: Decoded) -> Bool:
     case _: False{}
 
 def isInteger(value: F64) -> Bool: integerDecoded(decode(value))
+
+# Truncate toward zero by clearing fractional significand bits. In particular,
+# negative sub-unit values become negative zero and special values retain bits.
+def truncateSmall(small: Bool, negative: Bool, +exponent: U32, significand: W.U64) -> F64:
+  match small:
+    case True{}: pack(negative, 0, W.zero())
+    case False{}:
+      +shift = U32.to_nat((1075 - exponent : U32))
+      pack(negative, exponent, W.shiftLeft(W.shiftRight(significand, shift), shift))
+
+def truncateLarge(large: Bool, original: F64, negative: Bool, +exponent: U32, significand: W.U64) -> F64:
+  match large:
+    case True{}: original
+    case False{}: truncateSmall(U32.is_lt(exponent, 1023), negative, exponent, significand)
+
+def truncated(original: F64, decoded: Decoded) -> F64:
+  match decoded:
+    case Finite{negative, +exponent, significand}: truncateLarge(U32.is_ge(exponent, 1075), original, negative, exponent, significand)
+    case _: original
+
+def truncate(+value: F64) -> F64: truncated(value, decode(value))

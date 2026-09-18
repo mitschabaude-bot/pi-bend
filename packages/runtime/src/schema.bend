@@ -31,6 +31,7 @@ type Schema is Data:
   Not{schema: Schema}
   Minimum{limit: F.F64, inclusive: Bool}
   Maximum{limit: F.F64, inclusive: Bool}
+  UniqueItems{}
   ItemCount{bounds: CountBounds}
   PropertyCount{bounds: CountBounds}
   Contains{schema: Schema, bounds: CountBounds}
@@ -77,6 +78,12 @@ def member(values: List<&2, V.Value>, +value: V.Value) -> Bool:
   match values:
     case Nil{}: False{}
     case head <> tail: V.equal(head, value) || member(tail, value)
+
+def unique(values: List<&2, V.Value>) -> Bool:
+  match values:
+    case Nil{}: True{}
+    case head <> +rest:
+      Bool.pick(Unit -> Bool, member(rest, head), _ => False{}, _ => unique(rest))(Unit{})
 
 def tests(schemas: List<&2, Schema>, +value: V.Value) -> List<&2, Test>:
   match schemas:
@@ -163,6 +170,8 @@ def evaluate(test: Test) -> Bool:
     case Check{Minimum{_, _}, _}: True{}
     case Check{Maximum{limit, inclusive}, V.Number{value}}: upperBound(F.compare(value, limit), inclusive)
     case Check{Maximum{_, _}, _}: True{}
+    case Check{UniqueItems{}, V.ArrayValue{values}}: unique(values)
+    case Check{UniqueItems{}, _}: True{}
     case Check{ItemCount{bounds}, V.ArrayValue{values}}: inBounds(cardinality(V.Value, values), bounds)
     case Check{ItemCount{_}, _}: True{}
     case Check{PropertyCount{bounds}, V.ObjectValue{values}}: inBounds(cardinality(R.Property<V.Value>, R.entries(V.Value, values)), bounds)

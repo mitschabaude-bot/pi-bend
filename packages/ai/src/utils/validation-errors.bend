@@ -119,6 +119,7 @@ def countIssues(+array: Bool, +actual: B.BigNat, bounds: Schema.CountBounds, +pa
 
 def nativeIssue(path: String, reason: Native.Reason) -> Maybe<&2, List<&2, Issue>>:
   match reason:
+    case Native.DuplicateItems{}: simple(path, "must not have duplicate items")
     case Native.Rejected{}: simple(path, "schema is false")
     case Native.ExpectedType{expected}: simple(path, "must be " ++ typeName(expected))
     case Native.ExpectedTypes{expected}: simple(path, "must be either " ++ String.join(typeNames(expected), " or "))
