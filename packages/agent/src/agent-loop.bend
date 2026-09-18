@@ -860,3 +860,47 @@ def failToolCallsFromTruncatedMessage(-Parameters: Data, -Arguments: Data, -Diag
         R.modify(List<&2, R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<R.Ref<Record.Record<DetailValue>>>>>>>, Unit, batches, values => (batch <> values, Unit{}))
         first : Result<&2, &2, ExecutionError, Maybe<&2, T.AgentToolCall(Arguments)>> <- nextTruncatedCall(Arguments, ExecutionError, calls, 0n, Done{Unit{}})
         failTruncatedCalls(Parameters, Arguments, DiagnosticDetails, Custom, PartialResult, ExecutionError, DetailValue, run, calls, batch, 0n, first)
+
+# Array.filter creates a new array but retains each selected call object,
+# including repeated references. Non-tool content is never dereferenced.
+def toolCallsInContent(-Arguments: Data, content: List<&2, Ai.AssistantContent<Arguments>>) -> List<&2, T.AgentToolCall(Arguments)>:
+  match content:
+    case Nil{}: Nil{}
+    case Ai.AssistantToolCall{call} <> rest: call <> toolCallsInContent(Arguments, rest)
+    case _ <> rest: toolCallsInContent(Arguments, rest)
+
+def assistantContent(-Arguments: Data, -DiagnosticDetails: Data, message: Ai.AssistantMessage<Arguments, DiagnosticDetails>) -> R.Ref<List<&2, Ai.AssistantContent<Arguments>>>:
+  match message:
+    case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
+
+def collectAssistantToolCalls(-Arguments: Data, -DiagnosticDetails: Data, assistant: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>) -> IO(R.Ref<List<&2, T.AgentToolCall(Arguments)>>):
+  do IO<R.Ref<List<&2, T.AgentToolCall(Arguments)>>>:
+    message : Ai.AssistantMessage<Arguments, DiagnosticDetails> <- R.read(Ai.AssistantMessage<Arguments, DiagnosticDetails>, assistant)
+    content : List<&2, Ai.AssistantContent<Arguments>> <- R.read(List<&2, Ai.AssistantContent<Arguments>>, assistantContent(Arguments, DiagnosticDetails, message))
+    R.new(List<&2, T.AgentToolCall(Arguments)>, toolCallsInContent(Arguments, content))
+
+type PreparedToolCallBatch<-Arguments: Data> is Data:
+  PreparedToolCallBatch{toolCalls: R.Ref<List<&2, T.AgentToolCall(Arguments)>>, executionMode: T.ToolExecutionMode}
+
+def configuredToolExecution(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>) -> Maybe<&2, T.ToolExecutionMode>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, configured, _, _}: configured
+
+def availableContextTools(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>) -> IO(List<&2, R.Ref<T.AgentTool<Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError>>>):
+  match context:
+    case T.AgentContext{_, None{}}: IO.pure(List<&2, R.Ref<T.AgentTool<Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError>>>, Nil{})
+    case T.AgentContext{_, Some{reference}}: R.read(List<&2, R.Ref<T.AgentTool<Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError>>>, reference)
+
+# Prepare the exact call array and whole-batch mode for normal execution.
+# Read the global setting after the per-tool scan, as the source does.
+# The returned call-array cell is new and caller-owned; calls/tools are borrowed.
+def prepareToolCallBatch(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, assistant: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>) -> IO(PreparedToolCallBatch<Arguments>):
+  do IO<PreparedToolCallBatch<Arguments>>:
+    +calls : R.Ref<List<&2, T.AgentToolCall(Arguments)>> <- collectAssistantToolCalls(Arguments, DiagnosticDetails, assistant)
+    currentContext : T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError> <- R.read(T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, context)
+    tools : List<&2, R.Ref<T.AgentTool<Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError>>> <- availableContextTools(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, currentContext)
+    values : List<&2, T.AgentToolCall(Arguments)> <- R.read(List<&2, T.AgentToolCall(Arguments)>, calls)
+    sequential : Bool <- hasSequentialToolCall(Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError, values, tools)
+    currentConfig : T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch> <- R.read(T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, config)
+    mode : T.ToolExecutionMode = Bool.pick(T.ToolExecutionMode, sequential || isSequential(configuredToolExecution(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, currentConfig)), T.Sequential{}, T.Parallel{})
+    return PreparedToolCallBatch{calls, mode}
