@@ -9,3 +9,5 @@ for suite in agent-event-stream tool-finalization native-loop native-turn-hooks 
   done
 done
 python3 tests/failed_turn_vectors.py
+
+python3 tests/tool_update_scope.py

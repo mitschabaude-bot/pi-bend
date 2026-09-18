@@ -31,3 +31,6 @@ Other retained supplemental checks include 84 tool selections, 126 execution pol
 
 
 After resuming the full port, `packages/agent/test/tool-finalization.bend` adds nine native scenarios for the actual hook invocation/finalization path, with channel gates checking awaited settlement. `agent-event-stream.bend` checks nonempty/empty final histories, buffered ordering and ignored late pushes. Both run through `tests/native-agent.sh` on one/four threads. They supplement the still-pending full `agent-loop.test.ts` port and do not change its status.
+
+
+`tests/tool_update_scope.py` adds supplemental coverage for invocation-scoped update tracking. It executes the pinned `executePreparedToolCall` helper for failure-selection/late-update checks, runs native scope transitions and 256 concurrent completions on one/four threads, and verifies that copying a completion ticket is rejected by the compiler. The full `agent.test.ts` cases “should ignore tool updates after the tool execution settles” and “should ignore a settled parallel tool update while another tool is still running” still require the agent/executor and remain unported.
