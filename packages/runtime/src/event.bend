@@ -2,9 +2,10 @@ import Base
 import ./ref.bend as R
 import ./f64.bend as F
 import ./utf16.bend as U
+import ./clock.bend as Clock
 
-# Node Event state. Construction with a supplied monotonic timestamp is internal;
-# the public clock-backed constructor and complete EventTarget are still pending.
+# Node Event state. One runtime clock supplies all constructor timestamps;
+# complete EventTarget integration and managed lifetimes are still pending.
 type EventInit is Data:
   EventInit{bubbles: Bool, cancelable: Bool, composed: Bool}
 
@@ -40,6 +41,12 @@ def createAt(-Target: Data, eventType: String, init: EventInit, timeStamp: F.F64
   do IO<WebEvent<Target>>:
     state : R.Ref<State<Target>> <- R.new(State<Target>, State{Description{U.normalize(eventType), init, timeStamp, trusted}, Location{None{}, False{}, False{}}, Flags{False{}, False{}, False{}}})
     return WebEvent{state}
+
+# The runtime supplies its shared clock explicitly instead of a hidden global.
+def new(-Target: Data, clock: Clock.Clock, eventType: String, init: EventInit) -> IO(WebEvent<Target>):
+  do IO<WebEvent<Target>>:
+    stamp : F.F64 <- Clock.now(clock)
+    createAt(Target, eventType, init, stamp, False{})
 
 def same(-Target: Data, left: WebEvent<Target>, right: WebEvent<Target>) -> Bool:
   match left right:

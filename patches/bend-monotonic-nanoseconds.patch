@@ -1,0 +1,34 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -218,6 +218,11 @@
+ def IO.now() -> IO(Nat):
+   import "./effs/now.c"
+   import "./effs/now.js"
++
++# Exact monotonic nanoseconds as high/low U32 limbs, with an unspecified epoch.
++def IO.monotonicNanoseconds() -> IO(U32 & U32):
++  import "./effs/monotonic_nanoseconds.c"
++  import "./effs/monotonic_nanoseconds.js"
+ 
+ def Chan.new(-A: Type, room: U32) -> IO(Chan(A)):
+   import "./effs/chan_new.c"
+--- /dev/null
++++ b/bend2/effs/monotonic_nanoseconds.c
+@@ -0,0 +1,9 @@
++// Exact monotonic ticks. Clock origins and numeric conversion belong in Bend.
++Term io_monotonicnanoseconds_run(Env e, Term* f, IoWork* w) {
++  u64 value = io_tick();
++  return io_tup(e, (u32)(value >> 32), (u32)value);
++}
++
++static void __attribute__((constructor)) io_monotonicnanoseconds_use(void) {
++  io_eff(CID_IO_MONOTONICNANOSECONDS, io_monotonicnanoseconds_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/monotonic_nanoseconds.js
+@@ -0,0 +1,5 @@
++// The JS compiler backend implements the same exact high/low primitive.
++function io_monotonicnanoseconds() {
++  const value = process.hrtime.bigint();
++  return io_tup(Number((value >> 32n) & 0xffffffffn), Number(value & 0xffffffffn));
++}
