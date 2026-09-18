@@ -247,3 +247,17 @@ def fromU64(+value: W.U64) -> F64:
   shrinkInteger(8n, W.atLeast(W.compare(value, W.U64{16777216, 0})), 1078, value)
 
 def fromU32(value: U32) -> F64: fromU64(W.fromU32(value))
+
+# Number.isInteger semantics: signed zeros are integers, infinities/NaNs are
+# not. A finite number is integral exactly when shifting away its fractional
+# significand bits and restoring them leaves the significand unchanged.
+def integralFinite(+exponent: U32, +significand: W.U64) -> Bool:
+  +shift = U32.to_nat(U32.min((1075 - U32.min(exponent, 1075) : U32), 64))
+  W.equal(significand, W.shiftLeft(W.shiftRight(significand, shift), shift))
+
+def integerDecoded(value: Decoded) -> Bool:
+  match value:
+    case Finite{_, exponent, significand}: integralFinite(exponent, significand)
+    case _: False{}
+
+def isInteger(value: F64) -> Bool: integerDecoded(decode(value))
