@@ -6,6 +6,8 @@ import ../../runtime/src/record.bend as R
 import ../../runtime/test/schema.bend as Assert
 import ./api/strict-json-schema.bend as Check
 import ./api/grammar-input.bend as Grammar
+import ../src/api/openai-responses-shared.bend as O
+import ../src/types.bend as T
 
 def parameters() -> V.Value:
   D.schema(D.object(R.Record{
@@ -67,7 +69,75 @@ def grammarDeltas() -> IO(Unit):
     startedGrammar(C.appendGrammarToolInputJsonDelta(original, "payload", "a\"", False{}))
     Assert.assertion(Grammar.sameBuffer(original, C.GrammarToolInputJsonBuffer{"", False{}, False{}}), "retained grammar buffer remains unchanged")
 
+def sampleParameters() -> V.Value:
+  V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"payload", D.schema(D.string())} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"payload"} <> Nil{}}} <> R.Property{"additionalProperties", V.Boolean{False{}}} <> Nil{}}}
+
+def sampleTool(schema: V.Value, config: Maybe<&2, T.ToolConstrainedSampling>) -> T.Tool<V.Value>:
+  T.Tool{"sample_tool", "Sample tool", schema, config}
+
+def strictConfig(required: Bool) -> Maybe<&2, T.ToolConstrainedSampling>:
+  Some{T.SamplingConfigured{T.JsonSchemaSampling{Bool.pick(T.SamplingStrictness, required, T.Require{}, T.Prefer{})}}}
+
+def larkConfig() -> Maybe<&2, T.ToolConstrainedSampling>:
+  Some{T.SamplingConfigured{T.GrammarSampling{T.GrammarVariants{Some{"start: /[a-z]+/"}, None{}}}}}
+
+def sameStrict(left: Maybe<&2, T.Nullable<Bool>>, right: Maybe<&2, T.Nullable<Bool>>) -> Bool:
+  match left right:
+    case None{} None{}: True{}
+    case Some{T.NullValue{}} Some{T.NullValue{}}: True{}
+    case Some{T.PresentValue{a}} Some{T.PresentValue{b}}: Grammar.sameBool(a,b)
+    case _ _: False{}
+
+def functionMatches(result: Result<&2, &2, C.Error, List<&2, O.OpenAITool>>, schema: V.Value, strict: Maybe<&2, T.Nullable<Bool>>) -> Bool:
+  match result:
+    case Done{O.FunctionTool{"sample_tool", "Sample tool", actual, setting, None{}} <> Nil{}}: V.equal(actual,schema) && sameStrict(setting,strict)
+    case _: False{}
+
+def customMatches(result: Result<&2, &2, C.Error, List<&2, O.OpenAITool>>) -> Bool:
+  match result:
+    case Done{O.CustomTool{"sample_tool", "Sample tool", O.GrammarToolFormat{T.OpenAILark{}, "start: /[a-z]+/"}, None{}} <> Nil{}}: True{}
+    case _: False{}
+
+def conversionFails(result: Result<&2, &2, C.Error, List<&2, O.OpenAITool>>, expected: String) -> Bool:
+  match result:
+    case Fail{error}: String.eq(C.errorMessage(error),expected)
+    case _: False{}
+
+def supportedConstraints() -> IO(Unit):
+  +schema = sampleParameters()
+  +grammar = sampleTool(schema,larkConfig())
+  do IO<Unit>:
+    Assert.assertion(functionMatches(O.convertResponsesTools(sampleTool(schema,strictConfig(False{})) <> Nil{},None{}),schema,Some{T.PresentValue{True{}}}), "preferred supported strict schema")
+    Assert.assertion(conversionFails(O.convertResponsesTools(sampleTool(schema,strictConfig(True{})) <> Nil{},Some{O.ConvertResponsesToolsOptions{None{},Some{False{}},None{},None{}}}), "Tool \"sample_tool\" requires JSON-schema constrained sampling, but strict tools are unsupported."), "required strict capability rejection")
+    Assert.assertion(customMatches(O.convertResponsesTools(grammar <> Nil{},Some{O.ConvertResponsesToolsOptions{None{},None{},Some{True{}},None{}}})), "supported Lark tool declaration")
+    Assert.assertion(conversionFails(O.convertResponsesTools(sampleTool(schema,Some{T.SamplingConfigured{T.GrammarSampling{T.GrammarVariants{None{},None{}}}}}) <> Nil{},Some{O.ConvertResponsesToolsOptions{None{},None{},Some{True{}},None{}}}), "Tool \"sample_tool\" cannot use grammar constrained sampling: no supported grammar variant was provided."), "missing grammar variant rejection")
+    Assert.assertion(functionMatches(O.convertResponsesTools(grammar <> Nil{},Some{O.ConvertResponsesToolsOptions{None{},Some{False{}},Some{False{}},None{}}}),schema,None{}), "unsupported grammar falls back without a strict field")
+    Assert.assertion(functionMatches(O.convertResponsesTools(sampleTool(schema,Some{T.SamplingDisabled{}}) <> Nil{},None{}),schema,Some{T.PresentValue{False{}}}) && functionMatches(O.convertResponsesTools(sampleTool(schema,None{}) <> Nil{},None{}),schema,Some{T.PresentValue{False{}}}), "disabled sampling equals absent sampling")
+    IO.print("PASS converts supported constraints and falls back when unsupported")
+
+def schemaFails(result: Result<&2, &2, C.Error, V.Value>, expected: String) -> Bool:
+  match result:
+    case Fail{error}: String.eq(C.errorMessage(error),expected)
+    case _: False{}
+
+def rejectedSchema(+schema: V.Value, +reason: String) -> IO(Unit):
+  do IO<Unit>:
+    Assert.assertion(schemaFails(C.makeStrictJsonSchema(schema),reason), "unsupported strict schema error")
+    Assert.assertion(Check.sameResolution(C.resolveJsonSchemaStrictSampling(sampleTool(schema,strictConfig(False{})),True{}),Done{None{}}), "unsupported preferred schema falls back")
+    Assert.assertion(functionMatches(O.convertResponsesTools(sampleTool(schema,strictConfig(False{})) <> Nil{},Some{O.ConvertResponsesToolsOptions{None{},Some{True{}},None{},None{}}}),schema,Some{T.PresentValue{False{}}}), "fallback retains original schema with strict false")
+    Assert.assertion(Check.sameResolution(C.resolveJsonSchemaStrictSampling(sampleTool(schema,strictConfig(True{})),True{}),Fail{"Tool \"sample_tool\" requires JSON-schema constrained sampling, but " ++ reason ++ "."}), "unsupported required schema fails")
+
+def rejectsUnsafeSchemas() -> IO(Unit):
+  do IO<Unit>:
+    rejectedSchema(V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"metadata", V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.new(V.Value)}} <> R.Property{"additionalProperties", D.schema(D.string())} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"metadata"} <> Nil{}}} <> Nil{}}}, "schema-valued or true additionalProperties is unsupported")
+    rejectedSchema(V.ObjectValue{R.Record{R.Property{"allOf", V.ArrayValue{D.schema(D.object(R.Record{R.Property{"a", D.required(D.string())} <> Nil{}})) <> D.schema(D.object(R.Record{R.Property{"b", D.required(D.number())} <> Nil{}})) <> Nil{}}} <> Nil{}}}, "allOf schemas are unsupported")
+    rejectedSchema(D.schema(D.object(R.Record{R.Property{"value", D.required(D.union(D.object(R.Record{R.Property{"nested", D.required(D.string())} <> Nil{}}) <> D.null() <> Nil{}))} <> Nil{}})), "object and array unions are unsupported")
+    rejectedSchema(V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"child", V.ObjectValue{R.Record{R.Property{"$ref", V.Text{"https://example.com/child.json"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"child"} <> Nil{}}} <> Nil{}}}, "$ref schemas are unsupported")
+    IO.print("PASS falls back or rejects schemas that cannot be safely converted")
+
 def main() -> IO(Unit):
   do IO<Unit>:
+    supportedConstraints()
     derivesStrictSchemas()
+    rejectsUnsafeSchemas()
     grammarDeltas()

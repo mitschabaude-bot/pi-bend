@@ -5,6 +5,13 @@ import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/json-string.bend as JsonString
 import ../../../runtime/src/utf16.bend as Utf16
+import ../../../runtime/src/text-space.bend as Space
+
+type GrammarSchemaError is Data:
+  ObjectParametersRequired{}
+  OneRequiredStringProperty{}
+  MissingPropertySchema{inputProperty: String}
+  PropertyMustBeString{inputProperty: String}
 
 type Error is Data:
   UnsupportedStrictJsonSchema{error: Strict.Error}
@@ -13,6 +20,15 @@ type Error is Data:
   GrammarArgumentNotString{toolName: String, inputProperty: String}
   GrammarInputClosed{inputProperty: String}
   GrammarInputChanged{inputProperty: String}
+  GrammarVariantMissing{toolName: String}
+  InvalidGrammarSchema{toolName: String, reason: GrammarSchemaError}
+
+def grammarSchemaMessage(reason: GrammarSchemaError) -> String:
+  match reason:
+    case ObjectParametersRequired{}: "grammar constrained sampling requires an object parameter schema"
+    case OneRequiredStringProperty{}: "grammar constrained sampling requires exactly one required string property"
+    case MissingPropertySchema{property}: "grammar constrained sampling requires a properties entry for " ++ property
+    case PropertyMustBeString{property}: "grammar constrained sampling property " ++ property ++ " must have type string"
 
 def errorMessage(error: Error) -> String:
   match error:
@@ -22,6 +38,9 @@ def errorMessage(error: Error) -> String:
     case GrammarArgumentNotString{name, property}: "Grammar tool call \"" ++ name ++ "\" requires argument \"" ++ property ++ "\" to be a string."
     case GrammarInputClosed{property}: "grammar tool input for property \"" ++ property ++ "\" changed after it was closed"
     case GrammarInputChanged{property}: "grammar tool input for property \"" ++ property ++ "\" changed non-monotonically"
+
+    case GrammarVariantMissing{name}: "Tool \"" ++ name ++ "\" cannot use grammar constrained sampling: no supported grammar variant was provided."
+    case InvalidGrammarSchema{name, reason}: "Tool \"" ++ name ++ "\" cannot use grammar constrained sampling: " ++ grammarSchemaMessage(reason) ++ "."
 
 def strictSchemaResult(result: Result<&2, &2, Strict.Error, V.Value>) -> Result<&2, &2, Error, V.Value>:
   match result:
@@ -105,3 +124,74 @@ def appendGrammarToolInputJsonDelta(buffer: GrammarToolInputJsonBuffer, inputPro
       Bool.pick(Result<&2, &2, Error, GrammarToolInputJsonUpdate>, close && Utf16.equal(input, nextInput), Done{GrammarToolInputJsonUpdate{GrammarToolInputJsonBuffer{input, started, True{}}, None{}}}, Fail{GrammarInputClosed{inputProperty}})
     case GrammarToolInputJsonBuffer{+input, +started, False{}}:
       appendOpenGrammar(prefixSuffix(codeUnits(input), codeUnits(nextInput)), GrammarToolInputJsonBuffer{input, started, False{}}, started, inputProperty, nextInput, close)
+
+type GrammarConstrainedSampling is Data:
+  GrammarConstrainedSampling{format: T.GrammarFormat, definition: String, inputProperty: String}
+
+def grammarProperty(value: Maybe<&2, V.Value>, +property: String) -> Result<&2, &2, GrammarSchemaError, String>:
+  match value:
+    case None{}: Fail{MissingPropertySchema{property}}
+    case Some{V.ObjectValue{fields}}: Bool.pick(Result<&2, &2, GrammarSchemaError, String>, Strict.textEquals(R.get(V.Value, fields, "type"), "string"), Done{property}, Fail{PropertyMustBeString{property}})
+    case _: Fail{PropertyMustBeString{property}}
+
+def grammarProperties(value: Maybe<&2, V.Value>, +property: String) -> Result<&2, &2, GrammarSchemaError, String>:
+  match value:
+    case Some{V.ObjectValue{fields}}: grammarProperty(R.get(V.Value, fields, property), property)
+    case _: Fail{MissingPropertySchema{property}}
+
+def grammarRequired(value: Maybe<&2, V.Value>, fields: R.Record<V.Value>) -> Result<&2, &2, GrammarSchemaError, String>:
+  match value:
+    case Some{V.ArrayValue{V.Text{property} <> Nil{}}}: grammarProperties(R.get(V.Value, fields, "properties"), property)
+    case _: Fail{OneRequiredStringProperty{}}
+
+def grammarObject(isObject: Bool, +fields: R.Record<V.Value>) -> Result<&2, &2, GrammarSchemaError, String>:
+  match isObject:
+    case True{}: grammarRequired(R.get(V.Value, fields, "required"), fields)
+    case False{}: Fail{ObjectParametersRequired{}}
+
+def inferGrammarInputProperty(schema: V.Value) -> Result<&2, &2, GrammarSchemaError, String>:
+  match schema:
+    case V.ObjectValue{+fields}: grammarObject(Strict.textEquals(R.get(V.Value, fields, "type"), "object"), fields)
+    case _: Fail{ObjectParametersRequired{}}
+
+def nonblank(value: Maybe<&2, String>) -> Maybe<&2, String>:
+  match value:
+    case None{}: None{}
+    case Some{+text}: Bool.pick(Maybe<&2, String>, Space.blank(text), None{}, Some{text})
+
+def resolvedGrammar(name: String, format: T.GrammarFormat, definition: String, property: Result<&2, &2, GrammarSchemaError, String>) -> Result<&2, &2, Error, Maybe<&2, GrammarConstrainedSampling>>:
+  match property:
+    case Fail{reason}: Fail{InvalidGrammarSchema{name, reason}}
+    case Done{inputProperty}: Done{Some{GrammarConstrainedSampling{format, definition, inputProperty}}}
+
+def chooseGrammar(name: String, schema: V.Value, lark: Maybe<&2, String>, regex: Maybe<&2, String>) -> Result<&2, &2, Error, Maybe<&2, GrammarConstrainedSampling>>:
+  match lark regex:
+    case Some{definition} _: resolvedGrammar(name, T.OpenAILark{}, definition, inferGrammarInputProperty(schema))
+    case None{} Some{definition}: resolvedGrammar(name, T.OpenAIRegex{}, definition, inferGrammarInputProperty(schema))
+    case None{} None{}: Fail{GrammarVariantMissing{name}}
+
+def resolveGrammarConstrainedSampling(tool: T.Tool<V.Value>, supportsOpenAIGrammarTools: Bool) -> Result<&2, &2, Error, Maybe<&2, GrammarConstrainedSampling>>:
+  match tool supportsOpenAIGrammarTools:
+    case T.Tool{name, _, schema, Some{T.SamplingConfigured{T.GrammarSampling{T.GrammarVariants{lark, regex}}}}} True{}: chooseGrammar(name, schema, nonblank(lark), nonblank(regex))
+    case _ _: Done{None{}}
+
+def addGrammarProperty(result: Result<&2, &2, Error, Maybe<&2, GrammarConstrainedSampling>>, name: String, properties: R.Record<String>) -> Result<&2, &2, Error, R.Record<String>>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{None{}}: Done{properties}
+    case Done{Some{GrammarConstrainedSampling{_, _, property}}}: Done{R.set(String, properties, name, property)}
+
+def grammarToolName(tool: T.Tool<V.Value>) -> String:
+  match tool:
+    case T.Tool{name, _, _, _}: name
+
+def grammarPropertiesFrom(tools: List<&2, T.Tool<V.Value>>, +supported: Bool, result: Result<&2, &2, Error, R.Record<String>>) -> Result<&2, &2, Error, R.Record<String>>:
+  match tools result:
+    case _ Fail{error}: Fail{error}
+    case Nil{} Done{properties}: Done{properties}
+    case +head <> tail Done{properties}: grammarPropertiesFrom(tail, supported, addGrammarProperty(resolveGrammarConstrainedSampling(head, supported), grammarToolName(head), properties))
+
+def createGrammarToolInputProperties(tools: Maybe<&2, List<&2, T.Tool<V.Value>>>, supportsOpenAIGrammarTools: Bool) -> Result<&2, &2, Error, R.Record<String>>:
+  match tools:
+    case None{}: Done{R.new(String)}
+    case Some{values}: grammarPropertiesFrom(values, supportsOpenAIGrammarTools, Done{R.new(String)})

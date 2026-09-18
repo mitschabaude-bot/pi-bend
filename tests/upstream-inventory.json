@@ -588,7 +588,7 @@
         "packages/ai/test/constrained-sampling.bend"
       ],
       "sha256": "1c1ba81ee0a026e175bd654b443bfae3093d2003942cb27c9f29a5e6edc5aadf",
-      "notes": "Two of six original named cases ported: derives strict provider schemas without changing tool definitions; keeps grammar input JSON deltas append-only. Native schema builders retain original declarations; immutable grammar buffers return explicit updates and typed errors. Exact emitted JSON replaces the named test\u2019s parse-and-compare assertion. Supplemental actual-source tests cover strict conversion/policy and grammar input state transitions/argument checking. Four named cases still need Responses tool/message conversion or stream processing."
+      "notes": "Four of six original named cases ported: supported constraints/fallback, immutable strict schema derivation, rejection/fallback of unsafe schemas, and append-only grammar JSON deltas. Native builders, typed provider tool declarations, policy errors and immutable buffer updates preserve the original assertions. Supplemental source comparisons cover grammar selection, declaration maps, strict/grammar capability combinations, wire serialization and error precedence. Grammar-call message replay and custom Responses initial-input streaming remain pending."
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",

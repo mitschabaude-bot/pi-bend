@@ -1,3 +1,4 @@
+import ../packages/ai/src/api/openai-responses-shared.bend as OpenAIResponsesShared
 import ../packages/ai/src/api/constrained-sampling.bend as ConstrainedSampling
 import ../packages/ai/src/utils/estimate.bend as Estimate
 import ../packages/ai/src/api/simple-options.bend as SimpleOptions
