@@ -1109,10 +1109,11 @@
       "source": "packages/ai/test/system-message-replay.test.ts",
       "status": "partial",
       "ports": [
-        "packages/ai/test/system-message-replay.bend"
+        "packages/ai/test/system-message-replay.bend",
+        "packages/ai/test/tool-state.bend"
       ],
       "sha256": "2c608b26f7608ba608c652ea8f6daee8916a4562b971a30972b556906480544a",
-      "notes": "Six of nine named cases ported: prompt/tool/section replay; collapse including idempotence; no-system replay; late prompt patch; complete/framed prompt rendering; legacy normalization. All original assertions in those cases pass. Declaration comparison, tool state changes and the combined redefinition/non-additive case remain incomplete. Native tool-history/transport-mode tests supplement these assertions. EmptyObject is an opaque Type.Object({}) fixture, not a schema validator."
+      "notes": "Seven of nine named cases ported: prompt/tool/section replay; collapse including idempotence; no-system replay; late prompt patch; complete/framed prompt rendering; legacy normalization; changed tool definitions as removal plus addition, including unchanged states. The original assertions in those cases have native equivalents. Declaration comparison with extended executable tools and the combined redefinition/non-additive case remain incomplete. Native tool-history/transport-mode and direct upstream state-change differential tests supplement these assertions. The older EmptyObject fixture is opaque; the state-change fixture uses the verified TypeBox 1.3.27 empty-object data shape. Schema builders and validators are not ported."
     },
     {
       "source": "packages/ai/test/telemetry-options.test.ts",

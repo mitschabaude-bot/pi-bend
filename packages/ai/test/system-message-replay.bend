@@ -1,4 +1,5 @@
 import Base
+import ./tool-state.bend as ToolState
 import ../src/types.bend as T
 import ../src/utils/text.bend as Text
 import ../src/utils/transcript.bend as Transcript
@@ -7,7 +8,7 @@ import ../../runtime/src/record.bend as Record
 import ../../runtime/src/f64.bend as N
 import ../../runtime/src/u64.bend as U
 
-# Six cases ported from system-message-replay.test.ts; the other three remain
+# Seven cases ported from system-message-replay.test.ts; the other two remain
 # pending. The opaque schema fixture denotes the upstream Type.Object({}).
 type Schema is Data:
   EmptyObject{}
@@ -325,3 +326,4 @@ def main() -> IO(Unit):
     replayAndCollapse()
     noSystem()
     latePatch()
+    ToolState.upstreamCase()

@@ -1,4 +1,4 @@
-import { toToolDeclaration, declarationsEqual } from '../../pi-mono/packages/ai/src/utils/transcript.ts';
+import { toToolDeclaration, declarationsEqual, getToolStateChanges } from '../../pi-mono/packages/ai/src/utils/transcript.ts';
 import type { Tool } from '../../pi-mono/packages/ai/src/types.ts';
 import { readFileSync } from 'node:fs';
 
@@ -35,8 +35,14 @@ function result(fn: () => unknown) {
   }
 }
 const cases = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-console.log(JSON.stringify(cases.map(([a, b]: any[]) => ({
-  left: result(() => JSON.stringify(toToolDeclaration(tool(a)))),
-  right: result(() => JSON.stringify(toToolDeclaration(tool(b)))),
-  equal: result(() => declarationsEqual(tool(a), tool(b))),
-}))));
+const output = process.argv[3] === 'state'
+  ? cases.map(([previous, current]: any[]) => result(() => {
+      const changes = getToolStateChanges(previous.map(tool), current.map(tool));
+      return { toolsAdded: changes.toolsAdded.map(value => JSON.stringify(value)), toolsRemoved: changes.toolsRemoved.map(value => value.name) };
+    }))
+  : cases.map(([a, b]: any[]) => ({
+      left: result(() => JSON.stringify(toToolDeclaration(tool(a)))),
+      right: result(() => JSON.stringify(toToolDeclaration(tool(b)))),
+      equal: result(() => declarationsEqual(tool(a), tool(b))),
+    }));
+console.log(JSON.stringify(output));

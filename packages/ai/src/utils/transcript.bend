@@ -262,3 +262,79 @@ def toToolDeclaration(-Metadata: Data, tool: T.Tool<Schema.Value<Metadata>>) -> 
 
 def declarationsEqual(-Metadata: Data, left: T.Tool<Schema.Value<Metadata>>, right: T.Tool<Schema.Value<Metadata>>) -> Declaration.DeclarationResult<Bool>:
   Declaration.declarationsEqual(Metadata, left, right)
+
+# Upstream transcript.ts ToolStateChanges. Schema-data entry points currently
+# use value lists; mutable/extended-tool adapters remain a separate boundary.
+type ToolStateChanges<-P: Data> is Data:
+  ToolStateChanges{toolsAdded: List<&2, T.Tool<P>>, toolsRemoved: List<&2, T.ToolReference>}
+
+def indexToolValues(-P: Data, remaining: List<&2, T.Tool<P>>, indexed: M.OrderedMap<T.Tool<P>>) -> M.OrderedMap<T.Tool<P>>:
+  match remaining:
+    case Nil{}: indexed
+    case +head <> tail: indexToolValues(P, tail, M.set(T.Tool<P>, indexed, toolName(P, head), head))
+
+def unequal(result: Declaration.DeclarationResult<Bool>) -> Declaration.DeclarationResult<Bool>:
+  match result:
+    case Declaration.Failure{error}: Declaration.Failure{error}
+    case Declaration.Success{same}: Declaration.Success{Bool.not(same)}
+
+def compareIndexed(-Metadata: Data, existing: T.Tool<Schema.Value<Metadata>>, item: T.Tool<Schema.Value<Metadata>>, existingFirst: Bool) -> Declaration.DeclarationResult<Bool>:
+  match existingFirst:
+    case True{}: unequal(declarationsEqual(Metadata, existing, item))
+    case False{}: unequal(declarationsEqual(Metadata, item, existing))
+
+def changedAgainst(-Metadata: Data, existing: Maybe<&2, T.Tool<Schema.Value<Metadata>>>, item: T.Tool<Schema.Value<Metadata>>, existingFirst: Bool) -> Declaration.DeclarationResult<Bool>:
+  match existing:
+    case None{}: Declaration.Success{True{}}
+    case Some{value}: compareIndexed(Metadata, value, item, existingFirst)
+
+def retainChanged(-Metadata: Data, item: T.Tool<Schema.Value<Metadata>>, selected: List<&2, T.Tool<Schema.Value<Metadata>>>, changed: Declaration.DeclarationResult<Bool>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+  match changed:
+    case Declaration.Failure{error}: Declaration.Failure{error}
+    case Declaration.Success{True{}}: Declaration.Success{item <> selected}
+    case Declaration.Success{False{}}: Declaration.Success{selected}
+
+# Keep duplicates and source order. The maps are lookup indexes, not the lists
+# returned by filter. Complete filtering before projecting any added schemas.
+def selectChanged(-Metadata: Data, remaining: List<&2, T.Tool<Schema.Value<Metadata>>>, +indexed: M.OrderedMap<T.Tool<Schema.Value<Metadata>>>, +existingFirst: Bool, state: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+  match remaining state:
+    case _ Declaration.Failure{error}: Declaration.Failure{error}
+    case Nil{} Declaration.Success{selected}: Declaration.Success{List.reverse(&2, T.Tool<Schema.Value<Metadata>>, selected)}
+    case +head <> tail Declaration.Success{selected}:
+      selectChanged(Metadata, tail, indexed, existingFirst, retainChanged(Metadata, head, selected, changedAgainst(Metadata, M.get(T.Tool<Schema.Value<Metadata>>, indexed, toolName(Schema.Value<Metadata>, head)), head, existingFirst)))
+
+def retainDeclaration(-Metadata: Data, selected: List<&2, T.Tool<Schema.Value<Metadata>>>, result: Declaration.DeclarationResult<T.Tool<Schema.Value<Metadata>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+  match result:
+    case Declaration.Failure{error}: Declaration.Failure{error}
+    case Declaration.Success{value}: Declaration.Success{value <> selected}
+
+def projectAdded(-Metadata: Data, remaining: List<&2, T.Tool<Schema.Value<Metadata>>>, state: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+  match remaining state:
+    case _ Declaration.Failure{error}: Declaration.Failure{error}
+    case Nil{} Declaration.Success{selected}: Declaration.Success{List.reverse(&2, T.Tool<Schema.Value<Metadata>>, selected)}
+    case head <> tail Declaration.Success{selected}: projectAdded(Metadata, tail, retainDeclaration(Metadata, selected, toToolDeclaration(Metadata, head)))
+
+def projectSelected(-Metadata: Data, selected: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>:
+  match selected:
+    case Declaration.Failure{error}: Declaration.Failure{error}
+    case Declaration.Success{values}: projectAdded(Metadata, values, Declaration.Success{Nil{}})
+
+def toolReferences(-P: Data, values: List<&2, T.Tool<P>>) -> List<&2, T.ToolReference>:
+  match values:
+    case Nil{}: Nil{}
+    case head <> tail: T.ToolReference{toolName(P, head)} <> toolReferences(P, tail)
+
+def finishRemoved(-Metadata: Data, added: List<&2, T.Tool<Schema.Value<Metadata>>>, removed: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value<Metadata>>>:
+  match removed:
+    case Declaration.Failure{error}: Declaration.Failure{error}
+    case Declaration.Success{values}: Declaration.Success{ToolStateChanges{added, toolReferences(Schema.Value<Metadata>, values)}}
+
+def finishAdded(-Metadata: Data, previous: List<&2, T.Tool<Schema.Value<Metadata>>>, currentIndex: M.OrderedMap<T.Tool<Schema.Value<Metadata>>>, added: Declaration.DeclarationResult<List<&2, T.Tool<Schema.Value<Metadata>>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value<Metadata>>>:
+  match added:
+    case Declaration.Failure{error}: Declaration.Failure{error}
+    case Declaration.Success{values}: finishRemoved(Metadata, values, selectChanged(Metadata, previous, currentIndex, False{}, Declaration.Success{Nil{}}))
+
+def getToolStateChanges(-Metadata: Data, +previous: List<&2, T.Tool<Schema.Value<Metadata>>>, +current: List<&2, T.Tool<Schema.Value<Metadata>>>) -> Declaration.DeclarationResult<ToolStateChanges<Schema.Value<Metadata>>>:
+  previousIndex = indexToolValues(Schema.Value<Metadata>, previous, M.new(T.Tool<Schema.Value<Metadata>>))
+  currentIndex = indexToolValues(Schema.Value<Metadata>, current, M.new(T.Tool<Schema.Value<Metadata>>))
+  finishAdded(Metadata, previous, currentIndex, projectSelected(Metadata, selectChanged(Metadata, current, previousIndex, True{}, Declaration.Success{Nil{}})))
