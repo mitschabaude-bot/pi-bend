@@ -84,11 +84,12 @@ def abort(-Reason: Data, controller: AbortController<Reason>, why: Maybe<&2, Rea
         current : Maybe<&2, AbortReason<Reason>> <- D.peek(AbortReason<Reason>, settlement)
         abortPending(Reason, settlement, why, current)
 
-# Native one-shot observation, not an EventTarget listener. Registration is
+# Native removable observation, not an EventTarget listener. Registration is
 # acknowledged before return; late observers receive the existing reason.
-def observe(-Reason: Data, value: AbortSignal<Reason>) -> IO(D.Ticket<AbortReason<Reason>>):
+# Consume the ticket even when cancelled. Cancelling does not abort the signal.
+def observe(-Reason: Data, value: AbortSignal<Reason>) -> IO(D.Observation<AbortReason<Reason>>):
   match value:
-    case AbortSignal{settlement}: D.subscribe(AbortReason<Reason>, settlement)
+    case AbortSignal{settlement}: D.observe(AbortReason<Reason>, settlement)
 
 def releaseReason(-Reason: Data, value: Maybe<&2, AbortReason<Reason>>) -> IO(Unit):
   match value:

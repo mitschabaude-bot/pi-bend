@@ -170,17 +170,10 @@ def queuedNext() -> IO(Unit):
     disposeFixture(f)
     IO.print("PASS queued next calls serialize within each iterator")
 
-def pendingState(-A: Data, state: D.State<A>) -> Bool:
-  match state:
-    case D.Pending{_}: True{}
-    case D.Resolved{_}: False{}
-
 def expectPending(-A: Data, promise: D.Deferred<A>) -> IO(Unit):
-  match promise:
-    case D.Deferred{state}:
-      do IO<Unit>:
-        observed : D.State<A> <- Ref.read(D.State<A>, state)
-        assertion(pendingState(A, observed), "promise must still be pending")
+  do IO<Unit>:
+    observed : Maybe<&2, A> <- D.peek(A, promise)
+    assertion(Maybe.is_none(&2, A, observed), "promise must still be pending")
 
 def completionDoesNotEndWaiters() -> IO(Unit):
   do IO<Unit>:

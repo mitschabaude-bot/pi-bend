@@ -50,17 +50,12 @@ def checkEnd(value: E.Iteration<EventValue()>) -> IO(Unit):
     case E.End{}: IO.pure(Unit, Unit{})
     case E.Yield{_}: assertion(False{}, "push after terminal event must be ignored")
 
-def checkPending(state: D.State<Ref.Ref<Message()>>) -> IO(Unit):
-  match state:
-    case D.Pending{_}: IO.pure(Unit, Unit{})
-    case D.Resolved{_}: assertion(False{}, "partial event settled the result")
-
 def pending(stream: Stream()) -> IO(Unit):
   match stream:
-    case E.EventStream{_, D.Deferred{state}, _, _}:
+    case E.EventStream{_, result, _, _}:
       do IO<Unit>:
-        observed : D.State<Ref.Ref<Message()>> <- Ref.read(D.State<Ref.Ref<Message()>>, state)
-        checkPending(observed)
+        observed : Maybe<&2, Ref.Ref<Message()>> <- D.peek(Ref.Ref<Message()>, result)
+        assertion(Maybe.is_none(&2, Ref.Ref<Message()>, observed), "partial event settled the result")
 
 def partials(+stream: Stream(), +partial: Ref.Ref<Message()>, tool: Ref.Ref<T.ToolCall<Arguments>>) -> IO(Unit):
   do IO<Unit>:

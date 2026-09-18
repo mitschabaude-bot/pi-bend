@@ -74,6 +74,48 @@ def nullResult(value: Result<&2, &2, A.AbortReason<NullReason>, Unit>) -> Bool:
     case Fail{A.Supplied{NullReason{}}}: True{}
     case _: False{}
 
+def requireReason(-Reason: Data, value: Maybe<&2, A.AbortReason<Reason>>) -> IO(A.AbortReason<Reason>):
+  match value:
+    case Some{why}: IO.pure(A.AbortReason<Reason>, why)
+    case None{}: IO.die(A.AbortReason<Reason>, 1, "uncancelled observation lost its reason")
+
+def waitReason(-Reason: Data, observation: D.Observation<A.AbortReason<Reason>>) -> IO(A.AbortReason<Reason>):
+  match observation:
+    case D.Observation{ticket, _}:
+      do IO<A.AbortReason<Reason>>:
+        value : Maybe<&2, A.AbortReason<Reason>> <- D.wait(Maybe<&2, A.AbortReason<Reason>>, ticket)
+        requireReason(Reason, value)
+
+def cancelObservation(observation: D.Observation<A.AbortReason<Unit>>) -> IO(Unit):
+  match observation:
+    case D.Observation{ticket, cancellation}:
+      do IO<Unit>:
+        removed : Bool <- D.cancel(A.AbortReason<Unit>, cancellation)
+        assertion(removed, "never-aborted signal observation must be removable")
+        value : Maybe<&2, A.AbortReason<Unit>> <- D.wait(Maybe<&2, A.AbortReason<Unit>>, ticket)
+        assertion(Maybe.is_none(&2, A.AbortReason<Unit>, value), "cancelled abort observer must finish without a reason")
+
+def emptyObservers(state: D.State<A.AbortReason<Unit>>) -> Bool:
+  match state:
+    case D.Pending{_, Nil{}}: True{}
+    case _: False{}
+
+def checkCleanup(signal: A.AbortSignal<Unit>) -> IO(Unit):
+  match signal:
+    case A.AbortSignal{D.Deferred{state}}:
+      do IO<Unit>:
+        current : D.State<A.AbortReason<Unit>> <- R.read(D.State<A.AbortReason<Unit>>, state)
+        assertion(emptyObservers(current), "never-aborted signal must not retain cancelled observers")
+
+def repeatedCleanup(count: Nat, +signal: A.AbortSignal<Unit>) -> IO(Unit):
+  match count:
+    case 0n: checkCleanup(signal)
+    case 1n+ n:
+      do IO<Unit>:
+        observation : D.Observation<A.AbortReason<Unit>> <- A.observe(Unit, signal)
+        cancelObservation(observation)
+        repeatedCleanup(n, signal)
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +controller : A.AbortController<U32> <- A.new(U32)
@@ -82,8 +124,8 @@ def main() -> IO(Unit):
     assertion(Bool.not(before), "new controller must not be aborted")
     beforeCheck : Result<&2, &2, A.AbortReason<U32>, Unit> <- A.throwIfAborted(U32, signal)
     assertion(unthrown(U32, beforeCheck), "unaborted preflight must succeed")
-    first : D.Ticket<A.AbortReason<U32>> <- A.observe(U32, signal)
-    second : D.Ticket<A.AbortReason<U32>> <- A.observe(U32, signal)
+    first : D.Observation<A.AbortReason<U32>> <- A.observe(U32, signal)
+    second : D.Observation<A.AbortReason<U32>> <- A.observe(U32, signal)
     A.abort(U32, controller, Some{0})
     A.abort(U32, controller, Some{9})
     A.abort(U32, controller, None{})
@@ -91,10 +133,10 @@ def main() -> IO(Unit):
     assertion(after, "zero is an abort reason")
     checked : Result<&2, &2, A.AbortReason<U32>, Unit> <- A.throwIfAborted(U32, signal)
     assertion(zeroResult(checked), "preflight must return the first reason")
-    a : A.AbortReason<U32> <- D.wait(A.AbortReason<U32>, first)
-    b : A.AbortReason<U32> <- D.wait(A.AbortReason<U32>, second)
-    late : D.Ticket<A.AbortReason<U32>> <- A.observe(U32, signal)
-    c : A.AbortReason<U32> <- D.wait(A.AbortReason<U32>, late)
+    a : A.AbortReason<U32> <- waitReason(U32, first)
+    b : A.AbortReason<U32> <- waitReason(U32, second)
+    late : D.Observation<A.AbortReason<U32>> <- A.observe(U32, signal)
+    c : A.AbortReason<U32> <- waitReason(U32, late)
     assertion(zero(a) && zero(b) && zero(c), "early/late observations must retain the first reason")
     A.dispose(U32, controller)
     +defaults : A.AbortController<Unit> <- A.new(Unit)
@@ -112,10 +154,10 @@ def main() -> IO(Unit):
     A.dispose(Unit, defaults)
     +object : R.Ref<String> <- R.new(String, "before")
     +objects : A.AbortController<R.Ref<String>> <- A.new(R.Ref<String>)
-    ticket : D.Ticket<A.AbortReason<R.Ref<String>>> <- A.observe(R.Ref<String>, A.signal(R.Ref<String>, objects))
+    ticket : D.Observation<A.AbortReason<R.Ref<String>>> <- A.observe(R.Ref<String>, A.signal(R.Ref<String>, objects))
     A.abort(R.Ref<String>, objects, Some{object})
     R.write(String, object, "after")
-    value : A.AbortReason<R.Ref<String>> <- D.wait(A.AbortReason<R.Ref<String>>, ticket)
+    value : A.AbortReason<R.Ref<String>> <- waitReason(R.Ref<String>, ticket)
     text : String <- sharedValue(value)
     assertion(String.eq(text, "after"), "supplied reason identity was lost")
     A.dispose(R.Ref<String>, objects)
@@ -140,6 +182,12 @@ def main() -> IO(Unit):
     nullCheck : Result<&2, &2, A.AbortReason<NullReason>, Unit> <- A.throwIfAborted(NullReason, A.signal(NullReason, nullController))
     assertion(nullResult(nullCheck), "explicit null must differ from omitted reason")
     A.dispose(NullReason, nullController)
-    unused : A.AbortController<Unit> <- A.new(Unit)
+    +unused : A.AbortController<Unit> <- A.new(Unit)
+    repeatedCleanup(U32.to_nat(1000), A.signal(Unit, unused))
+    stillPending : Bool <- A.aborted(Unit, A.signal(Unit, unused))
+    assertion(Bool.not(stillPending), "cancelling observations must not abort their signal")
+    remaining : D.Observation<A.AbortReason<Unit>> <- A.observe(Unit, A.signal(Unit, unused))
+    A.abort(Unit, unused, None{})
+    delivered : A.AbortReason<Unit> <- waitReason(Unit, remaining)
     A.dispose(Unit, unused)
     IO.print("PASS abort state, preflight, reason identity, observation and concurrent first settlement")

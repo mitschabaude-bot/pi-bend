@@ -72,3 +72,5 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 Build issue: the current Bend compiler consumes roughly 10 GB compiling the combined application. Keep the generated C entry-point adaptation explicit in `scripts/entry.py`; never hide compiler changes in generated artifacts.
 
 The final port must replace the prototype libcurl/ICU/custom C dependencies with pure Bend implementations and missing Bend primitives. Bootstrap demonstrations above do not satisfy this requirement. `scripts/build-pure.sh` compiles canonical Bend tests without prototype effects, generated-entry-point patching, libcurl or ICU.
+
+- Deferred observations now support atomic cancellation and waiter removal; abort observations use the same primitive. Tests cover 128 settlement races, stale handles beyond a 64-bit counter carry, optional settled values and 1,000 cancellations with no retained abort observers. Existing generic/assistant stream assertions remain unchanged in meaning. EventTarget semantics and the pi abort-race utility remain pending; no additional upstream suite is marked complete.
