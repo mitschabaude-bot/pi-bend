@@ -49,11 +49,20 @@ option_policies=[
 ]
 option_values=object_values+[2,5,6,0.5,1.5,[1,1],[1,2],[1,2,3],{'x':1,'y':2}]
 for p in option_policies: cases += [dict(policy=p,value=v) for v in option_values]
+# Additional-field declarations carry executable conversion, not just raw JSON.
+additional_policies=[]
+for extra in [scalar(0),scalar(1),scalar(3),array(scalar(1)),union(scalar(1),scalar(4)),object_(('flag',scalar(0),True))]:
+    base=dict(**object_(('x',scalar(3),True)),additional=extra)
+    additional_policies += [base, array(base), dict(**base,options={'additionalProperties':False}),dict(**base,options={'additionalProperties':True}),dict(**base,options={'maxProperties':2})]
+additional_values=[{}, {'x':1}, {'x':'text','extra':'1'}, {'extra':None}, {'extra':'TRUE'}, {'extra':['1','2']}, {'extra':{'flag':'false'}}, {'a':'1','b':'bad'}, [{'x':2,'extra':'1'}], None, '1']
+for p in additional_policies: cases += [dict(policy=p,value=v) for v in additional_values]
 expected=json.loads(subprocess.check_output(['node','tests/schema_builder_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
 def seq(items): return ''.join(x+' <> ' for x in items)+'Nil{}'
 def declaration(p):
     k=p['kind']
-    if k=='object': return 'D.object(R.Record{'+seq('R.Property{'+string(key)+', D.'+('optional' if optional else 'required')+'('+declaration(child)+')}' for key,child,optional in p['fields'])+'})'
+    if k=='object':
+        fields='R.Record{'+seq('R.Property{'+string(key)+', D.'+('optional' if optional else 'required')+'('+declaration(child)+')}' for key,child,optional in p['fields'])+'}'
+        return 'D.objectWithAdditional('+fields+', '+declaration(p['additional'])+')' if 'additional' in p else 'D.object('+fields+')'
     if k=='never': return 'D.never()'
     if k=='scalar': return 'D.'+['boolean','number','integer','string','null'][p['index']]+'()'
     if k=='array': return 'D.array('+declaration(p['item'])+')'

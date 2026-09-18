@@ -168,7 +168,7 @@ type Policy is Data:
   Scalar{primitive: Primitive}
   ArrayItems{item: Policy}
   TupleItems{items: List<&2, Policy>}
-  ObjectFields{fields: R.Record<Policy>}
+  ObjectFields{fields: R.Record<Policy>, additional: Policy}
 
 type Task is Data:
   Visit{policy: Policy, value: V.Value}
@@ -204,24 +204,24 @@ def tupleTasks(policies: List<&2, Policy>, values: List<&2, V.Value>) -> List<&2
     case Nil{} head <> tail: Visit{Preserve{}, head} <> tupleTasks(Nil{}, tail)
     case policy <> policies head <> tail: Visit{policy, head} <> tupleTasks(policies, tail)
 
-def fieldPolicy(selected: Maybe<&2, Policy>) -> Policy:
+def fieldPolicy(selected: Maybe<&2, Policy>, additional: Policy) -> Policy:
   match selected:
-    case None{}: Preserve{}
+    case None{}: additional
     case Some{policy}: policy
 
-def objectTasks(+fields: R.Record<Policy>, values: List<&2, R.Property<V.Value>>) -> List<&2, Task>:
+def objectTasks(+fields: R.Record<Policy>, +additional: Policy, values: List<&2, R.Property<V.Value>>) -> List<&2, Task>:
   match values:
     case Nil{}: Nil{}
-    case R.Property{key, value} <> rest: Visit{fieldPolicy(R.get(Policy, fields, key)), value} <> objectTasks(fields, rest)
+    case R.Property{key, value} <> rest: Visit{fieldPolicy(R.get(Policy, fields, key), additional), value} <> objectTasks(fields, additional, rest)
 
 def reverseKeys(values: List<&2, R.Property<V.Value>>, keys: List<&2, String>) -> List<&2, String>:
   match values:
     case Nil{}: keys
     case R.Property{key, _} <> rest: reverseKeys(rest, key <> keys)
 
-def scheduleObject(fields: R.Record<Policy>, value: V.Value, rest: List<&2, Task>) -> List<&2, Task>:
+def scheduleObject(fields: R.Record<Policy>, additional: Policy, value: V.Value, rest: List<&2, Task>) -> List<&2, Task>:
   match value:
-    case V.ObjectValue{R.Record{+values}}: List.append(&2, Task, objectTasks(fields, values), FinishObject{reverseKeys(values, Nil{})} <> rest)
+    case V.ObjectValue{R.Record{+values}}: List.append(&2, Task, objectTasks(fields, additional, values), FinishObject{reverseKeys(values, Nil{})} <> rest)
     case other: Visit{Preserve{}, other} <> rest
 
 def finishObject(keys: List<&2, String>, values: List<&2, V.Value>, fields: List<&2, R.Property<V.Value>>) -> List<&2, V.Value>:
@@ -260,7 +260,7 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
     case Nil{} value <> Nil{}: Done{value}
     case Nil{} _: Fail{InvalidConversionState{}}
     case FinishObject{keys} <> rest values: run(rest, finishObject(keys, values, Nil{}))
-    case Visit{ObjectFields{fields}, value} <> rest values: run(scheduleObject(fields, value, rest), values)
+    case Visit{ObjectFields{fields, additional}, value} <> rest values: run(scheduleObject(fields, additional, value, rest), values)
     case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
     case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
     case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convert(literalPrimitive(literal), original))} <> rest, values)

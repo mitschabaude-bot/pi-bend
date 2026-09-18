@@ -145,11 +145,22 @@ def object(fields: R.Record<Field>) -> Declaration:
       Declaration{
         V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> List.append(&2, R.Property<V.Value>, requiredSchema(keys), R.Property{"properties", V.ObjectValue{R.Record{fieldSchemas(fields)}}} <> Nil{})}},
         S.All{S.JsonKind{S.ObjectType{}} <> S.Object{R.Record{fieldConstraints(fields)}, keys, S.Accept{}} <> Nil{}},
-        C.ObjectFields{R.Record{fieldConversions(fields)}}}
+        C.ObjectFields{R.Record{fieldConversions(fields)}, C.Preserve{}}}
 
-# Options that only constrain or annotate a declaration do not change its
-# conversion operations. Union candidate selection also uses the new whole
-# schema constraint. Structural replacements need their own builder operation.
+# A schema-valued additional field has its own constraint and conversion
+# policy. Declared fields take precedence; absent fields are never synthesized.
+def objectWithAdditional(fields: R.Record<Field>, additional: Declaration) -> Declaration:
+  match fields additional:
+    case R.Record{+fields} Declaration{raw, checker, policy}:
+      +keys = requiredKeys(fields)
+      Declaration{
+        V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> List.append(&2, R.Property<V.Value>, requiredSchema(keys), R.Property{"properties", V.ObjectValue{R.Record{fieldSchemas(fields)}}} <> R.Property{"additionalProperties", raw} <> Nil{})}},
+        S.All{S.JsonKind{S.ObjectType{}} <> S.Object{R.Record{fieldConstraints(fields)}, keys, checker} <> Nil{}},
+        C.ObjectFields{R.Record{fieldConversions(fields)}, policy}}
+
+# Constraint/annotation options preserve conversion, except that a boolean
+# additionalProperties override removes that field conversion policy. Union
+# candidate selection also uses the new whole schema constraint.
 type OptionError is Data:
   UnsupportedOption{name: String}
   InvalidOptionSchema{error: Loader.Error}
@@ -187,15 +198,25 @@ def mergeOptions(options: List<&2, R.Property<V.Value>>, state: Result<&2, &2, O
       mergeOptions(rest, Bool.pick(Unit -> Result<&2, &2, OptionError, R.Record<V.Value>>, supportedOption(Loader.keywordKind(key), value),
         _ => Done{R.set(V.Value, fields, key, value)}, _ => Fail{UnsupportedOption{key}})(Unit{}))
 
-def configuredConversion(policy: C.Policy, checker: S.Schema) -> C.Policy:
+def additionalConversion(fields: R.Record<C.Policy>, additional: C.Policy, raw: Maybe<&2, V.Value>) -> C.Policy:
+  match raw:
+    case Some{V.Boolean{_}}: C.ObjectFields{fields, C.Preserve{}}
+    case _: C.ObjectFields{fields, additional}
+
+def configuredConversion(policy: C.Policy, checker: S.Schema, raw: V.Value) -> C.Policy:
   match policy:
     case C.Union{choices, _}: C.Union{choices, checker}
+    case C.ObjectFields{fields, additional}:
+      match raw:
+        case V.ObjectValue{properties}:
+          additionalConversion(fields, additional, R.get(V.Value, properties, "additionalProperties"))
+        case _: C.ObjectFields{fields, additional}
     case other: other
 
-def configuredSchema(raw: V.Value, policy: C.Policy, loaded: Loader.Loaded()) -> Configured():
+def configuredSchema(+raw: V.Value, policy: C.Policy, loaded: Loader.Loaded()) -> Configured():
   match loaded:
     case Fail{error}: Fail{InvalidOptionSchema{error}}
-    case Done{+checker}: Done{Declaration{raw, checker, configuredConversion(policy, checker)}}
+    case Done{+checker}: Done{Declaration{raw, checker, configuredConversion(policy, checker, raw)}}
 
 def configuredFields(fields: Result<&2, &2, OptionError, R.Record<V.Value>>, policy: C.Policy) -> Configured():
   match fields:
