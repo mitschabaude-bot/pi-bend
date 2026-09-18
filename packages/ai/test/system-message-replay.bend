@@ -117,11 +117,11 @@ def rendering() -> IO(Unit):
 
 
 type Fixture is Data:
-  Fixture{messages: List<&2, Message()>, tools: List<&2, Ref.Ref<T.Tool<S.Value<U32>>>>, text: Ref.Ref<T.TextContent>}
+  Fixture{messages: List<&2, Message()>, tools: List<&2, Ref.Ref<T.Tool<S.Value<U32>>>>, text: Ref.Ref<T.TextContent>, cost: Ref.Ref<T.UsageCost>}
 
 def fixtureMessages(f: Fixture) -> List<&2, Message()>:
   match f:
-    case Fixture{messages, _, _}: messages
+    case Fixture{messages, _, _, _}: messages
 
 def createFixture() -> IO(Fixture):
   do IO<Fixture>:
@@ -134,9 +134,10 @@ def createFixture() -> IO(Fixture):
     append : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{"also do this"}, None{}, None{}, None{}, N.fromU32(12)})
     +text : Ref.Ref<T.TextContent> <- Ref.new(T.TextContent, T.TextContent{"ok", None{}})
     +zero : N.F64 = N.fromU32(0)
-    assistant : Ref.Ref<T.AssistantMessage<Unit, Unit>> <- Ref.new(T.AssistantMessage<Unit, Unit>, T.AssistantMessage{T.AssistantText{text} <> Nil{}, "", "", "", None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, T.UsageCost{zero, zero, zero, zero, zero}}, T.Stop{}, None{}, None{}, None{}, None{}, N.fromU32(13)})
+    +cost : Ref.Ref<T.UsageCost> <- Ref.new(T.UsageCost, T.UsageCost{zero, zero, zero, zero, zero})
+    assistant : Ref.Ref<T.AssistantMessage<Unit, Unit>> <- Ref.new(T.AssistantMessage<Unit, Unit>, T.AssistantMessage{T.AssistantText{text} <> Nil{}, "", "", "", None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}, T.Stop{}, None{}, None{}, None{}, None{}, N.fromU32(13)})
     last : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, Some{patch}, Some{second <> Nil{}}, Some{T.ToolReference{"first"} <> Nil{}}, N.fromU32(14)})
-    return Fixture{T.System{head} <> T.User{user} <> T.System{append} <> T.Assistant{assistant} <> T.System{last} <> Nil{}, first <> second <> Nil{}, text}
+    return Fixture{T.System{head} <> T.User{user} <> T.System{append} <> T.Assistant{assistant} <> T.System{last} <> Nil{}, first <> second <> Nil{}, text, cost}
 
 def disposeMessages(messages: List<&2, Message()>) -> IO(Unit):
   match messages:
@@ -168,11 +169,12 @@ def disposeTools(tools: List<&2, Ref.Ref<T.Tool<S.Value<U32>>>>) -> IO(Unit):
 
 def disposeFixture(f: Fixture) -> IO(Unit):
   match f:
-    case Fixture{messages, tools, text}:
+    case Fixture{messages, tools, text, cost}:
       do IO<Unit>:
         disposeMessages(messages)
         disposeTools(tools)
         previous : T.TextContent <- Ref.dispose(T.TextContent, text)
+        previous : T.UsageCost <- Ref.dispose(T.UsageCost, cost)
         return Unit{}
 
 def checkNamedTool(value: T.Tool<S.Value<U32>>, +expected: String) -> IO(Unit):

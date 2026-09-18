@@ -30,7 +30,7 @@ type UsageCost is Data:
   UsageCost{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, total: Number.F64}
 
 type Usage is Data:
-  Usage{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, cacheWrite1h: Maybe<&2, Number.F64>, reasoning: Maybe<&2, Number.F64>, totalTokens: Number.F64, cost: UsageCost}
+  Usage{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, cacheWrite1h: Maybe<&2, Number.F64>, reasoning: Maybe<&2, Number.F64>, totalTokens: Number.F64, cost: Ref.Ref<UsageCost>}
 
 type StopReason is Data:
   Pending{}

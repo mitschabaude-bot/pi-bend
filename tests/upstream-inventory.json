@@ -810,9 +810,12 @@
     },
     {
       "source": "packages/ai/test/models-runtime.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "49c86cd856972ee8453da6a3d0e546a8465e1426f48e0a1220f5756707e07dc8"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/model-cost.bend"
+      ],
+      "sha256": "49c86cd856972ee8453da6a3d0e546a8465e1426f48e0a1220f5756707e07dc8",
+      "notes": "The named request-wide pricing-tier case is ported with its original model/usage inputs and all short/long charge assertions. Supplemental direct-upstream cost vectors cover 159 inputs and returned-object identity through shared cost references. Registry, provider publication, auth and other runtime cases remain pending."
     },
     {
       "source": "packages/ai/test/node-http-proxy.test.ts",
