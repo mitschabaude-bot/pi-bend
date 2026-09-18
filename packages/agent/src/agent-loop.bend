@@ -235,3 +235,14 @@ def prepareArgumentsWith(-RawArguments: Data, -Arguments: Data, -ExecutionError:
 def prepareToolCallArguments(-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -ExecutionError: Data, tool: T.AgentTool<Parameters, Arguments, Details, RawArguments, Signal, ExecutionError>, toolCall: T.AgentToolCall(RawArguments), sameArguments: Arguments -> RawArguments -> Bool) -> IO(Result<&2, &2, ExecutionError, PreparedToolCallArguments<RawArguments, Arguments>>):
   match tool:
     case T.AgentTool{_, _, _, _, _, prepare, _, _, _}: prepareArgumentsWith(RawArguments, Arguments, ExecutionError, prepare, toolCall, sameArguments)
+
+# Initialization shared by prompt/continuation runs: copy the top-level message
+# array, retain its message objects and the optional executable-tools array.
+# Dynamic extra context properties are outside the current typed record.
+def copyContextMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, ExecutionError>, initialMessages: List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>) -> IO(R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, ExecutionError>>):
+  match context:
+    case T.AgentContext{messages, tools}:
+      do IO<R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, ExecutionError>>>:
+        previous : List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>> <- R.read(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, messages)
+        copied : T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, Details, Custom) <- R.new(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>, previous, initialMessages))
+        R.new(T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, ValidatedArguments, Signal, ExecutionError>, T.AgentContext{copied, tools})

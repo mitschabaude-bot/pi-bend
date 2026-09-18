@@ -5,7 +5,8 @@ import ../../runtime/src/ref.bend as Ref
 
 # Source: pi-mono packages/agent/src/types.ts at 46c9de402. This initial portion
 # covers tool definitions/results, messages, events and hook result records.
-# Agent state accessors, context and loop configuration remain pending. Raw arguments, abort signals and thrown errors retain explicit
+# Agent state accessors and loop configuration remain pending.
+# Raw arguments, abort signals and thrown errors retain explicit
 # caller types until their runtime interfaces are integrated.
 type ToolExecutionMode is Data:
   Sequential{}
@@ -74,9 +75,9 @@ type AfterToolCallResult<-Details: Data> is Data:
 # agent implementation, not these declarations.
 type AgentEvent<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data> is Data:
   AgentStart{}
-  AgentEnd{messages: List<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>}
+  AgentEnd{messages: Ref.Ref<List<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>>}
   TurnStart{}
-  TurnEnd{message: AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, toolResults: List<&2, Ref.Ref<Ai.ToolResultMessage<ToolDetails>>>}
+  TurnEnd{message: AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, toolResults: Ref.Ref<List<&2, Ref.Ref<Ai.ToolResultMessage<ToolDetails>>>>}
   MessageStart{message: AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>}
   MessageUpdate{message: AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, assistantMessageEvent: Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>}
   MessageEnd{message: AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>}
@@ -96,3 +97,32 @@ def eventType(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -To
     case ToolExecutionStart{_, _, _}: "tool_execution_start"
     case ToolExecutionUpdate{_, _, _, _}: "tool_execution_update"
     case ToolExecutionEnd{_, _, _, _}: "tool_execution_end"
+
+# Array identity at the context boundary is separate from element identity.
+# These typed shared cells hold dense lists; sparse arrays, index/property
+# semantics and automatic lifetime reclamation remain runtime work.
+def AgentMessageArray(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data) -> Data:
+  Ref.Ref<List<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>>
+
+def AgentToolArray(-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -ExecutionError: Data) -> Data:
+  Ref.Ref<List<&2, Ref.Ref<AgentTool<Parameters, Arguments, Details, RawArguments, Signal, ExecutionError>>>>
+
+# Arguments is the raw provider payload; ValidatedArguments is the schema's
+# execution payload. Tools and their callbacks retain both types independently.
+type AgentContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data> is Data:
+  AgentContext{messages: AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), tools: Maybe<&2, AgentToolArray(Parameters, ValidatedArguments, ToolDetails, Arguments, Signal, ExecutionError)>}
+
+type BeforeToolCallContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data> is Data:
+  BeforeToolCallContext{assistantMessage: Ref.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, toolCall: AgentToolCall(Arguments), args: ValidatedArguments, context: Ref.Ref<AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>}
+
+type AfterToolCallContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data> is Data:
+  AfterToolCallContext{assistantMessage: Ref.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, toolCall: AgentToolCall(Arguments), args: ValidatedArguments, result: Ref.Ref<AgentToolResult<ToolDetails>>, isError: Bool, context: Ref.Ref<AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>}
+
+type ShouldStopAfterTurnContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data> is Data:
+  ShouldStopAfterTurnContext{message: Ref.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, toolResults: Ref.Ref<List<&2, Ref.Ref<Ai.ToolResultMessage<ToolDetails>>>>, context: Ref.Ref<AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, newMessages: AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)}
+
+def PrepareNextTurnContext(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data) -> Data:
+  ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>
+
+type AgentLoopTurnUpdate<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -SamplingValue: Data> is Data:
+  AgentLoopTurnUpdate{context: Maybe<&2, Ref.Ref<AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>>, messages: Maybe<&2, AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>, model: Maybe<&2, Ref.Ref<Ai.Model<SamplingValue>>>, thinkingLevel: Maybe<&2, ThinkingLevel()>}

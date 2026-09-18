@@ -56,6 +56,25 @@ def finalPayload(event: EventValue()) -> Bool:
     case T.ToolExecutionEnd{id, name, result, isError}: String.eq(id, "id") && String.eq(name, "tool") && result && Bool.not(isError)
     case _: False{}
 
+def emptyMessages(values: List<&2, MessageValue()>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case _: IO.die(Unit, 1, "retained agent-end event lost array mutation")
+
+def endArray(event: EventValue(), expected: R.Ref<List<&2, MessageValue()>>) -> IO(Unit):
+  match event:
+    case T.AgentEnd{+messages}:
+      do IO<Unit>:
+        assertion(R.same(List<&2, MessageValue()>, messages, expected), "agent-end message array identity changed")
+        values : List<&2, MessageValue()> <- R.read(List<&2, MessageValue()>, messages)
+        emptyMessages(values)
+    case _: IO.die(Unit, 1, "wrong end event")
+
+def turnArray(event: EventValue(), expected: R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<Unit>>>>) -> IO(Unit):
+  match event:
+    case T.TurnEnd{_, results}: assertion(R.same(List<&2, R.Ref<Ai.ToolResultMessage<Unit>>>, results, expected), "turn-end tool-result array identity changed")
+    case _: IO.die(Unit, 1, "wrong turn event")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +zero : N.F64 = N.fromU32(0)
@@ -72,9 +91,15 @@ def main() -> IO(Unit):
     +value : R.Ref<String> <- R.new(String, "before")
     +message : MessageValue() = T.CustomMessage{value}
     check(T.AgentStart{}, "agent_start")
-    check(T.AgentEnd{message <> Nil{}}, "agent_end")
+    +messages : R.Ref<List<&2, MessageValue()>> <- R.new(List<&2, MessageValue()>, message <> Nil{})
+    +end : EventValue() = T.AgentEnd{messages}
+    check(end, "agent_end")
+    R.write(List<&2, MessageValue()>, messages, Nil{})
+    endArray(end, messages)
     check(T.TurnStart{}, "turn_start")
-    check(T.TurnEnd{message, Nil{}}, "turn_end")
+    +toolResults : R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<Unit>>>> <- R.new(List<&2, R.Ref<Ai.ToolResultMessage<Unit>>>, Nil{})
+    check(T.TurnEnd{message, toolResults}, "turn_end")
+    turnArray(T.TurnEnd{message, toolResults}, toolResults)
     check(T.MessageStart{message}, "message_start")
     check(T.MessageEnd{message}, "message_end")
     check(T.ToolExecutionStart{"id", "name", "raw"}, "tool_execution_start")
@@ -83,5 +108,7 @@ def main() -> IO(Unit):
     +event : EventValue() = T.MessageEnd{message}
     R.write(String, value, "after")
     retained(event)
+    oldMessages : List<&2, MessageValue()> <- R.dispose(List<&2, MessageValue()>, messages)
+    oldResults : List<&2, R.Ref<Ai.ToolResultMessage<Unit>>> <- R.dispose(List<&2, R.Ref<Ai.ToolResultMessage<Unit>>>, toolResults)
     old : String <- R.dispose(String, value)
     IO.print("PASS all ten agent event variants, tool payloads and shared stream/custom-message identity")
