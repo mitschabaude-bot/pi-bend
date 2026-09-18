@@ -10,6 +10,9 @@ type Task is Data:
   RenderArray{values: List<&2, T.JsonValue>, first: Bool}
   RenderObject{fields: List<&2, R.Property<T.JsonValue>>, first: Bool}
   EmitFragment{text: String}
+  PrettyValue{value: T.JsonValue, indent: String}
+  PrettyArray{values: List<&2, T.JsonValue>, indent: String, first: Bool}
+  PrettyObject{fields: List<&2, R.Property<T.JsonValue>>, indent: String, first: Bool}
 
 def emitNumber(encoded: Maybe<&2, String>, fragments: List<&2, String>) -> Maybe<&2, List<&2, String>>:
   match encoded:
@@ -25,6 +28,15 @@ def encode(tasks: List<&2, Task>, result: Maybe<&2, List<&2, String>>) -> Maybe<
   match tasks result:
     case _ None{}: None{}
     case Nil{} Some{fragments}: Some{String.join(List.reverse(&2, String, fragments), "")}
+    case PrettyValue{T.JsonArray{Nil{}}, _} <> rest Some{fragments}: encode(rest, Some{"[]" <> fragments})
+    case PrettyValue{T.JsonArray{values}, +indent} <> rest Some{fragments}: encode(PrettyArray{values, indent ++ "  ", True{}} <> EmitFragment{"\n" ++ indent ++ "]"} <> rest, Some{"[" <> fragments})
+    case PrettyValue{T.JsonObject{R.Record{Nil{}}}, _} <> rest Some{fragments}: encode(rest, Some{"{}" <> fragments})
+    case PrettyValue{T.JsonObject{fields}, +indent} <> rest Some{fragments}: encode(PrettyObject{R.entries(T.JsonValue, fields), indent ++ "  ", True{}} <> EmitFragment{"\n" ++ indent ++ "}"} <> rest, Some{"{" <> fragments})
+    case PrettyValue{value, _} <> rest Some{fragments}: encode(RenderValue{value} <> rest, Some{fragments})
+    case PrettyArray{Nil{}, _, _} <> rest Some{fragments}: encode(rest, Some{fragments})
+    case PrettyArray{head <> tail, +indent, first} <> rest Some{fragments}: encode(PrettyValue{head, indent} <> PrettyArray{tail, indent, False{}} <> rest, Some{(Bool.pick(String, first, "\n", ",\n") ++ indent) <> fragments})
+    case PrettyObject{Nil{}, _, _} <> rest Some{fragments}: encode(rest, Some{fragments})
+    case PrettyObject{R.Property{key, value} <> tail, +indent, first} <> rest Some{fragments}: encode(PrettyValue{value, indent} <> PrettyObject{tail, indent, False{}} <> rest, Some{(Bool.pick(String, first, "\n", ",\n") ++ indent ++ S.quote(key) ++ ": ") <> fragments})
     case EmitFragment{text} <> rest Some{fragments}: encode(rest, Some{text <> fragments})
     case RenderValue{T.JsonNull{}} <> rest Some{fragments}: encode(rest, Some{"null" <> fragments})
     case RenderValue{T.JsonBoolean{value}} <> rest Some{fragments}: encode(rest, Some{Bool.pick(String, value, "true", "false") <> fragments})
@@ -39,3 +51,8 @@ def encode(tasks: List<&2, Task>, result: Maybe<&2, List<&2, String>>) -> Maybe<
 
 def stringify(value: T.JsonValue) -> Maybe<&2, String>:
   encode(RenderValue{value} <> Nil{}, Some{Nil{}})
+
+# Fixed two-space rendering for diagnostics; no JavaScript replacer/hooks or
+# arbitrary indentation coercion is part of the native codec.
+def stringifyPretty(value: T.JsonValue) -> Maybe<&2, String>:
+  encode(PrettyValue{value, ""} <> Nil{}, Some{Nil{}})
