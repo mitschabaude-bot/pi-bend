@@ -2,10 +2,13 @@ import Base
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/f64.bend as Number
+import ../../runtime/src/record.bend as Record
+import ../../ai/src/utils/event-stream.bend as Stream
 
 # Source: pi-mono packages/agent/src/types.ts at 46c9de402. This initial portion
 # covers tool definitions/results, messages, events and hook result records.
-# Agent state accessors and loop configuration remain pending.
+# Agent state accessors and complete loop behavior remain pending.
 # Raw arguments, abort signals and thrown errors retain explicit
 # caller types until their runtime interfaces are integrated.
 type ToolExecutionMode is Data:
@@ -126,3 +129,28 @@ def PrepareNextTurnContext(-Parameters: Data, -Arguments: Data, -DiagnosticDetai
 
 type AgentLoopTurnUpdate<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -SamplingValue: Data> is Data:
   AgentLoopTurnUpdate{context: Maybe<&2, Ref.Ref<AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>>, messages: Maybe<&2, AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>, model: Maybe<&2, Ref.Ref<Ai.Model<SamplingValue>>>, thinkingLevel: Maybe<&2, ThinkingLevel()>}
+
+# Callback argument records preserve source positional arguments. Exceptions
+# become recoverable results; the loop must retain each callback's documented
+# fallback/error policy rather than silently treating failure as an empty value.
+type TransformContextInput<-Messages: Data, -Signal: Data> is Data:
+  TransformContextInput{messages: Messages, signal: Maybe<&2, Signal>}
+
+type ToolHookInput<-Context: Data, -Signal: Data> is Data:
+  ToolHookInput{context: Ref.Ref<Context>, signal: Maybe<&2, Signal>}
+
+type AgentLoopConfig<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data> is Data:
+  AgentLoopConfig{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, Ai.ProviderEnv()>, onPayload: Maybe<&2, Ai.PayloadCallback(Value, Ref.Ref<Ai.Model<Value>>, ExecutionError)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ref.Ref<Ai.Model<Value>>, ExecutionError)>, headers: Maybe<&2, Ai.ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Ref.Ref<Record.Record<Value>>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Ai.Transport>, cacheRetention: Maybe<&2, Ai.CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Ref.Ref<Record.Record<Value>>>, toolChoice: Maybe<&2, Ai.ToolChoice>, reasoning: Maybe<&2, Ai.ThinkingLevel>, deferred: Maybe<&2, Ai.DeferredRequest>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, model: Ref.Ref<Ai.Model<Value>>, convertToLlm: Callback.Callback<AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), Result<&2, &2, ExecutionError, Ref.Ref<List<&2, Ai.Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>>>, transformContext: Maybe<&2, Callback.Callback<TransformContextInput<AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), Signal>, Result<&2, &2, ExecutionError, AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>>, getApiKey: Maybe<&2, Callback.Callback<String, Result<&2, &2, ExecutionError, Maybe<&2, String>>>>, shouldStopAfterTurn: Maybe<&2, Callback.Callback<Ref.Ref<ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, Result<&2, &2, ExecutionError, Bool>>>, prepareNextTurn: Maybe<&2, Callback.Callback<Ref.Ref<PrepareNextTurnContext(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError)>, Result<&2, &2, ExecutionError, Maybe<&2, Ref.Ref<AgentLoopTurnUpdate<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value>>>>>>, getSteeringMessages: Maybe<&2, Callback.Callback<Unit, Result<&2, &2, ExecutionError, AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>>, getFollowUpMessages: Maybe<&2, Callback.Callback<Unit, Result<&2, &2, ExecutionError, AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom)>>>, toolExecution: Maybe<&2, ToolExecutionMode>, beforeToolCall: Maybe<&2, Callback.Callback<ToolHookInput<BeforeToolCallContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, Signal>, Result<&2, &2, ExecutionError, Maybe<&2, Ref.Ref<BeforeToolCallResult>>>>>, afterToolCall: Maybe<&2, Callback.Callback<ToolHookInput<AfterToolCallContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, Signal>, Result<&2, &2, ExecutionError, Maybe<&2, Ref.Ref<AfterToolCallResult<ToolDetails>>>>>>}
+
+# Structural projection only: preserve provider options and callback identity.
+def toSimpleStreamOptions(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, config: AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>) -> Ai.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, ExecutionError>:
+  match config:
+    case AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, _, _, _, _, _, _, _, _, _, _, _}: Ai.SimpleStreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}
+
+# Agent stream contract: errors must be encoded in the returned event stream,
+# so StreamFn has no out-of-band recoverable request-failure result.
+type StreamInput<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -ExecutionError: Data> is Data:
+  StreamInput{model: Ref.Ref<Ai.Model<Value>>, context: Ref.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>, options: Maybe<&2, Ref.Ref<Ai.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, ExecutionError>>>}
+
+def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -ExecutionError: Data) -> Data:
+  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Signal, Telemetry, Fetch, ExecutionError>, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>
