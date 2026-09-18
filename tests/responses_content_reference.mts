@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+const base='../pi-mono/packages/ai/src/';
+const source=fs.readFileSync(base+'api/openai-responses-shared.ts','utf8');
+const sanitize=fs.readFileSync(base+'utils/sanitize-unicode.ts','utf8');
+const start=source.indexOf('function convertToolResultOutput');
+const end=source.indexOf('export interface OpenAIResponsesStreamOptions',start);
+const userStart=source.indexOf('\n\t\t\tif (typeof msg.content === "string")',source.indexOf('msg.role === "user"'));
+const userEnd=source.indexOf('\n\t\t} else if (msg.role === "assistant")',userStart);
+const user='function user(input){const messages=[];for(const msg of [input]){'+source.slice(userStart,userEnd)+'}return messages[0]??null;}';
+const transform=fs.readFileSync(base+'api/transform-messages.ts','utf8');
+const api=new Function(stripTypeScriptTypes(sanitize+'\n'+source.slice(start,end)+'\n'+user+'\n'+transform).replace(/^export /gm,'')+';return {user,convertToolResultOutput,transformMessages};')();
+let input='';for await(const chunk of process.stdin)input+=chunk;
+process.stdout.write(JSON.stringify(JSON.parse(input).map(c=>{
+ const model={input:c.vision?['text','image']:['text']};
+ const user={role:'user',content:c.user,timestamp:1};
+ const result={role:'toolResult',toolCallId:'call',toolName:'tool',content:c.content,isError:false,timestamp:2};
+ const transformed=api.transformMessages([user,result],model);
+ return {user:JSON.stringify(api.user(user)),output:JSON.stringify(api.convertToolResultOutput(model,c.content)),preparedUser:JSON.stringify(api.user(transformed[0])),preparedOutput:JSON.stringify(api.convertToolResultOutput(model,transformed[1].content))};
+})));
