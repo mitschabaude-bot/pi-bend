@@ -7,7 +7,7 @@ The target is pi-mono revision `46c9de402`, including its library design. The cu
 | Upstream package | Library responsibilities to preserve | Current gap |
 | --- | --- | --- |
 | `ai` | Typed messages, content, usage, models, provider factories, transcript normalization, credentials, injectable transports, streaming events and stream results | Prototype passes generic JSON through a single hard-coded provider |
-| `agent` | `Agent`, `AgentState`, `AgentContext`, `AgentMessage`, `AgentTool`, `AgentToolResult`, `AgentLoopConfig`, `StreamFn`, event subscriptions, tool hooks, queues, concurrent execution and settlement | Prototype combines provider invocation, tool dispatch and session writes in one loop |
+| `agent` | `Agent`, `AgentState`, `AgentContext`, `AgentMessage`, `AgentTool`, `AgentToolResult`, `AgentLoopConfig`, `StreamFn`, event subscriptions, tool hooks, queues, concurrent execution and settlement | Native loop entry points, streaming wrappers and tool lifecycle are assembled; higher-level `Agent` orchestration and full schema integration remain pending |
 | `agent/harness` | Execution environment, filesystem/shell interfaces, resources, reducer/drive layers, typed results, session storage and conformance, compaction | Native OS calls exist; harness interfaces and lifecycle are unported |
 | `tui` | `Component`, `Terminal`, editor interfaces, reusable components, screen implementations, differential renderer, input protocols and themes | Unicode/native terminal primitives exist; the library is unported |
 | `coding-agent` | SDK/session orchestration, resources, settings, tools/renderers, print/JSON/RPC/interactive modes and extensions | Prototype CLI lacks the SDK and most lifecycle semantics |

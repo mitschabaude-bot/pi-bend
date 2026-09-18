@@ -18,7 +18,7 @@ import ./message-events.bend as Test
 type Preparing is Data:
   Preparing{calls: R.Ref<U32>, log: H.Log()}
 type Provider is Data:
-  Provider{stop: Bool, calls: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
+  Provider{stopRun: Bool, calls: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
 
 def user(text: String) -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
   T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, F.fromU32(0)}}}
@@ -89,18 +89,18 @@ def hasGuidance(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, String>>) 
     case Ai.System{Ai.SystemMessage{Ai.SystemText{"updated guidance"}, _, _, _, _}} <> _: True{}
     case _ <> rest: hasGuidance(rest)
 
-def checkRequest(stop: Bool, index: U32, messages: List<&2, Ai.Message<V.Value, V.Value, Unit, String>>) -> IO(Unit):
+def checkRequest(stopRun: Bool, index: U32, messages: List<&2, Ai.Message<V.Value, V.Value, Unit, String>>) -> IO(Unit):
   match index:
     case 0: Test.assertion(Bool.not(hasGuidance(messages)), "first request precedes preparation")
-    case 1: Test.assertion(Bool.not(stop) && hasGuidance(messages), "second provider request uses prepared guidance; stop suppresses this request")
+    case 1: Test.assertion(Bool.not(stopRun) && hasGuidance(messages), "second provider request uses prepared guidance; stop suppresses this request")
     case _: Test.assertion(False{}, "no unexpected provider requests")
 
 def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.StreamValue()):
   match environment input:
-    case Provider{stop, calls, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, _}:
+    case Provider{stopRun, calls, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, _}:
       do IO<H.StreamValue()>:
         +index : U32 <- H.bump(calls)
-        checkRequest(stop, index, messages)
+        checkRequest(stopRun, index, messages)
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Tools.response(False{}, index))
@@ -115,13 +115,13 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.StreamValu
     case Some{S.End{}}: IO.pure(List<&2, String>, List.reverse(&2, String, reversed))
     case Some{S.Yield{event}}: collect(iterator, T.eventType(V.Value, V.Value, Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>, event) <> reversed, None{})
 
-def checkOutcome(stop: Bool, result: H.Outcome()) -> IO(Unit):
+def checkOutcome(stopRun: Bool, result: H.Outcome()) -> IO(Unit):
   match result:
     case Fail{_}: Test.assertion(False{}, "turn loop succeeds")
-    case Done{messages}: Test.assertion(String.eq(roles(messages), Bool.pick(String, stop, "system|user|assistant|toolResult|", "system|user|assistant|toolResult|system|assistant|")), "complete run history at stop/preparation boundary")
+    case Done{messages}: Test.assertion(String.eq(roles(messages), Bool.pick(String, stopRun, "system|user|assistant|toolResult|", "system|user|assistant|toolResult|system|assistant|")), "complete run history at stop/preparation boundary")
 
-def checkEvents(stop: Bool, events: List<&2, String>) -> IO(Unit):
-  match stop:
+def checkEvents(stopRun: Bool, events: List<&2, String>) -> IO(Unit):
+  match stopRun:
     case False{}: IO.pure(Unit, Unit{})
     case True{}: Test.assertion(String.eq(String.join(events, "|"), "agent_start|turn_start|message_start|message_end|message_start|message_end|message_start|message_end|tool_execution_start|tool_execution_end|message_start|message_end|turn_end|agent_end"), "exact original stop-hook event sequence")
 
