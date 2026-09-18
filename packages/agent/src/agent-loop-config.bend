@@ -2,6 +2,7 @@ import Base
 import ./types.bend as T
 import ./agent-runtime.bend as Runtime
 import ./agent-queues.bend as Q
+import ./agent-hooks.bend as Hooks
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
@@ -60,3 +61,8 @@ def dispose(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data
         C.dispose(Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, followUp)
         ignored : Bool <- R.dispose(Bool, skip)
         return Unit{}
+
+# The run owns these wrappers; public hooks and option storage stay borrowed.
+def applyHooks(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, base: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>, adapters: Hooks.Adapters<T.ShouldStopAfterTurnContext<P, A, G, D, M, V, S, E>, T.AgentLoopTurnUpdate<P, A, G, D, M, V, S, E, J>, E>) -> T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>:
+  match base adapters:
+    case T.AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} Hooks.Adapters{stop, prepare}: T.AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, stop, prepare, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}

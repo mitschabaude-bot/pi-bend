@@ -31,6 +31,7 @@ import ../packages/agent/src/agent-listeners.bend as AgentListeners
 import ../packages/agent/src/agent-events.bend as AgentEvents
 import ../packages/agent/src/agent-failure.bend as AgentFailure
 import ../packages/agent/src/agent-loop-config.bend as AgentLoopConfig
+import ../packages/agent/src/agent-hooks.bend as AgentHooks
 import ../packages/agent/src/agent-queues.bend as AgentQueues
 import ../packages/agent/src/agent-continuation.bend as AgentContinuation
 import ../packages/agent/src/agent-loop.bend as Loop
