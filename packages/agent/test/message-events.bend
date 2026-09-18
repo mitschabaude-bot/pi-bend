@@ -28,9 +28,13 @@ def retained(event: EventValue()) -> IO(Unit):
         assertion(String.eq(value, "after"), "retained custom message must observe mutation")
     case _: IO.die(Unit, 1, "message-end payload changed")
 
-def assistant(content: R.Ref<List<&2, Ai.AssistantContent<String>>>, cost: R.Ref<Ai.UsageCost>, reason: Ai.StopReason) -> Ai.AssistantMessage<String, Unit>:
+def usage(cost: R.Ref<Ai.UsageCost>) -> Ai.Usage:
   +zero = N.fromU32(0)
-  Ai.AssistantMessage{content, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}, reason, None{}, None{}, None{}, None{}, zero}
+  Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}
+
+def assistant(content: R.Ref<List<&2, Ai.AssistantContent<String>>>, usageValue: R.Ref<Ai.Usage>, reason: Ai.StopReason) -> Ai.AssistantMessage<String, Unit>:
+  +zero = N.fromU32(0)
+  Ai.AssistantMessage{content, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, usageValue, reason, None{}, None{}, None{}, None{}, zero}
 
 def stopped(message: Ai.AssistantMessage<String, Unit>) -> Bool:
   match message:
@@ -79,16 +83,18 @@ def main() -> IO(Unit):
   do IO<Unit>:
     +zero : N.F64 = N.fromU32(0)
     +cost : R.Ref<Ai.UsageCost> <- R.new(Ai.UsageCost, Ai.UsageCost{zero, zero, zero, zero, zero})
+    +assistantUsage : R.Ref<Ai.Usage> <- R.new(Ai.Usage, usage(cost))
     +assistantContent : R.Ref<List<&2, Ai.AssistantContent<String>>> <- R.new(List<&2, Ai.AssistantContent<String>>, Nil{})
-    +partial : R.Ref<Ai.AssistantMessage<String, Unit>> <- R.new(Ai.AssistantMessage<String, Unit>, assistant(assistantContent, cost, Ai.Pending{}))
+    +partial : R.Ref<Ai.AssistantMessage<String, Unit>> <- R.new(Ai.AssistantMessage<String, Unit>, assistant(assistantContent, assistantUsage, Ai.Pending{}))
     +update : EventValue() = T.MessageUpdate{T.LlmMessage{Ai.Assistant{partial}}, Ai.Start{partial}}
     check(update, "message_update")
-    R.write(Ai.AssistantMessage<String, Unit>, partial, assistant(assistantContent, cost, Ai.Stop{}))
+    R.write(Ai.AssistantMessage<String, Unit>, partial, assistant(assistantContent, assistantUsage, Ai.Stop{}))
     updateIdentity(update, partial)
     assertion(partialPayload(T.ToolExecutionUpdate{"id", "tool", "raw", 42}), "partial tool payload changed")
     assertion(finalPayload(T.ToolExecutionEnd{"id", "tool", True{}, False{}}), "final tool payload changed")
     oldMessage : Ai.AssistantMessage<String, Unit> <- R.dispose(Ai.AssistantMessage<String, Unit>, partial)
     oldAssistantContent : List<&2, Ai.AssistantContent<String>> <- R.dispose(List<&2, Ai.AssistantContent<String>>, assistantContent)
+    oldAssistantUsage : Ai.Usage <- R.dispose(Ai.Usage, assistantUsage)
     oldCost : Ai.UsageCost <- R.dispose(Ai.UsageCost, cost)
     +value : R.Ref<String> <- R.new(String, "before")
     +message : MessageValue() = T.CustomMessage{value}

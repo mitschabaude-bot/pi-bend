@@ -21,9 +21,9 @@ def assertion(ok: Bool, label: String) -> IO(Unit):
     case True{}: IO.pure(Unit, Unit{})
     case False{}: IO.die(Unit, 1, label)
 
-def message(contents: Ref.Ref<List<&2, T.AssistantContent<Arguments>>>, cost: Ref.Ref<T.UsageCost>, reason: T.StopReason) -> Message():
+def message(contents: Ref.Ref<List<&2, T.AssistantContent<Arguments>>>, usage: Ref.Ref<T.Usage>, reason: T.StopReason) -> Message():
   +zero = N.fromU32(0)
-  T.AssistantMessage{contents, "custom-api", "custom-provider", "requested-model", Some{"actual-model"}, Some{"response-id"}, Some{"provider-effort"}, None{}, T.Usage{zero, zero, zero, zero, Some{zero}, Some{zero}, zero, cost}, reason, None{}, None{}, Some{"native-reason"}, Some{False{}}, N.fromU32(1234)}
+  T.AssistantMessage{contents, "custom-api", "custom-provider", "requested-model", Some{"actual-model"}, Some{"response-id"}, Some{"provider-effort"}, None{}, usage, reason, None{}, None{}, Some{"native-reason"}, Some{False{}}, N.fromU32(1234)}
 
 def tag(value: EventValue()) -> U32:
   match value:
@@ -137,17 +137,18 @@ def run(+error: Bool) -> IO(Unit):
     +thinking : Ref.Ref<T.ThinkingContent> <- Ref.new(T.ThinkingContent, T.ThinkingContent{"", None{}, Some{False{}}})
     +tool : Ref.Ref<T.ToolCall<Arguments>> <- Ref.new(T.ToolCall<Arguments>, T.ToolCall{"call-id", "read", Arguments{"source.bend", flag}, Some{"signature"}, Some{"namespace"}})
     +cost : Ref.Ref<T.UsageCost> <- Ref.new(T.UsageCost, T.UsageCost{N.fromU32(0), N.fromU32(0), N.fromU32(0), N.fromU32(0), N.fromU32(0)})
+    +usage : Ref.Ref<T.Usage> <- Ref.new(T.Usage, T.Usage{N.fromU32(0), N.fromU32(0), N.fromU32(0), N.fromU32(0), Some{N.fromU32(0)}, Some{N.fromU32(0)}, N.fromU32(0), cost})
     +contents : Ref.Ref<List<&2, T.AssistantContent<Arguments>>> <- Ref.new(List<&2, T.AssistantContent<Arguments>>, T.AssistantText{text} <> T.AssistantThinking{thinking} <> T.AssistantToolCall{tool} <> Nil{})
-    +partial : Ref.Ref<Message()> <- Ref.new(Message(), message(contents, cost, T.Pending{}))
+    +partial : Ref.Ref<Message()> <- Ref.new(Message(), message(contents, usage, T.Pending{}))
     +stream : Stream() <- E.createAssistantMessageEventStream(~Arguments, ~DiagnosticDetails)
     partials(stream, partial, tool)
     +cursor : E.Iterator<EventValue(), Ref.Ref<Message()>> <- E.iterator(EventValue(), Ref.Ref<Message()>, stream)
     retained : E.Iteration<EventValue()> <- E.nextValue(EventValue(), Ref.Ref<Message()>, cursor)
-    Ref.write(Message(), partial, message(contents, cost, Bool.pick(T.StopReason, error, T.Error{}, T.Stop{})))
+    Ref.write(Message(), partial, message(contents, usage, Bool.pick(T.StopReason, error, T.Error{}, T.Stop{})))
     E.push(EventValue(), Ref.Ref<Message()>, stream, terminal(error, partial))
     E.push(EventValue(), Ref.Ref<Message()>, stream, T.Start{partial})
     resultRef : Ref.Ref<Message()> <- E.resultValue(EventValue(), Ref.Ref<Message()>, stream)
-    Ref.write(Message(), resultRef, message(contents, cost, T.Length{}))
+    Ref.write(Message(), resultRef, message(contents, usage, T.Length{}))
     Ref.write(T.TextContent, text, T.TextContent{"updated", None{}})
     Ref.write(Bool, flag, True{})
     checkRetained(retained)
@@ -161,6 +162,7 @@ def run(+error: Bool) -> IO(Unit):
     E.disposeIterator(EventValue(), Ref.Ref<Message()>, cursor)
     E.disposeAssistantMessageEventStream(Arguments, DiagnosticDetails, stream)
     previous : Message() <- Ref.dispose(Message(), partial)
+    oldUsage : T.Usage <- Ref.dispose(T.Usage, usage)
     oldContents : List<&2, T.AssistantContent<Arguments>> <- Ref.dispose(List<&2, T.AssistantContent<Arguments>>, contents)
     previous : T.UsageCost <- Ref.dispose(T.UsageCost, cost)
     previous : T.TextContent <- Ref.dispose(T.TextContent, text)
@@ -177,8 +179,9 @@ def setupFailure() -> IO(Unit):
     +thinking : Ref.Ref<T.ThinkingContent> <- Ref.new(T.ThinkingContent, T.ThinkingContent{"", None{}, Some{False{}}})
     +tool : Ref.Ref<T.ToolCall<Arguments>> <- Ref.new(T.ToolCall<Arguments>, T.ToolCall{"call-id", "read", Arguments{"source.bend", flag}, None{}, None{}})
     +cost : Ref.Ref<T.UsageCost> <- Ref.new(T.UsageCost, T.UsageCost{N.fromU32(0), N.fromU32(0), N.fromU32(0), N.fromU32(0), N.fromU32(0)})
+    +usage : Ref.Ref<T.Usage> <- Ref.new(T.Usage, T.Usage{N.fromU32(0), N.fromU32(0), N.fromU32(0), N.fromU32(0), Some{N.fromU32(0)}, Some{N.fromU32(0)}, N.fromU32(0), cost})
     +contents : Ref.Ref<List<&2, T.AssistantContent<Arguments>>> <- Ref.new(List<&2, T.AssistantContent<Arguments>>, T.AssistantText{text} <> T.AssistantThinking{thinking} <> T.AssistantToolCall{tool} <> Nil{})
-    +partial : Ref.Ref<Message()> <- Ref.new(Message(), message(contents, cost, T.Aborted{}))
+    +partial : Ref.Ref<Message()> <- Ref.new(Message(), message(contents, usage, T.Aborted{}))
     +stream : Stream() <- E.createAssistantMessageEventStream(~Arguments, ~DiagnosticDetails)
     E.push(EventValue(), Ref.Ref<Message()>, stream, T.StreamError{T.ErrorAborted{}, partial})
     resultRef : Ref.Ref<Message()> <- E.resultValue(EventValue(), Ref.Ref<Message()>, stream)
@@ -190,6 +193,7 @@ def setupFailure() -> IO(Unit):
     E.disposeIterator(EventValue(), Ref.Ref<Message()>, cursor)
     E.disposeAssistantMessageEventStream(Arguments, DiagnosticDetails, stream)
     previous : Message() <- Ref.dispose(Message(), partial)
+    oldUsage : T.Usage <- Ref.dispose(T.Usage, usage)
     oldContents : List<&2, T.AssistantContent<Arguments>> <- Ref.dispose(List<&2, T.AssistantContent<Arguments>>, contents)
     previous : T.UsageCost <- Ref.dispose(T.UsageCost, cost)
     previous : T.TextContent <- Ref.dispose(T.TextContent, text)

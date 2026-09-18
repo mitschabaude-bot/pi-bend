@@ -137,15 +137,17 @@ def createFixture() -> IO(Fixture):
     +zero : N.F64 = N.fromU32(0)
     +cost : Ref.Ref<T.UsageCost> <- Ref.new(T.UsageCost, T.UsageCost{zero, zero, zero, zero, zero})
     contents : Ref.Ref<List<&2, T.AssistantContent<Unit>>> <- Ref.new(List<&2, T.AssistantContent<Unit>>, T.AssistantText{text} <> Nil{})
-    assistant : Ref.Ref<T.AssistantMessage<Unit, Unit>> <- Ref.new(T.AssistantMessage<Unit, Unit>, T.AssistantMessage{contents, "", "", "", None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}, T.Stop{}, None{}, None{}, None{}, None{}, N.fromU32(13)})
+    usage : Ref.Ref<T.Usage> <- Ref.new(T.Usage, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost})
+    assistant : Ref.Ref<T.AssistantMessage<Unit, Unit>> <- Ref.new(T.AssistantMessage<Unit, Unit>, T.AssistantMessage{contents, "", "", "", None{}, None{}, None{}, None{}, usage, T.Stop{}, None{}, None{}, None{}, None{}, N.fromU32(13)})
     last : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, Some{patch}, Some{second <> Nil{}}, Some{T.ToolReference{"first"} <> Nil{}}, N.fromU32(14)})
     return Fixture{T.System{head} <> T.User{user} <> T.System{append} <> T.Assistant{assistant} <> T.System{last} <> Nil{}, first <> second <> Nil{}, text, cost}
 
 def disposeAssistantContent(value: T.AssistantMessage<Unit, Unit>) -> IO(Unit):
   match value:
-    case T.AssistantMessage{contents, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case T.AssistantMessage{contents, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}:
       do IO<Unit>:
         old : List<&2, T.AssistantContent<Unit>> <- Ref.dispose(List<&2, T.AssistantContent<Unit>>, contents)
+        oldUsage : T.Usage <- Ref.dispose(T.Usage, usage)
         return Unit{}
 
 def disposeMessages(messages: List<&2, Message()>) -> IO(Unit):
