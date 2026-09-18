@@ -43,3 +43,6 @@ def checked(result: Validation.Coercion(U32), expected: V.Value<U32>, label: Str
 
 def check(value: V.Value<U32>, kind: String, expected: V.Value<U32>, label: String) -> IO(Unit):
   checked(Validation.coercePrimitiveByType(U32, value, kind), expected, label)
+
+def checkTypes(value: V.Value<U32>, types: List<&2, String>, expected: V.Value<U32>, label: String) -> IO(Unit):
+  checked(Validation.coerceSchemaTypes(U32, value, types), expected, label)

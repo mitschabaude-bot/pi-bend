@@ -107,3 +107,57 @@ def coercePrimitive(-M: Data, kind: PrimitiveType, value: V.Value<M>) -> Coercio
 
 def coercePrimitiveByType(-M: Data, value: V.Value<M>, kind: String) -> Coercion(M):
   coercePrimitive(M, primitiveType(kind), value)
+
+# This comparison is scoped to outputs of coercePrimitiveByType. That helper
+# never allocates/replaces objects, arrays, symbols or callable metadata. Their
+# unchanged payloads therefore retain identity; no structural equality is used.
+def primitiveCandidateChanged(-M: Data, original: V.Value<M>, candidate: V.Value<M>) -> Bool:
+  match original candidate:
+    case V.Number{a} V.Number{b}: Bool.not(equalNumber(F.compare(a, b)))
+    case V.Text{a} V.Text{b}: Bool.not(String.eq(a, b))
+    case V.Boolean{+a} V.Boolean{+b}: (a && Bool.not(b)) || (Bool.not(a) && b)
+    case V.Null{} V.Null{}: False{}
+    case V.Undefined{} V.Undefined{}: False{}
+    case V.ArrayValue{_} V.ArrayValue{_}: False{}
+    case V.ObjectValue{_, _} V.ObjectValue{_, _}: False{}
+    case V.Symbol{_} V.Symbol{_}: False{}
+    case V.Callable{_} V.Callable{_}: False{}
+    case V.BigInteger{_, _} V.BigInteger{_, _}: False{}
+    case _ _: True{}
+
+def matchesAnyType(-M: Data, types: List<&2, String>, +value: V.Value<M>) -> Bool:
+  match types:
+    case Nil{}: False{}
+    case head <> tail: matchesJsonType(M, value, head) || matchesAnyType(M, tail, value)
+
+def matchesTypeUnion(-M: Data, types: List<&2, String>, value: V.Value<M>) -> Bool:
+  match types:
+    case a <> b <> rest: matchesAnyType(M, a <> b <> rest, value)
+    case _: False{}
+
+type PrimitiveSelection<-M: Data> is Data:
+  TryNextType{}
+  SelectedPrimitive{value: V.Value<M>}
+  PrimitiveSelectionFailed{error: CoercionError}
+
+def primitiveSelection(-M: Data, original: V.Value<M>, candidate: Coercion(M)) -> PrimitiveSelection<M>:
+  match candidate:
+    case Fail{error}: PrimitiveSelectionFailed{error}
+    case Done{+value}: Bool.pick(PrimitiveSelection<M>, primitiveCandidateChanged(M, original, value), SelectedPrimitive{value}, TryNextType{})
+
+def selectPrimitiveTypes(-M: Data, types: List<&2, String>, +original: V.Value<M>, selected: PrimitiveSelection<M>) -> Coercion(M):
+  match types selected:
+    case _ SelectedPrimitive{value}: Done{value}
+    case _ PrimitiveSelectionFailed{error}: Fail{error}
+    case Nil{} TryNextType{}: Done{original}
+    case head <> tail TryNextType{}: selectPrimitiveTypes(M, tail, original, primitiveSelection(M, original, coercePrimitiveByType(M, original, head)))
+
+def coerceUnmatchedTypes(-M: Data, matched: Bool, types: List<&2, String>, value: V.Value<M>) -> Coercion(M):
+  match matched:
+    case True{}: Done{value}
+    case False{}: selectPrimitiveTypes(M, types, value, TryNextType{})
+
+# The scalar/type-array phase of coerceWithJsonSchema, after allOf/anyOf/oneOf
+# and before object/array traversal. This is not the complete schema algorithm.
+def coerceSchemaTypes(-M: Data, +value: V.Value<M>, +types: List<&2, String>) -> Coercion(M):
+  coerceUnmatchedTypes(M, matchesTypeUnion(M, types, value), types, value)
