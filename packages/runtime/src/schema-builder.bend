@@ -176,6 +176,7 @@ def booleanOption(value: V.Value) -> Bool:
 def supportedOption(kind: Loader.KeywordKind, value: V.Value) -> Bool:
   match kind:
     case Loader.AnnotationKeyword{}: True{}
+    case Loader.MultipleOfKeyword{}: True{}
     case Loader.MinimumKeyword{}: True{}
     case Loader.MaximumKeyword{}: True{}
     case Loader.ExclusiveMinimumKeyword{}: True{}

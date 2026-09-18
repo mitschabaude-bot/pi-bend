@@ -3,6 +3,7 @@ import ./schema-value.bend as V
 import ./schema-string.bend as Text
 import ./record.bend as R
 import ./f64.bend as F
+import ./f64-remainder.bend as Rem
 import ./big-nat.bend as B
 
 # Native executable schema vocabulary. JSON-schema loading and diagnostics are
@@ -32,6 +33,7 @@ type Schema is Data:
   Not{schema: Schema}
   Minimum{limit: F.F64, inclusive: Bool}
   Maximum{limit: F.F64, inclusive: Bool}
+  MultipleOf{divisor: F.F64}
   UniqueItems{}
   StringLength{bounds: CountBounds}
   ItemCount{bounds: CountBounds}
@@ -147,6 +149,18 @@ def upperBound(order: Maybe<&2, Cmp>, inclusive: Bool) -> Bool:
     case Some{EQ{}}: inclusive
     case _: False{}
 
+# Match the pinned validator's absolute remainder tolerance, including its
+# integer/reciprocal shortcut. All arithmetic remains native binary64.
+def nearMultiple(+value: F.F64) -> Bool:
+  +tolerance = F.fromBits(1037794527, 3654794683)
+  lowerBound(F.compare(value, F.negate(tolerance)), False{}) && upperBound(F.compare(value, tolerance), False{})
+
+def multipleRemainder(+remainder: F.F64, +divisor: F.F64) -> Bool:
+  nearMultiple(remainder) || nearMultiple(F.subtract(remainder, divisor)) || nearMultiple(F.add(remainder, divisor))
+
+def multipleOf(+value: F.F64, +divisor: F.F64) -> Bool:
+  (F.isInteger(value) && F.isInteger(F.divide(F.fromU32(1), divisor))) || multipleRemainder(Rem.remainder(value, divisor), divisor)
+
 def containsTests(values: List<&2, V.Value>, +schema: Schema) -> List<&2, Test>:
   match values:
     case Nil{}: Nil{}
@@ -172,6 +186,8 @@ def evaluate(test: Test) -> Bool:
     case Check{Minimum{_, _}, _}: True{}
     case Check{Maximum{limit, inclusive}, V.Number{value}}: upperBound(F.compare(value, limit), inclusive)
     case Check{Maximum{_, _}, _}: True{}
+    case Check{MultipleOf{divisor}, V.Number{value}}: multipleOf(value, divisor)
+    case Check{MultipleOf{_}, _}: True{}
     case Check{UniqueItems{}, V.ArrayValue{values}}: unique(values)
     case Check{UniqueItems{}, _}: True{}
     case Check{StringLength{bounds}, V.Text{text}}: inBounds(Text.length(text), bounds)

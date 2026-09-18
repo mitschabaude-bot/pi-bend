@@ -167,6 +167,11 @@ def numeric(lower: Bool, +inclusive: Bool, value: V.Value, path: List<&2, String
     case V.Number{+limit}: Bool.pick(Scheduled(), S.finite(F.decode(limit)), Done{Push{Bool.pick(S.Schema, lower, S.Minimum{limit, inclusive}, S.Maximum{limit, inclusive})} <> Nil{}}, invalid(List<&2, Task>, path, "a finite numeric bound"))
     case _: invalid(List<&2, Task>, path, "a finite numeric bound")
 
+def multiple(value: V.Value, path: List<&2, String>) -> Scheduled():
+  match value:
+    case V.Number{+divisor}: Bool.pick(Scheduled(), S.finite(F.decode(divisor)), Done{Push{S.MultipleOf{divisor}} <> Nil{}}, invalid(List<&2, Task>, path, "a finite numeric divisor"))
+    case _: invalid(List<&2, Task>, path, "a finite numeric divisor")
+
 def integerWord(value: W.U64) -> B.BigNat:
   match value:
     case W.U64{high, low}: B.add(B.shiftLeft(B.fromU32(high), 32n), B.fromU32(low))
@@ -254,6 +259,7 @@ type KeywordKind is Data:
   AdditionalPropertiesKeyword{}
   ItemsKeyword{}
   AdditionalItemsKeyword{}
+  MultipleOfKeyword{}
   MinimumKeyword{}
   MaximumKeyword{}
   ExclusiveMinimumKeyword{}
@@ -277,7 +283,7 @@ def selectedKeyword(value: Maybe<&2, KeywordKind>) -> KeywordKind:
     case None{}: UnknownKeyword{}
 
 def keywordKind(key: String) -> KeywordKind:
-  entries = {R.Record{R.Property{"$ref", ReferenceKeyword{}} <> R.Property{"$defs", DefinitionsKeyword{}} <> R.Property{"definitions", DefinitionsKeyword{}} <> R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"uniqueItems", UniqueItemsKeyword{}} <> R.Property{"minLength", MinLengthKeyword{}} <> R.Property{"maxLength", MaxLengthKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
+  entries = {R.Record{R.Property{"$ref", ReferenceKeyword{}} <> R.Property{"$defs", DefinitionsKeyword{}} <> R.Property{"definitions", DefinitionsKeyword{}} <> R.Property{"type", TypeKeyword{}} <> R.Property{"const", ConstKeyword{}} <> R.Property{"enum", EnumKeyword{}} <> R.Property{"allOf", AllOfKeyword{}} <> R.Property{"anyOf", AnyOfKeyword{}} <> R.Property{"oneOf", OneOfKeyword{}} <> R.Property{"not", NotKeyword{}} <> R.Property{"properties", PropertiesKeyword{}} <> R.Property{"required", RequiredKeyword{}} <> R.Property{"additionalProperties", AdditionalPropertiesKeyword{}} <> R.Property{"items", ItemsKeyword{}} <> R.Property{"additionalItems", AdditionalItemsKeyword{}} <> R.Property{"multipleOf", MultipleOfKeyword{}} <> R.Property{"minimum", MinimumKeyword{}} <> R.Property{"maximum", MaximumKeyword{}} <> R.Property{"exclusiveMinimum", ExclusiveMinimumKeyword{}} <> R.Property{"exclusiveMaximum", ExclusiveMaximumKeyword{}} <> R.Property{"uniqueItems", UniqueItemsKeyword{}} <> R.Property{"minLength", MinLengthKeyword{}} <> R.Property{"maxLength", MaxLengthKeyword{}} <> R.Property{"minItems", MinItemsKeyword{}} <> R.Property{"maxItems", MaxItemsKeyword{}} <> R.Property{"minProperties", MinPropertiesKeyword{}} <> R.Property{"maxProperties", MaxPropertiesKeyword{}} <> R.Property{"contains", ContainsKeyword{}} <> R.Property{"minContains", MinContainsKeyword{}} <> R.Property{"maxContains", MaxContainsKeyword{}} <> R.Property{"title", AnnotationKeyword{}} <> R.Property{"description", AnnotationKeyword{}} <> R.Property{"default", AnnotationKeyword{}} <> R.Property{"examples", AnnotationKeyword{}} <> R.Property{"deprecated", AnnotationKeyword{}} <> R.Property{"readOnly", AnnotationKeyword{}} <> R.Property{"writeOnly", AnnotationKeyword{}} <> Nil{}} : R.Record<KeywordKind>}
   selectedKeyword(R.get(KeywordKind, entries, key))
 
 # Each keyword contributes one conjunct. Cross-keyword rules consult the whole
@@ -301,6 +307,7 @@ def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record
     case AdditionalPropertiesKeyword{}: Done{Read{value, path} <> Build{Additional{declaredFields(R.get(V.Value, whole, "properties"))}, 1n} <> Nil{}}
     case ItemsKeyword{}: items(value, path)
     case AdditionalItemsKeyword{}: additionalItems(tuplePrefix(R.get(V.Value, whole, "items")), value, path)
+    case MultipleOfKeyword{}: multiple(value, path)
     case MinimumKeyword{}: numeric(True{}, True{}, value, path)
     case MaximumKeyword{}: numeric(False{}, True{}, value, path)
     case ExclusiveMinimumKeyword{}: numeric(True{}, False{}, value, path)
@@ -348,16 +355,17 @@ def keywordOrder(selected: KeywordKind) -> U32:
     case ExclusiveMinimumKeyword{}: 17
     case MaximumKeyword{}: 18
     case MinimumKeyword{}: 19
-    case ReferenceKeyword{}: 20
-    case DefinitionsKeyword{}: 27
-    case ConstKeyword{}: 21
-    case EnumKeyword{}: 22
-    case NotKeyword{}: 23
-    case AllOfKeyword{}: 24
-    case AnyOfKeyword{}: 25
-    case OneOfKeyword{}: 26
-    case AnnotationKeyword{}: 27
-    case UnknownKeyword{}: 27
+    case MultipleOfKeyword{}: 20
+    case ReferenceKeyword{}: 21
+    case DefinitionsKeyword{}: 28
+    case ConstKeyword{}: 22
+    case EnumKeyword{}: 23
+    case NotKeyword{}: 24
+    case AllOfKeyword{}: 25
+    case AnyOfKeyword{}: 26
+    case OneOfKeyword{}: 27
+    case AnnotationKeyword{}: 28
+    case UnknownKeyword{}: 28
 
 def insertKeyword(+key: String, +value: V.Value, fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   match fields:

@@ -132,6 +132,7 @@ def nativeIssue(path: String, reason: Native.Reason) -> Maybe<&2, List<&2, Issue
     case Native.ExpectedEnumeration{_}: simple(path, "must be equal to one of the allowed values")
     case Native.MissingFields{+keys}: Some{Issue{Required{path, keys}, "must have required properties " ++ String.join(keys, ", ")} <> Nil{}}
     case Native.AdditionalFields{_}: simple(path, "must not have additional properties")
+    case Native.NumericMultipleOf{divisor}: numericText(path, "must be multiple of ", "", Decimal.toDecimal(divisor))
     case Native.NumericMinimum{limit, inclusive}: numericText(path, Bool.pick(String, inclusive, "must be >= ", "must be > "), "", Decimal.toDecimal(limit))
     case Native.NumericMaximum{limit, inclusive}: numericText(path, Bool.pick(String, inclusive, "must be <= ", "must be < "), "", Decimal.toDecimal(limit))
     case Native.StringLength{actual, bounds}: lengthIssues(actual, bounds, path)
