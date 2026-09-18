@@ -23,6 +23,7 @@ for kind in range(5):
                  'message_end:tool:' + ('error' if kind == 1 else 'ok'),
                  'turn_end', 'agent_end', 'turn_start', 'message_start:prepared', 'message_end:prepared']:
         cases.append(dict(kind=kind, terminate=False, steering=False, follow=False, stop=False, failAt=fail))
+cases += [dict(kind=8, terminate=False, steering=steering, follow=follow, stop=False, failAt='') for steering, follow in itertools.product([False, True], repeat=2)]
 expected = json.loads(subprocess.check_output(['node', 'tests/main_loop_reference.mts'],
                      input=json.dumps(cases), text=True, cwd=ROOT))
 flag = lambda value: 'True{}' if value else 'False{}'

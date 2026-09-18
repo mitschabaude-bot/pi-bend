@@ -152,12 +152,12 @@ def toSimpleStreamOptions(-Parameters: Data, -Arguments: Data, -DiagnosticDetail
 # Options is explicit because Bend lacks TypeScript structural subtyping.
 # Standalone providers instantiate SimpleStreamOptions; the agent uses its full
 # configuration snapshot, preserving extra fields visible to injected streams.
-# Recoverable request errors still belong in the returned stream.
+# Opening failures are explicit; failures after opening remain stream events.
 type StreamInput<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data> is Data:
   StreamInput{model: Ai.Model<Value>, context: Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>, options: Maybe<&2, Options>}
 
-def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data) -> Data:
-  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Options>, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>
+def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data, -Error: Data) -> Data:
+  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Options>, Result<&2, &2, Error, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>>
 
 # systemPrompt is derived from messages by agent-state.systemPrompt.
 # Runtime ownership and borrowed callbacks remain outside this value snapshot.

@@ -25,6 +25,7 @@ cases += [dict(entry=entry, selection=selection, kind=kind, terminate=False,
 cases += [dict(entry=entry, selection=selection, kind=7, terminate=False,
                steering=False, follow=False, stop=False, failAt='')
           for entry, selection in itertools.product([1, 2], [0, 1])]
+cases += [dict(entry=entry, selection=selection, kind=8, terminate=False, steering=False, follow=False, stop=False, failAt='') for entry, selection in itertools.product([1, 2, 3, 4], [0, 1, 2, 7])]
 expected = json.loads(subprocess.check_output(['node', 'tests/main_loop_reference.mts'],
                      input=json.dumps(cases), text=True, cwd=ROOT))
 flag = lambda value: 'True{}' if value else 'False{}'

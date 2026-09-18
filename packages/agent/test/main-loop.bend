@@ -22,15 +22,16 @@ import ./message-events.bend as Test
 
 def Assistant() -> Data: Ai.AssistantMessage<V.Value, Unit>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
+def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
 def ProviderInput() -> Data: T.StreamInput<V.Value, V.Value, Unit, String, Unit, H.Config()>
 def Turn() -> Data: T.ShouldStopAfterTurnContext<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>
 def Update() -> Data: T.AgentLoopTurnUpdate<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit>
 def PrepareOutput() -> Data: Result<&2, &2, String, Maybe<&2, Update()>>
 def QueueOutput() -> Data: Result<&2, &2, String, H.Messages()>
 def Outcome() -> Data: Result<&2, &2, String, H.Messages()>
-def ProviderFunction() -> Data: T.StreamFn(V.Value, V.Value, Unit, String, Unit, H.Config())
-def Registry() -> Data: StreamFn.Registry(V.Value, V.Value, Unit, String, Unit, H.Config())
-def Selection() -> Data: StreamFn.Selection<V.Value, V.Value, Unit, String, Unit, H.Config()>
+def ProviderFunction() -> Data: T.StreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), String)
+def Registry() -> Data: StreamFn.Registry(V.Value, V.Value, Unit, String, Unit, H.Config(), String)
+def Selection() -> Data: StreamFn.Selection<V.Value, V.Value, Unit, String, Unit, H.Config(), String>
 def StreamRun() -> Data: Wrapper.Run<V.Value, Unit, String, String, V.Value, Unit, String>
 def StreamOptions() -> Data: Wrapper.Options<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>
 def Log() -> Data: R.Ref<List<&2, String>>
@@ -61,7 +62,7 @@ type Recording is Data:
 def change(registry: Registry(), enabled: Bool, provider: Maybe<&2, ProviderFunction()>) -> IO(Unit):
   match enabled:
     case False{}: IO.pure(Unit, Unit{})
-    case True{}: StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), registry, provider)
+    case True{}: StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), String, registry, provider)
 
 def changeDefault(defaults: Defaults, name: String) -> IO(Unit):
   match defaults:
@@ -186,21 +187,28 @@ def releaseProvider(gate: Maybe<&2, Gates>) -> IO(Unit):
         sent : Bool <- Chan.send(Unit, release, Unit{})
         R.requireSent(sent)
 
-def provider(environment: Provider, input: ProviderInput()) -> IO(StreamValue()):
+def openProvider(kind: U32, index: U32, streams: R.Ref<List<&2, StreamValue()>>) -> IO(ProviderOutput()):
+  match kind:
+    case 8: IO.pure(ProviderOutput(), Fail{"provider open failed"})
+    case kind:
+      do IO<ProviderOutput()>:
+        +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
+        R.modify(List<&2, StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
+        Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, Ai.Start{assistant(text("partial"), Ai.Pending{})})
+        Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, finalEvent(response(kind, index)))
+        return Done{stream}
+
+def provider(environment: Provider, input: ProviderInput()) -> IO(ProviderOutput()):
   match environment input:
     case Provider{kind, count, recording, requests, streams, label, gate} T.StreamInput{model, Ai.TranscriptContext{messages}, _}:
-      do IO<StreamValue()>:
+      do IO<ProviderOutput()>:
         +index : U32 <- bump(count)
         Test.assertion(U32.is_lt(index, 4), "loop must settle rather than spin")
         Test.assertion(String.eq(Api.name(Api.modelApi(Unit, model)), Bool.pick(String, U32.is_eq(index, 0), "original", "changed")), "next-turn model reaches the provider")
         log(requests, llmNames(messages))
         log(recording, label)
         waitForRelease(gate, index)
-        +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
-        R.modify(List<&2, StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
-        Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, Ai.Start{assistant(text("partial"), Ai.Pending{})})
-        Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, finalEvent(response(kind, index)))
-        return stream
+        openProvider(kind, index, streams)
 
 def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
   match environment input:
@@ -356,10 +364,10 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     +validator : C.Callback<H.Input(), H.Checked()> <- C.create(~R.Ref<U32>, ~H.Input(), ~H.Checked(), ~validate, validationCount)
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Conversion, ~H.Messages(), ~H.Converted(), ~convert, Conversion{recording, U32.is_eq(kind, 5)})
     +gate : Maybe<&2, Gates> <- createGate(streamed && U32.is_eq(kind, 7))
-    +registry : Registry() <- StreamFn.create(V.Value, V.Value, Unit, String, Unit, H.Config())
-    +providerCallback : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider", gate})
-    +replacement : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider:replacement", gate})
-    StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), registry, initialDefault(policy, providerCallback, replacement))
+    +registry : Registry() <- StreamFn.create(V.Value, V.Value, Unit, String, Unit, H.Config(), String)
+    +providerCallback : C.Callback<ProviderInput(), ProviderOutput()> <- C.create(~Provider, ~ProviderInput(), ~ProviderOutput(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider", gate})
+    +replacement : C.Callback<ProviderInput(), ProviderOutput()> <- C.create(~Provider, ~ProviderInput(), ~ProviderOutput(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider:replacement", gate})
+    StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), String, registry, initialDefault(policy, providerCallback, replacement))
     +defaults : Defaults = Defaults{policy, registry, providerCallback, replacement}
     +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording, baseline(mode), U32.is_eq(kind, 6)})
     +prepareHook : C.Callback<Turn(), PrepareOutput()> <- C.create(~Preparing, ~Turn(), ~PrepareOutput(), ~prepare, Preparing{recording, baseline(mode)})
@@ -395,9 +403,9 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     C.dispose(Maybe<&2, Unit>, Bool, aborted)
     C.dispose(H.EventValue(), Result<&2, &2, String, Unit>, sink)
     C.dispose(H.EventValue(), E.Emission<String>, emitter)
-    StreamFn.dispose(V.Value, V.Value, Unit, String, Unit, H.Config(), registry)
-    C.dispose(ProviderInput(), StreamValue(), replacement)
-    C.dispose(ProviderInput(), StreamValue(), providerCallback)
+    StreamFn.dispose(V.Value, V.Value, Unit, String, Unit, H.Config(), String, registry)
+    C.dispose(ProviderInput(), ProviderOutput(), replacement)
+    C.dispose(ProviderInput(), ProviderOutput(), providerCallback)
     ownedStreams : List<&2, StreamValue()> <- R.dispose(List<&2, StreamValue()>, streams)
     disposeStreams(ownedStreams)
     discarded : List<&2, String> <- R.dispose(List<&2, String>, recording)

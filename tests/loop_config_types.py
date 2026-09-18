@@ -57,13 +57,21 @@ subprocess.run(['sh','scripts/build-pure.sh',str(path),'build/test-loop-config-t
 for threads in ('1','4'): subprocess.run(['build/test-loop-config-types','--threads',threads],cwd=ROOT,check=True,timeout=30)
 bend=os.environ.get('BEND',str(Path.home()/'.bend/bin/bend'))
 preamble='\n'.join(lines[:8])+'\n'
+accepted=BUILD/'valid-loop-provider-result.bend'
+accepted.write_text(preamble+f'''def Input() -> Data: T.StreamInput<{stream_params}>
+def provider(value: C.Callback<Input(), Result<&2, &2, String, E.AssistantMessageEventStream(String, Unit)>>) -> T.StreamFn({stream_params}, String):
+  value
+def main() -> IO(Unit):
+  IO.print("typed provider opening")
+''')
+subprocess.run([bend,str(accepted)],cwd=ROOT,check=True,timeout=30)
 invalids=[('raw-context',f'''def bad(model: Ai.Model<Unit>, context: Ai.Context<Unit, String, Unit, String>) -> T.StreamInput<{stream_params}>:
   T.StreamInput{{model, context, None{{}}}}
-''','TranscriptContext','Context'),('stream-error',f'''def Input() -> Data: T.StreamInput<{stream_params}>
-def bad(value: C.Callback<Input(), Result<&2, &2, String, E.AssistantMessageEventStream(String, Unit)>>) -> T.StreamFn({stream_params}):
+''','TranscriptContext','Context'),('unreported-opening-error',f'''def Input() -> Data: T.StreamInput<{stream_params}>
+def bad(value: C.Callback<Input(), E.AssistantMessageEventStream(String, Unit)>) -> T.StreamFn({stream_params}, String):
   value
-''','EventStream','Result')]
-invalids.append(('option-erasure', f"""def bad(value: T.StreamFn(Unit, String, Unit, String, Unit, T.AgentLoopConfig<{params}>)) -> T.StreamFn({stream_params}):
+''','Result','EventStream')]
+invalids.append(('option-erasure', f"""def bad(value: T.StreamFn(Unit, String, Unit, String, Unit, T.AgentLoopConfig<{params}>, String)) -> T.StreamFn({stream_params}, String):
   value
 """, 'SimpleStreamOptions', 'AgentLoopConfig'))
 for name,body,required,observed in invalids:
@@ -75,4 +83,4 @@ for name,body,required,observed in invalids:
     assert result.returncode != 0, 'invalid stream contract accepted'
     assert re.search(r'- expected : [^\n]*'+required,output),output
     assert re.search(r'- observed : [^\n]*'+observed,output),output
-print(f'PASS {len(expected)} inherited loop fields, normalized stream input and in-stream request-error contract and explicit option typing')
+print(f'PASS {len(expected)} inherited loop fields, normalized stream input and typed provider-opening error contract and explicit option typing')

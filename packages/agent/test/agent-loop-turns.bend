@@ -95,16 +95,16 @@ def checkRequest(stopRun: Bool, index: U32, messages: List<&2, Ai.Message<V.Valu
     case 1: Test.assertion(Bool.not(stopRun) && hasGuidance(messages), "second provider request uses prepared guidance; stop suppresses this request")
     case _: Test.assertion(False{}, "no unexpected provider requests")
 
-def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.StreamValue()):
+def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match environment input:
     case Provider{stopRun, calls, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, _}:
-      do IO<H.StreamValue()>:
+      do IO<H.ProviderOutput()>:
         +index : U32 <- H.bump(calls)
         checkRequest(stopRun, index, messages)
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Tools.response(False{}, index))
-        return stream
+        return Done{stream}
 
 @unsafe def collect(+iterator: S.Iterator<Validation.EventValue(), H.Outcome()>, reversed: List<&2, String>, step: Maybe<&2, S.Iteration<Validation.EventValue()>>) -> IO(List<&2, String>):
   match step:
@@ -136,7 +136,7 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     +stopper : C.Callback<H.Turn(), Result<&2, &2, String, Bool>> <- C.create(~H.Log(), ~H.Turn(), ~Result<&2, &2, String, Bool>, ~stop, recording)
     +steeringCallback : C.Callback<Unit, H.QueueOutput()> <- C.create(~H.Log(), ~Unit, ~H.QueueOutput(), ~steering, recording)
     +followCallback : C.Callback<Unit, H.QueueOutput()> <- C.create(~H.Log(), ~Unit, ~H.QueueOutput(), ~followUp, recording)
-    +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.StreamValue(), ~provider, Provider{stopMode, calls, streams})
+    +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{stopMode, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
     +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
@@ -161,7 +161,7 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     C.dispose(H.Turn(), Result<&2, &2, String, Bool>, stopper)
     C.dispose(Unit, H.QueueOutput(), steeringCallback)
     C.dispose(Unit, H.QueueOutput(), followCallback)
-    C.dispose(H.ProviderInput(), H.StreamValue(), providerCallback)
+    C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
     C.dispose(Maybe<&2, Unit>, Bool, aborted)

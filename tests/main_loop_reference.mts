@@ -59,6 +59,7 @@ for (const fixture of JSON.parse(input)) {
     const index = providers++;
     assert.ok(index < 4); assert.equal(model.api, index === 0 ? 'original' : 'changed');
     requests.push(names(context.messages));trace.push(label);
+    if (fixture.kind === 8) throw new Error('provider open failed');
     const kind = index === 0 ? Math.min(fixture.kind, 4) : 4;
     const content = [kind === 0 || kind === 1 || kind === 3 ? {type:'toolCall',id:'call',name:'echo',arguments:{value:'42'}} : {type:'text',text:kind === 2 ? 'error' : 'done'}];
     const final = {role:'assistant',content,stopReason:['toolUse','length','error','aborted','stop'][kind],api:'custom-api',provider:'custom-provider',model:'model',timestamp:0};
@@ -82,7 +83,7 @@ for (const fixture of JSON.parse(input)) {
     else if (fixture.entry === 1) history = await run.runAgentLoop([custom('prompt')],context,config,emit,undefined,selected);
     else history = await run.runAgentLoopContinue(context,config,emit,undefined,selected);
   }
-  catch (cause) {if (!['conversion failed','stop failed','delivery failed','Cannot continue: no messages in context','Cannot continue from message role: assistant','No default stream function configured. Pass streamFn explicitly or call setDefaultStreamFn().'].includes(cause.message)) throw cause; error = cause.message;}
+  catch (cause) {if (!['provider open failed','conversion failed','stop failed','delivery failed','Cannot continue: no messages in context','Cannot continue from message role: assistant','No default stream function configured. Pass streamFn explicitly or call setDefaultStreamFn().'].includes(cause.message)) throw cause; error = cause.message;}
   results.push({history:error ? '' : names(history),error,trace:trace.join('|'),requests:requests.join(';'),providers,executions,validations});
 }
 process.stdout.write(JSON.stringify(results));

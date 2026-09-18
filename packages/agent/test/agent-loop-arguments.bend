@@ -89,16 +89,16 @@ def response(+prepare: Bool, index: U32) -> Ai.AssistantMessageEvent<V.Value, Un
     case 0: Ai.StreamDone{Ai.DoneToolUse{}, H.assistant(Ai.AssistantToolCall{Ai.ToolCall{"tool-1", toolName(prepare), raw(prepare), None{}, None{}}} <> Nil{}, Ai.ToolUse{})}
     case _: Ai.StreamDone{Ai.DoneStop{}, H.assistant(H.text("done"), Ai.Stop{})}
 
-def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.StreamValue()):
+def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match environment:
     case Provider{prepare, calls, streams}:
-      do IO<H.StreamValue()>:
+      do IO<H.ProviderOutput()>:
         +index : U32 <- H.bump(calls)
         Test.assertion(U32.is_lt(index, 2), "two provider requests")
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, response(prepare, index))
-        return stream
+        return Done{stream}
 
 def history(+prepare: Bool, messages: Validation.Messages()) -> Bool:
   match messages:
@@ -120,7 +120,7 @@ def scenario(+prepare: Bool, name: String) -> IO(Unit):
     +executor : C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()> <- C.create(~Capture, ~Validation.ExecuteInput(), ~Validation.ExecuteOutput(), ~execute, Capture{prepare, recording})
     +prepareCallback : C.Callback<V.Value, Validation.Checked()> <- C.create(~H.Log(), ~V.Value, ~Validation.Checked(), ~adapter, recording)
     +hook : C.Callback<HookInput(), HookOutput()> <- C.create(~H.Log(), ~HookInput(), ~HookOutput(), ~before, recording)
-    +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.StreamValue(), ~provider, Provider{prepare, calls, streams})
+    +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{prepare, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Capture, ~Validation.Input(), ~Validation.Checked(), ~validate, Capture{prepare, recording})
     +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
@@ -140,7 +140,7 @@ def scenario(+prepare: Bool, name: String) -> IO(Unit):
     C.dispose(Validation.ExecuteInput(), Validation.ExecuteOutput(), executor)
     C.dispose(V.Value, Validation.Checked(), prepareCallback)
     C.dispose(HookInput(), HookOutput(), hook)
-    C.dispose(H.ProviderInput(), H.StreamValue(), providerCallback)
+    C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
     C.dispose(Maybe<&2, Unit>, Bool, aborted)

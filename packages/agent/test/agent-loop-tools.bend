@@ -89,16 +89,16 @@ def checkRequest(truncated: Bool, index: U32, messages: List<&2, Ai.Message<V.Va
     case 1: Test.assertion(resultInTranscript(truncated, messages), "second provider request contains finalized tool result")
     case _: Test.assertion(False{}, "exactly two provider requests")
 
-def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.StreamValue()):
+def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match environment input:
     case Provider{+truncated, calls, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, _}:
-      do IO<H.StreamValue()>:
+      do IO<H.ProviderOutput()>:
         +index : U32 <- H.bump(calls)
         checkRequest(truncated, index, messages)
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, response(truncated, index))
-        return stream
+        return Done{stream}
 
 def checkHistory(+truncated: Bool, messages: Validation.Messages()) -> IO(Unit):
   match messages:
@@ -146,7 +146,7 @@ def scenario(+truncated: Bool, name: String) -> IO(Unit):
     +streams : R.Ref<List<&2, H.StreamValue()>> <- R.new(List<&2, H.StreamValue()>, Nil{})
     +executor : C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()> <- C.create(~H.Log(), ~Validation.ExecuteInput(), ~Validation.ExecuteOutput(), ~execute, recording)
     +hook : C.Callback<HookInput(), HookOutput()> <- C.create(~H.Log(), ~HookInput(), ~HookOutput(), ~after, recording)
-    +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.StreamValue(), ~provider, Provider{truncated, calls, streams})
+    +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{truncated, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
     +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
@@ -166,7 +166,7 @@ def scenario(+truncated: Bool, name: String) -> IO(Unit):
     Test.assertion(String.eq(String.join(List.reverse(&2, String, entries), "|"), Bool.pick(String, truncated, "", "hello|after")), "executor and hook invocation counts; truncated arguments never execute")
     C.dispose(Validation.ExecuteInput(), Validation.ExecuteOutput(), executor)
     C.dispose(HookInput(), HookOutput(), hook)
-    C.dispose(H.ProviderInput(), H.StreamValue(), providerCallback)
+    C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
     C.dispose(Maybe<&2, Unit>, Bool, aborted)

@@ -78,17 +78,18 @@ def checkTranscript(context: Ai.TranscriptContext<Unit, String, Unit, String>) -
       Test.assertion(String.eq(text, "converted"), "provider must receive converted transcript")
     case _: Test.assertion(False{}, "provider transcript shape")
 
-def providerBody(state: ProviderState, input: Input()) -> IO(StreamValue()):
+def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
+def providerBody(state: ProviderState, input: Input()) -> IO(ProviderOutput()):
   match state input:
     case ProviderState{logValue, +stream} T.StreamInput{_, context, options}:
-      do IO<StreamValue()>:
+      do IO<ProviderOutput()>:
         log(logValue, "provider")
         checkOptions(options)
         checkTranscript(context)
         Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.Start{message("first", Ai.Pending{})})
         Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.TextDelta{F.fromU32(0), "second", message("second", Ai.Pending{})})
         Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.StreamDone{Ai.DoneStop{}, message("second", Ai.Stop{})})
-        return stream
+        return Done{stream}
 
 def updateEvent(event: EventValue()) -> Bool:
   match event:
@@ -130,7 +131,7 @@ def scenario(+failTransform: Bool, failUpdate: Bool, +failConvert: Bool, +failKe
     +converter : C.Callback<H.Messages(), ConvertResult()> <- C.create(~TransformState, ~H.Messages(), ~ConvertResult(), ~convertBody, TransformState{logValue, failConvert})
     +transformer : C.Callback<TransformInput(), TransformResult()> <- C.create(~TransformState, ~TransformInput(), ~TransformResult(), ~transformBody, TransformState{logValue, failTransform})
     +resolver : C.Callback<String, Result<&2, &2, String, Maybe<&2, String>>> <- C.create(~TransformState, ~String, ~Result<&2, &2, String, Maybe<&2, String>>, ~keyBody, TransformState{logValue, failKey})
-    +provider : C.Callback<Input(), StreamValue()> <- C.create(~ProviderState, ~Input(), ~StreamValue(), ~providerBody, ProviderState{logValue, stream})
+    +provider : C.Callback<Input(), ProviderOutput()> <- C.create(~ProviderState, ~Input(), ~ProviderOutput(), ~providerBody, ProviderState{logValue, stream})
     +sink : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~SinkState, ~EventValue(), ~Result<&2, &2, String, Unit>, ~sinkBody, SinkState{logValue, events, failUpdate})
     config : Config() = T.AgentLoopConfig{None{}, None{}, Some{"fallback"}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, Some{transformer}, Some{resolver}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     outcome : Result<&2, &2, String, Message()> <- Loop.streamAssistantResponse(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, Unit, Unit, Loop.AssistantRequest{context, config, None{}, sink, provider})
@@ -145,7 +146,7 @@ def scenario(+failTransform: Bool, failUpdate: Bool, +failConvert: Bool, +failKe
     C.dispose(H.Messages(), ConvertResult(), converter)
     C.dispose(TransformInput(), TransformResult(), transformer)
     C.dispose(String, Result<&2, &2, String, Maybe<&2, String>>, resolver)
-    C.dispose(Input(), StreamValue(), provider)
+    C.dispose(Input(), ProviderOutput(), provider)
     C.dispose(EventValue(), Result<&2, &2, String, Unit>, sink)
     Stream.disposeAssistantMessageEventStream(String, Unit, stream)
     oldContext : H.Context() <- R.dispose(H.Context(), context)
