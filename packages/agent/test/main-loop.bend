@@ -1,6 +1,7 @@
 import Base
 import ../src/main-loop.bend as Main
 import ../src/loop-entry.bend as Entry
+import ../src/stream-fn.bend as StreamFn
 import ../src/types.bend as T
 import ../src/agent-loop.bend as Loop
 import ../src/tool-call.bend as Call
@@ -26,20 +27,59 @@ def Update() -> Data: T.AgentLoopTurnUpdate<V.Value, V.Value, Unit, String, Stri
 def PrepareOutput() -> Data: Result<&2, &2, String, Maybe<&2, Update()>>
 def QueueOutput() -> Data: Result<&2, &2, String, H.Messages()>
 def Outcome() -> Data: Result<&2, &2, String, H.Messages()>
+def ProviderFunction() -> Data: T.StreamFn(V.Value, V.Value, Unit, String, Unit, H.Config())
+def Registry() -> Data: StreamFn.Registry(V.Value, V.Value, Unit, String, Unit, H.Config())
+def Selection() -> Data: StreamFn.Selection<V.Value, V.Value, Unit, String, Unit, H.Config()>
 def Log() -> Data: R.Ref<List<&2, String>>
 
+type Defaults is Data:
+  Defaults{policy: U32, registry: Registry(), provider: ProviderFunction(), replacement: ProviderFunction()}
 type Provider is Data:
-  Provider{kind: U32, count: R.Ref<U32>, log: Log(), requests: Log(), streams: R.Ref<List<&2, StreamValue()>>}
+  Provider{kind: U32, count: R.Ref<U32>, log: Log(), requests: Log(), streams: R.Ref<List<&2, StreamValue()>>, label: String}
 type Execution is Data:
   Execution{terminate: Bool, count: R.Ref<U32>}
 type Queue is Data:
-  Queue{name: String, enabled: Bool, count: R.Ref<U32>, log: Log()}
+  Queue{name: String, enabled: Bool, count: R.Ref<U32>, log: Log(), defaults: Defaults}
 type Stopping is Data:
   Stopping{stop: Bool, log: Log(), baseline: String}
 type Preparing is Data:
   Preparing{log: Log(), baseline: String}
 type Recording is Data:
-  Recording{failAt: String, log: Log()}
+  Recording{failAt: String, log: Log(), defaults: Defaults}
+
+
+# Defaults are changed through the public registry from real event/queue
+# callbacks. The selected provider must be pinned before the first steering poll.
+def change(registry: Registry(), enabled: Bool, provider: Maybe<&2, ProviderFunction()>) -> IO(Unit):
+  match enabled:
+    case False{}: IO.pure(Unit, Unit{})
+    case True{}: StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), registry, provider)
+
+def changeDefault(defaults: Defaults, name: String) -> IO(Unit):
+  match defaults:
+    case Defaults{3, registry, provider, _}: change(registry, String.eq(name, "agent_start"), Some{provider})
+    case Defaults{4, registry, _, _}: change(registry, String.eq(name, "turn_start"), None{})
+    case Defaults{5, registry, _, replacement}: change(registry, String.eq(name, "steering"), Some{replacement})
+    case Defaults{6, registry, _, replacement}: change(registry, String.eq(name, "turn_start"), Some{replacement})
+    case _: IO.pure(Unit, Unit{})
+
+def initialDefault(policy: U32, provider: ProviderFunction(), replacement: ProviderFunction()) -> Maybe<&2, ProviderFunction()>:
+  match policy:
+    case 0: None{}
+    case 2: None{}
+    case 3: None{}
+    case 7: Some{replacement}
+    case _: Some{provider}
+
+def selection(policy: U32, registry: Registry(), provider: ProviderFunction()) -> Selection():
+  match policy:
+    case 0: StreamFn.Explicit{provider}
+    case 7: StreamFn.Explicit{provider}
+    case _: StreamFn.Fallback{registry}
+
+def entryCapture(policy: U32, registry: Registry(), capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>) -> Entry.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>:
+  match capture:
+    case Main.Capture{services, provider}: Entry.Capture{services, selection(policy, registry, provider)}
 
 def log(reference: Log(), entry: String) -> IO(Unit):
   R.modify(List<&2, String>, Unit, reference, values => (entry <> values, Unit{}))
@@ -110,13 +150,13 @@ def convert(recording: Log(), messages: H.Messages()) -> IO(H.Converted()):
 
 def provider(environment: Provider, input: ProviderInput()) -> IO(StreamValue()):
   match environment input:
-    case Provider{kind, count, recording, requests, streams} T.StreamInput{model, Ai.TranscriptContext{messages}, _}:
+    case Provider{kind, count, recording, requests, streams, label} T.StreamInput{model, Ai.TranscriptContext{messages}, _}:
       do IO<StreamValue()>:
         +index : U32 <- bump(count)
         Test.assertion(U32.is_lt(index, 4), "loop must settle rather than spin")
         Test.assertion(String.eq(Api.name(Api.modelApi(Unit, model)), Bool.pick(String, U32.is_eq(index, 0), "original", "changed")), "next-turn model reaches the provider")
         log(requests, llmNames(messages))
-        log(recording, "provider")
+        log(recording, label)
         +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, Ai.Start{assistant(text("partial"), Ai.Pending{})})
@@ -141,10 +181,11 @@ def queueValue(enabled: Bool, name: String, shouldDeliver: Bool) -> QueueOutput(
 
 def queue(environment: Queue, unused: Unit) -> IO(QueueOutput()):
   match environment:
-    case Queue{+name, enabled, count, recording}:
+    case Queue{+name, enabled, count, recording, defaults}:
       do IO<QueueOutput()>:
         +index : U32 <- bump(count)
         log(recording, name)
+        changeDefault(defaults, name)
         return queueValue(enabled, name, Bool.pick(Bool, String.eq(name, "steering"), U32.is_eq(index, 1), U32.is_eq(index, 0)))
 
 def stop(environment: Stopping, input: Turn()) -> IO(Result<&2, &2, String, Bool>):
@@ -175,10 +216,11 @@ def key(event: H.EventValue()) -> String:
 
 def emit(environment: Recording, event: H.EventValue()) -> IO(E.Emission<String>):
   match environment:
-    case Recording{failAt, recording}:
+    case Recording{failAt, recording, defaults}:
       do IO<E.Emission<String>>:
         +name : String = key(event)
         log(recording, name)
+        changeDefault(defaults, name)
         return E.Ready{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
 
 def abort(unused: Unit, signal: Maybe<&2, Unit>) -> IO(Bool): IO.pure(Bool, False{})
@@ -210,13 +252,13 @@ def entryContext(mode: U32, tools: List<&2, T.AgentTool<V.Value, V.Value, String
     case 4: T.AgentContext{T.CustomMessage{"old"} <> T.LlmMessage{Ai.Assistant{assistant(text("previous"), Ai.Stop{})}} <> Nil{}, Some{tools}}
     case _: T.AgentContext{T.CustomMessage{"old"} <> T.CustomMessage{"prompt"} <> Nil{}, Some{tools}}
 
-def invoke(mode: U32, capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config()) -> IO(Outcome()):
+def invoke(mode: U32, policy: U32, registry: Registry(), capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config()) -> IO(Outcome()):
   match mode:
     case 0: Main.runLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, capture, context, config, T.CustomMessage{"prompt"} <> Nil{})
-    case 1: Entry.runAgentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, T.CustomMessage{"prompt"} <> Nil{}, context, config, capture)
-    case _: Entry.runAgentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~Entry.errorMessage, context, config, capture)
+    case 1: Entry.runAgentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, T.CustomMessage{"prompt"} <> Nil{}, context, config, entryCapture(policy, registry, capture))
+    case _: Entry.runAgentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, ~Entry.errorMessage, context, config, entryCapture(policy, registry, capture))
 
-def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
+def scenarioSelection(+mode: U32, +policy: U32, +kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
   do IO<Unit>:
     +recording : Log() <- R.new(List<&2, String>, Nil{})
     +requests : Log() <- R.new(List<&2, String>, Nil{})
@@ -229,20 +271,24 @@ def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, 
     +executor : C.Callback<H.ExecuteInput(), H.ExecuteOutput()> <- C.create(~Execution, ~H.ExecuteInput(), ~H.ExecuteOutput(), ~execute, Execution{terminate, executionCount})
     +validator : C.Callback<H.Input(), H.Checked()> <- C.create(~R.Ref<U32>, ~H.Input(), ~H.Checked(), ~validate, validationCount)
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Log(), ~H.Messages(), ~H.Converted(), ~convert, recording)
-    +providerCallback : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams})
+    +registry : Registry() <- StreamFn.create(V.Value, V.Value, Unit, String, Unit, H.Config())
+    +providerCallback : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider"})
+    +replacement : C.Callback<ProviderInput(), StreamValue()> <- C.create(~Provider, ~ProviderInput(), ~StreamValue(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider:replacement"})
+    StreamFn.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), registry, initialDefault(policy, providerCallback, replacement))
+    +defaults : Defaults = Defaults{policy, registry, providerCallback, replacement}
     +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording, baseline(mode)})
     +prepareHook : C.Callback<Turn(), PrepareOutput()> <- C.create(~Preparing, ~Turn(), ~PrepareOutput(), ~prepare, Preparing{recording, baseline(mode)})
-    +steering : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"steering", steeringEnabled, steeringCount, recording})
-    +follow : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"follow", followEnabled, followCount, recording})
+    +steering : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"steering", steeringEnabled, steeringCount, recording, defaults})
+    +follow : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"follow", followEnabled, followCount, recording, defaults})
     +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~abort, Unit{})
-    +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~Recording, ~H.EventValue(), ~E.Emission<String>, ~emit, Recording{failAt, recording})
+    +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~Recording, ~H.EventValue(), ~E.Emission<String>, ~emit, Recording{failAt, recording, defaults})
     +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
     +updates : Call.Owners(String, String) <- Call.newOwners(String, String)
     +batches : Main.Batches(V.Value, Unit, String, String, V.Value, Unit, String) <- Main.newBatches(V.Value, Unit, String, String, V.Value, Unit, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = entryContext(mode, T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{})
     config : H.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
-    outcome : Outcome() <- invoke(mode, Main.Capture{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty", providerCallback}, context, config)
+    outcome : Outcome() <- invoke(mode, policy, registry, Main.Capture{Main.Services{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config)
     checked(outcome, expectedHistory, expectedError)
     Main.disposeBatches(V.Value, Unit, String, String, V.Value, Unit, String, batches)
     Call.disposeOwners(String, String, updates)
@@ -257,7 +303,6 @@ def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, 
     C.dispose(H.ExecuteInput(), H.ExecuteOutput(), executor)
     C.dispose(H.Input(), H.Checked(), validator)
     C.dispose(H.Messages(), H.Converted(), converter)
-    C.dispose(ProviderInput(), StreamValue(), providerCallback)
     C.dispose(Turn(), Result<&2, &2, String, Bool>, stopHook)
     C.dispose(Turn(), PrepareOutput(), prepareHook)
     C.dispose(Unit, QueueOutput(), steering)
@@ -265,6 +310,9 @@ def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, 
     C.dispose(Maybe<&2, Unit>, Bool, aborted)
     C.dispose(H.EventValue(), Result<&2, &2, String, Unit>, sink)
     C.dispose(H.EventValue(), E.Emission<String>, emitter)
+    StreamFn.dispose(V.Value, V.Value, Unit, String, Unit, H.Config(), registry)
+    C.dispose(ProviderInput(), StreamValue(), replacement)
+    C.dispose(ProviderInput(), StreamValue(), providerCallback)
     ownedStreams : List<&2, StreamValue()> <- R.dispose(List<&2, StreamValue()>, streams)
     disposeStreams(ownedStreams)
     discarded : List<&2, String> <- R.dispose(List<&2, String>, recording)
@@ -275,6 +323,9 @@ def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, 
     discarded : U32 <- R.dispose(U32, steeringCount)
     discarded : U32 <- R.dispose(U32, followCount)
     return Unit{}
+
+def scenarioMode(+mode: U32, kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
+  scenarioSelection(mode, 0, kind, terminate, steeringEnabled, followEnabled, shouldStop, failAt, expectedHistory, expectedError, expectedTrace, expectedRequests, expectedProviders, expectedExecutions, expectedValidations)
 
 def scenario(kind: U32, terminate: Bool, steeringEnabled: Bool, followEnabled: Bool, shouldStop: Bool, failAt: String, expectedHistory: String, expectedError: String, expectedTrace: String, expectedRequests: String, expectedProviders: U32, expectedExecutions: U32, expectedValidations: U32) -> IO(Unit):
   scenarioMode(0, kind, terminate, steeringEnabled, followEnabled, shouldStop, failAt, expectedHistory, expectedError, expectedTrace, expectedRequests, expectedProviders, expectedExecutions, expectedValidations)
