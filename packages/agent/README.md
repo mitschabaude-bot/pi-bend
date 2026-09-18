@@ -1,0 +1,9 @@
+# Agent library port
+
+`src/types.bend` starts the canonical port of pi-mono’s agent tool interfaces. `AgentToolResult` retains text/image content, typed details, usage and optional termination. `AgentTool` retains every upstream field: inherited declaration fields, label, argument preparation, execution, replay policy and execution-mode override. Preparation/execution/update callbacks use the runtime’s reusable callback handles. Execution receives a typed record containing the four original arguments; recoverable failures use `Result` rather than host exceptions.
+
+`toTool` is the explicit Bend projection from an executable tool to its base `ai.Tool` interface. It retains schema and sampling values and removes executable/display-only fields without invoking callbacks. The transcript library subsequently performs its normal schema snapshot. This models the structural upcast TypeScript performs implicitly; it is not a separate approximate declaration serializer.
+
+This module remains partial. Schema and validated argument types are independent parameters until the TypeBox `Static<Parameters>` relationship is implemented. Raw arguments, abort-signal handles and thrown errors are caller-typed pending their runtime adapters. Scoped updates, execution lifecycle, preparation/validation, replay enforcement and execution scheduling are not implemented by these type declarations. Agent state/context/events/loop configuration and the agent implementation remain pending.
+
+The upstream replay-suite declaration-comparison test uses a real typed executable tool, including preparation and execution callbacks. It checks all three original equality assertions and additionally verifies that declaration projection invokes neither callback. Canonical sources remain pure Bend. The ai/agent dependency graph currently requires the [shared-import compiler fix](../../patches/README.md).

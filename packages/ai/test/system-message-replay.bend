@@ -1,5 +1,6 @@
 import Base
 import ./tool-state.bend as ToolState
+import ./executable-declaration.bend as Executable
 import ./tool-declaration.bend as DeclarationTest
 import ../src/utils/tool-declaration.bend as D
 import ../../runtime/src/schema-value.bend as S
@@ -12,8 +13,8 @@ import ../../runtime/src/record.bend as Record
 import ../../runtime/src/f64.bend as N
 import ../../runtime/src/u64.bend as U
 
-# Eight cases ported from system-message-replay.test.ts. Extended executable
-# tool projection remains pending. Schema data matches pinned Type.Object({}).
+# Nine cases ported from system-message-replay.test.ts. Schema data matches
+# pinned Type.Object({}); the schema builder/validator library remains pending.
 
 def Message() -> Data: T.Message<S.Value<U32>, Unit, Unit, Unit>
 def Context() -> Data: T.Context<S.Value<U32>, Unit, Unit, Unit>
@@ -363,3 +364,4 @@ def main() -> IO(Unit):
     latePatch()
     ToolState.upstreamCase()
     toolHistory()
+    Executable.upstreamCase()
