@@ -6,6 +6,8 @@ import ../src/record.bend as R
 import ../src/f64.bend as F
 import ../src/big-nat.bend as B
 import ./schema.bend as T
+import ../src/schema-load.bend as Loader
+import ./schema-load.bend as L
 
 def empty(issues: List<&2, E.Issue>) -> Bool:
   match issues:
@@ -47,6 +49,21 @@ def numberBounds(issues: List<&2, E.Issue>) -> Bool:
     case E.Issue{Nil{}, E.NumericMinimum{lo, True{}}} <> E.Issue{Nil{}, E.NumericMaximum{hi, False{}}} <> Nil{}: V.equal(V.Number{lo}, V.Number{F.fromU32(2)}) && V.equal(V.Number{hi}, V.Number{F.fromU32(1)})
     case _: False{}
 
+def loadedTypes(issues: List<&2, E.Issue>) -> Bool:
+  match issues:
+    case E.Issue{Nil{}, E.ExpectedTypes{S.IntegerType{} <> S.StringType{} <> Nil{}}} <> Nil{}: True{}
+    case _: False{}
+
+def loadedPropertyOrder(issues: List<&2, E.Issue>) -> Bool:
+  match issues:
+    case E.Issue{a <> Nil{}, E.ExpectedType{S.IntegerType{}}} <> E.Issue{b <> Nil{}, E.ExpectedType{S.IntegerType{}}} <> Nil{}: String.eq(a, "10") && String.eq(b, "2")
+    case _: False{}
+
+def loadedKeywordOrder(issues: List<&2, E.Issue>) -> Bool:
+  match issues:
+    case E.Issue{Nil{}, E.NumericMaximum{_, True{}}} <> E.Issue{Nil{}, E.NumericMinimum{_, True{}}} <> Nil{}: True{}
+    case _: False{}
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +integer : S.Schema = S.JsonKind{S.IntegerType{}}
@@ -68,4 +85,12 @@ def main() -> IO(Unit):
     T.assertion(numberBounds(E.errors(S.All{S.Minimum{F.fromU32(2), True{}} <> S.Maximum{F.fromU32(1), False{}} <> Nil{}}, V.Number{F.fromU32(1)})), "all violated numeric bounds are retained")
     T.assertion(empty(E.errors(S.Array{Nil{}, integer}, V.Null{})), "array keyword ignores non-arrays")
     T.assertion(empty(E.errors(S.Object{properties, "present" <> Nil{}, S.Reject{}}, V.Null{})), "object keyword ignores non-objects")
+    +union : S.Schema <- L.loaded(Loader.compile(L.object("type", V.ArrayValue{V.Text{"integer"} <> V.Text{"string"} <> Nil{}})))
+    T.assertion(loadedTypes(E.errors(union, V.Null{})), "type arrays retain one aggregate type diagnostic")
+    T.assertion(empty(E.errors(union, V.Text{"ok"})), "type array still accepts matching members")
+    +typeDecl : V.Value = L.object("type", V.Text{"integer"})
+    +ordered : S.Schema <- L.loaded(Loader.compile(L.object("properties", V.ObjectValue{R.Record{R.Property{"10", typeDecl} <> R.Property{"2", typeDecl} <> Nil{}}})))
+    T.assertion(loadedPropertyOrder(E.errors(ordered, V.ObjectValue{R.Record{R.Property{"2", V.Null{}} <> R.Property{"10", V.Null{}} <> Nil{}}})), "property diagnostics retain schema declaration order, including numeric-looking keys")
+    +bounds : S.Schema <- L.loaded(Loader.compile(V.ObjectValue{R.Record{R.Property{"minimum", V.Number{F.fromU32(2)}} <> R.Property{"maximum", V.Number{F.fromU32(0)}} <> Nil{}}}))
+    T.assertion(loadedKeywordOrder(E.errors(bounds, V.Number{F.fromU32(1)})), "diagnostic keyword order is independent of declaration order")
     IO.print("PASS native structured schema diagnostics, paths, union isolation and exact counts")

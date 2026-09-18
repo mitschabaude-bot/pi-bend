@@ -20,6 +20,7 @@ def Loaded() -> Data: Result<&2, &2, Error, S.Schema>
 type Constructor is Data:
   Conjunction{}
   Disjunction{}
+  TypeAlternatives{}
   Exclusive{}
   Negation{}
   Properties{keys: List<&2, String>}
@@ -70,7 +71,7 @@ def pushed(value: Loaded()) -> Scheduled():
 def typed(value: V.Value, +path: List<&2, String>) -> Scheduled():
   match value:
     case V.Text{name}: pushed(typeNode(kind(name), path))
-    case V.ArrayValue{+values}: Done{List.append(&2, Task, typeMembers(values, path), Build{Disjunction{}, List.length(&2, V.Value, values)} <> Nil{})}
+    case V.ArrayValue{+values}: Done{List.append(&2, Task, typeMembers(values, path), Build{TypeAlternatives{}, List.length(&2, V.Value, values)} <> Nil{})}
     case _: invalid(List<&2, Task>, path, "a type name or array of type names")
 
 def childReads(values: List<&2, V.Value>, +path: List<&2, String>, +index: Nat) -> List<&2, Task>:
@@ -296,6 +297,49 @@ def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record
 def keyword(+key: String, value: V.Value, whole: R.Record<V.Value>, path: List<&2, String>) -> Scheduled():
   dispatch(keywordKind(key), key, value, whole, path)
 
+# Diagnostic keyword order is part of pi's displayed validation contract.
+# Property dictionaries themselves retain their native insertion order.
+def keywordOrder(selected: KeywordKind) -> U32:
+  match selected:
+    case TypeKeyword{}: 0
+    case RequiredKeyword{}: 1
+    case AdditionalPropertiesKeyword{}: 2
+    case PropertiesKeyword{}: 3
+    case MinPropertiesKeyword{}: 4
+    case MaxPropertiesKeyword{}: 5
+    case AdditionalItemsKeyword{}: 6
+    case ContainsKeyword{}: 7
+    case ItemsKeyword{}: 8
+    case MaxContainsKeyword{}: 9
+    case MaxItemsKeyword{}: 10
+    case MinContainsKeyword{}: 11
+    case MinItemsKeyword{}: 12
+    case ExclusiveMaximumKeyword{}: 13
+    case ExclusiveMinimumKeyword{}: 14
+    case MaximumKeyword{}: 15
+    case MinimumKeyword{}: 16
+    case ConstKeyword{}: 17
+    case EnumKeyword{}: 18
+    case NotKeyword{}: 19
+    case AllOfKeyword{}: 20
+    case AnyOfKeyword{}: 21
+    case OneOfKeyword{}: 22
+    case AnnotationKeyword{}: 23
+    case UnknownKeyword{}: 23
+
+def insertKeyword(+key: String, +value: V.Value, fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
+  match fields:
+    case Nil{}: R.Property{key, value} <> Nil{}
+    case R.Property{+otherKey, +otherValue} <> +rest:
+      Bool.pick(Unit -> List<&2, R.Property<V.Value>>, U32.is_le(keywordOrder(keywordKind(key)), keywordOrder(keywordKind(otherKey))),
+        _ => R.Property{key, value} <> R.Property{otherKey, otherValue} <> rest,
+        _ => R.Property{otherKey, otherValue} <> insertKeyword(key, value, rest))(Unit{})
+
+def orderedKeywords(fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
+  match fields:
+    case Nil{}: Nil{}
+    case R.Property{key, value} <> rest: insertKeyword(key, value, orderedKeywords(rest))
+
 def keywordTasks(fields: List<&2, R.Property<V.Value>>, +whole: R.Record<V.Value>, +path: List<&2, String>) -> List<&2, Task>:
   match fields:
     case Nil{}: Nil{}
@@ -306,21 +350,38 @@ def read(value: V.Value, path: List<&2, String>) -> Scheduled():
     case V.Boolean{flag}: Done{Push{Bool.pick(S.Schema, flag, S.Accept{}, S.Reject{})} <> Nil{}}
     case V.ObjectValue{+whole}:
       +fields = R.entries(V.Value, whole)
-      Done{List.append(&2, Task, keywordTasks(fields, whole, path), Build{Conjunction{}, List.length(&2, R.Property<V.Value>, fields)} <> Nil{})}
+      Done{List.append(&2, Task, keywordTasks(orderedKeywords(fields), whole, path), Build{Conjunction{}, List.length(&2, R.Property<V.Value>, fields)} <> Nil{})}
     case _: invalid(List<&2, Task>, path, "an object or boolean schema")
 
-def pairProperties(keys: List<&2, String>, schemas: List<&2, S.Schema>) -> R.Record<S.Schema>:
+def pairedProperties(keys: List<&2, String>, schemas: List<&2, S.Schema>) -> List<&2, R.Property<S.Schema>>:
   match keys schemas:
-    case key <> keys schema <> schemas: R.set(S.Schema, pairProperties(keys, schemas), key, schema)
-    case _ _: R.new(S.Schema)
+    case key <> keys schema <> schemas: R.Property{key, schema} <> pairedProperties(keys, schemas)
+    case _ _: Nil{}
+
+def prependType(typeName: S.JsonType, result: Result<&2, &2, Error, List<&2, S.JsonType>>) -> Result<&2, &2, Error, List<&2, S.JsonType>>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{rest}: Done{typeName <> rest}
+
+def compiledTypes(schemas: List<&2, S.Schema>) -> Result<&2, &2, Error, List<&2, S.JsonType>>:
+  match schemas:
+    case Nil{}: Done{Nil{}}
+    case S.JsonKind{typeName} <> rest: prependType(typeName, compiledTypes(rest))
+    case _: Fail{Error{Nil{}, InvalidConstruction{}}}
+
+def typeAlternatives(result: Result<&2, &2, Error, List<&2, S.JsonType>>) -> Loaded():
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{kinds}: Done{S.TypeUnion{kinds}}
 
 def construct(constructor: Constructor, schemas: List<&2, S.Schema>) -> Loaded():
   match constructor schemas:
     case Conjunction{} schemas: Done{S.All{schemas}}
     case Disjunction{} schemas: Done{S.Any{schemas}}
+    case TypeAlternatives{} schemas: typeAlternatives(compiledTypes(schemas))
     case Exclusive{} schemas: Done{S.One{schemas}}
     case Negation{} schema <> Nil{}: Done{S.Not{schema}}
-    case Properties{keys} schemas: Done{S.Object{pairProperties(keys, schemas), Nil{}, S.Accept{}}}
+    case Properties{keys} schemas: Done{S.Object{R.Record{pairedProperties(keys, schemas)}, Nil{}, S.Accept{}}}
     case Additional{fields} schema <> Nil{}: Done{S.Object{fields, Nil{}, schema}}
     case TupleItems{} schemas: Done{S.Array{schemas, S.Accept{}}}
     case AllItems{} schema <> Nil{}: Done{S.Array{Nil{}, schema}}

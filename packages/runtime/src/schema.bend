@@ -22,6 +22,7 @@ type Schema is Data:
   Accept{}
   Reject{}
   JsonKind{kind: JsonType}
+  TypeUnion{kinds: List<&2, JsonType>}
   Constant{value: V.Value}
   Enumeration{values: List<&2, V.Value>}
   All{schemas: List<&2, Schema>}
@@ -63,6 +64,13 @@ def matchesType(kind: JsonType, value: V.Value) -> Bool:
     case ArrayType{} V.ArrayValue{_}: True{}
     case ObjectType{} V.ObjectValue{_}: True{}
     case _ _: False{}
+
+# A type array is one type constraint, not an anyOf of child schemas. Keeping
+# that distinction allows diagnostics to describe the declaration accurately.
+def matchesTypes(kinds: List<&2, JsonType>, +value: V.Value) -> Bool:
+  match kinds:
+    case Nil{}: False{}
+    case head <> rest: matchesType(head, value) || matchesTypes(rest, value)
 
 def member(values: List<&2, V.Value>, +value: V.Value) -> Bool:
   match values:
@@ -137,6 +145,7 @@ def evaluate(test: Test) -> Bool:
     case Check{Accept{}, _}: True{}
     case Check{Reject{}, _}: False{}
     case Check{JsonKind{kind}, value}: matchesType(kind, value)
+    case Check{TypeUnion{kinds}, value}: matchesTypes(kinds, value)
     case Check{Constant{expected}, value}: V.equal(expected, value)
     case Check{Enumeration{values}, value}: member(values, value)
     case Check{All{schemas}, value}: evaluate(Every{tests(schemas, value)})

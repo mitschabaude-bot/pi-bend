@@ -10,6 +10,7 @@ import ./big-nat.bend as B
 type Reason is Data:
   Rejected{}
   ExpectedType{expected: S.JsonType}
+  ExpectedTypes{expected: List<&2, S.JsonType>}
   ExpectedConstant{expected: V.Value}
   ExpectedEnumeration{allowed: List<&2, V.Value>}
   MissingFields{keys: List<&2, String>}
@@ -117,6 +118,7 @@ def expand(schema: S.Schema, value: V.Value, +path: List<&2, String>) -> List<&2
     case S.Accept{} _: Nil{}
     case S.Reject{} _: EmitIssue{Issue{path, Rejected{}}} <> Nil{}
     case S.JsonKind{+expected} value: emitUnless(S.matchesType(expected, value), path, ExpectedType{expected})
+    case S.TypeUnion{+expected} value: emitUnless(S.matchesTypes(expected, value), path, ExpectedTypes{expected})
     case S.Constant{+expected} value: emitUnless(V.equal(expected, value), path, ExpectedConstant{expected})
     case S.Enumeration{+allowed} value: emitUnless(S.member(allowed, value), path, ExpectedEnumeration{allowed})
     case S.All{schemas} value: visits(schemas, value, path)
