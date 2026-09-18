@@ -408,3 +408,48 @@ def getOnResponse(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J
       do IO<Maybe<&2, Ai.ResponseCallback(Ai.Model<J>, E)>>:
         current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
         return optionsOnResponse(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+def configBeforeToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, value, _}: value
+def replaceBeforeToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, _, afterToolCall}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, value, afterToolCall}
+def changedBeforeToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceBeforeToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setBeforeToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedBeforeToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsBeforeToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>:
+  match options:
+    case Run.Options{config, _, _, _}: configBeforeToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getBeforeToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, T.BeforeToolCallUpdate<V, T.AgentContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>>>>>>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsBeforeToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, current)
+
+
+def configAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch)) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, value}: value
+def replaceAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, config: Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch), value: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>) -> Run.Config(A, G, D, M, V, E, J, Telemetry, Fetch):
+  match config:
+    case T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, _}: T.AgentLoopConfig{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, value}
+def changedAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>) -> Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> & Unit:
+  match options:
+    case Run.Options{config, provider, validate, emptyDetails}: (Run.Options{replaceAfterToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, config, value), provider, validate, emptyDetails}, Unit{})
+def setAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, Unit, options, current => changedAfterToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
+def optionsAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, options: Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>:
+  match options:
+    case Run.Options{config, _, _, _}: configAfterToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, config)
+def getAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<Schema.Value, A, G, D, M, V, Run.Signal(), E>, Run.Signal()>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>>:
+        current : Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch> <- R.read(Run.Options<A, G, D, M, V, E, J, Telemetry, Fetch>, options)
+        return optionsAfterToolCall(A, G, D, M, V, E, J, Telemetry, Fetch, current)
