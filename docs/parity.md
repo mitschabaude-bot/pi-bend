@@ -49,7 +49,7 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 - Explicit canonical `JsonValue` serialization matches JavaScript on 892 string cases and 114 structured values, with native checks for 2,000 nested arrays and UTF-16-equivalent map keys. Arbitrary dynamic-value/schema serialization and typed message/tool wire codecs remain pending.
 
-- Schema-data snapshots match JavaScript JSON round trips on 144 cases covering omitted metadata, non-enumerable and symbol properties, array omissions, numbers and Unicode. Native checks cover explicit unsupported hooks and 2,000-level nesting. Live-object hooks, cycles, schema builders/validation and declaration integration remain pending; no additional upstream suite is complete.
+- Schema-data snapshots match JavaScript JSON round trips on 156 cases, including twelve actual pinned-TypeBox fixtures, covering omitted metadata, non-enumerable and symbol properties, array omissions, numbers and Unicode. The pi-ai schema bridge also checks canonical serialized output; native checks cover explicit unsupported hooks and 2,000-level nesting. Live-object hooks, cycles, schema builders/validation and declaration integration remain pending; no additional upstream suite is complete.
 
 - Constrained-sampling configurations retain required-field and grammar-variant insertion order. Their typed JSON codec and grammar mutations pass 115 JavaScript comparisons, with existing transcript tests passing on one and four threads. Extra runtime fields, shared mutable configurations and declaration comparison remain pending.
 

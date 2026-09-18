@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import random
 import subprocess
+from typebox_fixtures import fixtures
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
@@ -39,6 +40,8 @@ values += [['object', [['type', ['string', list(map(ord, 'object'))], True],
                        ['execute', ['callable', 7], True]],
                       [[1, ['string', list(map(ord, 'Object'))]]]]]
 values += [tree(4) for _ in range(128)]
+typebox = fixtures(ROOT)
+values += [case['input'] for case in typebox]
 oracle = '''const items = JSON.parse(process.argv[1]);
 function build(v) {
   switch(v[0]) {
@@ -62,8 +65,11 @@ function wire(v) {
   if(Array.isArray(v)) return ['array',v.map(wire)];
   return ['object',Object.entries(v).map(([k,x])=>[k,wire(x),true]),[]];
 }
-console.log(JSON.stringify(items.map(v=>{try {const text=JSON.stringify(build(v)); return text===undefined ? ['absent'] : ['value',wire(JSON.parse(text))];} catch(e) {if(e instanceof TypeError) return ['bigint-error']; throw e;}})));'''
+console.log(JSON.stringify(items.map(v=>{try {const text=JSON.stringify(build(v)); return text===undefined ? ['absent'] : ['value',wire(JSON.parse(text)),text];} catch(e) {if(e instanceof TypeError) return ['bigint-error']; throw e;}})));'''
 expected = json.loads(subprocess.check_output(['node', '-e', oracle, json.dumps(values)], text=True))
+# Confirm the descriptor-tree transport itself preserves actual TypeBox JSON.
+for case, result in zip(typebox, expected[-len(typebox):], strict=True):
+    assert result[0] == 'value' and result[2] == case['json']
 
 def string(points):
     result = 'SNil{}'
@@ -89,17 +95,22 @@ def bend(v):
     symbols=' <> '.join([f'V.SymbolProperty{{{key}, {bend(value)}}}' for key,value in v[2]]+['Nil{}'])
     return f'V.ObjectValue{{{record}, {symbols}}}'
 
-source=['import Base','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/big-nat.bend as B','import ../packages/runtime/test/schema-value.bend as H','def main() -> IO(Unit):\n  do IO<Unit>:']
+source=['import Base','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/big-nat.bend as B','import ../packages/runtime/test/schema-value.bend as H','import ../packages/ai/test/schema-json.bend as J','def main() -> IO(Unit):\n  do IO<Unit>:']
 for index,(value,result) in enumerate(zip(values,expected,strict=True)):
     target='V.Projected{None{}}' if result[0]=='absent' else 'V.BigIntError{}' if result[0]=='bigint-error' else 'V.Projected{Some{'+bend(result[1])+'}}'
     source.append(f'    H.check({bend(value)}, {target}, "schema snapshot {index}")')
+    rendered = 'J.Omitted{}' if result[0]=='absent' else 'J.BigInt{}' if result[0]=='bigint-error' else 'J.Json{'+string(map(ord, result[2]))+'}'
+    source.append(f'    J.check({bend(value)}, {rendered}, "schema JSON {index}")')
 # Hook behavior is explicitly unsupported, not compared with a fake JS result.
 for enumerable in (True,False):
     value=['object',[['toJSON',['callable',1],enumerable]],[]]
     source.append(f'    H.check({bend(value)}, V.UnsupportedToJSON{{}}, "callable toJSON must not be silently discarded")')
+    source.append(f'    J.check({bend(value)}, J.Hook{{}}, "callable toJSON conversion error")')
 source.append('    H.check(H.nested(U32.to_nat(2000), V.Undefined{}), V.Projected{Some{H.nested(U32.to_nat(2000), V.Null{})}}, "deep omitted array value")')
 source.append('    H.check(H.nested(U32.to_nat(2000), V.BigInteger{False{}, B.one()}), V.BigIntError{}, "deep BigInt rejection")')
-source.append(f'    IO.print("schema-value: {len(values)} JavaScript snapshot cases, hook errors and deep-tree checks passed")')
+source.append('    J.check(H.nested(U32.to_nat(2000), V.Undefined{}), J.Json{J.repeat(U32.to_nat(2000), Chr{91}) ++ "null" ++ J.repeat(U32.to_nat(2000), Chr{93})}, "deep schema JSON")')
+source.append('    J.check(H.nested(U32.to_nat(2000), V.BigInteger{False{}, B.one()}), J.BigInt{}, "deep JSON BigInt rejection")')
+source.append(f'    IO.print("schema-value: {len(values)} JavaScript snapshot/serialization cases, hook errors and deep-tree checks passed")')
 entry=BUILD/'schema-value-vectors.bend'
 entry.write_text('\n'.join(source)+'\n')
 subprocess.run(['sh','scripts/build-pure.sh',str(entry),'build/test-schema-value'],cwd=ROOT,check=True)
