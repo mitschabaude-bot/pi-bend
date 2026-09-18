@@ -1190,9 +1190,12 @@
     },
     {
       "source": "packages/ai/test/validation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8f7ca3341b6e4ab7d052df57c834f3219c8c82b4cf4a914d1b442c005aae2d37"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/plain-validation-upstream.bend"
+      ],
+      "sha256": "8f7ca3341b6e4ab7d052df57c834f3219c8c82b4cf4a914d1b442c005aae2d37",
+      "notes": "The named plain-JSON AJV-compatible primitive-rules case is ported with all 15 original input/output assertions through normalization, schema compilation, recursive coercion and final checking. Supplemental tests compare 285 composed cases with actual validateToolArguments and exercise the native checker through agent preparation/execution. Builder-specific conversion, references, remaining schema vocabulary, exact error messages and other named cases remain pending; this is not complete validation parity."
     },
     {
       "source": "packages/ai/test/xai-oauth.test.ts",

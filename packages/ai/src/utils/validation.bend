@@ -1,4 +1,5 @@
 import Base
+import ../types.bend as Ai
 import ./validation-normalize.bend as Normalize
 import ../../../runtime/src/schema.bend as Schema
 import ../../../runtime/src/schema-load.bend as Loader
@@ -283,3 +284,50 @@ def coerceTasks(tasks: List<&2, CoercionTask>, result: Coercion()) -> Coercion()
 
 def coerceWithJsonSchema(value: V.Value, schema: V.Value) -> Coercion():
   coerceTasks(Coerce{schema} <> Nil{}, Done{value})
+
+# Plain JSON declarations use this complete checking sequence. Builder-specific
+# conversion and upstream diagnostic text remain separate, unfinished layers.
+# Retain the received value independently for later validation diagnostics.
+type ToolValidationError is Data:
+  ToolNotFound{name: String}
+  InvalidToolSchema{toolName: String, error: Loader.Error}
+  NormalizationFailed{toolName: String, error: Normalize.Error}
+  CoercionFailed{toolName: String, error: CoercionError}
+  InvalidToolArguments{toolName: String, schema: V.Value, received: V.Value, converted: V.Value}
+
+def ToolValidation() -> Data: Result<&2, &2, ToolValidationError, V.Value>
+
+def checkedToolArguments(name: String, schema: V.Value, received: V.Value, compiled: Schema.Schema, coerced: Coercion()) -> ToolValidation():
+  match coerced:
+    case Fail{error}: Fail{CoercionFailed{name, error}}
+    case Done{+converted}: Bool.pick(ToolValidation(), Schema.check(compiled, converted), Done{converted}, Fail{InvalidToolArguments{name, schema, received, converted}})
+
+def compiledToolArguments(name: String, +schema: V.Value, received: V.Value, normalized: V.Value, compiled: Loader.Loaded()) -> ToolValidation():
+  match compiled:
+    case Fail{error}: Fail{InvalidToolSchema{name, error}}
+    case Done{validator}: checkedToolArguments(name, schema, received, validator, coerceWithJsonSchema(normalized, schema))
+
+def normalizedToolArguments(name: String, +schema: V.Value, received: V.Value, normalized: Normalize.Outcome()) -> ToolValidation():
+  match normalized:
+    case Fail{error}: Fail{NormalizationFailed{name, error}}
+    case Done{value}: compiledToolArguments(name, schema, received, value, Loader.compile(schema))
+
+def validatePlainToolArguments(tool: Ai.Tool<V.Value>, call: Ai.ToolCall<V.Value>) -> ToolValidation():
+  match tool call:
+    case Ai.Tool{_, _, +schema, _} Ai.ToolCall{_, name, +arguments, _, _}:
+      normalizedToolArguments(name, schema, arguments, normalizeOptionalNulls(arguments, schema))
+
+def declaredToolName(tool: Ai.Tool<V.Value>) -> String:
+  match tool:
+    case Ai.Tool{name, _, _, _}: name
+
+def declaredCallName(call: Ai.ToolCall<V.Value>) -> String:
+  match call:
+    case Ai.ToolCall{_, name, _, _, _}: name
+
+def validatePlainToolCall(tools: List<&2, Ai.Tool<V.Value>>, +call: Ai.ToolCall<V.Value>) -> ToolValidation():
+  match tools:
+    case Nil{}: Fail{ToolNotFound{declaredCallName(call)}}
+    case +tool <> tail:
+      selected = Bool.pick(Unit -> ToolValidation(), String.eq(declaredToolName(tool), declaredCallName(call)), unused => validatePlainToolArguments(tool, call), unused => validatePlainToolCall(tail, call))
+      selected(Unit{})
