@@ -6,6 +6,7 @@ import ../../runtime/src/date.bend as Date
 import ../../runtime/src/f64.bend as Number
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/transcript.bend as Transcript
+import ../../ai/src/utils/event-stream.bend as Stream
 import ../../runtime/src/utf16.bend as U
 
 # Internal outcome records from upstream agent-loop.ts. The result is a shared
@@ -543,3 +544,141 @@ def snapshotAssistantMessage(-Arguments: Data, -DiagnosticDetails: Data, message
   do IO<R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>:
     value : Ai.AssistantMessage<Arguments, DiagnosticDetails> <- R.read(Ai.AssistantMessage<Arguments, DiagnosticDetails>, message)
     R.new(Ai.AssistantMessage<Arguments, DiagnosticDetails>, value)
+
+# Explicit ownership until shared handles are managed: the run owns snapshots
+# until retained events retire. The provider owns the stream/message objects.
+type AssistantResponseConsumer<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data> is Data:
+  AssistantResponseConsumer{context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), snapshots: R.Ref<List<&2, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>>, response: Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)}
+
+type AssistantResponseStep<-Arguments: Data, -DiagnosticDetails: Data, -ExecutionError: Data> is Data:
+  ResponseContinue{started: Bool}
+  ResponseComplete{message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>}
+  ResponseFailed{error: ExecutionError}
+
+# Empty arrays keep their indexed elements unchanged under JS's arr[-1] write.
+# The non-index property itself awaits the complete dynamic array runtime.
+def replaceLastMessage(-Message: Data, values: List<&2, Message>, replacement: Message) -> List<&2, Message>:
+  match values:
+    case Nil{}: Nil{}
+    case _ <> Nil{}: replacement <> Nil{}
+    case head <> tail: head <> replaceLastMessage(Message, tail, replacement)
+
+def recordAssistantMessage(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, replace: Bool) -> IO(Unit):
+  do IO<Unit>:
+    current : T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError> <- R.read(T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>, context)
+    reference : T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom) = contextMessages(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, current)
+    +wrapped : T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom> = T.LlmMessage{Ai.Assistant{message}}
+    R.modify(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>, Unit, reference, +values => (Bool.pick(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>, replace, replaceLastMessage(T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, values, wrapped), List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, values, wrapped <> Nil{})), Unit{}))
+
+def partialAgentEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, source: Maybe<&2, Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>>) -> T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>:
+  match source:
+    case None{}: T.MessageStart{T.LlmMessage{Ai.Assistant{message}}}
+    case Some{event}: T.MessageUpdate{T.LlmMessage{Ai.Assistant{message}}, event}
+
+def emitAssistantSnapshot(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, source: Maybe<&2, Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>>) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  match consumer:
+    case AssistantResponseConsumer{_, emit, snapshots, _}:
+      do IO<Result<&2, &2, ExecutionError, Unit>>:
+        +snapshot : R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>> <- snapshotAssistantMessage(Arguments, DiagnosticDetails, message)
+        R.modify(List<&2, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>, Unit, snapshots, values => (snapshot <> values, Unit{}))
+        C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, partialAgentEvent(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, snapshot, source))
+
+def afterResponseEmission(-Arguments: Data, -DiagnosticDetails: Data, -ExecutionError: Data, started: Bool, emitted: Result<&2, &2, ExecutionError, Unit>) -> AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>:
+  match emitted:
+    case Fail{error}: ResponseFailed{error}
+    case Done{_}: ResponseContinue{started}
+
+def startAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, +consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, +partial: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>) -> IO(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>):
+  match consumer:
+    case AssistantResponseConsumer{context, _, _, _}:
+      do IO<AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>>:
+        recordAssistantMessage(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, context, partial, False{})
+        emitted : Result<&2, &2, ExecutionError, Unit> <- emitAssistantSnapshot(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, partial, None{})
+        return afterResponseEmission(Arguments, DiagnosticDetails, ExecutionError, True{}, emitted)
+
+def responseEventPartial(-Arguments: Data, -DiagnosticDetails: Data, event: Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>) -> Maybe<&2, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>:
+  match event:
+    case Ai.TextStart{_, partial}: Some{partial}
+    case Ai.TextDelta{_, _, partial}: Some{partial}
+    case Ai.TextEnd{_, _, partial}: Some{partial}
+    case Ai.ThinkingStart{_, partial}: Some{partial}
+    case Ai.ThinkingDelta{_, _, partial}: Some{partial}
+    case Ai.ThinkingEnd{_, _, partial}: Some{partial}
+    case Ai.ToolcallStart{_, partial}: Some{partial}
+    case Ai.ToolcallDelta{_, _, partial}: Some{partial}
+    case Ai.ToolcallEnd{_, _, partial}: Some{partial}
+    case _: None{}
+
+def updateAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, +consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, source: Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, partial: Maybe<&2, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>, started: Bool) -> IO(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>):
+  match consumer partial started:
+    case AssistantResponseConsumer{context, _, _, _} Some{+message} True{}:
+      do IO<AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>>:
+        recordAssistantMessage(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, context, message, True{})
+        emitted : Result<&2, &2, ExecutionError, Unit> <- emitAssistantSnapshot(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, message, Some{source})
+        return afterResponseEmission(Arguments, DiagnosticDetails, ExecutionError, True{}, emitted)
+    case _ _ _: IO.pure(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>, ResponseContinue{started})
+
+
+def completeResponseEmission(-Arguments: Data, -DiagnosticDetails: Data, -ExecutionError: Data, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, emitted: Result<&2, &2, ExecutionError, Unit>) -> AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>:
+  match emitted:
+    case Fail{error}: ResponseFailed{error}
+    case Done{_}: ResponseComplete{message}
+
+def endAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, +message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, started: Result<&2, &2, ExecutionError, Unit>) -> IO(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>):
+  match consumer started:
+    case _ Fail{error}: IO.pure(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>, ResponseFailed{error})
+    case AssistantResponseConsumer{_, emit, _, _} Done{_}:
+      do IO<AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>>:
+        emitted : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.MessageEnd{T.LlmMessage{Ai.Assistant{message}}})
+        return completeResponseEmission(Arguments, DiagnosticDetails, ExecutionError, message, emitted)
+
+
+def maybeStartFinalResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, started: Bool) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  match started:
+    case True{}: IO.pure(Result<&2, &2, ExecutionError, Unit>, Done{Unit{}})
+    case False{}: emitAssistantSnapshot(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, message, None{})
+
+def finishAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, +consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, +started: Bool) -> IO(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>):
+  match consumer:
+    case AssistantResponseConsumer{context, _, _, response}:
+      do IO<AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>>:
+        +message : R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>> <- Stream.resultValue(Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, response)
+        recordAssistantMessage(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, context, message, started)
+        emitted : Result<&2, &2, ExecutionError, Unit> <- maybeStartFinalResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, message, started)
+        endAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, message, emitted)
+
+def handleAssistantResponseEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, started: Bool, +event: Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>) -> IO(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>):
+  match event:
+    case Ai.Start{partial}: startAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, partial)
+    case Ai.StreamDone{_, _}: finishAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, started)
+    case Ai.StreamError{_, _}: finishAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, started)
+    case _: updateAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, event, responseEventPartial(Arguments, DiagnosticDetails, event), started)
+
+def handleAssistantIteration(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, started: Bool, next: Stream.Iteration<Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>>) -> IO(AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>):
+  match next:
+    case Stream.End{}: finishAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, started)
+    case Stream.Yield{event}: handleAssistantResponseEvent(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, started, event)
+
+# Guarded IO recursion: each continuation awaits one iterator result.
+@unsafe
+def consumeAssistantIterations(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, +consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>, +cursor: Stream.Iterator<Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>, state: AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError>) -> IO(Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>):
+  match state:
+    case ResponseFailed{error}: IO.pure(Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>, Fail{error})
+    case ResponseComplete{message}: IO.pure(Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>, Done{message})
+    case ResponseContinue{started}:
+      do IO<Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>>:
+        next : Stream.Iteration<Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>> <- Stream.nextValue(Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, cursor)
+        step : AssistantResponseStep<Arguments, DiagnosticDetails, ExecutionError> <- handleAssistantIteration(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, started, next)
+        consumeAssistantIterations(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, cursor, step)
+
+# Consume an already-created provider stream. Listener failures preserve prior
+# transcript writes and snapshots and prevent later emissions. Snapshot owners
+# and the provider stream remain caller-owned on success and failure alike.
+def consumeAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, +consumer: AssistantResponseConsumer<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult>) -> IO(Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>):
+  match consumer:
+    case AssistantResponseConsumer{_, _, _, response}:
+      do IO<Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>>:
+        +cursor : Stream.Iterator<Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>> <- Stream.iterator(Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, response)
+        result : Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>> <- consumeAssistantIterations(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, consumer, cursor, ResponseContinue{False{}})
+        Stream.disposeIterator(Ai.AssistantMessageEvent<Arguments, DiagnosticDetails>, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, cursor)
+        return result
