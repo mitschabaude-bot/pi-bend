@@ -110,3 +110,10 @@ def waitForIdle(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: 
 def dispose(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: Runtime<P, A, G, D, C, V, S, E, J>) -> IO(OwnedState<P, A, G, D, C, V, S, E, J>):
   match runtime:
     case Runtime{lifecycle}: L.dispose(OwnedState<P, A, G, D, C, V, S, E, J>, lifecycle)
+
+def changedState(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, M, V, S, E, J>, change: State.Change<P, A, G, D, M, V, S, E, J>) -> OwnedState<P, A, G, D, M, V, S, E, J> & Unit:
+  match owned:
+    case OwnedState{state, queues}: (OwnedState{State.applyChange(P, A, G, D, M, V, S, E, J, state, change), queues}, Unit{})
+def updateState(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: Runtime<P, A, G, D, M, V, S, E, J>, change: State.Change<P, A, G, D, M, V, S, E, J>) -> IO(Unit):
+  match runtime:
+    case Runtime{lifecycle}: L.modify(OwnedState<P, A, G, D, M, V, S, E, J>, Unit, lifecycle, owned => active => changedState(P, A, G, D, M, V, S, E, J, owned, change))

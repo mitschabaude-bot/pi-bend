@@ -24,8 +24,10 @@
     },
     {
       "source": "packages/agent/test/agent.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "packages/agent/test/agent.bend"
+      ],
       "sha256": "c749bae5d7d9787b9f64009c065210c51622ad04dfd941388fee6b668c5b29f4"
     },
     {

@@ -37,6 +37,10 @@ for(let mode=0;mode<10;mode++){
  };
  agent=new Agent({streamFn:provider,initialState:{systemPrompt:'base',...(mode===9?{tools:[{name:'echo',label:'Echo',description:'Echo',parameters:{type:'object'},execute:async(id,args,signal)=>{assert.equal(id,'call');assert.equal(signal.aborted,false);return {content:[],details:null};}}]}:{}),...(mode===6?{messages:[user('old')]}:mode===7?{messages:[assistant()]}:{})}});
  agent.subscribe(async event=>{
+  agent.state.thinkingLevel='off';
+  assert.equal(agent.state.isStreaming,true);
+  if(event.type==='tool_execution_start')assert.ok(agent.state.pendingToolCalls.has(event.toolCallId));
+  if(event.type==='tool_execution_end')assert.equal(agent.state.pendingToolCalls.has(event.toolCallId),false);
   if(event.type==='agent_start'){
    await assert.rejects(agent.prompt('busy'),{message:'Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.'});
    await assert.rejects(agent.continue(),{message:'Agent is already processing. Wait for completion before continuing.'});

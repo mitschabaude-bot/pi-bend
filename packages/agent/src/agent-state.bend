@@ -81,3 +81,19 @@ def reset(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Detail
     case T.AgentState{model, thinking, tools, messages, _, _, _, _}:
       baseline = Transcript.getCurrentSystemMessage(Parameters, Arguments, DiagnosticDetails, Details, defaultConvertToLlm(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, messages))
       T.AgentState{model, thinking, tools, prependInitial(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, baseline, Nil{}), False{}, None{}, Set.empty(), None{}}
+
+# User-editable state is an explicit value transition. Runtime fields remain
+# owned by the run lifecycle, including when an update occurs during delivery.
+type Change<-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
+  SetModel{model: Ai.Model<J>}
+  SetThinkingLevel{level: T.ThinkingLevel()}
+  SetTools{tools: List<&2, T.AgentTool<P, V, D, A, S, E>>}
+  ReplaceMessages{messages: List<&2, T.AgentMessage<P, A, G, D, M>>}
+  AppendMessage{message: T.AgentMessage<P, A, G, D, M>}
+def applyChange(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, M, V, S, E, J>, change: Change<P, A, G, D, M, V, S, E, J>) -> T.AgentState<P, A, G, D, M, V, S, E, J>:
+  match state change:
+    case T.AgentState{_, thinking, tools, messages, streaming, current, pending, error} SetModel{model}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
+    case T.AgentState{model, _, tools, messages, streaming, current, pending, error} SetThinkingLevel{thinking}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
+    case T.AgentState{model, thinking, _, messages, streaming, current, pending, error} SetTools{tools}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
+    case T.AgentState{model, thinking, tools, _, streaming, current, pending, error} ReplaceMessages{messages}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
+    case T.AgentState{model, thinking, tools, messages, streaming, current, pending, error} AppendMessage{message}: T.AgentState{model, thinking, tools, List.append(&2, T.AgentMessage<P, A, G, D, M>, messages, message <> Nil{}), streaming, current, pending, error}

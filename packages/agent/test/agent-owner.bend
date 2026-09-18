@@ -1,4 +1,5 @@
 import Base
+import ../../runtime/src/string-set.bend as Set
 import ../src/agent.bend as Agent
 import ../src/agent-options.bend as Options
 import ../src/agent-run.bend as Run
@@ -90,10 +91,19 @@ def checkBusy(+agent: Owner(), event: H.EventValue()) -> IO(Unit):
         signal : Maybe<&2, Run.Signal()> <- Agent.signal(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
         Test.assertion(Maybe.is_some(&2, Run.Signal(), signal), "awaited listener exposes the active signal")
     case _: IO.pure(Unit, Unit{})
+def preservedPending(state: T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>, event: H.EventValue()) -> IO(Unit):
+  match state event:
+    case T.AgentState{_, _, _, _, True{}, _, pending, _} T.ToolExecutionStart{id, _, _}: Test.assertion(Set.contains(pending, id), "state update retains the started pending tool")
+    case T.AgentState{_, _, _, _, True{}, _, pending, _} T.ToolExecutionEnd{id, _, _, _}: Test.assertion(Bool.not(Set.contains(pending, id)), "state update retains completed-tool removal")
+    case T.AgentState{_, _, _, _, True{}, _, _, _} _: IO.pure(Unit, Unit{})
+    case _ _: Test.assertion(False{}, "state update must not end the active run")
 def listener(capture: ListenerCapture, input: Listeners.Input<H.EventValue(), Run.Signal()>) -> IO(Emission.Emission<String>):
   match capture input:
-    case ListenerCapture{agent, original} Listeners.Input{+event, signal}:
+    case ListenerCapture{+agent, original} Listeners.Input{+event, signal}:
       do IO<Emission.Emission<String>>:
+        Agent.setThinkingLevel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Off{})
+        snapshot : T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        preservedPending(snapshot, event)
         checkBusy(agent, event)
         H.listener(original, Listeners.Input{event, signal})
 def missing(result: Result<&2, &2, Provider.MissingDefault, Owner()>) -> Bool:

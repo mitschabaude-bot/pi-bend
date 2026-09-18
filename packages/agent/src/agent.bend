@@ -179,3 +179,49 @@ def prompt(~A: Data, ~G: Data, ~D: Data, ~M: Data, ~V: Data, ~E: Data, ~J: Data,
   do IO<Result<&2, &2, AgentError<E>, Unit>>:
     active : Maybe<&2, Run.Signal()> <- signal(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
     promptReady(~A, ~G, ~D, ~M, ~V, ~E, ~J, ~Telemetry, ~Fetch, ~renderError, ~fromString, ~declarationError, agent, input, active)
+
+def updateState(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, change: State.Change<Schema.Value, A, G, D, M, V, Run.Signal(), E, J>) -> IO(Unit):
+  match agent:
+    case Agent{runtime, _, _, _, _, _}: Runtime.updateState(Schema.Value, A, G, D, M, V, Run.Signal(), E, J, runtime, change)
+def setModel(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Ai.Model<J>) -> IO(Unit):
+  updateState(A, G, D, M, V, E, J, Telemetry, Fetch, agent, State.SetModel{value})
+def setThinkingLevel(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: T.ThinkingLevel()) -> IO(Unit):
+  updateState(A, G, D, M, V, E, J, Telemetry, Fetch, agent, State.SetThinkingLevel{value})
+def setTools(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: List<&2, T.AgentTool<Schema.Value, V, D, A, Run.Signal(), E>>) -> IO(Unit):
+  updateState(A, G, D, M, V, E, J, Telemetry, Fetch, agent, State.SetTools{value})
+def replaceMessages(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: List<&2, Run.Message(A, G, D, M)>) -> IO(Unit):
+  updateState(A, G, D, M, V, E, J, Telemetry, Fetch, agent, State.ReplaceMessages{value})
+def appendMessage(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Run.Message(A, G, D, M)) -> IO(Unit):
+  updateState(A, G, D, M, V, E, J, Telemetry, Fetch, agent, State.AppendMessage{value})
+def clearMessages(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Unit): replaceMessages(A, G, D, M, V, E, J, Telemetry, Fetch, agent, Nil{})
+def systemPrompt(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(String):
+  do IO<String>:
+    value : T.AgentState<Schema.Value, A, G, D, M, V, Run.Signal(), E, J> <- state(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return State.systemPrompt(Schema.Value, A, G, D, M, V, Run.Signal(), E, J, value)
+def queueValues(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, owned: Runtime.OwnedState<Schema.Value, A, G, D, M, V, Run.Signal(), E, J>) -> Queues.Queues<Run.Message(A, G, D, M)>:
+  match owned:
+    case Runtime.OwnedState{_, queues}: queues
+def queueSnapshot(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Queues.Queues<Run.Message(A, G, D, M)>):
+  match agent:
+    case Agent{runtime, _, _, _, _, _}:
+      do IO<Queues.Queues<Run.Message(A, G, D, M)>>:
+        owned : Runtime.OwnedState<Schema.Value, A, G, D, M, V, Run.Signal(), E, J> <- Runtime.snapshot(Schema.Value, A, G, D, M, V, Run.Signal(), E, J, runtime)
+        return queueValues(A, G, D, M, V, E, J, owned)
+def hasQueuedMessages(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(Bool):
+  do IO<Bool>:
+    queues : Queues.Queues<Run.Message(A, G, D, M)> <- queueSnapshot(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Queues.hasQueuedMessages(Run.Message(A, G, D, M), queues)
+def setSteeringMode(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, mode: T.QueueMode) -> IO(Unit):
+  match agent:
+    case Agent{runtime, _, _, _, _, _}: Runtime.setQueueMode(Schema.Value, A, G, D, M, V, Run.Signal(), E, J, runtime, Queues.Steering{}, mode)
+def getSteeringMode(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(T.QueueMode):
+  do IO<T.QueueMode>:
+    queues : Queues.Queues<Run.Message(A, G, D, M)> <- queueSnapshot(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Queues.getMode(Run.Message(A, G, D, M), queues, Queues.Steering{})
+def setFollowUpMode(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, mode: T.QueueMode) -> IO(Unit):
+  match agent:
+    case Agent{runtime, _, _, _, _, _}: Runtime.setQueueMode(Schema.Value, A, G, D, M, V, Run.Signal(), E, J, runtime, Queues.FollowUp{}, mode)
+def getFollowUpMode(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>) -> IO(T.QueueMode):
+  do IO<T.QueueMode>:
+    queues : Queues.Queues<Run.Message(A, G, D, M)> <- queueSnapshot(A, G, D, M, V, E, J, Telemetry, Fetch, agent)
+    return Queues.getMode(Run.Message(A, G, D, M), queues, Queues.FollowUp{})

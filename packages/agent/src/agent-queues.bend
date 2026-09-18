@@ -37,3 +37,8 @@ def drain(-M: Data, queues: Queues<M>, kind: QueueKind) -> Queues<M> & List<&2, 
   match queues kind:
     case Queues{steering, followUp} Steering{}: drained(M, Steering{}, followUp, Q.drain(M, steering))
     case Queues{steering, followUp} FollowUp{}: drained(M, FollowUp{}, steering, Q.drain(M, followUp))
+
+def getMode(-M: Data, queues: Queues<M>, kind: QueueKind) -> T.QueueMode:
+  match queues kind:
+    case Queues{steering, _} Steering{}: Q.getMode(M, steering)
+    case Queues{_, followUp} FollowUp{}: Q.getMode(M, followUp)
