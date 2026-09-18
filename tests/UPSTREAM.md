@@ -187,3 +187,16 @@ Five further named Agent cases are mapped below. `agent-behavior.bend` uses a do
 | continue() should keep one-at-a-time steering semantics from assistant tail | `agent-behavior.bend:steering` checks exact alternating history roles and two provider calls |
 
 All 13 mapped Agent cases and the supplemental queue-mode checks pass on one/four threads after fresh builds. Fourteen named Agent cases remain pending. The library type check and all six compiler-patch regression scripts pass on Bend 2.0.7 after compatible patches were reapplied following its automatic update. Suite totals remain 4 ported, 5 partial and 540 pending.
+
+The Agent failure and subscriber cases use the public owner, prompt, subscribe, abort and waitForIdle methods:
+
+| Upstream name | Native assertion group |
+| --- | --- |
+| emits full lifecycle events for thrown run failures | `agent-await.bend:failureCase` checks all eight ordered events, final assistant role/error stop reason/error message, and Agent error state |
+| should await async subscribers before prompt resolves | `agent-await.bend:awaitCase(0)` suspends the agent-end subscriber and checks listener/prompt/idle completion and streaming state before and after release |
+| waitForIdle should wait for async subscribers | `agent-await.bend:awaitCase(1)` suspends the assistant message-end subscriber and checks the public idle wait stays pending until release |
+| should pass the active abort signal to subscribers | `agent-signal.bend:main` retains the agent-start signal, checks it before cancellation and after prompt completion, and verifies provider-side cancellation |
+
+A typed provider `Fail` represents the thrown provider error; the stateful Agent still recovers with the original full lifecycle, distinct from the approved low-level stream-wrapper error contract. Subscriber tests use channel entry/release barriers and retain upstream's 10 ms observation window for negative completion assertions. The abort test uses a registered native abort observation instead of repeated timer polling; provider partial/terminal content is deterministic because the source assertions concern the signal. All public prompt calls and producer tasks join before resources are disposed. These tests do not establish full Agent or provider completion.
+
+All four new named cases pass after fresh builds on one/four threads, bringing the mapped Agent suite to 17 of 27 cases. Ten named cases remain pending: three tool-declaration updates, two late tool-update cases, three busy-operation guards, and two AgentOptions turn-hook cases. Suite totals remain 4 ported, 5 partial and 540 pending.
