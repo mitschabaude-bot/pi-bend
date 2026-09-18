@@ -10,9 +10,9 @@ lines = ['import Base', 'import ../packages/agent/test/api-key.bend as T', 'def 
 for case in reference['cases']:
     fallback = 'None{}' if case['fallback'] is None else 'Some{' + json.dumps(case['fallback']) + '}'
     retained = 'none' if case['retained'] is None else 'key:' + case['retained']
-    args = [str(case['mode']), fallback, 'True{}' if case['rotate'] else 'False{}', str(case['calls']), json.dumps(case['result']), json.dumps(retained)]
+    args = [str(case['mode']), fallback, 'True{}' if case['rotate'] else 'False{}', 'True{}' if case['signaled'] else 'False{}', str(case['calls']), json.dumps(case['result']), json.dumps(retained)]
     lines.append('    T.run(' + ', '.join(args) + ')')
-lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream API-key resolution cases")')
+lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream API-key/request snapshot cases")')
 source = BUILD / 'api-key-vectors.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = BUILD / 'test-api-key-vectors'

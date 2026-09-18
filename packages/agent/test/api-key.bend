@@ -14,6 +14,8 @@ import ../../runtime/src/f64.bend as F
 import ./queue-poll.bend as Q
 import ./stop-turn.bend as S
 def Outcome() -> Data: Result<&2, &2, String, Maybe<&2, String>>
+def Request() -> Data: Result<&2, &2, String, R.Ref<U.Config()>>
+
 def Resolver() -> Data: C.Callback<String, Outcome()>
 type Environment is Data:
   Environment{mode: U32, rotate: Bool, config: R.Ref<U.Config()>, calls: R.Ref<U32>, gate: S.Gate}
@@ -47,9 +49,30 @@ def body(environment: Environment, provider: String) -> IO(Outcome()):
         S.suspend(gate)
         return returned(mode)
 
-def task(config: R.Ref<U.Config()>, done: D.Deferred<Unit>) -> IO(Outcome()):
+def signalPresent(value: U.Config()) -> Bool:
+  match value:
+    case T.AgentLoopConfig{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: Bool.not(Maybe.is_none(&2, Unit, signal))
+
+def checkSnapshot(result: Request(), +original: R.Ref<U.Config()>, signaled: Bool) -> IO(Outcome()):
+  match result:
+    case Fail{error}: IO.pure(Outcome(), Fail{error})
+    case Done{+copied}:
+      do IO<Outcome()>:
+        Test.assertion(Bool.not(R.same(U.Config(), original, copied)), "request must allocate a new config")
+        +oldConfig : U.Config() <- R.read(U.Config(), original)
+        +current : U.Config() <- R.dispose(U.Config(), copied)
+        Test.assertion(String.eq(U.boolean(signalPresent(current)), U.boolean(signaled)), "request signal override differs")
+        Test.assertion(signalPresent(oldConfig), "request snapshot mutated original signal")
+        +expectedModel : R.Ref<Ai.Model<Unit>> = Loop.selectedRequestModel(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, oldConfig)
+        +expectedConvert : U.Converter() = Loop.selectedMessageConverter(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, oldConfig)
+        retained : String <- U.view(current, expectedModel, expectedConvert)
+        Test.assertion(String.eq(retained, "none|true"), "request snapshot changed unrelated fields")
+        return Done{Loop.selectedApiKey(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, current)}
+
+def task(+config: R.Ref<U.Config()>, +signaled: Bool, done: D.Deferred<Unit>) -> IO(Outcome()):
   do IO<Outcome()>:
-    result : Outcome() <- Loop.resolveApiKey(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, config)
+    snapshot : Request() <- Loop.resolveRequestConfig(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, config, U.selected(Unit, signaled, Unit{}))
+    result : Outcome() <- checkSnapshot(snapshot, config, signaled)
     won : Bool <- D.resolve(Unit, done, Unit{})
     return result
 
@@ -68,7 +91,7 @@ def showResult(value: Outcome()) -> String:
     case Fail{error}: "error:" ++ error
     case Done{key}: showKey(key)
 
-def run(+mode: U32, +fallback: Maybe<&2, String>, rotate: Bool, expectedCalls: U32, expected: String, retained: String) -> IO(Unit):
+def run(+mode: U32, +fallback: Maybe<&2, String>, rotate: Bool, signaled: Bool, expectedCalls: U32, expected: String, retained: String) -> IO(Unit):
   do IO<Unit>:
     +model : R.Ref<Ai.Model<Unit>> <- R.new(Ai.Model<Unit>, Model.model(Ai.CustomModelApi{"custom"}, None{}))
     +convert : U.Converter() <- C.create(~Unit, ~H.Messages(), ~U.Output(), ~U.forbidden, Unit{})
@@ -79,7 +102,8 @@ def run(+mode: U32, +fallback: Maybe<&2, String>, rotate: Bool, expectedCalls: U
     +calls : R.Ref<U32> <- R.new(U32, 0)
     +resolver : Resolver() <- C.create(~Environment, ~String, ~Outcome(), ~body, Environment{mode, rotate, config, calls, S.Gate{entered, release}})
     R.modify(U.Config(), Unit, config, value => (withKey(value, fallback, U.selected(Resolver(), Bool.not(U32.is_eq(mode, 0)), resolver)), Unit{}))
-    running : Chan(Outcome()) <- IO.fork(Outcome(), task(config, done))
+    R.modify(U.Config(), Unit, config, value => (Loop.withRequestOverrides(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, value, fallback, Some{Unit{}}), Unit{}))
+    running : Chan(Outcome()) <- IO.fork(Outcome(), task(config, signaled, done))
     advance(mode, S.Gate{entered, release}, done)
     result : Outcome() <- IO.join(Outcome(), running)
     Test.assertion(String.eq(showResult(result), expected), "API-key resolution differs from upstream")
