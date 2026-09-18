@@ -718,3 +718,42 @@ def streamAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDeta
       do IO<Result<&2, &2, ExecutionError, R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>>>:
         prepared : Result<&2, &2, ExecutionError, R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>> <- prepareLlmContext(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, context, config, signal)
         afterLlmContext(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, PartialResult, ExecutionResult, request, prepared)
+
+def assistantFailed(-Arguments: Data, -DiagnosticDetails: Data, message: Ai.AssistantMessage<Arguments, DiagnosticDetails>) -> Bool:
+  match message:
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Error{}, _, _, _, _, _}: True{}
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Aborted{}, _, _, _, _, _}: True{}
+    case _: False{}
+
+def afterFailedAgentEnd(-ExecutionError: Data, emitted: Result<&2, &2, ExecutionError, Unit>) -> Result<&2, &2, ExecutionError, Bool>:
+  match emitted:
+    case Fail{error}: Fail{error}
+    case Done{_}: Done{True{}}
+
+def afterFailedTurnEnd(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, messages: T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), emitted: Result<&2, &2, ExecutionError, Unit>) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  match emitted:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, ExecutionError, Bool>>:
+        ended : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.AgentEnd{messages})
+        return afterFailedAgentEnd(ExecutionError, ended)
+
+def endFailedAssistantTurn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, messages: T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), +emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), arrays: R.Ref<List<&2, R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<ToolDetails>>>>>>, failed: Bool) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  match failed:
+    case False{}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Done{False{}})
+    case True{}:
+      do IO<Result<&2, &2, ExecutionError, Bool>>:
+        +results : R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<ToolDetails>>>> <- R.new(List<&2, R.Ref<Ai.ToolResultMessage<ToolDetails>>>, Nil{})
+        R.modify(List<&2, R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<ToolDetails>>>>>, Unit, arrays, values => (results <> values, Unit{}))
+        emitted : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.TurnEnd{T.LlmMessage{Ai.Assistant{message}}, results})
+        afterFailedTurnEnd(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, messages, emit, emitted)
+
+# The post-response runLoop block: always append to newMessages before checking
+# the live stop reason. True means the error/abort branch finished both events;
+# false continues normal tool handling. Retained empty result arrays belong to
+# the run's owner list, including when an event listener fails.
+def recordAssistantCompletion(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, +message: R.Ref<Ai.AssistantMessage<Arguments, DiagnosticDetails>>, +messages: T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), arrays: R.Ref<List<&2, R.Ref<List<&2, R.Ref<Ai.ToolResultMessage<ToolDetails>>>>>>) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  do IO<Result<&2, &2, ExecutionError, Bool>>:
+    R.modify(List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>>, Unit, messages, values => (List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom>, values, T.LlmMessage{Ai.Assistant{message}} <> Nil{}), Unit{}))
+    value : Ai.AssistantMessage<Arguments, DiagnosticDetails> <- R.read(Ai.AssistantMessage<Arguments, DiagnosticDetails>, message)
+    endFailedAssistantTurn(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, message, messages, emit, arrays, assistantFailed(Arguments, DiagnosticDetails, value))
