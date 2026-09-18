@@ -15,10 +15,11 @@
         "packages/agent/test/agent-loop-tools.bend",
         "packages/agent/test/agent-loop-arguments.bend",
         "packages/agent/test/agent-loop-parallel.bend",
-        "packages/agent/test/agent-loop-steering.bend"
+        "packages/agent/test/agent-loop-steering.bend",
+        "packages/agent/test/agent-loop-turns.bend"
       ],
       "sha256": "47cdde0c9b42b99baed7d2d8aeca2409b9465b1155b3b060b59ae20535cf9f53",
-      "notes": "Seventeen of 24 named upstream cases ported: default stream fallback, AgentMessage events, transcript-only provider context, custom message conversion, transform-before-convert ordering, tool calls/results with hook-patched usage, rejection of length-truncated tool calls, argument preparation before validation, before-hook argument replacement without revalidation, parallel completion/source ordering, steering injection after the full tool batch, single-tool sequential override, mixed-tool sequential override, explicit parallel tools, empty continuation rejection, existing-context continuation, and custom last-message continuation. Native typed errors and explicit fallback selection adapt exceptions and omitted arguments; immutable system field equality replaces JS reference identity. Before-hook mutation uses an explicit immutable argument update. A channel gate replaces the source ordering test timer. Remaining seven cases pending. Supplemental 204 wrapper comparisons are not full-suite coverage."
+      "notes": "Nineteen of 24 named upstream cases ported: default stream fallback, AgentMessage events, transcript-only provider context, custom message conversion, transform-before-convert ordering, tool calls/results with hook-patched usage, rejection of length-truncated tool calls, argument preparation before validation, before-hook argument replacement without revalidation, parallel completion/source ordering, steering injection after the full tool batch, single-tool sequential override, mixed-tool sequential override, explicit parallel tools, prepareNextTurn snapshot, shouldStopAfterTurn queue suppression, empty continuation rejection, existing-context continuation, and custom last-message continuation. Native typed errors and explicit fallback selection adapt exceptions and omitted arguments; immutable system field equality replaces JS reference identity. Before-hook mutation uses an explicit immutable argument update. A channel gate replaces the source ordering test timer. Remaining five batch-termination cases pending. Supplemental 204 wrapper comparisons are not full-suite coverage."
     },
     {
       "source": "packages/agent/test/agent.test.ts",
