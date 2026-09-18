@@ -1,5 +1,7 @@
 import Base
 import ./types.bend as T
+import ./tool-update-scope.bend as Updates
+import ./event-emission.bend as Emission
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/record.bend as Record
 import ../../runtime/src/callback.bend as C
@@ -870,3 +872,93 @@ def disposeAgentStream(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: 
         Stream.dispose(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), stream)
         C.dispose(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Bool, check)
         C.dispose(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), extract)
+
+# The update emitter returns a delivery handle after its ordered start effects.
+# This is the native equivalent of invoking an async sink without awaiting it.
+type ToolUpdateCapture<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data> is Data:
+  ToolUpdateCapture{scope: Updates.Scope<Error>, call: Ai.ToolCall<Arguments>, emit: C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Emission.Emission<Error>>}
+
+type ToolUpdateRun<-Details: Data, -Error: Data> is Data:
+  ToolUpdateRun{scope: Updates.Scope<Error>, callback: T.AgentToolUpdateCallback(Details)}
+
+def finishToolUpdate(-Error: Data, ticket: Updates.Ticket<Error>, emission: Emission.Emission<Error>) -> IO(Unit):
+  do IO<Unit>:
+    outcome : Result<&2, &2, Error, Unit> <- Emission.wait(Error, emission)
+    Updates.complete(Error, ticket, outcome)
+
+def trackToolUpdate(-Error: Data, ticket: Updates.Ticket<Error>, emission: Emission.Emission<Error>) -> IO(Unit):
+  match emission:
+    case Emission.Ready{outcome}: Updates.complete(Error, ticket, outcome)
+    case Emission.Pending{reply}: IO.spawn(Unit, finishToolUpdate(Error, ticket, Emission.Pending{reply}))
+
+def emitAcceptedToolUpdate(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, ticket: Maybe<&1, Updates.Ticket<Error>>, call: Ai.ToolCall<Arguments>, partial: T.AgentToolResult<Details>, emit: C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Emission.Emission<Error>>) -> IO(Unit):
+  match ticket call:
+    case None{} _: IO.pure(Unit, Unit{})
+    case Some{accepted} Ai.ToolCall{id, name, arguments, _, _}:
+      do IO<Unit>:
+        delivery : Emission.Emission<Error> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Emission.Emission<Error>, emit, T.ToolExecutionUpdate{id, name, arguments, partial})
+        trackToolUpdate(Error, accepted, delivery)
+
+def forwardToolUpdate(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, capture: ToolUpdateCapture<Parameters, Arguments, DiagnosticDetails, Details, Custom, Error>, partial: T.AgentToolResult<Details>) -> IO(Unit):
+  match capture:
+    case ToolUpdateCapture{scope, call, emit}:
+      do IO<Unit>:
+        ticket : Maybe<&1, Updates.Ticket<Error>> <- Updates.begin(Error, scope)
+        emitAcceptedToolUpdate(Parameters, Arguments, DiagnosticDetails, Details, Custom, Error, ticket, call, partial, emit)
+
+def createToolUpdateRun(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error: Data, call: Ai.ToolCall<Arguments>, emit: C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Emission.Emission<Error>>) -> IO(ToolUpdateRun<Details, Error>):
+  do IO<ToolUpdateRun<Details, Error>>:
+    +scope : Updates.Scope<Error> <- Updates.new(Error)
+    callback : T.AgentToolUpdateCallback(Details) <- C.create(~ToolUpdateCapture<Parameters, Arguments, DiagnosticDetails, Details, Custom, Error>, ~T.AgentToolResult<Details>, ~Unit, ~(forwardToolUpdate(Parameters, Arguments, DiagnosticDetails, Details, Custom, Error)), ToolUpdateCapture{scope, call, emit})
+    return ToolUpdateRun{scope, callback}
+
+# A run owns the callback's tombstone until all tool-held aliases retire.
+# Waiting for the update result alone does not establish that lifetime boundary.
+def disposeToolUpdateRun(-Details: Data, -Error: Data, run: ToolUpdateRun<Details, Error>) -> IO(Unit):
+  match run:
+    case ToolUpdateRun{scope, callback}:
+      do IO<Unit>:
+        Updates.dispose(Error, scope)
+        C.dispose(T.AgentToolResult<Details>, Unit, callback)
+
+def executionOutcome(-Details: Data, -Error: Data, executed: Result<&2, &2, Error, T.AgentToolResult<Details>>, failureDetails: Details, renderError: Error -> String) -> ExecutedToolCallOutcome<Details>:
+  match executed:
+    case Done{value}: ExecutedToolCallOutcome{value, False{}}
+    case Fail{error}: failedToolOutcome(Details, Error, failureDetails, renderError, error)
+
+def checkedExecutionOutcome(-Details: Data, -Error: Data, executed: Result<&2, &2, Error, T.AgentToolResult<Details>>, updates: Result<&2, &2, Error, Unit>, failureDetails: Details, renderError: Error -> String) -> Result<&2, &2, Error, ExecutedToolCallOutcome<Details>>:
+  match updates:
+    case Fail{error}: Fail{error}
+    case Done{_}: Done{executionOutcome(Details, Error, executed, failureDetails, renderError)}
+
+# One fresh update run per invocation. The caller retains its lifetime owner
+# after this returns so a tool's retained update callback safely becomes a no-op.
+def executePreparedToolCall(-Parameters: Data, -Arguments: Data, -Details: Data, -RawArguments: Data, -Signal: Data, -Error: Data, prepared: PreparedToolCall<Parameters, Arguments, Details, RawArguments, Signal, Error>, signal: Maybe<&2, Signal>, run: ToolUpdateRun<Details, Error>, failureDetails: Details, renderError: Error -> String) -> IO(Result<&2, &2, Error, ExecutedToolCallOutcome<Details>>):
+  match prepared run:
+    case PreparedToolCall{Ai.ToolCall{id, _, _, _, _}, T.AgentTool{_, _, _, _, _, _, execute, _, _}, args} ToolUpdateRun{+scope, callback}:
+      do IO<Result<&2, &2, Error, ExecutedToolCallOutcome<Details>>>:
+        executed : Result<&2, &2, Error, T.AgentToolResult<Details>> <- C.call(T.ToolExecutionInput<Arguments, Signal, Details>, Result<&2, &2, Error, T.AgentToolResult<Details>>, execute, T.ToolExecutionInput{id, args, signal, Some{callback}})
+        Updates.close(Error, scope)
+        settled : Result<&2, &2, Error, Unit> <- Updates.result(Error, scope)
+        return checkedExecutionOutcome(Details, Error, executed, settled, failureDetails, renderError)
+
+# Native sinks distinguish ordered initiation from optional async completion.
+def StartingAgentEventSink(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -Error: Data) -> Data:
+  C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Emission.Emission<Error>>
+
+def awaitStartedEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -Error: Data, emitter: StartingAgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error), event: T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>) -> IO(Result<&2, &2, Error, Unit>):
+  do IO<Result<&2, &2, Error, Unit>>:
+    delivery : Emission.Emission<Error> <- C.call(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Emission.Emission<Error>, emitter, event)
+    Emission.wait(Error, delivery)
+
+# The adapter owns only its wrapper; its emitter remains caller-owned.
+def createAwaitedEventSink(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~ToolDetails: Data, ~Custom: Data, ~PartialResult: Data, ~ExecutionResult: Data, ~Error: Data, emitter: StartingAgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)) -> IO(AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)):
+  C.create(~StartingAgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error), ~T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, ~Result<&2, &2, Error, Unit>, ~(awaitStartedEvent(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)), emitter)
+
+def startAgentStreamEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -Error: Data, stream: AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult), event: T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>) -> IO(Emission.Emission<Error>):
+  do IO<Emission.Emission<Error>>:
+    Stream.push(T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, T.AgentMessageArray(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom), stream, event)
+    return Emission.Ready{Done{Unit{}}}
+
+def createAgentStreamEmitter(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~ToolDetails: Data, ~Custom: Data, ~PartialResult: Data, ~ExecutionResult: Data, ~Error: Data, stream: AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult)) -> IO(StartingAgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)):
+  C.create(~AgentEventStream(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult), ~T.AgentEvent<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, ~Emission.Emission<Error>, ~(startAgentStreamEvent(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, Error)), stream)

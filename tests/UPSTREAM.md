@@ -34,3 +34,6 @@ After resuming the full port, `packages/agent/test/tool-finalization.bend` adds 
 
 
 `tests/tool_update_scope.py` adds supplemental coverage for invocation-scoped update tracking. It executes the pinned `executePreparedToolCall` helper for failure-selection/late-update checks, runs native scope transitions and 256 concurrent completions on one/four threads, and verifies that copying a completion ticket is rejected by the compiler. The full `agent.test.ts` cases “should ignore tool updates after the tool execution settles” and “should ignore a settled parallel tool update while another tool is still running” still require the agent/executor and remain unported.
+
+
+`packages/agent/test/tool-execution.bend` checks prepared execution with delayed/immediate update delivery, original versus validated arguments, tool/listener error precedence, late callbacks and resource drain. Its eight cases use channels rather than timing assumptions. `tool-execution-stream.bend` composes the production execution helper, update emitter, after-tool hook, termination policy, result-message emission and canonical stream, checking ordered events and final history. These run on one/four threads through `tests/native-agent.sh`; complete public-agent test cases still require loop orchestration and remain pending.
