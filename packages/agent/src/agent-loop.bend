@@ -5,6 +5,7 @@ import ../../runtime/src/callback.bend as C
 import ../../runtime/src/date.bend as Date
 import ../../runtime/src/f64.bend as Number
 import ../../ai/src/types.bend as Ai
+import ../../ai/src/utils/transcript.bend as Transcript
 import ../../runtime/src/utf16.bend as U
 
 # Internal outcome records from upstream agent-loop.ts. The result is a shared
@@ -496,3 +497,19 @@ def resolveApiKey(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data,
   do IO<Result<&2, &2, ExecutionError, Maybe<&2, String>>>:
     +current : T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch> <- R.read(T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, config)
     invokeApiKeyResolver(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, config, selectedRequestModel(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, current), selectedApiKeyResolver(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, current))
+
+# Normalization receives only converted messages, as in the source request
+# path. Its message array remains shared; the returned context cell is new.
+def normalizeConvertedMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -ExecutionError: Data, converted: Result<&2, &2, ExecutionError, R.Ref<List<&2, Ai.Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>>) -> IO(Result<&2, &2, ExecutionError, R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>):
+  match converted:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>, Fail{error})
+    case Done{messages}:
+      do IO<Result<&2, &2, ExecutionError, R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>>:
+        value : Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails> <- Transcript.normalizeContext(Parameters, Arguments, DiagnosticDetails, ToolDetails, Ai.Context{None{}, messages, None{}})
+        context : R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>> <- R.new(Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>, value)
+        return Done{context}
+
+def prepareLlmContext(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, config: R.Ref<T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, signal: Maybe<&2, Signal>) -> IO(Result<&2, &2, ExecutionError, R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>):
+  do IO<Result<&2, &2, ExecutionError, R.Ref<Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>>:
+    converted : Result<&2, &2, ExecutionError, R.Ref<List<&2, Ai.Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>> <- convertContextMessages(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, context, config, signal)
+    normalizeConvertedMessages(Parameters, Arguments, DiagnosticDetails, ToolDetails, ExecutionError, converted)

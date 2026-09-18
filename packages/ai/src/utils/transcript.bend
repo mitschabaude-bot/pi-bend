@@ -39,17 +39,23 @@ def createInitialSystemMessage(-P: Data, systemPrompt: Maybe<&2, String>, tools:
   +available = nonEmptyTools(P, tools)
   createInitial(P, Bool.not(String.is_empty(prompt)) || hasTools(P, available), prompt, available)
 
-def prependInitial(-P: Data, -A: Data, -G: Data, -H: Data, initial: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, messages: List<&2, T.Message<P, A, G, H>>) -> T.TranscriptContext<P, A, G, H>:
+# No initial message preserves the original array. Prepending allocates only
+# the array cell; existing message objects retain their shared identities.
+def prependInitial(-P: Data, -A: Data, -G: Data, -H: Data, initial: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, messages: Ref.Ref<List<&2, T.Message<P, A, G, H>>>) -> IO(T.TranscriptContext<P, A, G, H>):
   match initial:
-    case None{}: T.TranscriptContext{messages}
-    case Some{value}: T.TranscriptContext{T.System{value} <> messages}
+    case None{}: IO.pure(T.TranscriptContext<P, A, G, H>, T.TranscriptContext{messages})
+    case Some{value}:
+      do IO<T.TranscriptContext<P, A, G, H>>:
+        original : List<&2, T.Message<P, A, G, H>> <- Ref.read(List<&2, T.Message<P, A, G, H>>, messages)
+        copied : Ref.Ref<List<&2, T.Message<P, A, G, H>>> <- Ref.new(List<&2, T.Message<P, A, G, H>>, T.System{value} <> original)
+        return T.TranscriptContext{copied}
 
 def normalizeContext(-P: Data, -A: Data, -G: Data, -H: Data, context: T.Context<P, A, G, H>) -> IO(T.TranscriptContext<P, A, G, H>):
   match context:
     case T.Context{systemPrompt, messages, tools}:
       do IO<T.TranscriptContext<P, A, G, H>>:
         initial : Maybe<&2, Ref.Ref<T.SystemMessage<P>>> <- createInitialSystemMessage(P, systemPrompt, tools)
-        return prependInitial(P, A, G, H, initial, messages)
+        prependInitial(P, A, G, H, initial, messages)
 
 def getInitialSystemMessage(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Message<P, A, G, H>>) -> Maybe<&2, Ref.Ref<T.SystemMessage<P>>>:
   match messages:
@@ -180,12 +186,19 @@ def withoutSystemMessages(-P: Data, -A: Data, -G: Data, -H: Data, messages: List
     case T.System{_} <> rest: withoutSystemMessages(P, A, G, H, rest)
     case head <> rest: head <> withoutSystemMessages(P, A, G, H, rest)
 
+def collapsedMessages(-P: Data, -A: Data, -G: Data, -H: Data, head: Maybe<&2, Ref.Ref<T.SystemMessage<P>>>, messages: List<&2, T.Message<P, A, G, H>>) -> List<&2, T.Message<P, A, G, H>>:
+  match head:
+    case None{}: messages
+    case Some{value}: T.System{value} <> messages
+
 def collapseSystemMessages(-P: Data, -A: Data, -G: Data, -H: Data, context: T.TranscriptContext<P, A, G, H>) -> IO(T.TranscriptContext<P, A, G, H>):
   match context:
-    case T.TranscriptContext{+messages}:
+    case T.TranscriptContext{reference}:
       do IO<T.TranscriptContext<P, A, G, H>>:
+        +messages : List<&2, T.Message<P, A, G, H>> <- Ref.read(List<&2, T.Message<P, A, G, H>>, reference)
         head : Maybe<&2, Ref.Ref<T.SystemMessage<P>>> <- getCurrentSystemMessage(P, A, G, H, messages)
-        return prependInitial(P, A, G, H, head, withoutSystemMessages(P, A, G, H, messages))
+        copied : Ref.Ref<List<&2, T.Message<P, A, G, H>>> <- Ref.new(List<&2, T.Message<P, A, G, H>>, collapsedMessages(P, A, G, H, head, withoutSystemMessages(P, A, G, H, messages)))
+        return T.TranscriptContext{copied}
 
 def resolveTranscript(-P: Data, -A: Data, -G: Data, -H: Data, context: T.TranscriptContext<P, A, G, H>, supportsMidConvoSystemMessages: Maybe<&2, Bool>) -> IO(T.TranscriptContext<P, A, G, H>):
   match supportsMidConvoSystemMessages:

@@ -1,4 +1,5 @@
 import Base
+import ./transcript-snapshot.bend as Snapshot
 import ./tool-state.bend as ToolState
 import ./executable-declaration.bend as Executable
 import ./tool-declaration.bend as DeclarationTest
@@ -17,8 +18,8 @@ import ../../runtime/src/u64.bend as U
 # pinned Type.Object({}); the schema builder/validator library remains pending.
 
 def Message() -> Data: T.Message<S.Value<U32>, Unit, Unit, Unit>
-def Context() -> Data: T.Context<S.Value<U32>, Unit, Unit, Unit>
-def Normalized() -> Data: T.TranscriptContext<S.Value<U32>, Unit, Unit, Unit>
+def Context() -> Data: Snapshot.Context<S.Value<U32>, Unit, Unit, Unit>
+def Normalized() -> Data: Snapshot.TranscriptContext<S.Value<U32>, Unit, Unit, Unit>
 
 def assertion(ok: Bool, label: String) -> IO(Unit):
   match ok:
@@ -65,11 +66,11 @@ def checkTail(messages: List<&2, Message()>, expected: String) -> IO(Unit):
 
 def checkUnchanged(value: Normalized(), expected: String) -> IO(Unit):
   match value:
-    case T.TranscriptContext{messages}: checkTail(messages, expected)
+    case Snapshot.TranscriptContext{messages}: checkTail(messages, expected)
 
 def checkNormalized(value: Normalized()) -> IO(Ref.Ref<T.SystemMessage<S.Value<U32>>>):
   match value:
-    case T.TranscriptContext{T.System{head} <> tail}:
+    case Snapshot.TranscriptContext{T.System{head} <> tail}:
       do IO<Ref.Ref<T.SystemMessage<S.Value<U32>>>>:
         +reference : Ref.Ref<T.SystemMessage<S.Value<U32>>> = head
         observed : T.SystemMessage<S.Value<U32>> <- Ref.read(T.SystemMessage<S.Value<U32>>, reference)
@@ -82,12 +83,12 @@ def normalization() -> IO(Unit):
   do IO<Unit>:
     +user : Ref.Ref<T.UserMessage> <- Ref.new(T.UserMessage, T.UserMessage{T.UserText{"hi"}, N.fromU32(1)})
     +messages : List<&2, Message()> = T.User{user} <> Nil{}
-    +plain : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{None{}, messages, None{}})
+    +plain : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{None{}, messages, None{}})
     checkUnchanged(plain, "hi")
-    empty : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{Some{""}, messages, Some{Nil{}}})
+    empty : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{Some{""}, messages, Some{Nil{}}})
     checkUnchanged(empty, "hi")
     +declaration : Ref.Ref<T.Tool<S.Value<U32>>> <- tool("a")
-    combined : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{Some{"be brief"}, messages, Some{declaration <> Nil{}}})
+    combined : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{Some{"be brief"}, messages, Some{declaration <> Nil{}}})
     head : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- checkNormalized(combined)
     previous : T.SystemMessage<S.Value<U32>> <- Ref.dispose(T.SystemMessage<S.Value<U32>>, head)
     # Supplemental identity assertion: normalization retains original messages.
@@ -227,7 +228,7 @@ def checkReplayAssistant(value: T.AssistantMessage<Unit, Unit>) -> IO(Unit):
 
 def checkCollapsed(value: Normalized()) -> IO(Unit):
   match value:
-    case T.TranscriptContext{T.System{head} <> T.User{user} <> T.Assistant{assistant} <> Nil{}}:
+    case Snapshot.TranscriptContext{T.System{head} <> T.User{user} <> T.Assistant{assistant} <> Nil{}}:
       do IO<Unit>:
         message : T.SystemMessage<S.Value<U32>> <- Ref.read(T.SystemMessage<S.Value<U32>>, head)
         checkReplay(message)
@@ -239,7 +240,7 @@ def checkCollapsed(value: Normalized()) -> IO(Unit):
 
 def disposeCollapsedHead(value: Normalized()) -> IO(Unit):
   match value:
-    case T.TranscriptContext{T.System{head} <> _}:
+    case Snapshot.TranscriptContext{T.System{head} <> _}:
       do IO<Unit>:
         previous : T.SystemMessage<S.Value<U32>> <- Ref.dispose(T.SystemMessage<S.Value<U32>>, head)
         return Unit{}
@@ -247,7 +248,7 @@ def disposeCollapsedHead(value: Normalized()) -> IO(Unit):
 
 def checkUncollapsed(value: Normalized()) -> IO(Unit):
   match value:
-    case T.TranscriptContext{T.System{_} <> T.User{_} <> T.System{_} <> T.Assistant{_} <> T.System{_} <> Nil{}}: IO.pure(Unit, Unit{})
+    case Snapshot.TranscriptContext{T.System{_} <> T.User{_} <> T.System{_} <> T.Assistant{_} <> T.System{_} <> Nil{}}: IO.pure(Unit, Unit{})
     case _: assertion(False{}, "supported mid-conversation system messages must stay in place")
 
 def replayAndCollapse() -> IO(Unit):
@@ -259,13 +260,13 @@ def replayAndCollapse() -> IO(Unit):
     prompt : String <- Transcript.getCurrentSystemPrompt(S.Value<U32>, Unit, Unit, Unit, messages)
     assertion(String.eq(prompt, "base\n\nalso do this\n\n<a>2</a>\n\n<c>1</c>"), "current system prompt")
     IO.print("PASS replays content, sections, and tools into one leading message")
-    +collapsed : Normalized() <- Transcript.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, T.TranscriptContext{messages})
+    +collapsed : Normalized() <- Snapshot.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, Snapshot.TranscriptContext{messages})
     checkCollapsed(collapsed)
-    +again : Normalized() <- Transcript.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, collapsed)
+    +again : Normalized() <- Snapshot.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, collapsed)
     checkCollapsed(again)
-    unchanged : Normalized() <- Transcript.resolveTranscript(S.Value<U32>, Unit, Unit, Unit, T.TranscriptContext{messages}, Some{True{}})
+    unchanged : Normalized() <- Snapshot.resolveTranscript(S.Value<U32>, Unit, Unit, Unit, Snapshot.TranscriptContext{messages}, Some{True{}})
     checkUncollapsed(unchanged)
-    +fallback : Normalized() <- Transcript.resolveTranscript(S.Value<U32>, Unit, Unit, Unit, T.TranscriptContext{messages}, None{})
+    +fallback : Normalized() <- Snapshot.resolveTranscript(S.Value<U32>, Unit, Unit, Unit, Snapshot.TranscriptContext{messages}, None{})
     checkCollapsed(fallback)
     disposeCollapsedHead(fallback)
     disposeCollapsedHead(collapsed)
@@ -284,12 +285,12 @@ def expectAbsent(value: Maybe<&2, Ref.Ref<T.SystemMessage<S.Value<U32>>>>) -> IO
 def noSystem() -> IO(Unit):
   do IO<Unit>:
     +user : Ref.Ref<T.UserMessage> <- Ref.new(T.UserMessage, T.UserMessage{T.UserText{"hi"}, N.fromU32(1)})
-    +context : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{None{}, T.User{user} <> Nil{}, None{}})
+    +context : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{None{}, T.User{user} <> Nil{}, None{}})
     current : Maybe<&2, Ref.Ref<T.SystemMessage<S.Value<U32>>>> <- Transcript.getCurrentSystemMessage(S.Value<U32>, Unit, Unit, Unit, T.User{user} <> Nil{})
     expectAbsent(current)
     prompt : String <- Transcript.getCurrentSystemPrompt(S.Value<U32>, Unit, Unit, Unit, T.User{user} <> Nil{})
     assertion(String.eq(prompt, ""), "no-system prompt must be empty")
-    collapsed : Normalized() <- Transcript.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, context)
+    collapsed : Normalized() <- Snapshot.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, context)
     checkUnchanged(collapsed, "hi")
     previous : T.UserMessage <- Ref.dispose(T.UserMessage, user)
     IO.print("PASS replay of a transcript without system messages is empty")
@@ -304,7 +305,7 @@ def checkLateTool(value: T.SystemMessage<S.Value<U32>>) -> IO(Unit):
 
 def checkLateHead(value: Normalized()) -> IO(Unit):
   match value:
-    case T.TranscriptContext{T.System{head} <> tail}:
+    case Snapshot.TranscriptContext{T.System{head} <> tail}:
       do IO<Unit>:
         observed : T.SystemMessage<S.Value<U32>> <- Ref.dispose(T.SystemMessage<S.Value<U32>>, head)
         checkLateTool(observed)
@@ -317,10 +318,10 @@ def latePatch() -> IO(Unit):
     +declaration : Ref.Ref<T.Tool<S.Value<U32>>> <- tool("x")
     +patch : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, Some{Record.set(Maybe<&2, String>, Record.new(Maybe<&2, String>), "preamble", Some{"You are pi."})}, Some{declaration <> Nil{}}, None{}, N.fromU32(2)})
     +messages : List<&2, Message()> = T.User{user} <> T.System{patch} <> Nil{}
-    context : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{None{}, messages, None{}})
+    context : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{None{}, messages, None{}})
     prompt : String <- Transcript.getCurrentSystemPrompt(S.Value<U32>, Unit, Unit, Unit, messages)
     assertion(String.eq(prompt, "You are pi."), "late prompt patch")
-    collapsed : Normalized() <- Transcript.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, context)
+    collapsed : Normalized() <- Snapshot.collapseSystemMessages(S.Value<U32>, Unit, Unit, Unit, context)
     checkLateHead(collapsed)
     previous : T.UserMessage <- Ref.dispose(T.UserMessage, user)
     previous : T.SystemMessage<S.Value<U32>> <- Ref.dispose(T.SystemMessage<S.Value<U32>>, patch)
@@ -329,7 +330,7 @@ def latePatch() -> IO(Unit):
 
 def contextMessages(context: Normalized()) -> List<&2, Message()>:
   match context:
-    case T.TranscriptContext{messages}: messages
+    case Snapshot.TranscriptContext{messages}: messages
 
 def toolHistory() -> IO(Unit):
   do IO<Unit>:
@@ -345,10 +346,10 @@ def toolHistory() -> IO(Unit):
     +first : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, None{}, Some{a <> Nil{}}, None{}, N.fromU32(1)})
     +second : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, None{}, Some{b <> Nil{}}, None{}, N.fromU32(2)})
     +replacement : Ref.Ref<T.SystemMessage<S.Value<U32>>> <- Ref.new(T.SystemMessage<S.Value<U32>>, T.SystemMessage{T.SystemText{""}, None{}, Some{changed <> Nil{}}, None{}, N.fromU32(2)})
-    additive : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{None{}, T.System{first} <> T.System{second} <> Nil{}, None{}})
+    additive : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{None{}, T.System{first} <> T.System{second} <> Nil{}, None{}})
     nonAdditive : Bool <- Transcript.hasNonAdditiveToolChanges(S.Value<U32>, Unit, Unit, Unit, contextMessages(additive))
     assertion(Bool.not(nonAdditive), "distinct added names must be additive")
-    +redeclared : Normalized() <- Transcript.normalizeContext(S.Value<U32>, Unit, Unit, Unit, T.Context{None{}, T.System{first} <> T.System{replacement} <> Nil{}, None{}})
+    +redeclared : Normalized() <- Snapshot.normalizeContext(S.Value<U32>, Unit, Unit, Unit, Snapshot.Context{None{}, T.System{first} <> T.System{replacement} <> Nil{}, None{}})
     nonAdditive : Bool <- Transcript.hasNonAdditiveToolChanges(S.Value<U32>, Unit, Unit, Unit, contextMessages(redeclared))
     assertion(nonAdditive, "same-name redeclaration must be non-additive")
     redefined : D.DeclarationResult<Bool> <- Transcript.hasToolRedefinitions(U32, Unit, Unit, Unit, contextMessages(redeclared))

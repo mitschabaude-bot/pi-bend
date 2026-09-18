@@ -196,13 +196,13 @@ type Message<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Too
   ToolResult{value: Ref.Ref<ToolResultMessage<ToolDetails>>}
 
 type Context<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
-  Context{systemPrompt: Maybe<&2, String>, messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>, tools: Maybe<&2, List<&2, Ref.Ref<Tool<Parameters>>>>}
+  Context{systemPrompt: Maybe<&2, String>, messages: Ref.Ref<List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>, tools: Maybe<&2, List<&2, Ref.Ref<Tool<Parameters>>>>}
 
 # Nominally distinct from raw Context: provider APIs can require normalization.
 # As with an upstream type assertion, explicitly constructing this wrapper is
 # possible, but an unnormalized Context cannot be passed implicitly.
 type TranscriptContext<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
-  TranscriptContext{messages: List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>}
+  TranscriptContext{messages: Ref.Ref<List<&2, Message<Parameters, Arguments, DiagnosticDetails, ToolDetails>>>}
 
 # Model metadata and API-dependent compatibility from types.ts. Nullable values
 # stay distinct from omitted optional fields, including explicit off mappings.
