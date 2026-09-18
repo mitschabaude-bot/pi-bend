@@ -1,6 +1,7 @@
 import Base
 import ../../runtime/src/f64.bend as Number
 import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/record.bend as Record
 import ./utils/diagnostics.bend as Diagnostics
 
@@ -359,3 +360,66 @@ type Model<-SamplingValue: Data> is Data:
 
 type ImagesModel<-SamplingValue: Data> is Data:
   ImagesModel{id: String, name: String, api: ImagesApi(), provider: ImagesProviderId(), baseUrl: String, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, output: List<&2, ModelInput>}
+
+# Shared request options from types.ts. Fetch, Signal and Telemetry remain
+# explicit caller types until their complete runtime interfaces are integrated.
+type CacheRetention is Data:
+  CacheNone{}
+  CacheShort{}
+  CacheLong{}
+
+type Transport is Data:
+  Sse{}
+  WebSocket{}
+  WebSocketCached{}
+  AutoTransport{}
+
+type ToolChoice is Data:
+  AutoTool{}
+  NoTool{}
+
+type DeferredWindow is Data:
+  FifteenMinutes{}
+  OneHour{}
+  TwentyFourHours{}
+
+type DeferredRequest is Data:
+  DeferredBoolean{value: Bool}
+  DeferredConfig{window: Maybe<&2, DeferredWindow>}
+
+def ProviderEnv() -> Data: Ref.Ref<Record.Record<String>>
+def ProviderHeaders() -> Data: Ref.Ref<Record.Record<Nullable<String>>>
+
+type ProviderResponse is Data:
+  ProviderResponse{status: Number.F64, headers: Ref.Ref<Record.Record<String>>}
+
+type PayloadInput<-Payload: Data, -RequestModel: Data> is Data:
+  PayloadInput{payload: Payload, model: RequestModel}
+
+type ResponseInput<-RequestModel: Data> is Data:
+  ResponseInput{response: Ref.Ref<ProviderResponse>, model: RequestModel}
+
+def PayloadCallback(-Payload: Data, -RequestModel: Data, -Error: Data) -> Data:
+  Callback.Callback<PayloadInput<Payload, RequestModel>, Result<&2, &2, Error, Maybe<&2, Payload>>>
+
+def ResponseCallback(-RequestModel: Data, -Error: Data) -> Data:
+  Callback.Callback<ResponseInput<RequestModel>, Result<&2, &2, Error, Unit>>
+
+type ProviderRequestOptions<-RequestModel: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Payload: Data, -Error: Data> is Data:
+  ProviderRequestOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Payload, RequestModel, Error)>, onResponse: Maybe<&2, ResponseCallback(RequestModel, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>}
+
+type StreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
+  StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Ref.Ref<Model<Value>>, Error)>, onResponse: Maybe<&2, ResponseCallback(Ref.Ref<Model<Value>>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Ref.Ref<Record.Record<Value>>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Ref.Ref<Record.Record<Value>>>}
+
+type SimpleStreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
+  SimpleStreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Ref.Ref<Model<Value>>, Error)>, onResponse: Maybe<&2, ResponseCallback(Ref.Ref<Model<Value>>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Ref.Ref<Record.Record<Value>>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Ref.Ref<Record.Record<Value>>>, toolChoice: Maybe<&2, ToolChoice>, reasoning: Maybe<&2, ThinkingLevel>, deferred: Maybe<&2, DeferredRequest>, thinkingBudgets: Maybe<&2, ThinkingBudgets>}
+
+# Explicit structural projections preserve every inherited field and shared
+# callback/map handle. They neither apply defaults nor invoke user callbacks.
+def toStreamOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> StreamOptions<Value, Signal, Telemetry, Fetch, Error>:
+  match options:
+    case SimpleStreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, _, _, _, _}: StreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata}
+
+def toProviderRequestOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: StreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> ProviderRequestOptions<Ref.Ref<Model<Value>>, Signal, Telemetry, Fetch, Value, Error>:
+  match options:
+    case StreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, _, _, _, _, _, _, _, _}: ProviderRequestOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs}
