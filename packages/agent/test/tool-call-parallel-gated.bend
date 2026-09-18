@@ -3,7 +3,7 @@ import ./tool-call-sequential.bend as S
 import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 import ../../ai/test/model-types.bend as Model
-import ../src/tool-batch-parallel.bend as Parallel
+import ../src/tool-execution.bend as Execution
 import ../src/tool-call.bend as Call
 import ../src/tool-batch.bend as Batch
 import ../src/agent-loop.bend as Loop
@@ -16,7 +16,7 @@ import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
 
-def Run() -> Data: Parallel.Run<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>
+def Run() -> Data: Execution.Execution<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>
 
 type Gates is Data:
   Gates{started: Chan(String), ended: Chan(String), first: Chan(Unit), second: Chan(Unit), third: Chan(Unit)}
@@ -103,14 +103,14 @@ def finish(failure: Bool, +run: Run(), gates: Gates) -> IO(S.Outcome()):
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         release(first)
-        Parallel.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Execution.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
     case True{} Gates{_, end, first, second, third}:
       do IO<S.Outcome()>:
         release(second)
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         # First and third remain blocked until the failed batch result arrives.
-        result : S.Outcome() <- Parallel.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        result : S.Outcome() <- Execution.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
         release(third)
         release(first)
         return result
@@ -153,9 +153,9 @@ def late(callbacks: List<&2, S.Update()>) -> IO(Unit):
         S.late(Some{callback})
         late(rest)
 
-def active(+failure: Bool, startedRun: Result<&2, &2, String, Run()>, +gates: Gates) -> IO(Unit):
-  match startedRun gates:
-    case Done{+run} Gates{+start, _, _, _, _}:
+def active(+failure: Bool, +run: Run(), +gates: Gates) -> IO(Unit):
+  match run gates:
+    case Execution.Concurrent{_} Gates{+start, _, _, _, _}:
       do IO<Unit>:
         a : Maybe<&1, String> <- Chan.recv(String, start)
         b : Maybe<&1, String> <- Chan.recv(String, start)
@@ -163,8 +163,13 @@ def active(+failure: Bool, startedRun: Result<&2, &2, String, Run()>, +gates: Ga
         Test.assertion(began(started(a), started(b), started(c)), "all three real tool executors start before any gate opens")
         outcome : S.Outcome() <- finish(failure, run, gates)
         checked(outcome, failure)
-        Parallel.dispose(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Execution.dispose(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
     case _ _: Test.assertion(False{}, "parallel preparation unexpectedly failed")
+
+def contents(calls: List<&2, Ai.ToolCall<V.Value>>) -> List<&2, Ai.AssistantContent<V.Value>>:
+  match calls:
+    case Nil{}: Nil{}
+    case call <> rest: Ai.AssistantToolCall{call} <> contents(rest)
 
 def scenario(+failure: Bool) -> IO(Unit):
   do IO<Unit>:
@@ -190,11 +195,11 @@ def scenario(+failure: Bool) -> IO(Unit):
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
-    assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.Capture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.Capture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
     +arguments : V.Value = H.field(V.Text{"42"})
     calls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"one", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"two", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"three", "echo", arguments, None{}, None{}} <> Nil{}
-    run : Result<&2, &2, String, Run()> <- Parallel.start(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context, calls)
+    assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{contents(calls), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
+    capture : Call.Capture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.Capture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
+    run : Run() <- Execution.executeToolCalls(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context)
     active(failure, run, gates)
     saved : List<&2, S.Update()> <- R.read(List<&2, S.Update()>, retained)
     late(saved)
@@ -226,4 +231,4 @@ def main() -> IO(Unit):
   do IO<Unit>:
     scenario(False{})
     scenario(True{})
-    IO.print("PASS gated parallel lifecycle: concurrent execution, final preparation context, ordered messages, prompt failure and surviving siblings")
+    IO.print("PASS routed gated parallel lifecycle: concurrent execution, final preparation context, ordered messages, prompt failure and surviving siblings")

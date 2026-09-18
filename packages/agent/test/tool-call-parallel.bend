@@ -66,8 +66,8 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     toolCalls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}} <> Ai.ToolCall{"bad", "echo", H.field(V.Text{"bad"}), None{}, None{}} <> Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}} <> Nil{}
     started : Result<&2, &2, String, Parallel.Run<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>> <- Parallel.start(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context, toolCalls)
     result : S.Outcome() <- finishRun(started)
-    # Upstream runs the S.before hook S.before checking abort; its returned
-    # context survives even when the signal was already S.aborted.
+    # Upstream runs the before hook before checking abort; its returned
+    # context survives even when the signal was already aborted.
     S.checkOutcome(result, contains(failAt, expectedEvents), True{}, expectedErrors, terminate)
     saved : Maybe<&2, S.Update()> <- R.read(Maybe<&2, S.Update()>, retained)
     S.late(saved)
