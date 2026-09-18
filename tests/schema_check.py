@@ -2,7 +2,8 @@
 
 The typed fixture translator is test-only. Loaded mode uses the production
 native loader and verifies explicit rejection of unsupported constraints.
-Remaining loader vocabulary, diagnostics and full tool integration are pending.
+Diagnostic mode compares acceptance via issue collection. Exact native issue
+contents have separate fixtures; upstream diagnostic text integration is pending.
 """
 import json
 from pathlib import Path
@@ -148,7 +149,8 @@ def schema(s):
     return 'S.All{' + seq(nodes) + '}'
 
 
-LOADED = '--loaded' in sys.argv
+DIAGNOSTICS = '--diagnostics' in sys.argv
+LOADED = '--loaded' in sys.argv or DIAGNOSTICS
 SUPPORTED = {'type', 'const', 'enum', 'allOf', 'anyOf', 'oneOf', 'not',
              'properties', 'required', 'additionalProperties', 'items', 'additionalItems',
              'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum',
@@ -187,6 +189,9 @@ lines = ['import Base', 'import ../packages/runtime/src/schema.bend as S',
          'import ../packages/runtime/test/schema-load.bend as L',
          'import ../packages/runtime/src/schema-load.bend as Loader',
          'import ../packages/agent/test/message-events.bend as T']
+if DIAGNOSTICS:
+    lines += ['import ../packages/runtime/src/schema-errors.bend as Errors',
+              'import ../packages/runtime/test/schema-errors.bend as Diagnostics']
 checks = 0
 rejections = 0
 for i, (s, results) in enumerate(zip(schemas, expected, strict=True)):
@@ -203,11 +208,12 @@ for i, (s, results) in enumerate(zip(schemas, expected, strict=True)):
         lines.append(f'    +schema : S.Schema = {schema(s)}')
     for j, (v, result) in enumerate(zip(values, results, strict=True)):
         literal = 'True{}' if result else 'False{}'
-        lines.append(f'    T.assertion(Bool.not(Bool.xor(S.check(schema, {value(v)}), {literal})), "schema {i}, value {j}")')
+        predicate = f'Diagnostics.empty(Errors.errors(schema, {value(v)}))' if DIAGNOSTICS else f'S.check(schema, {value(v)})'
+        lines.append(f'    T.assertion(Bool.not(Bool.xor({predicate}, {literal})), "schema {i}, value {j}")')
         checks += 1
 lines += ['def main() -> IO(Unit):', '  do IO<Unit>:']
 lines += [f'    case{i}()' for i in range(len(schemas))]
-mode = 'loaded' if LOADED else 'typed'
+mode = 'diagnostics' if DIAGNOSTICS else ('loaded' if LOADED else 'typed')
 lines += [f'    IO.print("PASS {checks} native {mode}-schema checks against TypeBox 1.3.27; {rejections} explicit unsupported rejections")']
 source = BUILD / f'schema-{mode}-check.bend'
 source.write_text('\n'.join(lines) + '\n')
@@ -217,10 +223,11 @@ for threads in ['1', '4']:
     subprocess.run([str(output), '--threads', threads], cwd=ROOT, check=True, timeout=120)
 
 # Native dictionary, IEEE and loader-error contracts avoid JS reflection.
-entry = 'schema-load' if LOADED else 'schema'
+entry = 'schema-errors' if DIAGNOSTICS else ('schema-load' if LOADED else 'schema')
 native = BUILD / f'test-native-{entry}'
 subprocess.run(['sh', 'scripts/build-pure.sh', f'packages/runtime/test/{entry}.bend', str(native)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     subprocess.run([str(native), '--threads', threads], cwd=ROOT, check=True, timeout=120)
 if not LOADED:
     subprocess.run([sys.executable, str(Path(__file__)), '--loaded'], cwd=ROOT, check=True)
+    subprocess.run([sys.executable, str(Path(__file__)), '--diagnostics'], cwd=ROOT, check=True)
