@@ -45,6 +45,30 @@ schemas = [True, False, {}, *({'type': t} for t in
            {'anyOf': [{'type': 'array', 'items': {'type': 'integer'}}, {'type': 'object', 'required': ['x']}]},
            {'oneOf': [{'const': 1}, {'const': 1}, {'type': 'string'}]}]
 
+values += [-0.0, 0.9999999999999999, 1.0000000000000002, 2, -2,
+           [1, 1], [1, 2], [1, 2, 3], [None, None], [0, -0.0],
+           [True, 1], [{'a': 1, 'b': 2}, {'b': 2, 'a': 1}],
+           [[1, 2], [2, 1]], [[1, 2], [1, 2]]]
+schemas += [
+    *({key: bound} for key in ['minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum']
+      for bound in [-1, 0, 1]),
+    {'type': 'number', 'minimum': -1, 'maximum': 1},
+    {'minimum': 1, 'maximum': 0},
+    {'minItems': 1}, {'maxItems': 1}, {'minItems': 1, 'maxItems': 2},
+    {'minItems': 2, 'maxItems': 1},
+    {'minProperties': 1}, {'maxProperties': 1},
+    {'minProperties': 1, 'maxProperties': 2},
+    {'contains': {'type': 'integer'}},
+    {'contains': {'type': 'integer'}, 'minContains': 0},
+    {'contains': {'type': 'integer'}, 'minContains': 2},
+    {'contains': {'type': 'integer'}, 'maxContains': 1},
+    {'contains': {'type': 'integer'}, 'minContains': 0, 'maxContains': 0},
+    {'contains': {'type': 'integer'}, 'minContains': 2, 'maxContains': 1},
+    {'contains': {'properties': {'x': {'type': 'number'}}, 'required': ['x'], 'type': 'object'}},
+    {'type': 'array', 'contains': {'type': 'integer'}, 'minItems': 2},
+    {'minContains': 100, 'maxContains': 0},
+]
+
 # Native maps treat these as ordinary strings. Exclude prototype-sensitive
 # schemas from the JS oracle; dedicated native checks below assert that policy.
 expected = json.loads(subprocess.check_output(
@@ -56,14 +80,18 @@ def seq(items):
     return ' <> '.join([*items, 'Nil{}'])
 
 
+def floating(v):
+    hi, lo = struct.unpack('>II', struct.pack('>d', v))
+    return f'F.fromBits({hi}, {lo})'
+
+
 def value(v):
     if v is None:
         return 'V.Null{}'
     if isinstance(v, bool):
         return f'V.Boolean{{{"True{}" if v else "False{}"}}}'
     if isinstance(v, (int, float)):
-        hi, lo = struct.unpack('>II', struct.pack('>d', v))
-        return f'V.Number{{F.fromBits({hi}, {lo})}}'
+        return 'V.Number{' + floating(v) + '}'
     if isinstance(v, str):
         return 'V.Text{' + json.dumps(v) + '}'
     if isinstance(v, list):
@@ -75,7 +103,10 @@ def schema(s):
     if isinstance(s, bool):
         return 'S.Accept{}' if s else 'S.Reject{}'
     allowed = {'type', 'const', 'enum', 'allOf', 'anyOf', 'oneOf', 'not',
-               'properties', 'required', 'additionalProperties', 'items', 'additionalItems'}
+               'properties', 'required', 'additionalProperties', 'items', 'additionalItems',
+               'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum',
+               'minItems', 'maxItems', 'minProperties', 'maxProperties',
+               'contains', 'minContains', 'maxContains'}
     assert set(s) <= allowed
     nodes = []
     if 'type' in s:
@@ -93,6 +124,21 @@ def schema(s):
     if set(s) & {'properties', 'required', 'additionalProperties'}:
         props = 'R.Record{' + seq('R.Property{' + json.dumps(k) + ', ' + schema(v) + '}' for k, v in s.get('properties', {}).items()) + '}'
         nodes.append('S.Object{' + props + ', ' + seq(map(json.dumps, s.get('required', []))) + ', ' + schema(s.get('additionalProperties', True)) + '}')
+    for key, node, inclusive in [('minimum', 'Minimum', True), ('maximum', 'Maximum', True),
+                                  ('exclusiveMinimum', 'Minimum', False), ('exclusiveMaximum', 'Maximum', False)]:
+        if key in s:
+            nodes.append('S.' + node + '{' + floating(s[key]) + ', ' + ('True{}' if inclusive else 'False{}') + '}')
+    def bounds(min_key, max_key, default=0):
+        minimum = s.get(min_key, default)
+        maximum = s.get(max_key)
+        assert isinstance(minimum, int) and minimum >= 0
+        assert maximum is None or (isinstance(maximum, int) and maximum >= 0)
+        return 'S.CountBounds{' + str(minimum) + 'n, ' + ('None{}' if maximum is None else 'Some{' + str(maximum) + 'n}') + '}'
+    for lo, hi, node in [('minItems', 'maxItems', 'ItemCount'), ('minProperties', 'maxProperties', 'PropertyCount')]:
+        if lo in s or hi in s:
+            nodes.append('S.' + node + '{' + bounds(lo, hi) + '}')
+    if 'contains' in s:
+        nodes.append('S.Contains{' + schema(s['contains']) + ', ' + bounds('minContains', 'maxContains', 1) + '}')
     if 'items' in s:
         items = s['items']
         prefix = items if isinstance(items, list) else []
