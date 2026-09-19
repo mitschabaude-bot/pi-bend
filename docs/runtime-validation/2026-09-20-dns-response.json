@@ -1,0 +1,52 @@
+{
+  "scope": "Offline DNS transaction matching contracts (RFC 5452 and RFC 4343).\n\nEndpoint metadata is supplied by the fixture; this is not socket integration.\n",
+  "cases_per_backend": 1370,
+  "backends": [
+    "native 1",
+    "native 4",
+    "Bun"
+  ],
+  "sha256": {
+    "/home/agent/code/pi-bend/packages/runtime/src/dns-response.bend": "c3360862db895f33cddf9e8ed440eb02fee97939eb5a0f54219cd95dd1e0f24e",
+    "/home/agent/code/pi-bend/packages/runtime/test/dns-response.bend": "276636077c01e21377bb3a625ab949e666799c7a98f9f474d7994eca0badab95",
+    "/home/agent/code/pi-bend/tests/dns_response_check.py": "536c031cc707475b99f1cfa4ad98eb4187422047073aa2ea44897f3bf989d0b4",
+    "/home/agent/code/pi-bend/build/dns-response": "7668189d090a364e6f6e3ff309738aee0d63f83c4c0205fdc33c7c0469424d43",
+    "/home/agent/code/pi-bend/build/dns-response.js": "2a81939b96bceff7f46b1a580bae5f5a6c59df55e456e4c1aa5738a58a144d7a"
+  },
+  "native_build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/runtime/test/dns-response.bend",
+      "build/dns-response"
+    ],
+    "elapsed_seconds": 4.229419366456568,
+    "peak_sampled_group_rss_kib": 969868,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "js_build": {
+    "command": [
+      "/home/agent/.bend/bin/bend",
+      "packages/runtime/test/dns-response.bend",
+      "-o",
+      "build/dns-response.js"
+    ],
+    "elapsed_seconds": 1.062077809125185,
+    "peak_sampled_group_rss_kib": 346624,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "references": [
+    "https://www.rfc-editor.org/rfc/rfc5452.html#section-9.1",
+    "https://www.rfc-editor.org/rfc/rfc4343.html#section-3"
+  ],
+  "limits": [
+    "Offline metadata/packet comparisons only; transport must provide actual selected and observed endpoints, including IPv6 scope.",
+    "No source-port/ID random generation, socket integration, retry engine, cryptographic authentication, record trust, alias traversal or caching is implemented here.",
+    "The single-question matcher requires one complete matching question before returning Truncated; it does not interpret incomplete record sections.",
+    "Matched means correlated and structurally parsed, not a successful DNS response code or permission to trust/cache every record. Header flags and error response codes remain available to later policy."
+  ]
+}
