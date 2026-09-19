@@ -1,0 +1,884 @@
+{
+  "scope": "Linux numeric socket endpoint observation; no resolver integration or resource-table audit.",
+  "live": {
+    "scope": "Observe local/peer numeric endpoints and retain working socket ownership.\n\nLinux IPv4, IPv6 and IPv4-mapped TCP peers plus an unconnected UDP socket.\n",
+    "cases": [
+      {
+        "backend": "native 1",
+        "mode": "4",
+        "iterations": 16,
+        "local": [
+          4,
+          2130706433,
+          0,
+          0,
+          0,
+          39622,
+          0
+        ],
+        "peer": [
+          4,
+          2130706433,
+          0,
+          0,
+          0,
+          50365,
+          0
+        ]
+      },
+      {
+        "backend": "native 1",
+        "mode": "6",
+        "iterations": 16,
+        "local": [
+          6,
+          0,
+          0,
+          0,
+          1,
+          40444,
+          0
+        ],
+        "peer": [
+          6,
+          0,
+          0,
+          0,
+          1,
+          41023,
+          0
+        ]
+      },
+      {
+        "backend": "native 1",
+        "mode": "mapped",
+        "iterations": 16,
+        "local": [
+          6,
+          0,
+          0,
+          65535,
+          2130706433,
+          54648,
+          0
+        ],
+        "peer": [
+          6,
+          0,
+          0,
+          65535,
+          2130706433,
+          51639,
+          0
+        ]
+      },
+      {
+        "backend": "native 1",
+        "mode": "unconnected UDP",
+        "endpoint": [
+          4,
+          0,
+          0,
+          0,
+          0,
+          54060,
+          0
+        ],
+        "peer_error": 107
+      },
+      {
+        "backend": "native 4",
+        "mode": "4",
+        "iterations": 16,
+        "local": [
+          4,
+          2130706433,
+          0,
+          0,
+          0,
+          35190,
+          0
+        ],
+        "peer": [
+          4,
+          2130706433,
+          0,
+          0,
+          0,
+          54491,
+          0
+        ]
+      },
+      {
+        "backend": "native 4",
+        "mode": "6",
+        "iterations": 16,
+        "local": [
+          6,
+          0,
+          0,
+          0,
+          1,
+          36624,
+          0
+        ],
+        "peer": [
+          6,
+          0,
+          0,
+          0,
+          1,
+          51015,
+          0
+        ]
+      },
+      {
+        "backend": "native 4",
+        "mode": "mapped",
+        "iterations": 16,
+        "local": [
+          6,
+          0,
+          0,
+          65535,
+          2130706433,
+          41204,
+          0
+        ],
+        "peer": [
+          6,
+          0,
+          0,
+          65535,
+          2130706433,
+          34517,
+          0
+        ]
+      },
+      {
+        "backend": "native 4",
+        "mode": "unconnected UDP",
+        "endpoint": [
+          4,
+          0,
+          0,
+          0,
+          0,
+          51010,
+          0
+        ],
+        "peer_error": 107
+      },
+      {
+        "backend": "Bun",
+        "mode": "4",
+        "iterations": 16,
+        "local": [
+          4,
+          2130706433,
+          0,
+          0,
+          0,
+          36212,
+          0
+        ],
+        "peer": [
+          4,
+          2130706433,
+          0,
+          0,
+          0,
+          54221,
+          0
+        ]
+      },
+      {
+        "backend": "Bun",
+        "mode": "6",
+        "iterations": 16,
+        "local": [
+          6,
+          0,
+          0,
+          0,
+          1,
+          33146,
+          0
+        ],
+        "peer": [
+          6,
+          0,
+          0,
+          0,
+          1,
+          49367,
+          0
+        ]
+      },
+      {
+        "backend": "Bun",
+        "mode": "mapped",
+        "iterations": 16,
+        "local": [
+          6,
+          0,
+          0,
+          65535,
+          2130706433,
+          36360,
+          0
+        ],
+        "peer": [
+          6,
+          0,
+          0,
+          65535,
+          2130706433,
+          37217,
+          0
+        ]
+      },
+      {
+        "backend": "Bun",
+        "mode": "unconnected UDP",
+        "endpoint": [
+          4,
+          0,
+          0,
+          0,
+          0,
+          58673,
+          0
+        ],
+        "peer_error": 107
+      }
+    ],
+    "sha256": {
+      "/home/agent/code/pi-bend/packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+      "/home/agent/code/pi-bend/tests/socket-endpoint.bend": "e9d8b5eae524b0464f1fe895d814f1f525218c576acdb8a700210f7bfef77b0d",
+      "/home/agent/code/pi-bend/tests/socket_endpoint_check.py": "bf42d028ada4b0185c07c692c68a757b660a499e28e79da0119fefa97a3067a3",
+      "/home/agent/code/pi-bend/build/bend-endpoint-candidate/comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+      "/home/agent/code/pi-bend/build/bend-endpoint-candidate/base.bend": "1cc487a94fbc13b3f043c7513ed1c966de522d17f5a377e67270f7c19af23dce",
+      "/home/agent/code/pi-bend/build/bend-endpoint-candidate/effs/socket_endpoint.c": "001e0cf9f612f378affb1ecb0b7e6c209535e9c1345a9c12344d37f05a638715",
+      "/home/agent/code/pi-bend/build/bend-endpoint-candidate/effs/socket_endpoint.js": "0e10d9e6f1b9f427fbe9f898777afb744187e75b44d1532e2bb12c331412ae99",
+      "/home/agent/code/pi-bend/build/socket-endpoint": "f9cffb7a675ab9cdde4cadb952388c64e3a09e1ac70887748a30eac9ed9516b1",
+      "/home/agent/code/pi-bend/build/socket-endpoint.js": "b19270d120192f18439f95ea8e3555d51d068a4d0c4632ae7bbca19ecc2417cf"
+    }
+  },
+  "layout": {
+    "scope": "Disposable syscall-boundary checks of endpoint decoding and error paths.\n\nNative ABI is Linux. JS additionally simulates Darwin sockaddr bytes; that is\nnot a real Darwin FFI/platform test. Production effects remain unchanged.\n",
+    "cases": [
+      {
+        "backend": "native 1",
+        "test": 0,
+        "side": 0,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "native 1",
+        "test": 0,
+        "side": 1,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "native 1",
+        "test": 0,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 1,
+        "side": 0,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "native 1",
+        "test": 1,
+        "side": 1,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "native 1",
+        "test": 1,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 2,
+        "side": 0,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "native 1",
+        "test": 2,
+        "side": 1,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "native 1",
+        "test": 2,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 3,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 1",
+        "test": 3,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 1",
+        "test": 3,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 4,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 1",
+        "test": 4,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 1",
+        "test": 4,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 5,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 1",
+        "test": 5,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 1",
+        "test": 5,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 6,
+        "side": 0,
+        "result": "error:9"
+      },
+      {
+        "backend": "native 1",
+        "test": 6,
+        "side": 1,
+        "result": "error:9"
+      },
+      {
+        "backend": "native 1",
+        "test": 6,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 1",
+        "test": 7,
+        "side": 0,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "native 1",
+        "test": 7,
+        "side": 1,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "native 1",
+        "test": 7,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 0,
+        "side": 0,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "native 4",
+        "test": 0,
+        "side": 1,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "native 4",
+        "test": 0,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 1,
+        "side": 0,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "native 4",
+        "test": 1,
+        "side": 1,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "native 4",
+        "test": 1,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 2,
+        "side": 0,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "native 4",
+        "test": 2,
+        "side": 1,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "native 4",
+        "test": 2,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 3,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 4",
+        "test": 3,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 4",
+        "test": 3,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 4,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 4",
+        "test": 4,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 4",
+        "test": 4,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 5,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 4",
+        "test": 5,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "native 4",
+        "test": 5,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 6,
+        "side": 0,
+        "result": "error:9"
+      },
+      {
+        "backend": "native 4",
+        "test": 6,
+        "side": 1,
+        "result": "error:9"
+      },
+      {
+        "backend": "native 4",
+        "test": 6,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "native 4",
+        "test": 7,
+        "side": 0,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "native 4",
+        "test": 7,
+        "side": 1,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "native 4",
+        "test": 7,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 0,
+        "side": 0,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 0,
+        "side": 1,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 0,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 1,
+        "side": 0,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 1,
+        "side": 1,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 1,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 2,
+        "side": 0,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 2,
+        "side": 1,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 2,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 3,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 3,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 3,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 4,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 4,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 4,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 5,
+        "side": 0,
+        "result": "error:97"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 5,
+        "side": 1,
+        "result": "error:97"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 5,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 6,
+        "side": 0,
+        "result": "error:9"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 6,
+        "side": 1,
+        "result": "error:9"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 6,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 7,
+        "side": 0,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 7,
+        "side": 1,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun Linux layout",
+        "test": 7,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 0,
+        "side": 0,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 0,
+        "side": 1,
+        "result": "4,305419896,0,0,0,54321,0"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 0,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 1,
+        "side": 0,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 1,
+        "side": 1,
+        "result": "6,16909060,2309737967,4275878552,4294967295,65535,3735928559"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 1,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 2,
+        "side": 0,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 2,
+        "side": 1,
+        "result": "6,0,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 2,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 3,
+        "side": 0,
+        "result": "error:47"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 3,
+        "side": 1,
+        "result": "error:47"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 3,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 4,
+        "side": 0,
+        "result": "error:47"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 4,
+        "side": 1,
+        "result": "error:47"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 4,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 5,
+        "side": 0,
+        "result": "error:47"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 5,
+        "side": 1,
+        "result": "error:47"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 5,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 6,
+        "side": 0,
+        "result": "error:9"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 6,
+        "side": 1,
+        "result": "error:9"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 6,
+        "side": 2,
+        "result": "error:22"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 7,
+        "side": 0,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 7,
+        "side": 1,
+        "result": "4,4294967295,0,0,0,0,0"
+      },
+      {
+        "backend": "Bun simulated Darwin layout",
+        "test": 7,
+        "side": 2,
+        "result": "error:22"
+      }
+    ],
+    "sha256": {
+      "socket_endpoint.c": "001e0cf9f612f378affb1ecb0b7e6c209535e9c1345a9c12344d37f05a638715",
+      "socket_endpoint.js": "0e10d9e6f1b9f427fbe9f898777afb744187e75b44d1532e2bb12c331412ae99"
+    }
+  },
+  "native_build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "tests/socket-endpoint.bend",
+      "build/socket-endpoint"
+    ],
+    "elapsed_seconds": 7.445170777849853,
+    "peak_sampled_group_rss_kib": 1469084,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "js_build": {
+    "command": [
+      "/home/agent/code/pi-bend/build/endpoint-compiler",
+      "tests/socket-endpoint.bend",
+      "-o",
+      "build/socket-endpoint.js"
+    ],
+    "elapsed_seconds": 1.5777115831151605,
+    "peak_sampled_group_rss_kib": 644716,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "test_sha256": {
+    "tests/socket_endpoint_layout_check.py": "705007fc2a8ac59720d7cf7530b86d7e5c043337affa95637925db6fce3a34a7",
+    "tests/socket-endpoint-probe.bend": "5badbb3bf557e63d509bf5da254181b45cac067bdfc50d7749b0dab653c0f4cc",
+    "scripts/prepare-endpoint-candidate.py": "d5f08221d991567c73f7e10ae5f8585c702186e0c24972b50629ee7ff7a55f00"
+  }
+}
