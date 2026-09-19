@@ -1,0 +1,89 @@
+{
+  "source": "https://raw.githubusercontent.com/web-platform-tests/wpt/c48d58747e1f211527fb695fd60548a997fae617/url/resources/urltestdata.json",
+  "sha256": "81e85fd3c199c08ef9c34cf651b3580eeedd080316493bfaf277a6b5ff8cf652",
+  "nodeVersions": {
+    "node": "24.18.0",
+    "acorn": "8.16.0",
+    "ada": "3.4.4",
+    "amaro": "1.1.9",
+    "ares": "1.34.6",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "llhttp": "9.4.2",
+    "merve": "1.2.2",
+    "modules": "137",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.69.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.7",
+    "simdjson": "4.6.4",
+    "simdutf": "6.4.0",
+    "sqlite": "3.53.1",
+    "tz": "2026b",
+    "undici": "7.28.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "13.6.233.17-node.50",
+    "zlib": "1.3.1-e00f703",
+    "zstd": "1.5.7"
+  },
+  "absoluteInputs": 560,
+  "baseDependentInputsNotChecked": 336,
+  "scalarBoundaryConversions": 0,
+  "wptNodeDifferences": [
+    {
+      "index": 310,
+      "input": "http://a.b.c.xn--pokxncvks",
+      "wpt": "http://a.b.c.xn--pokxncvks/",
+      "node": null
+    },
+    {
+      "index": 311,
+      "input": "http://10.0.0.xn--pokxncvks",
+      "wpt": "http://10.0.0.xn--pokxncvks/",
+      "node": null
+    },
+    {
+      "index": 313,
+      "input": "http://a.b.c.XN--pokxncvks",
+      "wpt": "http://a.b.c.xn--pokxncvks/",
+      "node": null
+    },
+    {
+      "index": 314,
+      "input": "http://a.b.c.Xn--pokxncvks",
+      "wpt": "http://a.b.c.xn--pokxncvks/",
+      "node": null
+    },
+    {
+      "index": 315,
+      "input": "http://10.0.0.XN--pokxncvks",
+      "wpt": "http://10.0.0.xn--pokxncvks/",
+      "node": null
+    },
+    {
+      "index": 316,
+      "input": "http://10.0.0.xN--pokxncvks",
+      "wpt": "http://10.0.0.xn--pokxncvks/",
+      "node": null
+    },
+    {
+      "index": 839,
+      "input": "file://xn--/p",
+      "wpt": "file://xn--/p",
+      "node": null
+    },
+    {
+      "index": 921,
+      "input": "https://xn--/",
+      "wpt": "https://xn--/",
+      "node": null
+    }
+  ],
+  "note": "Bend must match pinned Node outcomes on these inputs; differing WPT expectations are not claimed as standard conformance."
+}

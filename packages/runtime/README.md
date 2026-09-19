@@ -150,3 +150,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `url-special-host.bend` composes raw host preparation, Unicode domain-to-ASCII conversion and final domain/IPv4 classification. Literal bracketed IPv6 bypasses percent/IDNA processing, while percent-encoded brackets do not. The API returns typed preparation, domain or classification failures and borrows reusable immutable Unicode tables through its context argument. IDNA options are required explicitly: the pending Node-versus-Unicode domain-validation decision has not been made into a public URL default.
+
+
+`url-absolute.bend` composes constructor preprocessing, scheme dispatch, authority validation, host/port parsing, hierarchical/opaque path parsing and immutable URL records. It handles all absolute schemes, including file authorities, raw Windows-drive host tokens and localhost normalization. Missing schemes and invalid authorities/hosts/ports return typed errors. Its context requires explicit IDNA options and reusable Unicode tables; relative references with a base are a separate unfinished entry point. `url-authority.raw` exposes the shared authority boundary scanner for file parsing without applying non-file credential/port rules.

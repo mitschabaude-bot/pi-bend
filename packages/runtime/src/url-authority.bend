@@ -45,12 +45,15 @@ def parse(input: String) -> Tokens:
 type Prefix is Data:
   Prefix{tokens: Tokens, remainder: String}
 
-def finish(reversed: String, remainder: String) -> Prefix:
-  Prefix{parse(String.reverse(reversed)), remainder}
+type RawPrefix is Data:
+  RawPrefix{value: String, remainder: String}
+
+def finish(reversed: String, remainder: String) -> RawPrefix:
+  RawPrefix{String.reverse(reversed), remainder}
 
 # Called after the URL parser enters the authority state. Keep the delimiter in
 # the remainder so the enclosing path/query/fragment state can consume it.
-def scan(text: String, special: Bool, reversed: String) -> Prefix:
+def scan(text: String, special: Bool, reversed: String) -> RawPrefix:
   match text special:
     case SNil{} _: finish(reversed, "")
     case SCon{'/', rest} _: finish(reversed, SCon{'/', rest})
@@ -59,5 +62,12 @@ def scan(text: String, special: Bool, reversed: String) -> Prefix:
     case SCon{'\\', rest} True{}: finish(reversed, SCon{'\\', rest})
     case SCon{char, rest} isSpecial: scan(rest, isSpecial, SCon{char, reversed})
 
-def read(text: String, special: Bool) -> Prefix:
+def raw(text: String, special: Bool) -> RawPrefix:
   scan(text, special, "")
+
+def tokenized(value: RawPrefix) -> Prefix:
+  match value:
+    case RawPrefix{authority, remainder}: Prefix{parse(authority), remainder}
+
+def read(text: String, special: Bool) -> Prefix:
+  tokenized(raw(text, special))
