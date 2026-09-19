@@ -31,6 +31,8 @@ We build the primitives and reusable Bend libraries needed by the port. Missing 
 
 The [owned timer implementation](../patches/experimental/timer/README.md) provides deadline, wait, cancel and close effects, composed into Bend abortable sleep and provider retry adapters. Lifecycle, race and original retry tests pass against isolated candidates. Remaining work is adoption validation and complete provider integration. HTTP/TLS and the remaining transport layers are likewise implementation work; the bootstrap's libcurl dependency is not the final design.
 
+Numeric IPv6 connection establishment is now implemented in an [isolated additive primitive](../patches/experimental/ipv6-connect/README.md), with a pure Bend adapter for the existing address type. DNS, cancellable connect, TLS and endpoint-to-exchange integration remain our transport implementation work.
+
 ## Module acceptance
 
 For each module, record its upstream source and public exports; port the full data model and call contracts; port its tests; verify downstream composition; then migrate its callers. A module is not complete solely because a demonstration works. Track intentional language adaptations separately from remaining gaps.

@@ -1,6 +1,7 @@
-"""Compare isolated raw-TCP additions with the installed compiler.
+"""Compare isolated additive effects with the installed compiler.
 
-Usage: python3 scripts/benchmark-tcp-bytes.py CANDIDATE_BEND2 OUTPUT_JSON
+Usage: python3 scripts/benchmark-tcp-bytes.py CANDIDATE_BEND2 OUTPUT_JSON [EFFECT_FILE ...]
+Defaults to raw TCP byte effects; explicit filenames select another addition.
 Measures loading/checking/C emission, not Clang, networking or runtime throughput.
 """
 import hashlib
@@ -35,7 +36,7 @@ result = {
     'compiler_sha256': {name: digest(baseline / name) for name in ['main.ts', 'bend.ts', 'comp.ts']},
     'base_sha256': {'baseline': digest(baseline / 'base.bend'), 'candidate': digest(candidate / 'base.bend')},
     'candidate_effect_sha256': {name: digest(candidate / 'effs' / name) for name in
-        ['tcp_send_bytes.c', 'tcp_recv_bytes.c', 'tcp_send_bytes.js', 'tcp_recv_bytes.js']},
+        (sys.argv[3:] or ['tcp_send_bytes.c', 'tcp_recv_bytes.c', 'tcp_send_bytes.js', 'tcp_recv_bytes.js'])},
     'method': 'Two warmups; 20 alternating-order rounds per fixture. Fresh Bun process per sample. Wall clock includes GNU time wrapper. Individual GNU time peak RSS in KiB. C bytes must match for every sample.',
     'fixtures': {},
 }
