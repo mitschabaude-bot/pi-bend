@@ -1,5 +1,7 @@
 # pi-bend
 
+Bend compiler/runtime investigations and standard-library opportunities are tracked in [the Bend issue log](docs/bend-issues.md). Workarounds remain open investigations until their causes are understood.
+
 Native Bend port of pi, based on `earendil-works/pi` revision `46c9de402` (0.85.1). The current executable is a bootstrap prototype. A faithful port of the modular libraries, types and APIs is in progress under `packages/`; see [architecture fidelity](docs/architecture.md).
 
 The final libraries and complex dependencies must use pure Bend. The bootstrap executable still uses C adapters for networking and Unicode; replacing them is required work. Pure-Bend numeric foundations are under [packages/runtime](packages/runtime/README.md). JavaScript/TypeScript extension compatibility is intentionally excluded; extensions will use Bend.
