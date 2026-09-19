@@ -200,6 +200,10 @@ The provider-retry loop fixture builds with the installed compiler in 30.59 seco
 
 The standalone retry-error/rounding fixture builds with the installed compiler in 8.53 seconds at 1,983,744 KiB sampled group RSS. Adding exact delay-error rendering to the retry-loop fixture builds in 36.55 seconds at 10,486,640 KiB. All 680 standalone comparisons and twelve loop traces pass on one/four threads. These are distinct fixture compositions, not a compiler-patch benchmark or evidence of a leak; no compiler change was made. Build statistics and source hashes are retained in `docs/bend-issues/2026-09-19-retry-error-build.json`.
 
+### BEND-001 observation: native retry timer composition (2026-09-19)
+
+The retry-loop fixture with the native sleep adapter builds against the isolated additive timer candidate in 36.55 seconds at 10,430,488 KiB sampled group RSS. The timer candidate changes no compiler code. All twelve real-timer traces pass on one/four threads and resource audits find zero live timers/waiters/channels at exit; this does not establish general leak freedom. Build statistics and source hashes are in `docs/bend-issues/2026-09-19-retry-native-timer-build.json`; lifecycle observations are in `2026-09-19-retry-native-timers.json`.
+
 ## BEND-020 — Reclassified as timer implementation work
 
 The missing cancellable timer is expected library development, not a Bend defect or external blocker. Its design, lifecycle observations, implementation and validation now live in [the timer implementation record](../patches/experimental/timer/README.md). Historical raw measurements retain their paths so existing references remain valid. Actual defects or performance cliffs discovered while building it belong in this log.

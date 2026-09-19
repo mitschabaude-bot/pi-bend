@@ -99,7 +99,7 @@ def show(result: Result<&2, &2, P.RetryFailure<String>, String>) -> IO(Unit):
     case Fail{P.RequestFailed{P.Other{original}}}: IO.print("other " ++ original)
     case Fail{P.RequestFailed{P.Provider{P.ProviderError{original, _, _, _, _, _}}}}: IO.print("provider " ++ original)
 
-def run(+configuration: Config) -> IO(Unit):
+def runWithSleep(+configuration: Config, sleep: C.Callback<P.SleepInput<String>, Result<&2, &2, Unit, Unit>>) -> IO(Unit):
   match configuration:
     case Config{_, retries, _, cap, aborted, abortSleep}:
       do IO<Unit>:
@@ -110,17 +110,23 @@ def run(+configuration: Config) -> IO(Unit):
         +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~randomBody, Unit{})
         +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~dateBody, Unit{})
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~nowBody, Unit{})
-        +sleep : C.Callback<P.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~P.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleepBody, abortSleep)
         result : Result<&2, &2, P.RetryFailure<String>, String> <- P.retryProviderRequest(String, String, String, request, P.Effects{random, date, now, sleep}, P.ProviderRetryOptions{retries, cap, Some{A.signal(String, controller)}})
         show(result)
         C.dispose(Unit, Result<&2, &2, P.RequestFailure<String>, String>, request)
         C.dispose(Unit, F.F64, random)
         C.dispose(String, F.F64, date)
         C.dispose(Unit, F.F64, now)
-        C.dispose(P.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
         count : U32 <- R.dispose(U32, counter)
         A.dispose(String, controller)
         return Unit{}
+
+def run(+configuration: Config) -> IO(Unit):
+  match configuration:
+    case Config{_, _, _, _, _, abortSleep}:
+      do IO<Unit>:
+        +sleep : C.Callback<P.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~P.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleepBody, abortSleep)
+        runWithSleep(configuration, sleep)
+        C.dispose(P.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
 
 def arguments(values: List<String>) -> IO(Unit):
   match values:

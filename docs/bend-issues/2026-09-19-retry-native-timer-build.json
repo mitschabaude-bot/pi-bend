@@ -1,0 +1,20 @@
+{
+  "command": [
+    "sh",
+    "scripts/build-pure.sh",
+    "packages/ai/test/provider-retry-native-sleep.bend",
+    "build/provider-retry-native-sleep"
+  ],
+  "elapsed_seconds": 36.54661282990128,
+  "peak_sampled_group_rss_kib": 10430488,
+  "limit_gib": 40.0,
+  "stopped": false,
+  "child_exit_code": 0,
+  "generated_c_bytes": 3862687,
+  "source_sha256": {
+    "packages/runtime/src/timer-delay.bend": "1fe260b7cdf3642553f2e075f089d2408037480b9d13d4252b27cb3e28921b1d",
+    "packages/ai/src/utils/provider-retry-sleep.bend": "c2a6da2a2b0b2f6d41f6d9af6c8c373b7f11101d743fba201739ce489e74f82e",
+    "packages/ai/test/provider-retry-native-sleep.bend": "969e2dc5a55aac9d9f915a483b6cc77a2e4b737c25fd089d0979a109606db0cf",
+    "packages/ai/test/provider-retry.bend": "822dc4fdc70b006c19cfcf2c3e981566b7ba45b0c3d2700611da3b0149d81496"
+  }
+}

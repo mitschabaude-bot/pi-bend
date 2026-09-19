@@ -7,6 +7,7 @@ python3 scripts/prepare-timer-candidate.py build/bend-timer-candidate-fresh
 python3 tests/timer_primitive_check.py build/bend-timer-candidate-fresh
 python3 tests/timer_races_check.py build/bend-timer-candidate-fresh
 python3 tests/abortable_sleep_check.py build/bend-timer-candidate-fresh
+python3 tests/provider_retry_native_sleep_check.py build/bend-timer-candidate-fresh
 python3 scripts/benchmark-timer.py build/bend-timer-candidate-fresh build/timer-performance.json
 ```
 
@@ -16,7 +17,7 @@ The C effect uses a separate index/generation table, with a free list and genera
 
 Core tests pass on one/four native threads and Bun: immediate and parked expiry, cancellation before/during wait, repeated cancellation, head/middle/tail removal, old capabilities after close/slot reuse, 10,000 serial lifecycles, affine-owner copy rejection, and a program using only new/close. A disposable instrumented C copy observes one actual parked expiration, only three used registry slots, and zero live timer rows/waiters at exit. These observations do not prove general race safety or absence of leaks under every workload.
 
-The 20-round alternating-order comparison preserves existing generated C exactly. Separate checks preserve generated JS exactly for the same fixtures. Median compiler wall time is approximately 1.1% lower for detached sleep and 1.0% higher for UTF-8; shared-host measurements are inconclusive, not evidence of performance neutrality. The candidate remains uninstalled. Broader performance validation and provider backoff integration remain pending. The primitive is our implementation work; adoption awaits our validation, not an upstream fix. Raw compiler comparisons are retained in `docs/bend-issues/2026-09-19-timer-candidate-performance.json` and `2026-09-19-timer-candidate-js-parity.json`.
+The 20-round alternating-order comparison preserves existing generated C exactly. Separate checks preserve generated JS exactly for the same fixtures. Median compiler wall time is approximately 1.1% lower for detached sleep and 1.0% higher for UTF-8; shared-host measurements are inconclusive, not evidence of performance neutrality. The candidate remains uninstalled. Broader performance validation and complete provider-wrapper integration remain pending. The primitive is our implementation work; adoption awaits our validation, not an upstream fix. Raw compiler comparisons are retained in `docs/bend-issues/2026-09-19-timer-candidate-performance.json` and `2026-09-19-timer-candidate-js-parity.json`.
 
 ## Lifetime requirement
 
@@ -36,4 +37,8 @@ Disposable instrumentation counts creation, expiration, cancellation, close and 
 
 `packages/runtime/src/abortable-sleep.bend` composes the primitive with the existing native `AbortSignal` and removable deferred observations. Pre-aborted calls return the retained reason immediately. Otherwise an observation watcher competes with timer completion; the winner determines the result. Before returning, the call cancels its observation, joins its watcher and closes its timer. The caller retains ownership of the signal. Zero milliseconds means a literal immediately eligible deadline; any provider event-loop delay normalization belongs in its adapter. This is not yet a claim of upstream retry scheduling parity.
 
-`tests/abortable_sleep_check.py` runs eight repetitions on each backend: 32 normal waits sharing one signal, zero delay, cancellation of a 60-second wait, pre-aborted rejection and signal disposal. Native exit instrumentation verifies zero live timer rows, timer waiters and channel rows. All native one/four-thread and Bun runs pass. Retained observations are in `docs/bend-issues/2026-09-19-abortable-sleep.json`. Provider retry-loop integration, broadcast cancellation and broader interleaving tests remain work to finish.
+`tests/abortable_sleep_check.py` runs eight repetitions on each backend: 32 normal waits sharing one signal, zero delay, cancellation of a 60-second wait, pre-aborted rejection and signal disposal. Native exit instrumentation verifies zero live timer rows, timer waiters and channel rows. All native one/four-thread and Bun runs pass. Retained observations are in `docs/bend-issues/2026-09-19-abortable-sleep.json`. Provider retry-loop integration is now covered below; broadcast cancellation and broader interleaving tests remain work to finish.
+
+## Retry-loop integration
+
+The pure Bend `ai/src/utils/provider-retry-sleep.bend` adapter now runs through the actual native retry loop. Twelve real-timer traces pass on one/four threads, including the long-backoff cancellation scenario. Instrumentation verifies expected timer creation counts, cancellation of one parked timer in the abort case, and zero remaining live timers/waiters/channels in every case. The optional-signal and pre-aborted adapter paths also pass on native one/four threads and Bun. Results are retained in `docs/bend-issues/2026-09-19-retry-native-timers.json`. This validates composition with the candidate; it is not a performance comparison or exact virtual-time boundary proof.
