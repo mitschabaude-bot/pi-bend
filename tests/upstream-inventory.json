@@ -964,27 +964,39 @@
     },
     {
       "source": "packages/ai/test/openai-responses-empty-tool-result.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e7639c68dec93674ef6c3e42030857fefab2f4b1a3f6d5f1ad0b5ebc3b618e7d"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openai-responses-empty-tool-result.bend"
+      ],
+      "sha256": "e7639c68dec93674ef6c3e42030857fefab2f4b1a3f6d5f1ad0b5ebc3b618e7d",
+      "notes": "The original public-converter case passes: the function-call output exists and equals (no tool output), excluding the attached-image fallback. Explicit fixture model identity/API replaces catalog lookup; registry/catalog behavior is not covered."
     },
     {
       "source": "packages/ai/test/openai-responses-foreign-toolcall-id.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f52b282d047d2ba00f726f00c9bdb6c5a3eff236628d466d7227d25e33fffbf5"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openai-responses-foreign-toolcall-id.bend"
+      ],
+      "sha256": "f52b282d047d2ba00f726f00c9bdb6c5a3eff236628d466d7227d25e33fffbf5",
+      "notes": "All original assertions pass through the public converter with the exact opaque Copilot ID: a function call exists, item ID equals fc_ plus shortHash of the source item component, is at most 64 units and matches the original alphanumeric shape. Explicit fixture model identity/API replaces catalog lookup; registry/catalog behavior is not covered."
     },
     {
       "source": "packages/ai/test/openai-responses-message-id.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "26fb7ba32930bd0349288c637c02e8c6b9f0bcb17224c2f945372b38b3311bc0"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openai-responses-message-id.bend"
+      ],
+      "sha256": "26fb7ba32930bd0349288c637c02e8c6b9f0bcb17224c2f945372b38b3311bc0",
+      "notes": "All original assertions pass through normalizeContext and convertResponsesMessages: foreign thinking becomes a second visible text block, exact fallback IDs are msg_pi_1/msg_pi_1_1, and IDs are unique. Explicit fixture model identity/API replaces catalog lookup; registry/catalog behavior is not covered."
     },
     {
       "source": "packages/ai/test/openai-responses-namespace.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1bcf77de390f0fe6120b720a9a2b790575884ff0c08a29b49d8da5f2da701171"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/openai-responses-namespace.bend"
+      ],
+      "sha256": "1bcf77de390f0fe6120b720a9a2b790575884ff0c08a29b49d8da5f2da701171",
+      "notes": "Two of five original named cases pass: both function/custom calls exist without namespaces for all three migrated targets, and ordinary function calls acquire no namespace. Native Maybe values replace own-property assertions. Absent terminal error and both namespace stream/replay round trips remain pending."
     },
     {
       "source": "packages/ai/test/openai-responses-partial-json-cleanup.test.ts",
