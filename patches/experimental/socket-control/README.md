@@ -40,3 +40,13 @@ python3 tests/http_exchange_write_error_check.py build/bend-socket-candidate-fre
 ```
 
 The latter injects a body-send EPIPE into a disposable compiler copy and checks error retention and closure of both descriptors. Production effects are unchanged. The buffered driver still completes request writes before reading the response; a concurrent duplex driver is needed for early server responses during upload.
+
+## Concurrent reads and writes
+
+`runtime/src/socket-writer.bend` duplicates the connected socket for an independently owned upload while borrowing the original connection's AbortSignal scope. It adds no observation or primitive. Close and join writers before retiring the original connection; ordinary writer close preserves the shared connection. The independent descriptors allow response reads during backpressured upload writes.
+
+```sh
+python3 tests/socket_writer_check.py build/bend-socket-candidate-fresh
+```
+
+On native one/four threads and Bun, the test requires eight uploads to park before the peer sends early replies without draining upload data. The client reads each reply while its uploader remains unfinished, aborts, joins the writer and retires the connection. The peer verifies the exact partial upload prefix. Ordinary transmission, communication after writer close, pre-aborted creation, affine ownership and all 29 descriptor closes also pass. This is the socket prerequisite; the HTTP exchange driver still needs concurrent upload ownership and early-response settlement. Instrumentation changes only a disposable compiler copy, and the installed compiler remains unchanged.
