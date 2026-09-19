@@ -1,0 +1,434 @@
+{
+  "projection": {
+    "scope": "Normalized URL to HTTP endpoint projection and local Fetch wire targets.\n\nNode supplies normalized records; URL parsing has its own differential suites.\nNo external HTTP requests are made. TLS/DNS/blocked-port policy are not tested.\n",
+    "nodeVersions": {
+      "node": "24.18.0",
+      "acorn": "8.16.0",
+      "ada": "3.4.4",
+      "amaro": "1.1.9",
+      "ares": "1.34.6",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.3",
+      "llhttp": "9.4.2",
+      "merve": "1.2.2",
+      "modules": "137",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.69.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "3.5.7",
+      "simdjson": "4.6.4",
+      "simdutf": "6.4.0",
+      "sqlite": "3.53.1",
+      "tz": "2026b",
+      "undici": "7.28.0",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "13.6.233.17-node.50",
+      "zlib": "1.3.1-e00f703",
+      "zstd": "1.5.7"
+    },
+    "cases": 1942,
+    "localFetchWireCases": [
+      {
+        "url": "http://127.0.0.1:39407/",
+        "observed": {
+          "target": "/",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/",
+            null,
+            null
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407/?",
+        "observed": {
+          "target": "/?",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/",
+            "",
+            null
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/?"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407/?#f",
+        "observed": {
+          "target": "/?",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/",
+            "",
+            "f"
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/?"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407/a?b#f",
+        "observed": {
+          "target": "/a?b",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/a",
+            "b",
+            "f"
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/a?b"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407//a",
+        "observed": {
+          "target": "//a",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "//a",
+            null,
+            null
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "//a"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407/a%2fb",
+        "observed": {
+          "target": "/a%2fb",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/a%2fb",
+            null,
+            null
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/a%2fb"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407/\u00e9?a=\ud83d\ude42",
+        "observed": {
+          "target": "/%C3%A9?a=%F0%9F%99%82",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/%C3%A9",
+            "a=%F0%9F%99%82",
+            null
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/%C3%A9?a=%F0%9F%99%82"
+          ]
+        }
+      },
+      {
+        "url": "http://127.0.0.1:39407/a/../b?",
+        "observed": {
+          "target": "/b?",
+          "host": "127.0.0.1:39407"
+        },
+        "record": {
+          "fields": [
+            "http",
+            "",
+            "",
+            "127.0.0.1",
+            "39407",
+            "/b",
+            "",
+            null
+          ],
+          "result": [
+            "plain",
+            "127.0.0.1",
+            39407,
+            "127.0.0.1:39407",
+            "/b?"
+          ]
+        }
+      }
+    ],
+    "backends": [
+      "native 1",
+      "native 4",
+      "Bun"
+    ]
+  },
+  "composition": {
+    "scope": "Compose normalized URLs, Host defaults, buffered bodies and HTTP heads.\n\nCompare fields this layer owns with five local Node Fetch requests. Additional\nFetch transport defaults and real Bend socket exchange are separate coverage.\n",
+    "nodeVersions": {
+      "node": "24.18.0",
+      "acorn": "8.16.0",
+      "ada": "3.4.4",
+      "amaro": "1.1.9",
+      "ares": "1.34.6",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.3",
+      "llhttp": "9.4.2",
+      "merve": "1.2.2",
+      "modules": "137",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.69.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "3.5.7",
+      "simdjson": "4.6.4",
+      "simdutf": "6.4.0",
+      "sqlite": "3.53.1",
+      "tz": "2026b",
+      "undici": "7.28.0",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "13.6.233.17-node.50",
+      "zlib": "1.3.1-e00f703",
+      "zstd": "1.5.7"
+    },
+    "oracle": [
+      {
+        "method": "GET",
+        "target": "/a?",
+        "headers": {
+          "host": "127.0.0.1:44569",
+          "connection": "keep-alive",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate"
+        },
+        "body": []
+      },
+      {
+        "method": "POST",
+        "target": "/a?",
+        "headers": {
+          "host": "127.0.0.1:44569",
+          "connection": "keep-alive",
+          "content-type": "text/plain;charset=UTF-8",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "7"
+        },
+        "body": [
+          104,
+          195,
+          169,
+          240,
+          159,
+          153,
+          130
+        ]
+      },
+      {
+        "method": "PUT",
+        "target": "/a?",
+        "headers": {
+          "host": "127.0.0.1:44569",
+          "connection": "keep-alive",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "2"
+        },
+        "body": [
+          0,
+          255
+        ]
+      },
+      {
+        "method": "GET",
+        "target": "/a?",
+        "headers": {
+          "host": "127.0.0.1:44569",
+          "connection": "keep-alive",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate"
+        },
+        "body": []
+      },
+      {
+        "method": "POST",
+        "target": "/a?",
+        "headers": {
+          "host": "127.0.0.1:44569",
+          "connection": "keep-alive",
+          "content-type": "text/plain;charset=UTF-8",
+          "accept": "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          "content-length": "0"
+        },
+        "body": []
+      }
+    ],
+    "backends": [
+      "native 1",
+      "native 4",
+      "Bun"
+    ]
+  },
+  "verification_scope": "Projection tested against normalized Node URL records plus eight actual local Fetch requests. Composition tested in a detached c0fce1a checkout containing only this change, without pending form changes. All runs use the installed compiler, native one/four threads and Bun. No native network/TLS/provider integration claim.",
+  "builds": {
+    "projection_native": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "packages/runtime/test/http-url.bend",
+        "build/http-url"
+      ],
+      "elapsed_seconds": 21.469889044761658,
+      "peak_sampled_group_rss_kib": 3944388,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "projection_js": {
+      "command": [
+        "/home/agent/.bend/bin/bend",
+        "packages/runtime/test/http-url.bend",
+        "-o",
+        "build/http-url.js"
+      ],
+      "elapsed_seconds": 2.118294034153223,
+      "peak_sampled_group_rss_kib": 798392,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "clean_composition": {
+      "command": [
+        "sh",
+        "-c",
+        "cd build/http-url-clean && sh scripts/build-pure.sh packages/runtime/test/http-url-request.bend build/http-url-request && /home/agent/.bend/bin/bend packages/runtime/test/http-url-request.bend -o build/http-url-request.js && python3 tests/http_url_request_check.py"
+      ],
+      "elapsed_seconds": 18.794941939413548,
+      "peak_sampled_group_rss_kib": 3710644,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "sha256": {
+    "packages/runtime/src/http-url.bend": "e24a5384a3fabbc95ee235e55125869125be73731c1fc925b996cf349b9ca087",
+    "packages/runtime/src/http-buffered-request.bend": "5bdff0dce96d495682d9cf227ac4a495257816b17158608cf0dc41ee9676c449",
+    "packages/runtime/test/http-url.bend": "02898dafbaf3452b71e38c0ef5370e36a2820e01600787f24493b1ff9173e013",
+    "packages/runtime/test/http-url-request.bend": "a960390a65f11e2159e8cf4665c298d8f7299bd6a86c9848855945c3e9cedf3d",
+    "tests/http_url_check.py": "1dcd78fa01b7f453cb7f914504e9776bb2c0c21180328250a444939c2e82ceb2",
+    "tests/http_url_request_check.py": "2ade82a4b83ebbcce047cb0a84a0ec21a859a8b13eda9c20d36aa4e5458d05c0",
+    "build/http-url-clean/packages/runtime/src/http-buffered-body.bend": "7bb7e15970178e6a0eb3d3ae8e002d51fb49f60c134c0cd2951c609b1e4e6a67",
+    "build/http-url-clean/build/http-url-request.c": "5ddf748bbc36bab3e226df8488f0a4600c775a606255fb22543844891d1e7129",
+    "build/http-url-clean/build/http-url-request": "21f8306ad5c9888de910bb926803dc279251afa991d138876ff7137e2130362e",
+    "build/http-url.c": "d78bea0f6889d23473cc50a0b669efb468b2b44a997ab4b0896cb6f58078b172",
+    "build/http-url": "06a88df6ab1fcbca7af140579bc14e329b9260fbd76b8bc24717d4f90a69fec4",
+    "build/http-url.js": "f53622dff4654b6e971867f566f3dbd23bfaceb926705758c7d9dfbe5e9f0dfc"
+  }
+}

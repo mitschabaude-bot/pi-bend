@@ -247,5 +247,18 @@
       "bend": "invalid",
       "node": "data:text,hello %20/%C3%A9%2e%2E/#fa%2e"
     }
-  ]
+  ],
+  "native_results": {
+    "native 1": {
+      "total": 3458,
+      "matches": 3433,
+      "unresolved": 25
+    },
+    "native 4": {
+      "total": 3458,
+      "matches": 3433,
+      "unresolved": 25
+    },
+    "same_cases_and_outcomes_as_bun": true
+  }
 }
