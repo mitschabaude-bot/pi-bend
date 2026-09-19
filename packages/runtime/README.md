@@ -117,3 +117,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/idna-label.bend` composes strict ACE decoding, NFC verification, syntax/status checks and Unicode context analysis. Construct an immutable `Context` from the mapping, normalization and property tables and reuse it across calls. `process` accepts a label after domain-wide mapping/NFC and splitting; decoded ACE text is checked without repair and uses nontransitional status rules automatically. Options explicitly select hyphen, STD3 and joiner checks. Results preserve the decoded text, emptiness and Bidi facts, so the domain processor can apply Bidi requirements to every nonempty label when needed. DNS lengths and full domain orchestration remain separate work.
+
+
+`src/idna-domain-policy.bend` aggregates label Bidi facts across an entire domain and checks strict UTS #46 DNS lengths after ASCII conversion. Bidi validity applies to every nonempty label if any label contains RTL characters; a late RTL label therefore affects earlier labels too. DNS checks require ASCII labels of 1–63 characters and a domain of at most 253 characters, rejecting empty labels including a final root label in strict `VerifyDnsLength` mode. URL-host processing may disable that strict length policy. Counters saturate above the limits rather than wrapping on oversized input.
