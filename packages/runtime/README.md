@@ -111,3 +111,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/idna-ace.bend` supplies strict decoding of already-mapped `xn--` labels, returning the decoded text and whether ACE encoding was used. It rejects non-ASCII encodings, malformed Punycode and empty/ASCII-only decoded results. It deliberately preserves decoded characters for later validation; they must not be mapped again. Transitional capital sharp S is handled separately by the mapper as required by UTS #46, rather than relying solely on the data-table replacement.
+
+
+`src/idna-label-rules.bend` checks prepared-label syntax and mapping status with explicit `checkHyphens`, `useSTD3` and processing-mode options. It returns typed failures and never repairs text. ACE-decoded labels must use nontransitional mode. These checks are one part of validation: NFC, leading marks, ContextJ, domain-wide Bidi applicability and DNS lengths must also be handled before treating text as a valid hostname.
