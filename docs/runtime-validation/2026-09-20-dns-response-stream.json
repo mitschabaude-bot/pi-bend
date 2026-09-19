@@ -1,0 +1,52 @@
+{
+  "scope": "Offline DNS transaction matching contracts (RFC 5452 and RFC 4343).\n\nEndpoint metadata is supplied by the fixture; this is not socket integration.\n",
+  "cases_per_backend": 2912,
+  "backends": [
+    "native 1",
+    "native 4",
+    "Bun"
+  ],
+  "sha256": {
+    "/home/agent/code/pi-bend/packages/runtime/src/dns-response.bend": "2d40b4c34e3c95850a68f4d55709bd7ac9f999f197bf34d55d360ccffe5deb61",
+    "/home/agent/code/pi-bend/packages/runtime/test/dns-response.bend": "ae40b408c5108712a15b2a4e0121afa3f0796fd41e0cdb56d9b09afe1249e1c8",
+    "/home/agent/code/pi-bend/tests/dns_response_check.py": "16b24cf19ac2ffa402edc35779551a4bcab66a83527638c66d51ec7b1ad133a0",
+    "/home/agent/code/pi-bend/build/dns-response": "63465c03695f8557c872cb3afefad6bd46e93ce54ff6691fce727376205e11bf",
+    "/home/agent/code/pi-bend/build/dns-response.js": "b935ba367d320e826a3c7454d99c7a64ad1267699f019a7523dbbb6ce28c089e"
+  },
+  "native_build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/runtime/test/dns-response.bend",
+      "build/dns-response"
+    ],
+    "elapsed_seconds": 5.312271256931126,
+    "peak_sampled_group_rss_kib": 1140964,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "js_build": {
+    "command": [
+      "/home/agent/.bend/bin/bend",
+      "packages/runtime/test/dns-response.bend",
+      "-o",
+      "build/dns-response.js"
+    ],
+    "elapsed_seconds": 1.0555966859683394,
+    "peak_sampled_group_rss_kib": 345060,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "references": [
+    "https://www.rfc-editor.org/rfc/rfc7766.html#section-7",
+    "https://www.rfc-editor.org/rfc/rfc5452.html#section-9.1"
+  ],
+  "limits": [
+    "Offline matching checks only; endpoint metadata is supplied by the fixture, not gathered from live sockets.",
+    "inspectStream is for an established TCP connection and accepts QDCOUNT=0; inspect retains the complete-question datagram contract.",
+    "Truncated is a typed indication, not permission to repeat TCP fallback indefinitely. The transport retry policy remains unimplemented.",
+    "Matching still does not authenticate replies, interpret response codes, authorize caching unrelated records or complete resolver integration."
+  ]
+}

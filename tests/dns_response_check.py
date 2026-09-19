@@ -81,6 +81,31 @@ add(wire(flags=0x8380)+b'\0','truncated:33664')
 # owner names; record trust and address selection are deliberately later.
 answer=b'\xc0\x0c'+struct.pack('!HHIH',1,1,300,4)+b'\x7f\0\0\1'
 add(wire(an=1,tail=answer),'matched:33152')
+# The established-stream policy retains every existing endpoint/header/question
+# rejection, but permits QDCOUNT=0. All present-question baseline cases are
+# repeated through the stream entry point.
+for arg,expected in list(cases):
+    if expected == 'ignore:count': continue
+    mode,sent,reply=arg.split(':')
+    cases.append((str(int(mode)+100)+':'+sent+':'+reply,expected))
+for flags in [0x8000,0x8180,0x8183,0x8380]:
+    empty=struct.pack('!6H',42,flags,0,0,0,0)
+    want=('truncated:' if flags&512 else 'matched:')+str(flags)
+    for mode in range(13):
+        add(empty,want if mode<2 else 'ignore:endpoint',100+mode)
+        add(empty,'ignore:count' if mode<2 else 'ignore:endpoint',mode)
+    add(empty+b'\0','truncated:'+str(flags) if flags&512 else 'ignore:malformed',100)
+    add(struct.pack('!6H',43,flags,0,0,0,0),'ignore:id',100)
+    add(struct.pack('!6H',42,flags^0x8000,0,0,0,0),'ignore:query',100)
+    add(struct.pack('!6H',42,flags|0x0800,0,0,0,0),'ignore:opcode',100)
+owner=name([b'example',b'com'])
+record=owner+struct.pack('!HHIH',1,1,300,4)+b'\x7f\0\0\1'
+for length in range(len(record)+1):
+    reply=struct.pack('!6H',42,0x8180,0,1,0,0)+record[:length]
+    add(reply,'matched:33152' if length==len(record) else 'ignore:malformed',100)
+    truncated=struct.pack('!6H',42,0x8380,0,1,0,0)+record[:length]
+    add(truncated,'truncated:33664',100)
+for count in [2,65535]:add(wire(qd=count),'ignore:count',100)
 backends=[]
 for label,command in [('native 1',['build/dns-response','--threads','1']),('native 4',['build/dns-response','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/dns-response.js'])]:
     for first in range(0,len(cases),16):

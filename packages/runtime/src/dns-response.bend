@@ -90,32 +90,50 @@ def checkedQuestion(packet: Name.Packet, header: Message.Header, flags: U32, exp
     case Fail{error}: Ignore{Malformed{error}}
     case Done{Message.Parsed{actual, _}}: questionMatches(sameQuestion(expected, actual), packet, header, flags)
 
-def checkedHeader(equalId: Bool, response: Bool, equalOpcode: Bool, oneQuestion: Bool, +packet: Name.Packet, header: Message.Header, flags: U32, expected: Message.Question) -> Decision:
-  match equalId response equalOpcode oneQuestion:
-    case False{} _ _ _: Ignore{IdMismatch{}}
-    case True{} False{} _ _: Ignore{NotResponse{}}
-    case True{} True{} False{} _: Ignore{OpcodeMismatch{}}
-    case True{} True{} True{} False{}: Ignore{QuestionCountMismatch{}}
-    case True{} True{} True{} True{}: checkedQuestion(packet, header, flags, expected, Message.question(packet, 12))
+def absentQuestion(allowed: Bool, packet: Name.Packet, header: Message.Header, flags: U32) -> Decision:
+  match allowed:
+    case False{}: Ignore{QuestionCountMismatch{}}
+    case True{}: matched(U32.is_ne(U32.and(flags, 512), 0), packet, header)
 
-def header(packet: Name.Packet, id: U32, opcode: U32, expected: Message.Question, result: Result<&2, &2, Message.Error, Message.Header>) -> Decision:
+def questionCount(optional: Bool, count: U32, +packet: Name.Packet, header: Message.Header, flags: U32, expected: Message.Question) -> Decision:
+  match count:
+    case 0: absentQuestion(optional, packet, header, flags)
+    case 1: checkedQuestion(packet, header, flags, expected, Message.question(packet, 12))
+    case _: Ignore{QuestionCountMismatch{}}
+
+def checkedHeader(equalId: Bool, response: Bool, equalOpcode: Bool, optional: Bool, count: U32, packet: Name.Packet, header: Message.Header, flags: U32, expected: Message.Question) -> Decision:
+  match equalId response equalOpcode:
+    case False{} _ _: Ignore{IdMismatch{}}
+    case True{} False{} _: Ignore{NotResponse{}}
+    case True{} True{} False{}: Ignore{OpcodeMismatch{}}
+    case True{} True{} True{}: questionCount(optional, count, packet, header, flags, expected)
+
+def header(optional: Bool, packet: Name.Packet, id: U32, opcode: U32, expected: Message.Question, result: Result<&2, &2, Message.Error, Message.Header>) -> Decision:
   match result:
     case Fail{error}: Ignore{Malformed{error}}
-    case Done{Message.Header{+actualId, +flags, +qd, an, ns, ar}}: checkedHeader(U32.is_eq(id, actualId), U32.is_ne(U32.and(flags, 32768), 0), U32.is_eq(opcode, (flags / 2048 % 16 : U32)), U32.is_eq(qd, 1), packet, Message.Header{actualId, flags, qd, an, ns, ar}, flags, expected)
+    case Done{Message.Header{+actualId, +flags, +qd, an, ns, ar}}: checkedHeader(U32.is_eq(id, actualId), U32.is_ne(U32.and(flags, 32768), 0), U32.is_eq(opcode, (flags / 2048 % 16 : U32)), optional, qd, packet, Message.Header{actualId, flags, qd, an, ns, ar}, flags, expected)
 
-def packet(id: U32, opcode: U32, expected: Message.Question, value: Result<&2, &2, Name.Error, Name.Packet>) -> Decision:
+def packet(optional: Bool, id: U32, opcode: U32, expected: Message.Question, value: Result<&2, &2, Name.Error, Name.Packet>) -> Decision:
   match value:
     case Fail{error}: Ignore{Malformed{Message.NameError{error}}}
-    case Done{+messagePacket}: header(messagePacket, id, opcode, expected, Message.header(messagePacket))
+    case Done{+messagePacket}: header(optional, messagePacket, id, opcode, expected, Message.header(messagePacket))
 
-def endpoints(equal: Bool, id: U32, opcode: U32, expected: Message.Question, wire: List<&2, U32>) -> Decision:
+def endpoints(equal: Bool, optional: Bool, id: U32, opcode: U32, expected: Message.Question, wire: List<&2, U32>) -> Decision:
   match equal:
     case False{}: Ignore{EndpointMismatch{}}
-    case True{}: packet(id, opcode, expected, Name.packet(wire))
+    case True{}: packet(optional, id, opcode, expected, Name.packet(wire))
 
-# Matching is not authentication or permission to cache unrelated answers.
-# A truncated reply triggers fallback only after endpoints, header and complete
-# question match; truncated/malformed record sections are then not interpreted.
-def inspect(transaction: Transaction, source: Endpoint, destination: Endpoint, wire: List<&2, U32>) -> Decision:
+def inspectPolicy(optional: Bool, transaction: Transaction, source: Endpoint, destination: Endpoint, wire: List<&2, U32>) -> Decision:
   match transaction:
-    case Transaction{sentFrom, sentTo, id, opcode, expected}: endpoints(sameEndpoint(sentTo, source) && sameEndpoint(sentFrom, destination), id, opcode, expected, wire)
+    case Transaction{sentFrom, sentTo, id, opcode, expected}: endpoints(sameEndpoint(sentTo, source) && sameEndpoint(sentFrom, destination), optional, id, opcode, expected, wire)
+
+# Datagram matching requires the complete question, including before accepting
+# a truncation indication. Matching never grants trust to unrelated answers.
+def inspect(transaction: Transaction, source: Endpoint, destination: Endpoint, wire: List<&2, U32>) -> Decision:
+  inspectPolicy(False{}, transaction, source, destination, wire)
+
+# RFC 7766 section 7 allows an absent question on the established TCP stream.
+# If present it must match. ID/opcode/endpoints and complete-message validation
+# still apply; a zero-question response is not rewritten to invent a question.
+def inspectStream(transaction: Transaction, source: Endpoint, destination: Endpoint, wire: List<&2, U32>) -> Decision:
+  inspectPolicy(True{}, transaction, source, destination, wire)

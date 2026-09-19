@@ -43,11 +43,19 @@ def endpoint(v6: Bool, +mode: U32, destination: Bool) -> Response.Endpoint:
     case True{}: ipv6(mode, destination)
     case False{}: Response.Endpoint{Response.V4{IPv4.Address{Bool.pick(U32, U32.is_eq(mode, 2) || U32.is_eq(mode, 4), 2130706434, 2130706433)}}, Bool.pick(U32, U32.is_eq(mode, 3) || U32.is_eq(mode, 5), 54, Bool.pick(U32, destination, 40000, 53))}
 
-def run(+mode: U32, id: U32, opcode: U32, expected: Message.Question, wire: List<&2, U32>) -> String:
+def inspect(stream: Bool, transaction: Response.Transaction, source: Response.Endpoint, destination: Response.Endpoint, wire: List<&2, U32>) -> Response.Decision:
+  match stream:
+    case False{}: Response.inspect(transaction, source, destination, wire)
+    case True{}: Response.inspectStream(transaction, source, destination, wire)
+
+def runMode(stream: Bool, +mode: U32, id: U32, opcode: U32, expected: Message.Question, wire: List<&2, U32>) -> String:
   +v6 = U32.is_eq(mode, 1) || U32.is_ge(mode, 6)
   sourceMode = Bool.pick(U32, U32.is_eq(mode, 4) || U32.is_eq(mode, 5) || U32.is_eq(mode, 12), 0, mode)
   destMode = Bool.pick(U32, U32.is_eq(mode, 4) || U32.is_eq(mode, 5) || U32.is_eq(mode, 12), mode, 0)
-  show(Response.inspect(Response.Transaction{endpoint(v6, 0, True{}), endpoint(v6, 0, False{}), id, opcode, expected}, endpoint(v6 && Bool.not(U32.is_eq(mode, 11)), sourceMode, False{}), endpoint(v6, destMode, True{}), wire))
+  show(inspect(stream, Response.Transaction{endpoint(v6, 0, True{}), endpoint(v6, 0, False{}), id, opcode, expected}, endpoint(v6 && Bool.not(U32.is_eq(mode, 11)), sourceMode, False{}), endpoint(v6, destMode, True{}), wire))
+
+def run(+mode: U32, id: U32, opcode: U32, expected: Message.Question, wire: List<&2, U32>) -> String:
+  runMode(U32.is_ge(mode, 100), (mode % 100 : U32), id, opcode, expected, wire)
 
 def queried(mode: U32, wire: List<&2, U32>, result: Result<&2, &2, Message.Error, Message.Message>) -> String:
   match result:
