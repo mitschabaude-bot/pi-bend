@@ -1,6 +1,6 @@
 # Experimental compiler changes
 
-These patches are investigation candidates, not part of the seven patches applied to the installed compiler. They do not run automatically during builds.
+These patches are investigation candidates, not part of the eight patches applied to the installed compiler. They do not run automatically during builds.
 
 `bend-compiler-memory.patch` targets the patched Bend 2.0.7 compiler under Bun 1.4.0. It clears the telescope-decomposition cache at existing temporary-cache boundaries and forces Bun garbage collection after each native code-generation pass. It is deliberately an experiment: the explicit `Bun.gc` call assumes the Bun CLI host and is not a portable solution for other compiler embedding hosts. A weak/bounded cache and reducing pattern-lowering allocations remain open alternatives. See [BEND-001](../../docs/bend-issues.md) for measurements and outstanding questions.
 

@@ -2,7 +2,7 @@
 
 This is the living investigation log for problems encountered while building pi-bend. The project is also a contribution to Bend: use idiomatic functional representations, investigate toolchain failures, and develop reusable library facilities. A workaround does not close an issue. High RSS alone does not establish a memory leak. Application inefficiency must be distinguished from a compiler or runtime defect.
 
-Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with seven local patches listed in [patches/README.md](../patches/README.md). Automatic updates remain enabled; reproduce against recorded source hashes as well as version strings. No upstream issue/PR submission is recorded for these entries.
+Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with eight local patches listed in [patches/README.md](../patches/README.md). Automatic updates remain enabled; reproduce against recorded source hashes as well as version strings. No upstream issue/PR submission is recorded for these entries.
 
 ## BEND-001 — Native compilation consumes tens of GiB
 
@@ -85,7 +85,9 @@ These are capability additions, not automatically bugs in existing primitives.
 
 **BEND-011 — Deep generated C requires an increased Clang parser limit.** `scripts/build-pure.sh` uses `-fbracket-depth=2048` because generic record match trees exceed Clang's default 256. This is a code-generation interoperability/performance concern; the flag is a workaround. Measure depth and size versus record/variant shape and reduce a failing program. Do not flatten canonical application types merely to fit generated C.
 
-**BEND-012 — Pattern-binder/global-name collisions during module integration.** During terminal-module integration, global helpers named `number`, `signature` and `usage` were renamed after import-context name collisions. Standalone checking did not expose all failures. This is an observed diagnostic/name-resolution concern requiring a reduced reproducer; whether it is an intended restriction or compiler defect is not established. Track the exact diagnostic before proposing a language change.
+**BEND-012 — Binding/global-name collisions during module integration.** During terminal-module integration, global helpers named `number`, `signature` and `usage` were renamed after import-context name collisions. A new combined Responses test reproduced the problem in a typed `do` binding: the constrained-sampling fixture has both a global `unchanged` helper and a local `unchanged : ... <- ...` binding. Standalone execution succeeded; importing the same file failed with `expected: def, type or law; observed: :`. Copyable `+name` bindings failed with a quantified-datatype diagnostic.
++
++The typed-do case is now a confirmed compiler defect with reduced fixture `tests/typed-do-shadow.bend` and before/after runner `tests/typed_do_shadow.py`. Cause: `parse_term_do_stmt` parsed the left-hand name as a term before checking for `:`, allowing module namespace resolution to turn a local binding into a global reference; `+name` could fail even earlier while parsing quantified types. The local fix recognizes bare typed binding syntax first and retains the original term path for nonbindings. Effectful/pure/copied/nested bindings and initializer/tail global calls pass standalone/imported on one/four native threads and JS; qualified binding names remain rejected. The seven existing compiler regressions and canonical library types also pass. `patches/bend-typed-do-shadow.patch` is applied locally as the eighth patch. Application bindings were not renamed to hide this failure. Pattern/lambda and other previously observed shadowing cases remain open; this is not a blanket resolution of BEND-012.
 
 ## Standard-library development opportunities
 

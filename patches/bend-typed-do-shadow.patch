@@ -1,0 +1,20 @@
+--- a/bend2/bend.ts
++++ b/bend2/bend.ts
+@@ -2302,3 +2302,16 @@
+   }
+-  const t = parse_term(p);
++  // Recognize a typed binder before term parsing can resolve its name as a
++  // module global (or interpret +name as a quantified datatype).
++  const at = p.pos;
++  const copy = parse_take(p, "+");
++  parse_skip(p);
++  const name = char_is_head(parse_peek(p)) ? parse_lexeme(p) : "";
++  parse_skip(p);
++  let t: LTerm;
++  if (name !== "" && !name.includes(".") && !KEYWORDS.has(name) && parse_at(p, ":")) {
++    t = Var(name, copy ? -1 : 0, parse_span(p, beg));
++  } else {
++    p.pos = at;
++    t = parse_term(p);
++  }
+   parse_skip(p);
