@@ -1,4 +1,6 @@
 import Base
+import ../packages/runtime/src/http-response-reader.bend as Reader
+import ../packages/runtime/src/http-socket-source.bend as Source
 import ../packages/runtime/src/http-socket-exchange.bend as Exchange
 import ../packages/runtime/src/http-buffered-request.bend as Request
 import ../packages/runtime/src/http-buffered-body.bend as Body
@@ -10,14 +12,21 @@ import ../packages/runtime/src/http-response-stream.bend as Stream
 import ../packages/runtime/src/http-chunked-body.bend as Chunked
 import ./tcp-bytes-probe.bend as Probe
 
-def failed(result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Unit):
-  match result:
-    case Fail{Exchange.WriteFailure{Transport.SocketError{32, _}, None{}}}: IO.print("PASS exchange write failure")
-    case Fail{_}: IO.die(Unit, 1, "wrong write error or cleanup failure")
-    case Done{exchange}:
+def observed(next: Exchange.Next<String>) -> IO(Unit):
+  match next:
+    case Exchange.Next{Exchange.Closed{}, Fail{Exchange.ResponseFailure{Reader.PrimaryFailure{Reader.SourceError{Source.SocketFailure{Transport.SocketError{32, _}}}}}}}: IO.print("PASS exchange write failure")
+    case Exchange.Next{exchange, _}:
       do IO<Unit>:
         result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.close(String, exchange)
-        IO.die(Unit, 1, "injected write failure was not returned")
+        IO.die(Unit, 1, "injected write failure was not returned or exchange retained resources")
+
+def failed(result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Unit):
+  match result:
+    case Fail{_}: IO.die(Unit, 1, "unexpected start failure")
+    case Done{exchange}:
+      do IO<Unit>:
+        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        observed(next)
 
 def start(socket: Socket, signal: A.AbortSignal<String>, request: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):
   match request:

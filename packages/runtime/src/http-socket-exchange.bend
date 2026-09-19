@@ -2,6 +2,7 @@ import Base
 import ./abort.bend as A
 import ./abortable-socket.bend as Transport
 import ./socket-interrupt.bend as Interrupt
+import ./socket-upload.bend as Upload
 import ./http-buffered-request.bend as Request
 import ./http-buffered-framing.bend as Framing
 import ./http-request-head.bend as Head
@@ -11,8 +12,7 @@ import ./http-response-stream.bend as Stream
 
 # A dedicated connected cleartext socket exchange. Connection establishment,
 # TLS, pooling and URL preparation belong to higher transport layers. This
-# buffered driver completes its writes before reading; concurrent early-response
-# handling still needs a duplex driver.
+# upload task runs concurrently with response reads and is joined on release.
 type StartError<-Reason: Data> is Data:
   InvalidReadSize{}
   SocketFailure{error: Transport.Error<Reason>}
@@ -45,32 +45,24 @@ def cleanupError(result: Result<&2, &2, Interrupt.Error, Unit>) -> Maybe<&2, Int
     case Done{_}: None{}
     case Fail{error}: Some{error}
 
-def written(~Reason: Data, method: String, maximum: U32, limits: Stream.Limits, pair: Transport.Owner<Reason> & Result<&2, &2, Transport.Error<Reason>, Unit>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def uploading(~Reason: Data, method: String, maximum: U32, limits: Stream.Limits, pair: Transport.Owner<Reason> & Result<&2, &1, Transport.Error<Reason>, Upload.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match pair:
     case (owner, Fail{error}):
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         cleanup : Result<&2, &2, Interrupt.Error, Unit> <- Transport.close(Reason, owner)
         return Fail{WriteFailure{error, cleanupError(cleanup)}}
-    case (owner, Done{_}):
+    case (owner, Done{upload}):
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
-        source : Result<&2, &1, Source.Error<Reason>, Source.Owner<Reason>> <- Source.adopted(~Reason, maximum, Done{owner})
-        return adopted(Reason, method, limits, source)
-
-def sentHead(~Reason: Data, method: String, maximum: U32, limits: Stream.Limits, body: Framing.Prepared, pair: Transport.Owner<Reason> & Result<&2, &2, Transport.Error<Reason>, Unit>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
-  match pair:
-    case (owner, Fail{error}): written(~Reason, method, maximum, limits, (owner, Fail{error}))
-    case (owner, Done{_}):
-      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
-        result : Transport.Owner<Reason> & Result<&2, &2, Transport.Error<Reason>, Unit> <- Transport.send(Reason, owner, Framing.wireBody(body))
-        written(~Reason, method, maximum, limits, result)
+        source : Source.Owner<Reason> <- Source.adoptLease(~Reason, maximum, Source.Lease{owner, Some{upload}})
+        return Done{opened(Reason, method, limits, Source.borrow(Reason, source))}
 
 def connected(~Reason: Data, request: Request.Prepared, maximum: U32, limits: Stream.Limits, result: Result<&2, &1, Transport.Error<Reason>, Transport.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match request result:
     case _ Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{SocketFailure{error}})
     case Request.Prepared{Head.Head{method, head}, body} Done{owner}:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
-        result : Transport.Owner<Reason> & Result<&2, &2, Transport.Error<Reason>, Unit> <- Transport.send(Reason, owner, head)
-        sentHead(~Reason, method, maximum, limits, body, result)
+        result : Transport.Owner<Reason> & Result<&2, &1, Transport.Error<Reason>, Upload.Owner<Reason>> <- Upload.start(Reason, owner, head, Framing.wireBody(body))
+        uploading(~Reason, method, maximum, limits, result)
 
 # Takes ownership on every path. The read-size guard precedes any request IO.
 # Writes share the connection-wide AbortSignal observation with response reads.

@@ -23,7 +23,7 @@ def event(capture: Capture, value: Stream.Event) -> Capture:
     case Capture{heads, body, _} Stream.Completed{_}: Capture{heads, body, True{}}
     case capture _: capture
 
-def error(value: Source.Error<String>) -> String:
+def sourceError(value: Source.Error<String>) -> String:
   match value:
     case Source.SocketFailure{Transport.Aborted{A.Supplied{reason}}}: "abort:" ++ reason
     case Source.InvalidReadSize{}: "invalid-size"
@@ -31,13 +31,13 @@ def error(value: Source.Error<String>) -> String:
 
 def primary(value: Reader.PrimaryError<Source.Error<String>>) -> String:
   match value:
-    case Reader.SourceError{why}: error(why)
+    case Reader.SourceError{why}: sourceError(why)
     case Reader.DecodeError{_}: "decode"
 
 def failure(value: Reader.ReadError<Source.Error<String>>) -> String:
   match value:
     case Reader.PrimaryFailure{why}: primary(why)
-    case Reader.ReleaseFailure{why}: "release:" ++ error(why)
+    case Reader.ReleaseFailure{why}: "release:" ++ sourceError(why)
     case Reader.FailureWithRelease{why, _}: "both:" ++ primary(why)
 
 def summary(capture: Capture, terminal: String) -> String:

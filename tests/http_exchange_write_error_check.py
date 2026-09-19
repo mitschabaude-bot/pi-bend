@@ -40,10 +40,11 @@ def check(command, label):
         assert result.stdout == 'PASS exchange write failure\n', result.stdout
         rows = [line.split() for line in result.stderr.splitlines()]
         duplicate = [r for r in rows if r[0] == 'DUP']
-        assert len(duplicate) == 1, rows
-        assert sorted(r[1] for r in rows if r[0] == 'CLOSE') == sorted(duplicate[0][1:]), rows
-        assert len(rows) == 3, rows
-    print(label + ': body-write EPIPE retained; no body bytes sent; both descriptors closed PASS', flush=True)
+        assert len(duplicate) == 2, rows
+        assert sorted(r[1] for r in rows if r[0] == 'CLOSE') == sorted([duplicate[0][1], duplicate[0][2], duplicate[1][2]]), rows
+        assert duplicate[0][1] == duplicate[1][1], rows
+        assert len(rows) == 5, rows
+    print(label + ': body-write EPIPE retained; no body bytes sent; all three descriptors closed PASS', flush=True)
 
 
 with tempfile.TemporaryDirectory(prefix='exchange-write-', dir=ROOT / 'build') as temporary:

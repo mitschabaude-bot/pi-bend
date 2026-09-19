@@ -39,7 +39,7 @@ python3 tests/http_socket_exchange_check.py build/bend-socket-candidate-fresh
 python3 tests/http_exchange_write_error_check.py build/bend-socket-candidate-fresh
 ```
 
-The latter injects a body-send EPIPE into a disposable compiler copy and checks error retention and closure of both descriptors. Production effects are unchanged. The buffered driver still completes request writes before reading the response; a concurrent duplex driver is needed for early server responses during upload.
+The latter injects a body-send EPIPE into a disposable compiler copy and checks error retention and closure of all three descriptors. Production effects are unchanged. The driver now uploads concurrently with reads; upload failures arrive through response reads.
 
 ## Concurrent reads and writes
 
@@ -49,4 +49,7 @@ The latter injects a body-send EPIPE into a disposable compiler copy and checks 
 python3 tests/socket_writer_check.py build/bend-socket-candidate-fresh
 ```
 
-On native one/four threads and Bun, the test requires eight uploads to park before the peer sends early replies without draining upload data. The client reads each reply while its uploader remains unfinished, aborts, joins the writer and retires the connection. The peer verifies the exact partial upload prefix. Ordinary transmission, communication after writer close, pre-aborted creation, affine ownership and all 29 descriptor closes also pass. This is the socket prerequisite; the HTTP exchange driver still needs concurrent upload ownership and early-response settlement. Instrumentation changes only a disposable compiler copy, and the installed compiler remains unchanged.
+On native one/four threads and Bun, the test requires eight uploads to park before the peer sends early replies without draining upload data. The client reads each reply while its uploader remains unfinished, aborts, joins the writer and retires the connection. The peer verifies the exact partial upload prefix. Ordinary transmission, communication after writer close, pre-aborted creation, affine ownership and all 29 descriptor closes also pass. The HTTP exchange driver now uses this prerequisite for concurrent upload ownership and early-response settlement. Instrumentation changes only a disposable compiler copy, and the installed compiler remains unchanged.
+
+
+`runtime/src/socket-upload.bend` owns the upload task and its settlement state. The HTTP source owns it alongside the read connection, stopping and joining it before connection disposal. Intentional interruption after response completion or early close does not abort the caller's signal or replace the response with a shutdown-induced write error. Genuine upload failure wakes the reader and remains a typed error. Run `python3 tests/http_early_response_check.py build/bend-socket-candidate-fresh` for 15 backpressured early-response lifecycles per backend, including complete and truncated bodies and early consumer close; each run checks all 45 descriptor closes. `python3 tests/http_early_response_oracle.py` checks corresponding public outcomes against actual Node Fetch. Neither check proves all race interleavings or performance neutrality.
