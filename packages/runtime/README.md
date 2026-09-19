@@ -126,3 +126,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/url-host.bend` represents domains, opaque hosts, IPv4, IPv6 and empty hosts with native variants and a common serializer. `classifyDomain` checks a previously processed ASCII domain and dispatches numeric suffixes to IPv4 parsing. `parseOpaque` preserves case/percent escapes, applies C0 UTF-8 escaping and dispatches leading brackets to IPv6 before ordinary opaque-host checks. `bracketed` accepts the text after an opening bracket. This layer does not perform special-host percent decoding or IDNA policy selection. Nonfatal URL validation warnings are not exposed.
+
+
+`src/url-host-input.bend` prepares raw special-host tokens. It dispatches literal leading brackets to IPv6 before decoding, rejects an empty input token, and otherwise returns domain text after one percent-decoding pass and replacement-mode UTF-8 decoding with BOM preservation. Plus signs remain literal. The result distinguishes a completed IP literal from domain text that still requires IDNA policy and host classification. Percent-encoded brackets therefore never become IP-literal syntax.
