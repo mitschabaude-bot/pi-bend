@@ -46,7 +46,7 @@ def native_event(e):
         return 'D.ResponseFailed{'+', '.join([optional(r.get('status')),native_error,optional((r.get('incomplete_details') or {}).get('reason'))])+'}'
     if kind=='error':return 'D.ResponseError{'+optional(e['code'])+', '+string(e['message'])+'}'
     if kind=='response.unknown':return 'D.IgnoredEvent{}'
-    index=str(e['output_index'])+'n'
+    index=floating(e['output_index'])
     native='S.Added{'+index+', '+item(e['item'])+'}' if kind=='response.output_item.added' else 'S.Changed{'+index+', '+event_literal(e)+'}'
     return 'D.ContentEvent{'+native+'}'
 imports=['import Base','import ../packages/ai/test/api/responses-stream.bend as Check','import ../packages/ai/src/api/openai-responses-stream.bend as D','import ../packages/ai/src/api/openai-responses-terminal.bend as Terminal','import ../packages/ai/src/api/openai-responses-stream-state.bend as S','import ../packages/ai/src/api/openai-responses-stream-content.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']

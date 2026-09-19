@@ -75,6 +75,51 @@ bad('r',{'usage':{'input_tokens_details':[]}},'type:/usage/input_tokens_details:
 bad('r',{'incomplete_details':{'reason':1}},'type:/incomplete_details/reason:string')
 bad('e',{'code':9},'type:/code:string')
 
+# Every discriminator consumed by the pinned processResponsesStream loop.
+for index in [0,-0.0,42,2**32,2**53-1,1e100,-1,0.5]:
+    for kind,field,tag in [
+        ('reasoning_summary_text.delta','delta','thinking'),('reasoning_text.delta','delta','thinking'),
+        ('output_text.delta','delta','text'),('refusal.delta','delta','text'),
+        ('function_call_arguments.delta','delta','function_delta'),('function_call_arguments.done','arguments','function_done'),
+        ('custom_tool_call_input.delta','delta','custom_delta'),('custom_tool_call_input.done','input','custom_done'),
+    ]:
+        for text in ['', 'piece🌍']:
+            add('d',{'type':'response.'+kind,'output_index':index,field:text,'ignored':None},['changed',index,[tag,text]])
+    add('d',{'type':'response.reasoning_summary_part.done','output_index':index,'part':None},['changed',index,['summary_done']])
+    for item in items:
+        add('d',{'type':'response.output_item.added','output_index':index,'item':item},['added',index,project_item(item)])
+        add('d',{'type':'response.output_item.done','output_index':index,'item':item},['changed',index,['item_done',project_item(item)]])
+for status in [None,'completed','incomplete','future']:
+    response={'status':status,'output':items,'usage':{'input_tokens':7,'output_tokens':9},'incomplete_details':{'reason':'max_output_tokens'}}
+    for kind in ['completed','incomplete']:
+        add('d',{'type':'response.'+kind,'response':response},[kind,project_response(response)])
+for response in [None,{}, {'status':'failed','error':{}}, {'status':'failed','error':{'code':'bad','message':'broken'}}, {'status':'incomplete','incomplete_details':{'reason':'limit'}}]:
+    source={'type':'response.failed','response':response}
+    data=response or {}
+    error=data.get('error')
+    add('d',source,['failed',data.get('status'),None if error is None else [error.get('code'),error.get('message')],(data.get('incomplete_details') or {}).get('reason')])
+add('d',{'type':'response.failed'},['failed',None,None,None])
+for code in [None,'','bad']:
+    add('d',{'type':'error','code':code,'message':'problem'},['error',code,'problem'])
+for mode in ['d','j']:
+    add(mode,{'type':'response.created','response':{'id':'resp','unused':None}},['created','resp'])
+    for source in [{},{'type':None},{'type':'future.event','output_index':{},'item':False}]:
+        add(mode,source,['ignored'])
+# Synthesized SSE envelopes have no top-level event type in pi's processor.
+for source in [None,{'type':'response.created','response':{'id':'hidden'}}]:
+    add('s',source,['ignored'])
+for source,expected in [
+    ({'type':'response.output_text.delta','delta':'x'},'missing:/output_index'),
+    ({'type':'response.output_text.delta','output_index':'0','delta':'x'},'type:/output_index:number'),
+    ({'type':'response.function_call_arguments.done','output_index':0},'missing:/arguments'),
+    ({'type':'response.output_item.added','output_index':0,'item':{'type':'message'}},'missing:/item/id'),
+    ({'type':'response.created','response':{}},'missing:/response/id'),
+    ({'type':'response.completed'},'missing:/response'),
+    ({'type':'response.failed','response':{'error':{'message':False}}},'type:/response/error/message:string'),
+    ({'type':'error'},'missing:/message'),
+    (None,'type::object'),
+]: bad('d',source,expected)
+
 def codes(value):
     return ','.join(str(ord(c)) for c in value)
 arguments = ['s'+mode+'/'+codes(json.dumps(source,ensure_ascii=True))+'/'+codes(expected) for mode,source,expected in cases]
@@ -86,4 +131,4 @@ for threads in ['1','4']:
         assert len(actual)==len(cases[start:start+8]),(start,actual)
         for offset,result in enumerate(actual):
             assert result=='pass',(threads,cases[start+offset],result)
-    print(f'PASS Responses JSON boundary: {len(cases)} item/terminal/error vectors on {threads} native threads',flush=True)
+    print(f'PASS Responses JSON boundary: {len(cases)} item/terminal/event/error vectors on {threads} native threads',flush=True)

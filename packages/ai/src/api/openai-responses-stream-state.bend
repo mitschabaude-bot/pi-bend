@@ -9,15 +9,17 @@ import ../../../runtime/src/f64.bend as F
 
 # Provider output indices and assistant content indices are distinct: items may
 # arrive out of order, and replacing an output slot appends a new content block.
+# Wire indices retain fixed-size binary64 values; sparse/large numeric keys
+# must not allocate unary naturals in proportion to their magnitude.
 type Slot is Data:
-  Slot{outputIndex: Nat, contentIndex: Nat, block: Content.Block}
+  Slot{outputIndex: F.F64, contentIndex: Nat, block: Content.Block}
 
 type State<-G: Data> is Data:
   State{output: T.AssistantMessage<V.Value, G>, slots: List<&2, Slot>, reasoningBlocks: R.Record<Nat>, grammarProperties: R.Record<String>}
 
 type ContentEvent is Data:
-  Added{outputIndex: Nat, item: Content.OutputItem}
-  Changed{outputIndex: Nat, input: Content.Input}
+  Added{outputIndex: F.F64, item: Content.OutputItem}
+  Changed{outputIndex: F.F64, input: Content.Input}
 
 type Update<-G: Data> is Data:
   Update{state: State<G>, events: List<&2, T.AssistantMessageEvent<V.Value, G>>, error: Maybe<&2, Sampling.Error>}
@@ -43,17 +45,17 @@ def numericIndex(index: Nat) -> F.F64:
     case 0n: F.fromU32(0)
     case 1n+rest: F.add(F.fromU32(1), numericIndex(rest))
 
-def find(slots: List<&2, Slot>, +index: Nat) -> Maybe<&2, Slot>:
+def find(slots: List<&2, Slot>, +index: F.F64) -> Maybe<&2, Slot>:
   match slots:
     case Nil{}: None{}
-    case Slot{+key, position, block} <> rest: Bool.pick(Maybe<&2, Slot>, Nat.is_eq(key, index), Some{Slot{key, position, block}}, find(rest, index))
+    case Slot{+key, position, block} <> rest: Bool.pick(Maybe<&2, Slot>, V.equal(V.Number{key}, V.Number{index}), Some{Slot{key, position, block}}, find(rest, index))
 
-def remove(slots: List<&2, Slot>, +index: Nat) -> List<&2, Slot>:
+def remove(slots: List<&2, Slot>, +index: F.F64) -> List<&2, Slot>:
   match slots:
     case Nil{}: Nil{}
     case Slot{+key, position, block} <> rest:
       +tail = remove(rest, index)
-      Bool.pick(List<&2, Slot>, Nat.is_eq(key, index), tail, Slot{key, position, block} <> tail)
+      Bool.pick(List<&2, Slot>, V.equal(V.Number{key}, V.Number{index}), tail, Slot{key, position, block} <> tail)
 
 # Only the internal append position may reach Nil; all other positions came
 # from an existing slot. Replacing a block never mutates retained snapshots.
@@ -120,7 +122,7 @@ def emit(-G: Data, signals: List<&2, Content.Signal>, +index: Nat, current: Emis
     case Nil{}: current
     case head <> tail: emit(G, tail, index, emitOne(G, index, current, head))
 
-def slotsAfter(slots: List<&2, Slot>, +key: Nat, position: Nat, block: Content.Block, finished: Bool) -> List<&2, Slot>:
+def slotsAfter(slots: List<&2, Slot>, +key: F.F64, position: Nat, block: Content.Block, finished: Bool) -> List<&2, Slot>:
   match finished:
     case True{}: remove(slots, key)
     case False{}: Slot{key, position, block} <> remove(slots, key)
@@ -134,23 +136,23 @@ def committed(-G: Data, slots: List<&2, Slot>, refs: R.Record<Nat>, properties: 
   match emission:
     case Emission{message, reversed}: Update{State{withBlock(G, message, position, Content.content(block)), slots, refs, properties}, List.reverse(&2, T.AssistantMessageEvent<V.Value, G>, reversed), None{}}
 
-def apply(-G: Data, state: State<G>, key: Nat, +position: Nat, item: Maybe<&2, Content.OutputItem>, update: Content.Update) -> Update<G>:
+def apply(-G: Data, state: State<G>, key: F.F64, +position: Nat, item: Maybe<&2, Content.OutputItem>, update: Content.Update) -> Update<G>:
   match state update:
     case State{message, slots, refs, properties} Content.Update{+block, signals, +finished}:
       committed(G, slotsAfter(slots, key, position, block, finished), reasoningAfter(refs, position, finished, item), properties, position, block, emit(G, signals, position, Emission{message, Nil{}}))
 
 def unchanged(-G: Data, state: State<G>) -> Update<G>: Update{state, Nil{}, None{}}
 
-def created(-G: Data, +state: State<G>, key: Nat, value: Maybe<&2, Content.Update>) -> Update<G>:
+def created(-G: Data, +state: State<G>, key: F.F64, value: Maybe<&2, Content.Update>) -> Update<G>:
   match value:
     case None{}: unchanged(G, state)
     case Some{update}: apply(G, state, key, count(blocks(G, output(G, state))), None{}, update)
 
-def add(-G: Data, state: State<G>, key: Nat, item: Content.OutputItem) -> Update<G>:
+def add(-G: Data, state: State<G>, key: F.F64, item: Content.OutputItem) -> Update<G>:
   match state:
     case State{message, slots, refs, +properties}: created(G, State{message, slots, refs, properties}, key, Content.start(item, properties))
 
-def applied(-G: Data, state: State<G>, key: Nat, position: Nat, item: Maybe<&2, Content.OutputItem>, result: Result<&2, &2, Sampling.Error, Content.Update>) -> Update<G>:
+def applied(-G: Data, state: State<G>, key: F.F64, position: Nat, item: Maybe<&2, Content.OutputItem>, result: Result<&2, &2, Sampling.Error, Content.Update>) -> Update<G>:
   match result:
     case Fail{error}: Update{state, Nil{}, Some{error}}
     case Done{update}: apply(G, state, key, position, item, update)
@@ -165,7 +167,7 @@ def changeExisting(-G: Data, state: State<G>, slot: Maybe<&2, Slot>, +input: Con
     case None{}: unchanged(G, state)
     case Some{Slot{key, position, block}}: applied(G, state, key, position, doneItem(input), Content.step(block, input))
 
-def change(-G: Data, state: State<G>, key: Nat, input: Content.Input) -> Update<G>:
+def change(-G: Data, state: State<G>, key: F.F64, input: Content.Input) -> Update<G>:
   match state:
     case State{message, +slots, refs, properties}: changeExisting(G, State{message, slots, refs, properties}, find(slots, key), input)
 
@@ -173,11 +175,11 @@ def prependEvents(-G: Data, earlier: List<&2, T.AssistantMessageEvent<V.Value, G
   match update:
     case Update{state, events, error}: Update{state, List.append(&2, T.AssistantMessageEvent<V.Value, G>, earlier, events), error}
 
-def finishCreated(-G: Data, key: Nat, item: Content.OutputItem, update: Update<G>) -> Update<G>:
+def finishCreated(-G: Data, key: F.F64, item: Content.OutputItem, update: Update<G>) -> Update<G>:
   match update:
     case Update{state, events, _}: prependEvents(G, events, change(G, state, key, Content.ItemDone{item}))
 
-def finish(-G: Data, state: State<G>, +key: Nat, +item: Content.OutputItem, slot: Maybe<&2, Slot>) -> Update<G>:
+def finish(-G: Data, state: State<G>, +key: F.F64, +item: Content.OutputItem, slot: Maybe<&2, Slot>) -> Update<G>:
   match slot:
     case None{}: finishCreated(G, key, item, add(G, state, key, item))
     case some: changeExisting(G, state, some, Content.ItemDone{item})

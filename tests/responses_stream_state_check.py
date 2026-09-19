@@ -1,7 +1,7 @@
 """Compare interleaved Responses content and complete emission snapshots."""
 import itertools,json,subprocess
 from pathlib import Path
-from schema_literals import string,seq
+from schema_literals import string,seq,floating
 from responses_stream_literals import item,event_literal,record
 ROOT=Path(__file__).resolve().parents[1]
 cases=[]
@@ -35,9 +35,13 @@ add([added(3,tool()),event('function_call_arguments.done',3,arguments='null'),ad
 add([added(1,reasoning('rs')),added(2,reasoning('rs')),done(2,reasoning('rs')),done(1,reasoning('rs'))])
 add([added(0,dict(type='web_search_call',id='ws')),done(0,dict(type='web_search_call',id='ws'))])
 add([added(0,tool()),done(0,dict(type='web_search_call',id='ws')),event('function_call_arguments.delta',0,delta='{}'),done(0,tool())])
+# Provider indices are keys, not allocation sizes or assistant positions.
+for index in [2**32-1,2**32,2**53-1,1e100,-1,0.5]:
+    add([added(index,text('sparse')),added(3,text('neighbor')),event('output_text.delta',index,delta='large'),done(3,text('neighbor')),done(index,text('sparse'))])
+add([added(-0.0,text('zero')),event('output_text.delta',0,delta='same'),done(0,text('zero'))])
 expected=json.loads(subprocess.check_output(['node','tests/responses_stream_state_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
 def native_event(e):
-    index=str(e['output_index'])+'n'
+    index=floating(e['output_index'])
     if e['type']=='response.output_item.added':return 'S.Added{'+index+', '+item(e['item'])+'}'
     return 'S.Changed{'+index+', '+event_literal(e)+'}'
 def initial_text(b):return 'T.AssistantText{T.TextContent{'+string(b['text'])+', Some{'+string(b['textSignature'])+'}}}'

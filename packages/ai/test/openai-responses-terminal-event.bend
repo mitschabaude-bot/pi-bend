@@ -26,8 +26,8 @@ def execute(events: List<&2, D.ResponseStreamEvent>) -> IO(Harness.Execution):
 
 def earlyEvents() -> List<&2, D.ResponseStreamEvent>:
   D.ResponseCreated{"resp_early_eof"} <>
-  D.ContentEvent{S.Added{0n, C.ReasoningItem{R.Record{R.Property{"type", V.Text{"reasoning"}} <> R.Property{"id", V.Text{"rs_early_eof"}} <> R.Property{"summary", V.ArrayValue{Nil{}}} <> Nil{}}}}} <>
-  D.ContentEvent{S.Changed{0n, C.ThinkingDelta{"partial reasoning before the stream ends"}}} <> Nil{}
+  D.ContentEvent{S.Added{F.fromU32(0), C.ReasoningItem{R.Record{R.Property{"type", V.Text{"reasoning"}} <> R.Property{"id", V.Text{"rs_early_eof"}} <> R.Property{"summary", V.ArrayValue{Nil{}}} <> Nil{}}}}} <>
+  D.ContentEvent{S.Changed{F.fromU32(0), C.ThinkingDelta{"partial reasoning before the stream ends"}}} <> Nil{}
 
 def completedEvents() -> List<&2, D.ResponseStreamEvent>:
   D.ResponseCompleted{Terminal.Response{Some{"resp_completed"}, Some{"completed"}, None{}, Nil{}, Some{Terminal.ResponseUsage{Some{F.fromU32(20)}, Some{F.fromU32(7)}, Some{F.fromU32(2)}, Some{F.fromU32(3)}, None{}, Some{F.fromU32(27)}}}, None{}}} <> Nil{}
@@ -41,8 +41,8 @@ def phaseTerminal(incomplete: Bool) -> D.ResponseStreamEvent:
     case False{}: D.ResponseCompleted{Terminal.Response{Some{"resp_phase"}, Some{"completed"}, None{}, Nil{}, None{}, None{}}}
 
 def phaseEvents(first: T.TextSignaturePhase, last: T.TextSignaturePhase, incomplete: Bool) -> List<&2, D.ResponseStreamEvent>:
-  D.ContentEvent{S.Added{0n, C.MessageItem{"msg_phase", Some{first}, Nil{}}}} <>
-  D.ContentEvent{S.Changed{0n, C.ItemDone{C.MessageItem{"msg_phase", Some{last}, "answer" <> Nil{}}}}} <> phaseTerminal(incomplete) <> Nil{}
+  D.ContentEvent{S.Added{F.fromU32(0), C.MessageItem{"msg_phase", Some{first}, Nil{}}}} <>
+  D.ContentEvent{S.Changed{F.fromU32(0), C.ItemDone{C.MessageItem{"msg_phase", Some{last}, "answer" <> Nil{}}}}} <> phaseTerminal(incomplete) <> Nil{}
 
 def errorIs(execution: Harness.Execution, expected: String) -> Bool:
   match execution:

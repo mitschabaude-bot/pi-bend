@@ -59,7 +59,7 @@ def action(e):
         r=e['response'];err=r.get('error');native_error='None{}' if err is None else 'Some{Terminal.ProviderError{'+optional(err.get('code'))+', '+optional(err.get('message'))+'}}'
         return 'Check.Failed{'+', '.join([optional(r.get('status')),native_error,optional((r.get('incomplete_details') or {}).get('reason'))])+'}'
     if kind=='error':return 'Check.WireError{'+optional(e['code'])+', '+string(e['message'])+'}'
-    index=str(e['output_index'])+'n'
+    index=number(e['output_index'])
     native='S.Added{'+index+', '+item(e['item'])+'}' if kind=='response.output_item.added' else 'S.Changed{'+index+', '+event_literal(e)+'}'
     return 'Check.ContentEvent{'+native+'}'
 def cost(c):

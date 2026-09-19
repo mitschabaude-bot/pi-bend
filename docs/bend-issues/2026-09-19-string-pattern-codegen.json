@@ -1,0 +1,34 @@
+{
+  "compiler": "Bend 2.0.7 with the eight previously recorded local patches",
+  "host_runtime": "Bun 1.4.0",
+  "scope": "Single /usr/bin/time compiler process per fixture; no runtime throughput claim; shared host; source strategy differs, compiler is unchanged.",
+  "literal_pattern_fixture": {
+    "source": "tests/compiler-long-string-patterns.bend",
+    "cases": 16,
+    "generated_c_bytes": 268124850,
+    "elapsed_seconds": 14.32,
+    "peak_rss_kib": 5623696,
+    "lines": 174707,
+    "leading_space_bytes": 262945324,
+    "max_line_bytes": 2548
+  },
+  "string_equality_table_fixture": {
+    "source": "tests/compiler-string-table.bend",
+    "cases": 16,
+    "generated_c_bytes": 108544,
+    "elapsed_seconds": 0.35,
+    "peak_rss_kib": 200732
+  },
+  "full_wire_runner_before": {
+    "generated_c_bytes": 329986385,
+    "largest_segment": "FID____SRC_API_OPENAI_RESPONSES_WIRE_DECODE_C862",
+    "largest_segment_bytes_until_next": 304242028,
+    "largest_segment_lines": 197271,
+    "largest_segment_max_line_length": 2612
+  },
+  "full_wire_runner_after": {
+    "generated_c_bytes": 25776794,
+    "strategy": "Immutable wire-name table followed by native EventKind dispatch",
+    "validation": "1146 boundary cases pass before/after on one/four native threads"
+  }
+}

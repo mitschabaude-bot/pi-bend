@@ -1,4 +1,8 @@
 import Base
+import ../src/api/openai-responses-wire.bend as Wire
+import ../src/api/openai-responses-stream.bend as Stream
+import ../src/api/openai-responses-stream-state.bend as State
+import ../src/api/openai-sse-json.bend as SSE
 import ../src/api/openai-responses-wire-items.bend as Items
 import ../src/api/openai-responses-wire-terminal.bend as Terminal
 import ../src/api/openai-responses-stream-content.bend as Content
@@ -59,8 +63,38 @@ def providerError(value: Types.ProviderError) -> V.Value:
   match value:
     case Types.ProviderError{code, message}: V.ArrayValue{optionalText(code) <> optionalText(message) <> Nil{}}
 
+def optionalError(value: Maybe<&2, Types.ProviderError>) -> V.Value:
+  match value:
+    case None{}: V.Null{}
+    case Some{value}: providerError(value)
+
+def input(value: Content.Input) -> V.Value:
+  match value:
+    case Content.ThinkingDelta{text}: V.ArrayValue{V.Text{"thinking"} <> V.Text{text} <> Nil{}}
+    case Content.SummaryPartDone{}: V.ArrayValue{V.Text{"summary_done"} <> Nil{}}
+    case Content.TextDelta{text}: V.ArrayValue{V.Text{"text"} <> V.Text{text} <> Nil{}}
+    case Content.FunctionDelta{text}: V.ArrayValue{V.Text{"function_delta"} <> V.Text{text} <> Nil{}}
+    case Content.FunctionDone{text}: V.ArrayValue{V.Text{"function_done"} <> V.Text{text} <> Nil{}}
+    case Content.CustomDelta{text}: V.ArrayValue{V.Text{"custom_delta"} <> V.Text{text} <> Nil{}}
+    case Content.CustomDone{text}: V.ArrayValue{V.Text{"custom_done"} <> V.Text{text} <> Nil{}}
+    case Content.ItemDone{value}: V.ArrayValue{V.Text{"item_done"} <> item(value) <> Nil{}}
+
+def event(value: Stream.ResponseStreamEvent) -> V.Value:
+  match value:
+    case Stream.ContentEvent{State.Added{index, value}}: V.ArrayValue{V.Text{"added"} <> V.Number{index} <> item(value) <> Nil{}}
+    case Stream.ContentEvent{State.Changed{index, value}}: V.ArrayValue{V.Text{"changed"} <> V.Number{index} <> input(value) <> Nil{}}
+    case Stream.ResponseCreated{id}: V.ArrayValue{V.Text{"created"} <> V.Text{id} <> Nil{}}
+    case Stream.ResponseCompleted{value}: V.ArrayValue{V.Text{"completed"} <> response(value) <> Nil{}}
+    case Stream.ResponseIncomplete{value}: V.ArrayValue{V.Text{"incomplete"} <> response(value) <> Nil{}}
+    case Stream.ResponseFailed{status, cause, reason}: V.ArrayValue{V.Text{"failed"} <> optionalText(status) <> optionalError(cause) <> optionalText(reason) <> Nil{}}
+    case Stream.ResponseError{code, message}: V.ArrayValue{V.Text{"error"} <> optionalText(code) <> V.Text{message} <> Nil{}}
+    case Stream.IgnoredEvent{}: V.ArrayValue{V.Text{"ignored"} <> Nil{}}
+
 def decode(mode: String, value: V.Value) -> Result<&2, &2, D.Error, V.Value>:
   match mode:
+    case "d": Result.map(&2, &2, D.Error, Stream.ResponseStreamEvent, V.Value, event, Wire.decode(value))
+    case "j": Result.map(&2, &2, D.Error, Stream.ResponseStreamEvent, V.Value, event, Wire.fromMessage(SSE.JsonMessage{value}))
+    case "s": Result.map(&2, &2, D.Error, Stream.ResponseStreamEvent, V.Value, event, Wire.fromMessage(SSE.EventMessage{Some{"thread.run"}, value}))
     case "i": Result.map(&2, &2, D.Error, Content.OutputItem, V.Value, item, Items.decode(value))
     case "r": Result.map(&2, &2, D.Error, Types.Response, V.Value, response, Terminal.response(value))
     case _: Result.map(&2, &2, D.Error, Types.ProviderError, V.Value, providerError, Terminal.providerError(value))
