@@ -74,3 +74,5 @@ python3 tests/typed_do_shadow.py
 ```
 
 The reduced fixture verifies effectful and pure typed bindings, copyable bindings, nested lexical shadowing, global calls in initializers and tail actions in both standalone and imported forms. Native one/four-thread and JS checks pass; qualified binding names remain rejected. Before the patch, `tests/typed_do_shadow.py --expect-bug` verified standalone success and imported failure. All seven preceding compiler regressions and canonical library types also pass with the fix.
+
+The additive [owned timer experiment](experimental/timer/README.md) is isolated and **not installed**. It adds Base declarations and two new effect files without modifying compiler/scheduler code or existing effects. Core native/Bun lifetime tests and unchanged-output checks pass; race/scaling coverage and performance acceptance remain pending.
