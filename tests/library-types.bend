@@ -1,3 +1,4 @@
+import ../packages/ai/src/api/openai-responses-stream-content.bend as OpenAIResponsesStreamContent
 import ../packages/runtime/src/partial-json.bend as PartialJson
 import ../packages/ai/src/utils/json-parse.bend as AiJsonParse
 import ../packages/ai/src/api/openai-responses-assistant.bend as OpenAIResponsesAssistant
