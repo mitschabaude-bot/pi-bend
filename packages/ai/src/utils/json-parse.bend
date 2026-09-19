@@ -1,4 +1,7 @@
 import Base
+import ../../../runtime/src/partial-json.bend as Partial
+import ../../../runtime/src/text-space.bend as Space
+import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/json-parse.bend as Json
 import ../../../runtime/src/json-string.bend as StringJson
 import ../../../runtime/src/schema-value.bend as V
@@ -77,3 +80,35 @@ def tryRepaired(result: Result<&2, &2, Json.Error, V.Value>, +json: String) -> R
 
 def parseJsonWithRepair(+json: String) -> Result<&2, &2, Json.Error, V.Value>:
   tryRepaired(Json.parse(json), json)
+
+
+# The upstream helper may return any successfully decoded JSON value. Its
+# empty-object fallback applies to absent/blank input and failed recovery.
+def emptyObject() -> V.Value: V.ObjectValue{R.new(V.Value)}
+
+def recovered(result: Result<&2, &2, Partial.Error, V.Value>) -> V.Value:
+  match result:
+    case Done{V.Null{}}: emptyObject()
+    case Done{value}: value
+    case Fail{_}: emptyObject()
+
+def recoverRepaired(result: Result<&2, &2, Partial.Error, V.Value>, json: String) -> V.Value:
+  match result:
+    case Done{V.Null{}}: emptyObject()
+    case Done{value}: value
+    case Fail{_}: recovered(Partial.parse(repairJson(json)))
+
+def recoverPartial(result: Result<&2, &2, Json.Error, V.Value>, +json: String) -> V.Value:
+  match result:
+    case Done{value}: value
+    case Fail{_}: recoverRepaired(Partial.parse(json), json)
+
+def nonblankStreaming(blank: Bool, +json: String) -> V.Value:
+  match blank:
+    case True{}: emptyObject()
+    case False{}: recoverPartial(parseJsonWithRepair(json), json)
+
+def parseStreamingJson(partialJson: Maybe<&2, String>) -> V.Value:
+  match partialJson:
+    case None{}: emptyObject()
+    case Some{+json}: nonblankStreaming(Space.blank(json), json)
