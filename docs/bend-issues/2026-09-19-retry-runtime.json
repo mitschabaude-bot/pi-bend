@@ -1,0 +1,37 @@
+{
+  "scope": "Full native effect assembly with injected parser; real jittered retry and borrowed-parser lifetime. Native timer/channel exit audit, not exhaustive leak or scheduling proof.",
+  "sources": {
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry-runtime.bend": "c9f16ebeb6638e75be7e141232fff858a305c85f36762f4925dff5bbb8c84b8e",
+    "/home/agent/code/pi-bend/packages/ai/test/provider-retry-runtime.bend": "41a0d5945522d2c64e4f8327f10fdf7978bc342820856160f78b2408b82de2c5"
+  },
+  "samples": [
+    {
+      "backend": "native-1",
+      "seconds": 0.5000986328125,
+      "native_exit_audit": "RUNTIME_AUDIT 0 0 0"
+    },
+    {
+      "backend": "native-4",
+      "seconds": 0.49997119140625,
+      "native_exit_audit": "RUNTIME_AUDIT 0 0 0"
+    },
+    {
+      "backend": "bun",
+      "seconds": 0.569728759765625,
+      "native_exit_audit": ""
+    }
+  ],
+  "build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/ai/test/provider-retry-runtime.bend",
+      "build/provider-retry-runtime"
+    ],
+    "elapsed_seconds": 27.39573449175805,
+    "peak_sampled_group_rss_kib": 7903676,
+    "limit_gib": 40.0,
+    "stopped": false,
+    "child_exit_code": 0
+  }
+}
