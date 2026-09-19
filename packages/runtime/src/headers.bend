@@ -14,11 +14,17 @@ def extended(previous: Maybe<&2, List<&2, String>>, value: String) -> List<&2, S
     case None{}: value <> Nil{}
     case Some{values}: List.append(&2, String, values, value <> Nil{})
 
-def appendChecked(headers: Headers, field: Result<&2, &2, H.HeaderError, H.Header>) -> Result<&2, &2, H.HeaderError, Headers>:
+# Import an already validated field without caller-input normalization. Received
+# HTTP fields can retain trailing whitespace that append(name, value) strips.
+def appendField(headers: Headers, field: H.Header) -> Headers:
   match headers field:
-    case Headers{+fields} Done{H.Header{+name, value}}:
-      Done{Headers{R.set(List<&2, String>, fields, name, extended(R.get(List<&2, String>, fields, name), value))}}
-    case _ Fail{error}: Fail{error}
+    case Headers{+fields} H.Header{+name, value}:
+      Headers{R.set(List<&2, String>, fields, name, extended(R.get(List<&2, String>, fields, name), value))}
+
+def appendChecked(headers: Headers, field: Result<&2, &2, H.HeaderError, H.Header>) -> Result<&2, &2, H.HeaderError, Headers>:
+  match field:
+    case Done{value}: Done{appendField(headers, value)}
+    case Fail{error}: Fail{error}
 
 def append(headers: Headers, name: String, value: String) -> Result<&2, &2, H.HeaderError, Headers>:
   appendChecked(headers, H.normalize(name, value))
@@ -40,14 +46,19 @@ def deleteChecked(headers: Headers, name: Result<&2, &2, H.HeaderError, String>)
 def delete(headers: Headers, name: String) -> Result<&2, &2, H.HeaderError, Headers>:
   deleteChecked(headers, H.normalizeName(name))
 
-def joined(values: Maybe<&2, List<&2, String>>) -> Maybe<&2, String>:
+def separator(name: String) -> String:
+  match name:
+    case "cookie": "; "
+    case _: ", "
+
+def joined(name: String, values: Maybe<&2, List<&2, String>>) -> Maybe<&2, String>:
   match values:
     case None{}: None{}
-    case Some{items}: Some{String.join(items, ", ")}
+    case Some{items}: Some{String.join(items, separator(name))}
 
 def getChecked(headers: Headers, name: Result<&2, &2, H.HeaderError, String>) -> Result<&2, &2, H.HeaderError, Maybe<&2, String>>:
   match headers name:
-    case Headers{fields} Done{key}: Done{joined(R.get(List<&2, String>, fields, key))}
+    case Headers{fields} Done{+key}: Done{joined(key, R.get(List<&2, String>, fields, key))}
     case _ Fail{error}: Fail{error}
 
 def get(headers: Headers, name: String) -> Result<&2, &2, H.HeaderError, Maybe<&2, String>>:
@@ -85,10 +96,10 @@ def cookieEntries(values: List<&2, String>) -> List<&2, H.Header>:
     case Nil{}: Nil{}
     case value <> rest: H.Header{"set-cookie", value} <> cookieEntries(rest)
 
-def fieldEntries(cookie: Bool, name: String, values: List<&2, String>) -> List<&2, H.Header>:
+def fieldEntries(cookie: Bool, +name: String, values: List<&2, String>) -> List<&2, H.Header>:
   match cookie:
     case True{}: cookieEntries(values)
-    case False{}: H.Header{name, String.join(values, ", ")} <> Nil{}
+    case False{}: H.Header{name, String.join(values, separator(name))} <> Nil{}
 
 def combined(fields: List<&2, R.Property<List<&2, String>>>) -> List<&2, H.Header>:
   match fields:

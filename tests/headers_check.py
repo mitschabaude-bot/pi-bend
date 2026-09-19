@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 rng = random.Random(94112)
 cases = [
+    [('a','Cookie','a=1'),('a','cookie','b=2'),('g','COOKIE'),('s','cookie','c=3'),('a','Cookie',''),('g','cookie')],
     [('a','X',''),('g','x'),('h','X'),('a','x','two'),('s','X','three'),('d','x'),('g','X'),('h','x')],
     [('a','Set-Cookie','a=1'),('a','set-cookie','b=2'),('g','SET-COOKIE'),('s','Set-Cookie','c=3'),('a','SET-COOKIE',''),('d','set-cookie')],
     [('a','z','last'),('a','B','first'),('a','a','zero'),('a','b','second'),('s','Z','replacement'),('d','b'),('a','B','new')],
