@@ -80,17 +80,24 @@ def functionCall(call: Call, arguments: Maybe<&2, String>) -> Result<&2, &2, Err
     case None{}: Fail{InvalidArguments{}}
     case Some{text}: Done{FunctionCall{call, text}}
 
-def convertCall(property: Maybe<&2, String>, +id: String, +name: String, arguments: R.Record<V.Value>, namespace: Maybe<&2, String>, differentModel: Bool) -> Result<&2, &2, Error, AssistantItem>:
+# Provider JSON may be a scalar or array even for a declared object schema.
+# Keep it intact for ordinary function calls; grammar tools require a field.
+def grammarInput(name: String, arguments: V.Value, property: String) -> Result<&2, &2, Sampling.Error, String>:
+  match arguments:
+    case V.ObjectValue{fields}: Sampling.getGrammarToolInput(name, fields, property)
+    case _: Fail{Sampling.GrammarArgumentNotString{name, property}}
+
+def convertCall(property: Maybe<&2, String>, +id: String, +name: String, arguments: V.Value, namespace: Maybe<&2, String>, differentModel: Bool) -> Result<&2, &2, Error, AssistantItem>:
   match property:
-    case None{}: functionCall(callParts(Ids.splitId(id, ""), id, name, namespace, differentModel, False{}), Json.stringify(SchemaJson.toJson(V.ObjectValue{arguments})))
-    case Some{inputProperty}: customCall(callParts(Ids.splitId(id, ""), id, name, namespace, differentModel, True{}), Sampling.getGrammarToolInput(name, arguments, inputProperty))
+    case None{}: functionCall(callParts(Ids.splitId(id, ""), id, name, namespace, differentModel, False{}), Json.stringify(SchemaJson.toJson(arguments)))
+    case Some{inputProperty}: customCall(callParts(Ids.splitId(id, ""), id, name, namespace, differentModel, True{}), grammarInput(name, arguments, inputProperty))
 
 def optionalItem(result: Result<&2, &2, Error, AssistantItem>) -> Result<&2, &2, Error, Maybe<&2, AssistantItem>>:
   match result:
     case Fail{error}: Fail{error}
     case Done{item}: Done{Some{item}}
 
-def block(~A: Data, ~encode: A -> R.Record<V.Value>, content: T.AssistantContent<A>, context: ReplayContext, textIndex: Nat) -> Result<&2, &2, Error, Maybe<&2, AssistantItem>>:
+def block(~A: Data, ~encode: A -> V.Value, content: T.AssistantContent<A>, context: ReplayContext, textIndex: Nat) -> Result<&2, &2, Error, Maybe<&2, AssistantItem>>:
   match content context:
     case T.AssistantThinking{T.ThinkingContent{_, signature, _}} _: thinking(signature)
     case T.AssistantText{T.TextContent{text, signature}} ReplayContext{_, _, index, _}: Done{Some{textItem(Signature.parseTextSignature(signature), text, fallbackId(index, textIndex))}}
@@ -109,18 +116,18 @@ def append(item: Result<&2, &2, Error, Maybe<&2, AssistantItem>>, reversed: List
 
 # This stage receives already-transformed content. It returns the first error
 # without exposing a partially converted message; only text blocks advance IDs.
-def collect(~A: Data, ~encode: A -> R.Record<V.Value>, content: List<&2, T.AssistantContent<A>>, +context: ReplayContext, +textIndex: Nat, result: Result<&2, &2, Error, List<&2, AssistantItem>>) -> Result<&2, &2, Error, List<&2, AssistantItem>>:
+def collect(~A: Data, ~encode: A -> V.Value, content: List<&2, T.AssistantContent<A>>, +context: ReplayContext, +textIndex: Nat, result: Result<&2, &2, Error, List<&2, AssistantItem>>) -> Result<&2, &2, Error, List<&2, AssistantItem>>:
   match content result:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{reversed}: Done{List.reverse(&2, AssistantItem, reversed)}
     case +head <> rest Done{reversed}: collect(~A, ~encode, rest, context, advance(A, head, textIndex), append(block(~A, ~encode, head, context, textIndex), reversed))
 
-def convertAssistantContent(~A: Data, ~encode: A -> R.Record<V.Value>, content: List<&2, T.AssistantContent<A>>, context: ReplayContext) -> Result<&2, &2, Error, List<&2, AssistantItem>>:
+def convertAssistantContent(~A: Data, ~encode: A -> V.Value, content: List<&2, T.AssistantContent<A>>, context: ReplayContext) -> Result<&2, &2, Error, List<&2, AssistantItem>>:
   collect(~A, ~encode, content, context, 0n, Done{Nil{}})
 
 # The complete-message entry point derives identity from canonical source and
 # target records, so callers cannot accidentally preserve a foreign namespace.
-def convertAssistantMessage(~A: Data, ~G: Data, ~encode: A -> R.Record<V.Value>, target: Transform.Target, source: T.AssistantMessage<A, G>, messageIndex: Nat, grammarInputProperties: R.Record<String>) -> Result<&2, &2, Error, List<&2, AssistantItem>>:
+def convertAssistantMessage(~A: Data, ~G: Data, ~encode: A -> V.Value, target: Transform.Target, source: T.AssistantMessage<A, G>, messageIndex: Nat, grammarInputProperties: R.Record<String>) -> Result<&2, &2, Error, List<&2, AssistantItem>>:
   match target source:
     case Transform.Target{api, provider, id} T.AssistantMessage{content, sourceApi, sourceProvider, sourceModel, _, _, _, _, _, _, _, _, _, _, _}:
       +sameProviderAndApi = String.eq(api, sourceApi) && String.eq(provider, sourceProvider)

@@ -247,7 +247,7 @@ def resultItem(custom: Maybe<&2, String>, callId: String, output: Content.ToolRe
     case None{}: FunctionToolOutput{callId, output}
     case Some{_}: CustomToolOutput{callId, output}
 
-def convertMessage(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> R.Record<V.Value>, message: T.Message<P, A, G, D>, model: T.Model<J>, config: AssemblyConfig, first: Bool, index: Nat) -> Result<&2, &2, MessageError, List<&2, ResponseInputItem>>:
+def convertMessage(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, message: T.Message<P, A, G, D>, model: T.Model<J>, config: AssemblyConfig, first: Bool, index: Nat) -> Result<&2, &2, MessageError, List<&2, ResponseInputItem>>:
   match message config:
     case T.System{message} config: convertSystem(~P, ~encodeParameters, message, first, config, index)
     case T.User{T.UserMessage{content, _}} _: Done{userItems(Content.convertUserContent(content))}
@@ -275,7 +275,7 @@ def assemblyIndex(state: AssemblyState) -> Nat:
   match state:
     case AssemblyState{_, index}: index
 
-def assemble(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> R.Record<V.Value>, messages: List<&2, T.Message<P, A, G, D>>, +model: T.Model<J>, +config: AssemblyConfig, +first: Bool, state: Result<&2, &2, MessageError, AssemblyState>) -> Result<&2, &2, MessageError, List<&2, ResponseInputItem>>:
+def assemble(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, messages: List<&2, T.Message<P, A, G, D>>, +model: T.Model<J>, +config: AssemblyConfig, +first: Bool, state: Result<&2, &2, MessageError, AssemblyState>) -> Result<&2, &2, MessageError, List<&2, ResponseInputItem>>:
   match messages state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{AssemblyState{reversed, _}}: Done{List.reverse(&2, ResponseInputItem, reversed)}
@@ -290,12 +290,12 @@ def normalizeInput(-A: Data, -G: Data, -J: Data, providers: List<&2, String>, in
 def normalizeBody(-A: Data, -G: Data, -J: Data, providers: List<&2, String>) -> Transform.NormalizeToolCallIdInput<A, G, J> -> IO(Result<&2, &2, MessageError, String>):
   input => normalizeInput(A, G, J, providers, input)
 
-def assembled(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> R.Record<V.Value>, model: T.Model<J>, config: AssemblyConfig, result: Result<&2, &2, MessageError, List<&2, T.Message<P, A, G, D>>>) -> Result<&2, &2, MessageError, List<&2, ResponseInputItem>>:
+def assembled(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, model: T.Model<J>, config: AssemblyConfig, result: Result<&2, &2, MessageError, List<&2, T.Message<P, A, G, D>>>) -> Result<&2, &2, MessageError, List<&2, ResponseInputItem>>:
   match result:
     case Fail{error}: Fail{error}
     case Done{messages}: assemble(~P, ~A, ~G, ~D, ~J, ~encodeParameters, ~encodeArguments, messages, model, config, True{}, Done{AssemblyState{Nil{}, 0n}})
 
-def convertResolved(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> R.Record<V.Value>, ~now: Unit -> IO(F.F64), +model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, providers: List<&2, String>, options: ConvertResponsesMessagesOptions) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
+def convertResolved(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, ~now: Unit -> IO(F.F64), +model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, providers: List<&2, String>, options: ConvertResponsesMessagesOptions) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
   match context:
     case T.TranscriptContext{+messages}:
       do IO<Result<&2, &2, MessageError, List<&2, ResponseInputItem>>>:
@@ -310,13 +310,13 @@ def midConversation(options: ConvertResponsesMessagesOptions) -> Maybe<&2, Bool>
 
 # The callback belongs to this invocation and is retired after transformation,
 # including typed failures. Application types remain intact until serialization.
-def convertResponsesMessagesWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> R.Record<V.Value>, ~now: Unit -> IO(F.F64), model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, allowedToolCallProviders: List<&2, String>, options: Maybe<&2, ConvertResponsesMessagesOptions>) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
+def convertResponsesMessagesWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, ~now: Unit -> IO(F.F64), model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, allowedToolCallProviders: List<&2, String>, options: Maybe<&2, ConvertResponsesMessagesOptions>) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
   +configured = messageOptions(options)
   convertResolved(~P, ~A, ~G, ~D, ~J, ~encodeParameters, ~encodeArguments, ~now, model, Transcript.resolveTranscript(P, A, G, D, context, midConversation(configured)), allowedToolCallProviders, configured)
 
 def parameterValue(value: V.Value) -> V.Value: value
 
-def argumentRecord(value: R.Record<V.Value>) -> R.Record<V.Value>: value
+def argumentRecord(value: R.Record<V.Value>) -> V.Value: V.ObjectValue{value}
 
 def conversionClock(unused: Unit) -> IO(F.F64): Date.now()
 

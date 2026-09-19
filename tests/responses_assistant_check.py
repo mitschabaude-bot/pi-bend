@@ -25,15 +25,28 @@ add([])
 add([thinking(),thinking('')])
 add([thinking('{bad'),call(args={})],grammar={'tool':'input'})
 add([call(args={}),thinking('{bad')],grammar={'tool':'input'})
+# Streaming arguments are arbitrary JSON until tool validation. Replay must
+# preserve these values, including null, rather than replace them with {}.
+for args in [None, False, True, 0, -0.0, 3.5, '', 'text', [], [1, None, {'x': True}]]:
+    for grammar in [{}, {'tool': 'input'}]:
+        item=call()
+        item['arguments']=args
+        add([item],grammar=grammar)
 expected=json.loads(subprocess.check_output(['node','tests/responses_assistant_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
 def optional(v):return 'None{}' if v is None else 'Some{'+string(v)+'}'
 def record(v,encode=value):return 'R.Record{'+seq('R.Property{'+string(k)+', '+encode(x)+'}' for k,x in v.items())+'}'
 def block(b):
     if b['type']=='text':return 'T.AssistantText{T.TextContent{'+string(b['text'])+', '+optional(b.get('textSignature'))+'}}'
     if b['type']=='thinking':return 'T.AssistantThinking{T.ThinkingContent{"private", '+optional(b.get('thinkingSignature'))+', None{}}}'
-    return 'T.AssistantToolCall{T.ToolCall{'+', '.join([string(b['id']),string(b['name']),record(b['arguments']),'None{}',optional(b.get('namespace'))])+'}}'
+    return 'T.AssistantToolCall{T.ToolCall{'+', '.join([string(b['id']),string(b['name']),value(b['arguments']),'None{}',optional(b.get('namespace'))])+'}}'
 lines=['import Base','import ../packages/ai/test/api/responses-assistant.bend as Check','import ../packages/ai/src/api/openai-responses-assistant.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(c,r) in enumerate(zip(cases,expected,strict=True)):
+    # Null has no JS property access, so upstream throws a TypeError before
+    # grammar validation. Native JSON reports the same rejection through the
+    # existing typed missing-string error instead of emulating that exception.
+    if c['grammar'] and any(b.get('type')=='toolCall' and b['arguments'] is None for b in c['content']):
+        assert r == {'error': "Cannot read properties of null (reading 'input')"}, r
+        r = {'error': 'Grammar tool call "tool" requires argument "input" to be a string.'}
     context='C.ReplayContext{'+', '.join(['True{}' if c['relation']=='same' else 'False{}','True{}' if c['relation']=='different' else 'False{}',str(c['index'])+'n',record(c['grammar'],string)])+'}'
     result='Done{'+string(r['output'])+'}' if 'output' in r else 'Fail{'+string(r['error'])+'}'
     lines += [f'def case{i}() -> IO(Unit):','  Check.check('+', '.join([seq(map(block,c['content'])),context,result,f'"assistant replay {i}"'])+')']
