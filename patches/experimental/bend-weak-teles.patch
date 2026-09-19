@@ -1,0 +1,30 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -589,7 +589,7 @@
+ 
+ const USES: Map<HTerm, UMap> = new Map();
+ 
+-const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();
++let TELES: WeakMap<HTerm, ReturnType<typeof Bend.tele_unbind>> = new WeakMap();
+ 
+ const SRCS: Map<Bend.Name, Src> = new Map();
+ 
+@@ -665,7 +665,7 @@
+ // Memo
+ // ====
+ 
+-function memo<K, V>(m: Map<K, V>, k: K, f: () => V): V {
++function memo<K, V>(m: { get(k: K): V | undefined; set(k: K, v: V): void }, k: K, f: () => V): V {
+   const got = m.get(k);
+   if (got !== undefined) {
+     return got;
+@@ -1391,7 +1391,8 @@
+ // reference used as a value is no call; Clo.apply is never flat), and
+ // whether it is flat: no fork, no bang call, self-calls in tail position.
+ function carb_book(src: Bend.Book, roots: Bend.Name[]): Carb {
+-  [TELES, SRCS, NODES, CYCLES, FLATS, SIGS, BRWS].forEach((m) => m.clear());
++  TELES = new WeakMap();
++  [SRCS, NODES, CYCLES, FLATS, SIGS, BRWS].forEach((m) => m.clear());
+   LOCAL.clear();
+   for (const [k, tld] of Object.entries(src.tlds)) {
+     if (def_foreign(tld)) {
