@@ -146,6 +146,8 @@ A test runner composing the SSE JSON policy, schema-to-provider conversion and J
 
 `tests/compiler-pattern-shadow.bend` reduces a newly encountered occurrence to a single constructor pattern: `def number(value: Sample) -> U32` with `case Sample{number}: number`. Direct checking succeeds, while importing the file fails with `expected: a pattern (a binder or a constructor); observed: ...compiler-pattern-shadow.number`. Reproduce the imported failure by importing that file from a wrapper and defining `def value() -> U32: Shadow.number(Shadow.Sample{1})`. This confirms the still-open pattern case independently of the already patched typed-do case. `parse_body_stmt` parses each case's patterns through `parse_terms` before calling `parse_patt`; the latter only accepts a variable or constructor, so premature global resolution cannot be recovered there. No patch was installed. The JSON decoder uses the ordinary binder name `scalar` to proceed; this does not resolve BEND-012.
 
+The IDNA mapper later reproduced the same imported-pattern failure when a new global helper `replacement` collided with the existing `Data.Deviation{replacement}` binder. Renaming the helper to `mappedReplacement` allows integration; the reduced pattern reproducer above and its unresolved compiler diagnosis still apply. No new compiler patch was made.
+
 A separate local-binding failure during the same integration was not a new compiler defect: the guide's `do` grammar specifies `x : A = v` for pure bindings. Adding the omitted type annotation to that binding was sufficient.
 
 ### BEND-001/BEND-016 follow-up: JSON wire decoder composition (2026-09-19)

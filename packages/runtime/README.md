@@ -108,3 +108,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/unicode-17-idna-properties.bend` now supplies an immutable table for Bidi_Class, Joining_Type, canonical combining class and mark classification, including Unicode's script-specific defaults. `idna-label-context.analyze(table, text)` connects property lookup to the contextual rules and leading-mark inspection in one traversal. Its input is a prepared, decoded label; it does not perform mapping, NFC or ACE decoding. Regenerate the pinned data with `python3 scripts/generate-idna-properties.py`.
+
+
+`src/idna-ace.bend` supplies strict decoding of already-mapped `xn--` labels, returning the decoded text and whether ACE encoding was used. It rejects non-ASCII encodings, malformed Punycode and empty/ASCII-only decoded results. It deliberately preserves decoded characters for later validation; they must not be mapped again. Transitional capital sharp S is handled separately by the mapper as required by UTS #46, rather than relying solely on the data-table replacement.

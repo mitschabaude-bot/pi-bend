@@ -29,6 +29,9 @@ def mapped(code,transitional):
         return None
     if status=='ignored':
         return ()
+    # UTS #46 section 4 adds a transitional exception outside the data table.
+    if code==0x1e9e and transitional:
+        return (0x73,0x73)
     if status=='mapped' or status=='deviation' and transitional:
         return replacement
     assert status in ['valid','deviation']
@@ -47,7 +50,7 @@ for mode in ['n','t']:
         value=mapped(code,mode=='t')
         arguments.append(f'p;{mode};{code}')
         expected.append('invalid;'+str(code) if value is None else '+'+codes(value))
-texts=['','BÜCHER.de','faß.de','βόλος.com','\u200c\u200d','ＡＢＣ。ＣＯＭ','a\u00adb','\ufeffA','\u0000abc','a\ufffdb','\u0378','İ.K','ﬃ.test']
+texts=['','ẞ','ẞß.example','BÜCHER.de','faß.de','βόλος.com','\u200c\u200d','ＡＢＣ。ＣＯＭ','a\u00adb','\ufeffA','\u0000abc','a\ufffdb','\u0378','İ.K','ﬃ.test']
 rng=random.Random(4617)
 alphabet='abcXYZ.ßς\u200c\u200d\u00ad\u0301\ufeff\u0378\ufffdＡ。é🙂'
 texts+=[''.join(rng.choice(alphabet) for _ in range(rng.randrange(40))) for _ in range(300)]
@@ -64,6 +67,20 @@ for mode in ['n','t']:
             want='+'+codes(result)
         arguments.append('m;'+mode+';'+codes(map(ord,text)))
         expected.append(want)
+
+# Official conformance examples independently fix the expected capital-sharp-S
+# behavior. These inputs need no normalization beyond mapping, so their final
+# Unicode/nontransitional and ASCII/transitional columns test this stage directly.
+sharp_rows=[]
+for line in data.source('IdnaTestV2.txt').splitlines():
+    fields=[part.strip(' \t') for part in line.split('#')[0].split(';')]
+    if fields[0] in ['FAẞ.de','FAẞ.DE']:
+        sharp_rows.append(fields)
+assert len(sharp_rows)==2
+for fields in sharp_rows:
+    for mode,column in [('n',1),('t',5)]:
+        arguments.append('m;'+mode+';'+codes(map(ord,fields[0])))
+        expected.append('+'+codes(map(ord,fields[column])))
 
 def mix(hash_value,code):
     return ((hash_value*16777619)&0xffffffff)^code

@@ -27,13 +27,20 @@ def deviation(mode: Mode, code: U32, replacement: String) -> String:
     case Nontransitional{}: SCon{Chr{code}, SNil{}}
     case Transitional{}: replacement
 
+# Unicode 16+ maps capital sharp S to small sharp S in the data table.
+# UTS #46 section 4 separately requires "ss" for transitional processing.
+def mappedReplacement(mode: Mode, code: U32, value: String) -> String:
+  match mode code:
+    case Transitional{} 7838: "ss"
+    case _ _: value
+
 def mapped(mode: Mode, code: U32, status: Maybe<&2, Data.Status>) -> Result<&2, &2, MappingError, String>:
   match status:
     case None{}: Fail{Disallowed{code}}
     case Some{Data.Disallowed{}}: Fail{Disallowed{code}}
     case Some{Data.Valid{}}: Done{SCon{Chr{code}, SNil{}}}
     case Some{Data.Ignored{}}: Done{""}
-    case Some{Data.Mapped{replacement}}: Done{replacement}
+    case Some{Data.Mapped{value}}: Done{mappedReplacement(mode, code, value)}
     case Some{Data.Deviation{replacement}}: Done{deviation(mode, code, replacement)}
 
 def codePoint(table: Table.Table<Data.Entry>, mode: Mode, +code: U32) -> Result<&2, &2, MappingError, String>:
