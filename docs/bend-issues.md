@@ -266,3 +266,10 @@ Inspection of generated initialization code finds repeated `heap_alloc(e, cls_fi
 
 
 The BEND-022 U32-pattern inference failure also recurred in `idna-label-rules.punctuation`: matching literal 46 before a duplicated `+other` fallback fails with `expected: an annotated term (cannot infer)`. Making the function parameter copyable and using that parameter in the wildcard branch compiles and preserves behavior. The existing reduced fixture remains the regression entry point; no compiler patch was made.
+
+
+### BEND-016 recurrence: composed IDNA label validation (2026-09-19)
+
+The full-table `packages/runtime/test/idna-label.bend` fixture generated 8,292,982 bytes of C (110,990 lines). Clang `-O1` remained active after 6m41s, reporting 6m40s CPU time and 892,860 KiB sampled RSS; an earlier sample reported 618,000 KiB. The build subsequently completed successfully. These are individual samples, not a measured total duration or peak process-group memory. The [observation record](bend-issues/2026-09-19-idna-label-build.json) retains C/binary hashes and the measurement scope.
+
+The emitted file contains 20,963 textual `heap_alloc` call sites, counting runtime code as well as generated functions. This is not a dynamic allocation count or evidence of a leak. It supports retaining the immutable-table initialization/specialization lead from the earlier IDNA build, but does not isolate which Clang pass consumes the time. No compiler patch, optimization-level reduction or test/data reduction was used for this build.

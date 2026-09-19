@@ -1,0 +1,15 @@
+{
+  "fixture": "packages/runtime/test/idna-label.bend",
+  "generated_c_bytes": 8292982,
+  "generated_c_sha256": "edd78d7c9c810704641f0195b8e5edb844147e2017a86fab1d8bbc2592fa22ba",
+  "observation": "Clang -O1 still active at elapsed 3m16s, sampled RSS 618000 KiB. This is not a peak memory or controlled timing comparison.",
+  "later_clang_sample": {
+    "elapsed": "06:41",
+    "cpu": "06:40",
+    "rss_kib": 892860
+  },
+  "generated_c_heap_alloc_sites": 20963,
+  "count_scope": "All textual heap_alloc call sites in generated C, including runtime; not a runtime allocation count.",
+  "build_exit_code": 0,
+  "binary_sha256": "b7570f5d35fd23f83690a19159975b2000d60d65c6918d0e902353c97979d2bb"
+}

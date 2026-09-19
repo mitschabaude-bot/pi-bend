@@ -114,3 +114,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/idna-label-rules.bend` checks prepared-label syntax and mapping status with explicit `checkHyphens`, `useSTD3` and processing-mode options. It returns typed failures and never repairs text. ACE-decoded labels must use nontransitional mode. These checks are one part of validation: NFC, leading marks, ContextJ, domain-wide Bidi applicability and DNS lengths must also be handled before treating text as a valid hostname.
+
+
+`src/idna-label.bend` composes strict ACE decoding, NFC verification, syntax/status checks and Unicode context analysis. Construct an immutable `Context` from the mapping, normalization and property tables and reuse it across calls. `process` accepts a label after domain-wide mapping/NFC and splitting; decoded ACE text is checked without repair and uses nontransitional status rules automatically. Options explicitly select hyphen, STD3 and joiner checks. Results preserve the decoded text, emptiness and Bidi facts, so the domain processor can apply Bidi requirements to every nonempty label when needed. DNS lengths and full domain orchestration remain separate work.
