@@ -135,3 +135,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `url-authority.bend` reads a non-file authority prefix and returns the unconsumed path/query/fragment delimiter. Special schemes additionally stop at backslash. Its immutable tokens retain optional credentials and an optional raw port, distinguishing absent syntax from explicitly empty syntax. The last at-sign separates credentials from host; the first credential colon separates username/password, and the shared UTF-8 percent encoder escapes both. Host/port splitting respects IPv6 brackets. These lexical tokens still require host parsing, port validation and scheme-specific empty-host checks; file authority handling is separate.
+
+
+`url-path.bend` parses hierarchical path segments with immutable accumulators, resolves literal and percent-encoded dot segments, preserves repeated separators, and handles special-scheme backslashes and file-drive roots. `start` accepts the remainder after authority scanning; `parse` enters the path state with normalized base segments after the caller has performed relative-path shortening or reset. Results preserve absent versus empty query/fragment values and encode them with their respective UTF-8 sets. Input preprocessing, opaque paths, setter overrides and full relative-URL resolution are separate work.
