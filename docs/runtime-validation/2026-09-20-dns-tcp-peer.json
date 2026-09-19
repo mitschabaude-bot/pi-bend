@@ -1,0 +1,306 @@
+{
+  "scope": "Endpoint-aware DNS TCP composition. Local Linux fixtures; production programs unchanged. No resource-table instrumentation or complete resolver claim.",
+  "results": {
+    "scope": "Local IPv4/IPv6 endpoint-aware DNS TCP response matching.\n\nThe peer verifies query bytes, independent endpoint observations and closure.\n",
+    "cases": [
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "matched"
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "absent"
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "wrong-id"
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "wrong-question"
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "truncated"
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "malformed"
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "abort"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "matched"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "absent"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "wrong-id"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "wrong-question"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "truncated"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "malformed"
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "abort"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "matched"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "absent"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "wrong-id"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "wrong-question"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "truncated"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "malformed"
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "abort"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "matched"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "absent"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "wrong-id"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "wrong-question"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "truncated"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "malformed"
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "abort"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "matched"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "absent"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "wrong-id"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "wrong-question"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "truncated"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "malformed"
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "abort"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "matched"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "absent"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "wrong-id"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "wrong-question"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "truncated"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "malformed"
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "abort"
+      },
+      {
+        "backend": "native 1",
+        "mode": "inspection failure releases bound UDP port",
+        "iterations": 32
+      },
+      {
+        "backend": "native 4",
+        "mode": "inspection failure releases bound UDP port",
+        "iterations": 32
+      },
+      {
+        "backend": "Bun",
+        "mode": "inspection failure releases bound UDP port",
+        "iterations": 32
+      }
+    ],
+    "sha256": {
+      "/home/agent/code/pi-bend/tests/dns-tcp-peer-failure.bend": "84d9dfaeb7acc383ce7ee58f37b5806de23b792305fb7349c908617f6d4dc1cd",
+      "/home/agent/code/pi-bend/build/dns-tcp-peer-failure": "a6ebc025059386e418b7abdae39ca913325141cc60cfe150585b4b432e6097d2",
+      "/home/agent/code/pi-bend/build/dns-tcp-peer-failure.js": "fc8408a306a7a95c743dc5972f84a7ba94f6a2a9dcdfdd3d635e253e3963069b",
+      "/home/agent/code/pi-bend/packages/runtime/src/dns-tcp-peer.bend": "8b0d6379bef7c3c73d8ff06d0ae202964917f5d21034b0f0c8c24c37c0f0b6cb",
+      "/home/agent/code/pi-bend/tests/dns-tcp-peer.bend": "9bc141a6727d8b7d69a01207ec6ec7f7765e6f28f69d4eb2dd5df05bd795c1ba",
+      "/home/agent/code/pi-bend/tests/dns_tcp_peer_check.py": "5a8d17ed61f544d388eaeac6c56ab1a94eab008a18a115c798d05bfb1659909b",
+      "/home/agent/code/pi-bend/build/bend-endpoint-candidate/comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+      "/home/agent/code/pi-bend/build/bend-endpoint-candidate/base.bend": "1cc487a94fbc13b3f043c7513ed1c966de522d17f5a377e67270f7c19af23dce",
+      "/home/agent/code/pi-bend/build/dns-tcp-peer": "859267358ceafd7d6fd0017660c6d512951b3fce76cd92515d8115912a8bce3e",
+      "/home/agent/code/pi-bend/build/dns-tcp-peer.js": "790fbee85128fd584951ca6d5fec687c036f6a78311d3f469df4e4fabb44dc3e"
+    }
+  },
+  "builds": {
+    "dns-tcp-peer-build": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "tests/dns-tcp-peer.bend",
+        "build/dns-tcp-peer"
+      ],
+      "elapsed_seconds": 24.195846075192094,
+      "peak_sampled_group_rss_kib": 7253428,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-tcp-peer-js-build": {
+      "command": [
+        "/home/agent/code/pi-bend/build/dns-tcp-compiler",
+        "tests/dns-tcp-peer.bend",
+        "-o",
+        "build/dns-tcp-peer.js"
+      ],
+      "elapsed_seconds": 3.688992495648563,
+      "peak_sampled_group_rss_kib": 1594244,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-tcp-peer-failure-build": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "tests/dns-tcp-peer-failure.bend",
+        "build/dns-tcp-peer-failure"
+      ],
+      "elapsed_seconds": 5.309241249226034,
+      "peak_sampled_group_rss_kib": 1109740,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-tcp-peer-failure-js-build": {
+      "command": [
+        "/home/agent/code/pi-bend/build/dns-tcp-compiler",
+        "tests/dns-tcp-peer-failure.bend",
+        "-o",
+        "build/dns-tcp-peer-failure.js"
+      ],
+      "elapsed_seconds": 2.1085025165230036,
+      "peak_sampled_group_rss_kib": 668860,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "limitations": [
+    "Numeric connection establishment is composed by the caller; no resolver bootstrap, TLS, DNS retry/cache or alias selection.",
+    "Frames are returned by the existing connection and inspected explicitly; no automatic concurrent transaction dispatcher.",
+    "Inspection cleanup tests peer-endpoint failure on an unconnected UDP socket. Local-endpoint failure is not induced.",
+    "Cancellation during adoption is deterministic pre-abort after successful connect, not exhaustive handoff interleavings.",
+    "No upstream suite status changed."
+  ]
+}
