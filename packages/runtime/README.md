@@ -92,3 +92,10 @@ Serialization of the explicit pi-ai `JsonValue` union is implemented separately.
 `src/unicode-normalization.bend` provides `nfc(tables, text)` and `nfd(tables, text)` for scalar strings. Construct `src/unicode-17-normalization.bend`'s `tables()` once and share the immutable value across calls. Normalization decomposes canonical mappings, handles Hangul algorithmically, stably orders combining segments and performs blocked canonical composition. It does not case-fold or implement IDNA validation.
 
 The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerate with `python3 scripts/generate-unicode-normalization.py`; `--check` verifies reproducibility. The generator verifies pinned hashes of official Unicode inputs cached under `build/unicode-17`; downloaded source files are not production dependencies. `u32-table.bend` stores balanced immutable lookup data with generated height bounds, and `stable-sort.bend` avoids non-tail list traversal for long combining segments.
+
+
+## IDNA input preparation
+
+`src/idna-mapping.bend` maps scalar strings using Unicode 17 UTS #46 data, in transitional or nontransitional mode. Disallowed code points return a typed error containing the first offending code point. Construct `unicode-17-idna-mapping.table()` once and reuse it. `idna-prepare.bend` composes mapping with NFC through an immutable context containing both tables. This is preparation only: label validity, ACE decoding, contextual/bidirectional rules and URL host restrictions still need to run before using a result as a hostname.
+
+`scripts/generate-idna-mapping.py --check` verifies the generated ranges against pinned official data. The mapping checker compares range boundaries and mixed strings exactly and checks every Unicode code point in both modes through ordered block checksums. The preparation checker exercises mapping plus NFC on the official IDNA test inputs; it does not claim full IDNA conformance. Both run on native one/four threads and Bun through native-cleanup.
