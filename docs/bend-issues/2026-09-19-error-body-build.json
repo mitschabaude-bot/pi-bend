@@ -1,0 +1,44 @@
+{
+  "command": [
+    "sh",
+    "scripts/build-pure.sh",
+    "packages/ai/test/error-body-runner.bend",
+    "build/error-body-runner"
+  ],
+  "elapsed_seconds": 72.01224856264889,
+  "peak_sampled_group_rss_kib": 20306524,
+  "limit_gib": 40,
+  "stopped": false,
+  "child_exit_code": 0,
+  "artifacts": {
+    "packages/ai/src/utils/error-body.bend": {
+      "bytes": 5758,
+      "sha256": "a773f17c1266a1bee8bcb9d42f63534c74003a64ea8035e4b18ec84e5866483a"
+    },
+    "packages/ai/test/error-body-runner.bend": {
+      "bytes": 3149,
+      "sha256": "8854214607c41654206b2e95ebf1c4140ff082de2e61617fe96c9749b4bf5e67"
+    },
+    "build/error-body-runner.c": {
+      "bytes": 7432313,
+      "sha256": "4bdcd364b094c8b28c9dde3ef448b03cd4fc619e4406a814c5c3269cc6d3c35c"
+    },
+    "build/error-body-runner": {
+      "bytes": 1917304,
+      "sha256": "276f0399067d1d7ddd2dba086ee9e4c10b872c0c9a911ad9848b5a3aabca5180"
+    },
+    "/home/agent/.bend/current/bend2/comp.ts": {
+      "bytes": 182807,
+      "sha256": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f"
+    }
+  },
+  "validation": {
+    "actual_pi_cases": 306,
+    "native_threads": [
+      1,
+      4
+    ],
+    "compiler": "installed eight-patch compiler; no experimental patches",
+    "scope": "Typed normalization/formatting after provider-specific status extraction, which remains pending"
+  }
+}

@@ -625,9 +625,14 @@
     },
     {
       "source": "packages/ai/test/error-body.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1f1a91106e10f8d9f5cec797a3cc2dc69f834e435fbc95f391b4ac94e90c2be1"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/error-body-runner.bend",
+        "tests/error_body_check.py",
+        "tests/error_body_reference.mts"
+      ],
+      "sha256": "1f1a91106e10f8d9f5cec797a3cc2dc69f834e435fbc95f391b4ac94e90c2be1",
+      "notes": "306 actual-pi normalization/formatting comparisons pass on one/four native threads, including exact-name mapping of all 16 original scenarios at the typed transport-data boundary. Typed text/parsed/unavailable bodies replace SDK reflection and exclude streams/private state. Provider-specific status extraction, construction of body candidates from real failures, and catch-block integration remain pending; supplied status in these fixtures does not validate SDK field precedence."
     },
     {
       "source": "packages/ai/test/event-stream.test.ts",
