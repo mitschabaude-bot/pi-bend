@@ -137,3 +137,7 @@ The combined native build subsequently completed and passed all 14 original case
 ## Maintaining this log
 
 Give each new finding a stable ID, affected version/hash, observable symptom and impact, smallest available reproducer, expected/actual behavior, evidence, hypothesis, workaround, next experiment, regression coverage and upstream link when one exists. Mark unavailable evidence explicitly. Separate observation from inference and local patches from upstream releases. Review workarounds when updating Bend. Never close a problem merely because the port progressed past it.
+
+### BEND-001 follow-up: SSE JSON policy fixture (2026-09-19)
+
+A test runner composing the SSE JSON policy, schema-to-provider conversion and JSON serialization reached an observed 16,368,732 KiB compiler RSS at 39 seconds. That compiler process was stopped; this is a sampled observation, not an exact peak or completed timing. The test now compares parsed native values directly, avoiding serialization solely to transport test results. Its C emission still generates 9,003,095 bytes and a sampled compiler RSS reached 7,593,988 KiB at 21 seconds before completing; this is not a controlled performance comparison and does not establish a lower peak. The retained reproducer is `packages/ai/test/openai-sse-json-runner.bend`. No compiler patch was made, and BEND-001/BEND-016 remain open.
