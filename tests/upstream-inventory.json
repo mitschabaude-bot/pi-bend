@@ -1109,10 +1109,12 @@
         "packages/ai/test/provider-retry-policy.bend",
         "tests/provider_retry_policy_check.py",
         "packages/ai/test/provider-retry.bend",
-        "tests/provider_retry_check.py"
+        "tests/provider_retry_check.py",
+        "packages/ai/test/provider-retry-error.bend",
+        "tests/provider_retry_error_check.py"
       ],
       "sha256": "c5070cb70ce88a21102fa7588da49c94937b86f098bac4d26b9dc0d38988304e",
-      "notes": "Pure component coverage: 1,035 numeric-prefix/eligibility/delay comparisons (427 parser, 608 policy), plus 12 asynchronous retry-loop effect traces against the pinned helper, pass on one/four native threads. Loop traces replace sleep and date/random effects; they do not establish the original five request/timer tests. A separate owned-timer candidate and pure Bend abortable sleep pass lifecycle/cleanup tests. HTTP-date parsing, production randomness, exact delay-error formatting, timer integration into retry effects and provider adapters remain pending."
+      "notes": "Pure component coverage: 1,035 numeric-prefix/eligibility/delay comparisons (427 parser, 608 policy), plus 12 asynchronous retry-loop effect traces against the pinned helper, pass on one/four native threads. Loop traces replace sleep and date/random effects; they do not establish the original five request/timer tests. A separate owned-timer candidate and pure Bend abortable sleep pass lifecycle/cleanup tests. HTTP-date parsing, production randomness, timer integration into retry effects and provider adapters remain pending. Exact retry-generated error names/messages now pass 58 delay-limit and one abort comparison with the original helper, 618 binary64 ceiling comparisons, and three native original-error/abort rendering checks; the loop trace also checks the complete delay-limit message."
     },
     {
       "source": "packages/ai/test/providers.test.ts",

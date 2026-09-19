@@ -37,7 +37,7 @@ for (const c of cases) {
   }catch(e){
     if(e===original)trace.push((c.other?'other':'provider')+' original');
     else if(e.name==='AbortError')trace.push('abort');
-    else if(e.message.startsWith('Server requested '))trace.push('cap provider message');
+    else if(e.message.startsWith('Server requested '))trace.push(e.name+':'+e.message);
     else throw e;
   }
   traces.push(trace.join('\n')+'\n');

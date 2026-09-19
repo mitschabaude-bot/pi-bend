@@ -1,0 +1,36 @@
+{
+  "provider-retry-error": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/ai/test/provider-retry-error.bend",
+      "build/provider-retry-error"
+    ],
+    "elapsed_seconds": 8.531673273071647,
+    "peak_sampled_group_rss_kib": 1983744,
+    "limit_gib": 40,
+    "stopped": false,
+    "child_exit_code": 0,
+    "generated_c_bytes": 737807
+  },
+  "provider-retry": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/ai/test/provider-retry.bend",
+      "build/provider-retry"
+    ],
+    "elapsed_seconds": 36.545309581793845,
+    "peak_sampled_group_rss_kib": 10486640,
+    "limit_gib": 40,
+    "stopped": false,
+    "child_exit_code": 0,
+    "generated_c_bytes": 3743830
+  },
+  "source_sha256": {
+    "packages/runtime/src/f64-round.bend": "fafb1a2ab203ca48e1c290ed024871240fb42328ed15efe7b24f0fce2d68761f",
+    "packages/ai/src/utils/provider-retry-error.bend": "14de242eaae01c62c8e3e55f5353a5da898ec8898c3586edca82fa356d6d20d8",
+    "packages/ai/test/provider-retry-error.bend": "14e0c76780e23462c95107d2299ae2e2a2185d055513315b4c28fdbfb3d0b513",
+    "packages/ai/test/provider-retry.bend": "ee077e2d4423843aa64f845d276820a2f4abb5fdcfce834fdaba36bccf4ecd08"
+  }
+}

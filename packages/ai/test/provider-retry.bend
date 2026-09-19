@@ -1,5 +1,6 @@
 import Base
 import ../src/utils/provider-retry.bend as P
+import ../src/utils/provider-retry-error.bend as Error
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/u64.bend as W
 import ../../runtime/src/callback.bend as C
@@ -85,11 +86,16 @@ def preAbort(abort: Bool, controller: A.AbortController<String>) -> IO(Unit):
         changed : Bool <- A.abort(String, controller, Some{"stop"})
         return Unit{}
 
+def showLimit(result: Result<&2, &2, Error.FormattingError, Error.RenderedError>) -> IO(Unit):
+  match result:
+    case Done{Error.RenderedError{name, message}}: IO.print(name ++ ":" ++ message)
+    case Fail{_}: IO.die(Unit, 1, "retry error formatting failed")
+
 def show(result: Result<&2, &2, P.RetryFailure<String>, String>) -> IO(Unit):
   match result:
     case Done{value}: IO.print("done " ++ value)
     case Fail{P.RequestAborted{}}: IO.print("abort")
-    case Fail{P.DelayRejected{_, message}}: IO.print("cap " ++ message)
+    case Fail{P.DelayRejected{error, message}}: showLimit(Error.delayError(error, message))
     case Fail{P.RequestFailed{P.Other{original}}}: IO.print("other " ++ original)
     case Fail{P.RequestFailed{P.Provider{P.ProviderError{original, _, _, _, _, _}}}}: IO.print("provider " ++ original)
 
