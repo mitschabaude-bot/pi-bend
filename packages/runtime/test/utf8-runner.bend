@@ -26,8 +26,20 @@ def scalars(text: String) -> List<&2, U32>:
     case SNil{}: Nil{}
     case SCon{Chr{code}, rest}: code <> scalars(rest)
 
+def scalarSeparator(first: Bool, reversed: String) -> String:
+  match first:
+    case True{}: reversed
+    case False{}: SCon{',', reversed}
+
+# Reporting must not impose a machine-stack limit on the text under test.
+# The left operand of append has at most seven decimal digits.
+def scalarText(text: String, first: Bool, reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{Chr{code}, rest}: scalarText(rest, False{}, String.reverse(U32.show(code)) ++ scalarSeparator(first, reversed))
+
 def showText(text: String) -> String:
-  String.join(showNumbers(scalars(text)), ",")
+  scalarText(text, True{}, "")
 
 def fromScalars(values: List<&2, U32>) -> String:
   match values:

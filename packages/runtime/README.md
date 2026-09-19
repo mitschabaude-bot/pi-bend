@@ -132,3 +132,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `url-scheme.bend` represents the six special schemes explicitly and retains normalized names for other schemes. Its token parser accepts ASCII scheme syntax, lowercases ASCII letters, and exposes special-scheme and default-port queries. `url-port.bend` parses a delimited decimal port into an optional bounded number, omitting empty and scheme-default ports. Overflow never enters the accumulator. URL input preprocessing, delimiters, relative resolution, file authority restrictions, and setter prefix semantics belong to the enclosing parser; these modules do not implement them. Both are pure Bend.
+
+
+`url-authority.bend` reads a non-file authority prefix and returns the unconsumed path/query/fragment delimiter. Special schemes additionally stop at backslash. Its immutable tokens retain optional credentials and an optional raw port, distinguishing absent syntax from explicitly empty syntax. The last at-sign separates credentials from host; the first credential colon separates username/password, and the shared UTF-8 percent encoder escapes both. Host/port splitting respects IPv6 brackets. These lexical tokens still require host parsing, port validation and scheme-specific empty-host checks; file authority handling is separate.
