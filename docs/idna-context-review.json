@@ -1,0 +1,91 @@
+{
+  "versions": {
+    "node": "24.18.0",
+    "acorn": "8.16.0",
+    "ada": "3.4.4",
+    "amaro": "1.1.9",
+    "ares": "1.34.6",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "llhttp": "9.4.2",
+    "merve": "1.2.2",
+    "modules": "137",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.69.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.7",
+    "simdjson": "4.6.4",
+    "simdutf": "6.4.0",
+    "sqlite": "3.53.1",
+    "tz": "2026b",
+    "undici": "7.28.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "13.6.233.17-node.50",
+    "zlib": "1.3.1-e00f703",
+    "zstd": "1.5.7"
+  },
+  "cases": [
+    {
+      "input": "\u0628\u200c\u200c\u0628",
+      "reason": "Consecutive ZWNJs do not provide joining context for each other.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn--ngba799qa",
+        "url": "xn--ngba799qa"
+      },
+      "matches": false
+    },
+    {
+      "input": "\u0628\u200c\u200d\u0628",
+      "reason": "The later ZWJ has no immediate virama predecessor.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn--ngba799qea",
+        "url": "xn--ngba799qea"
+      },
+      "matches": false
+    },
+    {
+      "input": "\u0628-\u200c\u0628",
+      "reason": "The intervening hyphen is not Joining_Type Transparent.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn----0mcb526x",
+        "url": "xn----0mcb526x"
+      },
+      "matches": false
+    },
+    {
+      "input": "\u0915\u094d\u200da\u200cb",
+      "reason": "The later ZWNJ has no valid joining context.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn--ab-lnf8ty35hea",
+        "url": "xn--ab-lnf8ty35hea"
+      },
+      "matches": false
+    },
+    {
+      "input": "\u0915\u094d\u200d\u05d0\u05d1",
+      "reason": "A label in a Bidi domain mixes L with R.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn--4dbc02wog235h",
+        "url": "xn--4dbc02wog235h"
+      },
+      "matches": false
+    }
+  ],
+  "status": "pending user behavior decision; not parity",
+  "source": {
+    "url": "https://github.com/nodejs/node/blob/v24.18.0/deps/ada/ada.cpp#L9420",
+    "sha256": "ac8fba37ceddb7c10ca5a24fd57a0f0a0ca32cd3d391e40c6f9f6b7af3801fd4",
+    "observation": "The first join control returns a whole-label result. ZWNJ scans for any L/D before and R/D after instead of allowing only intervening T. Successful joiner handling returns before the Bidi section."
+  }
+}
