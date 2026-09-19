@@ -86,8 +86,23 @@ These are capability additions, not automatically bugs in existing primitives.
 **BEND-011 — Deep generated C requires an increased Clang parser limit.** `scripts/build-pure.sh` uses `-fbracket-depth=2048` because generic record match trees exceed Clang's default 256. This is a code-generation interoperability/performance concern; the flag is a workaround. Measure depth and size versus record/variant shape and reduce a failing program. Do not flatten canonical application types merely to fit generated C.
 
 **BEND-012 — Binding/global-name collisions during module integration.** During terminal-module integration, global helpers named `number`, `signature` and `usage` were renamed after import-context name collisions. A new combined Responses test reproduced the problem in a typed `do` binding: the constrained-sampling fixture has both a global `unchanged` helper and a local `unchanged : ... <- ...` binding. Standalone execution succeeded; importing the same file failed with `expected: def, type or law; observed: :`. Copyable `+name` bindings failed with a quantified-datatype diagnostic.
-+
-+The typed-do case is now a confirmed compiler defect with reduced fixture `tests/typed-do-shadow.bend` and before/after runner `tests/typed_do_shadow.py`. Cause: `parse_term_do_stmt` parsed the left-hand name as a term before checking for `:`, allowing module namespace resolution to turn a local binding into a global reference; `+name` could fail even earlier while parsing quantified types. The local fix recognizes bare typed binding syntax first and retains the original term path for nonbindings. Effectful/pure/copied/nested bindings and initializer/tail global calls pass standalone/imported on one/four native threads and JS; qualified binding names remain rejected. The seven existing compiler regressions and canonical library types also pass. `patches/bend-typed-do-shadow.patch` is applied locally as the eighth patch. Application bindings were not renamed to hide this failure. Pattern/lambda and other previously observed shadowing cases remain open; this is not a blanket resolution of BEND-012.
+
+The typed-do case is now a confirmed compiler defect with reduced fixture `tests/typed-do-shadow.bend` and before/after runner `tests/typed_do_shadow.py`. Cause: `parse_term_do_stmt` parsed the left-hand name as a term before checking for `:`, allowing module namespace resolution to turn a local binding into a global reference; `+name` could fail even earlier while parsing quantified types. The local fix recognizes bare typed binding syntax first and retains the original term path for nonbindings. Effectful/pure/copied/nested bindings and initializer/tail global calls pass standalone/imported on one/four native threads and JS; qualified binding names remain rejected. The seven existing compiler regressions and canonical library types also pass. `patches/bend-typed-do-shadow.patch` is applied locally as the eighth patch. Application bindings were not renamed to hide this failure. Pattern/lambda and other previously observed shadowing cases remain open; this is not a blanket resolution of BEND-012.
+
+### BEND-012 performance audit
+
+The typed-do patch was installed after correctness checks but before performance measurement. That sequencing was inadequate. Future patches must be minimal and pass relevant baseline performance comparisons before installation; memory improvements must be evaluated alongside time.
+
+An initial parsing-only comparison uses otherwise identical Bend 2.0.7 sources with this one patch reversed for the baseline. `scripts/benchmark-typed-do.ts` records two variants with alternating execution order, warmup and 30 batches of 10 parses on Bun 1.4.0. Two independent runs on the shared host produced these patched/baseline median-time ratios:
+
+| Workload | Run 1 | Run 2 |
+| --- | --- | --- |
+| Base | 1.005 | 0.981 |
+| Base plus standalone regression | 1.026 | 1.008 |
+| 400 ordinary-action functions | 0.977 | 0.980 |
+| 400 typed-binding functions | 0.996 | 0.967 |
+
+These mixed, small timing differences do not establish zero overhead. The standalone regression is slightly slower in both runs; further isolation is needed before attributing that to the patch or calling the patch performance-neutral. Both compiler versions emitted byte-identical 92,513-byte C for `tests/typed-do-shadow.bend`, establishing unchanged generated code for that fixture only. No compiler change was installed during this audit. Other seven patches have not received a comprehensive performance audit. Raw timings, hashes, environment and scope are in [the measurement record](bend-issues/2026-09-19-typed-do-performance.json). The memory experiment remains uninstalled; its successful memory reduction is not proof of acceptable compilation speed.
 
 ## Standard-library development opportunities
 

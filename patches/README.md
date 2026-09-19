@@ -1,5 +1,7 @@
 # Bend compiler patches
 
+Keep patches minimal and check relevant performance against an otherwise identical baseline before installing them. Correctness tests alone are insufficient. Memory experiments must measure time as well as memory; see the limitations and pending performance work in [the Bend issue log](../docs/bend-issues.md).
+
 `bend-shared-import-namespace.patch` fixes a module-loader issue observed in Bend 2.0.5. A file imported directly and through a sibling package could receive two lexical namespaces when the paths crossed above the entry directory. The loader now reuses a completed file’s established namespace when assigning a local import alias. Active import cycles remain errors. This changes the compiler’s import resolution; it adds no foreign behavior to the Bend executable.
 
 Apply it to the installed compiler source after inspecting compatibility with the installed release:
