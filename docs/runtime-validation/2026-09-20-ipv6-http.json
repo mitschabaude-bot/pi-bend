@@ -1,0 +1,509 @@
+{
+  "scope": "Typed URL -> numeric IPv6 connect -> full cleartext HTTP exchange.\n\nAll traffic is local. Compares fixed/chunked uploads and three response framing\nmodes with Node Fetch. This is not DNS, TLS or cancellable-connect coverage.\n",
+  "node_versions": {
+    "node": "24.18.0",
+    "acorn": "8.16.0",
+    "ada": "3.4.4",
+    "amaro": "1.1.9",
+    "ares": "1.34.6",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "llhttp": "9.4.2",
+    "merve": "1.2.2",
+    "modules": "137",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.69.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.7",
+    "simdjson": "4.6.4",
+    "simdutf": "6.4.0",
+    "sqlite": "3.53.1",
+    "tz": "2026b",
+    "undici": "7.28.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "13.6.233.17-node.50",
+    "zlib": "1.3.1-e00f703",
+    "zstd": "1.5.7"
+  },
+  "cases_per_backend": 24,
+  "backends": [
+    "Node Fetch",
+    "native 1",
+    "native 4",
+    "Bun"
+  ],
+  "observed": [
+    {
+      "request_line": "POST /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "DELETE /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "POST /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "DELETE /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "POST /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "DELETE /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "POST /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "DELETE /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "POST /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "DELETE /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "POST /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "DELETE /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "POST /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "DELETE /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "POST /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "DELETE /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "POST /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "DELETE /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "POST /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "DELETE /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "POST /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    },
+    {
+      "request_line": "DELETE /v1/responses?x=%C3%A9 HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 0
+    },
+    {
+      "request_line": "POST /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "content-length": [
+          "18"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 1
+    },
+    {
+      "request_line": "DELETE /v1/responses? HTTP/1.1",
+      "headers": {
+        "content-type": [
+          "application/json"
+        ],
+        "x-byte": [
+          "\u00ff"
+        ],
+        "transfer-encoding": [
+          "chunked"
+        ]
+      },
+      "host": "[::1]:<port>",
+      "body_hex": "7b2274657874223a2268c3a9f09f9982227d",
+      "response_framing": 2
+    }
+  ],
+  "sha256": {
+    "tests/ipv6-http-exchange.bend": "adf69ce7a12190f506a029cdb7ead68a0351abdcb2b7d044e3cf3f248ddcd9cd",
+    "build/ipv6-http-exchange.c": "38ec6de8b222ed7f0bf946142d92421f6a32975a0aecf39c191bfc7407ec8b36",
+    "build/ipv6-http-exchange": "b1d7021f205a23b081cf3f0eac5281887efd512ff7b8c61bdcc5957b5d125511",
+    "build/ipv6-http-exchange.js": "d03638dad57365da3d4590f8429c3dc43ae190a4c228a15d48d4c379e1ea1d14"
+  },
+  "compiler_sha256": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+  "verification_checkout": {
+    "revision": "3c05311fa7d893281cd04284fda814076cb89565",
+    "scope": "Detached committed checkout plus only the new IPv6 integration fixture/checker. Pending form-encoding drafts were absent."
+  },
+  "builds": {
+    "native": {
+      "command": [
+        "sh",
+        "-c",
+        "cd build/ipv6-http-clean && BEND=/home/agent/code/pi-bend/build/ipv6-http-clean/build/compiler sh scripts/build-pure.sh tests/ipv6-http-exchange.bend build/ipv6-http-exchange"
+      ],
+      "elapsed_seconds": 70.00010855961591,
+      "peak_sampled_group_rss_kib": 18712776,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/code/pi-bend/build/ipv6-http-clean/build/ipv6-http-compiler",
+        "tests/ipv6-http-exchange.bend",
+        "-o",
+        "build/ipv6-http-exchange.js"
+      ],
+      "elapsed_seconds": 4.772552818059921,
+      "peak_sampled_group_rss_kib": 1741796,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "dependencies_sha256": {
+    "tests/http-request-exchange.bend": "18330651e89234ec09876e2ac9864f943d8f4f66cadc2ed9849d461175133c18",
+    "packages/runtime/src/http-buffered-body.bend": "7bb7e15970178e6a0eb3d3ae8e002d51fb49f60c134c0cd2951c609b1e4e6a67",
+    "packages/runtime/src/http-buffered-request.bend": "5bdff0dce96d495682d9cf227ac4a495257816b17158608cf0dc41ee9676c449",
+    "packages/runtime/src/http-url.bend": "e24a5384a3fabbc95ee235e55125869125be73731c1fc925b996cf349b9ca087",
+    "packages/runtime/src/ipv6-connect.bend": "9bbb207b5c1a52d2c755b8163d5397115647bf2ac49522232f396c6019a845ed",
+    "tests/ipv6_http_exchange_check.py": "791d48176643db82adc967b1d8bcf2cae20f32d2cdc26ac67fae47ad83920084"
+  },
+  "candidate_sha256": {
+    "base.bend": "cbeef77e20b301f606c260609edaa24ec9b913ef0edc2104f36dab7886303e4d",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "effs/tcp_connect_ipv6.c": "1ebcf4d174c053a23987ca697d0e88eda48febdeeed8835c133875a3396f59d7",
+    "effs/tcp_connect_ipv6.js": "a4dfbb678019eeab985b99228db98e1497250a605ce90330dff22d784d3cf46d",
+    "effs/tcp_send_bytes.c": "94b5ca3c0dc4e37a4a80a2491b42cf6412c33ba02625bed247993e671ca35421",
+    "effs/tcp_recv_bytes.c": "affdcd703c508673cd9ef34e51508492bc8c37de26fa3963cbfb96defd32509d",
+    "effs/socket_duplicate.c": "c26ee880fa4c952b45981c4803e89933421238c1b4e6c108e6f2040829d3bbd5",
+    "effs/tcp_shutdown.c": "e3ec7b7aa7a9bd100db717a98f28e5162a4a46247c30c9509aa6176df619fc36",
+    "effs/socket_is_connection_reset.c": "a1f00e374f01f3d35bb93dcd780583048f9e72898d69072e8b740a1494da8bf5"
+  },
+  "limits": "Linux loopback, dedicated cleartext connections, finite lifecycle observations. No connection cancellation, DNS, TLS, connection pooling, general leak-freedom or production provider integration claim. Candidate effects remain uninstalled; compiler and scheduler unchanged."
+}
