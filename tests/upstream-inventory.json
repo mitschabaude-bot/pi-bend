@@ -588,7 +588,7 @@
         "packages/ai/test/constrained-sampling.bend"
       ],
       "sha256": "1c1ba81ee0a026e175bd654b443bfae3093d2003942cb27c9f29a5e6edc5aadf",
-      "notes": "Four of six original named cases ported: supported constraints/fallback, immutable strict schema derivation, rejection/fallback of unsafe schemas, and append-only grammar JSON deltas. Native builders, typed provider tool declarations, policy errors and immutable buffer updates preserve the original assertions. Supplemental source comparisons cover grammar selection, declaration maps, strict/grammar capability combinations, wire serialization and error precedence. Grammar-call message replay and custom Responses initial-input streaming remain pending."
+      "notes": "Five of six original named cases ported: supported constraints/fallback, immutable strict schema derivation, rejection/fallback of unsafe schemas, grammar-call Responses message replay, and append-only grammar JSON deltas. Replay uses the public complete transcript converter, checks both invalid argument inputs and the custom call/output wire items. Native builders, typed provider declarations, policy errors and immutable updates preserve the original assertions. Custom Responses initial-input streaming remains pending."
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",

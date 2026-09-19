@@ -8,6 +8,8 @@ import ./api/strict-json-schema.bend as Check
 import ./api/grammar-input.bend as Grammar
 import ../src/api/openai-responses-shared.bend as O
 import ../src/types.bend as T
+import ./api/responses-messages.bend as Responses
+import ../../runtime/src/f64.bend as F
 
 def parameters() -> V.Value:
   D.schema(D.object(R.Record{
@@ -135,9 +137,30 @@ def rejectsUnsafeSchemas() -> IO(Unit):
     rejectedSchema(V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"child", V.ObjectValue{R.Record{R.Property{"$ref", V.Text{"https://example.com/child.json"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"child"} <> Nil{}}} <> Nil{}}}, "$ref schemas are unsupported")
     IO.print("PASS falls back or rejects schemas that cannot be safely converted")
 
+def replayContext(arguments: R.Record<V.Value>) -> T.TranscriptContext<V.Value,R.Record<V.Value>,Unit,Unit>:
+  call = {T.AssistantToolCall{T.ToolCall{"call_1|ctc_1","sample_tool",arguments,None{},None{}}} : T.AssistantContent<R.Record<V.Value>>}
+  assistant = Responses.assistant(call <> Nil{},"openai-responses","openai","target",T.ToolUse{})
+  output = {T.ToolResult{T.ToolResultMessage{"call_1|ctc_1","sample_tool",T.TextImageText{T.TextContent{"done",None{}}} <> Nil{},None{},None{},False{},F.fromU32(1)}} : T.Message<V.Value,R.Record<V.Value>,Unit,Unit>}
+  T.TranscriptContext{T.Assistant{assistant} <> output <> Nil{}}
+
+def replayGrammar(arguments: R.Record<V.Value>) -> IO(Result<&2,&2,O.MessageError,List<&2,O.ResponseInputItem>>):
+  options = {O.ConvertResponsesMessagesOptions{None{},Some{R.Record{R.Property{"sample_tool","payload"} <> Nil{}}},None{},None{},None{},None{}} : O.ConvertResponsesMessagesOptions}
+  O.convertResponsesMessages(~Unit,~Unit,~Unit,Responses.model(True{},True{},None{}),replayContext(arguments),"openai" <> Nil{},Some{options})
+
+def grammarReplay() -> IO(Unit):
+  do IO<Unit>:
+    missing : Result<&2,&2,O.MessageError,List<&2,O.ResponseInputItem>> <- replayGrammar(R.new(V.Value))
+    Assert.assertion(Responses.matches(missing,Fail{"Grammar tool call \"sample_tool\" requires argument \"payload\" to be a string."}),"missing grammar replay input fails")
+    numeric : Result<&2,&2,O.MessageError,List<&2,O.ResponseInputItem>> <- replayGrammar(R.Record{R.Property{"payload",V.Number{F.fromU32(42)}} <> Nil{}})
+    Assert.assertion(Responses.matches(numeric,Fail{"Grammar tool call \"sample_tool\" requires argument \"payload\" to be a string."}),"numeric grammar replay input fails")
+    replayed : Result<&2,&2,O.MessageError,List<&2,O.ResponseInputItem>> <- replayGrammar(R.Record{R.Property{"payload",V.Text{"abc"}} <> Nil{}})
+    Assert.assertion(Responses.matches(replayed,Done{"[{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"call_id\":\"call_1\",\"name\":\"sample_tool\",\"input\":\"abc\"},{\"type\":\"custom_tool_call_output\",\"call_id\":\"call_1\",\"output\":\"done\"}]"}),"custom Responses call and output replay")
+    IO.print("PASS replays grammar calls as custom Responses items")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     supportedConstraints()
     derivesStrictSchemas()
     rejectsUnsafeSchemas()
+    grammarReplay()
     grammarDeltas()
