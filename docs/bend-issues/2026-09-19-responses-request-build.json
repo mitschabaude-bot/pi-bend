@@ -1,0 +1,71 @@
+{
+  "compiler": "Installed Bend 2.0.7 with the established eight patches; no experimental compiler changes",
+  "scope": "Sampled group RSS across C emission and Clang; not a controlled benchmark",
+  "compiler_sha256": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+  "fixtures": {
+    "responses-params": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "packages/ai/test/openai-responses-params-runner.bend",
+        "build/responses-params-runner"
+      ],
+      "elapsed_seconds": 81.61795142292976,
+      "peak_sampled_group_rss_kib": 18223172,
+      "limit_gib": 40,
+      "stopped": false,
+      "child_exit_code": 0,
+      "files": {
+        "packages/ai/test/openai-responses-params-runner.bend": {
+          "sha256": "8e3c910db8d77a8b6871bf614dafb4a75affb76b71555fb52bad00ac4633f6a9",
+          "bytes": 4941
+        },
+        "build/responses-params-runner": {
+          "sha256": "b3df3160a742017ea4d1c9ac1ba6415c757e640fc6abf541ab026a8409469cce",
+          "bytes": 2150600
+        },
+        "build/responses-params-runner.c": {
+          "sha256": "1b2c3af5d93959a3bb1c7b0322173c3ed50f8e84a672a7135fd605d059abf882",
+          "bytes": 22756815
+        }
+      },
+      "actual_upstream_comparisons": 914,
+      "native_threads": [
+        1,
+        4
+      ]
+    },
+    "responses-request": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "packages/ai/test/openai-responses-request.bend",
+        "build/responses-request"
+      ],
+      "elapsed_seconds": 154.78262735996395,
+      "peak_sampled_group_rss_kib": 39350920,
+      "limit_gib": 40,
+      "stopped": false,
+      "child_exit_code": 0,
+      "files": {
+        "packages/ai/test/openai-responses-request.bend": {
+          "sha256": "093291ce7bcf0b4c78b7e4e0257d8920a1eaf3e34ab5d9efa1d7610b3b8437f0",
+          "bytes": 4458
+        },
+        "build/responses-request": {
+          "sha256": "fc34683733e7e494c96d4c93b48ec29a132a09d629d59a139b144af7c17eda1f",
+          "bytes": 3075584
+        },
+        "build/responses-request.c": {
+          "sha256": "befe63040bb34b40157e29cfa8e4cfc0ce834b5e657f8a289f8a2a66def3dede",
+          "bytes": 27255095
+        }
+      },
+      "actual_upstream_comparisons": 192,
+      "native_threads": [
+        1,
+        4
+      ]
+    }
+  }
+}

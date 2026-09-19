@@ -966,10 +966,12 @@
       "status": "pending",
       "ports": [
         "tests/responses_policy_check.py",
-        "tests/provider_env_check.py"
+        "tests/provider_env_check.py",
+        "tests/responses_params_check.py",
+        "tests/responses_request_check.py"
       ],
       "sha256": "6cd2cc313079c4a3836bc93be5362aaf6b3ebd38b51cc4a81fad7770830ce5f8",
-      "notes": "Component evidence only: 9,219 extracted-source compatibility/cache/affinity comparisons and 168 actual-pi scoped/process environment comparisons pass on one/four native threads. The original suite remains pending because it invokes the complete provider with captured HTTP requests; request construction, explicit-header merging, hooks and wrapper integration remain unfinished."
+      "notes": "Component evidence: 9,219 compatibility/cache comparisons, 168 environment comparisons, 914 field-assembly comparisons against buildParams with substituted converted inputs, and 192 full request-builder comparisons with actual transcript/message/tool converters pass on one/four native threads. The original suite remains pending because it invokes the complete provider with captured HTTP requests; explicit-header merging, public options/wrapper, hooks and transport integration remain unfinished."
     },
     {
       "source": "packages/ai/test/openai-responses-empty-tool-result.test.ts",
