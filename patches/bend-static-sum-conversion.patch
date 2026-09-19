@@ -1,0 +1,23 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -1789,6 +1789,20 @@
+   if (lay.arms === null || v.lay.arms === null) {
+     die("a layout mismatch");
+   }
++  // A static sum has only one live arm. Converting every arm would treat
++  // inactive payload words as values of unrelated types (including tags).
++  if (v.stat && v.lay.arms.length > 0) {
++    const from = v.lay.arms[v.lay.arms.length === 1 ? 0 : Number(v.ws[0])];
++    const arm = lay_arm(lay, from.k);
++    const fields = arm.fs.map((f, j) =>
++      val_to(fl, val_field(v, from.fs[j]), f.lay));
++    const ws = lay.ks.map((_, j) => j === 0 && lay.arms!.length > 1
++      ? String(lay.arms!.indexOf(arm)) : "0");
++    fields.forEach((g, j) => g.ws.forEach((w, n) => {
++      ws[arm.fs[j].at + n] = w;
++    }));
++    return val_new(ws, lay, fields.every((g) => g.stat));
++  }
+   return val_arms(fl, lay, v.ws[0], (t, i) => `${t} == ${i}`, (arm) => {
+     const from = lay_arm(v.lay, arm.k);
+     return arm.fs.map((f, j) => val_to(fl, val_field(v, from.fs[j]), f.lay));

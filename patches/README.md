@@ -27,7 +27,7 @@ python3 tests/clock_vectors.py
 
 The clock tests compare 276 interval vectors bit-for-bit and exercise both primitive backends, monotonic progress, concurrent reads and Event timestamps. The JS test runs in Bun, as required by the existing sleep effect; Node supplies the numeric oracle. The origin is explicitly owned by a runtime `Clock`; canonical application startup must initialize and share it. A separate clock per Event would change the source contract and is not the intended composition.
 
-All six patches are currently applied locally to Bend 2.0.7, after checking compatibility following its automatic update. The import, channel identity, monotonic/Unix clock, JS identifier and static-layout regression scripts pass on this release. Bend automatic updates remain enabled, so a future release may remove them or implement the changes upstream. The module regression checks both diamond-import orders and cycle rejection; `sh tests/transcript.sh` additionally exercises the real ai/agent/runtime dependency graph. The build script does not silently modify the compiler.
+Seven patches are currently applied locally to Bend 2.0.7, including the static-sum conversion fix below. The import, channel identity, monotonic/Unix clock, JS identifier and static-layout regression scripts pass on this release. Bend automatic updates remain enabled, so a future release may remove them or implement the changes upstream. The module regression checks both diamond-import orders and cycle rejection; `sh tests/transcript.sh` additionally exercises the real ai/agent/runtime dependency graph. The build script does not silently modify the compiler.
 
 `bend-unix-milliseconds.patch` adds `IO.unixMilliseconds() -> IO(U32 & U32)`. It returns signed Unix epoch milliseconds as two's-complement high/low words. The native effect reads `CLOCK_REALTIME` and reduces its normalized seconds/nanoseconds pair to integer milliseconds without host floating point. An OS clock failure terminates with an explicit diagnostic. The JS backend uses `Date.now()` and the same word representation. `IO.now` and the monotonic primitive are unchanged. The pure-Bend `date.bend` module handles signed conversion to binary64. This is a small OS primitive, not a foreign Date library.
 
@@ -51,3 +51,13 @@ python3 tests/static_layout.py
 ```
 
 The reduced regression (`tests/static-layout.bend`) was verified to fail native compilation with the unpatched compiler and to pass with the patch on one/four threads; the JS backend also passes. It nests generic data/accessor descriptors with optional fields inside a list. The original property-inspection fixture likewise reproduces the failure before the patch. Shared runtime values, primitive coercion and generic/assistant event-stream regressions pass with the patch applied.
+
+
+`bend-static-sum-conversion.patch` fixes conversion between native layouts for a statically known algebraic-data variant. Previously, conversion emitted every destination branch and tried to interpret the live success payload as an unrelated error payload while generating an inactive branch. A small generic IO/Result program reproduced the compiler crash. Conversion now selects the known live constructor before converting its fields, preserves destination padding/tag layout, and derives static eligibility from the converted fields. Dynamic sum conversion retains its existing branch handling. This changes compiler code generation, not application semantics or production dependencies.
+
+```sh
+patch --forward -p1 -d "$HOME/.bend/current" < patches/bend-static-sum-conversion.patch
+python3 tests/static_sum_layout.py
+```
+
+The standalone regression covers empty/populated successes, both error variants, nested text/number payloads and subsequent generic IO round trips on one/four native threads and the JS backend. The preceding static-layout regression remains green on both backends. The fix was required by the Responses converter's instantiation of the existing generic message transformer with a structured error type.
