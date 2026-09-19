@@ -33,6 +33,8 @@ The [owned timer implementation](../patches/experimental/timer/README.md) provid
 
 Numeric IPv6 connection establishment is now implemented in an [isolated additive primitive](../patches/experimental/ipv6-connect/README.md), with a pure Bend adapter for the existing address type. DNS, cancellable connect, TLS and endpoint-to-exchange integration remain our transport implementation work.
 
+An [owned cancellable connection primitive](../patches/experimental/connect/README.md) now supports pending IPv4/IPv6 attempts in an isolated candidate. Its affine owner, cancellation capability and retirement rules are tested; pure Bend AbortSignal/deadline and transport integration remain to be composed.
+
 ## Module acceptance
 
 For each module, record its upstream source and public exports; port the full data model and call contracts; port its tests; verify downstream composition; then migrate its callers. A module is not complete solely because a demonstration works. Track intentional language adaptations separately from remaining gaps.
