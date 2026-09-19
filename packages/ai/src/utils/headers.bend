@@ -1,4 +1,6 @@
 import Base
+import ../../../runtime/src/headers.bend as Native
+import ../../../runtime/src/http-header.bend as H
 import ../types.bend as T
 import ../../../runtime/src/record.bend as R
 
@@ -19,3 +21,13 @@ def providerHeadersToRecord(headers: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2
   match headers:
     case None{}: None{}
     case Some{R.Record{properties}}: nonempty(present(properties))
+
+# Fetch iteration exposes separate Set-Cookie entries. As in pi, projecting
+# into a single-value record retains the last value for that name.
+def collect(entries: List<&2, H.Header>, record: R.Record<String>) -> R.Record<String>:
+  match entries:
+    case Nil{}: record
+    case H.Header{name, value} <> rest: collect(rest, R.set(String, record, name, value))
+
+def headersToRecord(headers: Native.Headers) -> R.Record<String>:
+  collect(Native.entries(headers), R.new(String))
