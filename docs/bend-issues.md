@@ -141,3 +141,13 @@ Give each new finding a stable ID, affected version/hash, observable symptom and
 ### BEND-001 follow-up: SSE JSON policy fixture (2026-09-19)
 
 A test runner composing the SSE JSON policy, schema-to-provider conversion and JSON serialization reached an observed 16,368,732 KiB compiler RSS at 39 seconds. That compiler process was stopped; this is a sampled observation, not an exact peak or completed timing. The test now compares parsed native values directly, avoiding serialization solely to transport test results. Its C emission still generates 9,003,095 bytes and a sampled compiler RSS reached 7,593,988 KiB at 21 seconds before completing; this is not a controlled performance comparison and does not establish a lower peak. The retained reproducer is `packages/ai/test/openai-sse-json-runner.bend`. No compiler patch was made, and BEND-001/BEND-016 remain open.
+
+### BEND-012 follow-up: reduced imported pattern collision (2026-09-19)
+
+`tests/compiler-pattern-shadow.bend` reduces a newly encountered occurrence to a single constructor pattern: `def number(value: Sample) -> U32` with `case Sample{number}: number`. Direct checking succeeds, while importing the file fails with `expected: a pattern (a binder or a constructor); observed: ...compiler-pattern-shadow.number`. Reproduce the imported failure by importing that file from a wrapper and defining `def value() -> U32: Shadow.number(Shadow.Sample{1})`. This confirms the still-open pattern case independently of the already patched typed-do case. `parse_body_stmt` parses each case's patterns through `parse_terms` before calling `parse_patt`; the latter only accepts a variable or constructor, so premature global resolution cannot be recovered there. No patch was installed. The JSON decoder uses the ordinary binder name `scalar` to proceed; this does not resolve BEND-012.
+
+A separate local-binding failure during the same integration was not a new compiler defect: the guide's `do` grammar specifies `x : A = v` for pure bindings. Adding the omitted type annotation to that binding was sufficient.
+
+### BEND-001/BEND-016 follow-up: JSON wire decoder composition (2026-09-19)
+
+The source-derived Responses output-item/terminal decoder runner emitted 24,932,938 bytes of C. Its compiler process reached a sampled RSS of 20,267,272 KiB at 47 seconds before exiting; this is not an exact peak or elapsed-time benchmark. The retained fixture is `packages/ai/test/openai-responses-wire-runner.bend`, which composes strict parsing, typed decoding and structural expected-value comparisons using runtime input data. No compiler change was made. Large code generation and compiler memory costs remain unresolved; do not treat native test success as performance evidence.
