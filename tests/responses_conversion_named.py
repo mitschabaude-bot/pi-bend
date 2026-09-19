@@ -1,4 +1,4 @@
-"""Original Responses conversion contracts; stream-dependent cases stay pending."""
+"""Original Responses conversion and namespace stream/replay contracts."""
 import re,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -9,9 +9,8 @@ for suite in suites:
     native=(ROOT/f'packages/ai/test/{suite}.bend').read_text()
     names=re.findall(r'\bit\("([^"\n]+)"',source)
     ported=re.findall(r'IO.print\("PASS ([^"\n]+)"\)',native)
-    if suite=='openai-responses-namespace':assert ported==names[3:] and len(names)==5
-    else:assert ported==names
-    expected.extend('PASS '+name for name in ported)
+    assert len(ported)==len(names) and set(ported)==set(names)
+    expected.extend('PASS '+name for name in names)
 # Keep the opaque foreign provider ID identical to the original test fixture.
 raw=re.search(r'const COPILOT_RAW_TOOL_CALL_ID =\s*"([^"]+)";', (ROOT.parent/'pi-mono/packages/ai/test/openai-responses-foreign-toolcall-id.test.ts').read_text()).group(1)
 assert f'def rawId() -> String: "{raw}"' in (ROOT/'packages/ai/test/openai-responses-foreign-toolcall-id.bend').read_text()
@@ -21,4 +20,4 @@ for threads in ['1','4']:
     result=subprocess.check_output([str(output),'--threads',threads],cwd=ROOT,text=True,timeout=120)
     assert result.splitlines()==expected,result
     print(result,end='')
-print('Responses conversion: three complete named suites and 2/5 namespace cases')
+print('Responses conversion: four complete named suites, including all five namespace cases')

@@ -1,4 +1,4 @@
-"""Named constrained-sampling cases ported so far; remaining names stay pending."""
+"""All original named constrained-sampling contracts."""
 import re,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -6,7 +6,7 @@ source=(ROOT.parent/'pi-mono/packages/ai/test/constrained-sampling.test.ts').rea
 native=ROOT/'packages/ai/test/constrained-sampling.bend'
 names=re.findall(r'\bit\("([^"\n]+)"',source)
 ported=re.findall(r'IO.print\("PASS ([^"\n]+)"\)',native.read_text())
-assert set(ported)=={'converts supported constraints and falls back when unsupported', 'derives strict provider schemas without changing tool definitions', 'falls back or rejects schemas that cannot be safely converted', 'keeps grammar input JSON deltas append-only', 'replays grammar calls as custom Responses items'}
+assert len(ported)==len(names) and set(ported)==set(names)
 ported=[name for name in names if name in ported]
 assert set(ported)<=set(names) and len(names)==6
 output=ROOT/'build/test-constrained-sampling'

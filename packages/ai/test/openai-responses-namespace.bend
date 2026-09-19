@@ -4,6 +4,31 @@ import ../src/types.bend as T
 import ./api/responses-named.bend as Fixture
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/schema.bend as Assert
+import ../../runtime/src/schema-value.bend as V
+import ./api/responses-stream-contracts.bend as Stream
+
+def absentTerminalError() -> IO(Unit):
+  do IO<Unit>:
+    output : T.AssistantMessage<V.Value, Unit> <- Stream.execute(Stream.functionEvents(), None{})
+    Assert.assertion(Stream.absentError(output), "terminal error message is absent")
+    IO.print("PASS omits an absent error message")
+
+def functionNamespace() -> IO(Unit):
+  do IO<Unit>:
+    +output : T.AssistantMessage<V.Value, Unit> <- Stream.execute(Stream.functionEvents(), None{})
+    Assert.assertion(Stream.messageTool(output, "call_test|fc_test", "lookup", Stream.payload("value", "hello"), Some{"dynamic_tools"}), "streamed function namespace and arguments")
+    replayed : Result<&2, &2, C.MessageError, List<&2, C.ResponseInputItem>> <- Stream.replay(output, None{})
+    Assert.assertion(Stream.replayMatches(replayed, False{}), "function namespace survives public transcript replay")
+    IO.print("PASS round-trips a function namespace received only on output_item.done")
+
+def customNamespace() -> IO(Unit):
+  +properties = {R.Record{R.Property{"query", "input"} <> Nil{}} : R.Record<String>}
+  do IO<Unit>:
+    +output : T.AssistantMessage<V.Value, Unit> <- Stream.execute(Stream.customEvents(), Some{properties})
+    Assert.assertion(Stream.messageTool(output, "call_test|ctc_test", "query", Stream.payload("input", "hello"), Some{"dynamic_tools"}), "streamed custom namespace and arguments")
+    replayed : Result<&2, &2, C.MessageError, List<&2, C.ResponseInputItem>> <- Stream.replay(output, Some{properties})
+    Assert.assertion(Stream.replayMatches(replayed, True{}), "custom namespace survives public transcript replay")
+    IO.print("PASS round-trips a custom-tool namespace received only on output_item.done")
 
 def targetDropsNamespace(model: T.Model<Unit>) -> IO(Unit):
   message = Fixture.assistant(Fixture.toolCall("call_function|fc_test","lookup","value","hello",Some{"dynamic_tools"}) <> Fixture.toolCall("call_custom|ctc_test","query","input","hello",Some{"dynamic_tools"}) <> Nil{},"openai-responses","openai","gpt-5.4",T.Pending{})
@@ -29,5 +54,8 @@ def ordinary() -> IO(Unit):
 
 def run() -> IO(Unit):
   do IO<Unit>:
+    absentTerminalError()
+    functionNamespace()
+    customNamespace()
     dropsNamespaces()
     ordinary()

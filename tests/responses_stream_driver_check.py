@@ -5,7 +5,9 @@ from schema_literals import string,seq,floating
 from responses_stream_literals import item,event_literal
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--batch-size',type=int,default=8)
+batch=parser.add_mutually_exclusive_group()
+batch.add_argument('--batch-size',type=int,default=8)
+batch.add_argument('--single-batch',action='store_true',help='Compile all cases in one batch')
 parser.add_argument('--generate-only',action='store_true',help='Generate oracle-backed fixtures without invoking the compiler')
 args=parser.parse_args()
 if args.batch_size < 1:parser.error('--batch-size must be positive')
@@ -48,8 +50,9 @@ def native_event(e):
     native='S.Added{'+index+', '+item(e['item'])+'}' if kind=='response.output_item.added' else 'S.Changed{'+index+', '+event_literal(e)+'}'
     return 'D.ContentEvent{'+native+'}'
 imports=['import Base','import ../packages/ai/test/api/responses-stream.bend as Check','import ../packages/ai/src/api/openai-responses-stream.bend as D','import ../packages/ai/src/api/openai-responses-terminal.bend as Terminal','import ../packages/ai/src/api/openai-responses-stream-state.bend as S','import ../packages/ai/src/api/openai-responses-stream-content.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
-for start in range(0,len(cases),args.batch_size):
-    stop=min(start+args.batch_size,len(cases));lines=list(imports)
+batch_size=len(cases) if args.single_batch else args.batch_size
+for start in range(0,len(cases),batch_size):
+    stop=min(start+batch_size,len(cases));lines=list(imports)
     for i in range(start,stop):
         c,r=cases[i],expected[i];mode='Check.'+c['mode']+'{'+(str(c['index'])+'n' if c['mode'] in ['ReadFails','SinkFails','CloseFails'] else '')+'}'
         lines += [f'def case{i}() -> IO(Unit):','  Check.check('+', '.join([seq(map(native_event,c['events'])),mode,optional(c['requested']),string(r),string(f'Responses async driver {i}')])+')']

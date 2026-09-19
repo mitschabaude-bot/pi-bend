@@ -10,6 +10,7 @@ import ../src/api/openai-responses-shared.bend as O
 import ../src/types.bend as T
 import ./api/responses-messages.bend as Responses
 import ../../runtime/src/f64.bend as F
+import ./api/responses-initial-input.bend as InitialInput
 
 def parameters() -> V.Value:
   D.schema(D.object(R.Record{
@@ -157,6 +158,11 @@ def grammarReplay() -> IO(Unit):
     Assert.assertion(Responses.matches(replayed,Done{"[{\"type\":\"custom_tool_call\",\"id\":\"ctc_1\",\"call_id\":\"call_1\",\"name\":\"sample_tool\",\"input\":\"abc\"},{\"type\":\"custom_tool_call_output\",\"call_id\":\"call_1\",\"output\":\"done\"}]"}),"custom Responses call and output replay")
     IO.print("PASS replays grammar calls as custom Responses items")
 
+def initialGrammarInput() -> IO(Unit):
+  do IO<Unit>:
+    InitialInput.run()
+    IO.print("PASS starts custom Responses tool calls with their initial input")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     supportedConstraints()
@@ -164,3 +170,4 @@ def main() -> IO(Unit):
     rejectsUnsafeSchemas()
     grammarReplay()
     grammarDeltas()
+    initialGrammarInput()

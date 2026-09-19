@@ -583,12 +583,12 @@
     },
     {
       "source": "packages/ai/test/constrained-sampling.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/constrained-sampling.bend"
       ],
       "sha256": "1c1ba81ee0a026e175bd654b443bfae3093d2003942cb27c9f29a5e6edc5aadf",
-      "notes": "Five of six original named cases ported: supported constraints/fallback, immutable strict schema derivation, rejection/fallback of unsafe schemas, grammar-call Responses message replay, and append-only grammar JSON deltas. Replay uses the public complete transcript converter, checks both invalid argument inputs and the custom call/output wire items. Native builders, typed provider declarations, policy errors and immutable updates preserve the original assertions. Custom Responses initial-input streaming remains pending."
+      "notes": "All six original named cases pass on one/four threads: strict/grammar capability conversion and fallback/rejection, unchanged tool declarations, unsafe-schema policies, grammar call/result replay, append-only grammar JSON deltas and streamed initial custom input. The public asynchronous processor receives the sample_tool-to-payload mapping; the retained start snapshot contains a, final sole tool call contains abc, concatenated emitted deltas parse to payload abc and final stop reason is toolUse. Native immutable schema builders, result values and event snapshots replace JS mutation while retaining all meaningful original assertions."
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",
@@ -991,12 +991,12 @@
     },
     {
       "source": "packages/ai/test/openai-responses-namespace.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/openai-responses-namespace.bend"
       ],
       "sha256": "1bcf77de390f0fe6120b720a9a2b790575884ff0c08a29b49d8da5f2da701171",
-      "notes": "Two of five original named cases pass: both function/custom calls exist without namespaces for all three migrated targets, and ordinary function calls acquire no namespace. Native Maybe values replace own-property assertions. Absent terminal error and both namespace stream/replay round trips remain pending."
+      "notes": "All five original named cases pass on one/four threads. The public processResponsesStream omits an absent terminal error and preserves namespaces arriving only at output_item.done for function/custom calls; normalizeContext and convertResponsesMessagesWith replay the exact call IDs, names, arguments/input and namespace. All three migrated targets drop namespaces; ordinary calls acquire none. Native Maybe values replace own-property assertions. Model identity/API and relevant fixture fields are explicit; model catalog behavior is not covered."
     },
     {
       "source": "packages/ai/test/openai-responses-partial-json-cleanup.test.ts",

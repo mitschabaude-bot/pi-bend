@@ -174,7 +174,7 @@ def resultValue(result: D.RunResult<Unit, String>, capture: Capture) -> V.Value:
 type Execution is Data:
   Execution{result: D.RunResult<Unit, String>, capture: Capture}
 
-def execute(events: List<&2, D.ResponseStreamEvent>, +mode: Mode, requested: Maybe<&2, String>, initial: T.AssistantMessage<V.Value, Unit>, model: T.Model<Unit>) -> IO(Execution):
+def executeWithGrammar(events: List<&2, D.ResponseStreamEvent>, +mode: Mode, requested: Maybe<&2, String>, properties: Maybe<&2, R.Record<String>>, initial: T.AssistantMessage<V.Value, Unit>, model: T.Model<Unit>) -> IO(Execution):
   do IO<Execution>:
     +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{events, 0n, 0n, Nil{}})
     +env : Environment = Environment{capture, mode}
@@ -183,7 +183,7 @@ def execute(events: List<&2, D.ResponseStreamEvent>, +mode: Mode, requested: May
     +sink : Cb.Callback<T.AssistantMessageEvent<V.Value, Unit>, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~T.AssistantMessageEvent<V.Value, Unit>, ~Result<&2, &2, String, Unit>, ~sinkCallback, env)
     +resolver : Cb.Callback<Pricing.ServiceTierRequest, Result<&2, &2, String, Maybe<&2, String>>> <- Cb.create(~Environment, ~Pricing.ServiceTierRequest, ~Result<&2, &2, String, Maybe<&2, String>>, ~resolveCallback, env)
     +pricing : Cb.Callback<Pricing.PricingRequest, Result<&2, &2, String, T.Usage>> <- Cb.create(~Environment, ~Pricing.PricingRequest, ~Result<&2, &2, String, T.Usage>, ~priceCallback, env)
-    options : Pricing.OpenAIResponsesStreamOptions<String> = Pricing.OpenAIResponsesStreamOptions{requested, None{}, Bool.pick(Maybe<&2, Cb.Callback<Pricing.ServiceTierRequest, Result<&2, &2, String, Maybe<&2, String>>>>, hasResolver(mode), Some{resolver}, None{}), Bool.pick(Maybe<&2, Cb.Callback<Pricing.PricingRequest, Result<&2, &2, String, T.Usage>>>, hasPricing(mode), Some{pricing}, None{})}
+    options : Pricing.OpenAIResponsesStreamOptions<String> = Pricing.OpenAIResponsesStreamOptions{requested, properties, Bool.pick(Maybe<&2, Cb.Callback<Pricing.ServiceTierRequest, Result<&2, &2, String, Maybe<&2, String>>>>, hasResolver(mode), Some{resolver}, None{}), Bool.pick(Maybe<&2, Cb.Callback<Pricing.PricingRequest, Result<&2, &2, String, T.Usage>>>, hasPricing(mode), Some{pricing}, None{})}
     result : D.RunResult<Unit, String> <- Shared.processResponsesStream(Unit, String, Unit, D.Reader{reader, close}, initial, sink, model, Some{options})
     Cb.dispose(Unit, Result<&2, &2, String, Maybe<&2, D.ResponseStreamEvent>>, reader)
     Cb.dispose(Unit, Result<&2, &2, String, Unit>, close)
@@ -192,6 +192,9 @@ def execute(events: List<&2, D.ResponseStreamEvent>, +mode: Mode, requested: May
     Cb.dispose(Pricing.PricingRequest, Result<&2, &2, String, T.Usage>, pricing)
     final : Capture <- Ref.dispose(Capture, capture)
     return Execution{result, final}
+
+def execute(events: List<&2, D.ResponseStreamEvent>, mode: Mode, requested: Maybe<&2, String>, initial: T.AssistantMessage<V.Value, Unit>, model: T.Model<Unit>) -> IO(Execution):
+  executeWithGrammar(events, mode, requested, None{}, initial, model)
 
 def checked(execution: Execution, expected: String, label: String) -> IO(Unit):
   match execution:
