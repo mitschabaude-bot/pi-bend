@@ -129,3 +129,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/url-host-input.bend` prepares raw special-host tokens. It dispatches literal leading brackets to IPv6 before decoding, rejects an empty input token, and otherwise returns domain text after one percent-decoding pass and replacement-mode UTF-8 decoding with BOM preservation. Plus signs remain literal. The result distinguishes a completed IP literal from domain text that still requires IDNA policy and host classification. Percent-encoded brackets therefore never become IP-literal syntax.
+
+
+`url-scheme.bend` represents the six special schemes explicitly and retains normalized names for other schemes. Its token parser accepts ASCII scheme syntax, lowercases ASCII letters, and exposes special-scheme and default-port queries. `url-port.bend` parses a delimited decimal port into an optional bounded number, omitting empty and scheme-default ports. Overflow never enters the accumulator. URL input preprocessing, delimiters, relative resolution, file authority restrictions, and setter prefix semantics belong to the enclosing parser; these modules do not implement them. Both are pure Bend.
