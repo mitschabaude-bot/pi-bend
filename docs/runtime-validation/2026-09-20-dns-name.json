@@ -1,0 +1,52 @@
+{
+  "scope": "DNS name encoding/compression checks against an independent byte interpreter.\n\nRFC 1035 sections 2.3.4 and 4.1.4. No network traffic or host resolver.\n",
+  "cases_per_backend": 1987,
+  "backends": [
+    "native 1",
+    "native 4",
+    "Bun"
+  ],
+  "sha256": {
+    "/home/agent/code/pi-bend/packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "/home/agent/code/pi-bend/packages/runtime/test/dns-name.bend": "cff33cc05bbbff098ebf487e1ff7d5ab18b90175b4b211fc6fed251680e70279",
+    "/home/agent/code/pi-bend/tests/dns_name_check.py": "2b98fda96d233eab6e8462a6f5f74601795bbb1fb3af03525f60b3ab8f8463e2",
+    "/home/agent/code/pi-bend/build/dns-name": "5d2a0da50d91ce6047e1e7c7d6caf941b9eae24ec12fb58ac95dda32a73f4b6a",
+    "/home/agent/code/pi-bend/build/dns-name.js": "f03476594c34a0043fd23f4af36ad42cf508018dc62f92e92d6a1d5607d745a2"
+  },
+  "native_build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/runtime/test/dns-name.bend",
+      "build/dns-name"
+    ],
+    "elapsed_seconds": 6.376440059393644,
+    "peak_sampled_group_rss_kib": 1653460,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "js_build": {
+    "command": [
+      "/home/agent/.bend/bin/bend",
+      "packages/runtime/test/dns-name.bend",
+      "-o",
+      "build/dns-name.js"
+    ],
+    "elapsed_seconds": 1.054980456829071,
+    "peak_sampled_group_rss_kib": 310932,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "references": [
+    "https://www.rfc-editor.org/rfc/rfc1035.html#section-2.3.4",
+    "https://www.rfc-editor.org/rfc/rfc1035.html#section-4.1.4"
+  ],
+  "limits": [
+    "Name codec only: no DNS message parser, transaction matching, resolver transport, system host configuration, cache or provider integration.",
+    "Packet index validates byte range and total message length, not whether every pointer target belongs to a name field in a parsed DNS message.",
+    "Pointers must target an earlier name segment; arbitrary forward pointers are rejected.",
+    "Tests use an independent Python byte interpreter and generated cases, not live recursive resolvers."
+  ]
+}
