@@ -1,0 +1,28 @@
+{
+  "scope": "Single guarded native serializer build, including C emission and Clang; not a runtime-memory measurement or controlled benchmark. No compiler patch.",
+  "build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/runtime/test/url-serialize.bend",
+      "build/url-serialize"
+    ],
+    "elapsed_seconds": 19.841578906401992,
+    "peak_sampled_group_rss_kib": 5141112,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "generated_c_bytes": 2089916,
+  "sha256": {
+    "packages/runtime/src/url-record.bend": "482752bbfdaceafd4c5a22800cc71aaa337a17650c40601a7cbb9e56cac053bb",
+    "packages/runtime/src/url-serialize.bend": "92ea7768af456b3df76db45517d7e4bbe983b54d24da253d5173310f98ed4b66",
+    "packages/runtime/test/url-serialize.bend": "bf251212d5978185fc989270b81afcfcde0acd6c23cf6dc73de9d2095cc202c7",
+    "tests/url_serialize_check.py": "ac0f9dd29dc452abe5dbdf819dd69f4d525eb4c2e31736445f7400c857499bfc",
+    "build/url-serialize.c": "32c788623a97b8761034e90cfd530d88072c925078da857638d515efb2df90ed",
+    "installed-compiler/main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "installed-compiler/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "installed-compiler/comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "installed-compiler/base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  }
+}
