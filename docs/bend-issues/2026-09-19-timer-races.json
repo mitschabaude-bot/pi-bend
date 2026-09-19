@@ -1,0 +1,128 @@
+{
+  "samples": [
+    {
+      "backend": "native-1",
+      "rounds": 10,
+      "cohort_size": 1,
+      "seconds": 0.421295840293169,
+      "created": 282,
+      "closed": 282,
+      "expired": 141,
+      "cancelled": 141,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": 1
+    },
+    {
+      "backend": "native-1",
+      "rounds": 10,
+      "cohort_size": 128,
+      "seconds": 0.4231321234256029,
+      "created": 1552,
+      "closed": 1552,
+      "expired": 141,
+      "cancelled": 1411,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": 128
+    },
+    {
+      "backend": "native-1",
+      "rounds": 5,
+      "cohort_size": 1024,
+      "seconds": 0.454753783531487,
+      "created": 5392,
+      "closed": 5392,
+      "expired": 141,
+      "cancelled": 5251,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": 1024
+    },
+    {
+      "backend": "native-4",
+      "rounds": 10,
+      "cohort_size": 1,
+      "seconds": 0.42164832074195147,
+      "created": 282,
+      "closed": 282,
+      "expired": 141,
+      "cancelled": 141,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": 1
+    },
+    {
+      "backend": "native-4",
+      "rounds": 10,
+      "cohort_size": 128,
+      "seconds": 0.4196231570094824,
+      "created": 1552,
+      "closed": 1552,
+      "expired": 141,
+      "cancelled": 1411,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": 128
+    },
+    {
+      "backend": "native-4",
+      "rounds": 5,
+      "cohort_size": 1024,
+      "seconds": 0.4542909003794193,
+      "created": 5392,
+      "closed": 5392,
+      "expired": 141,
+      "cancelled": 5251,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": 1024
+    },
+    {
+      "backend": "bun",
+      "rounds": 10,
+      "cohort_size": 1,
+      "seconds": 0.46679668966680765,
+      "created": 282,
+      "closed": 282,
+      "expired": 141,
+      "cancelled": 141,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": null
+    },
+    {
+      "backend": "bun",
+      "rounds": 10,
+      "cohort_size": 128,
+      "seconds": 0.48578145168721676,
+      "created": 1552,
+      "closed": 1552,
+      "expired": 141,
+      "cancelled": 1411,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": null
+    },
+    {
+      "backend": "bun",
+      "rounds": 5,
+      "cohort_size": 1024,
+      "seconds": 0.5598432729020715,
+      "created": 5392,
+      "closed": 5392,
+      "expired": 141,
+      "cancelled": 5251,
+      "live": 0,
+      "waiting": 0,
+      "registry_slots": null
+    }
+  ],
+  "source_sha256": "b4f326491d16ab819fa6d8a8b80a1e37655368d16aff864355b8691266b9cf52",
+  "scope": "Invariant stress with real-clock races; outcomes may vary. Instrumented copy, not performance evidence.",
+  "candidate_sha256": {
+    "base.bend": "42a29bd9502c85ae3e772ba5d8015d9e26bf95e4933cdb0026e9394e050a1d66",
+    "timer.c": "b6985cd3adb6ce750d13837594c2b6f2afe88761e48d42734431f92b5592f51a",
+    "timer.js": "b299c324486301e5d5bc0fc4bba24c28daf8d711dbc1f6ea9a87c945b532950f"
+  }
+}

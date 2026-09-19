@@ -1,10 +1,12 @@
-# Owned timer experiment — not installed
+# Owned timer implementation — validation in progress
 
 This additive primitive bundle appends `base.bend` to the installed Base and adds `effs/timer.c` and `effs/timer.js` in an isolated copy. It does not modify compiler code, the general scheduler, existing effects, or the installation. No C/JS retry policy is introduced: these effects only manage a native timer's deadline, wait, cancellation and retirement.
 
 ```sh
 python3 scripts/prepare-timer-candidate.py build/bend-timer-candidate-fresh
 python3 tests/timer_primitive_check.py build/bend-timer-candidate-fresh
+python3 tests/timer_races_check.py build/bend-timer-candidate-fresh
+python3 tests/abortable_sleep_check.py build/bend-timer-candidate-fresh
 python3 scripts/benchmark-timer.py build/bend-timer-candidate-fresh build/timer-performance.json
 ```
 
@@ -14,4 +16,24 @@ The C effect uses a separate index/generation table, with a free list and genera
 
 Core tests pass on one/four native threads and Bun: immediate and parked expiry, cancellation before/during wait, repeated cancellation, head/middle/tail removal, old capabilities after close/slot reuse, 10,000 serial lifecycles, affine-owner copy rejection, and a program using only new/close. A disposable instrumented C copy observes one actual parked expiration, only three used registry slots, and zero live timer rows/waiters at exit. These observations do not prove general race safety or absence of leaks under every workload.
 
-The 20-round alternating-order comparison preserves existing generated C exactly. Separate checks preserve generated JS exactly for the same fixtures. Median compiler wall time is approximately 1.1% lower for detached sleep and 1.0% higher for UTF-8; shared-host measurements are inconclusive, not evidence of performance neutrality. The candidate remains uninstalled. Completion/cancellation race stress, concurrent sustained resource tests, scaling/throughput measurements and the native abort-signal adapter remain pending. See BEND-020 and the retained raw measurements.
+The 20-round alternating-order comparison preserves existing generated C exactly. Separate checks preserve generated JS exactly for the same fixtures. Median compiler wall time is approximately 1.1% lower for detached sleep and 1.0% higher for UTF-8; shared-host measurements are inconclusive, not evidence of performance neutrality. The candidate remains uninstalled. Broader performance validation and provider backoff integration remain pending. The primitive is our implementation work; adoption awaits our validation, not an upstream fix. Raw compiler comparisons are retained in `docs/bend-issues/2026-09-19-timer-candidate-performance.json` and `2026-09-19-timer-candidate-js-parity.json`.
+
+## Lifetime requirement
+
+Pi’s provider-retry tests require cancellation of backoff to remove the outstanding timer immediately, without a second request. Bend’s existing `IO.sleep` and `IO.spawn` return no cancellation handle. Racing a detached sleep against an abort would leave scheduler work alive until its deadline. The reduced `tests/runtime-detached-sleep.bend` confirms that the spawned 250 ms timer outlives caller completion on one/four native threads; this is expected behavior, not a leak. Source hashes and observations remain in `docs/bend-issues/2026-09-19-detached-sleep.json`.
+
+## Completion and cancellation stress
+
+`tests/timer_races_check.py` passes on one/four native threads and Bun. Each process runs 270 deadline/two-canceller combinations and two forced outcomes, then repeatedly creates and retires cohorts of 1, 128 or 1,024 parked timers. Retirement reverses creation order to exercise tail removal. Exactly one canceller wins when cancellation wins; neither wins when expiration commits. Repeated waits retain the result, and cancellation after retirement is harmless.
+
+Disposable instrumentation counts creation, expiration, cancellation, close and outstanding waits. Every created timer is closed, every timer settles exactly once, and every run exits with zero live timers and timer waiters. Native registry slots track peak cohort size rather than cumulative creation. The largest run per backend creates and closes 5,392 timers. These finite tests do not prove absence of all leaks or races. Instrumented timing is not performance evidence. Results and source hashes are in `docs/bend-issues/2026-09-19-timer-races.json`; core results are in `2026-09-19-timer-candidate-correctness.json`.
+
+## Cohort cost
+
+`scripts/benchmark-timer-cohorts.py build/timer-races OUTPUT` measures the uninstrumented fixture for three repetitions on one/four threads. Ten rounds of 4,096 timers, retired in reverse creation order, take median 0.663/0.661 seconds with 3,328 KiB peak RSS; the fixed race portion without cohorts takes 0.419/0.446 seconds. At 128 and 1,024 timers peak RSS is 2,048 and 2,304 KiB. These are complete lifecycle measurements including a fixed real-clock race workload, not isolated cancellation latency or proof of a particular scaling law. Queue scanning remains linear per cancellation. Raw samples and fixture/binary/generated-C hashes are in `docs/bend-issues/2026-09-19-timer-cohorts.json`.
+
+## Pure Bend abortable sleep
+
+`packages/runtime/src/abortable-sleep.bend` composes the primitive with the existing native `AbortSignal` and removable deferred observations. Pre-aborted calls return the retained reason immediately. Otherwise an observation watcher competes with timer completion; the winner determines the result. Before returning, the call cancels its observation, joins its watcher and closes its timer. The caller retains ownership of the signal. Zero milliseconds means a literal immediately eligible deadline; any provider event-loop delay normalization belongs in its adapter. This is not yet a claim of upstream retry scheduling parity.
+
+`tests/abortable_sleep_check.py` runs eight repetitions on each backend: 32 normal waits sharing one signal, zero delay, cancellation of a 60-second wait, pre-aborted rejection and signal disposal. Native exit instrumentation verifies zero live timer rows, timer waiters and channel rows. All native one/four-thread and Bun runs pass. Retained observations are in `docs/bend-issues/2026-09-19-abortable-sleep.json`. Provider retry-loop integration, broadcast cancellation and broader interleaving tests remain work to finish.
