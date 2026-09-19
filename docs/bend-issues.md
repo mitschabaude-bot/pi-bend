@@ -183,3 +183,7 @@ Correctness validation uses `scripts/check-bounded-indentation.py` and is retain
 ### BEND-001/BEND-016 observation: provider-error normalization fixture (2026-09-19)
 
 The typed provider-error runner composes JSON parsing, schema-to-provider JSON conversion, existing serialization and native expected-value comparison. With the unchanged installed compiler it completes C emission and Clang compilation in 72.01 seconds, with sampled process-group RSS reaching 20,306,524 KiB and 7,432,313 bytes of generated C. The build stays below the 40 GiB guard and all 306 actual-pi comparisons pass on one/four threads. Retained source/artifact hashes and guard observations are in `docs/bend-issues/2026-09-19-error-body-build.json`. This is another observation of the known composition cost, not a controlled regression benchmark or evidence of a new leak. No compiler patch changed or was installed.
+
+### BEND-012 recurrence: imported policy test helper (2026-09-19)
+
+Importing the new policy test harness into the environment fixture reproduced the already reduced pattern/global collision: a helper named `text` made `case Some{text}` resolve to the global function only when imported. Renaming the test-only decoding helper to `decodeText` lets the composed fixture build. The standalone and imported policy paths now pass native tests, but this is a local workaround and BEND-012's pattern-binding defect remains open. No compiler patch changed.
