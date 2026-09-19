@@ -206,3 +206,5 @@ Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-
 
 
 - Ported the complete original Responses message-ID, foreign-toolcall-ID and empty-tool-result suites, plus 2/5 namespace cases. All five named tests pass on one/four threads through the public transcript converter. Assertions retain exact IDs, uniqueness, foreign hash/shape/length, no-output placeholder and namespace absence across every original target. Typed fixture models substitute for generated catalog lookup; catalog behavior is not claimed. Streaming-dependent namespace cases remain pending. Inventory is now 10 ported, 6 partial, 533 pending.
+
+- Added native JSON string-literal repair and `parseJsonWithRepair`, using explicit immutable scanner states and the existing strict decoder. All 365 repaired-spelling and parse-result comparisons match pinned upstream on one/four threads. Existing escapes and non-string text remain intact; raw string controls and invalid backslashes are repaired. Unchanged failures retain the original typed parse error. Incomplete JSON recovery and Responses stream processing remain pending; suite statuses are unchanged.

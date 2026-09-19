@@ -1,3 +1,4 @@
+import ../packages/ai/src/utils/json-parse.bend as AiJsonParse
 import ../packages/ai/src/api/openai-responses-assistant.bend as OpenAIResponsesAssistant
 import ../packages/ai/src/api/openai-responses-content.bend as OpenAIResponsesContent
 import ../packages/runtime/src/json-parse.bend as JsonParse
