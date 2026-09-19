@@ -25,6 +25,7 @@ def replace_once(text, old, new):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
+    parser.add_argument("--base", type=Path, default=Path.home() / ".bend/current/bend2", help="Compiler tree to copy and instrument; defaults to the installation")
     parser.add_argument("--label", default="compiler")
     parser.add_argument("--smol", action="store_true")
     parser.add_argument("--clear-teles", action="store_true", help="Experiment only: clear telescope memoization at existing memo_gc boundaries")
@@ -35,7 +36,7 @@ def main():
         parser.error("label must contain only letters, digits, hyphens or underscores")
     if args.rss_limit_gib <= 0:
         parser.error("RSS limit must be positive")
-    installed = Path.home() / ".bend/current/bend2"
+    installed = args.base.resolve()
     dest = ROOT / "build/bend-profiles" / args.label
     dest.mkdir(parents=True, exist_ok=False)
     compiler = dest / "bend2"

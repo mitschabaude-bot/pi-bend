@@ -1,0 +1,73 @@
+--- a/tests/dns-tcp-connection.bend
++++ b/tests/dns-tcp-connection.bend
+@@ -136,25 +136,9 @@
+         close(connection)
+         IO.die(TCP.Connection<String>, 1, "expected invalid write guard")
+ 
+-type Mode is Data:
+-  AbortRead{}
+-  BufferedAbort{}
+-  CutPrefix{}
+-  CutBody{}
+-  Pipeline{oneByte: Bool}
+-
+-def parseMode(value: String) -> Mode:
+-  match value:
+-    case "abort": AbortRead{}
+-    case "buffered": BufferedAbort{}
+-    case "cut-prefix": CutPrefix{}
+-    case "cut-body": CutBody{}
+-    case "one-byte": Pipeline{True{}}
+-    case _: Pipeline{False{}}
+-
+-def run(mode: Mode, +controller: Abort.AbortController<String>, connection: TCP.Connection<String>) -> IO(Unit):
++def run(mode: String, +controller: Abort.AbortController<String>, connection: TCP.Connection<String>) -> IO(Unit):
+   match mode:
+-    case AbortRead{}:
++    case "abort":
+       do IO<Unit>:
+         connection : TCP.Connection<String> <- send(connection, 1)
+         task : Chan(TCP.Next<String>) <- IO.fork(TCP.Next<String>, TCP.receive(String, connection, 7))
+@@ -163,20 +147,20 @@
+         next : TCP.Next<String> <- IO.join(TCP.Next<String>, task)
+         connection : TCP.Connection<String> <- terminal("abort", next)
+         finished("abort", connection)
+-    case BufferedAbort{}:
++    case "buffered":
+       do IO<Unit>:
+         connection : TCP.Connection<String> <- send(connection, 1)
+         won : Bool <- Abort.abort(String, controller, Some{"stop"})
+         finished("abort", buffered(connection))
+-    case CutPrefix{}:
++    case "cut-prefix":
+       do IO<Unit>:
+         connection : TCP.Connection<String> <- send(connection, 1)
+         finished("cut", connection)
+-    case CutBody{}:
++    case "cut-body":
+       do IO<Unit>:
+         connection : TCP.Connection<String> <- send(connection, 1)
+         finished("cut", connection)
+-    case Pipeline{oneByte}:
++    case other:
+       do IO<Unit>:
+         rejected : TCP.Connection<String> & Result<&2, &2, TCP.Error<String>, Unit> <- TCP.send(String, connection, 256 <> Nil{})
+         connection : TCP.Connection<String> <- badWrite(rejected)
+@@ -185,7 +169,7 @@
+         connection : TCP.Connection<String> <- send(connection, 1)
+         connection : TCP.Connection<String> <- send(connection, 2)
+         connection : TCP.Connection<String> <- send(connection, 3)
+-        packets(3n, 3, Bool.pick(U32, oneByte, 1, 65535), connection)
++        packets(3n, 3, Bool.pick(U32, String.eq(other, "one-byte"), 1, 65535), connection)
+ 
+ def args(values: List<String>) -> IO(Unit):
+   match values:
+@@ -196,7 +180,7 @@
+         socket : Socket <- connected(result)
+         adopted : Result<&2, &1, SocketIO.Error<String>, SocketIO.Owner<String>> <- SocketIO.create(String, socket, Abort.signal(String, controller))
+         socket : SocketIO.Owner<String> <- Test.opened(adopted)
+-        run(parseMode(mode), controller, TCP.adopt(String, socket))
++        run(mode, controller, TCP.adopt(String, socket))
+         Abort.dispose(String, controller)
+         IO.print("PASS DNS TCP connection")
+     case _: IO.die(Unit, 1, "expected mode family port")
