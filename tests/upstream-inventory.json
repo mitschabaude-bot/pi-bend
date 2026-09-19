@@ -1012,9 +1012,12 @@
     },
     {
       "source": "packages/ai/test/openai-responses-terminal-event.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ad1fed93b94223076b73b0f319f7f3e6502203f77a4e9c30162fc70721d1af66"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/openai-responses-terminal-event.bend"
+      ],
+      "sha256": "ad1fed93b94223076b73b0f319f7f3e6502203f77a4e9c30162fc70721d1af66",
+      "notes": "Ten of eleven original test instances pass through the public processResponsesStream on one/four threads: early EOF rejection, all three message-phase rows, terminal stop override, completed/incomplete usage and raw reasons, filtered/unknown incomplete errors and provider failure. Native immutable event snapshots and typed errors replace aliased mutable messages and thrown exceptions. The provider-wrapper early-EOF test remains pending; no request/HTTP/SSE/provider-wrapper parity is claimed. Exact source test names and phase rows are checked by tests/responses_terminal_named.py."
     },
     {
       "source": "packages/ai/test/openai-responses-tool-result-images.test.ts",

@@ -1,4 +1,6 @@
 import Base
+import ./openai-responses-stream.bend as ResponseStream
+import ./openai-responses-stream-pricing.bend as ResponsePricing
 import ./openai-responses-assistant.bend as Assistant
 import ./openai-responses-content.bend as Content
 import ./openai-responses-ids.bend as Ids
@@ -370,3 +372,15 @@ def inputJsonList(items: List<&2, ResponseInputItem>) -> List<&2, T.JsonValue>:
 
 def inputToJson(items: List<&2, ResponseInputItem>) -> T.JsonValue:
   T.JsonArray{inputJsonList(items)}
+
+# The public shared entry point owns processing, while callers own the reader,
+# sink and pricing callback handles. Provider wrappers publish the final event.
+def OpenAIResponsesStreamOptions(-E: Data) -> Data: ResponsePricing.OpenAIResponsesStreamOptions<E>
+
+def responseStreamOptions(-E: Data, options: Maybe<&2, OpenAIResponsesStreamOptions(E)>) -> OpenAIResponsesStreamOptions(E):
+  match options:
+    case None{}: ResponsePricing.defaultOptions(E)
+    case Some{value}: value
+
+def processResponsesStream(-G: Data, -E: Data, -J: Data, source: ResponseStream.Reader<E>, output: T.AssistantMessage<V.Value, G>, sink: Callback.Callback<T.AssistantMessageEvent<V.Value, G>, Result<&2, &2, E, Unit>>, model: T.Model<J>, options: Maybe<&2, OpenAIResponsesStreamOptions(E)>) -> IO(ResponseStream.RunResult<G, E>):
+  ResponseStream.processResponsesStream(G, E, J, source, output, sink, model, responseStreamOptions(E, options))

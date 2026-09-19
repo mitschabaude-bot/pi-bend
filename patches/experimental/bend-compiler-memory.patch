@@ -1,0 +1,19 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -676,7 +676,7 @@
+ }
+ 
+ function memo_gc(): void {
+-  [OPENS, USES, FOLDS, SPINES, CONSTS].forEach((m) => m.clear());
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES].forEach((m) => m.clear());
+ }
+ 
+ // Probe
+@@ -2872,6 +2872,7 @@
+   do {
+     was = facts();
+     fl = pass(done_defs(cb).reverse());
++    Bun.gc(true);
+   } while (was !== facts());
+   const reach = (from: string[], set = new Set<string>()): Set<string> => {
+     const grab = (fid: string) => set.has(fid) || (set.add(fid)

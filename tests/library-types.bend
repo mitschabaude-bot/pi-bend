@@ -1,3 +1,5 @@
+import ../packages/ai/src/api/openai-responses-stream.bend as OpenAIResponsesStream
+import ../packages/ai/src/api/openai-responses-stream-pricing.bend as OpenAIResponsesStreamPricing
 import ../packages/ai/src/api/openai-responses-terminal.bend as OpenAIResponsesTerminal
 import ../packages/ai/src/api/openai-responses-stream-state.bend as OpenAIResponsesStreamState
 import ../packages/ai/src/api/openai-responses-stream-content.bend as OpenAIResponsesStreamContent
