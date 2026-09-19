@@ -6,7 +6,9 @@ import ../packages/runtime/src/socket-interrupt.bend as I
 import ../packages/runtime/src/abort.bend as A
 import ../packages/runtime/src/http-response-stream.bend as Response
 import ../packages/runtime/src/http-chunked-body.bend as Chunked
-import ../packages/runtime/src/utf8.bend as UTF8
+import ../packages/runtime/src/http-buffered-body.bend as Body
+import ../packages/runtime/src/headers.bend as Headers
+import ../packages/runtime/src/big-nat.bend as N
 import ./tcp-bytes-probe.bend as Probe
 
 def cleanup(result: Result<&2, &2, I.Error, Unit>) -> IO(Unit):
@@ -86,8 +88,17 @@ def transmit(owner: S.Owner<String>, head: Result<&2, &2, Request.HeadError, Req
         owner : S.Owner<String> <- sent(second)
         loop(128n, (owner, Response.More{Response.new(method, Response.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}), Nil{}}), Nil{})
 
-def exchange(owner: S.Owner<String>, port: U32, +body: List<&2, U32>) -> IO(Unit):
-  transmit(owner, Request.encode("post", "/v1/responses?x=%C3%A9", H.Header{"host", "127.0.0.1:" ++ U32.show(port)} <> H.Header{"content-type", "application/json"} <> H.Header{"content-length", Nat.show(List.length(&2, U32, body))} <> H.Header{"x-byte", "\u{ff}"} <> Nil{}), body)
+def prepared(owner: S.Owner<String>, result: Result<&2, &2, Body.BodyError, Body.Prepared>) -> IO(Unit):
+  match result:
+    case Done{Body.Prepared{method, headers, Some{Body.Content{bytes, length}}}}:
+      transmit(owner, Request.encode(method, "/v1/responses?x=%C3%A9", Headers.entries(Headers.appendField(headers, H.Header{"content-length", N.toDecimal(length)}))), bytes)
+    case _:
+      do IO<Unit>:
+        close(owner)
+        IO.die(Unit, 1, "exchange body preparation failed")
+
+def exchange(owner: S.Owner<String>, port: U32) -> IO(Unit):
+  prepared(owner, Body.prepare("post", Headers.appendField(Headers.appendField(Headers.appendField(Headers.new(), H.Header{"host", "127.0.0.1:" ++ U32.show(port)}), H.Header{"content-type", "application/json"}), H.Header{"x-byte", "\u{ff}"}), Body.Text{"{\"text\":\"hé🙂\"}"}))
 
 def cases(count: Nat, +port: U32) -> IO(Unit):
   match count:
@@ -98,7 +109,7 @@ def cases(count: Nat, +port: U32) -> IO(Unit):
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
         created : Result<&2, &1, S.Error<String>, S.Owner<String>> <- S.create(String, socket, A.signal(String, controller))
         owner : S.Owner<String> <- opened(created)
-        exchange(owner, port, UTF8.encode("{\"text\":\"hé🙂\"}"))
+        exchange(owner, port)
         A.dispose(String, controller)
         cases(rest, port)
 
