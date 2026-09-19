@@ -1,0 +1,35 @@
+--- a/packages/runtime/src/dns-record.bend
++++ b/packages/runtime/src/dns-record.bend
+@@ -69,24 +69,15 @@
+     case Fail{error}: Fail{InvalidName{error}}
+     case Done{Name.Decoded{primary, +next}}: soaMore(U32.is_lt(next, end), packet, primary, end, next)
+ 
+-def kindFields(+packet: Name.Packet, kind: U32, +start: U32, +length: U32, original: Message.Record) -> Result<&2, &2, Error, Value>:
+-  match kind:
+-    case 1: address4(U32.is_eq(length, 4), packet, start)
+-    case 28: address6(U32.is_eq(length, 16), packet, start)
+-    case 5: nameResult(5, (start + length : U32), Name.decode(packet, start))
+-    case 2: nameResult(2, (start + length : U32), Name.decode(packet, start))
+-    case 12: nameResult(12, (start + length : U32), Name.decode(packet, start))
+-    case 6: soaPrimary(packet, (start + length : U32), Name.decode(packet, start))
+-    case _: Done{Opaque{original}}
+-
+-def classFields(class: U32, packet: Name.Packet, kind: U32, start: U32, length: U32, original: Message.Record) -> Result<&2, &2, Error, Value>:
+-  match class:
+-    case 1: kindFields(packet, kind, start, length, original)
+-    case _: Done{Opaque{original}}
+-
+-def fields(packet: Name.Packet, record: Message.Record) -> Result<&2, &2, Error, Value>:
++def fields(+packet: Name.Packet, record: Message.Record) -> Result<&2, &2, Error, Value>:
+   match record:
+-    case Message.Record{name, +kind, +class, ttl, +start, +length}: classFields(class, packet, kind, start, length, Message.Record{name, kind, class, ttl, start, length})
++    case Message.Record{_, 1, 1, _, start, length}: address4(U32.is_eq(length, 4), packet, start)
++    case Message.Record{_, 28, 1, _, start, length}: address6(U32.is_eq(length, 16), packet, start)
++    case Message.Record{_, 5, 1, _, +start, length}: nameResult(5, (start + length : U32), Name.decode(packet, start))
++    case Message.Record{_, 2, 1, _, +start, length}: nameResult(2, (start + length : U32), Name.decode(packet, start))
++    case Message.Record{_, 12, 1, _, +start, length}: nameResult(12, (start + length : U32), Name.decode(packet, start))
++    case Message.Record{_, 6, 1, _, +start, length}: soaPrimary(packet, (start + length : U32), Name.decode(packet, start))
++    case other: Done{Opaque{other}}
+ 
+ def checked(valid: Bool, packet: Name.Packet, record: Message.Record) -> Result<&2, &2, Error, Value>:
+   match valid:
