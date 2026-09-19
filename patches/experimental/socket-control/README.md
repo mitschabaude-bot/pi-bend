@@ -31,3 +31,12 @@ These checks cover retained abort reasons, observation/watch cleanup, normal EOF
 A complete buffered cleartext exchange can now be composed from the request-head encoder, UTF-8 encoder, abortable socket and response decoder. `python3 tests/http_request_exchange_check.py build/bend-socket-candidate-fresh` verifies 12 JSON POST exchanges on each native thread configuration and Bun against actual Node Fetch wire captures. This does not yet supply URL preparation, automatic request-body framing, streaming uploads or the provider wrapper.
 
 The request exchange check now applies `http-buffered-body` and `http-buffered-framing` automatically, alternating ordinary fixed-length POSTs with chunked DELETEs selected by an explicit zero-length declaration. It preserves entity content separately from the encoded wire body. Complete captures still match actual Fetch on native one/four threads and Bun; general streaming uploads and the higher-level request/provider wrapper remain unfinished.
+
+The composed exchange is now implemented by `http-buffered-request` and `http-socket-exchange`, including automatic callback/source retirement at EOF and error. Additional candidate checks are:
+
+```sh
+python3 tests/http_socket_exchange_check.py build/bend-socket-candidate-fresh
+python3 tests/http_exchange_write_error_check.py build/bend-socket-candidate-fresh
+```
+
+The latter injects a body-send EPIPE into a disposable compiler copy and checks error retention and closure of both descriptors. Production effects are unchanged. The buffered driver still completes request writes before reading the response; a concurrent duplex driver is needed for early server responses during upload.

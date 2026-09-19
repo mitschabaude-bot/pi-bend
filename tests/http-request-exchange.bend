@@ -1,109 +1,66 @@
 import Base
-import ../packages/runtime/src/http-request-head.bend as Request
+import ../packages/runtime/src/http-buffered-request.bend as Request
+import ../packages/runtime/src/http-buffered-body.bend as Body
 import ../packages/runtime/src/http-header.bend as H
-import ../packages/runtime/src/abortable-socket.bend as S
-import ../packages/runtime/src/socket-interrupt.bend as I
+import ../packages/runtime/src/headers.bend as Headers
+import ../packages/runtime/src/http-socket-exchange.bend as Exchange
 import ../packages/runtime/src/abort.bend as A
 import ../packages/runtime/src/http-response-stream.bend as Response
 import ../packages/runtime/src/http-chunked-body.bend as Chunked
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-buffered-framing.bend as Framing
 import ./tcp-bytes-probe.bend as Probe
 
-def cleanup(result: Result<&2, &2, I.Error, Unit>) -> IO(Unit):
+def cleanup(result: Result<&2, &2, Exchange.ReadError<String>, Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit, Unit{})
     case Fail{_}: IO.die(Unit, 1, "exchange cleanup failed")
 
-def close(owner: S.Owner<String>) -> IO(Unit):
+def close(exchange: Exchange.Exchange<String>) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, I.Error, Unit> <- S.close(String, owner)
+    result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.close(String, exchange)
     cleanup(result)
 
-def opened(result: Result<&2, &1, S.Error<String>, S.Owner<String>>) -> IO(S.Owner<String>):
+def opened(result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Exchange.Exchange<String>):
   match result:
-    case Done{owner}: IO.pure(S.Owner<String>, owner)
-    case Fail{_}: IO.die(S.Owner<String>, 1, "exchange adoption failed")
+    case Done{exchange}: IO.pure(Exchange.Exchange<String>, exchange)
+    case Fail{_}: IO.die(Exchange.Exchange<String>, 1, "exchange start failed")
 
-def sent(pair: S.Owner<String> & Result<&2, &2, S.Error<String>, Unit>) -> IO(S.Owner<String>):
-  match pair:
-    case (owner, Done{_}): IO.pure(S.Owner<String>, owner)
-    case (owner, Fail{_}):
-      do IO<S.Owner<String>>:
-        close(owner)
-        IO.die(S.Owner<String>, 1, "exchange send failed")
+def accumulated(value: Response.Event, body: List<&2, U32>) -> List<&2, U32>:
+  match value:
+    case Response.BodyData{bytes}: List.append(&2, U32, body, bytes)
+    case _: body
 
-def payload(events: List<&2, Response.Event>, body: List<&2, U32>) -> List<&2, U32>:
-  match events:
-    case Nil{}: body
-    case Response.BodyData{bytes} <> rest: payload(rest, List.append(&2, U32, body, bytes))
-    case _ <> rest: payload(rest, body)
-
-def finished(owner: S.Owner<String>, body: List<&2, U32>, rest: List<&2, U32>) -> IO(Unit):
-  match body rest:
-    case 79 <> 75 <> Nil{} Nil{}: close(owner)
-    case _ _:
+def finished(exchange: Exchange.Exchange<String>, body: List<&2, U32>) -> IO(Unit):
+  match body:
+    case 79 <> 75 <> Nil{}: close(exchange)
+    case _:
       do IO<Unit>:
-        close(owner)
+        close(exchange)
         IO.die(Unit, 1, "wrong exchange response")
 
-def decoded(reader: Response.Reader, bytes: List<&2, U32>) -> Response.ReadResult:
-  match bytes:
-    case Nil{}: Response.finish(reader)
-    case head <> rest: Response.read(reader, head <> rest)
-
-def received(reader: Response.Reader, pair: S.Owner<String> & Result<&2, &2, S.Error<String>, List<&2, U32>>) -> IO(S.Owner<String> & Response.ReadResult):
-  match pair:
-    case (owner, Done{bytes}): IO.pure(S.Owner<String> & Response.ReadResult, (owner, decoded(reader, bytes)))
-    case (owner, Fail{_}):
-      do IO<S.Owner<String> & Response.ReadResult>:
-        close(owner)
-        IO.die(S.Owner<String> & Response.ReadResult, 1, "exchange receive failed")
-
-def loop(fuel: Nat, pair: S.Owner<String> & Response.ReadResult, body: List<&2, U32>) -> IO(Unit):
-  match fuel pair:
-    case _ Tuple{owner, Response.Complete{events, rest}}: finished(owner, payload(events, body), rest)
-    case Succ{rest} Tuple{owner, Response.More{reader, events}}:
+def loop(fuel: Nat, next: Exchange.Next<String>, body: List<&2, U32>) -> IO(Unit):
+  match fuel next:
+    case _ Exchange.Next{exchange, Done{None{}}}: finished(exchange, body)
+    case Succ{rest} Exchange.Next{exchange, Done{Some{event}}}:
       do IO<Unit>:
-        pair : S.Owner<String> & Result<&2, &2, S.Error<String>, List<&2, U32>> <- S.recv(String, owner, 7)
-        next : S.Owner<String> & Response.ReadResult <- received(reader, pair)
-        loop(rest, next, payload(events, body))
-    case _ Tuple{owner, _}:
+        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        loop(rest, next, accumulated(event, body))
+    case _ Exchange.Next{exchange, _}:
       do IO<Unit>:
-        close(owner)
-        IO.die(Unit, 1, "exchange decoder failed")
+        close(exchange)
+        IO.die(Unit, 1, "exchange reader failed")
 
-def transmit(owner: S.Owner<String>, head: Result<&2, &2, Request.HeadError, Request.Head>, body: List<&2, U32>) -> IO(Unit):
-  match head:
+def prepared(socket: Socket, signal: A.AbortSignal<String>, request: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):
+  match request:
     case Fail{_}:
       do IO<Unit>:
-        close(owner)
-        IO.die(Unit, 1, "exchange request invalid")
-    case Done{Request.Head{method, bytes}}:
+        Socket.close(socket)
+        IO.die(Unit, 1, "request preparation failed")
+    case Done{value}:
       do IO<Unit>:
-        first : S.Owner<String> & Result<&2, &2, S.Error<String>, Unit> <- S.send(String, owner, bytes)
-        owner : S.Owner<String> <- sent(first)
-        second : S.Owner<String> & Result<&2, &2, S.Error<String>, Unit> <- S.send(String, owner, body)
-        owner : S.Owner<String> <- sent(second)
-        loop(128n, (owner, Response.More{Response.new(method, Response.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}), Nil{}}), Nil{})
-
-def framed(owner: S.Owner<String>, result: Result<&2, &2, Framing.FramingError, Framing.Prepared>) -> IO(Unit):
-  match result:
-    case Done{Framing.Prepared{Body.Prepared{method, headers, content}, encoding}}:
-      transmit(owner, Request.encode(method, "/v1/responses?x=%C3%A9", Headers.entries(headers)), Framing.wireContent(content, encoding))
-    case Fail{_}:
-      do IO<Unit>:
-        close(owner)
-        IO.die(Unit, 1, "exchange framing failed")
-
-def prepared(owner: S.Owner<String>, result: Result<&2, &2, Body.BodyError, Body.Prepared>) -> IO(Unit):
-  match result:
-    case Done{request}: framed(owner, Framing.prepare(request))
-    case Fail{_}:
-      do IO<Unit>:
-        close(owner)
-        IO.die(Unit, 1, "exchange body preparation failed")
+        started : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.start(~String, socket, signal, value, 7, Response.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
+        exchange : Exchange.Exchange<String> <- opened(started)
+        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        loop(128n, next, Nil{})
 
 def requestHeaders(port: U32, chunked: Bool) -> Headers.Headers:
   host = Headers.appendField(Headers.new(), H.Header{"host", "127.0.0.1:" ++ U32.show(port)})
@@ -111,8 +68,8 @@ def requestHeaders(port: U32, chunked: Bool) -> Headers.Headers:
   +fields = Headers.appendField(json, H.Header{"x-byte", "\u{ff}"})
   Bool.pick(Headers.Headers, chunked, Headers.appendField(fields, H.Header{"content-length", "0"}), fields)
 
-def exchange(owner: S.Owner<String>, port: U32, +chunked: Bool) -> IO(Unit):
-  prepared(owner, Body.prepare(Bool.pick(String, chunked, "delete", "post"), requestHeaders(port, chunked), Body.Text{"{\"text\":\"hé🙂\"}"}))
+def request(socket: Socket, signal: A.AbortSignal<String>, port: U32, +chunked: Bool) -> IO(Unit):
+  prepared(socket, signal, Request.prepare(Bool.pick(String, chunked, "delete", "post"), "/v1/responses?x=%C3%A9", requestHeaders(port, chunked), Body.Text{"{\"text\":\"hé🙂\"}"}))
 
 def cases(count: Nat, +port: U32, +chunked: Bool) -> IO(Unit):
   match count:
@@ -121,9 +78,7 @@ def cases(count: Nat, +port: U32, +chunked: Bool) -> IO(Unit):
       do IO<Unit>:
         +controller : A.AbortController<String> <- A.new(String)
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-        created : Result<&2, &1, S.Error<String>, S.Owner<String>> <- S.create(String, socket, A.signal(String, controller))
-        owner : S.Owner<String> <- opened(created)
-        exchange(owner, port, chunked)
+        request(socket, A.signal(String, controller), port, chunked)
         A.dispose(String, controller)
         cases(rest, port, Bool.not(chunked))
 
