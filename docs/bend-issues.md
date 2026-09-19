@@ -215,3 +215,7 @@ The before module source, test runner source, hashes and build observations are 
 ## BEND-020 — Reclassified as timer implementation work
 
 The missing cancellable timer is expected library development, not a Bend defect or external blocker. Its design, lifecycle observations, implementation and validation now live in [the timer implementation record](../patches/experimental/timer/README.md). Historical raw measurements retain their paths so existing references remain valid. Actual defects or performance cliffs discovered while building it belong in this log.
+
+### BEND-012/BEND-017 recurrences during socket integration
+
+The abortable-socket integration encountered the existing pattern/global-name collision when a helper named `interrupt` shared a name with a `Lifetime` constructor-pattern binder. Renaming the operation helper to `cancelForReason` allowed the module to typecheck. Importing the socket-interrupt test fixture also exposed its global `owner` helper in an `owner` pattern; the new test uses its own small assertion helper and does not import that unrelated fixture. These are instances of the already reduced BEND-012 pattern defect, not a new fix. A result-combination helper initially matched `reason value` against parameters declared `value, reason`; aligning the match order with binder order addressed the documented BEND-017 restriction. No compiler patch was changed or installed, and the existing reduced reproducers remain applicable.
