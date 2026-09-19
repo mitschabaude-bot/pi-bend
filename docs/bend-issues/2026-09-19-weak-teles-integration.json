@@ -1,0 +1,89 @@
+{
+  "scope": "Single shared-host native emission experiment. Weak-key TELES candidate only; no forced GC or --smol. Candidate is uninstalled. Failed installed baseline prevents a completed-build speed comparison.",
+  "source_revision": "e2e0c163864de14e05178deaf27060de9f246d08",
+  "compiler_sha256": {
+    "installed": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "candidate": "e1a5dd06552fd5f927b0d8a4b4fda1246c4a5ab678754b72f00edfece0269d98"
+  },
+  "stopped_16_gib_attempt": {
+    "command": [
+      "/usr/bin/time",
+      "-f",
+      "%e %U %S %M",
+      "-o",
+      "build/url-absolute-weak-usage.txt",
+      "/home/agent/.bun/bin/bun",
+      "build/bend-weak-teles-candidate/main.ts",
+      "packages/runtime/test/url-absolute.bend",
+      "-o",
+      "build/url-absolute-weak.c"
+    ],
+    "elapsed_seconds": 109.14105779863894,
+    "peak_sampled_group_rss_kib": 16836940,
+    "limit_gib": 16.0,
+    "stopped": true,
+    "child_exit_code": -15
+  },
+  "completed_24_gib_attempt": {
+    "command": [
+      "/usr/bin/time",
+      "-f",
+      "%e %U %S %M",
+      "-o",
+      "build/url-absolute-weak-24-usage.txt",
+      "/home/agent/.bun/bin/bun",
+      "build/bend-weak-teles-candidate/main.ts",
+      "packages/runtime/test/url-absolute.bend",
+      "-o",
+      "build/url-absolute-weak-24.c"
+    ],
+    "elapsed_seconds": 149.90948243066669,
+    "peak_sampled_group_rss_kib": 17636288,
+    "limit_gib": 24.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "individual_compiler_usage": {
+    "wall_seconds": 149.7,
+    "cpu_user_seconds": 161.82,
+    "cpu_system_seconds": 18.95,
+    "peak_rss_kib": 17740096
+  },
+  "generated_c_bytes": 13768586,
+  "sha256": {
+    "packages/runtime/src/url-absolute.bend": "545a745f124fc1663458bd27c22c09230a091efca0a12e3e16eea5ebe5fa6b57",
+    "packages/runtime/src/url-authority.bend": "d21bc22ef7c518d3dbfd76a7cc166311eafa830baf3f68906551743f40ef260d",
+    "packages/runtime/test/url-absolute.bend": "21064073fd928926c4252580b901d4097544718ebd00c507ea22c58afbb38d5f",
+    "build/url-absolute-weak-24.c": "3ea998601386978c8d7dbbe62d0b4682571d43b5bebea885969dfdace4f32bd9",
+    "build/url-absolute.c": "3ea998601386978c8d7dbbe62d0b4682571d43b5bebea885969dfdace4f32bd9",
+    "build/url-absolute": "65f54164ea7a7cf2739268a2c539617331e1a50e4a66462fe591a6e1fe8e7151"
+  },
+  "validation": {
+    "exact_C_matches_prior_candidate": true,
+    "prior_validation_record": "2026-09-19-url-absolute-build.json",
+    "scope": "Reuses prior 2222 parser and 560 WPT checks on native one/four threads by exact generated-C and tested-binary identity. No repeated Clang build or runtime suite. Nine parser cases assert explicit Unicode policy, not Node parity."
+  },
+  "additional_parity": {
+    "record": "2026-09-19-weak-teles-parity.json",
+    "fixtures": 6,
+    "backends": [
+      "C",
+      "JS"
+    ],
+    "result": "byte-identical baseline and candidate outputs",
+    "guard": {
+      "command": [
+        "python3",
+        "scripts/check-weak-teles-parity.py",
+        "build/bend-weak-teles-candidate",
+        "docs/bend-issues/2026-09-19-weak-teles-parity.json"
+      ],
+      "elapsed_seconds": 42.89080143813044,
+      "peak_sampled_group_rss_kib": 6808204,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "remaining": "Broader compiler and performance validation before adoption; pattern-expansion cause remains unresolved. No full-port or installed-native acceptance claim."
+}

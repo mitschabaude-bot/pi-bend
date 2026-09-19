@@ -1,0 +1,106 @@
+{
+  "scope": "Compare native and JS emission for an isolated weak-cache candidate.\n\nThis checks output equivalence on selected fixtures, not full compiler parity.\nRun under run-rss-guarded.py; sources and every output are hashed in the report.\n",
+  "bun": "1.4.0",
+  "compiler_sha256": {
+    "baseline": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "candidate": "e1a5dd06552fd5f927b0d8a4b4fda1246c4a5ab678754b72f00edfece0269d98"
+  },
+  "fixtures": [
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "source_sha256": "ecda1bc6be3ef2799d60b70f46535363c78a6ba11eba961e89c440ab9c1ba9be",
+      "outputs": {
+        "c": {
+          "identical": true,
+          "bytes": 92513,
+          "sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        "js": {
+          "identical": true,
+          "bytes": 14591,
+          "sha256": "a92997e211c95e9430f98ada70bffb24a704ba704372942bf41dc0b3a42b163a"
+        }
+      }
+    },
+    {
+      "source": "tests/static-sum-layout.bend",
+      "source_sha256": "b6a9e9ee3c878c896291866eccec1c6f73d8808fab804e24e029a1ed5325e373",
+      "outputs": {
+        "c": {
+          "identical": true,
+          "bytes": 127436,
+          "sha256": "7753a311b210fca69ca36803c68117391617d385874d3251edaf2d186d17aa7c"
+        },
+        "js": {
+          "identical": true,
+          "bytes": 20412,
+          "sha256": "a8cd3005551821fd1d5dca5356a69e5b8371f720912edfb3f5fa477b0fc4cbbf"
+        }
+      }
+    },
+    {
+      "source": "tests/compiler-dot-state.bend",
+      "source_sha256": "ed2dbf43e33516bd3c2e9f41738fd62dbe4c4238eae4866985ec1196c092130d",
+      "outputs": {
+        "c": {
+          "identical": true,
+          "bytes": 85215,
+          "sha256": "a0d623aaa384833ba17852f78a54ba40a9bd8e55239ec50cfe08d2b12cfd75a5"
+        },
+        "js": {
+          "identical": true,
+          "bytes": 14700,
+          "sha256": "67de6e3544d8602da7b9b1788627fe61f488645edbfa4f72aa49953b2474dc08"
+        }
+      }
+    },
+    {
+      "source": "packages/runtime/test/deferred.bend",
+      "source_sha256": "ca26f348f9d416060f60a061c0461f367627dd816142105f83fac869ff85acbf",
+      "outputs": {
+        "c": {
+          "identical": true,
+          "bytes": 205179,
+          "sha256": "de6348a33ee4ce2e56ba5494f0b12d913c380beae4f8549112e0520ae7354898"
+        },
+        "js": {
+          "identical": true,
+          "bytes": 32592,
+          "sha256": "864e48e9eeb6368c547450d4e7559c4f49f2c38acad6aeb90cacdc9f044f7b6d"
+        }
+      }
+    },
+    {
+      "source": "packages/runtime/test/http-line.bend",
+      "source_sha256": "5bd76a962de484e9186abcaab79dbd090ac69f3364e426e54ab9f1f95df2e1d4",
+      "outputs": {
+        "c": {
+          "identical": true,
+          "bytes": 232009,
+          "sha256": "54eb8d5fa17183f912496e6531721f6449bf1070462d0c2eb02563dde5edfb17"
+        },
+        "js": {
+          "identical": true,
+          "bytes": 95181,
+          "sha256": "abd7c2e6acbebe63ddf0bb715ddc37fc405664bede7d5e92c73d2fc923a218b7"
+        }
+      }
+    },
+    {
+      "source": "packages/runtime/test/schema-builder.bend",
+      "source_sha256": "c6ee7c706ddfd54065cd6baeb79a5c14ffe8586bbc4f5e4afddadfcfb2a2a132",
+      "outputs": {
+        "c": {
+          "identical": true,
+          "bytes": 3104460,
+          "sha256": "82aacbb586854fd2cf5c231a60048031733c84c1858048f89e5ca7d41ac1f256"
+        },
+        "js": {
+          "identical": true,
+          "bytes": 1363246,
+          "sha256": "294ab530e8a1dd180bde6dce4d6865f6bf90428749e7b20fc0024e348c2a1139"
+        }
+      }
+    }
+  ]
+}
