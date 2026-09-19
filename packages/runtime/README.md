@@ -141,3 +141,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `url-record.bend` defines the immutable internal URL value: typed scheme/host, optional port, encoded credentials, hierarchical or opaque path, and optional query/fragment. Absent host and an explicitly empty host are distinct. `url-serialize.bend` serializes this normalized record or its path, optionally excluding the fragment. It preserves encoded text, omits empty credentials, and protects hostless paths beginning with two slashes from being interpreted as an authority. Reversed accumulators bound machine-stack use for long components and many segments. Parsers must establish record invariants; serialization does not validate or normalize arbitrary field combinations.
+
+
+`url-input.bend` prepares constructor inputs by trimming edge C0 controls/space and removing ASCII tabs, line feeds and carriage returns. `removeTabsAndNewlines` exposes only the latter operation for parser entries that must retain edge characters. `prefix` separates a syntactically valid, lowercased scheme from its unconsumed remainder, or returns the complete preprocessed relative reference unchanged. A detected scheme is not proof of URL validity; base resolution and the remaining parser states follow. All scans are tail-recursive.
