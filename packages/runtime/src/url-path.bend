@@ -1,6 +1,7 @@
 import Base
 import ./url-percent.bend as Percent
 import ./url-scheme.bend as Scheme
+import ./url-query.bend as Query
 
 type Parsed is Data:
   Parsed{segments: List<&2, String>, query: Maybe<&2, String>, fragment: Maybe<&2, String>}
@@ -103,28 +104,22 @@ def push(part: Segment, file: Bool, last: Bool, reversed: List<&2, String>) -> L
     case Parent{}: trailing(last, shorten(reversed, file))
     case Name{value}: appendName(reversed, file, value)
 
-def querySet(special: Bool) -> Percent.EncodeSet:
-  match special:
-    case True{}: Percent.SpecialQuery{}
-    case False{}: Percent.Query{}
-
 def finish(reversed: List<&2, String>, query: Maybe<&2, String>, fragment: Maybe<&2, String>) -> Parsed:
   Parsed{List.reverse(&2, String, reversed), query, fragment}
 
-# URL query strings use UTF-8 and preserve '+' and existing percent escapes.
-# Form parsing is a separate API, not part of URL path/query parsing.
-def query(text: String, +set: Percent.EncodeSet, reversed: String, segments: List<&2, String>) -> Parsed:
-  match text:
-    case SNil{}: finish(segments, Some{Percent.encode(set, String.reverse(reversed))}, None{})
-    case SCon{'#', fragment}: finish(segments, Some{Percent.encode(set, String.reverse(reversed))}, Some{Percent.encode(Percent.Fragment{}, fragment)})
-    case SCon{char, rest}: query(rest, set, SCon{char, reversed}, segments)
+def queryResult(result: Query.Parsed, reversed: List<&2, String>) -> Parsed:
+  match result:
+    case Query.Parsed{value, fragment}: finish(reversed, Some{value}, fragment)
+
+def query(text: String, set: Percent.EncodeSet, reversed: String, segments: List<&2, String>) -> Parsed:
+  queryResult(Query.scan(text, set, reversed), segments)
 
 def scan(text: String, +special: Bool, +file: Bool, reversed: String, segments: List<&2, String>) -> Parsed:
   match text special:
     case SNil{} _: finish(push(segment(String.reverse(reversed)), file, True{}, segments), None{}, None{})
     case SCon{'/', rest} isSpecial: scan(rest, isSpecial, file, "", push(segment(String.reverse(reversed)), file, False{}, segments))
     case SCon{'\\', rest} True{}: scan(rest, True{}, file, "", push(segment(String.reverse(reversed)), file, False{}, segments))
-    case SCon{'?', rest} isSpecial: query(rest, querySet(isSpecial), "", push(segment(String.reverse(reversed)), file, True{}, segments))
+    case SCon{'?', rest} isSpecial: query(rest, Query.encodeSet(isSpecial), "", push(segment(String.reverse(reversed)), file, True{}, segments))
     case SCon{'#', rest} _: finish(push(segment(String.reverse(reversed)), file, True{}, segments), None{}, Some{Percent.encode(Percent.Fragment{}, rest)})
     case SCon{char, rest} isSpecial: scan(rest, isSpecial, file, SCon{char, reversed}, segments)
 

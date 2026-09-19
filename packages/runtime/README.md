@@ -144,3 +144,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `url-input.bend` prepares constructor inputs by trimming edge C0 controls/space and removing ASCII tabs, line feeds and carriage returns. `removeTabsAndNewlines` exposes only the latter operation for parser entries that must retain edge characters. `prefix` separates a syntactically valid, lowercased scheme from its unconsumed remainder, or returns the complete preprocessed relative reference unchanged. A detected scheme is not proof of URL validity; base resolution and the remaining parser states follow. All scans are tail-recursive.
+
+
+`url-opaque-path.bend` handles the opaque-path state used by data, mailto and other non-hierarchical URLs. It preserves literal slashes, dot segments and percent escapes, encodes C0/non-ASCII bytes, and handles the final literal space before a query/fragment delimiter. `url-query.bend` provides shared UTF-8 query/fragment parsing for both opaque and hierarchical paths, with scheme-dependent query escaping. Opaque-path entry selection and constructor preprocessing remain the responsibility of the enclosing URL parser.
