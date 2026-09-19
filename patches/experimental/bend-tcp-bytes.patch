@@ -1,0 +1,176 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -306,2 +306,13 @@
+   import "./effs/tcp_connect.js"
++
++# Byte lists follow File.read_bytes: each element is in 0..255.
++def TCP.send_bytes(sock: Socket, data: List<&2, U32>) ->
++  IO(Socket & Result<&1, &1, U32 & String, Unit>):
++  import "./effs/tcp_send_bytes.c"
++  import "./effs/tcp_send_bytes.js"
++
++def TCP.recv_bytes(sock: Socket, max: U32) ->
++  IO(Socket & Result<&1, &1, U32 & String, List<&2, U32>>):
++  import "./effs/tcp_recv_bytes.c"
++  import "./effs/tcp_recv_bytes.js"
+ 
+--- /dev/null
++++ b/bend2/effs/tcp_send_bytes.c
+@@ -0,0 +1,47 @@
++// TCP
++// ===
++
++// Sends what is left; a full socket (non-blocking, so EAGAIN) parks the
++// computation until the socket is writable, and the loop resumes here.
++static Term tcp_send_bytes_more(Env e, IoWork* w) {
++  int fd = (int)w->hand;
++  while (w->code == 0 && (u64)w->made < w->size) {
++    ssize_t n = send(fd, w->data + w->made, w->size - (u64)w->made, 0);
++    if (n < 0 && errno == EAGAIN) {
++      return io_wait_on(w, fd, POLLOUT, tcp_send_bytes_more);
++    }
++    w->made += io_sys_end(w, n);
++  }
++  Term r = w->code != 0 ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(CID_UNIT, 0));
++  free(w->data);
++  return io_tup(e, io_hand(w->hand), r);
++}
++
++Term tcp_send_bytes_run(Env e, Term* f, IoWork* w) {
++  w->hand = (intptr_t)io_hand_v(f[0]);
++  u64 cap = 64;
++  Term xs = f[1];
++  w->data = io_mem(malloc(cap));
++  w->size = 0;
++  w->made = 0;
++  w->code = 0;
++  while (term_aux(xs) == CID_CON) {
++    Term fb[2];
++    spare_free(e, cls_fit(2), ctr_take(e, xs, 2, fb));
++    if (fb[0] > 255) w->code = EINVAL;
++    if (w->code == 0) {
++      if (w->size == cap) {
++        cap *= 2;
++        w->data = io_mem(realloc(w->data, cap));
++      }
++      w->data[w->size++] = (char)fb[0];
++    }
++    xs = fb[1];
++  }
++  return tcp_send_bytes_more(e, w);
++}
++
++static void __attribute__((constructor)) tcp_send_bytes_use(void) {
++  io_eff(CID_TCP_SEND_BYTES, tcp_send_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/tcp_recv_bytes.c
+@@ -0,0 +1,37 @@
++// TCP
++// ===
++
++static Term tcp_recv_bytes_pack(Env e, IoWork* w) {
++  Term r;
++  if (w->code) {
++    r = io_fail(e, w->code, NULL);
++  } else {
++    Term xs = term_pak(CID_NIL, 0);
++    for (u64 i = w->size; i > 0; i -= 1) {
++      xs = io_node(e, CID_CON, ((uint8_t*)w->data)[i - 1], xs, IO_HOTS & 16);
++    }
++    r = io_done(e, xs);
++  }
++  free(w->data);
++  return io_tup(e, io_hand(w->hand), r);
++}
++
++// The loop parked the request until the socket was readable; a recv that
++// still finds nothing (the socket is non-blocking) parks again.
++static Term tcp_recv_bytes_more(Env e, IoWork* w) {
++  int fd  = (int)w->hand;
++  w->size = io_sys_end(w, recv(fd, w->data, (size_t)w->made, 0));
++  return w->code == EAGAIN ? io_wait_on(w, fd, POLLIN, tcp_recv_bytes_more)
++    : tcp_recv_bytes_pack(e, w);
++}
++
++Term tcp_recv_bytes_run(Env e, Term* f, IoWork* w) {
++  w->hand = (intptr_t)io_hand_v(f[0]);
++  w->made = f[1] < INT32_MAX ? (intptr_t)f[1] : INT32_MAX;
++  w->data = io_mem(malloc((size_t)w->made + 1));
++  return tcp_recv_bytes_more(e, w);
++}
++
++static void __attribute__((constructor)) tcp_recv_bytes_use(void) {
++  io_eff(CID_TCP_RECV_BYTES, tcp_recv_bytes_run, IO_READ);
++}
+--- /dev/null
++++ b/bend2/effs/tcp_send_bytes.js
+@@ -0,0 +1,33 @@
++// TCP
++// ===
++
++// Sends what is left; a full socket (non-blocking, so EAGAIN) parks the
++// computation until the socket is writable, and the loop resumes here.
++function tcp_send_bytes(socket, data, k) {
++  const sys = io_sys();
++  const fd = socket;
++  const bytes = [];
++  for (let xs = data; xs.$ === "Con"; xs = xs.tail) {
++    if (xs.head > 255) return io_tup(socket, io_fail(22));
++    bytes.push(xs.head);
++  }
++  const b = Uint8Array.from(bytes);
++  const again = sys.mac ? 35 : 11;
++  const go = (at) => {
++    while (at < b.length) {
++      const part = b.subarray(at);
++      const n = Number(sys.send(fd, sys.ptr(part), part.length, 0));
++      if (n < 0) {
++        const code = sys.errno();
++        if (code === again) {
++          io_park_on(fd, true, k, () => go(at));
++          return undefined;
++        }
++        return io_tup(socket, io_fail(code));
++      }
++      at += n;
++    }
++    return io_tup(socket, io_done({ $: "Unit" }));
++  };
++  return go(0);
++}
+--- /dev/null
++++ b/bend2/effs/tcp_recv_bytes.js
+@@ -0,0 +1,31 @@
++// TCP
++// ===
++
++// The loop parked the request until the socket was readable; a recv that
++// still finds nothing (the socket is non-blocking) parks again.
++function tcp_recv_bytes(socket, max, k) {
++  const sys = io_sys();
++  const fd = socket;
++  const len = Math.min(Number(max), 2147483647);
++  const b = new Uint8Array(Math.max(len, 1));
++  const again = sys.mac ? 35 : 11;
++  const go = () => {
++    const n = Number(sys.recv(fd, sys.ptr(b), len, 0));
++    if (n < 0) {
++      const code = sys.errno();
++      if (code === again) {
++        io_park_on(fd, false, k, go);
++        return undefined;
++      }
++      return io_tup(socket, io_fail(code));
++    }
++    let xs = { $: "Nil" };
++    for (let i = n; i > 0; i--) xs = { $: "Con", head: b[i-1], tail: xs };
++    return io_tup(socket, io_done(xs));
++  };
++  return go();
++}
++
++function tcp_recv_bytes_need() {
++  return { read: true };
++}
