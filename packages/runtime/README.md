@@ -102,3 +102,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/idna-bidi.bend` implements the RFC 5893 label rule over `unicode-bidi-class.Class` values, either incrementally or through `analyze`. Its result preserves both rule validity and whether the label contains R/AL/AN. The domain processor must check every label if any label contains those classes; checking only right-to-left labels would be incorrect. Unicode character-property lookup and full domain integration remain unfinished.
+
+
+`src/idna-contextj.bend` validates contextual joiners incrementally. Feed each scalar's code point, `unicode-joining-type.JoiningType` and canonical combining class to `push`, then call `finish` to reject any unresolved right context. Transparent characters preserve joining context but do not preserve immediate virama adjacency. These rules operate on prepared label characters, after any transitional mapping has removed join controls. Unicode property lookup remains to be connected.
