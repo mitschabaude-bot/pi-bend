@@ -25,6 +25,12 @@ Upstream generic tools, custom messages and schema-validated arguments must reta
 
 Complex dependencies belong in pure Bend, including HTTP/TLS, cryptographic operations, Unicode algorithms and numeric support. Missing language primitives should be added to Bend instead of replacing these libraries with C or JavaScript glue. The prototype C adapters are temporary migration liabilities. Operating-system primitives must remain injectable through the ported library interfaces so upstream mocked/conformance tests have equivalents.
 
+## Runtime and standard-library implementation
+
+We build the primitives and reusable Bend libraries needed by the port. Missing facilities are expected in a new language, not work deferred to someone else. Use minimal OS effects beneath idiomatic, functional Bend APIs; test resource ownership, cancellation, behavior and performance before adoption. Investigate actual defects encountered along the way in the Bend issue log.
+
+The [owned timer implementation](../patches/experimental/timer/README.md) provides deadline, wait, cancel and close effects, composed into Bend abortable sleep and provider retry adapters. Lifecycle, race and original retry tests pass against isolated candidates. Remaining work is adoption validation and complete provider integration. HTTP/TLS and the remaining transport layers are likewise implementation work; the bootstrap's libcurl dependency is not the final design.
+
 ## Module acceptance
 
 For each module, record its upstream source and public exports; port the full data model and call contracts; port its tests; verify downstream composition; then migrate its callers. A module is not complete solely because a demonstration works. Track intentional language adaptations separately from remaining gaps.

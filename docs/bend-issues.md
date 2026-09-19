@@ -1,6 +1,8 @@
-# Bend issues and standard-library opportunities
+# Bend bug and performance investigations
 
 This is the living investigation log for problems encountered while building pi-bend. The project is also a contribution to Bend: use idiomatic functional representations, investigate toolchain failures, and develop reusable library facilities. A workaround does not close an issue. High RSS alone does not establish a memory leak. Application inefficiency must be distinguished from a compiler or runtime defect.
+
+Missing primitives are our implementation responsibilities, not defects awaiting an upstream fix. Track their implementation and integration with the code and [architecture plan](architecture.md#runtime-and-standard-library-implementation). Historical facility entries below retain their identifiers for existing links; their absence is not an external blocker.
 
 Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with eight local patches listed in [patches/README.md](../patches/README.md). Automatic updates remain enabled; reproduce against recorded source hashes as well as version strings. No upstream issue/PR submission is recorded for these entries.
 
