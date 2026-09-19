@@ -80,6 +80,46 @@
         "url": "xn--4dbc02wog235h"
       },
       "matches": false
+    },
+    {
+      "input": "1.\u05d0",
+      "reason": "Every nonempty label in a Bidi domain must start with L, R or AL; the ASCII label starts with EN.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "1.xn--4db",
+        "url": "1.xn--4db"
+      },
+      "matches": false
+    },
+    {
+      "input": "_.\u05d0",
+      "reason": "The ASCII label in this Bidi domain starts with ON.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "_.xn--4db",
+        "url": "_.xn--4db"
+      },
+      "matches": false
+    },
+    {
+      "input": "\u05d0._",
+      "reason": "The final ASCII label in this Bidi domain starts with ON.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn--4db._",
+        "url": "xn--4db._"
+      },
+      "matches": false
+    },
+    {
+      "input": "\u05d0.1a",
+      "reason": "The final ASCII label in this Bidi domain starts with EN.",
+      "standardAccepted": false,
+      "node": {
+        "ascii": "xn--4db.1a",
+        "url": "xn--4db.1a"
+      },
+      "matches": false
     }
   ],
   "status": "pending user behavior decision; not parity",
@@ -87,5 +127,10 @@
     "url": "https://github.com/nodejs/node/blob/v24.18.0/deps/ada/ada.cpp#L9420",
     "sha256": "ac8fba37ceddb7c10ca5a24fd57a0f0a0ca32cd3d391e40c6f9f6b7af3801fd4",
     "observation": "The first join control returns a whole-label result. ZWNJ scans for any L/D before and R/D after instead of allowing only intervening T. Successful joiner handling returns before the Bidi section."
+  },
+  "asciiLabelSource": {
+    "url": "https://github.com/nodejs/node/blob/v24.18.0/deps/ada/ada.cpp#L9754",
+    "sha256": "ac8fba37ceddb7c10ca5a24fd57a0f0a0ca32cd3d391e40c6f9f6b7af3801fd4",
+    "observation": "ASCII labels take a copy-only fast path instead of calling is_label_valid, including in domains containing RTL labels."
   }
 }

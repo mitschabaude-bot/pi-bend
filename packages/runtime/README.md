@@ -147,3 +147,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `url-opaque-path.bend` handles the opaque-path state used by data, mailto and other non-hierarchical URLs. It preserves literal slashes, dot segments and percent escapes, encodes C0/non-ASCII bytes, and handles the final literal space before a query/fragment delimiter. `url-query.bend` provides shared UTF-8 query/fragment parsing for both opaque and hierarchical paths, with scheme-dependent query escaping. Opaque-path entry selection and constructor preprocessing remain the responsibility of the enclosing URL parser.
+
+
+`url-special-host.bend` composes raw host preparation, Unicode domain-to-ASCII conversion and final domain/IPv4 classification. Literal bracketed IPv6 bypasses percent/IDNA processing, while percent-encoded brackets do not. The API returns typed preparation, domain or classification failures and borrows reusable immutable Unicode tables through its context argument. IDNA options are required explicitly: the pending Node-versus-Unicode domain-validation decision has not been made into a public URL default.

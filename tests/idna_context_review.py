@@ -1,6 +1,6 @@
 """Pending Node/Unicode behavior review, not a passing parity assertion.
 
-These labels violate RFC 5892 ContextJ or RFC 5893 Bidi requirements. The normal
+These inputs violate RFC 5892 ContextJ or RFC 5893 Bidi requirements. The normal
 property/context checker separately verifies the native standard-rule result.
 Exit nonzero while Node accepts any; never count this review as passed parity.
 """
@@ -15,6 +15,10 @@ CASES=[
     ('ب-\u200cب','The intervening hyphen is not Joining_Type Transparent.'),
     ('क्\u200da\u200cb','The later ZWNJ has no valid joining context.'),
     ('क्\u200dאב','A label in a Bidi domain mixes L with R.'),
+    ('1.א','Every nonempty label in a Bidi domain must start with L, R or AL; the ASCII label starts with EN.'),
+    ('_.א','The ASCII label in this Bidi domain starts with ON.'),
+    ('א._','The final ASCII label in this Bidi domain starts with ON.'),
+    ('א.1a','The final ASCII label in this Bidi domain starts with EN.'),
 ]
 ORACLE="""
 const {domainToASCII}=require('url');

@@ -307,3 +307,10 @@ The existing BEND-012 imported-pattern collision also appeared when `url-seriali
 
 
 BEND-022 also recurred in the URL scheme-prefix scanner: a literal colon character pattern followed by `SCon{Chr{+code}, rest}` fails inference on the refined numeric term. The scanner now detects the colon by numeric equality and carries the boundary flag to its next tail call, leaving the duplicated scalar unrefined. The existing character/U32 reduced fixtures remain applicable; no compiler patch was made. The completed input/prefix suite verifies the resulting behavior on native one/four threads and Bun.
+
+
+### BEND-001/BEND-016 recurrence: full special-host pipeline
+
+The composed URL host fixture crossed its 12 GiB sampled process-group guard after 31.62 seconds (12,639,412 KiB observed) and was stopped. A subsequent installed-toolchain build under a 24 GiB guard completed in 510.47 seconds with 22,834,836 KiB sampled group peak RSS and 9,821,143 bytes of generated C. Most of the later wait was in Clang; one sample at 6m36s of Clang elapsed/CPU time showed 659,408 KiB RSS. These phases must not be conflated: the peak group observation is not the later Clang sample, and neither establishes a runtime leak.
+
+All 2,215 integration cases pass on native one/four threads and Bun. JS emission and tests ran while Clang was compiling; their separate guarded group completed in 22.48 seconds with 3,848,204 KiB sampled peak. This overlap and the shared host preclude interpreting the figures as controlled throughput comparisons. The [measurement record](bend-issues/2026-09-19-url-special-host-build.json) retains guards, source/compiler/binary hashes and validation scope. No compiler patch, optimization-level change or Unicode-data reduction was used. Pattern expansion/cache retention and generated-table C optimization remain the existing investigation leads.
