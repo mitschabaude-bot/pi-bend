@@ -204,6 +204,14 @@ The standalone retry-error/rounding fixture builds with the installed compiler i
 
 The retry-loop fixture with the native sleep adapter builds against the isolated additive timer candidate in 36.55 seconds at 10,430,488 KiB sampled group RSS. The timer candidate changes no compiler code. All twelve real-timer traces pass on one/four threads and resource audits find zero live timers/waiters/channels at exit; this does not establish general leak freedom. Build statistics and source hashes are in `docs/bend-issues/2026-09-19-retry-native-timer-build.json`; lifecycle observations are in `2026-09-19-retry-native-timers.json`.
 
+### BEND-001/BEND-016 recurrence: HTTP date token patterns (2026-09-19)
+
+Two nested list patterns ending in the literal `"GMT"` caused the HTTP date syntax fixture to emit 82,589,722 bytes of C, including 74,057,188 bytes of leading whitespace. The guarded build reached 12,198,264 KiB sampled group RSS. Clang's `-O1` optimization was deliberately stopped after more than two minutes of compiler CPU time; the total interrupted build took 201.14 seconds. This was not a crash, and no runtime correctness result is claimed for that version.
+
+Binding the zone token and checking it with `String.eq(zone, "GMT")` retains the recognizer's grammar while reducing generated C to 184,863 bytes. The revised build finishes in 1.58 seconds at 188,868 KiB sampled group RSS, and all 1,517 cases pass on one/four native threads. The month/weekday tables already use string equality rather than literal-pattern dispatch. This recurrence supports the existing pattern-lowering/code-expansion diagnosis; it does not establish a new root cause or resolve BEND-016. No compiler patch was applied.
+
+The before module source, test runner source, hashes and build observations are retained in `docs/bend-issues/2026-09-19-http-date-pattern.json`. To reproduce without changing production code, write `before_module_source` to a temporary `.bend` file, write `test_source` beside it with its syntax-module import redirected to that file, then emit C with the installed compiler under the RSS guard. Inspect emission size before attempting expensive C optimization. The current ordinary regression uses the explicit equality implementation.
+
 ## BEND-020 — Reclassified as timer implementation work
 
 The missing cancellable timer is expected library development, not a Bend defect or external blocker. Its design, lifecycle observations, implementation and validation now live in [the timer implementation record](../patches/experimental/timer/README.md). Historical raw measurements retain their paths so existing references remain valid. Actual defects or performance cliffs discovered while building it belong in this log.
