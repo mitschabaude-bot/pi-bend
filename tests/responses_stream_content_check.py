@@ -49,29 +49,7 @@ for item in [tool(arguments=''),tool('custom_tool_call',input=''),dict(type='mes
         if item['type']!=wrong['type']:add(item,[done(wrong)])
 add(dict(type='web_search_call',id='ws'))
 expected=json.loads(subprocess.check_output(['node','tests/responses_stream_content_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
-def optional(v):return 'None{}' if v is None else 'Some{'+string(v)+'}'
-def record(v,enc=value):return 'R.Record{'+seq('R.Property{'+string(k)+', '+enc(x)+'}' for k,x in v.items())+'}'
-def item(v):
-    kind=v['type']
-    if kind=='reasoning':return 'C.ReasoningItem{'+record(v)+'}'
-    if kind=='message':
-        phase='None{}' if v.get('phase') is None else 'Some{T.'+{'commentary':'Commentary','final_answer':'FinalAnswer'}[v['phase']]+'{}}'
-        return 'C.MessageItem{'+string(v['id'])+', '+phase+', '+seq(string(x.get('text',x.get('refusal',''))) for x in v['content'])+'}'
-    if kind in ['function_call','custom_tool_call']:
-        args=string(v.get('arguments','')) if kind=='function_call' else optional(v.get('input'))
-        return 'C.'+('FunctionItem' if kind=='function_call' else 'CustomItem')+'{'+', '.join([string(v['id']),string(v['call_id']),string(v['name']),args,optional(v.get('namespace'))])+'}'
-    return 'C.OtherItem{}'
-def event_literal(e):
-    kind=e['type'].removeprefix('response.')
-    if kind=='output_item.done':return 'C.ItemDone{'+item(e['item'])+'}'
-    if kind=='reasoning_summary_part.done':return 'C.SummaryPartDone{}'
-    ctor,field={
-        'reasoning_summary_text.delta':('ThinkingDelta','delta'), 'reasoning_text.delta':('ThinkingDelta','delta'),
-        'output_text.delta':('TextDelta','delta'), 'refusal.delta':('TextDelta','delta'),
-        'function_call_arguments.delta':('FunctionDelta','delta'), 'function_call_arguments.done':('FunctionDone','arguments'),
-        'custom_tool_call_input.delta':('CustomDelta','delta'), 'custom_tool_call_input.done':('CustomDone','input'),
-    }[kind]
-    return 'C.'+ctor+'{'+string(e[field])+'}'
+from responses_stream_literals import item, event_literal, record
 lines=['import Base','import ../packages/ai/test/api/responses-stream-content.bend as Check','import ../packages/ai/src/api/openai-responses-stream-content.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(c,result) in enumerate(zip(cases,expected,strict=True)):
     lines += [f'def case{i}() -> IO(Unit):','  Check.check('+', '.join([item(c['item']),record(c['properties'],string),seq(map(event_literal,c['events'])),string(result),string(f'Responses content stream {i}')])+')']
