@@ -1,0 +1,251 @@
+{
+  "status": "Pending user choice; not an approved deviation or passing full Node differential suite.",
+  "choice": "Only fragment-only references against opaque bases, or Node acceptance of path/query references containing a fragment.",
+  "source": "https://github.com/nodejs/node/blob/v24.18.0/deps/ada/ada.cpp",
+  "source_sha256": "ac8fba37ceddb7c10ca5a24fd57a0f0a0ca32cd3d391e40c6f9f6b7af3801fd4",
+  "source_lines": "13385-13423: NO_SCHEME checks fragment.has_value(), not the current input character, then falls into relative parsing when non-fragment input remains.",
+  "nodeVersions": {
+    "node": "24.18.0",
+    "acorn": "8.16.0",
+    "ada": "3.4.4",
+    "amaro": "1.1.9",
+    "ares": "1.34.6",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "llhttp": "9.4.2",
+    "merve": "1.2.2",
+    "modules": "137",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.69.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.7",
+    "simdjson": "4.6.4",
+    "simdutf": "6.4.0",
+    "sqlite": "3.53.1",
+    "tz": "2026b",
+    "undici": "7.28.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "13.6.233.17-node.50",
+    "zlib": "1.3.1-e00f703",
+    "zstd": "1.5.7"
+  },
+  "wpt": {
+    "source": "https://raw.githubusercontent.com/web-platform-tests/wpt/c48d58747e1f211527fb695fd60548a997fae617/url/resources/urltestdata.json",
+    "sha256": "81e85fd3c199c08ef9c34cf651b3580eeedd080316493bfaf277a6b5ff8cf652",
+    "baseDependentInputs": 336,
+    "wptNodeDifferences": []
+  },
+  "bun_results": {
+    "total": 3458,
+    "matches": 3433,
+    "unresolved": 25
+  },
+  "cases": [
+    {
+      "backend": "Bun",
+      "index": 892,
+      "input": "?new#hash",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello?new#hash"
+    },
+    {
+      "backend": "Bun",
+      "index": 913,
+      "input": "x?y#z",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/x?y#z"
+    },
+    {
+      "backend": "Bun",
+      "index": 914,
+      "input": "x#y?z",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/x#y?z"
+    },
+    {
+      "backend": "Bun",
+      "index": 933,
+      "input": "C|#x",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/C|#x"
+    },
+    {
+      "backend": "Bun",
+      "index": 943,
+      "input": "/#",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:/#"
+    },
+    {
+      "backend": "Bun",
+      "index": 953,
+      "input": "?new#hash",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20?new#hash"
+    },
+    {
+      "backend": "Bun",
+      "index": 974,
+      "input": "x?y#z",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/x?y#z"
+    },
+    {
+      "backend": "Bun",
+      "index": 975,
+      "input": "x#y?z",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/x#y?z"
+    },
+    {
+      "backend": "Bun",
+      "index": 994,
+      "input": "C|#x",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/C|#x"
+    },
+    {
+      "backend": "Bun",
+      "index": 1004,
+      "input": "/#",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:/#"
+    },
+    {
+      "backend": "Bun",
+      "index": 2542,
+      "input": "a#f%2e%2e%2E",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/a#f%2e%2e%2E"
+    },
+    {
+      "backend": "Bun",
+      "index": 2612,
+      "input": "?q%2e%2E#f#fC|%2e%2E",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello?q%2e%2E#f#fC|%2e%2E"
+    },
+    {
+      "backend": "Bun",
+      "index": 2659,
+      "input": "\u00e9#fC:/",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/%C3%A9#fC:/"
+    },
+    {
+      "backend": "Bun",
+      "index": 2701,
+      "input": "\u00e9\\%2e%2E#f.C|",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/%C3%A9\\%2e%2E#f.C|"
+    },
+    {
+      "backend": "Bun",
+      "index": 2765,
+      "input": "%2e%2E?q..a#f",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/?q..a#f"
+    },
+    {
+      "backend": "Bun",
+      "index": 2823,
+      "input": ".#f?q",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/#f?q"
+    },
+    {
+      "backend": "Bun",
+      "index": 2857,
+      "input": "C|#f%2e#f",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/C|#f%2e#f"
+    },
+    {
+      "backend": "Bun",
+      "index": 2904,
+      "input": "\u00e9#f",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/%C3%A9#f"
+    },
+    {
+      "backend": "Bun",
+      "index": 2960,
+      "input": "?q#f...%2e%2E",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello?q#f...%2e%2E"
+    },
+    {
+      "backend": "Bun",
+      "index": 2963,
+      "input": ".#f\\",
+      "base": "data:text,hello?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello/#f\\"
+    },
+    {
+      "backend": "Bun",
+      "index": 2998,
+      "input": "\u00e9\\\u00e9C|#fC|",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/%C3%A9\\%C3%A9C|#fC|"
+    },
+    {
+      "backend": "Bun",
+      "index": 3137,
+      "input": "\\#f",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/\\#f"
+    },
+    {
+      "backend": "Bun",
+      "index": 3151,
+      "input": "\u00e9a#f\\",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/%C3%A9a#f\\"
+    },
+    {
+      "backend": "Bun",
+      "index": 3182,
+      "input": "\\C|#f?q\\",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/\\C|#f?q\\"
+    },
+    {
+      "backend": "Bun",
+      "index": 3215,
+      "input": "\u00e9%2e%2E/#fa%2e",
+      "base": "data:text,hello  ?old#hash",
+      "bend": "invalid",
+      "node": "data:text,hello %20/%C3%A9%2e%2E/#fa%2e"
+    }
+  ]
+}

@@ -797,3 +797,11 @@ Absolute-parser build limitation: installed-toolchain native emission exceeded a
 
 
 Absolute parser validation: `tests/url_absolute_check.py` passes 2,222 cases on installed Bun and candidate-generated native code with one/four threads. Of those, 2,213 compare directly with Node and nine assert the explicitly selected strict Unicode policy. `tests/url_absolute_wpt_check.py` additionally passes all 560 applicable corpus inputs against Node on those backends. The authority refactor preserves all 2,873 previous cases on installed native one/four threads and Bun. These runtime results do not resolve the installed native compiler’s memory guard failure; the isolated build procedure and measurements are recorded in `docs/bend-issues.md`. No upstream pi suite status changed.
+
+### Base URL resolution draft
+
+`runtime/src/url-resolve.bend` composes immutable base inheritance with the existing scheme, authority, host and path states. It handles empty/query/fragment references, credentials and port inheritance, network references, special-scheme backslashes, same-scheme references, custom hierarchical schemes, and file host/drive/root behavior. It is not wired into provider transport, and its opaque-base acceptance policy is not final.
+
+`tests/url_resolve_check.py --backend js --wpt-only` passes all 336 base-dependent inputs from the existing pinned WPT corpus, with no WPT/Node differences. The full 3,458-case Bun differential run matches Node on 3,433 cases and intentionally remains failing on 25 unresolved cases: the draft rejects path/query references against opaque bases, while Node accepts them when a fragment occurs later in the input. Fragment-only references work in both. The [review record](url-opaque-base-review.json) retains every mismatch, the Node version and its parser-source hash. No cases are skipped or counted as Node parity. The optional WPT-only command is a named subset, not a replacement for the full differential check.
+
+The user has been asked whether to retain fragment-only opaque-base resolution or reproduce Node's broader acceptance. No answer or approved default is assumed. Native validation is pending; the isolated weak-cache compiler is being used for the experiment, without changing the installed compiler. Upstream suite statuses remain unchanged.
