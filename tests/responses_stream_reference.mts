@@ -14,7 +14,10 @@ const sampling=fs.readFileSync(base+'api/constrained-sampling.ts','utf8');
 const grammar=sampling.slice(sampling.indexOf('export function appendGrammarToolInputJsonDelta('),sampling.indexOf('function inferGrammarInputProperty('));
 const signatures=source.slice(source.indexOf('function encodeTextSignatureV1('),source.indexOf('type ToolResultOutputContent'));
 const processing=source.slice(source.indexOf('type StreamingToolCall ='));
-export const processStream=new Function('parseStreamingJson',strip(grammar+'\n'+signatures+'\n'+processing)+';return processResponsesStream;')(parseStreamingJson);
+const modelSource=fs.readFileSync(base+'models.ts','utf8');
+const costSource=modelSource.slice(modelSource.indexOf('export function calculateCost<'),modelSource.indexOf('const EXTENDED_THINKING_LEVELS'));
+export const calculateCost=new Function(strip(costSource)+';return calculateCost;')();
+export const processStream=new Function('parseStreamingJson','calculateCost',strip(grammar+'\n'+signatures+'\n'+processing)+';return processResponsesStream;')(parseStreamingJson,calculateCost);
 export function clean(c){
  const value=c.type==='toolCall'?{type:c.type,id:c.id,name:c.name,arguments:structuredClone(c.arguments)}:c.type==='text'?{type:c.type,text:c.text}:{type:c.type,thinking:c.thinking};
  for(const field of ['namespace','textSignature','thinkingSignature'])if(c[field]!==undefined)value[field]=c[field];
