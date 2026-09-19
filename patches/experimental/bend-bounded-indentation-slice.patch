@@ -1,0 +1,14 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -1508,8 +1508,10 @@
+     uses: new Map(), brwl: new Map(), rest: [], def: "" };
+ }
+ 
++const FILE_INDENT = "  ".repeat(16);
++
+ function file_push(fl: File, line: string): void {
+-  fl.seg.lines.push("  ".repeat(fl.tab) + line);
++  fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);
+ }
+ 
+ // Block

@@ -1,0 +1,68 @@
+{
+  "compiler_sha256": {
+    "baseline": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "candidate": "5d1e87ed88198ac3dea3cf2aacbf7c1b408014f55cf2ca6a0aa0ce0c45f68aea"
+  },
+  "fixtures": {
+    "tests/typed-do-shadow.bend": {
+      "artifacts": {
+        "baseline": {
+          "binary_sha256": "621c9f423e794c29e592f59880c78ec147d275a3ffd4a76214d2ad38abada7aa",
+          "js_sha256": "a92997e211c95e9430f98ada70bffb24a704ba704372942bf41dc0b3a42b163a"
+        },
+        "candidate": {
+          "binary_sha256": "621c9f423e794c29e592f59880c78ec147d275a3ffd4a76214d2ad38abada7aa",
+          "js_sha256": "a92997e211c95e9430f98ada70bffb24a704ba704372942bf41dc0b3a42b163a"
+        }
+      },
+      "assertions_per_run": 5,
+      "native_threads": [
+        1,
+        4
+      ],
+      "js_runtime": "Bun",
+      "js_changed_indentation_lines": 0,
+      "native_binaries_identical": true
+    },
+    "packages/runtime/test/utf8-runner.bend": {
+      "artifacts": {
+        "baseline": {
+          "binary_sha256": "83c10e28e313c5f02c8fa20675832fb4f5beb558e50b3011df4654c5a1f2cd63",
+          "js_sha256": "d1258b7e8247e298d6636f6dea8f6b046accee2b3acb2b135e547e5dfbd29df4"
+        },
+        "candidate": {
+          "binary_sha256": "83c10e28e313c5f02c8fa20675832fb4f5beb558e50b3011df4654c5a1f2cd63",
+          "js_sha256": "fe2ce921f360afb8fbe4bd710d25b4e8530ed47ed812ea758157c63a9ac4db40"
+        }
+      },
+      "assertions_per_run": 8,
+      "native_threads": [
+        1,
+        4
+      ],
+      "js_runtime": "Bun",
+      "js_changed_indentation_lines": 613,
+      "native_binaries_identical": true
+    },
+    "tests/compiler-long-string-patterns.bend": {
+      "artifacts": {
+        "baseline": {
+          "binary_sha256": "a5bde5e9ef2cf5c41d9a22ac33392c92c238460d7fcdf37b532bfd5db5b397d6",
+          "js_sha256": "a067a8db7ea933d4a9081bac6e83f92cb9eaf599b9997c640a9d106fe1e46dfe"
+        },
+        "candidate": {
+          "binary_sha256": "a5bde5e9ef2cf5c41d9a22ac33392c92c238460d7fcdf37b532bfd5db5b397d6",
+          "js_sha256": "4611bfae857d59ab459b00c403f56129ab6005ab98139ca50c257a144f8fc0fe"
+        }
+      },
+      "assertions_per_run": 637,
+      "native_threads": [
+        1,
+        4
+      ],
+      "js_runtime": "Bun",
+      "js_changed_indentation_lines": 50980,
+      "native_binaries_identical": true
+    }
+  }
+}

@@ -1,0 +1,11 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -1509,7 +1509,7 @@
+ }
+ 
+ function file_push(fl: File, line: string): void {
+-  fl.seg.lines.push("  ".repeat(fl.tab) + line);
++  fl.seg.lines.push("  ".repeat(Math.min(fl.tab, 16)) + line);
+ }
+ 
+ // Block
