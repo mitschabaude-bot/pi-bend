@@ -1,0 +1,18 @@
+{
+  "command": [
+    "sh",
+    "scripts/build-pure.sh",
+    "packages/ai/test/provider-retry.bend",
+    "build/provider-retry"
+  ],
+  "elapsed_seconds": 30.590528986416757,
+  "peak_sampled_group_rss_kib": 8658016,
+  "limit_gib": 40.0,
+  "stopped": false,
+  "child_exit_code": 0,
+  "source_sha256": {
+    "packages/ai/src/utils/provider-retry.bend": "69a33e5dcacaa2a83e9c73621b8bff65e7f8fcf01c1d334f68fad0aad5a6bf67",
+    "packages/ai/test/provider-retry.bend": "08447eff95829e9314ca3b08db5547c1560f65fa0a159a68aebc21c89d320bd5"
+  },
+  "generated_c_bytes": 3542799
+}

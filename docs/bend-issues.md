@@ -192,6 +192,10 @@ Importing the new policy test harness into the environment fixture reproduced th
 
 The request-field fixture completes with the installed compiler in 81.62 seconds including Clang, sampled group peak RSS 18,223,172 KiB and 22,756,815 bytes of C. The separate full builder fixture, connecting the actual native transcript/message/tool converters, completes in 154.78 seconds, sampled group peak RSS 39,350,920 KiB and 27,255,095 bytes of C. Both remain under the 40 GiB guard, without the uninstalled memory experiment. These are observations on different compositions, not controlled before/after benchmarks; they neither establish a new leak nor resolve the known composition costs. Both fixtures pass their respective 914 and 192 actual-upstream comparisons on one/four native threads. Raw guard results and compiler/source/output hashes are retained in `docs/bend-issues/2026-09-19-responses-request-build.json`. No compiler patch changed.
 
+### BEND-001 observation: retry-loop composition build (2026-09-19)
+
+The provider-retry loop fixture builds with the installed compiler in 30.59 seconds, with 8,658,016 KiB sampled process-group peak RSS. It composes existing binary64 parsing/policy code with native callbacks, abort signals and a structurally recursive retry loop; all twelve trace comparisons pass on one/four threads. This is another integration observation for BEND-001, not evidence of a leak or a new compiler defect. Build statistics, generated-C size and source hashes are retained in `docs/bend-issues/2026-09-19-provider-retry-loop-build.json`.
+
 ## BEND-020 — Reclassified as timer implementation work
 
 The missing cancellable timer is expected library development, not a Bend defect or external blocker. Its design, lifecycle observations, implementation and validation now live in [the timer implementation record](../patches/experimental/timer/README.md). Historical raw measurements retain their paths so existing references remain valid. Actual defects or performance cliffs discovered while building it belong in this log.
