@@ -1,0 +1,63 @@
+{
+  "results": {
+    "scope": "Immutable DNS pending-table transitions against an independent Python model.\n\nOffline TCP dispatch contracts; no network, timer or transaction ID generator.\n",
+    "results": [
+      {
+        "backend": "native 1",
+        "sequences": 56,
+        "transitions": 8760
+      },
+      {
+        "backend": "native 4",
+        "sequences": 56,
+        "transitions": 8760
+      },
+      {
+        "backend": "Bun",
+        "sequences": 56,
+        "transitions": 8760
+      }
+    ],
+    "seed": 7766,
+    "sha256": {
+      "packages/runtime/src/dns-pending.bend": "a6d0c1daa17fe370327cc05031071edd92544ca26438cc03735a5baf7468bdeb",
+      "packages/runtime/test/dns-pending.bend": "2c85879873af0fcc53a319e0cf947ec642bbb35ed0de43d8546e35d220b46f86",
+      "tests/dns_pending_check.py": "c39cef47db5dbbdc49cbc33186d251606e397711f4017c742a750d20239b5696",
+      "build/dns-pending": "0b9efb4cd3f17438724f41a197b63d4ae7186e26f82e569f34d16417863264fd",
+      "build/dns-pending.js": "d65f6ffb6079c2e741d0168f2529ad95d4c1f5c68070f285cb5c1e81ef59a272"
+    }
+  },
+  "native_build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/runtime/test/dns-pending.bend",
+      "build/dns-pending"
+    ],
+    "elapsed_seconds": 18.26156552694738,
+    "peak_sampled_group_rss_kib": 5909060,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "js_build": {
+    "command": [
+      "/home/agent/.bend/bin/bend",
+      "packages/runtime/test/dns-pending.bend",
+      "-o",
+      "build/dns-pending.js"
+    ],
+    "elapsed_seconds": 5.847152124159038,
+    "peak_sampled_group_rss_kib": 2745092,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "scope": "Pure per-connection TCP pending table. Independent dictionary model with retained snapshots, deterministic edge cases, 768 simultaneous entries and randomized transitions. Not a live concurrent transaction driver.",
+  "limitations": [
+    "No random ID allocator, timeout scheduling, retries or socket send/read serialization.",
+    "An ID alone cannot distinguish a stale removal after reuse; the owning driver must serialize lifetimes.",
+    "Retirement returns caller correlation values; no callbacks or promises run in the table.",
+    "No upstream suite statuses changed."
+  ]
+}
