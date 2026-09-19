@@ -12,3 +12,8 @@ def TCP.shutdown(socket: Socket) ->
   IO(Socket & Result<&1, &1, U32 & String, Unit>):
   import "./effs/tcp_shutdown.c"
   import "./effs/tcp_shutdown.js"
+
+# Classify the platform errno without hard-coding OS numbers in Bend libraries.
+def Socket.isConnectionReset(code: U32) -> IO(Bool):
+  import "./effs/socket_is_connection_reset.c"
+  import "./effs/socket_is_connection_reset.js"

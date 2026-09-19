@@ -4,12 +4,13 @@ import ./http-body.bend as Body
 import ./http-chunked-body.bend as Chunked
 import ./http-response-policy.bend as Policy
 import ./http-header.bend as H
+import ./http-response-termination.bend as Termination
 
 type Limits is Data:
   Limits{headLineBytes: Nat, headBytes: Nat, headFields: Nat, informationalHeads: Nat, body: Chunked.Limits}
 
 type Context is Data:
-  Context{method: String, limits: Limits, remainingInformational: Nat}
+  Context{method: String, limits: Limits, remainingInformational: Nat, resetEOF: Bool}
 
 type Phase is Data:
   ReadingHead{reader: Head.Reader}
@@ -46,7 +47,7 @@ def bodyReader(framing: Body.Framing, limits: Limits) -> Body.Reader:
 
 def new(method: String, +limits: Limits) -> Reader:
   match limits:
-    case Limits{_, _, _, info, _}: Reader{ReadingHead{headReader(limits)}, Context{method, limits, info}}
+    case Limits{_, _, _, info, _}: Reader{ReadingHead{headReader(limits)}, Context{method, limits, info, False{}}}
 
 type ScanState is Data:
   Running{reader: Reader, reversed: List<&2, Event>}
@@ -54,21 +55,21 @@ type ScanState is Data:
 
 def informational(head: Head.ResponseHead, context: Context, reversed: List<&2, Event>) -> ScanState:
   match context:
-    case Context{_, _, Zero{}}: Broken{TooManyInformational{}, reversed}
-    case Context{method, +limits, Succ{remaining}}:
-      Running{Reader{ReadingHead{headReader(limits)}, Context{method, limits, remaining}}, InformationalHead{head} <> reversed}
+    case Context{_, _, Zero{}, _}: Broken{TooManyInformational{}, reversed}
+    case Context{method, +limits, Succ{remaining}, _}:
+      Running{Reader{ReadingHead{headReader(limits)}, Context{method, limits, remaining, False{}}}, InformationalHead{head} <> reversed}
 
-def planned(result: Result<&2, &2, Policy.PolicyError, Policy.ResponsePlan>, head: Head.ResponseHead, context: Context, reversed: List<&2, Event>) -> ScanState:
+def planned(result: Result<&2, &2, Policy.PolicyError, Policy.ResponsePlan>, +head: Head.ResponseHead, context: Context, reversed: List<&2, Event>) -> ScanState:
   match result context:
     case Fail{error} _: Broken{PolicyError{error}, reversed}
     case Done{Policy.Informational{}} value: informational(head, value, reversed)
-    case Done{Policy.Final{framing, +expose}} Context{method, +limits, remaining}:
-      Running{Reader{ReadingBody{bodyReader(framing, limits), expose}, Context{method, limits, remaining}}, FinalHead{head, expose} <> reversed}
+    case Done{Policy.Final{+framing, +expose}} Context{method, +limits, remaining, _}:
+      Running{Reader{ReadingBody{bodyReader(framing, limits), expose}, Context{method, limits, remaining, Termination.allowsReset(framing, head)}}, FinalHead{head, expose} <> reversed}
 
 def completedHead(+head: Head.ResponseHead, context: Context, reversed: List<&2, Event>) -> ScanState:
   match context:
-    case Context{+method, limits, remaining}:
-      planned(Policy.plan(method, head), head, Context{method, limits, remaining}, reversed)
+    case Context{+method, limits, remaining, _}:
+      planned(Policy.plan(method, head), head, Context{method, limits, remaining, False{}}, reversed)
 
 def consumedHead(result: Head.ReadResult, context: Context, reversed: List<&2, Event>) -> ScanState:
   match result:
@@ -107,8 +108,15 @@ def bodyEOF(result: Result<&2, &2, Body.BodyError, Unit>) -> ReadResult:
     case Done{_}: Complete{Completed{Nil{}} <> Nil{}, Nil{}}
     case Fail{error}: Failed{BodyError{error}, Nil{}}
 
-# Only call on clean socket EOF. Transport errors must not be converted to EOF.
+# Finish on clean EOF or a reset admitted by the retained HTTP framing policy.
+# Abort and unrelated transport errors must remain failures.
 def finish(reader: Reader) -> ReadResult:
   match reader:
     case Reader{ReadingHead{_}, _}: Failed{IncompleteResponse{}, Nil{}}
     case Reader{ReadingBody{body, _}, _}: bodyEOF(Body.finish(body))
+
+# Computed once when the final head is parsed, not by rescanning headers for
+# each body chunk. Before a final response head, reset cannot finish a message.
+def permitsResetEOF(reader: Reader) -> Bool:
+  match reader:
+    case Reader{_, Context{_, _, _, allowed}}: allowed

@@ -5,7 +5,8 @@ import ./http-chunked-body.bend as Chunked
 import ./http-header.bend as H
 
 # Framing selection belongs to the response policy, not the decoder. Explicit
-# clean EOF ends UntilClose; socket failures must be propagated as failures.
+# an approved end-of-input ends UntilClose; transport policy must distinguish
+# clean EOF, framing-compatible reset and failures before calling finish.
 type Framing is Data:
   NoBody{}
   ContentLength{length: W.U64}

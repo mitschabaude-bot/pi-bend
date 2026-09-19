@@ -74,9 +74,25 @@ def readOwned(-Reason: Data, maximum: U32, value: Maybe<&1, Lease<Reason>>) -> I
         checked : Maybe<&1, U.Owner<Reason>> & Maybe<&2, S.Error<Reason>> <- checkUpload(Reason, upload)
         readChecked(Reason, maximum, connection, checked)
 
-def readCallback(-Reason: Data, environment: Environment<Reason>, unused: Unit) -> IO(Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>):
+def classified(-Reason: Data, isReset: Bool, error: Error<Reason>) -> Reader.ReadResult<Error<Reason>>:
+  match isReset:
+    case True{}: Reader.Reset{error}
+    case False{}: Reader.Failed{error}
+
+def classify(-Reason: Data, result: Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>) -> IO(Reader.ReadResult<Error<Reason>>):
+  match result:
+    case Fail{SocketFailure{S.SocketError{+code, message}}}:
+      do IO<Reader.ReadResult<Error<Reason>>>:
+        isReset : Bool <- Socket.isConnectionReset(code)
+        return classified(Reason, isReset, SocketFailure{S.SocketError{code, message}})
+    case value: IO.pure(Reader.ReadResult<Error<Reason>>, Reader.fromResult(Error<Reason>, value))
+
+def readCallback(-Reason: Data, environment: Environment<Reason>, unused: Unit) -> IO(Reader.ReadResult<Error<Reason>>):
   match environment:
-    case Environment{resource, maximum}: Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>, resource, value => readOwned(Reason, maximum, value))
+    case Environment{resource, maximum}:
+      do IO<Reader.ReadResult<Error<Reason>>>:
+        result : Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>> <- Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>, resource, value => readOwned(Reason, maximum, value))
+        classify(Reason, result)
 
 def cleanup(-Reason: Data, value: Result<&2, &2, I.Error, Unit>) -> Result<&2, &2, Error<Reason>, Unit>:
   match value:
@@ -116,9 +132,9 @@ def callbacks(~Reason: Data, +maximum: U32, pair: Resource.Owner<Maybe<&1, Lease
   match pair:
     case (resource, +handle):
       do IO<Owner<Reason>>:
-        reader : C.Callback<Unit, Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>> <- C.create(~Environment<Reason>, ~Unit, ~Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>, ~readCallback(Reason), Environment{handle, maximum})
+        reader : C.Callback<Unit, Reader.ReadResult<Error<Reason>>> <- C.create(~Environment<Reason>, ~Unit, ~Reader.ReadResult<Error<Reason>>, ~readCallback(Reason), Environment{handle, maximum})
         release : C.Callback<Reader.Release, Result<&2, &2, Error<Reason>, Unit>> <- C.create(~Environment<Reason>, ~Reader.Release, ~Result<&2, &2, Error<Reason>, Unit>, ~releaseCallback(Reason), Environment{handle, maximum})
-        return Owner{resource, Reader.Source{reader, release}}
+        return Owner{resource, Reader.TransportSource{reader, release}}
 
 def adoptLease(~Reason: Data, maximum: U32, lease: Lease<Reason>) -> IO(Owner<Reason>):
   do IO<Owner<Reason>>:
@@ -153,6 +169,10 @@ def borrow(-Reason: Data, owner: Owner<Reason>) -> Owner<Reason> & Reader.Source
 
 def disposeCallbacks(-Reason: Data, source: Reader.Source<Error<Reason>>) -> IO(Unit):
   match source:
+    case Reader.TransportSource{reader, release}:
+      do IO<Unit>:
+        C.dispose(Unit, Reader.ReadResult<Error<Reason>>, reader)
+        C.dispose(Reader.Release, Result<&2, &2, Error<Reason>, Unit>, release)
     case Reader.Source{reader, release}:
       do IO<Unit>:
         C.dispose(Unit, Result<&2, &2, Error<Reason>, Maybe<&2, List<&2, U32>>>, reader)

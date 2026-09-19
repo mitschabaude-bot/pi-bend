@@ -53,3 +53,15 @@ On native one/four threads and Bun, the test requires eight uploads to park befo
 
 
 `runtime/src/socket-upload.bend` owns the upload task and its settlement state. The HTTP source owns it alongside the read connection, stopping and joining it before connection disposal. Intentional interruption after response completion or early close does not abort the caller's signal or replace the response with a shutdown-induced write error. Genuine upload failure wakes the reader and remains a typed error. Run `python3 tests/http_early_response_check.py build/bend-socket-candidate-fresh` for 15 backpressured early-response lifecycles per backend, including complete and truncated bodies and early consumer close; each run checks all 45 descriptor closes. `python3 tests/http_early_response_oracle.py` checks corresponding public outcomes against actual Node Fetch. Neither check proves all race interleavings or performance neutrality.
+
+
+## Reset classification and HTTP termination
+
+The bundle also supplies `Socket.isConnectionReset(U32) -> IO(Bool)`. Its native effect compares against `ECONNRESET`; the Bun effect uses the platform errno (Linux 104, Darwin 54). This keeps OS error numbers out of pure Bend HTTP policy. It has no compiler or scheduler changes. Prepare a fresh candidate to include it; older candidate directories do not contain the new primitive.
+
+```sh
+python3 tests/socket_reset_classifier_check.py build/bend-socket-candidate-fresh build/bend-socket-candidate-baseline
+python3 tests/http_reset_check.py build/bend-socket-candidate-fresh
+```
+
+The classifier checks 514 values on native one/four threads and Bun. The first check additionally requires byte-identical C/JavaScript for an unrelated TCP fixture against a pre-classifier candidate. Seven real-reset HTTP cases match actual Fetch, with the server waiting for client consumption of a response prefix before resetting. The pure HTTP reader decides whether reset can finish its current framing and exposes a distinct reset release reason. Aborts and other errors remain failures. The generic reader's 826 native lifecycle traces include reset and release-failure handling. These checks do not establish Darwin compatibility, all reset/upload race outcomes or broad performance neutrality; the candidate remains isolated.

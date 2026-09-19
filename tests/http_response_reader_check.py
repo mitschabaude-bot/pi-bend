@@ -16,10 +16,10 @@ def codes(data):
     return ','.join(map(str, data))
 
 
-def add(chunks, batches, actions, close_fails=False):
+def add(chunks, batches, actions, close_fails=False, transport=False):
     """A batch supplies events and optionally (release reason, primary error)."""
-    inputs = '|'.join('e' if c is None else 'b' + codes(c) for c in chunks)
-    args.append(f's{int(close_fails)}/{actions}/{inputs}')
+    inputs = '|'.join('e' if c is None else 'r' if c == 'reset' else 'b' + codes(c) for c in chunks)
+    args.append(f'{"t" if transport else "s"}{int(close_fails)}/{actions}/{inputs}')
     trace, pending = [], []
     reads = 0
     released = closed = False
@@ -108,6 +108,24 @@ for chunks, batches in scenarios:
     for fail in [False, True]:
         for count in range(8):
             add(chunks, batches, 'n' * count + 'rrnn', fail)
+
+# The transport source distinguishes reset from ordinary failure. Only final
+# nonpersistent response framing permits reset to finish the parser. Cleanup
+# failure still suppresses completion without losing earlier head/body events.
+reset_scenarios = [
+    ([b'HTTP/1.1 200 OK\r\n\r\nabc', 'reset'], [(['head:200:body', 'data:97,98,99'], None), (['done'], ('reset', None))]),
+    ([b'HTTP/1.1', 'reset'], [([], None), ([], ('read-error', 'source:reset'))]),
+    (['reset'], [([], ('read-error', 'source:reset'))]),
+    ([b'HTTP/1.1 103 Early\r\n\r\n', 'reset'], [(['info:103'], None), ([], ('read-error', 'source:reset'))]),
+    ([head + b'a', 'reset'], [(['head:200:body', 'data:97'], None), ([], ('read-error', 'source:reset'))]),
+    ([b'HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\na', 'reset'], [(['head:200:body', 'data:97'], None), ([], ('decode', 'decode'))]),
+    ([b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n1\r\na\r\n', 'reset'], [(['head:200:body', 'data:97'], None), ([], ('decode', 'decode'))]),
+    ([b'HTTP/1.1 200 OK\r\n\r\nabc', None], [(['head:200:body', 'data:97,98,99'], None), ([], ('read-error', 'source:read failed'))]),
+]
+for chunks, batches in reset_scenarios:
+    for fail in [False, True]:
+        for count in range(8):
+            add(chunks, batches, 'n' * count + 'rrnn', fail, transport=True)
 
 # Bytewise reads exercise transitions that produce no event; the header event
 # must still stop pulling before the next body byte is requested.

@@ -10,6 +10,7 @@ import ./utf8-runner.bend as Text
 type Input is Data:
   ChunkStep{chunk: List<&2, U32>}
   ReadError{}
+  ResetError{}
 
 type Action is Data:
   Pull{}
@@ -24,6 +25,7 @@ type Environment is Data:
 def takeInput(inputs: List<&2, Input>, trace: List<&2, String>) -> Capture & Result<&2, &2, String, Maybe<&2, List<&2, U32>>>:
   match inputs:
     case Nil{}: (Capture{Nil{}, "read" <> trace}, Done{None{}})
+    case ResetError{} <> rest: (Capture{rest, "read" <> trace}, Fail{"reset"})
     case ReadError{} <> rest: (Capture{rest, "read" <> trace}, Fail{"read failed"})
     case ChunkStep{chunk} <> rest: (Capture{rest, "read" <> trace}, Done{Some{chunk}})
 
@@ -46,6 +48,7 @@ def releaseReason(reason: D.ReleaseReason) -> String:
   match reason:
     case D.MessageComplete{rest}: "complete:" ++ String.join(Text.showNumbers(rest), ",")
     case D.CleanEOF{}: "eof"
+    case D.ResetEOF{}: "reset"
     case D.DecodeFailure{}: "decode"
     case D.ReadFailure{}: "read-error"
     case D.EarlyClose{}: "early"
@@ -124,6 +127,29 @@ def run(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails: Bool) -
     finished : D.Cursor<String> <- execute(actions, capture, D.create(String, D.Source{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
     cleanup : D.CloseResult<String> <- D.close(String, finished)
     Cb.dispose(Unit, Result<&2, &2, String, Maybe<&2, List<&2, U32>>>, reader)
+    Cb.dispose(D.Release, Result<&2, &2, String, Unit>, closer)
+    trace : Capture <- Ref.dispose(Capture, capture)
+    IO.print(showCapture(trace))
+
+
+def transportResult(result: Result<&2, &2, String, Maybe<&2, List<&2, U32>>>) -> D.ReadResult<String>:
+  match result:
+    case Fail{"reset"}: D.Reset{"reset"}
+    case value: D.fromResult(String, value)
+
+def transportCallback(environment: Environment, unused: Unit) -> IO(D.ReadResult<String>):
+  do IO<D.ReadResult<String>>:
+    result : Result<&2, &2, String, Maybe<&2, List<&2, U32>>> <- readCallback(environment, unused)
+    return transportResult(result)
+
+def runTransport(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails: Bool) -> IO(Unit):
+  do IO<Unit>:
+    +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{inputs, Nil{}})
+    +reader : Cb.Callback<Unit, D.ReadResult<String>> <- Cb.create(~Environment, ~Unit, ~D.ReadResult<String>, ~transportCallback, Environment{capture, closeFails})
+    +closer : Cb.Callback<D.Release, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~D.Release, ~Result<&2, &2, String, Unit>, ~closeCallback, Environment{capture, closeFails})
+    finished : D.Cursor<String> <- execute(actions, capture, D.create(String, D.TransportSource{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
+    cleanup : D.CloseResult<String> <- D.close(String, finished)
+    Cb.dispose(Unit, D.ReadResult<String>, reader)
     Cb.dispose(D.Release, Result<&2, &2, String, Unit>, closer)
     trace : Capture <- Ref.dispose(Capture, capture)
     IO.print(showCapture(trace))

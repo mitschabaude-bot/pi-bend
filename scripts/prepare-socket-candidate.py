@@ -12,6 +12,6 @@ subprocess.run(['patch', '-p2', '-i', str(root / 'patches/experimental/bend-tcp-
 addition = root / 'patches/experimental/socket-control'
 with (candidate / 'base.bend').open('a') as out:
     out.write((addition / 'base.bend').read_text())
-for name in ['socket_duplicate.c', 'socket_duplicate.js', 'tcp_shutdown.c', 'tcp_shutdown.js']:
+for name in ['socket_duplicate.c', 'socket_duplicate.js', 'tcp_shutdown.c', 'tcp_shutdown.js', 'socket_is_connection_reset.c', 'socket_is_connection_reset.js']:
     shutil.copyfile(addition / name, candidate / 'effs' / name)
 print(candidate)

@@ -10,6 +10,7 @@ import ./http-head.bend as Head
 type ReleaseReason is Data:
   MessageComplete{rest: List<&2, U32>}
   CleanEOF{}
+  ResetEOF{}
   DecodeFailure{}
   ReadFailure{}
   EarlyClose{}
@@ -17,8 +18,17 @@ type ReleaseReason is Data:
 type Release is Data:
   Release{reason: ReleaseReason, head: Maybe<&2, Head.ResponseHead>}
 
+# A reset remains distinct from EOF and ordinary failure until HTTP framing
+# decides whether it can terminate this response. Preserve its original error.
+type ReadResult<-E: Data> is Data:
+  Bytes{bytes: List<&2, U32>}
+  End{}
+  Failed{error: E}
+  Reset{error: E}
+
 type Source<-E: Data> is Data:
   Source{next: C.Callback<Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>>, release: C.Callback<Release, Result<&2, &2, E, Unit>>}
+  TransportSource{next: C.Callback<Unit, ReadResult<E>>, release: C.Callback<Release, Result<&2, &2, E, Unit>>}
 
 type PrimaryError<-E: Data> is Data:
   SourceError{error: E}
@@ -76,22 +86,28 @@ def withoutCompletion(events: List<&2, Stream.Event>) -> List<&2, Stream.Event>:
     case Stream.Completed{_} <> rest: withoutCompletion(rest)
     case head <> rest: head <> withoutCompletion(rest)
 
-def completionReason(eof: Bool, rest: List<&2, U32>) -> ReleaseReason:
-  match eof:
-    case True{}: CleanEOF{}
-    case False{}: MessageComplete{rest}
+def completionReason(ending: Maybe<&2, ReleaseReason>, rest: List<&2, U32>) -> ReleaseReason:
+  match ending:
+    case Some{reason}: reason
+    case None{}: MessageComplete{rest}
 
-def decoded(-E: Data, result: Stream.ReadResult, previous: Maybe<&2, Head.ResponseHead>, eof: Bool) -> Decision<E>:
+def decoded(-E: Data, result: Stream.ReadResult, previous: Maybe<&2, Head.ResponseHead>, ending: Maybe<&2, ReleaseReason>) -> Decision<E>:
   match result:
     case Stream.More{reader, +events}: decide(E, Live{reader, events, finalHead(events, previous)})
-    case Stream.Complete{+events, rest}: ReleaseSource{Release{completionReason(eof, rest), finalHead(events, previous)}, events, None{}}
+    case Stream.Complete{+events, rest}: ReleaseSource{Release{completionReason(ending, rest), finalHead(events, previous)}, events, None{}}
     case Stream.Failed{error, +events}: ReleaseSource{Release{DecodeFailure{}, finalHead(events, previous)}, events, Some{DecodeError{error}}}
 
-def received(-E: Data, reader: Stream.Reader, head: Maybe<&2, Head.ResponseHead>, result: Result<&2, &2, E, Maybe<&2, List<&2, U32>>>) -> Decision<E>:
+def reset(-E: Data, allowed: Bool, reader: Stream.Reader, head: Maybe<&2, Head.ResponseHead>, error: E) -> Decision<E>:
+  match allowed:
+    case True{}: decoded(E, Stream.finish(reader), head, Some{ResetEOF{}})
+    case False{}: ReleaseSource{Release{ReadFailure{}, head}, Nil{}, Some{SourceError{error}}}
+
+def received(-E: Data, +reader: Stream.Reader, head: Maybe<&2, Head.ResponseHead>, result: ReadResult<E>) -> Decision<E>:
   match result:
-    case Fail{error}: ReleaseSource{Release{ReadFailure{}, head}, Nil{}, Some{SourceError{error}}}
-    case Done{None{}}: decoded(E, Stream.finish(reader), head, True{})
-    case Done{Some{bytes}}: decoded(E, Stream.read(reader, bytes), head, False{})
+    case Failed{error}: ReleaseSource{Release{ReadFailure{}, head}, Nil{}, Some{SourceError{error}}}
+    case Reset{error}: reset(E, Stream.permitsResetEOF(reader), reader, head, error)
+    case End{}: decoded(E, Stream.finish(reader), head, Some{CleanEOF{}})
+    case Bytes{bytes}: decoded(E, Stream.read(reader, bytes), head, None{})
 
 def outcome(-E: Data, primary: Maybe<&2, PrimaryError<E>>, released: Result<&2, &2, E, Unit>) -> Result<&2, &2, ReadError<E>, Unit>:
   match primary released:
@@ -105,13 +121,24 @@ def settled(-E: Data, pending: List<&2, Stream.Event>, result: Result<&2, &2, Re
     case Done{_}: decide(E, Drained{pending, Done{Unit{}}})
     case Fail{error}: decide(E, Drained{withoutCompletion(pending), Fail{error}})
 
-def readSource(-E: Data, source: Source<E>) -> IO(Result<&2, &2, E, Maybe<&2, List<&2, U32>>>):
+def fromResult(-E: Data, result: Result<&2, &2, E, Maybe<&2, List<&2, U32>>>) -> ReadResult<E>:
+  match result:
+    case Fail{error}: Failed{error}
+    case Done{None{}}: End{}
+    case Done{Some{bytes}}: Bytes{bytes}
+
+def readSource(-E: Data, source: Source<E>) -> IO(ReadResult<E>):
   match source:
-    case Source{next, _}: C.call(Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>, next, Unit{})
+    case Source{next, _}:
+      do IO<ReadResult<E>>:
+        result : Result<&2, &2, E, Maybe<&2, List<&2, U32>>> <- C.call(Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>, next, Unit{})
+        return fromResult(E, result)
+    case TransportSource{next, _}: C.call(Unit, ReadResult<E>, next, Unit{})
 
 def releaseSource(-E: Data, source: Source<E>, request: Release) -> IO(Result<&2, &2, E, Unit>):
   match source:
     case Source{_, release}: C.call(Release, Result<&2, &2, E, Unit>, release, request)
+    case TransportSource{_, release}: C.call(Release, Result<&2, &2, E, Unit>, release, request)
 
 # The source controls progress; an empty byte chunk may require another read.
 @unsafe def drive(-E: Data, +source: Source<E>, decision: Decision<E>) -> IO(Next<E>):
@@ -119,7 +146,7 @@ def releaseSource(-E: Data, source: Source<E>, request: Release) -> IO(Result<&2
     case Available{position, result}: IO.pure(Next<E>, Next{Cursor{source, position}, result})
     case Pull{reader, head}:
       do IO<Next<E>>:
-        result : Result<&2, &2, E, Maybe<&2, List<&2, U32>>> <- readSource(E, source)
+        result : ReadResult<E> <- readSource(E, source)
         drive(E, source, received(E, reader, head, result))
     case ReleaseSource{request, pending, primary}:
       do IO<Next<E>>:
