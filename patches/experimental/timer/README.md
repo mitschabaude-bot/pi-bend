@@ -9,6 +9,7 @@ python3 tests/timer_races_check.py build/bend-timer-candidate-fresh
 python3 tests/abortable_sleep_check.py build/bend-timer-candidate-fresh
 python3 tests/provider_retry_native_sleep_check.py build/bend-timer-candidate-fresh
 python3 tests/provider_retry_runtime_check.py build/bend-timer-candidate-fresh
+python3 tests/provider_retry_named_check.py build/bend-timer-candidate-fresh
 python3 scripts/benchmark-timer.py build/bend-timer-candidate-fresh build/timer-performance.json
 ```
 
@@ -38,7 +39,7 @@ Disposable instrumentation counts creation, expiration, cancellation, close and 
 
 `packages/runtime/src/abortable-sleep.bend` composes the primitive with the existing native `AbortSignal` and removable deferred observations. Pre-aborted calls return the retained reason immediately. Otherwise an observation watcher competes with timer completion; the winner determines the result. Before returning, the call cancels its observation, joins its watcher and closes its timer. The caller retains ownership of the signal. Zero milliseconds means a literal immediately eligible deadline; any provider event-loop delay normalization belongs in its adapter. This is not yet a claim of upstream retry scheduling parity.
 
-`tests/abortable_sleep_check.py` runs eight repetitions on each backend: 32 normal waits sharing one signal, zero delay, cancellation of a 60-second wait, pre-aborted rejection and signal disposal. Native exit instrumentation verifies zero live timer rows, timer waiters and channel rows. All native one/four-thread and Bun runs pass. Retained observations are in `docs/bend-issues/2026-09-19-abortable-sleep.json`. Provider retry-loop integration and broadcast/deadline tests are now covered below; exact virtual-clock boundaries and exhaustive interleaving coverage are not established.
+`tests/abortable_sleep_check.py` runs eight repetitions on each backend: 32 normal waits sharing one signal, zero delay, cancellation of a 60-second wait, pre-aborted rejection and signal disposal. Native exit instrumentation verifies zero live timer rows, timer waiters and channel rows. All native one/four-thread and Bun runs pass. Retained observations are in `docs/bend-issues/2026-09-19-abortable-sleep.json`. Provider retry-loop integration and broadcast/deadline tests are now covered below; the original virtual-clock boundaries are now covered below, while exhaustive interleaving coverage is not established.
 
 ## Retry-loop integration
 
@@ -51,3 +52,7 @@ The expanded `tests/abortable_sleep_check.py` runs eight repetitions per backend
 All native one/four-thread and Bun runs pass. Every observed run creates and closes 1,151 timers, reaches 128 simultaneously live timers and cancels 1,056 parked waits. Timer creation/cancellation counts are observations, not assumptions about real-clock scheduling. Instrumented exit checks require no live timers or timer waiters; native checks also require no live channel rows. Bun channel rows are not audited. The checker requires actual overlapping live timers and parked cancellations, so a run consisting solely of pre-aborted calls would not pass. Raw measurements and source hashes are retained in `docs/bend-issues/2026-09-19-abortable-sleep-concurrency.json`. These finite instrumented tests provide composition and lifetime evidence, not a performance comparison or a proof of every interleaving.
 
 The owned native retry runtime also passes `tests/provider_retry_runtime_check.py` on native one/four threads and Bun. The test combines OS-seeded initialization, deterministic generator injection, wall clock, real sleep and a jittered retry, then verifies native timer/channel retirement and continued access to its borrowed parser. Owner copying is rejected. The default date parser and provider HTTP wiring remain unfinished.
+
+## Original retry timing contracts
+
+`tests/provider_retry_named_check.py` passes all five original retry tests on native one/four threads. A disposable test compiler adds only clock-control effects; the generated test binary uses a virtual `io_tick`, with production timer source retained exactly. The fixture verifies the 999/1,000 and 1,999/2,000 ms boundaries and cancellation timer counts through the actual sleep adapter and retry loop. A deliberately early advance is rejected by the first test. Raw results and source hashes are in `docs/bend-issues/2026-09-19-retry-virtual-clock.json`. These test controls are never installed. The named suite is fully ported, while broader provider integration and timer adoption remain unfinished.

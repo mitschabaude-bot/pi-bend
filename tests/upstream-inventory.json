@@ -1104,7 +1104,7 @@
     },
     {
       "source": "packages/ai/test/provider-retry.test.ts",
-      "status": "pending",
+      "status": "ported",
       "ports": [
         "packages/ai/test/provider-retry-policy.bend",
         "tests/provider_retry_policy_check.py",
@@ -1118,10 +1118,12 @@
         "packages/runtime/test/random.bend",
         "tests/random_check.py",
         "packages/ai/test/provider-retry-runtime.bend",
-        "tests/provider_retry_runtime_check.py"
+        "tests/provider_retry_runtime_check.py",
+        "packages/ai/test/provider-retry-named.bend",
+        "tests/provider_retry_named_check.py"
       ],
       "sha256": "c5070cb70ce88a21102fa7588da49c94937b86f098bac4d26b9dc0d38988304e",
-      "notes": "Pure component coverage: 1,035 numeric-prefix/eligibility/delay comparisons (427 parser, 608 policy), plus 12 asynchronous retry-loop effect traces against the pinned helper, pass on one/four native threads. Loop traces replace sleep and date/random effects; they do not establish the original five request/timer tests. A separate owned-timer candidate and pure Bend abortable sleep pass lifecycle/cleanup tests. HTTP-date parsing, complete default effect assembly and provider adapters remain pending. Exact retry-generated error names/messages now pass 58 delay-limit and one abort comparison with the original helper, 618 binary64 ceiling comparisons, and three native original-error/abort rendering checks; the loop trace also checks the complete delay-limit message. Twelve real native-timer loop traces pass on one/four threads against the isolated timer candidate; the long backoff cancels one parked timer with no second request and all cases retire timers and channels. Exact upstream virtual-clock boundaries and broader deadline/abort interleavings remain unverified. The production jitter callback now uses a pure Bend SplitMix64 generator seeded from Linux OS entropy via existing File primitives; 4,096 reference vectors, 384 concurrent draws, numeric endpoints and seed-source failure tests pass on native one/four threads and Bun. Default provider-effect assembly remains unfinished. An affine native retry-runtime owner now assembles jitter, clock and cancellable sleep with an injected parser; real retry, callback lifetime and native cleanup checks pass on native one/four threads and Bun. Default date parsing and provider HTTP wiring remain unfinished."
+      "notes": "All five original named tests pass on native one/four threads using the isolated owned-timer candidate and a test-only virtual monotonic clock: 999/1000 ms and 1999/2000 ms boundaries, provider non-retry override with original-value preservation, exact server-delay cap error, cap disabling, and cancellation with one pending timer before/zero after and no second request. Production timer effects, native sleep adapter and retry loop are unchanged by the harness. Exit audits find no live timers/waiters/channels. Advancing the clock one millisecond too far fails the first test at request count, validating boundary sensitivity. JS error identity is represented by preservation of the original native error value; AbortError is the typed RequestAborted variant (its rendering has separate exact tests). Supplemental parsing/policy, rendering, real-timer, concurrency, randomness and owned-runtime tests remain listed. Timer adoption, complete date parsing and provider HTTP wiring remain unfinished; suite coverage does not imply complete provider behavior."
     },
     {
       "source": "packages/ai/test/providers.test.ts",
