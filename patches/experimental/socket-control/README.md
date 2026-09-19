@@ -27,3 +27,5 @@ python3 tests/http_socket_source_check.py build/bend-socket-candidate-fresh
 ```
 
 These checks cover retained abort reasons, observation/watch cleanup, normal EOF, HTTP body completion and truncation, early response closure and invalid read size. The concrete HTTP adapter closes its dedicated connection rather than returning it to a pool. Socket adoption begins after connection establishment; connect cancellation, DNS, TLS, request transmission and provider integration remain outstanding. These tests do not establish general race/leak freedom or compiler performance neutrality.
+
+A complete buffered cleartext exchange can now be composed from the request-head encoder, UTF-8 encoder, abortable socket and response decoder. `python3 tests/http_request_exchange_check.py build/bend-socket-candidate-fresh` verifies 12 JSON POST exchanges on each native thread configuration and Bun against actual Node Fetch wire captures. This does not yet supply URL preparation, automatic request-body framing, streaming uploads or the provider wrapper.
