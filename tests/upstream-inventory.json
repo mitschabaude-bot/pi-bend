@@ -1105,8 +1105,12 @@
     {
       "source": "packages/ai/test/provider-retry.test.ts",
       "status": "pending",
-      "ports": [],
-      "sha256": "c5070cb70ce88a21102fa7588da49c94937b86f098bac4d26b9dc0d38988304e"
+      "ports": [
+        "packages/ai/test/provider-retry-policy.bend",
+        "tests/provider_retry_policy_check.py"
+      ],
+      "sha256": "c5070cb70ce88a21102fa7588da49c94937b86f098bac4d26b9dc0d38988304e",
+      "notes": "Pure component coverage only: 1,035 numeric-prefix/eligibility/delay comparisons pass on one/four native threads (427 parser, 608 retry-policy). Original five async request/timer tests remain pending. Retry loop, HTTP-date parser, error formatting, provider adapters and cancellable timer lifecycle are not established by these comparisons; missing cancellable runtime timer tracked as BEND-020."
     },
     {
       "source": "packages/ai/test/providers.test.ts",

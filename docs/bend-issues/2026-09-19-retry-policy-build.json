@@ -1,0 +1,49 @@
+{
+  "command": [
+    "sh",
+    "scripts/build-pure.sh",
+    "packages/ai/test/provider-retry-policy.bend",
+    "build/provider-retry-policy"
+  ],
+  "elapsed_seconds": 16.696241470053792,
+  "peak_sampled_group_rss_kib": 3354176,
+  "limit_gib": 40,
+  "stopped": false,
+  "child_exit_code": 0,
+  "files": {
+    "packages/runtime/src/parse-float.bend": {
+      "bytes": 2660,
+      "sha256": "99364e06ff85ec69154df8570dace2af522caa80ef9f7165303c626c200255ba"
+    },
+    "packages/ai/src/utils/provider-retry-policy.bend": {
+      "bytes": 3801,
+      "sha256": "147cb7293c4c1aeeaa8cd3a52f9ec26bd9fa875e6278d9aa7b3653ce6166c898"
+    },
+    "packages/ai/test/provider-retry-policy.bend": {
+      "bytes": 2747,
+      "sha256": "7391f143fbb9820cdf56c75f45500ad39e79c982337e910f90d51c512ec4d0b7"
+    },
+    "build/provider-retry-policy.c": {
+      "bytes": 2448085,
+      "sha256": "7059cdee711a7c48129901dbf05f532cac050960ac337bc63b6e386532798a7e"
+    },
+    "build/provider-retry-policy": {
+      "bytes": 1501184,
+      "sha256": "07f949cf439e133c41daa7f58d5aba77f170c6da8df2579c5ec047d055fd6b9f"
+    },
+    "/home/agent/.bend/current/bend2/comp.ts": {
+      "bytes": 182807,
+      "sha256": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f"
+    }
+  },
+  "validation": {
+    "cases": 1035,
+    "parser_cases": 427,
+    "retry_policy_cases": 608,
+    "native_threads": [
+      1,
+      4
+    ],
+    "compiler": "unchanged installed compiler"
+  }
+}

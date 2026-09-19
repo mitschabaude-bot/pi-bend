@@ -1,0 +1,22 @@
+{
+  "scope": "Source-level missing cancellation facility; native detached-sleep lifetime observation. No leak or timing regression claim.",
+  "samples": [
+    {
+      "threads": 1,
+      "elapsed_seconds": 0.25205747690051794,
+      "stdout": "caller finished\ntimer finished\n"
+    },
+    {
+      "threads": 4,
+      "elapsed_seconds": 0.25200369860976934,
+      "stdout": "caller finished\ntimer finished\n"
+    }
+  ],
+  "sha256": {
+    "tests/runtime-detached-sleep.bend": "80b16fa706a09ef5c14fee0ba6f4a5be153540e256bb4c434d79e459c5cea167",
+    "/home/agent/.bend/current/bend2/base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1",
+    "/home/agent/.bend/current/bend2/comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "/home/agent/.bend/current/bend2/effs/sleep.c": "77e212d3baeec0b3dc0a9c7f630b43094986e433c049049d354a9681719e2ecd",
+    "/home/agent/.bend/current/bend2/effs/sleep.js": "6515ad28d914f204c09526c7b35aaea15d0e0df27cf10170a4a690fc584c8668"
+  }
+}
