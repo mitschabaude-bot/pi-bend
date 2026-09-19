@@ -123,3 +123,6 @@ The generated Unicode 17 data is covered by `src/unicode-LICENSE.txt`. Regenerat
 
 
 `src/idna-domain.bend` now provides strict `toASCII(context, options, input)`: domain-wide mapping/NFC, dot splitting, ACE decoding and label validation, Punycode encoding, domain-wide Bidi and optional strict DNS lengths. It reuses `idna-label.Context` and requires explicit label/Bidi/length options; no URL policy defaults are chosen. Typed failures distinguish preparation, indexed label/encoding errors and domain policy failures. Successful output preserves label order and empty separators when strict DNS lengths are disabled. This is ToASCII, not tolerant ToUnicode display conversion or a complete URL host parser; forbidden-host-character and numeric-host handling still belong to the URL layer.
+
+
+`src/url-host.bend` represents domains, opaque hosts, IPv4, IPv6 and empty hosts with native variants and a common serializer. `classifyDomain` checks a previously processed ASCII domain and dispatches numeric suffixes to IPv4 parsing. `parseOpaque` preserves case/percent escapes, applies C0 UTF-8 escaping and dispatches leading brackets to IPv6 before ordinary opaque-host checks. `bracketed` accepts the text after an opening bracket. This layer does not perform special-host percent decoding or IDNA policy selection. Nonfatal URL validation warnings are not exposed.

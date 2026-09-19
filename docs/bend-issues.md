@@ -276,3 +276,8 @@ The emitted file contains 20,963 textual `heap_alloc` call sites, counting runti
 
 
 The subsequent `packages/runtime/test/idna-domain.bend` integration emitted 8,366,186 bytes of C. Clang `-O1` was still active at 7m01s CPU/wall time with 1,108,256 KiB sampled RSS, then completed successfully. The [domain build observation](bend-issues/2026-09-19-idna-domain-build.json) retains C/binary hashes and sample scope. This extends BEND-016's integration evidence; it is not a controlled timing comparison, a peak-memory measurement or a new root-cause finding. No compiler or optimization-level change was made.
+
+
+### BEND-022 recurrence: character refinement inside a string pattern
+
+`tests/compiler-string-pattern-dup.bend` reduces the same fallback-duplication inference failure to `case SCon{'[', rest}` followed by `case +other: other ++ other`. Native emission on the locally patched Bend 2.0.7 fails with `expected: an annotated term (cannot infer)` and a refined `SCon{Chr{U32{...}}, rest}` term. This establishes that the failure also occurs when the numeric literal is nested inside a character/string pattern. Making the function input copyable and referring to it in a wildcard branch works; `url-host.parseOpaque` uses that form and passes its cross-backend tests. The intentionally failing reducer is not included in the passing suite. No compiler patch was made; the existing inference investigation remains open.
