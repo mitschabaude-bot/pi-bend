@@ -3,6 +3,7 @@
 Checks DNS RCODE classification, selected-empty replies, search precedence,
 alias follow-ups, refusal, EOF/reset/partial framing, shared deadline and
 terminal source/validation/abort errors.
+Each scenario runs through both the default wrapper and explicit request options.
 This is not a server retry, OS configuration or full resolver test.
 """
 import argparse
@@ -93,6 +94,7 @@ for code in [16,18,19,4095]:
     cases.append(dict(label='extended-'+str(code),plan=[('a.x',dict(code=code)),('a','address')],answer='a'))
 cases.append(dict(label='extended-success',plan=[('a.x',dict(code=0))],answer='a.x'))
 cases.append(dict(label='malformed-opt',plan=[('a.x',dict(code=0,data=[0,1,0,1]))],halt='extension'))
+cases=[dict(case,edns=edns) for case in cases for edns in [False,True]]
 rows=[]
 for backend,command in [('native 1',['build/dns-address-search','--threads','1']),('native 4',['build/dns-address-search','--threads','4']),('Bun',[str(bun),'build/dns-address-search.js'])]:
     for number,family,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
@@ -108,7 +110,9 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                             with listener.accept()[0] as peer:
                                 peer.settimeout(4)
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0]);identifier=case.get('ids',[0,65535,4660])[min(index,2)]
-                                assert query==struct.pack('!6H',identifier,256,1,0,0,0)+wire(owner)+struct.pack('!HH',kind,1),(case,query)
+                                extension=(b'\0'+struct.pack('!HHIH',41,1232,32768,10)+bytes.fromhex('fde9000200fffde90000')) if case['edns'] else b''
+                                expected=struct.pack('!6H',identifier,288 if case['edns'] else 256,1,0,0,int(case['edns']))+wire(owner)+struct.pack('!HH',kind,1)+extension
+                                assert query==expected,(case,query,expected)
                                 if value=='eof':continue
                                 if value=='partial':
                                     peer.sendall(b'\0');continue
@@ -121,7 +125,7 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                                     peer.sendall(reply(identifier,owner,kind,value))
                                 assert peer.recv(1)==b'','exchange not closed'
                     future=pool.submit(serve) if plan else None
-                    run=subprocess.run([*command,mode,str(number),str(listener.getsockname()[1]),str(15 if mode=='type' else kind),name,str(name.count('.')),str(int(name.endswith('.'))),str(case.get('ndots',2)),case.get('domains','x|y')],cwd=ROOT,capture_output=True,text=True,timeout=7)
+                    run=subprocess.run([*command,'edns' if case['edns'] else 'plain',mode,str(number),str(listener.getsockname()[1]),str(15 if mode=='type' else kind),name,str(name.count('.')),str(int(name.endswith('.'))),str(case.get('ndots',2)),case.get('domains','x|y')],cwd=ROOT,capture_output=True,text=True,timeout=7)
                     if future:future.result(timeout=5)
                     if mode!='refused':assert not select.select([listener],[],[],0)[0],('unexpected candidate',case,run)
                 if 'dns' in case:want=['dns:'+str(case['dns'])]
@@ -131,6 +135,6 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,output=want))
     print(f'{backend}: {len(cases)*4} live search cases PASS',flush=True)
-paths=['packages/runtime/src/dns-edns-response.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend','tests/dns-address-search.bend','tests/dns_address_search_check.py','build/dns-address-search','build/dns-address-search.js']
+paths=['packages/runtime/src/dns-edns-response.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend','tests/dns-address-search.bend','tests/dns-lookup-options.bend','tests/dns_address_search_check.py','build/dns-address-search','build/dns-address-search.js']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-address-search-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-address-search-result.json').write_text(json.dumps(r,indent=2)+'\n')

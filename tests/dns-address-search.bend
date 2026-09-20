@@ -1,4 +1,8 @@
 import Base
+import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/dns-server-source.bend as Selector
+import ../packages/runtime/src/dns-tcp-servers.bend as Servers
+import ./dns-lookup-options.bend as Options
 import ../packages/runtime/src/dns-address-search.bend as Network
 import ../packages/runtime/src/dns-address-lookup.bend as Lookup
 import ../packages/runtime/src/dns-address-answer.bend as Answer
@@ -27,19 +31,24 @@ def report(value: Network.Report<String>) -> IO(Unit):
         result(answer)
         IO.print(QueryTest.retained(reason))
 
+def lookup(edns: Bool, environment: IDs.Source, address: Connect.Address, port: U32, milliseconds: U32, parent: Abort.AbortSignal<String>, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Network.Report<String>):
+  match edns:
+    case False{}: Network.searchWith(~IDs.Source, ~IDs.draw, ~String, environment, address, port, milliseconds, parent, kind, maximum, cursor)
+    case True{}: Network.searchSourceOptionsWith(~IDs.Source, ~IDs.draw, ~String, environment, Selector.Fixed{Servers.Server{address, port} <> Nil{}}, milliseconds, parent, Options.settings(), kind, maximum, cursor)
+
 def args(values: List<String>) -> IO(Unit):
   match values:
-    case +mode <> family <> port <> kind <> name <> dots <> absolute <> ndots <> domains <> Nil{}:
+    case options <> +mode <> family <> port <> kind <> name <> dots <> absolute <> ndots <> domains <> Nil{}:
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +count : Ref.Ref<U32> <- Ref.new(U32, 0)
         QueryTest.prepare(String.eq(mode, "pre"), False{}, parent)
-        answer : Network.Report<String> <- Network.searchWith(~IDs.Source, ~IDs.draw, ~String, IDs.Source{mode, count, parent}, Test.endpoint(family), Scalar.decimal(port, 0), Bool.pick(U32, String.eq(mode, "deadline"), 1000, 5000), Abort.signal(String, parent), Scalar.decimal(kind, 0), Bool.pick(U32, String.eq(mode, "zero"), 0, 7), Search.start(SearchTest.parsed(Presentation.parse(name)), Scalar.decimal(dots, 0), String.eq(absolute, "1"), SearchTest.domainInput(domains), Search.Policy{Scalar.decimal(ndots, 0), True{}, True{}, False{}}))
+        answer : Network.Report<String> <- lookup(String.eq(options, "edns"), IDs.Source{mode, count, parent}, Test.endpoint(family), Scalar.decimal(port, 0), Bool.pick(U32, String.eq(mode, "deadline"), 1000, 5000), Abort.signal(String, parent), Scalar.decimal(kind, 0), Bool.pick(U32, String.eq(mode, "zero"), 0, 7), Search.start(SearchTest.parsed(Presentation.parse(name)), Scalar.decimal(dots, 0), String.eq(absolute, "1"), SearchTest.domainInput(domains), Search.Policy{Scalar.decimal(ndots, 0), True{}, True{}, False{}}))
         report(answer)
         draws : U32 <- Ref.dispose(U32, count)
         IO.print("draws:" ++ U32.show(draws))
         Abort.dispose(String, parent)
-    case _: IO.die(Unit, 1, "expected mode family port kind name dots absolute ndots domains")
+    case _: IO.die(Unit, 1, "expected options mode family port kind name dots absolute ndots domains")
 
 def main() -> IO(Unit):
   do IO<Unit>:

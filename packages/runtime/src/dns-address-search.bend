@@ -3,6 +3,7 @@ import ./abort.bend as Abort
 import ./deadline.bend as Deadline
 import ./abortable-connect.bend as Connect
 import ./dns-id.bend as Id
+import ./dns-query.bend as Request
 import ./dns-address-answer.bend as Answer
 import ./dns-address-lookup.bend as Lookup
 import ./dns-search.bend as Search
@@ -19,7 +20,7 @@ import ./abortable-socket.bend as SocketIO
 # The context borrows the ID environment, server selector and deadline signal.
 # Each candidate closes its exchanges before returning.
 type Context<-Environment: Data, -Reason: Data> is Data:
-  Context{environment: Environment, source: Selector.Source<Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, maximum: U32}
+  Context{environment: Environment, source: Selector.Source<Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Request.Options, kind: U32, maximum: U32}
 
 type Report<-Reason: Data> is Data:
   Report{result: Result<&2, &2, Run.Error<Lookup.Error<Reason>>, Answer.Selection>, deadline: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>}
@@ -61,20 +62,20 @@ def completed(-Reason: Data, result: Result<&2, &2, Lookup.Error<Reason>, Answer
 
 def request(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, context: Context<Environment, Reason>, request: Run.Request) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
   match context request:
-    case Context{environment, source, signal, kind, maximum} Run.Request{_, name}:
+    case Context{environment, source, signal, options, kind, maximum} Run.Request{_, name}:
       do IO<Run.Outcome<Lookup.Error<Reason>, Answer.Selection>>:
-        result : Result<&2, &2, Lookup.Error<Reason>, Answer.Selection> <- Lookup.exchangeSourceWith(~Environment, ~draw, Reason, environment, source, signal, kind, name, maximum)
+        result : Result<&2, &2, Lookup.Error<Reason>, Answer.Selection> <- Lookup.exchangeSourceOptionsWith(~Environment, ~draw, Reason, environment, source, signal, options, kind, name, maximum)
         completed(Reason, result)
 
-def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
+def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, options: Request.Options, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, signal):
       do IO<Report<Reason>>:
-        result : Result<&2, &2, Run.Error<Lookup.Error<Reason>>, Answer.Selection> <- Run.run(~Context<Environment, Reason>, ~Lookup.Error<Reason>, ~Answer.Selection, ~request(~Environment, ~draw, ~Reason), Context{environment, source, signal, kind, maximum}, cursor)
+        result : Result<&2, &2, Run.Error<Lookup.Error<Reason>>, Answer.Selection> <- Run.run(~Context<Environment, Reason>, ~Lookup.Error<Reason>, ~Answer.Selection, ~request(~Environment, ~draw, ~Reason), Context{environment, source, signal, options, kind, maximum}, cursor)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return Report{result, reason}
 
-def start(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
+def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, options: Request.Options, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
   match valid available maximum:
     case False{} _ _: IO.pure(Report<Reason>, Report{Fail{Run.Halted{Lookup.UnsupportedType{}}}, None{}})
     case True{} _ 0: IO.pure(Report<Reason>, Report{Fail{Run.Halted{Lookup.InvalidReadSize{}}}, None{}})
@@ -82,12 +83,21 @@ def start(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, 
     case True{} True{} size:
       do IO<Report<Reason>>:
         scope : Deadline.Scope<Reason> <- Deadline.create(Reason, milliseconds, parent)
-        scoped(~Environment, ~draw, ~Reason, environment, source, kind, size, cursor, Deadline.borrow(Reason, scope))
+        scopedOptions(~Environment, ~draw, ~Reason, environment, source, options, kind, size, cursor, Deadline.borrow(Reason, scope))
 
 # One total deadline spans candidates, server attempts and alias follow-ups.
 # The source must return promptly; arbitrary user IO cannot be force-cancelled.
+def searchSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, +source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, options: Request.Options, +kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
+  startOptions(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Selector.available(Servers.Server, source), environment, source, milliseconds, parent, options, kind, maximum, cursor)
+
+def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
+  scopedOptions(~Environment, ~draw, ~Reason, environment, source, Request.defaults(), kind, maximum, cursor, pair)
+
+def start(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
+  startOptions(~Environment, ~draw, ~Reason, valid, available, environment, source, milliseconds, parent, Request.defaults(), kind, maximum, cursor)
+
 def searchSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, +source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
-  start(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Selector.available(Servers.Server, source), environment, source, milliseconds, parent, kind, maximum, cursor)
+  searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, Request.defaults(), kind, maximum, cursor)
 
 def searchSourceRandom(~Reason: Data, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
   searchSourceWith(~Unit, ~Id.random, ~Reason, Unit{}, source, milliseconds, parent, kind, maximum, cursor)

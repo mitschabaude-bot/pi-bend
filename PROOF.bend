@@ -1,4 +1,5 @@
 import Base
+import ./proofs/dns-query.bend as DNSQuery
 import ./proofs/agent-events.bend as AgentEvents
 import ./proofs/agent-owner.bend as AgentOwner
 import ./proofs/fifo.bend as Fifo
