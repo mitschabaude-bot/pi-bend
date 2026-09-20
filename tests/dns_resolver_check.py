@@ -43,6 +43,8 @@ def selected(owner,kind,empty=False):
     return 'ok:'+''.join(str(x)+',' for x in wire(owner))+':'+('' if empty else ('4,16909060,60;' if kind==1 else '6,16909060,84281096,151653132,219025168,60;'))
 
 cases=[
+ dict(name='invalid-domain',mode='invalid-domain',plan=[(1,'a',0,'address'),(2,'b',65535,'address')],first='a',second='b',draws=2),
+ dict(name='invalid-later',mode='invalid-later',plan=[(1,'a.x',0,3),(2,'a',65535,'address'),(0,'b.x',4660,'address')],first='a',second='b.x',draws=3),
  dict(name='rotate',plan=[(1,'a.x',0,'address'),(2,'b.x',65535,'address')],first='a.x',second='b.x',draws=2),
  dict(name='fixed',mode='fixed',plan=[(0,'a.x',0,'address'),(0,'b.x',65535,'address')],first='a.x',second='b.x',draws=2),
  dict(name='suffix',plan=[(1,'a.x',0,3),(2,'a.y',65535,'address'),(0,'b.x',4660,'address')],first='a.y',second='b.x',draws=3),
@@ -86,7 +88,7 @@ for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1'
                 want=[case['error'] if 'error' in case else selected(case['first'],kind),'none',case.get('reason','none'),case['second_error'] if 'second_error' in case else selected(case['second'],kind),'none','none','draws:'+str(case['draws'])]
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case_index,queries=trace,output=want))
-    print(backend+': 40 reused resolver scenarios PASS',flush=True)
+    print(backend+f': {len(cases)*4} reused resolver scenarios PASS',flush=True)
 paths=['packages/runtime/src/dns-tcp-resolver.bend','tests/dns-resolver-lookup.bend','tests/dns_resolver_check.py','build/dns-resolver-lookup','build/dns-resolver-lookup.js']
 r=dict(scope=__doc__,cases=cases,runs=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-resolver-lookup-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-resolver-result.json').write_text(json.dumps(r,indent=2)+'\n')

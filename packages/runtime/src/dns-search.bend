@@ -12,8 +12,14 @@ type Origin is Data:
   Suffix{index: Nat}
   Final{}
 
+# Invalid configured domains occupy their original search position. Their
+# candidate is a typed failure; response policy decides whether to continue.
+type Domain is Data:
+  Valid{name: Name.Name}
+  Invalid{error: Name.Error}
+
 type Cursor is Data:
-  Cursor{base: Name.Name, dots: U32, noTld: Bool, first: Bool, domains: List<&2, Name.Name>, index: Nat, triedDirect: Bool, triedRoot: Bool, searched: Bool}
+  Cursor{base: Name.Name, dots: U32, noTld: Bool, first: Bool, domains: List<&2, Domain>, index: Nat, triedDirect: Bool, triedRoot: Bool, searched: Bool}
 
 type Step is Data:
   Exhausted{}
@@ -41,14 +47,14 @@ def root(name: Name.Name) -> Bool:
     case Name.Name{Nil{}}: True{}
     case _: False{}
 
-def domainList(allowed: Bool, all: Bool, domains: List<&2, Name.Name>) -> List<&2, Name.Name>:
+def domainList(allowed: Bool, all: Bool, domains: List<&2, Domain>) -> List<&2, Domain>:
   match allowed all domains:
     case False{} _ _: Nil{}
     case True{} True{} names: names
     case True{} False{} Nil{}: Nil{}
     case True{} False{} first <> _: first <> Nil{}
 
-def prepared(absolute: Bool, base: Name.Name, +dots: U32, domains: List<&2, Name.Name>, policy: Policy) -> Cursor:
+def preparedDomains(absolute: Bool, base: Name.Name, +dots: U32, domains: List<&2, Domain>, policy: Policy) -> Cursor:
   match absolute policy:
     case True{} _: Cursor{base, dots, False{}, True{}, Nil{}, Zero{}, False{}, False{}, False{}}
     case False{} Policy{ndots, defaultNames, +searchNames, noTld}:
@@ -56,8 +62,30 @@ def prepared(absolute: Bool, base: Name.Name, +dots: U32, domains: List<&2, Name
 
 # Names are validated individually when requested, including the composed wire
 # length. No candidate is silently removed merely because it cannot be encoded.
+def startDomains(base: Name.Name, dots: U32, absolute: Bool, domains: List<&2, Domain>, policy: Policy) -> Cursor:
+  preparedDomains(absolute, base, dots, domains, policy)
+
+def wrapDomains(names: List<&2, Name.Name>, reversed: List<&2, Domain>) -> List<&2, Domain>:
+  match names:
+    case Nil{}: List.reverse(&2, Domain, reversed)
+    case name <> rest: wrapDomains(rest, Valid{name} <> reversed)
+
+# Existing callers supplying wire names retain the same entry point.
+def prepared(absolute: Bool, base: Name.Name, dots: U32, domains: List<&2, Name.Name>, policy: Policy) -> Cursor:
+  preparedDomains(absolute, base, dots, wrapDomains(domains, Nil{}), policy)
+
 def start(base: Name.Name, dots: U32, absolute: Bool, domains: List<&2, Name.Name>, policy: Policy) -> Cursor:
   prepared(absolute, base, dots, domains, policy)
+
+def domainRoot(domain: Domain) -> Bool:
+  match domain:
+    case Valid{name}: root(name)
+    case Invalid{_}: False{}
+
+def domainCandidate(base: Name.Name, domain: Domain) -> Result<&2, &2, Name.Error, Name.Name>:
+  match domain:
+    case Valid{name}: valid(joined(base, name))
+    case Invalid{error}: Fail{error}
 
 def finalCandidate(allowed: Bool, +base: Name.Name, dots: U32, noTld: Bool, index: Nat, triedRoot: Bool, searched: Bool) -> Step:
   match allowed:
@@ -69,7 +97,7 @@ def next(cursor: Cursor) -> Step:
     case Cursor{+base, dots, noTld, True{}, domains, index, _, triedRoot, searched}:
       Candidate{Initial{}, valid(base), Cursor{base, dots, noTld, False{}, domains, index, True{}, triedRoot, searched}}
     case Cursor{+base, dots, noTld, False{}, +domain <> rest, +index, triedDirect, triedRoot, _}:
-      Candidate{Suffix{index}, valid(joined(base, domain)), Cursor{base, dots, noTld, False{}, rest, Succ{index}, triedDirect, triedRoot || root(domain), True{}}}
+      Candidate{Suffix{index}, domainCandidate(base, domain), Cursor{base, dots, noTld, False{}, rest, Succ{index}, triedDirect, triedRoot || domainRoot(domain), True{}}}
     case Cursor{base, +dots, +noTld, False{}, Nil{}, index, triedDirect, +triedRoot, +searched}:
       finalCandidate(Bool.not(triedDirect || triedRoot) && (Bool.not(U32.is_zero(dots)) || Bool.not(searched) || Bool.not(noTld)), base, dots, noTld, index, triedRoot, searched)
 

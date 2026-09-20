@@ -9,16 +9,17 @@ import ./dns-id.bend as Id
 import ./random-index.bend as Index
 import ./abort.bend as Abort
 
-# Explicit, already-resolved TCP configuration. OS loading, IPv6 interface
+# Explicit TCP configuration with resolved endpoints and typed search entries.
+# Invalid domains remain candidate failures. OS loading, IPv6 interface
 # resolution and resolver-option interpretation are separate boundaries.
 type Config is Data:
-  Config{servers: List<&2, Servers.Server>, domains: List<&2, Name.Name>, policy: Search.Policy, milliseconds: U32, maximum: U32, rotate: Bool}
+  Config{servers: List<&2, Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, milliseconds: U32, maximum: U32, rotate: Bool}
 
 type Owner is Type:
   Owner{config: Config, selector: Source.Owner<Servers.Server>}
 
 type Resolver is Data:
-  Resolver{source: Source.Source<Servers.Server>, domains: List<&2, Name.Name>, policy: Search.Policy, milliseconds: U32, maximum: U32}
+  Resolver{source: Source.Source<Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, milliseconds: U32, maximum: U32}
 
 type Replacement is Type:
   Updated{owner: Owner}
@@ -87,7 +88,7 @@ def replace(previous: Owner, config: Config) -> IO(Replacement):
 def lookupWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, resolver: Resolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, dots: U32, absolute: Bool) -> IO(Network.Report<Reason>):
   match resolver:
     case Resolver{source, domains, policy, milliseconds, maximum}:
-      Network.searchSourceWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, kind, maximum, Search.start(name, dots, absolute, domains, policy))
+      Network.searchSourceWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, kind, maximum, Search.startDomains(name, dots, absolute, domains, policy))
 
 def lookup(~Reason: Data, resolver: Resolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, dots: U32, absolute: Bool) -> IO(Network.Report<Reason>):
   lookupWith(~Unit, ~Id.random, ~Reason, Unit{}, resolver, parent, kind, name, dots, absolute)
