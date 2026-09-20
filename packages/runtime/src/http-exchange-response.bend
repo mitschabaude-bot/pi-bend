@@ -1,0 +1,23 @@
+import Base
+import ./http-socket-exchange.bend as Exchange
+import ./http-response.bend as Response
+import ./http-response-stream.bend as Stream
+import ./http-response-progress.bend as Progress
+
+def unpack(-Reason: Data, result: Exchange.Next<Reason>) -> Exchange.Exchange<Reason> & Result<&2, &2, Exchange.ReadError<Reason>, Maybe<&2, Stream.Event>>:
+  match result:
+    case Exchange.Next{exchange, result}: (exchange, result)
+
+def read(-Reason: Data, exchange: Exchange.Exchange<Reason>) -> IO(Exchange.Exchange<Reason> & Result<&2, &2, Exchange.ReadError<Reason>, Maybe<&2, Stream.Event>>):
+  do IO<Exchange.Exchange<Reason> & Result<&2, &2, Exchange.ReadError<Reason>, Maybe<&2, Stream.Event>>>:
+    result : Exchange.Next<Reason> <- Exchange.next(Reason, exchange)
+    return unpack(Reason, result)
+
+def start(-Reason: Data, exchange: Exchange.Exchange<Reason>) -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Reason>>, Response.Response<Exchange.Exchange<Reason>>>):
+  Response.startWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), exchange)
+
+def next(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Response.Next<Exchange.ReadError<Reason>, Exchange.Exchange<Reason>>):
+  Response.nextWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), body)
+
+def close(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Response.Next<Exchange.ReadError<Reason>, Exchange.Exchange<Reason>>):
+  Response.closeWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, Exchange.close(Reason), body)

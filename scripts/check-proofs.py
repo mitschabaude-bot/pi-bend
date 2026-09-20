@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('http-response-progress-erases-chunk', 'packages/runtime/src/http-response-progress.bend',
+         'Chunk{first <> rest}', 'Chunk{Nil{}}', 'laws/http-response-progress.nonempty_chunks_preserve_bytes'),
+        ('http-response-progress-erases-trailers', 'packages/runtime/src/http-response-progress.bend',
+         'Complete{fields}', 'Complete{Nil{}}', 'laws/http-response-progress.completion_retains_trailers'),
+        ('http-response-progress-replaces-primary', 'packages/runtime/src/http-response-progress.bend',
+         'Fail{FailureWithCleanup{error, cleanup}}', 'Fail{CleanupFailure{cleanup}}', 'laws/http-response-progress.dual_failure_retains_both'),
         ('http-response-metadata-erases-fields', 'packages/runtime/src/http-response-metadata.bend',
          'appendFields(fields, Headers.new()), exposeBody', 'Headers.new(), exposeBody', 'laws/http-response-metadata.received_headers_retained'),
         ('http-response-metadata-accepts-300', 'packages/runtime/src/http-response-metadata.bend',
