@@ -6,3 +6,9 @@ def UDP.recv_bytes(socket: Socket, max: U32) ->
   IO(Socket & Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>):
   import "./effs/udp_recv_bytes.c"
   import "./effs/udp_recv_bytes.js"
+
+# Bind a wildcard datagram socket for exactly family 4 or 6. IPv6 is v6-only.
+# port=0 requests an ephemeral port; ports above 65535 fail with EINVAL.
+def UDP.bind_family(family: U32, port: U32) -> IO(Result<&1, &1, U32 & String, Socket>):
+  import "./effs/udp_bind_family.c"
+  import "./effs/udp_bind_family.js"

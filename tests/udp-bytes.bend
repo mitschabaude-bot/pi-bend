@@ -45,8 +45,15 @@ def opened(limits: List<String>, result: Result<&1, &1, U32 & String, Socket>) -
         socket : Socket <- EndpointTest.observed(local)
         loop(limits, socket)
 
+def args(values: List<String>) -> IO(Unit):
+  match values:
+    case family <> limits:
+      do IO<Unit>:
+        result : Result<&1, &1, U32 & String, Socket> <- UDP.bind_family(Scalar.decimal(family, 0), 0)
+        opened(limits, result)
+    case _: IO.die(Unit, 1, "expected family and limits")
+
 def main() -> IO(Unit):
   do IO<Unit>:
-    limits : List<String> <- IO.args()
-    result : Result<&1, &1, U32 & String, Socket> <- UDP.bind(0)
-    opened(limits, result)
+    values : List<String> <- IO.args()
+    args(values)

@@ -12,7 +12,7 @@ assert not args.destination.exists(),'Use a fresh candidate directory'
 shutil.copytree(args.base,args.destination)
 addition=ROOT/'patches/experimental/udp-bytes'
 with (args.destination/'base.bend').open('a') as output:output.write((addition/'base.bend').read_text())
-for name in ['udp_recv_bytes.c','udp_recv_bytes.js']:shutil.copyfile(addition/name,args.destination/'effs'/name)
+for source in [*addition.glob('*.c'), *addition.glob('*.js')]:shutil.copyfile(source,args.destination/'effs'/source.name)
 for path in args.base.rglob('*'):
     if path.is_file() and path.relative_to(args.base).as_posix()!='base.bend':
         assert path.read_bytes()==(args.destination/path.relative_to(args.base)).read_bytes(),path

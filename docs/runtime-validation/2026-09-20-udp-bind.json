@@ -1,0 +1,261 @@
+{
+  "scope": "UDP family/port validation, occupied ports, and IPv6-only wildcard binding.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 0,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 5,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4294967295,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "port": 65536,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "port": 65536,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "port": 4294967295,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "port": 4294967295,
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "port": 0,
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "port": 43518,
+      "error": 98
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "port": 0,
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "port": 33153,
+      "error": 98
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "port": 42828,
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 0,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 5,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4294967295,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "port": 65536,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "port": 65536,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "port": 4294967295,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "port": 4294967295,
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "port": 0,
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "port": 37753,
+      "error": 98
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "port": 0,
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "port": 51738,
+      "error": 98
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "port": 33326,
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 0,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 5,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4294967295,
+      "port": 0,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "port": 65536,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "port": 65536,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "port": 4294967295,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "port": 4294967295,
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "port": 0,
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "port": 50440,
+      "error": 98
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "port": 0,
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "port": 53578,
+      "error": 98
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "port": 44484,
+      "error": null
+    }
+  ],
+  "sha256": {
+    "tests/udp-bind.bend": "4250479e8b1ba5b47f757afb349ad9c179121d1eb209599327044378b575d540",
+    "tests/udp_bind_check.py": "96cf77ec178c5e7694f4bf115c998e212c3c69f1c854ea7a926bf57bcd24917e",
+    "patches/experimental/udp-bytes/README.md": "c97ee44525b3558b44f7413a7f9a297a1538b0ff2d0a4eccb5b2d037886e7416",
+    "patches/experimental/udp-bytes/udp_bind_family.c": "5558307fa8ddc562873ac8051e9a632e17eb3805bfa91ce9e4e214829318de8f",
+    "patches/experimental/udp-bytes/udp_recv_bytes.js": "8fd410db01fae5c50f58bb13802d7bf50b7e1b134bd86a2a2fe30c9a93740fa5",
+    "patches/experimental/udp-bytes/udp_bind_family.js": "4089ca41cc59f51dcc7e3bcfffa446fb28a43943a7e0ffb556e36dbf9da5d560",
+    "patches/experimental/udp-bytes/base.bend": "5fd043696fd13876c43a05c96c905598d080cb8ebe8ccab0185cc1a772a881e5",
+    "patches/experimental/udp-bytes/udp_recv_bytes.c": "7c33956ff1237d1209203fb3b8e5d4a214930b1046bc57ecab5c06180d58af65"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-family-candidate/main.ts",
+        "tests/udp-bind.bend",
+        "-o",
+        "build/udp-bind.c"
+      ],
+      "elapsed_seconds": 2.1120576169341803,
+      "peak_sampled_group_rss_kib": 702336,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-family-candidate/main.ts",
+        "tests/udp-bind.bend",
+        "-o",
+        "build/udp-bind.js"
+      ],
+      "elapsed_seconds": 1.579772631637752,
+      "peak_sampled_group_rss_kib": 309700,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
