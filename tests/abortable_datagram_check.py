@@ -40,7 +40,7 @@ for backend,cmd in [('native 1',['build/abortable-datagram','--threads','1']),('
                         for _ in range(count):
                             assert line(p.stdout)==first,(backend,family,mode)
                             assert line(p.stdout)=='scope:'+scope,(backend,family,mode)
-                        assert line(p.stdout)=='ready' 
+                        assert line(p.stdout)=='ready'
                         peer.sendto(b'\0\xff', (host,int(local[5])))
                         out,err=p.communicate(timeout=8)
                         assert p.returncode==0 and out.decode().splitlines()==[f'{prefix}:{peer.getsockname()[1]}:0:0:0,255,'] and err==(b'' if backend=='Bun' else b'AUDIT 0 0 0 0 0\n'),(backend,family,mode,count,p.returncode,out,err)
