@@ -1,4 +1,6 @@
 import Base
+import ./laws/agent-queues.bend as AgentQueues
+import ./laws/pending-queue.bend as Pending
 import ./packages/runtime/src/fifo.bend as Fifo
 
 # Observable list semantics, independent of the queue's two-list layout.
