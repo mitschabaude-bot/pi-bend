@@ -1,0 +1,286 @@
+{
+  "scope": "Uniform random indices, byte decoding and owned DNS selector initialization.",
+  "checks": [
+    {
+      "backend": "native 1",
+      "index_cases": 2925,
+      "decode_cases": 146,
+      "scripted_initializations": 12,
+      "direct_sampler_checks": 5,
+      "os_initializations": 20,
+      "native_live_channels": 0
+    },
+    {
+      "backend": "native 4",
+      "index_cases": 2925,
+      "decode_cases": 146,
+      "scripted_initializations": 12,
+      "direct_sampler_checks": 5,
+      "os_initializations": 20,
+      "native_live_channels": 0
+    },
+    {
+      "backend": "Bun",
+      "index_cases": 2925,
+      "decode_cases": 146,
+      "scripted_initializations": 12,
+      "direct_sampler_checks": 5,
+      "os_initializations": 20,
+      "native_live_channels": null
+    }
+  ],
+  "scripted": [
+    [
+      [],
+      [
+        "error"
+      ],
+      0,
+      0,
+      null
+    ],
+    [
+      [
+        7
+      ],
+      [
+        "error"
+      ],
+      0,
+      0,
+      null
+    ],
+    [
+      [
+        0,
+        1
+      ],
+      [
+        4294967295
+      ],
+      1,
+      1,
+      null
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        0
+      ],
+      0,
+      1,
+      null
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        1
+      ],
+      1,
+      1,
+      null
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        4294967294
+      ],
+      2,
+      1,
+      null
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        4294967295,
+        2
+      ],
+      2,
+      2,
+      null
+    ],
+    [
+      [
+        9,
+        9,
+        7
+      ],
+      [
+        2
+      ],
+      2,
+      1,
+      null
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        "error"
+      ],
+      0,
+      1,
+      "error:11:unavailable"
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        4294967295,
+        "error"
+      ],
+      0,
+      2,
+      "error:11:unavailable"
+    ],
+    [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        4294967295
+      ],
+      0,
+      2,
+      "error:99:exhausted"
+    ]
+  ],
+  "long_rejection_case": {
+    "rejections": 10002,
+    "accepted_word": 1,
+    "draws": 10003
+  },
+  "sha256": {
+    "packages/runtime/src/random-index.bend": "d371dbbc646f34049f7fe46a152d6733f6da847f90cc75ce3cb4fd2d5d8c3efb",
+    "packages/runtime/src/dns-server-initialize.bend": "a7ad1e6d863a733480cd0d57ed7be5704c695bf077d1c6816a577dafbce64ec1",
+    "packages/runtime/src/dns-server-source.bend": "24aff8d196f7844919a7a99825113947e06411924b08805bc7e1a48a3d667874",
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "tests/dns_server_initialize_check.py": "448941a9cce3acc6c839db02fc11518d950183a61fa453fd70d4b4316db3aaf8",
+    "tests/random-index.bend": "9d96be109f38d748b6225f805ab7f07e7deb116e68e84ce00bd3676dca5d7f82",
+    "tests/random-index-decode.bend": "f60e75a59966a85a670a607ffd046f300300733c0025f4969128347d7f9587d7",
+    "tests/dns-server-initialize.bend": "859069827b80273ad7f13be3bc50a9444dbb75f4b52d4c5ba5b0def2efc22aac"
+  },
+  "case_sha256": "593b20649cfeb5f4e68146cb85d6bf47d10ec1cd0693b2a0c65a92385d346e3b",
+  "builds": {
+    "random-index-c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+        "tests/random-index.bend",
+        "-o",
+        "build/random-index.c"
+      ],
+      "elapsed_seconds": 0.5264519322663546,
+      "peak_sampled_group_rss_kib": 23936,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "random-index-js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+        "tests/random-index.bend",
+        "-o",
+        "build/random-index.js"
+      ],
+      "elapsed_seconds": 0.5264789536595345,
+      "peak_sampled_group_rss_kib": 23296,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "random-index-decode-c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+        "tests/random-index-decode.bend",
+        "-o",
+        "build/random-index-decode.c"
+      ],
+      "elapsed_seconds": 0.5263716634362936,
+      "peak_sampled_group_rss_kib": 23808,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "random-index-decode-js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+        "tests/random-index-decode.bend",
+        "-o",
+        "build/random-index-decode.js"
+      ],
+      "elapsed_seconds": 0.5261338204145432,
+      "peak_sampled_group_rss_kib": 24064,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-server-initialize-c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+        "tests/dns-server-initialize.bend",
+        "-o",
+        "build/dns-server-initialize.c"
+      ],
+      "elapsed_seconds": 1.0526345381513238,
+      "peak_sampled_group_rss_kib": 261224,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-server-initialize-js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+        "tests/dns-server-initialize.bend",
+        "-o",
+        "build/dns-server-initialize.js"
+      ],
+      "elapsed_seconds": 0.5266055343672633,
+      "peak_sampled_group_rss_kib": 23296,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "base.bend": "1401db4d6c225d62ee6990a2d1328206f9633479c3d19a659e0bd354fa81c587"
+  },
+  "limitations": [
+    "Not connected to OS configuration loading or reload.",
+    "Injected IO must return promptly; initialization has no owned deadline.",
+    "Live entropy tests verify valid choices and subsequent rotation, not statistical quality or uniqueness.",
+    "No compiler effects or installation changes; the existing isolated entropy candidate is required."
+  ]
+}
