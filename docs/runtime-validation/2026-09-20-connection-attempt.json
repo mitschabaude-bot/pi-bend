@@ -1,0 +1,2393 @@
+{
+  "scope": "Finite loopback checks of timed/final connection attempts and resource retirement.\n\nUnmodified and audited programs run on native one/four threads and Bun. Injected\nsettlement covers late deadline diagnostics; it is not a scheduler race proof.\n",
+  "cases": [
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": false,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 4,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 4,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 6,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": false,
+      "timed": true,
+      "mode": 7,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": false,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 4,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 4,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 6,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 4",
+      "audited": false,
+      "timed": true,
+      "mode": 7,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": false,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 4,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 4,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 6,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "Bun",
+      "audited": false,
+      "timed": true,
+      "mode": 7,
+      "family": 4,
+      "error": 0,
+      "resources": null
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": false,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 4,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 4,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 6,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 1",
+      "audited": true,
+      "timed": true,
+      "mode": 7,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": false,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 4,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 4,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 6,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "native 4",
+      "audited": true,
+      "timed": true,
+      "mode": 7,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": false,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 0,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 111,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 4,
+      "error": 22,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 2,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 3,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 4,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 5,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 0,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 111,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 1,
+      "family": 6,
+      "error": 22,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 2,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 3,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 4,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        16,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 5,
+      "family": 6,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 6,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "backend": "Bun",
+      "audited": true,
+      "timed": true,
+      "mode": 7,
+      "family": 4,
+      "error": 0,
+      "resources": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "sha256": {
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/effs/connect.c": "c4a0db6c9f5d24b09b75710939d6ae3afcb9191d9cc2c17b39f3efe97bb5fb7e",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/effs/connect.js": "c76ce6847d2cc1d98a781ab4124571a7dbfeae2656222eaefef46c63f94b2a68",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/effs/timer.c": "b6985cd3adb6ce750d13837594c2b6f2afe88761e48d42734431f92b5592f51a",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/effs/timer.js": "b299c324486301e5d5bc0fc4bba24c28daf8d711dbc1f6ea9a87c945b532950f",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "/home/agent/code/pi-bend/build/connection-attempt": "1dd904e7e34e6b5125c74ce320a29e46efc1599df8fa7acb704122019fe423e4",
+    "/home/agent/code/pi-bend/build/connection-attempt-audit": "705145f686bc954044896efc96a60438c0e009b6b09cc4c0ccd4d21845acdbe3",
+    "/home/agent/code/pi-bend/build/connection-attempt-audit.c": "224bfe1efa7ae7829d096e3a46e0001be2ea4779760a070b75cf15193874d577",
+    "/home/agent/code/pi-bend/build/connection-attempt-audit.js": "118bb0ed2c9c299b66e998300449f96b2373b011157f3f138d4fa5033b6ed0d2",
+    "/home/agent/code/pi-bend/build/connection-attempt.c": "5ca9f0efef09247ddae487fe105920ee413f4543dfe8d76d2511aa42afb41336",
+    "/home/agent/code/pi-bend/build/connection-attempt.js": "1a6cf09b21ad227ed32822997a23302b917d0b458481efa4feddc9f1ef92d1ac",
+    "/home/agent/code/pi-bend/packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "/home/agent/code/pi-bend/packages/runtime/src/abortable-connect.bend": "8e30fc940734a27e40cfaf6895dda4b574e6b316a7deebb1cbe8cdbe9b550151",
+    "/home/agent/code/pi-bend/packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "/home/agent/code/pi-bend/packages/runtime/src/connection-attempt-result.bend": "37225068f3fa3700d306d471ab0cf61bddd2c2bbb91c34a98d7122888180ef9a",
+    "/home/agent/code/pi-bend/packages/runtime/src/connection-attempt.bend": "6881addf1484c58816bddef255d7e385e2a7ec316662979bf47453a707b5aa7a",
+    "/home/agent/code/pi-bend/packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "/home/agent/code/pi-bend/packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "/home/agent/code/pi-bend/packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "/home/agent/code/pi-bend/packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "/home/agent/code/pi-bend/packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "/home/agent/code/pi-bend/packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "/home/agent/code/pi-bend/packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "/home/agent/code/pi-bend/packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "/home/agent/code/pi-bend/packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "/home/agent/code/pi-bend/packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "/home/agent/code/pi-bend/tests/abortable-connect.bend": "d8f577328a43ac93a34f7f8f38e5ada3d1be8ff861f2cdc7feccf9bc914f7905",
+    "/home/agent/code/pi-bend/tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1",
+    "/home/agent/code/pi-bend/tests/connect-owned.bend": "a982986c1355e74344a175ebd945994739019a2b46d59670605e383bde688013",
+    "/home/agent/code/pi-bend/tests/connection-attempt.bend": "320118abba2b1619775fa3ac879840f81cfe2be51ff13571e20d94ee1e39afc6",
+    "/home/agent/code/pi-bend/tests/connection_attempt_check.py": "14fa30d0952bdb86db696337f3f47a2231c41472803378ab26b5c7973168f517"
+  }
+}

@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('connection-attempt-erases-errno', 'packages/runtime/src/connection-attempt-result.bend',
+         'case Connect.SocketError{code, message}: SocketFailure{code, message}\n    case Connect.Aborted{Abort.Supplied{Deadline.Expired{}}}', 'case Connect.SocketError{code, message}: SocketFailure{0, message}\n    case Connect.Aborted{Abort.Supplied{Deadline.Expired{}}}', 'laws/connection-attempt-result.timed_socket_failure_retained'),
+        ('connection-attempt-conflates-expiry', 'packages/runtime/src/connection-attempt-result.bend',
+         'case Connect.Aborted{Abort.Supplied{Deadline.Expired{}}}: TimedOut{}', 'case Connect.Aborted{Abort.Supplied{Deadline.Expired{}}}: UnexpectedDefaultAbort{}', 'laws/connection-attempt-result.expiry_distinguished'),
+        ('connection-attempt-erases-parent-reason', 'packages/runtime/src/connection-attempt-result.bend',
+         'case Connect.Aborted{Abort.Supplied{Deadline.ParentAbort{reason}}}: Aborted{reason}', 'case Connect.Aborted{Abort.Supplied{Deadline.ParentAbort{reason}}}: Aborted{Abort.DefaultAbort{}}', 'laws/connection-attempt-result.timed_parent_reason_retained'),
         ('interleave-swaps-leading-pair', 'packages/runtime/src/list-interleave.bend',
          'a <> b <> interleave(A, xs, ys)', 'b <> a <> interleave(A, xs, ys)', 'laws/list-interleave.leading_pair'),
         ('interleave-drops-right-tail', 'packages/runtime/src/list-interleave.bend',
