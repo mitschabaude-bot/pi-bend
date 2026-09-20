@@ -55,6 +55,8 @@ cases=[
     dict(name='truncated',servers=['truncated','unused'],outcome='truncated'),
 ]
 for code in range(16):cases.append(dict(name='rcode-'+str(code),servers=[code,'unused'],outcome='reply:'+str(code)))
+cases += [dict(case, name='edns-'+case['name'], extension=1232) for case in list(cases)]
+cases.append(dict(name='invalid-edns',extension=65536,servers=['invalid','unused'],outcome='extension-field'))
 rows=[]
 for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),('native 4',['build/dns-tcp-servers','--threads','4']),('Bun',[str(bun),'build/dns-tcp-servers.js'])]:
     for number,family,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
@@ -74,9 +76,17 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
                             if action in ['refused','unused']:continue
                             with listeners[server_index].accept()[0] as peer:
                                 peer.settimeout(4)
+                                if action=='invalid':
+                                    assert peer.recv(1)==b'', 'invalid extension wrote bytes'
+                                    trace.append(server_index)
+                                    continue
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0])
                                 question=b'\x01a\0'+struct.pack('!HH',kind,1)
-                                assert query==struct.pack('!6H',42,256,1,0,0,0)+question,query
+                                opt=b''
+                                if 'extension' in case:
+                                    data=struct.pack('!HH',65001,2)+b'\0\xff'+struct.pack('!HH',65001,0)
+                                    opt=b'\0'+struct.pack('!HHIH',41,case['extension'],32768,len(data))+data
+                                assert query==struct.pack('!6H',42,256,1,0,0,bool(opt))+question+opt,query
                                 trace.append(server_index)
                                 if action=='slow-eof':time.sleep(.7);continue
                                 if action=='eof':continue
@@ -98,7 +108,7 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
                                 assert peer.recv(1)==b'','attempt left open'
                     future=pool.submit(serve) if any(action not in ['refused','unused'] for action in types) else None
                     ports=','.join(str(listeners[index].getsockname()[1]) for index in order)
-                    result=subprocess.run([*command,case.get('mode','direct'),str(number),ports,str(kind)],cwd=ROOT,capture_output=True,text=True,timeout=7)
+                    result=subprocess.run([*command,case.get('mode','direct'),str(case.get('extension','none')),str(number),ports,str(kind)],cwd=ROOT,capture_output=True,text=True,timeout=7)
                     if future:future.result(timeout=5)
                     for index,listener in enumerate(listeners):
                         if types[index]!='refused':assert not select.select([listener],[],[],0)[0],('unexpected attempt',case,index,result)
@@ -106,6 +116,6 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
                 assert result.returncode==0 and not result.stderr and result.stdout.splitlines()==want,(backend,number,kind,case,result,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,accepted_server_indices=trace,output=want))
     print(f'{backend}: {len(cases)*4} TCP failover cases PASS',flush=True)
-paths=['packages/runtime/src/dns-tcp-servers.bend','packages/runtime/src/dns-tcp-query.bend','packages/runtime/src/dns-tcp-recover.bend','packages/runtime/src/dns-tcp-connection.bend','tests/dns-tcp-servers.bend','tests/dns_tcp_servers_check.py','build/dns-tcp-servers','build/dns-tcp-servers.js']
+paths=['packages/runtime/src/dns-query.bend','packages/runtime/src/dns-tcp-session.bend','packages/runtime/src/dns-tcp-servers.bend','packages/runtime/src/dns-tcp-query.bend','packages/runtime/src/dns-tcp-recover.bend','packages/runtime/src/dns-tcp-connection.bend','tests/dns-tcp-servers.bend','tests/dns_tcp_servers_check.py','build/dns-tcp-servers','build/dns-tcp-servers.js']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-tcp-servers-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-tcp-servers-result.json').write_text(json.dumps(r,indent=2)+'\n')

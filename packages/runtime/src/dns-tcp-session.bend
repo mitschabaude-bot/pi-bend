@@ -4,6 +4,7 @@ import ./dns-tcp-peer.bend as Peer
 import ./dns-tcp-connection.bend as TCP
 import ./dns-message.bend as Message
 import ./dns-edns.bend as Edns
+import ./dns-query.bend as Request
 import ./socket-interrupt.bend as Interrupt
 
 type Failure<-Reason: Data> is Data:
@@ -80,6 +81,12 @@ def submitEdns(-Reason: Data, -Token: Data, session: Session<Reason, Token>, +id
   match session:
     case Session{route, connection, pending, Some{+why}}: IO.pure(Step<Reason, Token>, Step{Session{route, connection, pending, Some{why}}, Rejected{Stopped{why}}})
     case Session{route, connection, pending, None{}}: extendedEncoded(Reason, Token, route, connection, pending, id, flags, question, token, Edns.query(id, flags, question, extension))
+
+# Both forms use the same registration, write and settlement implementation.
+def submitRequest(-Reason: Data, -Token: Data, session: Session<Reason, Token>, request: Request.Request, token: Token) -> IO(Step<Reason, Token>):
+  match request:
+    case Request.Request{id, flags, question, None{}}: submit(Reason, Token, session, id, flags, question, token)
+    case Request.Request{id, flags, question, Some{extension}}: submitEdns(Reason, Token, session, id, flags, question, token, extension)
 
 def dispatched(-Reason: Data, -Token: Data, route: Peer.Route, connection: TCP.Connection<Reason>, value: Pending.Received<Token>) -> Step<Reason, Token>:
   match value:
