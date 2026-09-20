@@ -12,3 +12,10 @@ def UDP.recv_bytes(socket: Socket, max: U32) ->
 def UDP.bind_family(family: U32, port: U32) -> IO(Result<&1, &1, U32 & String, Socket>):
   import "./effs/udp_bind_family.c"
   import "./effs/udp_bind_family.js"
+
+# Send one raw datagram to a numeric endpoint. Destination port is 1..65535.
+# IPv4 requires b/c/d/scope=0. Validate all bytes before calling sendto.
+def UDP.send_bytes(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32, bytes: List<&2, U32>) ->
+  IO(Socket & Result<&1, &1, U32 & String, Unit>):
+  import "./effs/udp_send_bytes.c"
+  import "./effs/udp_send_bytes.js"

@@ -1,8 +1,11 @@
 """Binary UDP receives, boundaries, truncation and non-consuming invalid limits."""
+import argparse
 import hashlib,json,select,socket,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-family-candidate'
+bun=Path.home()/'.bun/bin/bun'
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path,nargs='?',default=ROOT/'build/bend-udp-family-candidate')
+candidate=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-bytes-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-bytes.bend','-o',f'build/udp-bytes.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-bytes.c','-lpthread','-lm','-o','build/udp-bytes'],cwd=ROOT,check=True)

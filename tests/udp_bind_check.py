@@ -1,8 +1,11 @@
 """UDP family/port validation, occupied ports, and IPv6-only wildcard binding."""
+import argparse
 import errno,hashlib,json,socket,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-family-candidate'
+bun=Path.home()/'.bun/bin/bun'
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path,nargs='?',default=ROOT/'build/bend-udp-family-candidate')
+candidate=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-bind-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-bind.bend','-o',f'build/udp-bind.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-bind.c','-lpthread','-lm','-o','build/udp-bind'],cwd=ROOT,check=True)
