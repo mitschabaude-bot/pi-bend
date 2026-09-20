@@ -1,4 +1,6 @@
 import Base
+import ./agent-owner.bend as Owner
+import ../packages/runtime/src/string-set.bend as Set
 import ../packages/agent/src/agent-state.bend as State
 import ../packages/agent/src/types.bend as T
 import ../packages/ai/src/types.bend as Ai
@@ -111,3 +113,74 @@ law agent_end:
   for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
   for reported: List<&2, T.AgentMessage<P, A, G, D, C>>
   {messages(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.AgentEnd{reported})) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}
+
+def pending(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Set.Set:
+  match state:
+    case T.AgentState{_, _, _, _, _, _, tools, _}: tools
+
+def error(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Maybe<&2, String>:
+  match state:
+    case T.AgentState{_, _, _, _, _, _, _, value}: value
+
+law tool_start_membership:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for -V: Data
+  for -S: Data
+  for -E: Data
+  for -J: Data
+  for -Partial: Data
+  for -Execution: Data
+  for state: T.AgentState<P, A, G, D, C, V, S, E, J>
+  for +id: String
+  for name: String
+  for arguments: A
+  {Set.contains(pending(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.ToolExecutionStart{id, name, arguments})), id) == True{} : Bool}
+
+law tool_end_membership:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for -V: Data
+  for -S: Data
+  for -E: Data
+  for -J: Data
+  for -Partial: Data
+  for -Execution: Data
+  for state: T.AgentState<P, A, G, D, C, V, S, E, J>
+  for +id: String
+  for name: String
+  for result: Execution
+  for failed: Bool
+  {Set.contains(pending(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.ToolExecutionEnd{id, name, result, failed})), id) == False{} : Bool}
+
+law finish_idle:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for -V: Data
+  for -S: Data
+  for -E: Data
+  for -J: Data
+  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
+  {Owner.runState(P, A, G, D, C, V, S, E, J, State.finishRun(P, A, G, D, C, V, S, E, J, state)) == Owner.RunState{False{}, None{}, Set.empty(), error(P, A, G, D, C, V, S, E, J, state)} : Owner.RunState<P, A, G, D, C>}
+
+law finish_messages:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for -V: Data
+  for -S: Data
+  for -E: Data
+  for -J: Data
+  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
+  {messages(P, A, G, D, C, V, S, E, J, State.finishRun(P, A, G, D, C, V, S, E, J, state)) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}

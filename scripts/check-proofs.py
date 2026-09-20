@@ -90,6 +90,18 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('tool-start-does-not-register-pending', 'packages/agent/src/agent-state.bend',
+         'streaming, partial, Set.insert(pending, id), error}',
+         'streaming, partial, pending, error}', 'laws/agent-events.tool_start_membership'),
+        ('tool-end-retains-pending', 'packages/agent/src/agent-state.bend',
+         'streaming, partial, Set.remove(pending, id), error}',
+         'streaming, partial, pending, error}', 'laws/agent-events.tool_end_membership'),
+        ('finish-run-remains-streaming', 'packages/agent/src/agent-state.bend',
+         'T.AgentState{model, thinking, tools, messages, False{}, None{}, Set.empty(), error}',
+         'T.AgentState{model, thinking, tools, messages, True{}, None{}, Set.empty(), error}', 'laws/agent-events.finish_idle'),
+        ('finish-run-discards-error', 'packages/agent/src/agent-state.bend',
+         'T.AgentState{model, thinking, tools, messages, False{}, None{}, Set.empty(), error}',
+         'T.AgentState{model, thinking, tools, messages, False{}, None{}, Set.empty(), None{}}', 'laws/agent-events.finish_idle'),
         ('message-start-discards-history', 'packages/agent/src/agent-state.bend',
          'T.MessageStart{message}: T.AgentState{model, thinking, tools, messages, streaming, Some{message}, pending, error}',
          'T.MessageStart{message}: T.AgentState{model, thinking, tools, Nil{}, streaming, Some{message}, pending, error}', 'laws/agent-events.message_start'),
