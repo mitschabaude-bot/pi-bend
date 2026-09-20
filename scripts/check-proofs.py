@@ -73,6 +73,15 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('ordered-map-drops-replaced-key', 'packages/runtime/src/ordered-map.bend',
+         'String.eq(name, key), R.Property{key, value} <> rest',
+         'String.eq(name, key), rest', 'proofs/ordered-map.put_equivalent'),
+        ('ordered-map-removal-is-no-op', 'packages/runtime/src/ordered-map.bend',
+         'OrderedMap{R.removeProperties(V, properties, key)}',
+         'OrderedMap{properties}', 'laws/ordered-map.remove'),
+        ('ordered-map-lookup-always-missing', 'packages/runtime/src/ordered-map.bend',
+         'case OrderedMap{properties}: R.getProperties(V, properties, key)',
+         'case OrderedMap{properties}: None{}', 'laws/ordered-map.lookup'),
         ('replacement-duplicates-old-entry', 'packages/runtime/src/record.bend',
          'String.eq(key, name), Property{key, value} <> rest',
          'String.eq(key, name), Property{key, value} <> (Property{name, old} <> rest)', 'proofs/record.set_properties_lookup'),

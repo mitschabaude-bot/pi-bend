@@ -1,4 +1,5 @@
 import Base
+import ./laws/ordered-map.bend as OrderedMap
 import ./laws/record.bend as Record
 import ./laws/string-set.bend as StringSet
 import ./laws/agent-queues.bend as AgentQueues
