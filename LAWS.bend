@@ -1,4 +1,5 @@
 import Base
+import ./laws/http-exchange-plan.bend as HTTPExchangePlan
 import ./laws/connection-plan.bend as ConnectionPlan
 import ./laws/connection-progress.bend as ConnectionProgress
 import ./laws/connection-attempt-result.bend as ConnectionAttemptResult

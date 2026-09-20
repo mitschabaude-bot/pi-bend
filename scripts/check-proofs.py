@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('http-exchange-plan-conflates-tls', 'packages/runtime/src/http-exchange-plan.bend',
+         'case URL.Endpoint{URL.TLS{}, _, _, _, _} _: Rejected{TLSRequired{}}',
+         'case URL.Endpoint{URL.TLS{}, _, _, _, _} _: Rejected{InvalidReadSize{}}', 'laws/http-exchange-plan.tls_cannot_start_cleartext'),
+        ('http-exchange-plan-allows-zero-read', 'packages/runtime/src/http-exchange-plan.bend',
+         'case URL.Endpoint{URL.Plaintext{}, _, _, _, _} 0: Rejected{InvalidReadSize{}}',
+         'case URL.Endpoint{URL.Plaintext{}, host, port, _, _} 0: Start{host, port, request, 0}', 'laws/http-exchange-plan.zero_read_size_cannot_start'),
         ('connection-plan-calls-unavailable-connector', 'packages/runtime/src/connection-plan.bend',
          'case Candidates.NoAddresses{resolution}: IO.pure(Report<Resolution, Reason, Value>, Unresolved{resolution})',
          'case Candidates.NoAddresses{resolution}:\n      do IO<Report<Resolution, Reason, Value>>:\n        connection : Driver.Report<Reason, Value> <- connect(context, Nil{})\n        return Attempted{resolution, connection}',
