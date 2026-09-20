@@ -9,3 +9,14 @@ type Request is Data:
 
 def plain(id: U32, flags: U32, question: Message.Question) -> Request:
   Request{id, flags, question, None{}}
+
+# Settings shared by distinct questions in one lookup/search. IDs and question
+# names are supplied separately, so alias follow-ups do not reuse either.
+type Options is Data:
+  Options{flags: U32, extension: Maybe<&2, Edns.Query>}
+
+def defaults() -> Options: Options{256, None{}}
+
+def create(options: Options, id: U32, question: Message.Question) -> Request:
+  match options:
+    case Options{flags, extension}: Request{id, flags, question, extension}

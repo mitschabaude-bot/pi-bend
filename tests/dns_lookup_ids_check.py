@@ -23,7 +23,7 @@ a = p.parse_args()
 candidate = a.candidate.resolve()
 bun = Path.home() / '.bun/bin/bun'
 if not a.no_build:
-    for fixture in ['dns-lookup-ids', 'dns-lookup-random']:
+    for fixture in ['dns-lookup-ids', 'dns-lookup-random', 'dns-lookup-options']:
         for suffix in ['c', 'js']:
             subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '16',
                             '--stats', f'build/{fixture}-{suffix}-build.json', '--', str(bun),
@@ -65,8 +65,15 @@ def selected(owner, kind):
     return f'ok:{wire}:' + ('4,16909060,60;' if kind == 1 else '6,16909060,84281096,151653132,219025168,60;')
 
 rows = []
-for fixture in ['dns-lookup-ids', 'dns-lookup-random']:
-    injected = fixture == 'dns-lookup-ids'
+for fixture in ['dns-lookup-ids', 'dns-lookup-random', 'dns-lookup-options']:
+    injected = fixture != 'dns-lookup-random'
+    extended = fixture == 'dns-lookup-options'
+    opt = b''
+    flags = 256
+    if extended:
+        flags = 288
+        data = struct.pack('!HH',65001,2)+b'\0\xff'+struct.pack('!HH',65001,0)
+        opt = b'\0'+struct.pack('!HHIH',41,1232,32768,len(data))+data
     modes = ['direct', 'aliases', 'pre', 'zero', 'type', 'deadline']
     if injected:
         modes += ['error-first', 'error-second', 'abort-source']
@@ -93,7 +100,7 @@ for fixture in ['dns-lookup-ids', 'dns-lookup-random']:
                                     size = struct.unpack('!H', exact(peer, 2))[0]
                                     query = exact(peer, size)
                                     identifier = struct.unpack('!H', query[:2])[0]
-                                    assert query[2:] == struct.pack('!5H', 256, 1, 0, 0, 0) + question(owner, kind), query
+                                    assert query[2:] == struct.pack('!5H', flags, 1, 0, 0, bool(opt)) + question(owner, kind) + opt, query
                                     if injected:
                                         assert identifier == [0, 65535, 4660][index], (mode, index, identifier)
                                     if mode == 'deadline' and index == 0:
@@ -122,7 +129,7 @@ for fixture in ['dns-lookup-ids', 'dns-lookup-random']:
                                     if not chunk:
                                         break
                                     sent += chunk
-                                expected_query = struct.pack('!6H', 0, 256, 1, 0, 0, 0) + question(b'a', kind)
+                                expected_query = struct.pack('!6H', 0, flags, 1, 0, 0, bool(opt)) + question(b'a', kind) + opt
                                 expected_frame = struct.pack('!H', len(expected_query)) + expected_query
                                 assert expected_frame.startswith(sent), sent
                             aborted_connections = 1
@@ -145,15 +152,15 @@ for fixture in ['dns-lookup-ids', 'dns-lookup-random']:
                     else:
                         want += ['PASS DNS address lookup']
                     assert run.returncode == 0 and not run.stderr and run.stdout.splitlines() == want, (fixture, backend, number, kind, mode, run, want)
-                    rows.append(dict(source='injected' if injected else 'OS', backend=backend,
+                    rows.append(dict(extended=extended, source='injected' if injected else 'OS', backend=backend,
                                      family=number, query_type=kind, mode=mode, exchanges=len(plan),
                                      checked_draw_count=draws if injected else None,
                                      aborted_connections=aborted_connections, outcome=outcome))
         print(f'{fixture} {backend}: PASS', flush=True)
-paths = ['packages/runtime/src/dns-address-lookup.bend', 'packages/runtime/src/dns-id.bend',
+paths = ['packages/runtime/src/dns-query.bend','tests/dns-lookup-options.bend','build/dns-lookup-options','build/dns-lookup-options.js','packages/runtime/src/dns-address-lookup.bend', 'packages/runtime/src/dns-id.bend',
          'tests/dns-lookup-ids.bend', 'tests/dns-lookup-random.bend', 'tests/dns_lookup_ids_check.py',
          'build/dns-lookup-ids', 'build/dns-lookup-ids.js', 'build/dns-lookup-random', 'build/dns-lookup-random.js']
-result = dict(scope=__doc__, cases=rows, sha256={path:hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in paths},
+result = dict(scope=__doc__, candidate=str(candidate), compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['main.ts','bend.ts','comp.ts','base.bend']}, cases=rows, sha256={path:hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in paths},
               builds={f'{fixture}-{suffix}':json.loads((ROOT/f'build/{fixture}-{suffix}-build.json').read_text())
-                      for fixture in ['dns-lookup-ids', 'dns-lookup-random'] for suffix in ['c', 'js']})
+                      for fixture in ['dns-lookup-ids', 'dns-lookup-random', 'dns-lookup-options'] for suffix in ['c', 'js']})
 (ROOT/'build/dns-lookup-ids-result.json').write_text(json.dumps(result, indent=2)+'\n')
