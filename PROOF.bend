@@ -1,4 +1,5 @@
 import Base
+import ./proofs/dns-pair-queries.bend as DNSPairQueries
 import ./proofs/dns-pair-result.bend as DNSPairResult
 import ./proofs/dns-search-text.bend as DNSSearchText
 import ./proofs/hosts-resolve.bend as HostsResolve

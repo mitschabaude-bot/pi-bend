@@ -51,3 +51,18 @@ def exchangeRequest(-Reason: Data, source: Source, signal: Abort.AbortSignal<Dea
         servers : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Selector.choose(Plan.Attempt<Endpoint.Endpoint>, selector)
         result : Result<&2, &2, Transport.Error<Reason>, Reply.Reply> <- Transport.exchangeWith(Reason, Options.enabled(Options.UseTcp{}, options), attempts(options), servers, signal, request, maximum)
         return native(Reason, result)
+
+# Select once, then share this immutable order across related questions.
+# Callers validate input/entropy and observe cancellation before committing
+# this rotation step. The snapshot holds no rotation handle and neither owns
+# nor closes the original selector.
+def snapshot(source: Source) -> IO(Source):
+  match source:
+    case TcpSource{selector}:
+      do IO<Source>:
+        servers : List<&2, TCP.Server> <- Selector.choose(TCP.Server, selector)
+        return TcpSource{Selector.Fixed{servers}}
+    case Configured{selector, options}:
+      do IO<Source>:
+        servers : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Selector.choose(Plan.Attempt<Endpoint.Endpoint>, selector)
+        return Configured{Selector.Fixed{servers}, options}

@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('dns-pair-queries-loses-aaaa-type', 'packages/runtime/src/dns-pair-queries.bend',
+         'Message.Question{name, 28, 1}', 'Message.Question{name, 1, 1}', 'laws/dns-pair-queries.shared_query_intent'),
+        ('dns-pair-queries-mislabels-first-error', 'packages/runtime/src/dns-pair-queries.bend',
+         'Fail{Encoding{IPv4{}, error}}', 'Fail{Encoding{IPv6{}, error}}', 'laws/dns-pair-queries.first_encoding_failure'),
+        ('dns-pair-queries-rejects-valid-intent', 'packages/runtime/src/dns-pair-queries.bend',
+         'case Done{_} Done{_}: Done{queries}', 'case Done{_} Done{_}: Fail{Encoding{IPv4{}, Edns.InvalidField{}}}', 'laws/dns-pair-queries.valid_queries_retained'),
         ('dns-pair-hides-terminal-report', 'packages/runtime/src/dns-pair-result.bend',
          'case Stopped{}: Run.Halt{reports}', 'case Stopped{}: Run.Answer{reports}', 'laws/dns-pair-result.left_terminal_retains_both'),
         ('dns-pair-swaps-family-reports', 'packages/runtime/src/dns-pair-result.bend',

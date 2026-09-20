@@ -20,6 +20,7 @@ type Error<-Reason: Data> is Data:
   InvalidReadSize{}
   NoServers{}
   UnsupportedType{}
+  UnsupportedClass{}
   Identifier{error: Id.Error}
   Exchange{error: Query.Error<Reason>}
   Selection{error: Answer.Error}
@@ -120,6 +121,30 @@ def exchangeChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, 
     case True{} _ 0: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{InvalidReadSize{}})
     case True{} False{} _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{NoServers{}})
     case True{} True{} size: drive(~Environment, ~draw, Reason, environment, source, signal, options, kind, size, Again{name, Answer.newHistory()})
+
+# Use a caller-reserved identifier for the first question. Alias follow-ups
+# still draw fresh identifiers through the supplied environment.
+def exchangeIdentifiedChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, valid: Bool, available: Bool, readable: Bool, environment: Environment, source: ExchangeSource.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Request.Options, id: U32, kind: U32, name: Name.Name, +maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  match valid available readable:
+    case False{} _ _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{UnsupportedType{}})
+    case True{} _ False{}: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{InvalidReadSize{}})
+    case True{} False{} True{}: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{NoServers{}})
+    case True{} True{} True{}:
+      +sharedEnvironment = environment
+      +sharedSource = source
+      +sharedSignal = signal
+      +sharedOptions = options
+      +sharedKind = kind
+      +sharedMaximum = maximum
+      do IO<Result<&2, &2, Error<Reason>, Answer.Selection>>:
+        first : Progress<Reason> <- identified(Reason, sharedSource, sharedSignal, sharedOptions, sharedKind, name, Answer.newHistory(), sharedMaximum, Done{id})
+        drive(~Environment, ~draw, Reason, sharedEnvironment, sharedSource, sharedSignal, sharedOptions, sharedKind, sharedMaximum, first)
+
+def exchangeRequestWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, +source: ExchangeSource.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Request.Request, +maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  match request:
+    case Request.Request{id, flags, Message.Question{name, +kind, 1}, extension}:
+      exchangeIdentifiedChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), ExchangeSource.available(source), U32.is_ne(maximum, 0), environment, source, signal, Request.Options{flags, extension}, id, kind, name, maximum)
+    case _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{UnsupportedClass{}})
 
 def exchangeTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, +source: ExchangeSource.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Request.Options, +kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
   exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), ExchangeSource.available(source), environment, source, signal, options, kind, name, maximum)
