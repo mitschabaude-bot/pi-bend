@@ -1,0 +1,61 @@
+{
+  "scope": "Ensure barrier and resource audits detect typed sequential and unjoined-channel mutations.",
+  "checks": [
+    {
+      "mutation": "sequential",
+      "backend": "native 1",
+      "rejection": "runtime deadlock diagnostic",
+      "stderr": "bend: deadlock: every computation waits on a channel\nAUDIT 4\n",
+      "module_check": "All terms check."
+    },
+    {
+      "mutation": "sequential",
+      "backend": "native 4",
+      "rejection": "runtime deadlock diagnostic",
+      "stderr": "bend: deadlock: every computation waits on a channel\nAUDIT 4\n",
+      "module_check": "All terms check."
+    },
+    {
+      "mutation": "sequential",
+      "backend": "Bun",
+      "rejection": "runtime deadlock diagnostic",
+      "stderr": "bend: deadlock: every computation waits on a channel\nAUDIT 4 1 0\n",
+      "module_check": "All terms check."
+    },
+    {
+      "mutation": "unclosed-child-channel",
+      "backend": "native 1",
+      "rejection": "AUDIT 1",
+      "module_check": "All terms check."
+    },
+    {
+      "mutation": "unclosed-child-channel",
+      "backend": "native 4",
+      "rejection": "AUDIT 1",
+      "module_check": "All terms check."
+    },
+    {
+      "mutation": "unclosed-child-channel",
+      "backend": "Bun",
+      "rejection": "AUDIT 1 0 0",
+      "module_check": "All terms check."
+    }
+  ],
+  "mutations": {
+    "sequential": "import Base\n\n# Start both operations before waiting for either, then join both children.\n# Return values in argument order, independent of completion order. Typed\n# errors are ordinary values: one error never abandons the other operation.\n# Each operation must handle its own cancellation and close its own resources.\n# Like IO.join, this does not recover from IO.die or a runtime trap.\ndef both(-Left: Type, -Right: Type, left: IO(Left), right: IO(Right)) -> IO(Left & Right):\n  do IO<Left & Right>:\n    leftValue : Left <- left\n    rightValue : Right <- right\n    return (leftValue, rightValue)\n",
+    "unclosed-child-channel": "import Base\n\n# Start both operations before waiting for either, then join both children.\n# Return values in argument order, independent of completion order. Typed\n# errors are ordinary values: one error never abandons the other operation.\n# Each operation must handle its own cancellation and close its own resources.\n# Like IO.join, this does not recover from IO.die or a runtime trap.\ndef taken(-A: Type, value: Maybe<&1, A>) -> IO(A):\n  match value:\n    case Some{value}: IO.pure(A, value)\n    case None{}: IO.die(A, 1, \"closed child\")\n\ndef receive(-A: Type, channel: Chan(A)) -> IO(A):\n  do IO<A>:\n    value : Maybe<&1, A> <- Chan.recv(A, channel)\n    taken(A, value)\n\ndef both(-Left: Type, -Right: Type, left: IO(Left), right: IO(Right)) -> IO(Left & Right):\n  do IO<Left & Right>:\n    leftTask : Chan(Left) <- IO.fork(Left, left)\n    rightTask : Chan(Right) <- IO.fork(Right, right)\n    leftValue : Left <- IO.join(Left, leftTask)\n    rightValue : Right <- receive(Right, rightTask)\n    return (leftValue, rightValue)\n"
+  },
+  "sha256": {
+    "packages/runtime/src/io-pair.bend": "cacaeb3ca0f8f7ac2a9a9b0355d5b889df64d8c7ebdbe8d9fc8dc98c198571b5",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "tests/io-pair.bend": "cc3acfb1f7a640eb1fbc83bffde831206a6c6df4a5f676e2c8e255652f56f459",
+    "tests/io_pair_mutation_check.py": "325d59faa4d504ec749f4bf37fa23591cec00f2a1d98bd46d32e5c560e9ee232",
+    "tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "scope": "Structured parallel pairs and candidate-paired DNS search with deterministic IO barriers.",
+  "checks": [
+    {
+      "backend": "native 1",
+      "fixture": "io-pair",
+      "cases": 256
+    },
+    {
+      "backend": "native 1",
+      "fixture": "dns-search-parallel",
+      "cases": 1458
+    },
+    {
+      "backend": "native 4",
+      "fixture": "io-pair",
+      "cases": 256
+    },
+    {
+      "backend": "native 4",
+      "fixture": "dns-search-parallel",
+      "cases": 1458
+    },
+    {
+      "backend": "Bun",
+      "fixture": "io-pair",
+      "cases": 256
+    },
+    {
+      "backend": "Bun",
+      "fixture": "dns-search-parallel",
+      "cases": 1458
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "packages/runtime/src/dns-presentation.bend": "adf6acc0f09457bbd9feae8b24a612489bf0e1c449678fd0e54ae38314f0cb90",
+    "packages/runtime/src/dns-search-parallel.bend": "b69287787e095b8f2f1d1c20d3ff928615a125eba877f9f6b2a63c325c0c70fb",
+    "packages/runtime/src/dns-search-response.bend": "a024d01e28fbfb4195cafa80d680f0528779252e5e73ed7e45ed18f8326214fb",
+    "packages/runtime/src/dns-search-run.bend": "879c0bdd352813b8da8c5e97142c4ff44cdfadc3e105ef7e4ab67a31ec247f00",
+    "packages/runtime/src/dns-search.bend": "a023407403eee3d6862c65af45b11b9d51ad100b824240a74a510b40d21d1bee",
+    "packages/runtime/src/io-pair.bend": "cacaeb3ca0f8f7ac2a9a9b0355d5b889df64d8c7ebdbe8d9fc8dc98c198571b5",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/dns-presentation.bend": "86be239a67555ee02c8f11d22df06c001b85b9e39e8b4a24361827259d6fff81",
+    "tests/dns-search-parallel.bend": "b528bfae68e52f6720b15c684cec9c59f9afa5bab129e741e89fedea1796fbeb",
+    "tests/dns-search-response.bend": "9a1540c72b10f6da7c02d9caf630635600976ae7247590062fca3837e274eab1",
+    "tests/dns-search-run.bend": "7f69286089dfdc9b3f6928deade9a27b7818d4617c06ce5e989cd02fe8fc1432",
+    "tests/dns-search.bend": "009c505ab1b20da5f920e370958a774a9989de33182071e0d77ff45ca081fd64",
+    "tests/io-pair.bend": "cc3acfb1f7a640eb1fbc83bffde831206a6c6df4a5f676e2c8e255652f56f459",
+    "tests/io_pair_check.py": "ef89409c8b6558c3ca70f5723eae5b08b7b4c3b9be9feed3c7b5cf143295544c",
+    "tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  },
+  "builds": {
+    "io-pair-c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/io-pair.bend",
+        "-o",
+        "build/io-pair.c"
+      ],
+      "elapsed_seconds": 0.526308155618608,
+      "peak_sampled_group_rss_kib": 27008,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "io-pair-js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/io-pair.bend",
+        "-o",
+        "build/io-pair.js"
+      ],
+      "elapsed_seconds": 0.5259133325889707,
+      "peak_sampled_group_rss_kib": 24064,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-search-parallel-c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/dns-search-parallel.bend",
+        "-o",
+        "build/dns-search-parallel.c"
+      ],
+      "elapsed_seconds": 6.93422601185739,
+      "peak_sampled_group_rss_kib": 2422936,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-search-parallel-js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/dns-search-parallel.bend",
+        "-o",
+        "build/dns-search-parallel.js"
+      ],
+      "elapsed_seconds": 1.05294977594167,
+      "peak_sampled_group_rss_kib": 316456,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
