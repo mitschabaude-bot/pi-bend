@@ -1,4 +1,5 @@
 import Base
+import ./utf8-strict.bend as UTF8
 import ./bounded-file.bend as File
 import ./hosts-file.bend as Parser
 import ./hosts.bend as Hosts
@@ -23,3 +24,8 @@ def readWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, Decode
   do IO<Result<&2, &2, Error<DecodeError>, List<&2, Hosts.Entry<Parser.Address>>>>:
     text : Result<&2, &2, File.Error<DecodeError>, String> <- File.readWith(~DecodeError, ~decode, path, chunkSize, byteLimit)
     return loaded(DecodeError, text)
+
+# The standard entry point rejects malformed UTF-8 and strips one leading BOM.
+# readWith remains available for an explicitly selected decoding policy.
+def read(path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, Error<UTF8.Error>, List<&2, Hosts.Entry<Parser.Address>>>):
+  readWith(~UTF8.Error, ~UTF8.decode, path, chunkSize, byteLimit)

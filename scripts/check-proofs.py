@@ -91,6 +91,13 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('strict-utf8-erases-first-error', 'packages/runtime/src/utf8-strict.bend',
+         'case _ Fail{error}: Fail{error}', 'case _ Fail{error}: Fail{IncompleteSequence{0n}}', 'laws/utf8-strict.failure_retained'),
+        ('strict-utf8-accepts-truncated-text', 'packages/runtime/src/utf8-strict.bend',
+         'case Done{State{offset, UTF8.Accumulator{UTF8.Decoder{UTF8.Continuation{_, _, _, _}, _}, _}}}: Fail{IncompleteSequence{offset}}',
+         'case Done{State{offset, UTF8.Accumulator{UTF8.Decoder{UTF8.Continuation{_, _, _, _}, _}, reversed}}}: Done{String.reverse(reversed)}', 'laws/utf8-strict.incomplete_rejected'),
+        ('strict-utf8-loses-invalid-byte-offset', 'packages/runtime/src/utf8-strict.bend',
+         'Fail{InvalidByte{offset, byte}}', 'Fail{InvalidByte{0n, byte}}', 'laws/utf8-strict.invalid_byte_rejected'),
         ('bounded-reader-forgets-overflow', 'packages/runtime/src/bounded-bytes.bend',
          'case _ State{_, reversed, True{}}: State{0n, reversed, True{}}', 'case _ State{_, reversed, True{}}: State{0n, reversed, False{}}', 'laws/bounded-bytes.overflow_sticky'),
         ('bounded-reader-retains-excess-byte', 'packages/runtime/src/bounded-bytes.bend',

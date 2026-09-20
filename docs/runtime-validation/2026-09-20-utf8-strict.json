@@ -1,0 +1,62 @@
+{
+  "scope": "Strict incremental UTF-8 against Python's independent strict codec, including error offsets.",
+  "checks": [
+    {
+      "backend": "native 1",
+      "cases": 18012
+    },
+    {
+      "backend": "native 4",
+      "cases": 18012
+    },
+    {
+      "backend": "Bun",
+      "cases": 18012
+    }
+  ],
+  "seed": 478193,
+  "sha256": {
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8-strict.bend": "2e0aafa95b71aa44b3642c1c234656037ea8f8136a91cd589535c2764bada840",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/utf8-strict.bend": "40e29dafe96d73e15415bc6b014c2ee66c8981e16df946f55dcb7cd381487e03",
+    "tests/utf8_strict_check.py": "72fb6f2f69ed2fb8159f5146aeb3a5994c2a07e6f879de8f4775e32c8b494178"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/utf8-strict.bend",
+        "-o",
+        "build/utf8-strict.c"
+      ],
+      "elapsed_seconds": 1.0573256760835648,
+      "peak_sampled_group_rss_kib": 238360,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/utf8-strict.bend",
+        "-o",
+        "build/utf8-strict.js"
+      ],
+      "elapsed_seconds": 0.5270329583436251,
+      "peak_sampled_group_rss_kib": 26112,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
