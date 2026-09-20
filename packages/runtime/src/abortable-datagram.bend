@@ -3,6 +3,8 @@ import ./abort-outcome.bend as Outcome
 import ./abort.bend as Abort
 import ./deferred.bend as Deferred
 import ./socket-endpoint.bend as Endpoint
+import ./url-ipv4.bend as IPv4
+import ./url-ipv6.bend as IPv6
 
 type Packet is Data:
   Packet{peer: Endpoint.Endpoint, truncated: Bool, bytes: List<&2, U32>}
@@ -25,14 +27,14 @@ def converted(-Reason: Data, datagramValue: Maybe<&1, Result<&1, &1, U32 & Strin
     case Some{Done{((family, a, b, c, d, port, scope), truncated, bytes)}}:
       Some{packet(Reason, Endpoint.endpoint(family, a, b, c, d, port, scope), truncated, bytes)}
 
-def selected(-Reason: Data, choice: Outcome.Outcome<Reason, Error<Reason>, Packet>) -> Result<&2, &2, Error<Reason>, Packet>:
+def selected(-Reason: Data, -Value: Data, choice: Outcome.Outcome<Reason, Error<Reason>, Value>) -> Result<&2, &2, Error<Reason>, Value>:
   match choice:
     case Outcome.Aborted{why}: Fail{Aborted{why}}
     case Outcome.Completed{result}: result
     case Outcome.Cancelled{}: Fail{CancelledWithoutReason{}}
 
 def outcome(-Reason: Data, datagramValue: Maybe<&1, Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>>, abortState: Maybe<&2, Abort.AbortReason<Reason>>) -> Result<&2, &2, Error<Reason>, Packet>:
-  selected(Reason, Outcome.choose(Reason, Error<Reason>, Packet, abortState, converted(Reason, datagramValue)))
+  selected(Reason, Packet, Outcome.choose(Reason, Error<Reason>, Packet, abortState, converted(Reason, datagramValue)))
 
 def cancelForReason(-Reason: Data, handle: UDPReadCancel, abortState: Maybe<&2, Abort.AbortReason<Reason>>) -> IO(Unit):
   match abortState:
@@ -80,3 +82,61 @@ def recv(-Reason: Data, socket: Socket, maximum: U32, +signal: Abort.AbortSignal
   do IO<Socket & Result<&2, &2, Error<Reason>, Packet>>:
     abortState : Maybe<&2, Abort.AbortReason<Reason>> <- Abort.reason(Reason, signal)
     checked(Reason, socket, maximum, signal, abortState)
+
+def writeOperation(socket: Socket, destination: Endpoint.Endpoint, bytes: List<&2, U32>) -> IO(UDPWrite & UDPWriteCancel):
+  match destination:
+    case Endpoint.V4{IPv4.Address{address}, port}: UDPWrite.new(socket, 4, address, 0, 0, 0, port, 0, bytes)
+    case Endpoint.V6{IPv6.Address{a, b, c, d}, port, scope}: UDPWrite.new(socket, 6, a, b, c, d, port, scope, bytes)
+
+def writeConverted(-Reason: Data, value: Maybe<&1, Result<&1, &1, U32 & String, Unit>>) -> Maybe<&2, Result<&2, &2, Error<Reason>, Unit>>:
+  match value:
+    case None{}: None{}
+    case Some{Fail{(code, message)}}: Some{Fail{SocketError{code, message}}}
+    case Some{Done{unit}}: Some{Done{unit}}
+
+def cancelWriteForReason(-Reason: Data, handle: UDPWriteCancel, abortState: Maybe<&2, Abort.AbortReason<Reason>>) -> IO(Unit):
+  match abortState:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{_}:
+      do IO<Unit>:
+        won : Bool <- UDPWrite.cancel(handle)
+        return Unit{}
+
+def watchWrite(-Reason: Data, handle: UDPWriteCancel, ticket: Deferred.Ticket<Maybe<&2, Abort.AbortReason<Reason>>>) -> IO(Unit):
+  do IO<Unit>:
+    abortState : Maybe<&2, Abort.AbortReason<Reason>> <- Deferred.wait(Maybe<&2, Abort.AbortReason<Reason>>, ticket)
+    cancelWriteForReason(Reason, handle, abortState)
+
+def writeSettled(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket & Maybe<&1, Result<&1, &1, U32 & String, Unit>>) -> IO(Socket & Result<&2, &2, Error<Reason>, Unit>):
+  match pair:
+    case (socket, value):
+      do IO<Socket & Result<&2, &2, Error<Reason>, Unit>>:
+        abortState : Maybe<&2, Abort.AbortReason<Reason>> <- Abort.reason(Reason, signal)
+        return (socket, selected(Reason, Unit, Outcome.choose(Reason, Error<Reason>, Unit, abortState, writeConverted(Reason, value))))
+
+def writeObserving(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: UDPWrite & UDPWriteCancel, observation: Deferred.Observation<Abort.AbortReason<Reason>>) -> IO(Socket & Result<&2, &2, Error<Reason>, Unit>):
+  match pair observation:
+    case (write, handle) Deferred.Observation{ticket, cancellation}:
+      do IO<Socket & Result<&2, &2, Error<Reason>, Unit>>:
+        watcher : Chan(Unit) <- IO.fork(Unit, watchWrite(Reason, handle, ticket))
+        result : Socket & Maybe<&1, Result<&1, &1, U32 & String, Unit>> <- UDPWrite.wait(write)
+        removed : Bool <- Deferred.cancel(Abort.AbortReason<Reason>, cancellation)
+        IO.join(Unit, watcher)
+        writeSettled(Reason, signal, result)
+
+def writeChecked(-Reason: Data, socket: Socket, destination: Endpoint.Endpoint, bytes: List<&2, U32>, +signal: Abort.AbortSignal<Reason>, abortState: Maybe<&2, Abort.AbortReason<Reason>>) -> IO(Socket & Result<&2, &2, Error<Reason>, Unit>):
+  match abortState:
+    case Some{why}: IO.pure(Socket & Result<&2, &2, Error<Reason>, Unit>, (socket, Fail{Aborted{why}}))
+    case None{}:
+      do IO<Socket & Result<&2, &2, Error<Reason>, Unit>>:
+        operation : UDPWrite & UDPWriteCancel <- writeOperation(socket, destination, bytes)
+        observation : Deferred.Observation<Abort.AbortReason<Reason>> <- Abort.observe(Reason, signal)
+        writeObserving(Reason, signal, operation, observation)
+
+# Borrow the signal, return the socket on every outcome and join the observer.
+# A retained abort wins at this boundary even if transmission already completed;
+# callers must not interpret an abort result as proof of non-delivery.
+def send(-Reason: Data, socket: Socket, destination: Endpoint.Endpoint, bytes: List<&2, U32>, +signal: Abort.AbortSignal<Reason>) -> IO(Socket & Result<&2, &2, Error<Reason>, Unit>):
+  do IO<Socket & Result<&2, &2, Error<Reason>, Unit>>:
+    abortState : Maybe<&2, Abort.AbortReason<Reason>> <- Abort.reason(Reason, signal)
+    writeChecked(Reason, socket, destination, bytes, signal, abortState)

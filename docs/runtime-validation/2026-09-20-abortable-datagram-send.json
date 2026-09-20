@@ -1,0 +1,1954 @@
+{
+  "scope": "Abortable UDP sends preserve reasons, delivery and socket ownership and clean up watchers/timers.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 1,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 10,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "23925"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "246198"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "23559"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "242016"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "23585"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "247164"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 1,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 10,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "23012"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "238484"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "23535"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "237372"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "22493"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "238898"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 1,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 10,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "23615"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "237318"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "22931"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "238759"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "24373"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "238303"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 1,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 10,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "24113"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "240835"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "24426"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "244094"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "23167"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "241338"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 1,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 10,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "10557"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "159677"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "11003"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "163543"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "10439"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "164442"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 0,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "byte",
+      "size": 256,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 1,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "port",
+      "size": 0,
+      "count": 10,
+      "outcome": "error:22",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 1,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": false,
+      "mode": "ok",
+      "size": 65536,
+      "count": 10,
+      "outcome": "error:90",
+      "scope": "none",
+      "blocked_attempts": [],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "10937"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "custom",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "173044"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "10830"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "default",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:default",
+      "scope": "default",
+      "blocked_attempts": [
+        "166194"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "10478"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "deadline",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:expiry",
+      "scope": "expiry",
+      "blocked_attempts": [
+        "167842"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 1,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "pre",
+      "size": 256,
+      "count": 10,
+      "outcome": "abort:parent:stop",
+      "scope": "parent:stop",
+      "blocked_attempts": [
+        "0"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 1,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "injected_backpressure": true,
+      "mode": "ok",
+      "size": 256,
+      "count": 10,
+      "outcome": "ok",
+      "scope": "none",
+      "blocked_attempts": [
+        "3"
+      ],
+      "audit": []
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-connect.bend": "8e30fc940734a27e40cfaf6895dda4b574e6b316a7deebb1cbe8cdbe9b550151",
+    "packages/runtime/src/abortable-datagram.bend": "07464d20e8bc12b0e8f6f7efeeffc35c76af31547e6d330d9aac2284fa410896",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/abortable-datagram-send.bend": "9e4340b65a934d857b6b2141f6f49a097bb09d34444af9e0164640018663c079",
+    "tests/abortable-datagram.bend": "9b48003775bdd989429ffa64486a19fbfbc5b1350da58ef7cfe1a76949710d23",
+    "tests/socket-endpoint.bend": "e9d8b5eae524b0464f1fe895d814f1f525218c576acdb8a700210f7bfef77b0d",
+    "tests/udp-bytes.bend": "68628adc8fa94e3b65257db488cc6176498034ab3c90ee88f59df68b0d80fb77",
+    "tests/udp-write.bend": "44bad7ddb9a40eba73b6b80239d7189a6054957f8e9ea744afe398fb7eb78d0d",
+    "tests/abortable_datagram_send_check.py": "9fd7a1bbede737134af39f36df77ec40c54e9366feb55a2a000f63f8df5e87d9",
+    "tests/udp_backpressure.py": "afa7a685f6b3fa736398ba85b6cd6c42f2aab92def6f4d408a099d2385bf8e3e",
+    "patches/experimental/udp-bytes/README.md": "3aec2bfb30abf1781ba194d6cddb08a313b149048882d698892a2d8d848bae9b",
+    "patches/experimental/udp-bytes/udp_bind_family.c": "5558307fa8ddc562873ac8051e9a632e17eb3805bfa91ce9e4e214829318de8f",
+    "patches/experimental/udp-bytes/udp_recv_bytes.js": "73f973d2fc965b49f3549b991efaa92867a9c771d3061063a5980ce2894f8705",
+    "patches/experimental/udp-bytes/udp_bind_family.js": "4089ca41cc59f51dcc7e3bcfffa446fb28a43943a7e0ffb556e36dbf9da5d560",
+    "patches/experimental/udp-bytes/udp_send_bytes.c": "02c493e61963e93ac0a4991cd889d9c9c3635905720fcdf2497a8c9222995f6e",
+    "patches/experimental/udp-bytes/udp_send_bytes.js": "1310de48811ee2f3f71fad8c4104560fabae45d5c4916cd6b289d850d6b7e0b0",
+    "patches/experimental/udp-bytes/base.bend": "fb62850516d3a4194c2ccf96ba5047efa04b7e7ef76347236fbd106e326125bd",
+    "patches/experimental/udp-bytes/udp_recv_bytes.c": "92e667a71dff3483dcf5c1852c659b019c9d73f187e7fcefef24a2c076853547"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "ee3835960b2e501cc72e08bff68cc10540a53a325a7a700ab2e88f9581b56fb2"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-write-candidate/main.ts",
+        "tests/abortable-datagram-send.bend",
+        "-o",
+        "build/abortable-datagram-send.c"
+      ],
+      "elapsed_seconds": 3.15883303899318,
+      "peak_sampled_group_rss_kib": 947544,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-write-candidate/main.ts",
+        "tests/abortable-datagram-send.bend",
+        "-o",
+        "build/abortable-datagram-send.js"
+      ],
+      "elapsed_seconds": 1.5812833989039063,
+      "peak_sampled_group_rss_kib": 618724,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

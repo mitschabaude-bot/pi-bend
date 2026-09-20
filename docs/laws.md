@@ -78,7 +78,7 @@ The configuration acceptance boundary additionally rejects every nonempty option
 
 ## Abort result arbitration
 
-Two laws quantify over arbitrary reason, failure and value types. A retained abort always determines the selected outcome, independently of the operation's result or cancellation state. Without an abort, every completed result is preserved exactly, including either its success payload or its failure payload. `abortable-datagram` uses this pure arbitration after retiring its observer and joining the watcher. The laws prove selection at that final observation boundary; they do not prove IO race ordering or resource retirement. [Proof evidence](proof-validation/2026-09-20-abort-outcome.json) includes mutations that drop the reason or completed result.
+Two laws quantify over arbitrary reason, failure and value types. A retained abort always determines the selected outcome, independently of the operation's result or cancellation state. Without an abort, every completed result is preserved exactly, including either its success payload or its failure payload. `abortable-datagram.recv` and `.send` use this pure arbitration after retiring their observers and joining their watchers. The same laws apply to packet results and send completion because they quantify over the result type. The laws prove selection at that final observation boundary; they do not prove IO race ordering or resource retirement. [Proof evidence](proof-validation/2026-09-20-abort-outcome.json) includes mutations that drop the reason or completed result.
 
 ## Relationship to pi and existing tests
 
