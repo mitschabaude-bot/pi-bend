@@ -34,7 +34,7 @@ def outcome(value: Result<&2, &2, Query.Error<String>, Query.Reply>) -> String:
     case Fail{Query.Connection{Connect.Aborted{why}}}: "connect:" ++ cause(why)
     case Fail{Query.Connection{Connect.SocketError{code, _}}}: "socket:" ++ U32.show(code)
     case Fail{Query.Adoption{Peer.Adoption{SocketIO.Aborted{why}}}}: "adopt:" ++ cause(why)
-    case Fail{Query.Terminated{Session.Transport{TCP.Transport{SocketIO.Aborted{why}}}}}: "read:" ++ cause(why)
+    case Fail{Query.Terminated{Session.Transport{TCP.Transport{_, SocketIO.Aborted{why}}}}}: "read:" ++ cause(why)
     case Fail{Query.Terminated{Session.EndOfStream{}}}: "eof"
     case Fail{Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}}: "frame"
     case Fail{Query.Submission{Session.Query{_}}}: "query"

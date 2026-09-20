@@ -52,7 +52,7 @@ def socketFailure(-Reason: Data, code: U32) -> IO(Run.Outcome<Lookup.Error<Reaso
 def completed(-Reason: Data, result: Result<&2, &2, Lookup.Error<Reason>, Answer.Selection>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
   match result:
     case Fail{Lookup.Exchange{Query.Connection{Connect.SocketError{code, _}}}}: socketFailure(Reason, code)
-    case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Transport{SocketIO.SocketError{code, _}}}}}}: socketFailure(Reason, code)
+    case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Transport{_, SocketIO.SocketError{code, _}}}}}}: socketFailure(Reason, code)
     case Fail{Lookup.Exchange{Query.Terminated{Session.EndOfStream{}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
     case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
     case other: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, outcome(Reason, other))

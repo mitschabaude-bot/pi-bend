@@ -3,9 +3,19 @@ import ./abortable-socket.bend as SocketIO
 import ./socket-interrupt.bend as Interrupt
 import ./dns-tcp-frame.bend as Frame
 
+type Operation is Data:
+  Sending{}
+  ReadingLength{}
+  ReadingPayload{}
+
+def readOperation(reader: Frame.Reader) -> Operation:
+  match reader:
+    case Frame.Payload{_, _}: ReadingPayload{}
+    case _: ReadingLength{}
+
 type Error<-Reason: Data> is Data:
   Framing{error: Frame.Error}
-  Transport{error: SocketIO.Error<Reason>}
+  Transport{operation: Operation, error: SocketIO.Error<Reason>}
   InvalidReadSize{}
 
 type Position<-Reason: Data> is Data:
@@ -46,7 +56,7 @@ def eof(-Reason: Data, socket: SocketIO.Owner<Reason>, result: Result<&2, &2, Fr
 
 def received(-Reason: Data, reader: Frame.Reader, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, List<&2, U32>>) -> Step<Reason>:
   match pair:
-    case (socket, Fail{error}): ended(Reason, socket, Some{Transport{error}})
+    case (socket, Fail{error}): ended(Reason, socket, Some{Transport{readOperation(reader), error}})
     case (socket, Done{Nil{}}): eof(Reason, socket, Frame.finish(reader))
     case (socket, Done{byte <> rest}): decoded(Reason, socket, Frame.read(reader, byte <> rest))
 
@@ -62,7 +72,7 @@ def received(-Reason: Data, reader: Frame.Reader, pair: SocketIO.Owner<Reason> &
 
 def inspected(-Reason: Data, reader: Frame.Reader, unread: List<&2, U32>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit>) -> Step<Reason>:
   match pair:
-    case (socket, Fail{error}): ended(Reason, socket, Some{Transport{error}})
+    case (socket, Fail{error}): ended(Reason, socket, Some{Transport{readOperation(reader), error}})
     case (socket, Done{_}): decoded(Reason, socket, Frame.read(reader, unread))
 
 def pending(-Reason: Data, connection: Connection<Reason>) -> IO(Step<Reason>):
@@ -87,7 +97,7 @@ def receive(-Reason: Data, connection: Connection<Reason>, maximum: U32) -> IO(N
 def sent(-Reason: Data, position: Position<Reason>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit>) -> Connection<Reason> & Result<&2, &2, Error<Reason>, Unit>:
   match pair:
     case (socket, Done{_}): (Connection{socket, position}, Done{Unit{}})
-    case (socket, Fail{error}): (Connection{socket, position}, Fail{Transport{error}})
+    case (socket, Fail{error}): (Connection{socket, position}, Fail{Transport{Sending{}, error}})
 
 def sendFrame(-Reason: Data, connection: Connection<Reason>, result: Result<&2, &2, Frame.Error, List<&2, U32>>) -> IO(Connection<Reason> & Result<&2, &2, Error<Reason>, Unit>):
   match connection result:

@@ -4,6 +4,7 @@ import ./deadline.bend as Deadline
 import ./abortable-connect.bend as Connect
 import ./abortable-socket.bend as SocketIO
 import ./dns-tcp-query.bend as Query
+import ./dns-tcp-recover.bend as Recover
 import ./dns-tcp-session.bend as Session
 import ./dns-tcp-connection.bend as TCP
 import ./dns-tcp-frame.bend as Frame
@@ -27,7 +28,7 @@ def retryable(-Reason: Data, error: Query.Error<Reason>) -> Bool:
   match error:
     case Query.Connection{Connect.SocketError{_, _}}: True{}
     case Query.Terminated{Session.EndOfStream{}}: True{}
-    case Query.Terminated{Session.Transport{TCP.Transport{SocketIO.SocketError{_, _}}}}: True{}
+    case Query.Terminated{Session.Transport{TCP.Transport{_, SocketIO.SocketError{_, _}}}}: True{}
     case Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}: True{}
     case _: False{}
 
@@ -45,7 +46,7 @@ def completed(-Reason: Data, report: Query.Completed<Reason>) -> Decision<Reason
     case other: Stop{other}
 
 # One pass through the supplied order. The borrowed deadline and unchanged
-# query span every attempt. Query.exchange returns only after closing its
+# query span every attempt. Recover.exchange returns only after closing its
 # resources; no detached attempt overlaps the following server.
 def drive(-Reason: Data, servers: List<&2, Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +id: U32, +flags: U32, +question: Message.Question, +maximum: U32, decision: Decision<Reason>) -> IO(Result<&2, &2, Error<Reason>, Query.Reply>):
   match servers decision:
@@ -54,7 +55,7 @@ def drive(-Reason: Data, servers: List<&2, Server>, +signal: Abort.AbortSignal<D
     case Nil{} Next{report}: IO.pure(Result<&2, &2, Error<Reason>, Query.Reply>, Fail{Failed{report}})
     case Server{address, port} <> rest Next{_}:
       do IO<Result<&2, &2, Error<Reason>, Query.Reply>>:
-        report : Query.Completed<Reason> <- Query.exchange(Reason, address, port, signal, id, flags, question, maximum)
+        report : Query.Completed<Reason> <- Recover.exchange(Reason, address, port, signal, id, flags, question, maximum)
         drive(Reason, rest, signal, id, flags, question, maximum, completed(Reason, report))
 
 def exchange(-Reason: Data, servers: List<&2, Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +id: U32, +flags: U32, +question: Message.Question, +maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Query.Reply>):
@@ -62,5 +63,5 @@ def exchange(-Reason: Data, servers: List<&2, Server>, +signal: Abort.AbortSigna
     case Nil{}: IO.pure(Result<&2, &2, Error<Reason>, Query.Reply>, Fail{NoServers{}})
     case Server{address, port} <> rest:
       do IO<Result<&2, &2, Error<Reason>, Query.Reply>>:
-        report : Query.Completed<Reason> <- Query.exchange(Reason, address, port, signal, id, flags, question, maximum)
+        report : Query.Completed<Reason> <- Recover.exchange(Reason, address, port, signal, id, flags, question, maximum)
         drive(Reason, rest, signal, id, flags, question, maximum, completed(Reason, report))

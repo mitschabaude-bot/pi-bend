@@ -80,7 +80,7 @@ def framingError(kind: String, error: Frame.Error) -> Bool:
 def terminalError(kind: String, error: TCP.Error<String>) -> Bool:
   match error:
     case TCP.Framing{why}: framingError(kind, why)
-    case TCP.Transport{why}: transportError(kind, why)
+    case TCP.Transport{_, why}: transportError(kind, why)
     case TCP.InvalidReadSize{}: String.eq(kind, "zero")
 
 def terminalValue(kind: String, value: Maybe<&2, List<&2, U32>>) -> Bool:

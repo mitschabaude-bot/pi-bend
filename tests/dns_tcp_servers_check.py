@@ -1,6 +1,7 @@
 """Ordered TCP server failover with real loopback endpoints.
 
-One pass; DNS replies are returned without UDP response-code failover. Checks
+One server pass with one same-server length-read reset recovery per server.
+DNS replies are returned without UDP response-code failover. Checks
 closed attempts, final error selection, shared deadline and terminal abort.
 """
 import argparse
@@ -36,7 +37,12 @@ cases=[
     dict(name='refusal-next',servers=['refused',0],outcome='reply:0'),
     dict(name='eof-next',servers=['eof',0],outcome='reply:0'),
     dict(name='partial-next',servers=['partial',0],outcome='reply:0'),
-    dict(name='reset-next',servers=['reset',0],outcome='reply:0'),
+    dict(name='reset-next',servers=['reset',0],attempts=[(0,'reset'),(0,'reset'),(1,0)],outcome='reply:0'),
+    dict(name='reset-recover',servers=['reset','unused'],attempts=[(0,'reset'),(0,0)],outcome='reply:0'),
+    dict(name='partial-prefix-reset-recover',servers=['reset-prefix','unused'],attempts=[(0,'reset-prefix'),(0,0)],outcome='reply:0'),
+    dict(name='payload-reset-next',servers=['reset-payload',0],outcome='reply:0'),
+    dict(name='new-frame-reset-recover',servers=['reset-after-frame','unused'],attempts=[(0,'reset-after-frame'),(0,0)],outcome='reply:0'),
+    dict(name='reset-recovery-deadline',mode='deadline',servers=['slow-reset','unused'],attempts=[(0,'slow-reset'),(0,'stall')],outcome='read:expiry',reason='expiry'),
     dict(name='third-server',servers=['eof','eof',0],outcome='reply:0'),
     dict(name='last-eof',servers=['refused','eof'],outcome='eof'),
     dict(name='last-refusal',servers=['eof','refused'],outcome='socket:'+str(errno.ECONNREFUSED)),
@@ -55,6 +61,7 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
         for kind in [1,28]:
             for case in cases:
                 types=case['servers'];order=case.get('order',list(range(len(types))));trace=[]
+                plan=case.get('attempts',[(order[index],action) for index,action in enumerate(types)])
                 with ExitStack() as stack:
                     listeners=[]
                     for action in types:
@@ -63,18 +70,25 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
                         listeners.append(listener)
                     pool=stack.enter_context(ThreadPoolExecutor(max_workers=1))
                     def serve():
-                        for index,action in enumerate(types):
+                        for server_index,action in plan:
                             if action in ['refused','unused']:continue
-                            with listeners[order[index]].accept()[0] as peer:
+                            with listeners[server_index].accept()[0] as peer:
                                 peer.settimeout(4)
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0])
                                 question=b'\x01a\0'+struct.pack('!HH',kind,1)
                                 assert query==struct.pack('!6H',42,256,1,0,0,0)+question,query
-                                trace.append(order[index])
+                                trace.append(server_index)
                                 if action=='slow-eof':time.sleep(.7);continue
                                 if action=='eof':continue
                                 if action=='partial':peer.sendall(b'\0');continue
-                                if action=='reset':peer.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack('ii',1,0));continue
+                                if action in ['reset','reset-prefix','reset-payload','reset-after-frame','slow-reset']:
+                                    if action=='reset-prefix':peer.sendall(b'\0')
+                                    if action=='reset-payload':peer.sendall(b'\0\x40abc')
+                                    if action=='reset-after-frame':
+                                        noise=struct.pack('!6H',43,0x8180,1,0,0,0)+question
+                                        peer.sendall(struct.pack('!H',len(noise))+noise)
+                                    time.sleep(.7 if action=='slow-reset' else .01)
+                                    peer.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack('ii',1,0));continue
                                 if action=='stall':
                                     assert select.select([peer],[],[],.6)[0],'server failover restarted deadline'
                                 else:
@@ -92,6 +106,6 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
                 assert result.returncode==0 and not result.stderr and result.stdout.splitlines()==want,(backend,number,kind,case,result,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,accepted_server_indices=trace,output=want))
     print(f'{backend}: {len(cases)*4} TCP failover cases PASS',flush=True)
-paths=['packages/runtime/src/dns-tcp-servers.bend','packages/runtime/src/dns-tcp-query.bend','tests/dns-tcp-servers.bend','tests/dns_tcp_servers_check.py','build/dns-tcp-servers','build/dns-tcp-servers.js']
+paths=['packages/runtime/src/dns-tcp-servers.bend','packages/runtime/src/dns-tcp-query.bend','packages/runtime/src/dns-tcp-recover.bend','packages/runtime/src/dns-tcp-connection.bend','tests/dns-tcp-servers.bend','tests/dns_tcp_servers_check.py','build/dns-tcp-servers','build/dns-tcp-servers.js']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-tcp-servers-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-tcp-servers-result.json').write_text(json.dumps(r,indent=2)+'\n')
