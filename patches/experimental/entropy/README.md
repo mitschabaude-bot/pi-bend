@@ -12,7 +12,7 @@ python3 tests/entropy_check.py build/bend-entropy-candidate
 python3 scripts/benchmark-tcp-bytes.py build/bend-entropy-candidate build/entropy-performance.json entropy_bytes.c entropy_bytes.js
 ```
 
-The preparer also accepts `--base` to compose with existing candidates. It checks all existing files remain byte-identical and Base changes only by appending the declaration. Nothing is installed. The existing `/dev/urandom` seed adapter and caller-supplied DNS IDs remain unchanged; wiring this effect into resolver defaults and other entropy consumers is subsequent implementation work.
+The preparer also accepts `--base` to compose with existing candidates. It checks all existing files remain byte-identical and Base changes only by appending the declaration. Nothing is installed. The existing `/dev/urandom` seed adapter remains unchanged. `runtime/src/dns-id.bend` now adapts two OS octets into a DNS ID, and `dns-address-lookup.lookupRandom` uses it for each exchange; the caller-supplied-ID entry point remains available. Other entropy consumers are subsequent implementation work.
 
 The regression performs 263 requests per outcome on native one/four threads and Bun. Live Linux output is checked for exact length and byte bounds. Disposable syscall injection checks every byte value, every supported length, repeated calls, oversized arguments, `EAGAIN`, `ENOSYS`, `EINTR`, and two forms of short return. Exact call counts verify zero and oversized requests bypass the syscall. All 5,523 requests pass (789 live, 4,734 injected). These tests do not infer cryptographic quality from sample uniqueness or establish performance on other platforms. No live entropy values are stored in the validation record.
 
