@@ -1,4 +1,5 @@
 import Base
+import ./proofs/hosts.bend as Hosts
 import ./proofs/resolver-configuration.bend as ResolverConfiguration
 import ./proofs/dns-search-run.bend as DNSSearchRun
 import ./proofs/resolver-transport.bend as ResolverTransport

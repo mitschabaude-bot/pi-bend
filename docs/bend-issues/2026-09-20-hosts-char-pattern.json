@@ -1,0 +1,24 @@
+{
+  "issue": "BEND-022 recurrence through nested character patterns",
+  "checks": [
+    {
+      "source": "docs/bend-issues/2026-09-20-hosts-char-repro.bend",
+      "sha256": "6138dd9aae1653a54a4f1886445a29ca690b414f8b2636f458403f0dc56f1bcf",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Bend's installer changed. Update with: curl -fsSL https://bend-lang.com/install.sh | sh\nError:\n- expected : an annotated term (cannot infer)\n- observed : U32{WCon{True{}, WCon{True{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{True{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, _77}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\nContext:\n- _77 : Word.Nil<> - WNil{}\n- _   : String\nLocation: read\n6 |     case SCon{'#', _}: 1\n7>|     case SCon{Chr{+code}, _}: (code + code : U32)\n8 | \n"
+    },
+    {
+      "source": "docs/bend-issues/2026-09-20-hosts-char-control.bend",
+      "sha256": "23362de612708d511ca67c03c7415fd6eb503e08542a6ce6e69e2c2bd54df7f5",
+      "exit_code": 0,
+      "stdout": "All terms check.\n",
+      "stderr": "Bend's installer changed. Update with: curl -fsSL https://bend-lang.com/install.sh | sh\n"
+    }
+  ],
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  }
+}

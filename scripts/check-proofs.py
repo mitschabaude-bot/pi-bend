@@ -91,6 +91,16 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('hosts-discards-matched-row', 'packages/runtime/src/hosts.bend',
+         'case True{}: entry <> rest', 'case True{}: rest', 'laws/hosts.matched_entry_retained'),
+        ('hosts-reverses-matches', 'packages/runtime/src/hosts.bend',
+         'case True{}: entry <> rest', 'case True{}: List.append(&2, Entry<Address>, rest, entry <> Nil{})', 'proofs/hosts.selected_append'),
+        ('hosts-ignores-canonical-name', 'packages/runtime/src/hosts.bend',
+         'same(name, canonical) || alias(name, aliases)', 'alias(name, aliases)', 'laws/hosts.canonical_matches'),
+        ('hosts-ignores-aliases', 'packages/runtime/src/hosts.bend',
+         'same(name, canonical) || alias(name, aliases)', 'same(name, canonical)', 'laws/hosts.canonical_matches'),
+        ('hosts-accepts-partial-database', 'packages/runtime/src/hosts-file.bend',
+         'case Fail{error}: Fail{Failure{number, error}}', 'case Fail{error}: Done{reversed}', 'laws/hosts.invalid_line_discards_partial_database'),
         ('resolver-erases-transport-error', 'packages/runtime/src/resolver-configuration.bend',
          'case Fail{error}: Fail{error}', 'case Fail{error}: Fail{Plan.NoServers{}}', 'laws/resolver-configuration.rejects_invalid_transport'),
         ('resolver-search-discards-options', 'packages/runtime/src/resolver-configuration.bend',
