@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/resolver-options.bend as Options
 import ../packages/runtime/src/resolver-search.bend as Configuration
 import ../packages/runtime/src/dns-query.bend as Query
 import ../packages/runtime/src/dns-search.bend as Search
@@ -25,3 +26,10 @@ law preserves_search_policy:
   for +dots: U32
   for +absolute: Bool
   {cursor(Configuration.plan(configuration, name, dots, absolute)) == Configuration.start(configuration, name, dots, absolute) : Search.Cursor}
+
+law rejects_diagnostics:
+  for options: Options.Options
+  for +first: Options.Diagnostic
+  for +rest: List<&2, Options.Diagnostic>
+  for domains: List<&2, String>
+  {Configuration.checked(Options.Report{options, first <> rest}, domains) == Fail{first <> rest} : Result<&2, &2, List<&2, Options.Diagnostic>, Configuration.Configuration>}
