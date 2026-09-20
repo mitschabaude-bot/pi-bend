@@ -73,6 +73,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('line-chunk-resets-pending-state', 'packages/runtime/src/line-decoder.bend',
+         'collect(bytes, Decoded{decoder, Nil{}}, Nil{})',
+         'collect(bytes, Decoded{create(), Nil{}}, Nil{})', 'laws/line-decoder.empty_chunk'),
+        ('line-collector-drops-emitted-lines', 'packages/runtime/src/line-decoder.bend',
+         'case head <> tail: prepend(tail, head <> reversed)',
+         'case head <> tail: prepend(tail, reversed)', 'proofs/line-decoder.prepend_reverse'),
         ('ordered-map-drops-replaced-key', 'packages/runtime/src/ordered-map.bend',
          'String.eq(name, key), R.Property{key, value} <> rest',
          'String.eq(name, key), rest', 'proofs/ordered-map.put_equivalent'),
