@@ -1,4 +1,5 @@
 import Base
+import ./proofs/abort-outcome.bend as AbortOutcome
 import ./proofs/resolver-search.bend as ResolverSearch
 import ./proofs/resolver-request.bend as ResolverRequest
 import ./proofs/dns-query.bend as DNSQuery

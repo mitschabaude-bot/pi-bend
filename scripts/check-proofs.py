@@ -90,6 +90,10 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('abort-outcome-discards-reason', 'packages/runtime/src/abort-outcome.bend',
+         'case Some{why} _: Aborted{why}', 'case Some{why} _: Cancelled{}', 'laws/abort-outcome.retained_abort_wins'),
+        ('abort-outcome-discards-completion', 'packages/runtime/src/abort-outcome.bend',
+         'case None{} Some{result}: Completed{result}', 'case None{} Some{result}: Cancelled{}', 'laws/abort-outcome.completion_preserved'),
         ('resolver-search-accepts-diagnostics', 'packages/runtime/src/resolver-search.bend',
          'case Options.Report{_, diagnostics}: Fail{diagnostics}',
          'case Options.Report{options, _}: Done{prepare(options, domains)}', 'laws/resolver-search.rejects_diagnostics'),
