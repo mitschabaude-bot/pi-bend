@@ -57,6 +57,10 @@ cases=[
  dict(name='empty',servers=0,plan=[],error='no-servers',second_error='no-servers',draws=0),
  dict(name='type',kind=15,plan=[],error='type',second_error='type',draws=0),
 ]
+if not a.explicit:
+    cases += [dict(case,name=case['name']+'-'+str(timeout)+'-'+str(attempts),tuning=f'timeout:{timeout} attempts:{attempts}')
+              for case in list(cases) if case['name'] in ['failover','reset','deadline']
+              for timeout,attempts in [(1,1),(30,5)]]
 cases=[dict(case,edns=edns) for case in cases for edns in [False,True]]
 rows=[]
 for backend,command in [('native 1',[f'build/{fixture}','--threads','1']),('native 4',[f'build/{fixture}','--threads','4']),('Bun',[str(bun),f'build/{fixture}.js'])]:
@@ -85,7 +89,7 @@ for backend,command in [('native 1',[f'build/{fixture}','--threads','1']),('nati
                                 assert peer.recv(1)==b'','resolver left exchange open'
                     future=pool.submit(serve) if case['plan'] else None
                     ports=','.join(str(sock.getsockname()[1]) for sock in listeners)
-                    run=subprocess.run([*command,'edns' if case['edns'] else 'plain',case.get('mode','rotate'),str(number),ports,str(case.get('kind',kind))],cwd=ROOT,capture_output=True,text=True,timeout=7)
+                    run=subprocess.run([*command,'edns' if case['edns'] else 'plain',case.get('mode','rotate'),str(number),ports,str(case.get('kind',kind)),*([case.get('tuning','')] if not a.explicit else [])],cwd=ROOT,capture_output=True,text=True,timeout=7)
                     if future:future.result(timeout=5)
                     for listener in listeners:assert not select.select([listener],[],[],0)[0],('unexpected lookup',case)
                 want=[case['error'] if 'error' in case else selected(case['first'],kind),'none',case.get('reason','none'),case['second_error'] if 'second_error' in case else selected(case['second'],kind),'none','none','draws:'+str(case['draws'])]

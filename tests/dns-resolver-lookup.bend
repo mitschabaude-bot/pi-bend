@@ -42,17 +42,17 @@ def configuration(result: Result<&2, &2, List<&2, ParsedOptions.Diagnostic>, Con
 
 def args(values: List<String>) -> IO(Unit):
   match values:
-    case options <> +mode <> family <> ports <> kind <> Nil{}:
+    case options <> +mode <> family <> ports <> kind <> tuning <> Nil{}:
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +counter : Ref.Ref<U32> <- Ref.new(U32, 0)
-        settings : Configuration.Configuration <- configuration(Configuration.prepareStrict(Config.words("ndots:2 " ++ Bool.pick(String, String.eq(mode, "fixed"), "", "rotate ") ++ Bool.pick(String, String.eq(options, "edns"), "edns0 trust-ad", ""), Config.Words{"", Nil{}}), domains(String.eq(mode, "invalid-domain"), String.eq(mode, "invalid-later"))))
+        settings : Configuration.Configuration <- configuration(Configuration.prepareStrict(Config.words("ndots:2 " ++ Bool.pick(String, String.eq(mode, "fixed"), "", "rotate ") ++ Bool.pick(String, String.eq(options, "edns"), "edns0 trust-ad", "") ++ " " ++ tuning, Config.Words{"", Nil{}}), domains(String.eq(mode, "invalid-domain"), String.eq(mode, "invalid-later"))))
         owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~OwnerTest.seed, 1, Resolver.fromSearch(ServersTest.serverInput(family, ports), Bool.pick(U32, String.eq(mode, "deadline"), 300, 5000), 7, settings))
         created(mode, Scalar.decimal(kind, 0), IDs.Source{"direct", counter, parent}, Abort.signal(String, parent), owner)
         draws : U32 <- Ref.dispose(U32, counter)
         IO.print("draws:" ++ U32.show(draws))
         Abort.dispose(String, parent)
-    case _: IO.die(Unit, 1, "expected options mode family ports kind")
+    case _: IO.die(Unit, 1, "expected options mode family ports kind tuning")
 
 def main() -> IO(Unit):
   do IO<Unit>:
