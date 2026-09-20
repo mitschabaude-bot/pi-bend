@@ -1,0 +1,128 @@
+{
+  "scope": "Injected affine HTTP event source through real callback/serial owner and SSE reader; exact IO traces and channel/parked-IO retirement. No real socket in this fixture; no universal concurrency claim.",
+  "runs": [
+    {
+      "backend": "native-1",
+      "audited": false,
+      "cases": 33,
+      "passed": true,
+      "audit": ""
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "cases": 33,
+      "passed": true,
+      "audit": ""
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "cases": 33,
+      "passed": true,
+      "audit": ""
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "cases": 33,
+      "passed": true,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "cases": 33,
+      "passed": true,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "cases": 33,
+      "passed": true,
+      "audit": "AUDIT 0 0 0"
+    }
+  ],
+  "source_sha256": {
+    "packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "packages/runtime/src/headers.bend": "9978dc8b32df82059c8c09345003077db13ee4127f7c8944a9888f8c8a0d6602",
+    "packages/runtime/src/http-body-source.bend": "195b3c5b4ab6b6bdf1a2f33eac7850f83f18cdef13f9ecfb22344652fdbc6b17",
+    "packages/runtime/src/http-body.bend": "7388c006dedb8d5f10966ebdeceae913ac631de005348f891745ce1bcebcf52f",
+    "packages/runtime/src/http-chunk-size.bend": "6a9562c2bf1d4acbf621173dbc1f177735c16eb8e63801bc34c2a6f347ed0dbe",
+    "packages/runtime/src/http-chunked-body.bend": "eafa17ba24b7feef64c6194734200a9f65abf1b4214061124954aedf3ba75918",
+    "packages/runtime/src/http-content-length.bend": "c5fbb68c029b3f203cc6721ffdf5eb77be38e69c3922dba1f3a8a970b8b37ae3",
+    "packages/runtime/src/http-field.bend": "7a2b9e89f6760294f6e40fe5135e1bde32a9e897ed99a2ac8101a0abdefabcf2",
+    "packages/runtime/src/http-fixed-body.bend": "fed0fed0522429e5beee2da28827e5ac41781a6222733b9381847954f19adaa6",
+    "packages/runtime/src/http-framing-fields.bend": "ea95cd26537356a9aa45ba7734e024c80f85209e68fd5b136aca3c3bf46adea3",
+    "packages/runtime/src/http-head.bend": "e8d8d955c879224dedb8831171f77bc26ddb4581137713f1fa95dd0f52f7e59f",
+    "packages/runtime/src/http-header.bend": "5e9a18dd5c72942bf11013344eafb5d94d7a7156cd50f632e7b307488ab58b3e",
+    "packages/runtime/src/http-line.bend": "f1165cfec3c4b32f3d5d83ddd60f1fed30d4c058a02272bed826d4eef5a34f66",
+    "packages/runtime/src/http-response-metadata.bend": "fb6e92273c328abb777646913cadc35343e97e4edcd954b42dca7c1734c3df64",
+    "packages/runtime/src/http-response-policy.bend": "ab878b0ac93379f9cd86117adb46c5649ef979cf5febd2af13d09f49a86f09cd",
+    "packages/runtime/src/http-response-progress.bend": "0df44f82f8cbc2d08d1c19975465a74eb989f154a6f7380d867744fb1f250547",
+    "packages/runtime/src/http-response-stream.bend": "005f900a423cd03555fe954e4f161e8fb31e688f5db502be2574da2f8ec7c53f",
+    "packages/runtime/src/http-response-termination.bend": "ffa0780a05554dbd5b00c1bcd755412a425c8aa54e2a3a80f7f35d48480a09cd",
+    "packages/runtime/src/http-response.bend": "b4b2be6cd162fc8e59910d4436509fb2bbf8a4320b41c1602331fd32dd9a7c05",
+    "packages/runtime/src/http-status.bend": "43170e7135a2b96b1d7bfbd48bfde2357404ece662292c8c30ff86d432022960",
+    "packages/runtime/src/line-decoder.bend": "c6a2a29dd95f10fd9f5e850d0c1584dc9b2806fe2818e47f131d167ccf9798c9",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/sse-chunks.bend": "308f75d50380961133124357f38dc2666a87c1b25855a0240305309cf6681d09",
+    "packages/runtime/src/sse-decoder.bend": "edad73cf2db7bed6c67b3f5e724ff4567ba1b2a571f7aaafa496630c1b141c39",
+    "packages/runtime/src/sse-reader.bend": "26aa691647b6664af32aa67b6a16db09016492ed9d44d89fe4fb615438a18000",
+    "packages/runtime/src/sse-stream.bend": "ec083830a8334aad03028a4918da815b9f8afa674f472ed14440da8cbed63f9d",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/http-body-source.bend": "eb8d2cf5ec357bd239b612dd24c499879816d868c38bcf94f09ed828985e904f",
+    "packages/runtime/test/http-response.bend": "a26b14b8aedd03d8961d752092c35449e1a27867fb9b22635a0926f73b345f89",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1",
+    "tests/http_body_source_check.py": "c579d096844bd2a7a9778cb4f91dc1370244cc393be8c9ef9a6b67428074e92c"
+  },
+  "compiler_command": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "packages/runtime/test/http-body-source.bend",
+        "-o",
+        "build/http-body-source.c"
+      ],
+      "elapsed_seconds": 6.378752679564059,
+      "peak_sampled_group_rss_kib": 1003256,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "packages/runtime/test/http-body-source.bend",
+        "-o",
+        "build/http-body-source.js"
+      ],
+      "elapsed_seconds": 2.1228952519595623,
+      "peak_sampled_group_rss_kib": 707148,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "program_sha256": {
+    "": "b644f159e41c7777c7d7319362c1d6f44136d4b3dd2c9c9d24f14dbabaefe0b9",
+    ".c": "f552e8483ee0cf53fc7184a5989713407de76ed68b71b66d3b33cca6e91e30ed",
+    ".js": "3fce4c316cd9c1bd52fed03be5dc79751c3e6f3e18ddcb0af1250aaca3d7646f",
+    "-audit": "fecad6772bd2afacc736722cb231e75d04fb65e846ac9a384a6b334207ce4330",
+    "-audit.c": "f767ef9e40d1fe61ee4f8979a039de4cb0872d08fade0c1619c1ed3e95a8dcbb",
+    "-audit.js": "2c4b63985460b537bb9ed6b5bef2951c1d85500c1b6c484b91a38b134328b47a"
+  }
+}

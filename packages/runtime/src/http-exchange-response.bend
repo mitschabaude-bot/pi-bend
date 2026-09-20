@@ -3,6 +3,7 @@ import ./http-socket-exchange.bend as Exchange
 import ./http-response.bend as Response
 import ./http-response-stream.bend as Stream
 import ./http-response-progress.bend as Progress
+import ./http-body-source.bend as Source
 
 def unpack(-Reason: Data, result: Exchange.Next<Reason>) -> Exchange.Exchange<Reason> & Result<&2, &2, Exchange.ReadError<Reason>, Maybe<&2, Stream.Event>>:
   match result:
@@ -21,3 +22,6 @@ def next(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Re
 
 def close(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Response.Next<Exchange.ReadError<Reason>, Exchange.Exchange<Reason>>):
   Response.closeWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, Exchange.close(Reason), body)
+
+def source(~Reason: Data, ~E: Data, ~map: Progress.Error<Exchange.ReadError<Reason>> -> E, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Source.Owner<Exchange.Exchange<Reason>, E>):
+  Source.create(~Exchange.ReadError<Reason>, ~Exchange.Exchange<Reason>, ~E, ~map, ~(read(Reason)), ~(Exchange.close(Reason)), body)

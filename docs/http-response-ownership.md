@@ -26,4 +26,24 @@ python3 tests/http_response_check.py
 python3 tests/http_exchange_response_check.py --worktree "$PWD/build/http-resolved-clean"
 ```
 
-The provider-facing acquired byte source, text/JSON body consumption, TLS, redirects, decompression, pooling and native provider adoption remain pending. This is response ownership atop the existing cleartext exchange, not completion of Fetch or the pi port.
+## Acquired SSE byte source
+
+`http-body-source` now consumes an affine body into a serialized owner and lends an `sse-reader.Source` containing read/close callbacks. Its error mapping is explicit and typed, so provider code can classify cancellation without matching strings. Bytes pass through unchanged; UTF-8/SSE decoding remains in the existing reader. Calls retain the serial resource token across the complete asynchronous operation. The owner stores its release operation, so disposal cannot accidentally select a different transport close function.
+
+Retire all callback aliases and in-flight calls before disposal. The owner retires both callback factories, takes and retires the serial resource, then closes the remaining body. This last step is necessary for an unread body: closing a fresh SSE cursor intentionally does not call the source's close callback. Completion/error/early-close successors are already closed, so subsequent disposal causes no repeated transport close. A close error is returned once; disposal of that closed successor succeeds rather than repeating it. The source is one acquired reader; it does not implement body cloning or multiple independent reads.
+
+Five generic laws preserve bytes, distinguish EOF from an empty chunk, apply the supplied read/close error mapping, and prove that releasing an already-closed body equals an immediate successful IO return for every transport close function. The proof root imports the existing response and SSE loops, raising its audited concrete annotation count from four to seven; the proofs neither invoke those loops nor claim their termination. No unsafe annotation is added by this adapter.
+
+All 33 [integration cases](runtime-validation/2026-09-20-http-body-source.json) pass on native one/four threads and Bun, both unmodified and audited. They compose an injected asynchronous HTTP event source with the real serial/callback owner and SSE reader. Cases cover unread disposal, early return with buffered SSE events, normal completion, read/cleanup failures, unfinished events at EOF, and every split of a multibyte UTF-8 event. Two concurrent source reads yield distinct successive chunks across an explicit asynchronous suspension; their acquisition order is unspecified. Native audits return live channels and parked IO to zero; Bun audits additionally check its live/waiting IO counts. This is finite ownership/concurrency evidence, not a universal scheduling proof or a real socket/SSE integration test.
+
+```sh
+python3 tests/http_body_source_check.py
+```
+
+`http-exchange-response.source` supplies the concrete byte-source factory for a native socket body and a caller-provided typed error mapping. All 42 [socket/SSE executions](runtime-validation/2026-09-20-http-exchange-sse.json) pass across native one/four threads and Bun, in production and audited builds. Real peers exercise fixed/chunked/EOF bodies, seven-byte socket reads, one-byte HTTP chunks splitting a multibyte SSE payload, early return, unread disposal, body truncation and unfinished SSE events. Peers observe client EOF. Native audits return live channels, parked IO and sockets in descriptors 0–4095 to zero; Bun audits return explicit channels and live/waiting IO to zero. This composition uses the same clean pinned worktree plus recorded new files, excluding form drafts.
+
+```sh
+python3 tests/http_exchange_sse_check.py --worktree "$PWD/build/http-resolved-clean"
+```
+
+OpenAI provider-reader composition, text/JSON body consumption, TLS, redirects, decompression, pooling and native provider adoption remain pending. This is response ownership and acquired streaming atop the existing cleartext exchange, not completion of Fetch or the pi port.

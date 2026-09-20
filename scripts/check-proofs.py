@@ -38,11 +38,12 @@ def check(directory, source):
     return {'source': source, 'exit_code': run.returncode, 'stdout': run.stdout, 'stderr': run.stderr}
 
 def accepted(result):
-    # The full owner import closure includes three existing schema/JSON
-    # annotations as well as the original runtime annotation. None supplies
-    # evidence for these laws; their exact source declarations are audited below.
+    # The full root includes the previous four concrete annotations plus the
+    # two response loops and SSE loop. The body-source module alone reports
+    # three. None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
-                 'All terms check, with 4 unsafe annotations.'}
+                 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
+                 'All terms check, with 7 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -57,6 +58,9 @@ unsafe_declarations = {
 }
 assert unsafe_declarations == {
     ('packages/runtime/src/callback.bend', 'factory'),
+    ('packages/runtime/src/http-response.bend', 'seek'),
+    ('packages/runtime/src/http-response.bend', 'drive'),
+    ('packages/runtime/src/sse-reader.bend', 'drive'),
     ('packages/runtime/src/dns-search-run.bend', 'drive'),
     ('packages/ai/src/utils/event-stream.bend', 'drive'),
     ('packages/runtime/src/schema-value.bend', 'compare'),
@@ -91,6 +95,10 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('http-body-source-erases-bytes', 'packages/runtime/src/http-body-source.bend',
+         'Done{Some{SSE.Bytes{bytes}}}', 'Done{Some{SSE.Bytes{Nil{}}}}', 'laws/http-body-source.bytes_are_not_decoded_or_changed'),
+        ('http-body-source-eof-becomes-chunk', 'packages/runtime/src/http-body-source.bend',
+         'case Done{None{}}: Done{None{}}', 'case Done{None{}}: Done{Some{SSE.EmptyChunk{}}}', 'laws/http-body-source.eof_is_not_an_empty_chunk'),
         ('http-response-progress-erases-chunk', 'packages/runtime/src/http-response-progress.bend',
          'Chunk{first <> rest}', 'Chunk{Nil{}}', 'laws/http-response-progress.nonempty_chunks_preserve_bytes'),
         ('http-response-progress-erases-trailers', 'packages/runtime/src/http-response-progress.bend',
