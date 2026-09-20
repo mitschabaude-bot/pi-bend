@@ -1,6 +1,6 @@
 # pi-bend
 
-Bend compiler/runtime investigations and standard-library opportunities are tracked in [the Bend issue log](docs/bend-issues.md). Workarounds remain open investigations until their causes are understood.
+Bend compiler/runtime defects and performance problems are tracked in [the Bend issue log](docs/bend-issues.md). Missing primitives are implementation work in this project, with design and validation records alongside the code. Workarounds remain open investigations until their causes are understood.
 
 Native Bend port of pi, based on `earendil-works/pi` revision `46c9de402` (0.85.1). The current executable is a bootstrap prototype. A faithful port of the modular libraries, types and APIs is in progress under `packages/`; see [architecture fidelity](docs/architecture.md).
 
