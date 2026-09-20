@@ -43,7 +43,7 @@ def accepted(result):
     # three. The provider HTTP adapter also imports the buffered-body loop.
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
-                 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
+                 'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
                  'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
@@ -206,6 +206,16 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
          'case Done{State{offset, UTF8.Accumulator{UTF8.Decoder{UTF8.Continuation{_, _, _, _}, _}, reversed}}}: Done{String.reverse(reversed)}', 'laws/utf8-strict.incomplete_rejected'),
         ('strict-utf8-loses-invalid-byte-offset', 'packages/runtime/src/utf8-strict.bend',
          'Fail{InvalidByte{offset, byte}}', 'Fail{InvalidByte{0n, byte}}', 'laws/utf8-strict.invalid_byte_rejected'),
+        ('provider-hook-ignores-replacement', 'packages/ai/src/utils/provider-request.bend',
+         'case Done{Some{value}}: Done{value}', 'case Done{Some{value}}: Done{original}', 'laws/provider-request.present_replacement_is_exact'),
+        ('provider-hook-discards-payload-error', 'packages/ai/src/utils/provider-request.bend',
+         'Fail{PayloadFailure{cause}}', 'Fail{RequestFailure{Retry.RequestAborted{}}}', 'laws/provider-request.payload_failure_is_preserved'),
+        ('provider-hook-skips-owner-release', 'packages/ai/src/utils/provider-request.bend',
+         'cleanup : Result<&2, &2, E, Unit> <- release(owner)',
+         'cleanup : Result<&2, &2, E, Unit> <- IO.pure(Result<&2, &2, E, Unit>, Done{Unit{}})', 'laws/provider-request.failed_response_hook_retires_owner_first'),
+        ('provider-response-view-discards-owner', 'packages/ai/src/utils/provider-response-view.bend',
+         'Response.Response{metadata, body}, T.ProviderResponse',
+         'Response.Response{metadata, Response.Closed{None{}}}, T.ProviderResponse', 'laws/provider-response-view.metadata_projection_retains_owned_response'),
         ('text-budget-appends-after-stop', 'packages/runtime/src/text-unit-budget.bend',
          'Stopped{prefix, omitted + width(char)}', 'Stopped{SCon{char, prefix}, omitted + width(char)}', 'laws/text-unit-budget.stopped_prefix_is_stable'),
         ('text-budget-drops-fitting-character', 'packages/runtime/src/text-unit-budget.bend',

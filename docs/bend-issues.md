@@ -569,3 +569,11 @@ This was a library representation bug exposed by the already documented native/B
 ### BEND-001/BEND-016 observation: native OpenAI error normalization
 
 The clean native HTTP/error-normalization fixture compiles on the unchanged isolated candidate in 107.17 seconds at 7,563,364 KiB sampled peak process-group RSS, emitting 35,631,465 bytes of C after six passes. JS emission takes 9.61 seconds at 3,540,068 KiB and emits 18,211,661 bytes. The [record](bend-issues/2026-09-21-openai-http-error-compiler.json) preserves source/compiler identities, phase profiles and slowest definitions. These are build observations for another composition, not a performance improvement or new leak attribution. No compiler patch was changed or installed.
+
+### BEND-012 recurrence: provider payload binder
+
+Importing the provider request module exposed the existing global-name/pattern-binder collision: `Done{payload}` collided with its same-module `payload` helper. The [record](bend-issues/2026-09-21-provider-request-shadow.json) preserves the failing source, diagnostic and compiler identity. Renaming the local binder to `preparedPayload` checks both through the proof root and the concrete fixture. This is another occurrence of the documented resolver defect, not a fix or a new defect classification. No compiler patch was changed or installed.
+
+### BEND-001/BEND-016 observation: provider hooks and HTTP retry
+
+The native request-hook fixture compiles on the unchanged isolated candidate in 64.79 seconds at 5,763,740 KiB sampled peak process-group RSS. JS emission takes 6.39 seconds at 2,609,368 KiB. The [record](bend-issues/2026-09-21-provider-request-compiler.json) preserves the clean source closure, compiler identity, guard measurements, generated sizes and build profiles. These are build costs for a different composition, not evidence of an improvement or an isolated leak. No compiler patch was changed or installed.

@@ -1,4 +1,6 @@
 import Base
+import ./proofs/provider-response-view.bend as ProviderResponseView
+import ./proofs/provider-request.bend as ProviderRequest
 import ./proofs/text-unit-budget.bend as TextUnitBudget
 import ./proofs/openai-http-error.bend as OpenAIHTTPError
 import ./proofs/provider-http-response.bend as ProviderHTTPResponse
