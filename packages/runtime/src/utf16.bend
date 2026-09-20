@@ -35,11 +35,16 @@ def finish(pending: Maybe<&2, U32>) -> String:
     case None{}: ""
     case Some{high}: unit(high)
 
-def collect(chars: String, step: Step, fragments: List<&2, String>) -> String:
-  match chars step:
-    case SNil{} Step{pending, fragment}: String.join(List.reverse(&2, String, fragment <> fragments), "") ++ finish(pending)
-    case SCon{Chr{code}, rest} Step{pending, fragment}: collect(rest, consume(pending, code), fragment <> fragments)
+def reverseFragment(fragment: String, reversed: String) -> String:
+  match fragment:
+    case SNil{}: reversed
+    case SCon{char, rest}: reverseFragment(rest, SCon{char, reversed})
 
-def normalize(text: String) -> String: collect(text, Step{None{}, ""}, Nil{})
+def collect(chars: String, step: Step, reversed: String) -> String:
+  match chars step:
+    case SNil{} Step{pending, fragment}: String.reverse(reverseFragment(finish(pending), reverseFragment(fragment, reversed)))
+    case SCon{Chr{code}, rest} Step{pending, fragment}: collect(rest, consume(pending, code), reverseFragment(fragment, reversed))
+
+def normalize(text: String) -> String: collect(text, Step{None{}, ""}, "")
 
 def equal(left: String, right: String) -> Bool: String.eq(normalize(left), normalize(right))

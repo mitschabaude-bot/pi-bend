@@ -1,0 +1,47 @@
+{
+  "scope": "String.join non-tail stack overflow reached by UTF8.encode of 100000 ASCII characters on Bun; native DNS fixture succeeded.",
+  "before_source": "import Base\n\n# Canonicalize the representation, not Unicode spelling: merge adjacent UTF-16\n# surrogate pairs into scalars while retaining every unpaired unit unchanged.\n# No NFC/NFD or case normalization is performed.\ntype Step is Data:\n  Step{pending: Maybe<&2, U32>, fragment: String}\n\ndef highSurrogate(+code: U32) -> Bool: U32.is_ge(code, 55296) && U32.is_le(code, 56319)\ndef lowSurrogate(+code: U32) -> Bool: U32.is_ge(code, 56320) && U32.is_le(code, 57343)\n\ndef unit(code: U32) -> String: SCon{Chr{code}, SNil{}}\n\ndef start(isHigh: Bool, code: U32) -> Step:\n  match isHigh:\n    case True{}: Step{Some{code}, \"\"}\n    case False{}: Step{None{}, unit(code)}\n\ndef prepend(prefix: String, step: Step) -> Step:\n  match step:\n    case Step{pending, fragment}: Step{pending, prefix ++ fragment}\n\ndef pair(isLow: Bool, high: U32, +code: U32) -> Step:\n  match isLow:\n    case True{}: Step{None{}, unit((65536 + (high - 55296) * 1024 + code - 56320 : U32))}\n    case False{}: prepend(unit(high), start(highSurrogate(code), code))\n\ndef consume(pending: Maybe<&2, U32>, +code: U32) -> Step:\n  match pending:\n    case None{}: start(highSurrogate(code), code)\n    case Some{high}: pair(lowSurrogate(code), high, code)\n\ndef finish(pending: Maybe<&2, U32>) -> String:\n  match pending:\n    case None{}: \"\"\n    case Some{high}: unit(high)\n\ndef collect(chars: String, step: Step, fragments: List<&2, String>) -> String:\n  match chars step:\n    case SNil{} Step{pending, fragment}: String.join(List.reverse(&2, String, fragment <> fragments), \"\") ++ finish(pending)\n    case SCon{Chr{code}, rest} Step{pending, fragment}: collect(rest, consume(pending, code), fragment <> fragments)\n\ndef normalize(text: String) -> String: collect(text, Step{None{}, \"\"}, Nil{})\n\ndef equal(left: String, right: String) -> Bool: String.eq(normalize(left), normalize(right))\n",
+  "before_sha256": "1b30202ff954c0612df7ed8272c3ecdde5c9844b75c4ad95e28d41c7703a9c60",
+  "diagnostic_stack": "RangeError: Maximum call stack size exceeded.\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n    at $String$2e$join$2e$go$ (/home/agent/code/pi-bend/build/dns-presentation-diagnostic.js:3451:26)\n",
+  "installed_compiler_sha256": {
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  },
+  "reduced_reproducer": {
+    "source": "tests/compiler-js-string-join.bend",
+    "source_sha256": "a07f13cb22f0556ca2b48e65ba183ea4dfe3aeb0c88aefecf5a38c2357f53cef",
+    "runs": [
+      {
+        "backend": "native 1",
+        "returncode": 0,
+        "stdout_bytes": 65537,
+        "stderr": ""
+      },
+      {
+        "backend": "native 4",
+        "returncode": 0,
+        "stdout_bytes": 65537,
+        "stderr": ""
+      },
+      {
+        "backend": "Bun",
+        "returncode": 1,
+        "stdout_bytes": 0,
+        "stderr": "bend: memory fault (machine stack overflow?)\n"
+      }
+    ]
+  },
+  "u32_pattern_recheck": [
+    {
+      "backend": "c",
+      "returncode": 1,
+      "diagnostic": "Error:\n- expected : an annotated term (cannot infer)\n- observed : U32{WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, _71}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\nContext:\n- _71 : Word.Nil<> - WNil{}\nLocation: split\n5 |     case 0: 0\n6>|     case +word: (word / 16 + word % 16 : U32)\n7 | \n"
+    },
+    {
+      "backend": "js",
+      "returncode": 1,
+      "diagnostic": "Error:\n- expected : an annotated term (cannot infer)\n- observed : U32{WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, WCon{False{}, _71}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}\nContext:\n- _71 : Word.Nil<> - WNil{}\nLocation: split\n5 |     case 0: 0\n6>|     case +word: (word / 16 + word % 16 : U32)\n7 | \n"
+    }
+  ]
+}
