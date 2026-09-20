@@ -1,4 +1,5 @@
 import Base
+import ./laws/connection-plan.bend as ConnectionPlan
 import ./laws/connection-progress.bend as ConnectionProgress
 import ./laws/connection-attempt-result.bend as ConnectionAttemptResult
 import ./laws/list-interleave.bend as ListInterleave

@@ -1,0 +1,15 @@
+{
+  "scope": "Existing BEND-012 pattern/global collision reappears when HTTP connector fixture imports the address formatting fixture, even without calling it. Test-only helper remains local; no compiler fix claimed.",
+  "source": "tests/http-connect.bend",
+  "source_sha256": "b95b0a6d0e95a38a74ddf24b990f13cff0cae79754d49345d2695d5d21901caa",
+  "insertion": "import ./http-addresses.bend as Show",
+  "stdout": "",
+  "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nError:\n- expected : a pattern (a binder or a constructor)\n- observed : http-addresses.report\nLocation:\n105 |     case Done{Route.NumericAddress{Connect.V6{IPv6.Address{a, b, c, d}, scope}}}: IO.print(\"numeric6:\" ++ U32.show(a) ++ \",\" ++ U32.show(b) ++ \",\" ++ U32.show(c) ++ \",\" ++ U32.show(d) ++ \":\" ++ U32.show(scope))\n106>|     case Done{Route.Named{report}}: hostReport(report)\n107 | \n",
+  "exit_code": 1,
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  }
+}

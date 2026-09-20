@@ -91,6 +91,10 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('connection-plan-calls-unavailable-connector', 'packages/runtime/src/connection-plan.bend',
+         'case Candidates.NoAddresses{resolution}: IO.pure(Report<Resolution, Reason, Value>, Unresolved{resolution})',
+         'case Candidates.NoAddresses{resolution}:\n      do IO<Report<Resolution, Reason, Value>>:\n        connection : Driver.Report<Reason, Value> <- connect(context, Nil{})\n        return Attempted{resolution, connection}',
+         'laws/connection-plan.unavailable_does_not_connect'),
         ('connection-progress-loses-parent-abort', 'packages/runtime/src/connection-progress.bend',
          'case _ Some{reason}: Stop{Aborted{reason}}', 'case _ Some{reason}: Advance{}', 'laws/connection-progress.parent_abort_wins'),
         ('connection-progress-retries-abort', 'packages/runtime/src/connection-progress.bend',
