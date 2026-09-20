@@ -1,4 +1,5 @@
 import Base
+import ./proofs/dns-udp-plan.bend as DNSUDPPlan
 import ./proofs/dns-udp-timeout.bend as DNSUDPTimeout
 import ./proofs/dns-udp-schedule.bend as DNSUDPSchedule
 import ./proofs/abort-outcome.bend as AbortOutcome

@@ -90,6 +90,17 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('udp-plan-replaces-first-server', 'packages/runtime/src/dns-udp-plan.bend',
+         'case first <> second <> Nil{}: Done{Located{first, Timeout.First{}}',
+         'case first <> +second <> Nil{}: Done{Located{second, Timeout.First{}}', 'laws/dns-udp-plan.assignment_preserves_payloads'),
+        ('udp-plan-discards-position', 'packages/runtime/src/dns-udp-plan.bend',
+         'case Done{duration}: Done{Attempt{server, position, duration}}',
+         'case Done{duration}: Done{Attempt{server, Timeout.First{}, duration}}', 'laws/dns-udp-plan.timing_preserves_identity'),
+        ('udp-plan-accepts-failed-layout', 'packages/runtime/src/dns-udp-plan.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Done{Nil{}}', 'laws/dns-udp-plan.invalid_layout_stops_preparation'),
+        ('udp-plan-discards-excess-servers', 'packages/runtime/src/dns-udp-plan.bend',
+         'case _ <> _ <> _ <> _ <> _: Fail{TooManyServers{}}',
+         'case _ <> _ <> _ <> _ <> _: Done{Nil{}}', 'laws/dns-udp-plan.assignment_preserves_payloads'),
         ('udp-duration-can-be-zero', 'packages/runtime/src/dns-udp-timeout.bend',
          'case Duration{additional}: Succ{additional}', 'case Duration{additional}: additional', 'laws/dns-udp-timeout.duration_positive'),
         ('udp-zero-timeout-floor-is-two', 'packages/runtime/src/dns-udp-timeout.bend',

@@ -1,0 +1,1746 @@
+{
+  "scope": "Compiled composition of position assignment, timeout budgets, rotation and retry order.",
+  "cases": [
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 0,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=1;0@first=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "0@first=1;0@first=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@first=1;0@first=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 1,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "0@first=1;0@first=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=1;1@second2=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=1;1@second2=1;0@first=1;1@second2=1;0@first=1;1@second2=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "1@second2=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "1@second2=1;0@first=1;1@second2=1;0@first=1;1@second2=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@first=1;1@second2=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@first=1;1@second2=1;0@first=1;1@second2=1;0@first=1;1@second2=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "1@second2=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 2,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "1@second2=1;0@first=1;1@second2=1;0@first=1;1@second2=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=1;1@second3=1;0@third3=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;0@third3=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "1@second3=1;0@third3=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "1@second3=1;0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@third3=1;0@first=1;1@second3=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "0@third3=1;0@first=1;1@second3=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 3,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;0@third3=1;0@first=1;1@second3=1;"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 0,
+      "count": 4,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 0,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=5;0@first=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "0@first=5;0@first=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@first=5;0@first=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 1,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "0@first=5;0@first=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=5;1@second2=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=5;1@second2=5;0@first=5;1@second2=5;0@first=5;1@second2=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "1@second2=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "1@second2=5;0@first=5;1@second2=5;0@first=5;1@second2=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@first=5;1@second2=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@first=5;1@second2=5;0@first=5;1@second2=5;0@first=5;1@second2=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "1@second2=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 2,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "1@second2=5;0@first=5;1@second2=5;0@first=5;1@second2=5;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=5;1@second3=3;0@third3=6;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;0@third3=6;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "1@second3=3;0@third3=6;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "1@second3=3;0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@third3=6;0@first=5;1@second3=3;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "0@third3=6;0@first=5;1@second3=3;"
+    },
+    {
+      "timeout": 5,
+      "count": 3,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;0@third3=6;0@first=5;1@second3=3;"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 5,
+      "count": 4,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 0,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=30;0@first=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "0@first=30;0@first=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@first=30;0@first=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 1,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "0@first=30;0@first=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=30;1@second2=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=30;1@second2=30;0@first=30;1@second2=30;0@first=30;1@second2=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "1@second2=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "1@second2=30;0@first=30;1@second2=30;0@first=30;1@second2=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@first=30;1@second2=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@first=30;1@second2=30;0@first=30;1@second2=30;0@first=30;1@second2=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "1@second2=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 2,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "1@second2=30;0@first=30;1@second2=30;0@first=30;1@second2=30;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 0,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "0@first=30;1@second3=20;0@third3=40;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;0@third3=40;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 1,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "1@second3=20;0@third3=40;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "1@second3=20;0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 2,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "0@third3=40;0@first=30;1@second3=20;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 5,
+      "attempts": 0,
+      "expected": ""
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "0@third3=40;0@first=30;1@second3=20;"
+    },
+    {
+      "timeout": 30,
+      "count": 3,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;0@third3=40;0@first=30;1@second3=20;"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 30,
+      "count": 4,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 0,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "no-servers"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 1,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 2,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 3,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "invalid:31"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 0,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 0,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 0,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 1,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 1,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 1,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 2,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 2,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 2,
+      "attempts": 3,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 5,
+      "attempts": 0,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 5,
+      "attempts": 1,
+      "expected": "too-many"
+    },
+    {
+      "timeout": 31,
+      "count": 4,
+      "offset": 5,
+      "attempts": 3,
+      "expected": "too-many"
+    }
+  ],
+  "runs": [
+    {
+      "backend": "native 1",
+      "cases": 240
+    },
+    {
+      "backend": "native 4",
+      "cases": 240
+    },
+    {
+      "backend": "Bun",
+      "cases": 240
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "packages/runtime/src/dns-udp-plan.bend": "d9ee058ca71a8143bfafe2dd4378e1f3125ba672650b6c9b2604cc2edf1b3b31",
+    "packages/runtime/src/dns-udp-schedule.bend": "daec062eee9a168ffcffdf1b543c9128780a36639a51b4adfb066f6cdda7e0d1",
+    "packages/runtime/src/dns-udp-timeout.bend": "715d163fa77ac8aec3628434c4a34efa834c5f05e41b02c99fe7c29f8e540484",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/dns-udp-plan.bend": "3de30e6c8b5ca4423f4d040a6df12b9908dc15c51f96fa38e4b611152ec6ee18",
+    "tests/dns_udp_plan_check.py": "3385d57e840781eaff4eca718eb9d398ff677a48cdd0e212769270dd10faf453"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/dns-udp-plan.bend",
+        "-o",
+        "build/dns-udp-plan.c"
+      ],
+      "elapsed_seconds": 0.5267405239865184,
+      "peak_sampled_group_rss_kib": 27776,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/dns-udp-plan.bend",
+        "-o",
+        "build/dns-udp-plan.js"
+      ],
+      "elapsed_seconds": 0.5261790417134762,
+      "peak_sampled_group_rss_kib": 24064,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
