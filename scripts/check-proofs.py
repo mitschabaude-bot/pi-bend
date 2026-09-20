@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('resolver-erases-transport-error', 'packages/runtime/src/resolver-configuration.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Fail{Plan.NoServers{}}', 'laws/resolver-configuration.rejects_invalid_transport'),
+        ('resolver-search-discards-options', 'packages/runtime/src/resolver-configuration.bend',
+         ': Search.Configuration{options, domains}', ': Search.Configuration{Options.defaults(), domains}', 'laws/resolver-configuration.shared_search_settings'),
+        ('resolver-assembly-discards-deadline', 'packages/runtime/src/resolver-configuration.bend',
+         'Done{Config{transport, domains, milliseconds, maximum}}', 'Done{Config{transport, domains, 0, maximum}}', 'laws/resolver-configuration.assembly_retains_configuration'),
         ('search-resumes-after-halt', 'packages/runtime/src/dns-search-run.bend',
          'case Halt{failure}: Finished{Fail{Halted{failure}}}',
          'case Halt{failure}: Active{cursor, history}', 'laws/dns-search-run.halt_is_terminal'),

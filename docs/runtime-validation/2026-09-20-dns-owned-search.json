@@ -1,0 +1,7074 @@
+{
+  "scope": "Persistent native resolver owners execute configured search and repeated lookups.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:36197",
+        "draws:4"
+      ],
+      "seconds": 0.011995745822787285,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:39365",
+        "draws:2"
+      ],
+      "seconds": 0.011320101097226143,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "next:33883",
+        "draws:3"
+      ],
+      "seconds": 0.011396601796150208,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:35029",
+        "draws:2"
+      ],
+      "seconds": 0.011389493010938168,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:46173",
+        "draws:2"
+      ],
+      "seconds": 0.01135617308318615,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:41463",
+        "draws:2"
+      ],
+      "seconds": 0.011415832675993443,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:56505",
+        "draws:2"
+      ],
+      "seconds": 0.011274361982941628,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:52967",
+        "draws:3"
+      ],
+      "seconds": 0.011402793228626251,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:46769",
+        "draws:2"
+      ],
+      "seconds": 2.0140394009649754,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:49095",
+        "draws:2"
+      ],
+      "seconds": 0.013014613650739193,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:45573",
+        "draws:2"
+      ],
+      "seconds": 0.012756001204252243,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:35979",
+        "draws:2"
+      ],
+      "seconds": 0.012175547890365124,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:51955",
+        "draws:2"
+      ],
+      "seconds": 0.012087046168744564,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:41377",
+        "draws:2"
+      ],
+      "seconds": 0.01163390465080738,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:53647",
+        "draws:1"
+      ],
+      "seconds": 0.011565414257347584,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:41031",
+        "draws:1"
+      ],
+      "seconds": 1.204951765947044,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:46825",
+        "draws:1"
+      ],
+      "seconds": 0.010463097132742405,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:47019",
+        "draws:0"
+      ],
+      "seconds": 0.010429435409605503,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:50041",
+        "draws:1"
+      ],
+      "seconds": 0.010332605801522732,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:59641",
+        "draws:2"
+      ],
+      "seconds": 0.01126774214208126,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:50119",
+        "draws:0"
+      ],
+      "seconds": 0.010622456669807434,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:49843",
+        "draws:0"
+      ],
+      "seconds": 0.010481167584657669,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:53891",
+        "draws:1"
+      ],
+      "seconds": 0.010571927763521671,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:59565",
+        "draws:4"
+      ],
+      "seconds": 0.011666945181787014,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:52139",
+        "draws:2"
+      ],
+      "seconds": 0.012194488197565079,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:6,0,0,0,1,60;",
+        "none",
+        "next:35761",
+        "draws:3"
+      ],
+      "seconds": 0.012224677950143814,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:36755",
+        "draws:2"
+      ],
+      "seconds": 0.011693605221807957,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:34371",
+        "draws:2"
+      ],
+      "seconds": 0.011949236504733562,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:56371",
+        "draws:2"
+      ],
+      "seconds": 0.011630763299763203,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:48983",
+        "draws:2"
+      ],
+      "seconds": 0.012027276679873466,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:44969",
+        "draws:3"
+      ],
+      "seconds": 0.012178528122603893,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:51933",
+        "draws:2"
+      ],
+      "seconds": 2.014628811739385,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:33759",
+        "draws:2"
+      ],
+      "seconds": 0.012423539534211159,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:59513",
+        "draws:2"
+      ],
+      "seconds": 0.012613371014595032,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:43451",
+        "draws:2"
+      ],
+      "seconds": 0.011760485358536243,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:33283",
+        "draws:2"
+      ],
+      "seconds": 0.012115666642785072,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:55457",
+        "draws:2"
+      ],
+      "seconds": 0.01229792833328247,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:55085",
+        "draws:1"
+      ],
+      "seconds": 0.011797734536230564,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:57697",
+        "draws:1"
+      ],
+      "seconds": 1.2071524690836668,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:49267",
+        "draws:1"
+      ],
+      "seconds": 0.010841608978807926,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:52989",
+        "draws:0"
+      ],
+      "seconds": 0.010745098814368248,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:45501",
+        "draws:1"
+      ],
+      "seconds": 0.010690717957913876,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:47507",
+        "draws:2"
+      ],
+      "seconds": 0.011491012759506702,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:56591",
+        "draws:0"
+      ],
+      "seconds": 0.01065140776336193,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:55871",
+        "draws:0"
+      ],
+      "seconds": 0.01062488742172718,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:32831",
+        "draws:1"
+      ],
+      "seconds": 0.010569946840405464,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:44641",
+        "draws:4"
+      ],
+      "seconds": 0.012689751572906971,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:57193",
+        "draws:2"
+      ],
+      "seconds": 0.012321828864514828,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "next:47051",
+        "draws:3"
+      ],
+      "seconds": 0.011792154982686043,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:46091",
+        "draws:2"
+      ],
+      "seconds": 0.012504169717431068,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:36707",
+        "draws:2"
+      ],
+      "seconds": 0.012225426733493805,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:43187",
+        "draws:2"
+      ],
+      "seconds": 0.012354209087789059,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:42683",
+        "draws:2"
+      ],
+      "seconds": 0.012455480173230171,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:42927",
+        "draws:3"
+      ],
+      "seconds": 0.011775125749409199,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:59171",
+        "draws:2"
+      ],
+      "seconds": 2.0130794597789645,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:54995",
+        "draws:2"
+      ],
+      "seconds": 0.012198547832667828,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:37143",
+        "draws:2"
+      ],
+      "seconds": 0.011578243225812912,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:46811",
+        "draws:2"
+      ],
+      "seconds": 0.012524669989943504,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:49921",
+        "draws:2"
+      ],
+      "seconds": 0.012484850361943245,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:49843",
+        "draws:2"
+      ],
+      "seconds": 0.011317722499370575,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:32949",
+        "draws:1"
+      ],
+      "seconds": 0.011562343686819077,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:49137",
+        "draws:1"
+      ],
+      "seconds": 1.2051083333790302,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:37895",
+        "draws:1"
+      ],
+      "seconds": 0.01078781858086586,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:40445",
+        "draws:0"
+      ],
+      "seconds": 0.010671117343008518,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:58351",
+        "draws:1"
+      ],
+      "seconds": 0.010497117415070534,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:60067",
+        "draws:2"
+      ],
+      "seconds": 0.011882895603775978,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:48209",
+        "draws:0"
+      ],
+      "seconds": 0.010651038028299809,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:44679",
+        "draws:0"
+      ],
+      "seconds": 0.01049098651856184,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:57637",
+        "draws:1"
+      ],
+      "seconds": 0.010573488660156727,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:41643",
+        "draws:4"
+      ],
+      "seconds": 0.011731434613466263,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:37647",
+        "draws:2"
+      ],
+      "seconds": 0.012239458039402962,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:6,0,0,0,1,60;",
+        "none",
+        "next:44579",
+        "draws:3"
+      ],
+      "seconds": 0.011916966177523136,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:59087",
+        "draws:2"
+      ],
+      "seconds": 0.012641631066799164,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:54411",
+        "draws:2"
+      ],
+      "seconds": 0.012356839142739773,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:38535",
+        "draws:2"
+      ],
+      "seconds": 0.012408118695020676,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:60221",
+        "draws:2"
+      ],
+      "seconds": 0.012140747159719467,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:49071",
+        "draws:3"
+      ],
+      "seconds": 0.012082857079803944,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:45095",
+        "draws:2"
+      ],
+      "seconds": 2.014615887776017,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:53651",
+        "draws:2"
+      ],
+      "seconds": 0.012194107286632061,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:56401",
+        "draws:2"
+      ],
+      "seconds": 0.012609310448169708,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:57841",
+        "draws:2"
+      ],
+      "seconds": 0.01236276887357235,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:44409",
+        "draws:2"
+      ],
+      "seconds": 0.012305079028010368,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:46947",
+        "draws:2"
+      ],
+      "seconds": 0.012127416208386421,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:51731",
+        "draws:1"
+      ],
+      "seconds": 0.011838724836707115,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:49965",
+        "draws:1"
+      ],
+      "seconds": 1.2069753836840391,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:34889",
+        "draws:1"
+      ],
+      "seconds": 0.010868648998439312,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:35249",
+        "draws:0"
+      ],
+      "seconds": 0.010585726238787174,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:52479",
+        "draws:1"
+      ],
+      "seconds": 0.010585296899080276,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:54471",
+        "draws:2"
+      ],
+      "seconds": 0.01149603258818388,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:37037",
+        "draws:0"
+      ],
+      "seconds": 0.010716767981648445,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:52777",
+        "draws:0"
+      ],
+      "seconds": 0.01055870670825243,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:57447",
+        "draws:1"
+      ],
+      "seconds": 0.010586436837911606,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:55901",
+        "draws:4"
+      ],
+      "seconds": 0.012319597415626049,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:56947",
+        "draws:2"
+      ],
+      "seconds": 0.012310847640037537,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "next:36723",
+        "draws:3"
+      ],
+      "seconds": 0.012806221842765808,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:38847",
+        "draws:2"
+      ],
+      "seconds": 0.012584670446813107,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:36375",
+        "draws:2"
+      ],
+      "seconds": 0.01247990969568491,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:43985",
+        "draws:2"
+      ],
+      "seconds": 0.011942225508391857,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:48731",
+        "draws:2"
+      ],
+      "seconds": 0.012324429117143154,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:44483",
+        "draws:3"
+      ],
+      "seconds": 0.012445440515875816,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:44703",
+        "draws:2"
+      ],
+      "seconds": 2.0145696848630905,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:53823",
+        "draws:2"
+      ],
+      "seconds": 0.012371918186545372,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:33049",
+        "draws:2"
+      ],
+      "seconds": 0.012788931839168072,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:40607",
+        "draws:2"
+      ],
+      "seconds": 0.012577390298247337,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:46261",
+        "draws:2"
+      ],
+      "seconds": 0.012703041546046734,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:58931",
+        "draws:2"
+      ],
+      "seconds": 0.01178810466080904,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:41337",
+        "draws:1"
+      ],
+      "seconds": 0.012070187367498875,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:42067",
+        "draws:1"
+      ],
+      "seconds": 1.206513600423932,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:47809",
+        "draws:1"
+      ],
+      "seconds": 0.010732018388807774,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:44003",
+        "draws:0"
+      ],
+      "seconds": 0.010630637407302856,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:39253",
+        "draws:1"
+      ],
+      "seconds": 0.010539236478507519,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:58593",
+        "draws:2"
+      ],
+      "seconds": 0.01182937528938055,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:41693",
+        "draws:0"
+      ],
+      "seconds": 0.010495237074792385,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:59559",
+        "draws:0"
+      ],
+      "seconds": 0.010584586299955845,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:45747",
+        "draws:1"
+      ],
+      "seconds": 0.010474556125700474,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:59345",
+        "draws:4"
+      ],
+      "seconds": 0.011983685195446014,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:40151",
+        "draws:2"
+      ],
+      "seconds": 0.012102696113288403,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:6,0,0,0,1,60;",
+        "none",
+        "next:47945",
+        "draws:3"
+      ],
+      "seconds": 0.012548650614917278,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:42417",
+        "draws:2"
+      ],
+      "seconds": 0.012110386975109577,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:51985",
+        "draws:2"
+      ],
+      "seconds": 0.012735480442643166,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:60863",
+        "draws:2"
+      ],
+      "seconds": 0.011910186149179935,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:40793",
+        "draws:2"
+      ],
+      "seconds": 0.012365867383778095,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:58345",
+        "draws:3"
+      ],
+      "seconds": 0.01258552074432373,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:35379",
+        "draws:2"
+      ],
+      "seconds": 2.013400654308498,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:50959",
+        "draws:2"
+      ],
+      "seconds": 0.012245467863976955,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:41347",
+        "draws:2"
+      ],
+      "seconds": 0.012891332618892193,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:58893",
+        "draws:2"
+      ],
+      "seconds": 0.01227880734950304,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:34941",
+        "draws:2"
+      ],
+      "seconds": 0.01254304964095354,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:40723",
+        "draws:2"
+      ],
+      "seconds": 0.01207706704735756,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:41491",
+        "draws:1"
+      ],
+      "seconds": 0.011869264766573906,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:53089",
+        "draws:1"
+      ],
+      "seconds": 1.206514068879187,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:54729",
+        "draws:1"
+      ],
+      "seconds": 0.010705468244850636,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:36329",
+        "draws:0"
+      ],
+      "seconds": 0.010570536367595196,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:55137",
+        "draws:1"
+      ],
+      "seconds": 0.010492445901036263,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:48357",
+        "draws:2"
+      ],
+      "seconds": 0.011303401552140713,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:51025",
+        "draws:0"
+      ],
+      "seconds": 0.0105795469135046,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:43169",
+        "draws:0"
+      ],
+      "seconds": 0.01044341642409563,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:57545",
+        "draws:1"
+      ],
+      "seconds": 0.01051371730864048,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:45555",
+        "draws:4"
+      ],
+      "seconds": 0.012821241281926632,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:54967",
+        "draws:2"
+      ],
+      "seconds": 0.012070576660335064,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "next:41129",
+        "draws:3"
+      ],
+      "seconds": 0.012542100623250008,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:60727",
+        "draws:2"
+      ],
+      "seconds": 0.012807321734726429,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:56279",
+        "draws:2"
+      ],
+      "seconds": 0.012345639057457447,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:40181",
+        "draws:2"
+      ],
+      "seconds": 0.012277908623218536,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:57337",
+        "draws:2"
+      ],
+      "seconds": 0.01249644998461008,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:50253",
+        "draws:3"
+      ],
+      "seconds": 0.01251525990664959,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:41871",
+        "draws:2"
+      ],
+      "seconds": 2.0147546092048287,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:60321",
+        "draws:2"
+      ],
+      "seconds": 0.012262738309800625,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:45695",
+        "draws:2"
+      ],
+      "seconds": 0.012743771076202393,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:40805",
+        "draws:2"
+      ],
+      "seconds": 0.012588500045239925,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:45543",
+        "draws:2"
+      ],
+      "seconds": 0.01268749125301838,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:38283",
+        "draws:2"
+      ],
+      "seconds": 0.011741173453629017,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:32989",
+        "draws:1"
+      ],
+      "seconds": 0.011434003710746765,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:34865",
+        "draws:1"
+      ],
+      "seconds": 1.2064571464434266,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:55661",
+        "draws:1"
+      ],
+      "seconds": 0.010831798426806927,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:60257",
+        "draws:0"
+      ],
+      "seconds": 0.010655928403139114,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:45121",
+        "draws:1"
+      ],
+      "seconds": 0.010683667846024036,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:32811",
+        "draws:2"
+      ],
+      "seconds": 0.011865045875310898,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:56903",
+        "draws:0"
+      ],
+      "seconds": 0.010595547966659069,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:56021",
+        "draws:0"
+      ],
+      "seconds": 0.010478567332029343,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:59775",
+        "draws:1"
+      ],
+      "seconds": 0.0104912668466568,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:35995",
+        "draws:4"
+      ],
+      "seconds": 0.01194530539214611,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:50907",
+        "draws:2"
+      ],
+      "seconds": 0.012286867946386337,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:6,0,0,0,1,60;",
+        "none",
+        "next:56985",
+        "draws:3"
+      ],
+      "seconds": 0.01277897134423256,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:38515",
+        "draws:2"
+      ],
+      "seconds": 0.01184991467744112,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:54811",
+        "draws:2"
+      ],
+      "seconds": 0.012100516818463802,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:39765",
+        "draws:2"
+      ],
+      "seconds": 0.012409999035298824,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:35263",
+        "draws:2"
+      ],
+      "seconds": 0.012549588456749916,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:48511",
+        "draws:3"
+      ],
+      "seconds": 0.011938695795834064,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:39047",
+        "draws:2"
+      ],
+      "seconds": 2.01463217753917,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:46505",
+        "draws:2"
+      ],
+      "seconds": 0.012525539845228195,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:44989",
+        "draws:2"
+      ],
+      "seconds": 0.012847581878304482,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:40017",
+        "draws:2"
+      ],
+      "seconds": 0.011910035274922848,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:44785",
+        "draws:2"
+      ],
+      "seconds": 0.012619120068848133,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:47223",
+        "draws:2"
+      ],
+      "seconds": 0.012336348183453083,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:35099",
+        "draws:1"
+      ],
+      "seconds": 0.01181560568511486,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:44041",
+        "draws:1"
+      ],
+      "seconds": 1.2045632218942046,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:46517",
+        "draws:1"
+      ],
+      "seconds": 0.010713928379118443,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:59505",
+        "draws:0"
+      ],
+      "seconds": 0.010469146072864532,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:53057",
+        "draws:1"
+      ],
+      "seconds": 0.0104586873203516,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:39311",
+        "draws:2"
+      ],
+      "seconds": 0.011731884442269802,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:55773",
+        "draws:0"
+      ],
+      "seconds": 0.010607076808810234,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:38057",
+        "draws:0"
+      ],
+      "seconds": 0.010518256574869156,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:35225",
+        "draws:1"
+      ],
+      "seconds": 0.01052840705960989,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:48625",
+        "draws:4"
+      ],
+      "seconds": 0.13080134242773056,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:43065",
+        "draws:2"
+      ],
+      "seconds": 0.07589547336101532,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "next:53527",
+        "draws:3"
+      ],
+      "seconds": 0.08127943705767393,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:45433",
+        "draws:2"
+      ],
+      "seconds": 0.07616285514086485,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:56651",
+        "draws:2"
+      ],
+      "seconds": 0.07709943037480116,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:43077",
+        "draws:2"
+      ],
+      "seconds": 0.07726158108562231,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:33715",
+        "draws:2"
+      ],
+      "seconds": 0.07735117245465517,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:46523",
+        "draws:3"
+      ],
+      "seconds": 0.07762163318693638,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:56935",
+        "draws:2"
+      ],
+      "seconds": 2.0764715457335114,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:47727",
+        "draws:2"
+      ],
+      "seconds": 0.07670853659510612,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:50047",
+        "draws:2"
+      ],
+      "seconds": 0.08503277041018009,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:53929",
+        "draws:2"
+      ],
+      "seconds": 0.07820323761552572,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:43065",
+        "draws:2"
+      ],
+      "seconds": 0.08068600296974182,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:54543",
+        "draws:2"
+      ],
+      "seconds": 0.0785400290042162,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:43965",
+        "draws:1"
+      ],
+      "seconds": 0.0648468816652894,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:43889",
+        "draws:1"
+      ],
+      "seconds": 1.2480727573856711,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:39495",
+        "draws:1"
+      ],
+      "seconds": 0.06144346110522747,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:60839",
+        "draws:0"
+      ],
+      "seconds": 0.05085980333387852,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:51681",
+        "draws:1"
+      ],
+      "seconds": 0.05079258233308792,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:47819",
+        "draws:2"
+      ],
+      "seconds": 0.07320925686508417,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:50907",
+        "draws:0"
+      ],
+      "seconds": 0.05089863296598196,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:42263",
+        "draws:0"
+      ],
+      "seconds": 0.0508269127458334,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:45573",
+        "draws:1"
+      ],
+      "seconds": 0.05080900248140097,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:34219",
+        "draws:4"
+      ],
+      "seconds": 0.0821394519880414,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:34675",
+        "draws:2"
+      ],
+      "seconds": 0.07570400089025497,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:6,0,0,0,1,60;",
+        "none",
+        "next:44257",
+        "draws:3"
+      ],
+      "seconds": 0.08029106166213751,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:35427",
+        "draws:2"
+      ],
+      "seconds": 0.07577060256153345,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:48907",
+        "draws:2"
+      ],
+      "seconds": 0.07567388098686934,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:37593",
+        "draws:2"
+      ],
+      "seconds": 0.07702047005295753,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:56263",
+        "draws:2"
+      ],
+      "seconds": 0.07651366665959358,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:60921",
+        "draws:3"
+      ],
+      "seconds": 0.07866976130753756,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:36327",
+        "draws:2"
+      ],
+      "seconds": 2.0765567626804113,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:58789",
+        "draws:2"
+      ],
+      "seconds": 0.07569500058889389,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:59923",
+        "draws:2"
+      ],
+      "seconds": 0.08386277314275503,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:39443",
+        "draws:2"
+      ],
+      "seconds": 0.07730488106608391,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:58979",
+        "draws:2"
+      ],
+      "seconds": 0.0818049106746912,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:50327",
+        "draws:2"
+      ],
+      "seconds": 0.07850583922117949,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:44489",
+        "draws:1"
+      ],
+      "seconds": 0.063660834915936,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:47887",
+        "draws:1"
+      ],
+      "seconds": 1.254450804553926,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:52429",
+        "draws:1"
+      ],
+      "seconds": 0.06110921874642372,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:59951",
+        "draws:0"
+      ],
+      "seconds": 0.05092641431838274,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:59987",
+        "draws:1"
+      ],
+      "seconds": 0.05092702433466911,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:34569",
+        "draws:2"
+      ],
+      "seconds": 0.07416160218417645,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:60305",
+        "draws:0"
+      ],
+      "seconds": 0.05095152463763952,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:34243",
+        "draws:0"
+      ],
+      "seconds": 0.0508830938488245,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:36325",
+        "draws:1"
+      ],
+      "seconds": 0.05076238326728344,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:35171",
+        "draws:4"
+      ],
+      "seconds": 0.08032714016735554,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:55507",
+        "draws:2"
+      ],
+      "seconds": 0.07543256878852844,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "next:57991",
+        "draws:3"
+      ],
+      "seconds": 0.08184066042304039,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:43869",
+        "draws:2"
+      ],
+      "seconds": 0.07691599894315004,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:47655",
+        "draws:2"
+      ],
+      "seconds": 0.07618755474686623,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:37397",
+        "draws:2"
+      ],
+      "seconds": 0.07720636110752821,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:50321",
+        "draws:2"
+      ],
+      "seconds": 0.07676918711513281,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:43685",
+        "draws:3"
+      ],
+      "seconds": 0.07801136560738087,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:33867",
+        "draws:2"
+      ],
+      "seconds": 2.077516008168459,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:49233",
+        "draws:2"
+      ],
+      "seconds": 0.07510142680257559,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:56537",
+        "draws:2"
+      ],
+      "seconds": 0.08521974179893732,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:47725",
+        "draws:2"
+      ],
+      "seconds": 0.07814987655729055,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "next:47641",
+        "draws:2"
+      ],
+      "seconds": 0.08071108255535364,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "next:60471",
+        "draws:2"
+      ],
+      "seconds": 0.07893851213157177,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:54939",
+        "draws:1"
+      ],
+      "seconds": 0.06397082656621933,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:43055",
+        "draws:1"
+      ],
+      "seconds": 1.2568801268935204,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:53507",
+        "draws:1"
+      ],
+      "seconds": 0.06179990340024233,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:42439",
+        "draws:0"
+      ],
+      "seconds": 0.05133780650794506,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:47809",
+        "draws:1"
+      ],
+      "seconds": 0.05089308321475983,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:54265",
+        "draws:2"
+      ],
+      "seconds": 0.07253663055598736,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:44107",
+        "draws:0"
+      ],
+      "seconds": 0.05092131346464157,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:42113",
+        "draws:0"
+      ],
+      "seconds": 0.05090448260307312,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:44829",
+        "draws:1"
+      ],
+      "seconds": 0.05094318464398384,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:50769",
+        "draws:4"
+      ],
+      "seconds": 0.0818209694698453,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:50679",
+        "draws:2"
+      ],
+      "seconds": 0.07592214178293943,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "alias",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "b"
+        ]
+      ],
+      "result": [
+        "ok:1,98,0,:6,0,0,0,1,60;",
+        "none",
+        "next:39059",
+        "draws:3"
+      ],
+      "seconds": 0.07990514766424894,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "servfail",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:60921",
+        "draws:2"
+      ],
+      "seconds": 0.07572343107312918,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "refused-code",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:43909",
+        "draws:2"
+      ],
+      "seconds": 0.07710793986916542,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "not-implemented",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:38981",
+        "draws:2"
+      ],
+      "seconds": 0.07847784925252199,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "empty-rejected",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:49085",
+        "draws:2"
+      ],
+      "seconds": 0.07732618134468794,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "no-data",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:4",
+        "none",
+        "next:56391",
+        "draws:3"
+      ],
+      "seconds": 0.07949380483478308,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "timeout",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:41905",
+        "draws:2"
+      ],
+      "seconds": 2.0774242291226983,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "rotate",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:55085",
+        "draws:2"
+      ],
+      "seconds": 0.07657649647444487,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "fallback",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:34183",
+        "draws:2"
+      ],
+      "seconds": 0.0835316814482212,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:34561",
+        "draws:2"
+      ],
+      "seconds": 0.07674914784729481,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "forced-eof",
+      "trace": [
+        [
+          "tcp",
+          0,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          "a"
+        ]
+      ],
+      "result": [
+        "ok:1,97,0,:6,0,0,0,1,60;",
+        "none",
+        "next:54821",
+        "draws:2"
+      ],
+      "seconds": 0.08001469820737839,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "none",
+        "next:44319",
+        "draws:2"
+      ],
+      "seconds": 0.07876260951161385,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "malformed-edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "none",
+        "next:51603",
+        "draws:1"
+      ],
+      "seconds": 0.06511940341442823,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "transport",
+        "expiry",
+        "next:37275",
+        "draws:1"
+      ],
+      "seconds": 1.258528357371688,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "connection-refused",
+      "trace": [],
+      "result": [
+        "dns:2",
+        "none",
+        "next:50359",
+        "draws:1"
+      ],
+      "seconds": 0.06138207018375397,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "pre",
+      "trace": [],
+      "result": [
+        "abort:parent",
+        "parent",
+        "next:40599",
+        "draws:0"
+      ],
+      "seconds": 0.051100293174386024,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "error-first",
+      "trace": [],
+      "result": [
+        "entropy:11",
+        "none",
+        "next:38643",
+        "draws:1"
+      ],
+      "seconds": 0.050972944125533104,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "error-second",
+      "trace": [
+        [
+          "udp",
+          0,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "entropy:38",
+        "none",
+        "next:58687",
+        "draws:2"
+      ],
+      "seconds": 0.07288528326898813,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "size",
+      "trace": [],
+      "result": [
+        "zero",
+        "none",
+        "next:51639",
+        "draws:0"
+      ],
+      "seconds": 0.05102159455418587,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "unsupported",
+      "trace": [],
+      "result": [
+        "type",
+        "none",
+        "next:42409",
+        "draws:0"
+      ],
+      "seconds": 0.05092847440391779,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "mode": "zero-attempts",
+      "trace": [],
+      "result": [
+        "transport",
+        "none",
+        "next:60347",
+        "draws:1"
+      ],
+      "seconds": 0.050800273194909096,
+      "audit": "AUDIT 0 0"
+    }
+  ],
+  "candidate": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2",
+  "sha256": {
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-connect.bend": "8e30fc940734a27e40cfaf6895dda4b574e6b316a7deebb1cbe8cdbe9b550151",
+    "packages/runtime/src/abortable-datagram.bend": "07464d20e8bc12b0e8f6f7efeeffc35c76af31547e6d330d9aac2284fa410896",
+    "packages/runtime/src/abortable-socket.bend": "bf97fe0ea84725a5400dace593ab7748df9c1c5982eefec10dff44ab71c7dce5",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/datagram-peer.bend": "85dd3fd3d6b1696685c425de655382da036f92d925e5f8faffe863ab422d9acc",
+    "packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/dns-address-answer.bend": "ad479558794b0b68af71af7125e7730cb2f14d3786d98baded446c57639db3f9",
+    "packages/runtime/src/dns-address-lookup.bend": "be2ba8ec672b1fcf686439bc3899a32898bb1975a28a25d2dbd837ebf338efb6",
+    "packages/runtime/src/dns-address-search.bend": "33f39e891fc54390bd7faa8688ff08f4c463244bd30b86047dea852bcfecd688",
+    "packages/runtime/src/dns-edns-response.bend": "2ca8eeb0f26dbdf461be033330a0aea150eb7e834128a07a45b6e995f6dd3ef1",
+    "packages/runtime/src/dns-edns.bend": "e0da21c269c95007c5d271305c219c0387d822623185772fdf2209834474fd56",
+    "packages/runtime/src/dns-exchange-source.bend": "2915c35f8d3039ebdfdf3e2a3b7f305e06df1f848a685bb7d062ab3cc03b8f12",
+    "packages/runtime/src/dns-id.bend": "3d2026cb6b5aa9fcab2e640ef7dfeca6a4f158c090306fb33f5266f37d073b33",
+    "packages/runtime/src/dns-message.bend": "a77aabec7636f895ce1a22a490e096185aec10aa64f0f7fd8bb90043997be7ff",
+    "packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "packages/runtime/src/dns-pending.bend": "61a792403cc3e320380db9d3edf03f0409f72cb3ea09492cec09c619124a0fc5",
+    "packages/runtime/src/dns-presentation.bend": "adf6acc0f09457bbd9feae8b24a612489bf0e1c449678fd0e54ae38314f0cb90",
+    "packages/runtime/src/dns-query.bend": "2e0bdc96c1c5e53daf231fc52bb297465efbeb490f98f498423ecbce8e456f45",
+    "packages/runtime/src/dns-record.bend": "4bcdac18af44d04f13db20266bd20c2057fe2f7ed9faa413dea609f83ef53d64",
+    "packages/runtime/src/dns-resolver.bend": "a6faa841369ccccc0639b7223afdbce0963beae50510629efd0399f42a621227",
+    "packages/runtime/src/dns-response.bend": "2d40b4c34e3c95850a68f4d55709bd7ac9f999f197bf34d55d360ccffe5deb61",
+    "packages/runtime/src/dns-search-response.bend": "a024d01e28fbfb4195cafa80d680f0528779252e5e73ed7e45ed18f8326214fb",
+    "packages/runtime/src/dns-search-run.bend": "879c0bdd352813b8da8c5e97142c4ff44cdfadc3e105ef7e4ab67a31ec247f00",
+    "packages/runtime/src/dns-search.bend": "a023407403eee3d6862c65af45b11b9d51ad100b824240a74a510b40d21d1bee",
+    "packages/runtime/src/dns-server-initialize.bend": "a7ad1e6d863a733480cd0d57ed7be5704c695bf077d1c6816a577dafbce64ec1",
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "packages/runtime/src/dns-server-source.bend": "24aff8d196f7844919a7a99825113947e06411924b08805bc7e1a48a3d667874",
+    "packages/runtime/src/dns-tcp-connection.bend": "f7c40b6298c63b83f0d47d112f1b3fe1ca8c9c80eace489e4e4e7ecb196db335",
+    "packages/runtime/src/dns-tcp-frame.bend": "59c91601b376cab4b889a542ced398cd82439fd21b094febdb269b9eba800dae",
+    "packages/runtime/src/dns-tcp-peer.bend": "8b0d6379bef7c3c73d8ff06d0ae202964917f5d21034b0f0c8c24c37c0f0b6cb",
+    "packages/runtime/src/dns-tcp-query.bend": "771fc4b510a9df6e769606a92ffbe62f6e152de906d011a31beee0aa5f51dac3",
+    "packages/runtime/src/dns-tcp-recover.bend": "819dc1dd6b130ff05b517946d7a876289be6624593fd27ef2c89e0b8a457d707",
+    "packages/runtime/src/dns-tcp-servers.bend": "c992954d5dde86baf1f59b99c7634f557faf9e037c6fbfe77da64ac79d65b681",
+    "packages/runtime/src/dns-tcp-session.bend": "bc752d068440092b7bae4fb3762eeb62a795945a6b49432e13eaaeccb7346e78",
+    "packages/runtime/src/dns-transport-choice.bend": "ed0d3f46454c2f2758512c85c4c18bfc117a00c2b86d977d2115be976bf51d1b",
+    "packages/runtime/src/dns-transport.bend": "c298d9f6fea873583f5d3b49cbe7e18810b1abd455b28eef865f975b8b3ac811",
+    "packages/runtime/src/dns-udp-attempt-scope.bend": "4ab54deff52786c6281c04bf17fd334ac1227a678fbbdcc939818ee3533de897",
+    "packages/runtime/src/dns-udp-plan.bend": "d9ee058ca71a8143bfafe2dd4378e1f3125ba672650b6c9b2604cc2edf1b3b31",
+    "packages/runtime/src/dns-udp-policy.bend": "e07290db705a57196283738734eb1b6d015f5fa588db2a0733ce3eaca67e001f",
+    "packages/runtime/src/dns-udp-query.bend": "d87a2993f70c4e1deb96c22c392c66240387b5014695205dcd36cdc3313120f6",
+    "packages/runtime/src/dns-udp-schedule.bend": "c76949a597d5b612af67efaf30a76c1bf4a93a1a7bdf4a72f5a6bd53f3dd597c",
+    "packages/runtime/src/dns-udp-servers.bend": "e1233e1ee23113713b7a0badfcb70b205ec77d108d35de2df4adf1ca6c468b30",
+    "packages/runtime/src/dns-udp-timeout.bend": "631e15078cb1c2285d5f1bfc0e19513f86c065b9d41ad144ca5956ebeb125cb2",
+    "packages/runtime/src/random-index.bend": "d371dbbc646f34049f7fe46a152d6733f6da847f90cc75ce3cb4fd2d5d8c3efb",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/resolver-address.bend": "faf2ee05a364bc3414d2bfc9a47229ef6f9b4d26888952d3045c92bb366aca0e",
+    "packages/runtime/src/resolver-config.bend": "18eee7247f014e687badaf2f62ee0b76e539239309a87a31bfb6ffbfece80cfc",
+    "packages/runtime/src/resolver-configuration.bend": "cb7fe08bf4005100c544b0a624c99955d798df073ebc125b173fe5ca8cb487fe",
+    "packages/runtime/src/resolver-domains.bend": "2515db3b94d64a6f5fa33dbea2874c85d1d9b7e7ba61ba0e99ee839af30aece9",
+    "packages/runtime/src/resolver-options.bend": "0156b6a1880c2ab1f156ae52cfe4527877bc109c65f0e401940a0a8316278012",
+    "packages/runtime/src/resolver-request.bend": "ac8b9b2e15af84f2e5098ef0fd2c6b70eb69e2880960b78ca19f4af095a8ab48",
+    "packages/runtime/src/resolver-search.bend": "a5a61a7d269df145dc337b8ff769a7a93a83d8d46a450e1a0ec8ab0e87b8b2a5",
+    "packages/runtime/src/resolver-settings.bend": "381a1f0fdef7121bdfc9f6f4fc2b1fa4eb8e764ee54e9c9f94ff92011919bf68",
+    "packages/runtime/src/resolver-transport.bend": "09acf57ec74a90b6d0dcf191bf3042cd0cba9fffbaec9a6eb27a327a7aaff34f",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+    "packages/runtime/src/socket-interrupt.bend": "00c9c2a7ec68ffb37ddebe90ecc88f31df2b9bfac21bc046ddea51ff9b33eb6c",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/dns-address-answer.bend": "620963d57e1afcb4edd3cc859c52f2b8d54acfce04de526445d6456405a018a7",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/abortable-socket.bend": "d67d2f48d167d609c263ecd8329956418dbb39ed8806f168fcd3445de58b15a5",
+    "tests/dns-address-lookup.bend": "6f48481669a38b4c551059d6d5bd45bc770251dd523161ab2d596383dc1a2320",
+    "tests/dns-lookup-ids.bend": "42f585a7963764b9005f02aadb1a9776b26f6e273ec2c0a7a08c676e6f5af59f",
+    "tests/dns-lookup-random.bend": "5b739daa8a995c5cad2dedbaeae9280e7a77d5410ee1d7f55dea8db198c19e20",
+    "tests/dns-owned-search.bend": "682c9b023bb3d3642184523cf0d829b26e2fe8ead200f5ce633da376078390ff",
+    "tests/dns-presentation.bend": "86be239a67555ee02c8f11d22df06c001b85b9e39e8b4a24361827259d6fff81",
+    "tests/dns-search-response.bend": "9a1540c72b10f6da7c02d9caf630635600976ae7247590062fca3837e274eab1",
+    "tests/dns-search.bend": "009c505ab1b20da5f920e370958a774a9989de33182071e0d77ff45ca081fd64",
+    "tests/dns-tcp-connection.bend": "0de6c97baa2934d8ad95f3012b111b90b7944383375d4e248b95a637fbcfb781",
+    "tests/dns-tcp-query.bend": "65f6bd6ff486b553e9a5561c9df4359401ac9ceedd7648045fb2971736c4be27",
+    "tests/dns-udp-attempt-scope.bend": "8ddebf3692ef481d4ce391c1cf421c678d0a23da8968228c585d2ac0706e5d63",
+    "tests/dns-udp-query.bend": "ab3382d1e67e2f3e1fca2149a5b51622b483c8571df03c816d4377cdfd53a44f",
+    "tests/tcp-bytes-probe.bend": "8fa1175b5f2c55b598368dbdf0d2fa8fca3a5b2af199994e7c919b7d329772cc",
+    "tests/dns_owned_search_check.py": "255fb2dd789cd80dce4bce2910e6fe243272a8d9bba1c0b16b74aaa6c3e5ef64"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/dns-owned-search.bend",
+        "-o",
+        "build/dns-owned-search.c"
+      ],
+      "elapsed_seconds": 60.06317543797195,
+      "peak_sampled_group_rss_kib": 3447124,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/dns-owned-search.bend",
+        "-o",
+        "build/dns-owned-search.js"
+      ],
+      "elapsed_seconds": 4.228937570005655,
+      "peak_sampled_group_rss_kib": 1444232,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

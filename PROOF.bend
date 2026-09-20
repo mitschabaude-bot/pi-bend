@@ -1,4 +1,5 @@
 import Base
+import ./proofs/resolver-configuration.bend as ResolverConfiguration
 import ./proofs/dns-search-run.bend as DNSSearchRun
 import ./proofs/resolver-transport.bend as ResolverTransport
 import ./proofs/dns-edns-response.bend as DNSEdnsResponse
