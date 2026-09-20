@@ -396,3 +396,7 @@ The injected-ID lookup fixture emitted C in 33.23 seconds with 10,559,328 KiB sa
 ### BEND-001 observation: resolver configuration parser composition (2026-09-20)
 
 The configuration-address fixture emitted C in 12.29 seconds with 4,656,608 KiB sampled group peak RSS; the full configuration-syntax fixture emitted C in 15.00 seconds with 5,570,448 KiB. Both completed under 8 GiB guards, with Clang compilation outside those measurements. These are different compositions of existing numeric parsers and new native syntax code, not controlled compiler-patch measurements or a newly isolated cause. The [validation record](runtime-validation/2026-09-20-resolver-config.json) retains current inputs, hashes and measurements as additional evidence for the unresolved BEND-001 investigation. No compiler or runtime patch was changed.
+
+### BEND-001 observation: resolver settings fold (2026-09-20)
+
+The resolver-settings fixture emitted C in 15.53 seconds with 5,920,060 KiB sampled group peak RSS under an 8 GiB guard. Clang compilation is outside these measurements. This is another composition using the existing numeric/configuration parsers, not a controlled performance regression or newly isolated compiler cause. The [validation record](runtime-validation/2026-09-20-resolver-settings.json) preserves the build and source hashes for the ongoing BEND-001 investigation. No compiler or runtime patch was changed.

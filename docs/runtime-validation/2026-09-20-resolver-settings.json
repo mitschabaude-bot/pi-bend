@@ -1,0 +1,66 @@
+{
+  "scope": "Resolver source precedence over typed overrides, independent of network I/O.\n\nOption/sort tokens are retained, not interpreted. The override strings in this\nfixture encode already-decoded lists, not libc environment-string semantics.\n",
+  "cases": [
+    {
+      "backend": "native 1",
+      "cases": 247
+    },
+    {
+      "backend": "native 4",
+      "cases": 247
+    },
+    {
+      "backend": "Bun",
+      "cases": 247
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/resolver-settings.bend": "381a1f0fdef7121bdfc9f6f4fc2b1fa4eb8e764ee54e9c9f94ff92011919bf68",
+    "packages/runtime/src/resolver-config.bend": "18eee7247f014e687badaf2f62ee0b76e539239309a87a31bfb6ffbfece80cfc",
+    "packages/runtime/src/resolver-address.bend": "faf2ee05a364bc3414d2bfc9a47229ef6f9b4d26888952d3045c92bb366aca0e",
+    "tests/resolver-settings.bend": "058dfdabf97192cdb7172e02eaa58b878dac056b8c141330709646ab65a9195f",
+    "tests/resolver_settings_check.py": "cb88426dcb64eeeb914ad335405fb5e0c6f01a19d2985bdac815c97f42926e33",
+    "build/resolver-settings": "74f6c08e21895a373ec18a4e224765b923b06d27d6b802ce0ace8029df3e8e19",
+    "build/resolver-settings.js": "f6c26a810e52a25cf613bdc87510f4862a470bace7e42211f2e023d2fba3a2c7"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/resolver-settings.bend",
+        "-o",
+        "build/resolver-settings.c"
+      ],
+      "elapsed_seconds": 15.531744061037898,
+      "peak_sampled_group_rss_kib": 5920060,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/resolver-settings.bend",
+        "-o",
+        "build/resolver-settings.js"
+      ],
+      "elapsed_seconds": 1.5778668811544776,
+      "peak_sampled_group_rss_kib": 314160,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+  },
+  "libc_version": [
+    "glibc",
+    "2.39"
+  ]
+}
