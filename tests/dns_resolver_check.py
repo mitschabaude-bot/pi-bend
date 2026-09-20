@@ -13,12 +13,13 @@ import subprocess
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');p.add_argument('--explicit',action='store_true');a=p.parse_args()
+fixture='dns-resolver-explicit' if a.explicit else 'dns-resolver-lookup'
 candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
     for suffix in ['c','js']:
-        subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','20','--stats',f'build/dns-resolver-lookup-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-resolver-lookup.bend','-o',f'build/dns-resolver-lookup.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-resolver-lookup.c','-lpthread','-lm','-o','build/dns-resolver-lookup'],cwd=ROOT,check=True)
+        subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','20','--stats',f'build/{fixture}-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),f'tests/{fixture}.bend','-o',f'build/{fixture}.{suffix}'],cwd=ROOT,check=True)
+subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{fixture}.c','-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
 
 def wire(owner):return b''.join(bytes([len(label)])+label.encode() for label in owner.rstrip('.').split('.'))+b'\0'
 def exact(peer,size):
@@ -58,7 +59,7 @@ cases=[
 ]
 cases=[dict(case,edns=edns) for case in cases for edns in [False,True]]
 rows=[]
-for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1']),('native 4',['build/dns-resolver-lookup','--threads','4']),('Bun',[str(bun),'build/dns-resolver-lookup.js'])]:
+for backend,command in [('native 1',[f'build/{fixture}','--threads','1']),('native 4',[f'build/{fixture}','--threads','4']),('Bun',[str(bun),f'build/{fixture}.js'])]:
     for number,family,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
         for kind in [1,28]:
             for case_index,case in enumerate(cases):
@@ -73,7 +74,7 @@ for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1'
                             with listeners[server].accept()[0] as peer:
                                 peer.settimeout(5)
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0])
-                                extension=(b'\0'+struct.pack('!HHIH',41,1232,32768,10)+bytes.fromhex('fde9000200fffde90000')) if case['edns'] else b''
+                                extension=(b'\0'+(struct.pack('!HHIH',41,1232,32768,10)+bytes.fromhex('fde9000200fffde90000') if a.explicit else struct.pack('!HHIH',41,1200,0,0))) if case['edns'] else b''
                                 assert query==struct.pack('!6H',identifier,288 if case['edns'] else 256,1,0,0,int(case['edns']))+wire(owner)+struct.pack('!HH',kind,1)+extension,(case,query)
                                 trace.append([server,owner,identifier])
                                 if action=='eof':continue
@@ -91,6 +92,6 @@ for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1'
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case_index,queries=trace,output=want))
     print(backend+f': {len(cases)*4} reused resolver scenarios PASS',flush=True)
-paths=['packages/runtime/src/dns-tcp-resolver.bend','tests/dns-resolver-lookup.bend','tests/dns_resolver_check.py','build/dns-resolver-lookup','build/dns-resolver-lookup.js']
-r=dict(scope=__doc__,cases=cases,runs=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-resolver-lookup-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
-(ROOT/'build/dns-resolver-result.json').write_text(json.dumps(r,indent=2)+'\n')
+paths=['packages/runtime/src/resolver-search.bend','packages/runtime/src/resolver-request.bend','packages/runtime/src/dns-tcp-resolver.bend',f'tests/{fixture}.bend','tests/dns_resolver_check.py',f'build/{fixture}',f'build/{fixture}.js']
+r=dict(scope=__doc__,explicit=a.explicit,cases=cases,runs=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/{fixture}-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
+(ROOT/f'build/{fixture}-result.json').write_text(json.dumps(r,indent=2)+'\n')

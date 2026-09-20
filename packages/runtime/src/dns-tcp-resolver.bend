@@ -1,4 +1,7 @@
 import Base
+import ./resolver-search.bend as Configuration
+import ./resolver-domains.bend as Domains
+import ./resolver-options.bend as Options
 import ./dns-query.bend as Query
 import ./dns-server-source.bend as Source
 import ./dns-server-initialize.bend as Initialize
@@ -15,6 +18,13 @@ import ./abort.bend as Abort
 # resolution and resolver-option interpretation are separate boundaries.
 type Config is Data:
   Config{servers: List<&2, Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, request: Query.Options, milliseconds: U32, maximum: U32, rotate: Bool}
+
+# Assemble the already-validated search/request settings and resolved endpoints.
+# The deadline is supplied by the caller; timeout/attempt scheduling is separate.
+def fromSearch(servers: List<&2, Servers.Server>, milliseconds: U32, maximum: U32, configuration: Configuration.Configuration) -> Config:
+  match configuration:
+    case Configuration.Configuration{+options, Domains.Report{+domains, issues}}:
+      Config{servers, domains, Configuration.policy(options), Configuration.requestOptions(Configuration.Configuration{options, Domains.Report{domains, issues}}), milliseconds, maximum, Options.enabled(Options.Rotate{}, options)}
 
 type Owner is Type:
   Owner{config: Config, selector: Source.Owner<Servers.Server>}

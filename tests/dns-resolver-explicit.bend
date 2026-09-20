@@ -1,8 +1,8 @@
 import Base
-import ../packages/runtime/src/resolver-search.bend as Configuration
-import ../packages/runtime/src/resolver-config.bend as Config
-import ../packages/runtime/src/resolver-options.bend as ParsedOptions
+import ../packages/runtime/src/dns-query.bend as Query
+import ./dns-lookup-options.bend as Options
 import ../packages/runtime/src/dns-tcp-resolver.bend as Resolver
+import ../packages/runtime/src/dns-search.bend as Search
 import ../packages/runtime/src/dns-name.bend as Name
 import ../packages/runtime/src/dns-address-search.bend as Network
 import ../packages/runtime/src/random-index.bend as Index
@@ -29,16 +29,11 @@ def created(mode: String, kind: U32, environment: IDs.Source, parent: Abort.Abor
     case Fail{_}: IO.die(Unit, 1, "initialization failed")
     case Done{owner}: run(mode, kind, environment, parent, Resolver.borrow(owner))
 
-def domains(firstInvalid: Bool, laterInvalid: Bool) -> List<&2, String>:
+def domains(firstInvalid: Bool, laterInvalid: Bool) -> List<&2, Search.Domain>:
   match firstInvalid laterInvalid:
-    case True{} _: "..bad" <> "y" <> Nil{}
-    case False{} True{}: "x" <> "..bad" <> "y" <> Nil{}
-    case False{} False{}: "x" <> "y" <> Nil{}
-
-def configuration(result: Result<&2, &2, List<&2, ParsedOptions.Diagnostic>, Configuration.Configuration>) -> IO(Configuration.Configuration):
-  match result:
-    case Fail{_}: IO.die(Configuration.Configuration, 2, "invalid options")
-    case Done{value}: IO.pure(Configuration.Configuration, value)
+    case True{} _: Search.Invalid{Name.InvalidLabel{}} <> Search.Valid{Name.Name{(121 <> Nil{}) <> Nil{}}} <> Nil{}
+    case False{} True{}: Search.Valid{Name.Name{(120 <> Nil{}) <> Nil{}}} <> Search.Invalid{Name.InvalidLabel{}} <> Search.Valid{Name.Name{(121 <> Nil{}) <> Nil{}}} <> Nil{}
+    case False{} False{}: Search.Valid{Name.Name{(120 <> Nil{}) <> Nil{}}} <> Search.Valid{Name.Name{(121 <> Nil{}) <> Nil{}}} <> Nil{}
 
 def args(values: List<String>) -> IO(Unit):
   match values:
@@ -46,8 +41,7 @@ def args(values: List<String>) -> IO(Unit):
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +counter : Ref.Ref<U32> <- Ref.new(U32, 0)
-        settings : Configuration.Configuration <- configuration(Configuration.prepareStrict(Config.words("ndots:2 " ++ Bool.pick(String, String.eq(mode, "fixed"), "", "rotate ") ++ Bool.pick(String, String.eq(options, "edns"), "edns0 trust-ad", ""), Config.Words{"", Nil{}}), domains(String.eq(mode, "invalid-domain"), String.eq(mode, "invalid-later"))))
-        owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~OwnerTest.seed, 1, Resolver.fromSearch(ServersTest.serverInput(family, ports), Bool.pick(U32, String.eq(mode, "deadline"), 300, 5000), 7, settings))
+        owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~OwnerTest.seed, 1, Resolver.Config{ServersTest.serverInput(family, ports), domains(String.eq(mode, "invalid-domain"), String.eq(mode, "invalid-later")), Search.Policy{2, True{}, True{}, False{}}, Bool.pick(Query.Options, String.eq(options, "edns"), Options.settings(), Query.defaults()), Bool.pick(U32, String.eq(mode, "deadline"), 300, 5000), 7, Bool.not(String.eq(mode, "fixed"))})
         created(mode, Scalar.decimal(kind, 0), IDs.Source{"direct", counter, parent}, Abort.signal(String, parent), owner)
         draws : U32 <- Ref.dispose(U32, counter)
         IO.print("draws:" ++ U32.show(draws))
