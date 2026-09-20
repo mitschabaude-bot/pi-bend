@@ -9,6 +9,7 @@ import ./dns-name.bend as Name
 import ./dns-response.bend as Response
 import ./dns-id.bend as Id
 import ./dns-tcp-servers.bend as Servers
+import ./dns-server-source.bend as Selector
 
 type Error<-Reason: Data> is Data:
   InvalidReadSize{}
@@ -55,66 +56,83 @@ def resolved(-Reason: Data, name: Name.Name, kind: U32, history: Answer.History,
     case Fail{Servers.NoServers{}}: Finished{Fail{NoServers{}}}
     case Fail{Servers.Failed{report}}: completed(Reason, name, kind, history, report)
 
-def identified(-Reason: Data, servers: List<&2, Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, +name: Name.Name, history: Answer.History, maximum: U32, value: Result<&2, &2, Id.Error, U32>) -> IO(Progress<Reason>):
+# Observe cancellation again after entropy, before committing a rotation step.
+def route(-Reason: Data, source: Selector.Source<Servers.Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, id: U32, +kind: U32, +name: Name.Name, history: Answer.History, maximum: U32, check: Result<&2, &2, Abort.AbortReason<Deadline.Cause<Reason>>, Unit>) -> IO(Progress<Reason>):
+  match check:
+    case Fail{why}: IO.pure(Progress<Reason>, Finished{Fail{Exchange{Query.Connection{Connect.Aborted{why}}}}})
+    case Done{_}:
+      do IO<Progress<Reason>>:
+        servers : List<&2, Servers.Server> <- Selector.choose(Servers.Server, source)
+        result : Result<&2, &2, Servers.Error<Reason>, Query.Reply> <- Servers.exchange(Reason, servers, signal, id, 256, Message.Question{name, kind, 1}, maximum)
+        return resolved(Reason, name, kind, history, result)
+
+def identified(-Reason: Data, source: Selector.Source<Servers.Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, +name: Name.Name, history: Answer.History, maximum: U32, value: Result<&2, &2, Id.Error, U32>) -> IO(Progress<Reason>):
   match value:
     case Fail{error}: IO.pure(Progress<Reason>, Finished{Fail{Identifier{error}}})
     case Done{id}:
       do IO<Progress<Reason>>:
-        result : Result<&2, &2, Servers.Error<Reason>, Query.Reply> <- Servers.exchange(Reason, servers, signal, id, 256, Message.Question{name, kind, 1}, maximum)
-        return resolved(Reason, name, kind, history, result)
+        check : Result<&2, &2, Abort.AbortReason<Deadline.Cause<Reason>>, Unit> <- Abort.throwIfAborted(Deadline.Cause<Reason>, signal)
+        route(Reason, source, signal, id, kind, name, history, maximum, check)
 
-# Inspect the retained abort reason before invoking the source. Connect also
-# checks the signal, covering an abort that arrives while the source runs.
-def ready(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, servers: List<&2, Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, history: Answer.History, maximum: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Progress<Reason>):
+# Inspect the retained abort reason before drawing an ID. After the draw,
+# identified checks again before selecting servers; connect also checks.
+def ready(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, history: Answer.History, maximum: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Progress<Reason>):
   match reason:
     case Some{why}: IO.pure(Progress<Reason>, Finished{Fail{Exchange{Query.Connection{Connect.Aborted{why}}}}})
     case None{}:
       do IO<Progress<Reason>>:
         value : Result<&2, &2, Id.Error, U32> <- draw(environment)
-        identified(Reason, servers, signal, kind, name, history, maximum, value)
+        identified(Reason, source, signal, kind, name, history, maximum, value)
 
 # Each follow-up draws a new ID for its question. Server failover and reset
 # recovery reuse that ID under the same deadline. The environment is borrowed;
 # its owner disposes resources after this call. Static injection needs no mutable callback registry.
-@unsafe def drive(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, +environment: Environment, +servers: List<&2, Servers.Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, +maximum: U32, progress: Progress<Reason>) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+@unsafe def drive(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, +environment: Environment, +source: Selector.Source<Servers.Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, +maximum: U32, progress: Progress<Reason>) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
   match progress:
     case Finished{result}: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, result)
     case Again{name, history}:
       do IO<Result<&2, &2, Error<Reason>, Answer.Selection>>:
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Abort.reason(Deadline.Cause<Reason>, signal)
-        next : Progress<Reason> <- ready(~Environment, ~draw, Reason, environment, servers, signal, kind, name, history, maximum, reason)
-        drive(~Environment, ~draw, Reason, environment, servers, signal, kind, maximum, next)
+        next : Progress<Reason> <- ready(~Environment, ~draw, Reason, environment, source, signal, kind, name, history, maximum, reason)
+        drive(~Environment, ~draw, Reason, environment, source, signal, kind, maximum, next)
 
 # Execute one name and its alias follow-ups under a caller-owned deadline.
 # Validation precedes entropy/network effects. This function neither resets the
 # deadline nor retires its signal, allowing an enclosing search to reuse it.
-def exchangeChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, valid: Bool, environment: Environment, servers: List<&2, Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
-  match valid servers maximum:
+def exchangeChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  match valid available maximum:
     case False{} _ _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{UnsupportedType{}})
     case True{} _ 0: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{InvalidReadSize{}})
-    case True{} Nil{} _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{NoServers{}})
-    case True{} configured size: drive(~Environment, ~draw, Reason, environment, configured, signal, kind, size, Again{name, Answer.newHistory()})
+    case True{} False{} _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{NoServers{}})
+    case True{} True{} size: drive(~Environment, ~draw, Reason, environment, source, signal, kind, size, Again{name, Answer.newHistory()})
 
-def exchangeServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, servers: List<&2, Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
-  exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), environment, servers, signal, kind, name, maximum)
+def exchangeSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, +source: Selector.Source<Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Selector.available(Servers.Server, source), environment, source, signal, kind, name, maximum)
 
-def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, servers: List<&2, Servers.Server>, kind: U32, name: Name.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
+def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, kind: U32, name: Name.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, signal):
       do IO<Report<Reason>>:
-        result : Result<&2, &2, Error<Reason>, Answer.Selection> <- exchangeServersWith(~Environment, ~draw, Reason, environment, servers, signal, kind, name, maximum)
+        result : Result<&2, &2, Error<Reason>, Answer.Selection> <- exchangeSourceWith(~Environment, ~draw, Reason, environment, source, signal, kind, name, maximum)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return Report{result, reason}
 
-def start(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, valid: Bool, environment: Environment, servers: List<&2, Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
-  match valid servers maximum:
+def start(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
+  match valid available maximum:
     case False{} _ _: IO.pure(Report<Reason>, Report{Fail{UnsupportedType{}}, None{}})
     case True{} _ 0: IO.pure(Report<Reason>, Report{Fail{InvalidReadSize{}}, None{}})
-    case True{} Nil{} _: IO.pure(Report<Reason>, Report{Fail{NoServers{}}, None{}})
-    case True{} configured size:
+    case True{} False{} _: IO.pure(Report<Reason>, Report{Fail{NoServers{}}, None{}})
+    case True{} True{} size:
       do IO<Report<Reason>>:
         scope : Deadline.Scope<Reason> <- Deadline.create(Reason, milliseconds, parent)
-        scoped(~Environment, ~draw, Reason, environment, configured, kind, name, size, Deadline.borrow(Reason, scope))
+        scoped(~Environment, ~draw, Reason, environment, source, kind, name, size, Deadline.borrow(Reason, scope))
+
+def exchangeServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, servers: List<&2, Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  exchangeSourceWith(~Environment, ~draw, Reason, environment, Selector.Fixed{servers}, signal, kind, name, maximum)
+
+# The caller owns the selection source and retains it across lookup calls.
+def lookupSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, +source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
+  start(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Selector.available(Servers.Server, source), environment, source, milliseconds, parent, kind, name, maximum)
 
 def exchangeWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
   exchangeServersWith(~Environment, ~draw, Reason, environment, Servers.Server{address, port} <> Nil{}, signal, kind, name, maximum)
@@ -122,7 +140,7 @@ def exchangeWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.
 # The injected source runs once per question, not per retry. It must return promptly;
 # arbitrary user effects cannot be force-cancelled by the enclosing deadline.
 def lookupWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, address: Connect.Address, port: U32, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
-  start(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), environment, Servers.Server{address, port} <> Nil{}, milliseconds, parent, kind, name, maximum)
+  lookupSourceWith(~Environment, ~draw, Reason, environment, Selector.Fixed{Servers.Server{address, port} <> Nil{}}, milliseconds, parent, kind, name, maximum)
 
 # Preserve the deterministic entry point. Dedicated connections isolate delayed
 # replies even when a caller reuses the same ID across alias follow-ups.
@@ -137,7 +155,10 @@ def lookupRandom(-Reason: Data, address: Connect.Address, port: U32, millisecond
 # The supplied order is reused for each alias question. Rotation/configuration
 # policy belongs to the caller; all attempts share this one owned deadline.
 def lookupServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, servers: List<&2, Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
-  start(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), environment, servers, milliseconds, parent, kind, name, maximum)
+  lookupSourceWith(~Environment, ~draw, Reason, environment, Selector.Fixed{servers}, milliseconds, parent, kind, name, maximum)
 
 def lookupServersRandom(-Reason: Data, servers: List<&2, Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
   lookupServersWith(~Unit, ~Id.random, Reason, Unit{}, servers, milliseconds, parent, kind, name, maximum)
+
+def lookupSourceRandom(-Reason: Data, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, maximum: U32) -> IO(Report<Reason>):
+  lookupSourceWith(~Unit, ~Id.random, Reason, Unit{}, source, milliseconds, parent, kind, name, maximum)
