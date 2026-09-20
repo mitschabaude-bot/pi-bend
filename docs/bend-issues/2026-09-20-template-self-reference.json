@@ -1,0 +1,67 @@
+{
+  "classification": "Template-mediated recursion restriction; not classified as a new compiler defect. Specialization creates a declaration before the calling def, which is unavailable in the declaration-order checker. Guide prohibits mutual recursion; unsafe direct recursion remains available.",
+  "variants": {
+    "indirect": "import Base\n\ndef apply(~f: Nat -> Nat, value: Nat) -> Nat:\n  f(value)\n\n@unsafe def walk(value: Nat) -> Nat:\n  match value:\n    case Zero{}: Zero{}\n    case Succ{rest}: apply(~walk, rest)\n",
+    "direct": "import Base\n\ndef apply(~f: Nat -> Nat, value: Nat) -> Nat:\n  f(value)\n\n@unsafe def walk(value: Nat) -> Nat:\n  match value:\n    case Zero{}: Zero{}\n    case Succ{rest}: walk(rest)\n",
+    "earlier-definition": "import Base\n\ndef apply(~f: Nat -> Nat, value: Nat) -> Nat:\n  f(value)\n\ndef identity(value: Nat) -> Nat: value\n\n@unsafe def walk(value: Nat) -> Nat:\n  match value:\n    case Zero{}: Zero{}\n    case Succ{rest}: apply(~identity, rest)\n"
+  },
+  "runs": [
+    {
+      "compiler": "installed",
+      "variant": "indirect",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error:\n- expected : a defined name\n- observed : walk\nContext:\n- f     : @_:Nat -> Nat\n- value : Nat\nLocation: apply~0\n3 | def apply(~f: Nat -> Nat, value: Nat) -> Nat:\n4>|   f(value)\n5 | \n"
+    },
+    {
+      "compiler": "installed",
+      "variant": "direct",
+      "exit_code": 0,
+      "stdout": "All terms check, with 1 unsafe annotation.\n",
+      "stderr": ""
+    },
+    {
+      "compiler": "installed",
+      "variant": "earlier-definition",
+      "exit_code": 0,
+      "stdout": "All terms check, with 1 unsafe annotation.\n",
+      "stderr": ""
+    },
+    {
+      "compiler": "candidate",
+      "variant": "indirect",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":29491200,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":64749568,\"heapTotal\":11561984,\"heapUsed\":3993931,\"external\":1842587,\"arrayBuffers\":100}\nError:\n- expected : a defined name\n- observed : walk\nContext:\n- f     : @_:Nat -> Nat\n- value : Nat\nLocation: apply~0\n3 | def apply(~f: Nat -> Nat, value: Nat) -> Nat:\n4>|   f(value)\n5 | \n"
+    },
+    {
+      "compiler": "candidate",
+      "variant": "direct",
+      "exit_code": 0,
+      "stdout": "All terms check, with 1 unsafe annotation.\n",
+      "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":29884416,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":64225280,\"heapTotal\":11561984,\"heapUsed\":3963307,\"external\":1830043,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":79327232,\"heapTotal\":18345984,\"heapUsed\":11080345,\"external\":2575161,\"arrayBuffers\":100}\n"
+    },
+    {
+      "compiler": "candidate",
+      "variant": "earlier-definition",
+      "exit_code": 0,
+      "stdout": "All terms check, with 1 unsafe annotation.\n",
+      "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":66060288,\"heapTotal\":11611136,\"heapUsed\":3973703,\"external\":1822407,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":80666624,\"heapTotal\":18378752,\"heapUsed\":11070007,\"external\":2558087,\"arrayBuffers\":100}\n"
+    }
+  ],
+  "compiler_sha256": {
+    "installed": {
+      "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+      "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+      "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+      "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1"
+    },
+    "candidate": {
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+      "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    }
+  },
+  "guide_sha256": "e841013e89c235b8cce1a3a4966988185380611c4d4ddecf577bb717340dc37a"
+}

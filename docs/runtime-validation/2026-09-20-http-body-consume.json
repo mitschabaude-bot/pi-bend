@@ -1,0 +1,98 @@
+{
+  "scope": "Owned buffered bytes/text/JSON with injected affine source and exact read/close traces. Every partition of short Unicode payload, byte limits and early stop, null-body suppression, transport/cleanup failures and strict UTF8/JSON decoding. Python standard codecs supply successful decode projections; error/ownership traces are specified directly. No real sockets or universal scheduler proof.",
+  "runs": [
+    {
+      "backend": "native-1",
+      "cases": 202,
+      "trace_lines": 1793,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "cases": 202,
+      "trace_lines": 1793,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "cases": 202,
+      "trace_lines": 1793,
+      "passed": true
+    }
+  ],
+  "source_sha256": {
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/bounded-bytes.bend": "ca3fc3b391a2eabb4de79ef5e6ee71a3b3a216acb82d9140fdc9548f8f4421e9",
+    "packages/runtime/src/f64-ratio.bend": "ac20c44b90946b88148bd6f01fcc2c664fb818aa1e4dbd35b44d556443459f06",
+    "packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "packages/runtime/src/headers.bend": "9978dc8b32df82059c8c09345003077db13ee4127f7c8944a9888f8c8a0d6602",
+    "packages/runtime/src/http-body-buffer.bend": "2eef5a96bf5cf6312a535ead2ce2241ce24bc566ff7e57c8d40557d7e49609ba",
+    "packages/runtime/src/http-body-consume.bend": "1a4b58df5132f44c48ff4ea4087d3320971c3f11aece596ab885dc3b5de4c594",
+    "packages/runtime/src/http-body.bend": "7388c006dedb8d5f10966ebdeceae913ac631de005348f891745ce1bcebcf52f",
+    "packages/runtime/src/http-chunk-size.bend": "6a9562c2bf1d4acbf621173dbc1f177735c16eb8e63801bc34c2a6f347ed0dbe",
+    "packages/runtime/src/http-chunked-body.bend": "eafa17ba24b7feef64c6194734200a9f65abf1b4214061124954aedf3ba75918",
+    "packages/runtime/src/http-content-length.bend": "c5fbb68c029b3f203cc6721ffdf5eb77be38e69c3922dba1f3a8a970b8b37ae3",
+    "packages/runtime/src/http-field.bend": "7a2b9e89f6760294f6e40fe5135e1bde32a9e897ed99a2ac8101a0abdefabcf2",
+    "packages/runtime/src/http-fixed-body.bend": "fed0fed0522429e5beee2da28827e5ac41781a6222733b9381847954f19adaa6",
+    "packages/runtime/src/http-framing-fields.bend": "ea95cd26537356a9aa45ba7734e024c80f85209e68fd5b136aca3c3bf46adea3",
+    "packages/runtime/src/http-head.bend": "e8d8d955c879224dedb8831171f77bc26ddb4581137713f1fa95dd0f52f7e59f",
+    "packages/runtime/src/http-header.bend": "5e9a18dd5c72942bf11013344eafb5d94d7a7156cd50f632e7b307488ab58b3e",
+    "packages/runtime/src/http-line.bend": "f1165cfec3c4b32f3d5d83ddd60f1fed30d4c058a02272bed826d4eef5a34f66",
+    "packages/runtime/src/http-response-metadata.bend": "fb6e92273c328abb777646913cadc35343e97e4edcd954b42dca7c1734c3df64",
+    "packages/runtime/src/http-response-policy.bend": "ab878b0ac93379f9cd86117adb46c5649ef979cf5febd2af13d09f49a86f09cd",
+    "packages/runtime/src/http-response-progress.bend": "0df44f82f8cbc2d08d1c19975465a74eb989f154a6f7380d867744fb1f250547",
+    "packages/runtime/src/http-response-stream.bend": "005f900a423cd03555fe954e4f161e8fb31e688f5db502be2574da2f8ec7c53f",
+    "packages/runtime/src/http-response-termination.bend": "ffa0780a05554dbd5b00c1bcd755412a425c8aa54e2a3a80f7f35d48480a09cd",
+    "packages/runtime/src/http-response.bend": "b4b2be6cd162fc8e59910d4436509fb2bbf8a4320b41c1602331fd32dd9a7c05",
+    "packages/runtime/src/http-status.bend": "43170e7135a2b96b1d7bfbd48bfde2357404ece662292c8c30ff86d432022960",
+    "packages/runtime/src/json-parse.bend": "4cbb8bbbe782652eab46842cc842388ca25ad448a12936a109b27f7ca694f5c6",
+    "packages/runtime/src/number-string.bend": "35c4aee2b8c5ff65f99cdfd6e3b57051e422b6117826415a5abba2b188ab5705",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/schema-value.bend": "0829df30e23dc6011a1b0a1d29b7fc222241acba258aa692af1b740b6cacc8a9",
+    "packages/runtime/src/text-space.bend": "58db43cb9289c3e0de14bb641a10f9eed1f323f4ab28eb25f999578892c2b8e9",
+    "packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8-strict.bend": "2e0aafa95b71aa44b3642c1c234656037ea8f8136a91cd589535c2764bada840",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/http-body-consume.bend": "822611a8583969112b5661024d4652d7dbca107cfcc7d7d89e602885aefffd2f",
+    "packages/runtime/test/http-response.bend": "a26b14b8aedd03d8961d752092c35449e1a27867fb9b22635a0926f73b345f89",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/http_body_consume_check.py": "2e01595dc9e65d9d2b3e62a8af894596cea7f05c35cf936faea84e334a96bab4"
+  },
+  "compiler_command": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "packages/runtime/test/http-body-consume.bend",
+        "-o",
+        "build/http-body-consume.c"
+      ],
+      "elapsed_seconds": 31.501443344168365,
+      "peak_sampled_group_rss_kib": 3277492,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "packages/runtime/test/http-body-consume.bend",
+        "-o",
+        "build/http-body-consume.js"
+      ],
+      "elapsed_seconds": 4.2196160685271025,
+      "peak_sampled_group_rss_kib": 1283492,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

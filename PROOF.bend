@@ -1,4 +1,5 @@
 import Base
+import ./proofs/http-body-buffer.bend as HTTPBodyBuffer
 import ./proofs/http-abort-classification.bend as HTTPAbortClassification
 import ./proofs/http-body-source.bend as HTTPBodySource
 import ./proofs/http-response-progress.bend as HTTPResponseProgress

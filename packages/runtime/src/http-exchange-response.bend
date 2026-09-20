@@ -1,4 +1,7 @@
 import Base
+import ./http-body-consume.bend as Consume
+import ./http-body-buffer.bend as Buffer
+import ./schema-value.bend as Value
 import ./http-socket-exchange.bend as Exchange
 import ./http-response.bend as Response
 import ./http-response-stream.bend as Stream
@@ -25,3 +28,13 @@ def close(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(R
 
 def source(~Reason: Data, ~E: Data, ~map: Progress.Error<Exchange.ReadError<Reason>> -> E, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Source.Owner<Exchange.Exchange<Reason>, E>):
   Source.create(~Exchange.ReadError<Reason>, ~Exchange.Exchange<Reason>, ~E, ~map, ~(read(Reason)), ~(Exchange.close(Reason)), body)
+
+# Consume and retire the owned body under an explicit caller byte budget.
+def bytes(-Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Buffer.Error<Exchange.ReadError<Reason>>, List<&2, U32>>):
+  Consume.bytesWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), limit, body)
+
+def text(-Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Consume.TextError<Exchange.ReadError<Reason>>, String>):
+  Consume.textWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), limit, body)
+
+def json(-Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Consume.JSONError<Exchange.ReadError<Reason>>, Value.Value>):
+  Consume.jsonWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), limit, body)

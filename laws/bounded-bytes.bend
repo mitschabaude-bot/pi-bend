@@ -27,3 +27,16 @@ law one_byte_consumes_budget:
   for +byte: U32
   for +retained: List<&2, U32>
   {Bytes.consumed(byte <> Nil{}, Bytes.State{1n+remaining, retained, False{}}) == Bytes.State{remaining, byte <> retained, False{}} : Bytes.State}
+
+# Any input fitting the caller's budget survives exactly, including order.
+law fitting_input_preserved:
+  for +input: List<&2, U32>
+  for spare: Nat
+  {Bytes.finish(Bytes.consumed(input, Bytes.create(Nat.add(List.length(&2, U32, input), spare)))) == Done{input} : Result<&2, &2, Bytes.Error, List<&2, U32>>}
+
+# Every nonempty excess is rejected, independently of prefix and suffix values.
+law overflow_rejected:
+  for +prefix: List<&2, U32>
+  for byte: U32
+  for suffix: List<&2, U32>
+  {Bytes.finish(Bytes.consumed(List.append(&2, U32, prefix, byte <> suffix), Bytes.create(List.length(&2, U32, prefix)))) == Fail{Bytes.LimitExceeded{}} : Result<&2, &2, Bytes.Error, List<&2, U32>>}
