@@ -1,4 +1,5 @@
 import Base
+import ./proofs/list-interleave.bend as ListInterleave
 import ./proofs/connection-addresses.bend as ConnectionAddresses
 import ./proofs/http-host-route.bend as HTTPHostRoute
 import ./proofs/numeric-scope.bend as NumericScope

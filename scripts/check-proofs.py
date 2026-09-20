@@ -91,6 +91,10 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('interleave-swaps-leading-pair', 'packages/runtime/src/list-interleave.bend',
+         'a <> b <> interleave(A, xs, ys)', 'b <> a <> interleave(A, xs, ys)', 'laws/list-interleave.leading_pair'),
+        ('interleave-drops-right-tail', 'packages/runtime/src/list-interleave.bend',
+         'case Nil{} other: other', 'case Nil{} other: Nil{}', 'laws/list-interleave.left_empty'),
         ('connection-addresses-erases-hosts', 'packages/runtime/src/connection-addresses.bend',
          'case first <> rest: host(first) <> hosts(rest)', 'case first <> rest: Nil{}', 'laws/connection-addresses.hosts_count'),
         ('connection-addresses-erases-answers', 'packages/runtime/src/connection-addresses.bend',
