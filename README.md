@@ -12,6 +12,10 @@ See [docs/parity.md](docs/parity.md) for the implementation and validation statu
 
 Upstream test parity is tracked in [tests/UPSTREAM.md](tests/UPSTREAM.md) and a source-hashed inventory. Unported and partially ported suites remain explicit; passing local smoke tests does not imply full compatibility. The pinned Agent suite now has all 27 named cases ported and passing on one/four threads; this does not establish complete Agent API or provider parity. All 16 public mutable configuration fields have native getter/setter accessors, with supplemental upstream comparisons for capture and replacement behavior. The shared provider transcript transform is assembled, with all four named Copilot migration tests ported; context estimation and shared request-option construction are also ported, including both original context-estimation tests. Provider implementations and transport integration remain pending.
 
+## Laws and proofs
+
+Generic behavioral contracts live in [LAWS.bend](LAWS.bend), with machine-checked implementations in [PROOF.bend](PROOF.bend). Run `bend PROOF.bend` as the proof gate, or `python3 scripts/check-proofs.py` to also check rejection of open obligations and well-typed broken implementations. The initial laws prove FIFO empty/enqueue/dequeue sequence semantics for arbitrary element types and queue states. [Proof coverage](docs/laws.md) distinguishes these guarantees from remaining agent, IO and runtime work. Differential, integration and performance tests remain complementary.
+
 ## Build and test
 
 Requires Bend 2.0.4, Bun for the Bend compiler, Clang, Python 3 for build/test scripts, libcurl, and ICU development libraries (`icu-uc` and `icu-i18n` via pkg-config). The resulting executable uses no JavaScript runtime.

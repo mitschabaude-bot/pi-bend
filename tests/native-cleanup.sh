@@ -3,6 +3,7 @@
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
+python3 scripts/check-proofs.py
 sh scripts/build-pure.sh tests/library-types.bend build/test-library-types
 build/test-library-types
 for suite in transcript event-stream json native-agent; do
