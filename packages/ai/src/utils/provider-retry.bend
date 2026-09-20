@@ -29,8 +29,8 @@ type SleepInput<-Reason: Data> is Data:
 type Effects<-Reason: Data> is Data:
   Effects{random: C.Callback<Unit, F.F64>, parseDate: C.Callback<String, F.F64>, now: C.Callback<Unit, F.F64>, sleep: C.Callback<SleepInput<Reason>, Result<&2, &2, Unit, Unit>>}
 
-type Decision<-E: Data, -Value: Data> is Data:
-  Finished{result: Result<&2, &2, RetryFailure<E>, Value>}
+type Decision<v, -E: Data, -Value: Kind(v)> is Kind(v):
+  Finished{result: Result<&2, v, RetryFailure<E>, Value>}
   Retry{}
 
 def signalAborted(-Reason: Data, signal: Maybe<&2, A.AbortSignal<Reason>>) -> IO(Bool):
@@ -53,78 +53,87 @@ def delay(-Reason: Data, effects: Effects<Reason>, source: P.DelaySource, index:
             current : F.F64 <- C.call(Unit, F.F64, now, Unit{})
             return P.resolveServerDate(epoch, current, maximum)
 
-def afterSleep(-E: Data, -Value: Data, result: Result<&2, &2, Unit, Unit>) -> Decision<E, Value>:
+def afterSleep(v, -E: Data, -Value: Kind(v), result: Result<&2, &2, Unit, Unit>) -> Decision<v, E, Value>:
   match result:
     case Done{_}: Retry{}
     case Fail{_}: Finished{Fail{RequestAborted{}}}
 
-def sleepDelay(-Reason: Data, -E: Data, -Value: Data, effects: Effects<Reason>, signal: Maybe<&2, A.AbortSignal<Reason>>, message: String, result: Result<&2, &2, P.DelayError, F.F64>) -> IO(Decision<E, Value>):
+def sleepDelay(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, signal: Maybe<&2, A.AbortSignal<Reason>>, message: String, result: Result<&2, &2, P.DelayError, F.F64>) -> IO(Decision<v, E, Value>):
   match effects result:
-    case _ Fail{error}: IO.pure(Decision<E, Value>, Finished{Fail{DelayRejected{error, message}}})
+    case _ Fail{error}: IO.pure(Decision<v, E, Value>, Finished{Fail{DelayRejected{error, message}}})
     case Effects{_, _, _, sleep} Done{milliseconds}:
-      do IO<Decision<E, Value>>:
+      do IO<Decision<v, E, Value>>:
         slept : Result<&2, &2, Unit, Unit> <- C.call(SleepInput<Reason>, Result<&2, &2, Unit, Unit>, sleep, SleepInput{milliseconds, signal})
-        return afterSleep(E, Value, slept)
+        return afterSleep(v, E, Value, slept)
 
-def providerDecision(-Reason: Data, -E: Data, -Value: Data, +effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, error: ProviderError<E>, retryable: Bool) -> IO(Decision<E, Value>):
+def providerDecision(v, -Reason: Data, -E: Data, -Value: Kind(v), +effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, error: ProviderError<E>, retryable: Bool) -> IO(Decision<v, E, Value>):
   match options error retryable:
-    case _ value False{}: IO.pure(Decision<E, Value>, Finished{Fail{RequestFailed{Provider{value}}}})
+    case _ value False{}: IO.pure(Decision<v, E, Value>, Finished{Fail{RequestFailed{Provider{value}}}})
     case ProviderRetryOptions{_, maximum, signal} ProviderError{_, message, _, _, milliseconds, seconds} True{}:
-      do IO<Decision<E, Value>>:
+      do IO<Decision<v, E, Value>>:
         result : Result<&2, &2, P.DelayError, F.F64> <- delay(Reason, effects, P.selectDelaySource(milliseconds, seconds), index, maximum)
-        sleepDelay(Reason, E, Value, effects, signal, message, result)
+        sleepDelay(v, Reason, E, Value, effects, signal, message, result)
 
 def canRetry(-E: Data, error: ProviderError<E>) -> Bool:
   match error:
     case ProviderError{_, _, status, shouldRetry, _, _}: P.isRetryableProviderError(status, shouldRetry)
 
-def classify(-Reason: Data, -E: Data, -Value: Data, effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, failure: RequestFailure<E>) -> IO(Decision<E, Value>):
+def classify(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, failure: RequestFailure<E>) -> IO(Decision<v, E, Value>):
   match failure:
-    case Other{original}: IO.pure(Decision<E, Value>, Finished{Fail{RequestFailed{Other{original}}}})
-    case Provider{+error}: providerDecision(Reason, E, Value, effects, options, index, error, canRetry(E, error))
+    case Other{original}: IO.pure(Decision<v, E, Value>, Finished{Fail{RequestFailed{Other{original}}}})
+    case Provider{+error}: providerDecision(v, Reason, E, Value, effects, options, index, error, canRetry(E, error))
 
-def failed(-Reason: Data, -E: Data, -Value: Data, effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, failure: RequestFailure<E>, aborted: Bool, exhausted: Bool) -> IO(Decision<E, Value>):
+def failed(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, failure: RequestFailure<E>, aborted: Bool, exhausted: Bool) -> IO(Decision<v, E, Value>):
   match aborted exhausted:
-    case True{} _: IO.pure(Decision<E, Value>, Finished{Fail{RequestAborted{}}})
-    case False{} True{}: IO.pure(Decision<E, Value>, Finished{Fail{RequestFailed{failure}}})
-    case False{} False{}: classify(Reason, E, Value, effects, options, index, failure)
+    case True{} _: IO.pure(Decision<v, E, Value>, Finished{Fail{RequestAborted{}}})
+    case False{} True{}: IO.pure(Decision<v, E, Value>, Finished{Fail{RequestFailed{failure}}})
+    case False{} False{}: classify(v, Reason, E, Value, effects, options, index, failure)
 
-def received(-Reason: Data, -E: Data, -Value: Data, effects: Effects<Reason>, +options: ProviderRetryOptions<Reason>, index: Nat, exhausted: Bool, result: Result<&2, &2, RequestFailure<E>, Value>) -> IO(Decision<E, Value>):
+def received(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, +options: ProviderRetryOptions<Reason>, index: Nat, exhausted: Bool, result: Result<&2, v, RequestFailure<E>, Value>) -> IO(Decision<v, E, Value>):
   match options result:
-    case _ Done{value}: IO.pure(Decision<E, Value>, Finished{Done{value}})
+    case _ Done{value}: IO.pure(Decision<v, E, Value>, Finished{Done{value}})
     case ProviderRetryOptions{_, _, signal} Fail{failure}:
-      do IO<Decision<E, Value>>:
+      do IO<Decision<v, E, Value>>:
         aborted : Bool <- signalAborted(Reason, signal)
-        failed(Reason, E, Value, effects, options, index, failure, aborted, exhausted)
+        failed(v, Reason, E, Value, effects, options, index, failure, aborted, exhausted)
 
-def resume(-E: Data, -Value: Data, decision: Decision<E, Value>, next: Unit -> IO(Result<&2, &2, RetryFailure<E>, Value>)) -> IO(Result<&2, &2, RetryFailure<E>, Value>):
+def resume(v, -E: Data, -Value: Kind(v), decision: Decision<v, E, Value>, next: Unit -> IO(Result<&2, v, RetryFailure<E>, Value>)) -> IO(Result<&2, v, RetryFailure<E>, Value>):
   match decision:
-    case Finished{result}: IO.pure(Result<&2, &2, RetryFailure<E>, Value>, result)
+    case Finished{result}: IO.pure(Result<&2, v, RetryFailure<E>, Value>, result)
     case Retry{}: next(Unit{})
 
-def exhaustedResult(-E: Data, -Value: Data, decision: Decision<E, Value>) -> IO(Result<&2, &2, RetryFailure<E>, Value>):
-  resume(E, Value, decision, unused => IO.die(Result<&2, &2, RetryFailure<E>, Value>, 1, "exhausted retry loop continued"))
+def exhaustedResult(v, -E: Data, -Value: Kind(v), decision: Decision<v, E, Value>) -> IO(Result<&2, v, RetryFailure<E>, Value>):
+  resume(v, E, Value, decision, unused => IO.die(Result<&2, v, RetryFailure<E>, Value>, 1, "exhausted retry loop continued"))
 
 # The decreasing retry count bounds the loop; requests always run at least once,
 # even with an already-aborted signal. Successful requests are returned directly.
-def loop(-Reason: Data, -E: Data, -Value: Data, +request: C.Callback<Unit, Result<&2, &2, RequestFailure<E>, Value>>, +effects: Effects<Reason>, +options: ProviderRetryOptions<Reason>, remaining: Nat, +index: Nat) -> IO(Result<&2, &2, RetryFailure<E>, Value>):
+def loop(v, -Reason: Data, -E: Data, -Value: Kind(v), +request: C.Callback<Unit, Result<&2, v, RequestFailure<E>, Value>>, +effects: Effects<Reason>, +options: ProviderRetryOptions<Reason>, remaining: Nat, +index: Nat) -> IO(Result<&2, v, RetryFailure<E>, Value>):
   match remaining:
     case Zero{}:
-      do IO<Result<&2, &2, RetryFailure<E>, Value>>:
-        result : Result<&2, &2, RequestFailure<E>, Value> <- C.call(Unit, Result<&2, &2, RequestFailure<E>, Value>, request, Unit{})
-        decision : Decision<E, Value> <- received(Reason, E, Value, effects, options, index, True{}, result)
-        exhaustedResult(E, Value, decision)
+      do IO<Result<&2, v, RetryFailure<E>, Value>>:
+        result : Result<&2, v, RequestFailure<E>, Value> <- C.call(Unit, Result<&2, v, RequestFailure<E>, Value>, request, Unit{})
+        decision : Decision<v, E, Value> <- received(v, Reason, E, Value, effects, options, index, True{}, result)
+        exhaustedResult(v, E, Value, decision)
     case Succ{rest}:
-      do IO<Result<&2, &2, RetryFailure<E>, Value>>:
-        result : Result<&2, &2, RequestFailure<E>, Value> <- C.call(Unit, Result<&2, &2, RequestFailure<E>, Value>, request, Unit{})
-        decision : Decision<E, Value> <- received(Reason, E, Value, effects, options, index, False{}, result)
-        resume(E, Value, decision, unused => loop(Reason, E, Value, request, effects, options, rest, Succ{index}))
+      do IO<Result<&2, v, RetryFailure<E>, Value>>:
+        result : Result<&2, v, RequestFailure<E>, Value> <- C.call(Unit, Result<&2, v, RequestFailure<E>, Value>, request, Unit{})
+        decision : Decision<v, E, Value> <- received(v, Reason, E, Value, effects, options, index, False{}, result)
+        resume(v, E, Value, decision, unused => loop(v, Reason, E, Value, request, effects, options, rest, Succ{index}))
 
 def retryCount(value: Maybe<&2, Nat>) -> Nat:
   match value:
     case None{}: 0n
     case Some{count}: count
 
-def retryProviderRequest(-Reason: Data, -E: Data, -Value: Data, request: C.Callback<Unit, Result<&2, &2, RequestFailure<E>, Value>>, effects: Effects<Reason>, +options: ProviderRetryOptions<Reason>) -> IO(Result<&2, &2, RetryFailure<E>, Value>):
+def retryProviderRequestWith(v, -Reason: Data, -E: Data, -Value: Kind(v), request: C.Callback<Unit, Result<&2, v, RequestFailure<E>, Value>>, effects: Effects<Reason>, +options: ProviderRetryOptions<Reason>) -> IO(Result<&2, v, RetryFailure<E>, Value>):
   match options:
-    case ProviderRetryOptions{maximum, _, _}: loop(Reason, E, Value, request, effects, options, retryCount(maximum), 0n)
+    case ProviderRetryOptions{maximum, _, _}: loop(v, Reason, E, Value, request, effects, options, retryCount(maximum), 0n)
+
+# Preserve the public data-result API; both entry points share one loop.
+def retryProviderRequest(-Reason: Data, -E: Data, -Value: Data, request: C.Callback<Unit, Result<&2, &2, RequestFailure<E>, Value>>, effects: Effects<Reason>, options: ProviderRetryOptions<Reason>) -> IO(Result<&2, &2, RetryFailure<E>, Value>):
+  retryProviderRequestWith(&2, Reason, E, Value, request, effects, options)
+
+# A successful request transfers an affine resource exactly once. Failures
+# remain copyable descriptions; each failed attempt must retire its resources.
+def retryProviderRequestOwned(-Reason: Data, -E: Data, -Value: Type, request: C.Callback<Unit, Result<&2, &1, RequestFailure<E>, Value>>, effects: Effects<Reason>, options: ProviderRetryOptions<Reason>) -> IO(Result<&2, &1, RetryFailure<E>, Value>):
+  retryProviderRequestWith(&1, Reason, E, Value, request, effects, options)
