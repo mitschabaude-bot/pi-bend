@@ -1,4 +1,5 @@
 import Base
+import ./laws/bounded-bytes.bend as BoundedBytes
 import ./laws/hosts.bend as Hosts
 import ./laws/resolver-configuration.bend as ResolverConfiguration
 import ./laws/dns-search-run.bend as DNSSearchRun

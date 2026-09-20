@@ -10,4 +10,12 @@ Parsing returns either the complete ordered database or the first typed failure 
 
 Generic laws cover concatenation of lookup results, empty lookup, canonical-name and alias matching, retention of matched entries, first-failure retention and rejection of partial databases. The concatenation proof is inductive over arbitrary entry lists. These laws do not prove the numeric address parser, all case-folding behavior, IO ownership or resource bounds. Executed tests use `inet_pton` for addresses and a separate test-only grammar/lookup oracle for the remaining behavior.
 
-File loading, NSS/source ordering, address-family policy and dispatch into the native DNS resolver remain unimplemented for this layer. No production host-resolution path has been changed by adding this pure core.
+Bounded file loading is implemented below. NSS/source ordering, address-family policy and dispatch into the native DNS resolver remain unimplemented for this layer. No production host-resolution path has been changed by adding this pure core.
+
+## Bounded file loading
+
+`hosts-load.readWith` reads a caller-selected path under an explicit source-byte limit and returns typed loading, decoding or syntax failures. It requires a decoder; there is no implicit replacement-decoding default. A missing file is a loading error, not an empty database or permission to query DNS. The caller will choose that source/fallback policy when hostname resolution is integrated.
+
+`bounded-file.readWith` is shared with resolver-file loading. Its pure `bounded-bytes` core retains at most the budget, tracks overflow across chunks and rejects the first excess byte. The IO adapter uses the existing file-fold owner to close before decoding. Exact-budget files succeed after EOF; oversized inputs stop without waiting for EOF. Read chunk size remains separately caller-controlled, so the byte-retention limit is not a bound on the size of an individual OS read or total process memory.
+
+Four generic laws cover chunk composition, sticky overflow, exclusion of excess bytes and single-byte budget consumption for arbitrary values and retained prefixes. Live file and pipe tests check error precedence and closure. The resolver's existing `readWith`/`loadWith` entry points and error constructors remain unchanged; their internal budget state moved into the reusable core. These APIs do not yet supply a production strict UTF-8 decoder, OS source ordering or hosts-to-DNS dispatch.

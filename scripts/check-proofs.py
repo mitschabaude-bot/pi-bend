@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('bounded-reader-forgets-overflow', 'packages/runtime/src/bounded-bytes.bend',
+         'case _ State{_, reversed, True{}}: State{0n, reversed, True{}}', 'case _ State{_, reversed, True{}}: State{0n, reversed, False{}}', 'laws/bounded-bytes.overflow_sticky'),
+        ('bounded-reader-retains-excess-byte', 'packages/runtime/src/bounded-bytes.bend',
+         'case _ <> _ State{0n, reversed, False{}}: State{0n, reversed, True{}}', 'case byte <> _ State{0n, reversed, False{}}: State{0n, byte <> reversed, True{}}', 'laws/bounded-bytes.chunk_composition'),
+        ('bounded-reader-does-not-consume-budget', 'packages/runtime/src/bounded-bytes.bend',
+         'consumed(rest, State{remaining, byte <> reversed, False{}})', 'consumed(rest, State{1n+remaining, byte <> reversed, False{}})', 'laws/bounded-bytes.chunk_composition'),
         ('hosts-discards-matched-row', 'packages/runtime/src/hosts.bend',
          'case True{}: entry <> rest', 'case True{}: rest', 'laws/hosts.matched_entry_retained'),
         ('hosts-reverses-matches', 'packages/runtime/src/hosts.bend',
