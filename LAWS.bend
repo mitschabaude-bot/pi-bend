@@ -1,4 +1,5 @@
 import Base
+import ./laws/resolver-request.bend as ResolverRequest
 import ./laws/dns-query.bend as DNSQuery
 import ./laws/agent-events.bend as AgentEvents
 import ./laws/agent-owner.bend as AgentOwner
