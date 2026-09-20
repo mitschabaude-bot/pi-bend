@@ -77,11 +77,23 @@ def ready(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, 
         next : Progress<Reason> <- ready(~Environment, ~draw, Reason, environment, address, port, signal, kind, name, history, maximum, reason)
         drive(~Environment, ~draw, Reason, environment, address, port, signal, kind, maximum, next)
 
+# Execute one name and its alias follow-ups under a caller-owned deadline.
+# Validation precedes entropy/network effects. This function neither resets the
+# deadline nor retires its signal, allowing an enclosing search to reuse it.
+def exchangeChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, valid: Bool, environment: Environment, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  match valid maximum:
+    case False{} _: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{UnsupportedType{}})
+    case True{} 0: IO.pure(Result<&2, &2, Error<Reason>, Answer.Selection>, Fail{InvalidReadSize{}})
+    case True{} size: drive(~Environment, ~draw, Reason, environment, address, port, signal, kind, size, Again{name, Answer.newHistory()})
+
+def exchangeWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +kind: U32, name: Name.Name, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, Answer.Selection>):
+  exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), environment, address, port, signal, kind, name, maximum)
+
 def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), -Reason: Data, environment: Environment, address: Connect.Address, port: U32, kind: U32, name: Name.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, signal):
       do IO<Report<Reason>>:
-        result : Result<&2, &2, Error<Reason>, Answer.Selection> <- drive(~Environment, ~draw, Reason, environment, address, port, signal, kind, maximum, Again{name, Answer.newHistory()})
+        result : Result<&2, &2, Error<Reason>, Answer.Selection> <- exchangeWith(~Environment, ~draw, Reason, environment, address, port, signal, kind, name, maximum)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return Report{result, reason}
 
