@@ -38,13 +38,30 @@ def check(directory, source):
     return {'source': source, 'exit_code': run.returncode, 'stdout': run.stdout, 'stderr': run.stderr}
 
 def accepted(result):
-    # Agent types import an existing effectful runtime annotation. Keep its
-    # current count explicit: increases require review, not silent acceptance.
-    summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.'}
+    # The full owner import closure includes three existing schema/JSON
+    # annotations as well as the original runtime annotation. None supplies
+    # evidence for these laws; their exact source declarations are audited below.
+    summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
+                 'All terms check, with 4 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
     assert result['exit_code'] != 0 and diagnostic in result['stdout'] + result['stderr'], result
+
+# Templates are included in this source audit even when the checker does not
+# count them as a concrete unsafe definition. Keep this list explicit.
+unsafe_declarations = {
+    (name, match.group(1))
+    for name in FILES
+    for match in re.finditer(r'^@unsafe\s+def ([^\s(]+)', (ROOT / name).read_text(), re.MULTILINE)
+}
+assert unsafe_declarations == {
+    ('packages/runtime/src/callback.bend', 'factory'),
+    ('packages/ai/src/utils/event-stream.bend', 'drive'),
+    ('packages/runtime/src/schema-value.bend', 'compare'),
+    ('packages/ai/src/utils/json.bend', 'encode'),
+    ('packages/ai/src/utils/schema-json.bend', 'convert'),
+}, unsafe_declarations
 
 results = {'proof': check(ROOT, 'PROOF.bend'), 'open_laws': check(ROOT, 'LAWS.bend'), 'mutations': []}
 accepted(results['proof'])
@@ -73,6 +90,21 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('enqueue-changes-agent-state', 'packages/agent/src/agent-runtime.bend',
+         '(OwnedState{state, Q.enqueue(T.AgentMessage<P, A, G, D, C>, queues, kind, message)}, Unit{})',
+         '(OwnedState{State.beginRun(P, A, G, D, C, V, S, E, J, state), Q.enqueue(T.AgentMessage<P, A, G, D, C>, queues, kind, message)}, Unit{})', 'laws/agent-owner.enqueue_preserves_state'),
+        ('queue-update-changes-agent-state', 'packages/agent/src/agent-runtime.bend',
+         '(OwnedState{state, update(queues)}, Unit{})',
+         '(OwnedState{State.beginRun(P, A, G, D, C, V, S, E, J, state), update(queues)}, Unit{})', 'laws/agent-owner.queue_update_preserves_state'),
+        ('drain-changes-agent-state', 'packages/agent/src/agent-runtime.bend',
+         '(OwnedState{state, queues}, messages)',
+         '(OwnedState{State.beginRun(P, A, G, D, C, V, S, E, J, state), queues}, messages)', 'proofs/agent-owner.drained_preserves_state'),
+        ('replace-messages-discards-input', 'packages/agent/src/agent-state.bend',
+         'ReplaceMessages{messages}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}',
+         'ReplaceMessages{messages}: T.AgentState{model, thinking, tools, Nil{}, streaming, current, pending, error}', 'laws/agent-owner.replace_messages'),
+        ('model-change-stops-run', 'packages/agent/src/agent-state.bend',
+         'SetModel{model}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}',
+         'SetModel{model}: T.AgentState{model, thinking, tools, messages, False{}, current, pending, error}', 'laws/agent-owner.changes_preserve_run_state'),
         ('flush-drops-pending-lines', 'packages/runtime/src/line-decoder.bend',
          'case LineDecoder{pending}: consume(LineDecoder{pending}, 10)',
          'case LineDecoder{pending}: Decoded{create(), Nil{}}', 'laws/line-decoder.flush_result'),
