@@ -62,7 +62,7 @@ js_source = js_source.replace(js_needle, js_needle + '\n  servers_attempts++;')
     + js_source)
 
 query = struct.pack('!6H', 42, 256, 1, 0, 0, 0) + b'\0\0\1\0\1'
-modes = ['first', 'second', 'round', 'exhausted', 'duplicate', 'rotation',
+modes = ['servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'all-rcode', 'nxdomain', 'first', 'second', 'round', 'exhausted', 'duplicate', 'rotation',
          'refused', 'all-refused', 'truncated', 'total', 'later', 'pre',
          'pre-default', 'zero', 'empty', 'budget', 'port', 'invalid']
 rows = []
@@ -97,25 +97,32 @@ for backend, command in [
                         received.append((index, time.monotonic() - started))
                         assert wire == query, (mode, wire.hex())
                         respond = (
-                            mode in ['first', 'truncated', 'refused'] or
+                            mode in ['servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'all-rcode', 'nxdomain', 'first', 'truncated', 'refused'] or
                             mode in ['second', 'rotation'] and len(received) == 2 or
                             mode == 'round' and len(received) == 3 or
                             mode == 'duplicate' and len(received) == 2
                         )
                         if respond:
                             flags = 0x8380 if mode == 'truncated' else 0x8180
+                            if mode == 'all-rcode' or len(received) == 1:
+                                flags = {'servfail': 0x8182, 'notimp': 0x8184, 'rcode-refused': 0x8185, 'empty-answer': 0x8100, 'rcode-tc': 0x8382, 'all-rcode': 0x8185, 'nxdomain': 0x8183}.get(mode, flags)
                             peer.sendto(struct.pack('!6H', 42, flags, 1, 0, 0, 0) + query[12:], client)
                 out, err = process.communicate(timeout=1)
                 elapsed = time.monotonic() - started
                 expected_order = {
+                    'servfail': [0, 1], 'notimp': [0, 1], 'rcode-refused': [0, 1], 'empty-answer': [0, 1], 'rcode-tc': [0, 1], 'all-rcode': [0, 1, 0, 1], 'nxdomain': [0],
                     'first': [0], 'second': [0, 1], 'round': [0, 1, 0],
                     'exhausted': [0, 1, 0, 1], 'duplicate': [0, 0],
                     'rotation': [1, 2], 'refused': [1], 'all-refused': [],
                     'truncated': [0], 'total': [0, 1], 'later': [0],
                 }.get(mode, [])
                 assert [i for i, _ in received] == expected_order, (backend, family, mode, received)
-                if mode in ['first', 'second', 'round', 'duplicate', 'rotation', 'refused']:
+                if mode in ['servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'first', 'second', 'round', 'duplicate', 'rotation', 'refused']:
                     expected = f'{ports[expected_order[-1]]}:answer:33152:17:1'
+                elif mode == 'all-rcode':
+                    expected = f'{ports[1]}:rejected:33157:active'
+                elif mode == 'nxdomain':
+                    expected = f'{ports[0]}:answer:33155:17:1'
                 elif mode == 'truncated':
                     expected = f'{ports[0]}:truncated'
                 elif mode in ['zero', 'empty']:

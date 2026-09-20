@@ -90,6 +90,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('udp-policy-accepts-server-failure', 'packages/runtime/src/dns-udp-policy.bend',
+         'case FailureCode{}: Retry{ServerFailure{}}', 'case FailureCode{}: Accept{}', 'laws/dns-udp-policy.server_failure_retries'),
+        ('udp-policy-accepts-unhelpful-empty', 'packages/runtime/src/dns-udp-policy.bend',
+         'case True{}: Retry{UnhelpfulEmpty{}}', 'case True{}: Accept{}', 'laws/dns-udp-policy.unhelpful_success_retries'),
+        ('udp-policy-accepts-truncation', 'packages/runtime/src/dns-udp-policy.bend',
+         'case True{} False{}: UseTCP{}', 'case True{} False{}: Accept{}', 'laws/dns-udp-policy.truncation_uses_tcp'),
         ('udp-oversized-duration-accepted', 'packages/runtime/src/dns-udp-timeout.bend',
          'case Zero{} Succ{_}: Fail{OutOfRange{}}',
          'case Zero{} Succ{_}: Done{accumulated}', 'laws/dns-udp-timeout.oversized_duration_rejected'),

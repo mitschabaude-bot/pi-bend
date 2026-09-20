@@ -7,11 +7,14 @@ import ./dns-udp-plan.bend as Plan
 import ./dns-udp-schedule.bend as Schedule
 import ./dns-udp-query.bend as Query
 import ./dns-query.bend as Request
+import ./dns-message.bend as Message
+import ./dns-udp-policy.bend as Policy
 import ./abortable-datagram.bend as Datagram
 import ./datagram-peer.bend as Peer
 import ./socket-endpoint.bend as Endpoint
 
 type Failure<-Reason: Data> is Data:
+  Rejected{header: Message.Header, reason: Policy.Rejection}
   InvalidDestination{}
   InvalidBudget{error: Timeout.MillisecondsError}
   Exchange{error: Query.Error<Deadline.Cause<Deadline.Cause<Reason>>>}
@@ -56,11 +59,30 @@ def failed(-Reason: Data, endpoint: Endpoint.Endpoint, +error: Query.Error<Deadl
     case Scope.UnexpectedDefaultAbort{}: Stop{Report{endpoint, Exchange{error}, Scope.UnexpectedDefaultAbort{}}}
     case other: retry(Reason, retryable(Reason, error), Report{endpoint, Exchange{error}, other})
 
-# A reply already completed by the query remains a reply even when scope
+def rejected(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reason: Policy.Rejection, end: Scope.End<Reason>) -> Decision<Reason>:
+  match end:
+    case Scope.ParentAborted{why}: Stop{Report{endpoint, Rejected{header, reason}, Scope.ParentAborted{why}}}
+    case Scope.UnexpectedDefaultAbort{}: Stop{Report{endpoint, Rejected{header, reason}, Scope.UnexpectedDefaultAbort{}}}
+    case other: Next{Some{Report{endpoint, Rejected{header, reason}, other}}}
+
+def selected(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reply: Query.Reply, end: Scope.End<Reason>, decision: Policy.Decision) -> Decision<Reason>:
+  match decision:
+    case Policy.Retry{reason}: rejected(Reason, endpoint, header, reason, end)
+    case _: Answer{Reply{endpoint, reply}}
+
+def responseHeader(reply: Query.Reply) -> Message.Header:
+  match reply:
+    case Query.Truncated{header}: header
+    case Query.Answer{Message.Message{_, header, _, _, _, _}}: header
+
+def answered(-Reason: Data, endpoint: Endpoint.Endpoint, +header: Message.Header, reply: Query.Reply, end: Scope.End<Reason>) -> Decision<Reason>:
+  selected(Reason, endpoint, header, reply, end, Policy.header(header, False{}))
+
+# An accepted reply remains a reply even when scope
 # closure observes a later expiry. Failed attempts retain cleanup-time reasons.
 def completed(-Reason: Data, endpoint: Endpoint.Endpoint, result: Result<&2, &2, Query.Error<Deadline.Cause<Deadline.Cause<Reason>>>, Query.Reply>, end: Scope.End<Reason>) -> Decision<Reason>:
   match result:
-    case Done{reply}: Answer{Reply{endpoint, reply}}
+    case Done{+reply}: answered(Reason, endpoint, responseHeader(reply), reply, end)
     case Fail{error}: failed(Reason, endpoint, error, end)
 
 def scoped(-Reason: Data, +endpoint: Endpoint.Endpoint, request: Request.Request, pair: Deadline.Scope<Deadline.Cause<Reason>> & Abort.AbortSignal<Deadline.Cause<Deadline.Cause<Reason>>>) -> IO(Decision<Reason>):
@@ -117,6 +139,7 @@ def drive(-Reason: Data, fuel: Nat, step: Schedule.Step<Plan.Attempt<Endpoint.En
 # Entries are already positioned/timed/rotated. Borrow one total deadline and
 # reuse the identical request through every attempt. Return the selected server
 # with a reply so a later TCP fallback can target that same endpoint.
-# RCODE and EDNS policy belong above this transport-failure failover layer.
+# Retryable response codes advance this same cursor. Truncation retains the
+# selected endpoint for TCP fallback; EDNS negotiation remains above this layer.
 def exchangeRequest(-Reason: Data, +attempts: Nat, +servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Request.Request) -> IO(Result<&2, &2, Error<Reason>, Reply>):
   drive(Reason, Nat.mul(attempts, List.length(&2, Plan.Attempt<Endpoint.Endpoint>, servers)), Schedule.next(Plan.Attempt<Endpoint.Endpoint>, Schedule.start(Plan.Attempt<Endpoint.Endpoint>, attempts, servers)), signal, request, Next{None{}})
