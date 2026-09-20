@@ -1,0 +1,6675 @@
+{
+  "scope": "Search suffixes composed with multi-server address/alias lookup and recovery.",
+  "cases": [
+    {
+      "name": "suffix-failover",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "eof"
+        ],
+        [
+          1,
+          "a.x",
+          0,
+          3
+        ],
+        [
+          0,
+          "a.y",
+          65535,
+          "eof"
+        ],
+        [
+          1,
+          "a.y",
+          65535,
+          "address"
+        ]
+      ],
+      "answer": "a.y",
+      "draws": 2
+    },
+    {
+      "name": "suffix-alias-failover",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "eof"
+        ],
+        [
+          1,
+          "a.x",
+          0,
+          3
+        ],
+        [
+          0,
+          "a.y",
+          65535,
+          "alias:b"
+        ],
+        [
+          0,
+          "b",
+          4660,
+          "eof"
+        ],
+        [
+          1,
+          "b",
+          4660,
+          "address"
+        ]
+      ],
+      "answer": "b",
+      "draws": 3
+    },
+    {
+      "name": "reset-next-suffix",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "reset"
+        ],
+        [
+          0,
+          "a.x",
+          0,
+          3
+        ],
+        [
+          0,
+          "a.y",
+          65535,
+          "address"
+        ]
+      ],
+      "answer": "a.y",
+      "draws": 2
+    },
+    {
+      "name": "dns-refused-final",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          5
+        ],
+        [
+          0,
+          "a",
+          65535,
+          "eof"
+        ],
+        [
+          1,
+          "a",
+          65535,
+          "address"
+        ]
+      ],
+      "answer": "a",
+      "draws": 2
+    },
+    {
+      "name": "last-connection-refused",
+      "servers": [
+        "listen",
+        "refused"
+      ],
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "eof"
+        ]
+      ],
+      "dns": 2,
+      "draws": 1
+    },
+    {
+      "name": "transport-final",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "eof"
+        ],
+        [
+          1,
+          "a.x",
+          0,
+          "eof"
+        ],
+        [
+          0,
+          "a",
+          65535,
+          "eof"
+        ],
+        [
+          1,
+          "a",
+          65535,
+          "address"
+        ]
+      ],
+      "answer": "a",
+      "draws": 2
+    },
+    {
+      "name": "no-data-precedence",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535,
+          3
+        ],
+        [
+          0,
+          "a",
+          4660,
+          3
+        ]
+      ],
+      "dns": 4,
+      "draws": 3
+    },
+    {
+      "name": "initial-precedence",
+      "text": "a.b",
+      "ndots": 1,
+      "plan": [
+        [
+          0,
+          "a.b",
+          0,
+          "eof"
+        ],
+        [
+          1,
+          "a.b",
+          0,
+          3
+        ],
+        [
+          0,
+          "a.b.x",
+          65535,
+          0
+        ],
+        [
+          0,
+          "a.b.y",
+          4660,
+          2
+        ]
+      ],
+      "dns": 1,
+      "draws": 3
+    },
+    {
+      "name": "all-refused",
+      "servers": [
+        "refused",
+        "refused"
+      ],
+      "plan": [],
+      "dns": 2,
+      "draws": 1
+    },
+    {
+      "name": "source-first",
+      "mode": "error-first",
+      "plan": [],
+      "error": "entropy:11:test source unavailable",
+      "draws": 1
+    },
+    {
+      "name": "source-second",
+      "mode": "error-second",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          3
+        ]
+      ],
+      "error": "entropy:38:test source unavailable",
+      "draws": 2
+    },
+    {
+      "name": "pre-abort",
+      "mode": "pre",
+      "plan": [],
+      "error": "connect:parent",
+      "reason": "parent",
+      "draws": 0
+    },
+    {
+      "name": "deadline-suffix-failover",
+      "mode": "deadline",
+      "slow_first": true,
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          3
+        ],
+        [
+          0,
+          "a.y",
+          65535,
+          "eof"
+        ],
+        [
+          1,
+          "a.y",
+          65535,
+          "stall"
+        ]
+      ],
+      "error": "read:expiry",
+      "reason": "expiry",
+      "draws": 2
+    },
+    {
+      "name": "deadline-alias-recovery",
+      "mode": "deadline",
+      "slow_first": true,
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "alias:b"
+        ],
+        [
+          0,
+          "b",
+          65535,
+          "reset"
+        ],
+        [
+          0,
+          "b",
+          65535,
+          "stall"
+        ]
+      ],
+      "error": "read:expiry",
+      "reason": "expiry",
+      "draws": 2
+    },
+    {
+      "name": "no-servers",
+      "servers": [],
+      "plan": [],
+      "error": "no-servers",
+      "draws": 0
+    },
+    {
+      "name": "zero",
+      "mode": "zero",
+      "plan": [],
+      "error": "zero",
+      "draws": 0
+    },
+    {
+      "name": "type",
+      "mode": "type",
+      "plan": [],
+      "error": "type",
+      "draws": 0
+    },
+    {
+      "name": "alias-loop",
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "alias:b"
+        ],
+        [
+          0,
+          "b",
+          65535,
+          "alias:a.x"
+        ]
+      ],
+      "error": "loop",
+      "draws": 2
+    },
+    {
+      "name": "no-domains",
+      "domains": "",
+      "plan": [
+        [
+          0,
+          "a",
+          0,
+          "eof"
+        ],
+        [
+          1,
+          "a",
+          0,
+          "address"
+        ]
+      ],
+      "answer": "a",
+      "draws": 1
+    },
+    {
+      "name": "duplicate",
+      "order": [
+        0,
+        0
+      ],
+      "plan": [
+        [
+          0,
+          "a.x",
+          0,
+          "eof"
+        ],
+        [
+          0,
+          "a.x",
+          0,
+          3
+        ],
+        [
+          0,
+          "a.y",
+          65535,
+          "address"
+        ]
+      ],
+      "answer": "a.y",
+      "draws": 2
+    },
+    {
+      "name": "invalid-name",
+      "text": "a..b",
+      "ndots": 1,
+      "plan": [],
+      "dns": 3,
+      "draws": 0
+    },
+    {
+      "name": "absolute",
+      "text": "a.",
+      "plan": [
+        [
+          0,
+          "a",
+          0,
+          "eof"
+        ],
+        [
+          1,
+          "a",
+          0,
+          "address"
+        ]
+      ],
+      "answer": "a",
+      "draws": 1
+    }
+  ],
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 0,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 1,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "b",
+          4660
+        ],
+        [
+          1,
+          "b",
+          4660
+        ]
+      ],
+      "output": [
+        "ok:1,98,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 2,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 3,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 4,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 5,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          1,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a",
+          65535
+        ],
+        [
+          1,
+          "a",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 6,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          0,
+          "a",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 7,
+      "queries": [
+        [
+          0,
+          "a.b",
+          0
+        ],
+        [
+          1,
+          "a.b",
+          0
+        ],
+        [
+          0,
+          "a.b.x",
+          65535
+        ],
+        [
+          0,
+          "a.b.y",
+          4660
+        ]
+      ],
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 8,
+      "queries": [],
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 9,
+      "queries": [],
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 10,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ]
+      ],
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 11,
+      "queries": [],
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 12,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ],
+        [
+          1,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 13,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 14,
+      "queries": [],
+      "output": [
+        "no-servers",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 15,
+      "queries": [],
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 16,
+      "queries": [],
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 17,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "b",
+          65535
+        ]
+      ],
+      "output": [
+        "loop",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 18,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 19,
+      "queries": [
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.x",
+          0
+        ],
+        [
+          0,
+          "a.y",
+          65535
+        ]
+      ],
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 20,
+      "queries": [],
+      "output": [
+        "dns:3",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": 21,
+      "queries": [
+        [
+          0,
+          "a",
+          0
+        ],
+        [
+          1,
+          "a",
+          0
+        ]
+      ],
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/dns-address-search.bend": "5414a84e5b416b9b57a0e4cfcdc7a9547901974082d0015c4afa1d27d0424a13",
+    "packages/runtime/src/dns-address-lookup.bend": "cd6dcac24a4fa041f236f54217ece84421172cc4576f42601323a09f7a4371be",
+    "packages/runtime/src/dns-tcp-servers.bend": "8bf2629794be02cbd76ae23c1e9f53fd1d7dfc8bd4207792039beacb0a1748db",
+    "packages/runtime/src/dns-tcp-recover.bend": "05d16ba3343f570f2e2ea8e2dc7060e977c4cbbd3586ea5a0ca97ee17ccdbbab",
+    "tests/dns-search-servers.bend": "5b72caa62ad03f50b5041012dc12dc36963cd73d165b2ce577267798a2b697eb",
+    "tests/dns_search_servers_check.py": "7c08e8358290d9ee75d952748255aedb770b2128ece0df82a2bc5019106d9b29",
+    "tests/dns-lookup-ids.bend": "42f585a7963764b9005f02aadb1a9776b26f6e273ec2c0a7a08c676e6f5af59f",
+    "tests/dns-address-lookup.bend": "6f48481669a38b4c551059d6d5bd45bc770251dd523161ab2d596383dc1a2320",
+    "tests/dns-tcp-servers.bend": "4db16d5735dcb22edbd04b4ca100b9eb3cffe5e9d11bff92a06d591105d451da",
+    "build/dns-search-servers": "ac633a41f6f05aaea354b144b30439e4307aecac8b3660aeaaf9d20a5387a4fd",
+    "build/dns-search-servers.js": "57650e7d710a4d9615245cac7ac71a98ec848c1f1745b9a78fd1bdf89de5be1d"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-dns-refused-candidate/main.ts",
+        "tests/dns-search-servers.bend",
+        "-o",
+        "build/dns-search-servers.c"
+      ],
+      "elapsed_seconds": 45.54069027490914,
+      "peak_sampled_group_rss_kib": 15923452,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-dns-refused-candidate/main.ts",
+        "tests/dns-search-servers.bend",
+        "-o",
+        "build/dns-search-servers.js"
+      ],
+      "elapsed_seconds": 3.1568202385678887,
+      "peak_sampled_group_rss_kib": 1243936,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "base.bend": "1401db4d6c225d62ee6990a2d1328206f9633479c3d19a659e0bd354fa81c587",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+  },
+  "single_server_regression": {
+    "scope": "Single-server DNS search over real loopback TCP exchanges.\n\nChecks DNS RCODE classification, selected-empty replies, search precedence,\nalias follow-ups, refusal, EOF/reset/partial framing, shared deadline and\nterminal source/validation/abort errors.\nThis is not a server retry, OS configuration or full resolver test.\n",
+    "sha256": {
+      "packages/runtime/src/dns-address-search.bend": "5414a84e5b416b9b57a0e4cfcdc7a9547901974082d0015c4afa1d27d0424a13",
+      "packages/runtime/src/dns-address-lookup.bend": "cd6dcac24a4fa041f236f54217ece84421172cc4576f42601323a09f7a4371be",
+      "packages/runtime/src/dns-search-run.bend": "879c0bdd352813b8da8c5e97142c4ff44cdfadc3e105ef7e4ab67a31ec247f00",
+      "packages/runtime/src/dns-search-response.bend": "a024d01e28fbfb4195cafa80d680f0528779252e5e73ed7e45ed18f8326214fb",
+      "tests/dns-address-search.bend": "a8994f2855ec2fe7791d91d04ebc48fdbf02b2c86640809c623379bdd9011442",
+      "tests/dns_address_search_check.py": "da733f36f44bf4a2ccc180ebeb208c735c5023faca84fb0dba54605d1dc7b818",
+      "build/dns-address-search": "631d385d957364e1c4fe415eed87f56a0b50986e9ab1c4dd7c548c47eac8aa3a",
+      "build/dns-address-search.js": "88474de3ab81ab266d1ce519cc37fa959c02745eaa0ce746701be32a128840e3"
+    },
+    "builds": {
+      "c": {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+          "tests/dns-address-search.bend",
+          "-o",
+          "build/dns-address-search.c"
+        ],
+        "elapsed_seconds": 47.15225143916905,
+        "peak_sampled_group_rss_kib": 16672044,
+        "limit_gib": 16.0,
+        "stopped": false,
+        "child_exit_code": 0
+      },
+      "js": {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "/home/agent/code/pi-bend/build/bend-dns-refused-candidate/main.ts",
+          "tests/dns-address-search.bend",
+          "-o",
+          "build/dns-address-search.js"
+        ],
+        "elapsed_seconds": 3.163684155791998,
+        "peak_sampled_group_rss_kib": 1228056,
+        "limit_gib": 16.0,
+        "stopped": false,
+        "child_exit_code": 0
+      }
+    },
+    "compiler_sha256": {
+      "base.bend": "1401db4d6c225d62ee6990a2d1328206f9633479c3d19a659e0bd354fa81c587",
+      "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+      "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+      "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+    },
+    "case_count": 480,
+    "result_sha256": "331d5245e1154e082d30649dd8473d99ea65113b1178555ec060614bf03af55c"
+  }
+}
