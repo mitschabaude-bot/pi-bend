@@ -1,0 +1,18 @@
+import Base
+import ./record.bend as RecordProof
+import ../laws/record.bend as RecordLaws
+import ../laws/string-set.bend as Laws
+import ../packages/runtime/src/record.bend as R
+import ../packages/runtime/src/string-set.bend as Set
+
+def Laws.empty_membership(value): {==}
+
+def Laws.remove_membership(values, value):
+  match values:
+    case Set.Set{entries}:
+      Equal.cong(Maybe<&2, Unit>, Bool, result => Bool.not(Maybe.is_none(&2, Unit, result)), R.get(Unit, R.remove(Unit, entries, value), value), None{}, RecordLaws.remove_absent(Unit, entries, value))
+
+def Laws.remove_idempotent(values, value):
+  match values:
+    case Set.Set{entries}:
+      Equal.cong(R.Record<Unit>, Set.Set, record => Set.Set{record}, R.remove(Unit, R.remove(Unit, entries, value), value), R.remove(Unit, entries, value), RecordLaws.remove_idempotent(Unit, entries, value))

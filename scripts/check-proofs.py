@@ -73,6 +73,14 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('removal-keeps-matching-entry', 'packages/runtime/src/record.bend',
+         'Bool.pick(List<&2, Property<V>>, String.eq(name, key), tail, Property{name, value} <> tail)',
+         'Property{name, value} <> tail', 'proofs/record.remove_properties_absent'),
+        ('removal-discards-other-entries', 'packages/runtime/src/record.bend',
+         'Bool.pick(List<&2, Property<V>>, String.eq(name, key), tail, Property{name, value} <> tail)',
+         'tail', 'proofs/record.remove_properties_absent'),
+        ('set-removal-is-no-op', 'packages/runtime/src/string-set.bend',
+         'Set{R.remove(Unit, entries, value)}', 'Set{entries}', 'laws/string-set.remove_membership'),
         ('clear-forgets-mode', 'packages/agent/src/pending-message-queue.bend',
          'case PendingMessageQueue{mode, _}: new(M, mode)',
          'case PendingMessageQueue{mode, _}: new(M, T.All{})', 'laws/pending-queue.clear'),
@@ -91,7 +99,11 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         original_extra = target.read_text()
         assert original_extra.count(before) == 1, label
         target.write_text(original_extra.replace(before, after))
-        typed = check(directory, name)
+        # Import under a namespace: standalone Set conflicts with Base.Set.
+        # This checks the module exactly as production callers import it.
+        (directory / 'mutation-module.bend').write_text(f'import ./{name} as Subject\n')
+        typed = check(directory, 'mutation-module.bend')
+        typed['module'] = name
         accepted(typed)
         proof_result = check(directory, 'PROOF.bend')
         rejected(proof_result, diagnostic)
@@ -106,4 +118,4 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
     rejected(results['missing_proof'], 'unfilled law')
 results['sha256'] = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in FILES + ['scripts/check-proofs.py']}
 (ROOT / 'build/proof-check.json').write_text(json.dumps(results, indent=2) + '\n')
-print('PASS generic queue laws; open obligations, missing proof and seven well-typed mutations rejected')
+print(f"PASS generic laws; open obligations, missing proof and {len(results['mutations'])} well-typed mutations rejected")
