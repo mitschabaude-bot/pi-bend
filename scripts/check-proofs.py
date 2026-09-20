@@ -90,6 +90,10 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('transport-settings-discarded', 'packages/runtime/src/resolver-transport.bend',
+         'Done{Prepared{options, servers}}', 'Done{Prepared{Options.defaults(), servers}}', 'laws/resolver-transport.settings_and_entries_preserved'),
+        ('transport-timing-error-ignored', 'packages/runtime/src/resolver-transport.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Done{Prepared{options, Nil{}}}', 'laws/resolver-transport.preparation_failure_retained'),
         ('edns-code-uses-version', 'packages/runtime/src/dns-edns-response.bend',
          'Some{Response{_, upper, _, _, _}}: (upper * 16', 'Some{Response{_, _, version, _, _}}: (version * 16', 'laws/dns-edns-response.response_code_metadata_independent'),
         ('edns-duplicate-opt-accepted', 'packages/runtime/src/dns-edns-response.bend',

@@ -1,4 +1,5 @@
 import Base
+import ./laws/resolver-transport.bend as ResolverTransport
 import ./laws/dns-edns-response.bend as DNSEdnsResponse
 import ./laws/dns-transport-choice.bend as DNSTransportChoice
 import ./laws/dns-udp-policy.bend as DNSUDPPolicy
