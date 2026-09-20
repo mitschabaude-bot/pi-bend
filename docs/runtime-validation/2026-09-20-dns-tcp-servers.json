@@ -1,0 +1,7369 @@
+{
+  "scope": "Ordered TCP server failover with real loopback endpoints.\n\nOne pass; DNS replies are returned without UDP response-code failover. Checks\nclosed attempts, final error selection, shared deadline and terminal abort.\n",
+  "cases": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "refusal-next",
+        "servers": [
+          "refused",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "eof-next",
+        "servers": [
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "partial-next",
+        "servers": [
+          "partial",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "reset-next",
+        "servers": [
+          "reset",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "third-server",
+        "servers": [
+          "eof",
+          "eof",
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        1,
+        2
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-eof",
+        "servers": [
+          "refused",
+          "eof"
+        ],
+        "outcome": "eof"
+      },
+      "accepted_server_indices": [
+        1
+      ],
+      "output": [
+        "eof",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-refusal",
+        "servers": [
+          "eof",
+          "refused"
+        ],
+        "outcome": "socket:111"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "socket:111",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "last-partial",
+        "servers": [
+          "eof",
+          "partial"
+        ],
+        "outcome": "frame"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "frame",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "no-servers",
+        "servers": [],
+        "outcome": "no-servers"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "no-servers",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "pre-abort",
+        "mode": "pre",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "connect:parent",
+        "reason": "parent"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "connect:parent",
+        "parent"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "invalid-size",
+        "mode": "zero",
+        "servers": [
+          "unused",
+          "unused"
+        ],
+        "outcome": "zero"
+      },
+      "accepted_server_indices": [],
+      "output": [
+        "zero",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "deadline",
+        "mode": "deadline",
+        "servers": [
+          "slow-eof",
+          "stall",
+          "unused"
+        ],
+        "outcome": "read:expiry",
+        "reason": "expiry"
+      },
+      "accepted_server_indices": [
+        0,
+        1
+      ],
+      "output": [
+        "read:expiry",
+        "expiry"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "duplicate-server",
+        "servers": [
+          "eof",
+          0
+        ],
+        "order": [
+          0,
+          0
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0,
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "truncated",
+        "servers": [
+          "truncated",
+          "unused"
+        ],
+        "outcome": "truncated"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "truncated",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-0",
+        "servers": [
+          0,
+          "unused"
+        ],
+        "outcome": "reply:0"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:0",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-1",
+        "servers": [
+          1,
+          "unused"
+        ],
+        "outcome": "reply:1"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:1",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-2",
+        "servers": [
+          2,
+          "unused"
+        ],
+        "outcome": "reply:2"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:2",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-3",
+        "servers": [
+          3,
+          "unused"
+        ],
+        "outcome": "reply:3"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:3",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-4",
+        "servers": [
+          4,
+          "unused"
+        ],
+        "outcome": "reply:4"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:4",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-5",
+        "servers": [
+          5,
+          "unused"
+        ],
+        "outcome": "reply:5"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:5",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-6",
+        "servers": [
+          6,
+          "unused"
+        ],
+        "outcome": "reply:6"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:6",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-7",
+        "servers": [
+          7,
+          "unused"
+        ],
+        "outcome": "reply:7"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:7",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-8",
+        "servers": [
+          8,
+          "unused"
+        ],
+        "outcome": "reply:8"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:8",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-9",
+        "servers": [
+          9,
+          "unused"
+        ],
+        "outcome": "reply:9"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:9",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-10",
+        "servers": [
+          10,
+          "unused"
+        ],
+        "outcome": "reply:10"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:10",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-11",
+        "servers": [
+          11,
+          "unused"
+        ],
+        "outcome": "reply:11"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:11",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-12",
+        "servers": [
+          12,
+          "unused"
+        ],
+        "outcome": "reply:12"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:12",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-13",
+        "servers": [
+          13,
+          "unused"
+        ],
+        "outcome": "reply:13"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:13",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-14",
+        "servers": [
+          14,
+          "unused"
+        ],
+        "outcome": "reply:14"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:14",
+        "none"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "name": "rcode-15",
+        "servers": [
+          15,
+          "unused"
+        ],
+        "outcome": "reply:15"
+      },
+      "accepted_server_indices": [
+        0
+      ],
+      "output": [
+        "reply:15",
+        "none"
+      ]
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/dns-tcp-servers.bend": "3b4a1df9d22103052be385336027aa2ca242f983b45d0732c6e4439b940d440f",
+    "packages/runtime/src/dns-tcp-query.bend": "8d46f9b760766afb4e643ab8e0ed234f116bd7d435d57cc85a1e9b5d8e1eaa8f",
+    "tests/dns-tcp-servers.bend": "120b50bcb0122aaec8876559314c84c5ffa83edf645971cecc2ca601210e66e3",
+    "tests/dns_tcp_servers_check.py": "46275b9eb19a34d01afa3e1f60f62f81ccd742a416e01d2425e07afa0fe426cf",
+    "build/dns-tcp-servers": "d9fdc24bb74fababf391093c54258cb645f35efa224bea3ea6536cc28354bd1e",
+    "build/dns-tcp-servers.js": "7c21d709d4713cb28151b97106bc0f47a96047116ba4787d6cf94fdc6cc5580b"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-dns-refused-candidate/main.ts",
+        "tests/dns-tcp-servers.bend",
+        "-o",
+        "build/dns-tcp-servers.c"
+      ],
+      "elapsed_seconds": 16.597056604921818,
+      "peak_sampled_group_rss_kib": 5975820,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-dns-refused-candidate/main.ts",
+        "tests/dns-tcp-servers.bend",
+        "-o",
+        "build/dns-tcp-servers.js"
+      ],
+      "elapsed_seconds": 2.6312431739643216,
+      "peak_sampled_group_rss_kib": 1032944,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "base.bend": "1401db4d6c225d62ee6990a2d1328206f9633479c3d19a659e0bd354fa81c587",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+  }
+}
