@@ -3,6 +3,7 @@ import ./dns-pending.bend as Pending
 import ./dns-tcp-peer.bend as Peer
 import ./dns-tcp-connection.bend as TCP
 import ./dns-message.bend as Message
+import ./dns-edns.bend as Edns
 import ./socket-interrupt.bend as Interrupt
 
 type Failure<-Reason: Data> is Data:
@@ -11,6 +12,7 @@ type Failure<-Reason: Data> is Data:
 
 type Error<-Reason: Data> is Data:
   Query{error: Message.Error}
+  Extension{error: Edns.Error}
   Registration{error: Pending.RegistrationError}
   InvalidReadSize{}
   Stopped{failure: Failure<Reason>}
@@ -64,6 +66,20 @@ def submit(-Reason: Data, -Token: Data, session: Session<Reason, Token>, +id: U3
   match session:
     case Session{route, connection, pending, Some{+why}}: IO.pure(Step<Reason, Token>, Step{Session{route, connection, pending, Some{why}}, Rejected{Stopped{why}}})
     case Session{route, connection, pending, None{}}: encoded(Reason, Token, route, connection, pending, id, flags, question, token, Message.query(id, flags, question))
+
+def extendedEncoded(-Reason: Data, -Token: Data, route: Peer.Route, connection: TCP.Connection<Reason>, pending: Pending.Pending<Token>, id: U32, flags: U32, question: Message.Question, token: Token, result: Result<&2, &2, Edns.Error, List<&2, U32>>) -> IO(Step<Reason, Token>):
+  match result:
+    case Fail{Edns.Message{error}}: encoded(Reason, Token, route, connection, pending, id, flags, question, token, Fail{error})
+    case Fail{error}: IO.pure(Step<Reason, Token>, Step{Session{route, connection, pending, None{}}, Rejected{Extension{error}}})
+    case Done{wire}: encoded(Reason, Token, route, connection, pending, id, flags, question, token, Done{wire})
+
+# Use the same pending table and transport as plain queries. Validation errors
+# leave the live session unchanged; an ended session takes precedence over
+# encoding. Successful encoding still registers before the first byte written.
+def submitEdns(-Reason: Data, -Token: Data, session: Session<Reason, Token>, +id: U32, +flags: U32, +question: Message.Question, token: Token, extension: Edns.Query) -> IO(Step<Reason, Token>):
+  match session:
+    case Session{route, connection, pending, Some{+why}}: IO.pure(Step<Reason, Token>, Step{Session{route, connection, pending, Some{why}}, Rejected{Stopped{why}}})
+    case Session{route, connection, pending, None{}}: extendedEncoded(Reason, Token, route, connection, pending, id, flags, question, token, Edns.query(id, flags, question, extension))
 
 def dispatched(-Reason: Data, -Token: Data, route: Peer.Route, connection: TCP.Connection<Reason>, value: Pending.Received<Token>) -> Step<Reason, Token>:
   match value:

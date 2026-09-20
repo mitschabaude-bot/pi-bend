@@ -28,6 +28,11 @@ def exact(peer,count):
     return data
 
 def message(id,flags=0x8180):return struct.pack('!6H',id,flags,1,0,0,0)+b'\0\0\1\0\1'
+def edns_message(id):
+    header=struct.pack('!6H',id,256,1,0,0,1)
+    data=struct.pack('!HH',65001,2)+b'\x00\xff'+struct.pack('!HH',65001,0)
+    return header+b'\0\0\1\0\1'+b'\0'+struct.pack('!HHIH',41,1232,32768,len(data))+data
+
 def frame(data):return struct.pack('!H',len(data))+data
 
 def normalized(line):
@@ -39,7 +44,7 @@ def normalized(line):
 rows=[]
 for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('native 4',['build/dns-tcp-session','--threads','4']),('Bun',[str(bun),'build/dns-tcp-session.js'])]:
     for family,host,number in [(socket.AF_INET,'127.0.0.1',4),(socket.AF_INET6,'::1',6)]:
-        for mode in ['replies','truncated','eof','cut','abort','write-abort','close','cancel']:
+        for mode in ['replies','truncated','eof','cut','abort','write-abort','close','cancel','edns']:
             with socket.socket(family,socket.SOCK_STREAM) as listener,ThreadPoolExecutor(max_workers=1) as pool:
                 listener.bind((host,0));listener.listen(4);listener.settimeout(15)
                 def serve():
@@ -47,11 +52,11 @@ for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('n
                         peer.settimeout(15)
                         for id in ([1] if mode=='write-abort' else [1,2]):
                             size=struct.unpack('!H',exact(peer,2))[0]
-                            assert exact(peer,size)==message(id,256),'unexpected query'
+                            assert exact(peer,size)==(edns_message(id) if mode=='edns' else message(id,256)),'unexpected query'
                         if mode in ['replies','truncated']:
                             peer.sendall(b''.join(frame(x) for x in [b'\0\2',message(99),message(2,0x8380 if mode=='truncated' else 0x8180),message(1)]))
                             peer.shutdown(socket.SHUT_WR)
-                        elif mode=='cancel':
+                        elif mode in ['cancel','edns']:
                             peer.sendall(frame(message(1)))
                             size=struct.unpack('!H',exact(peer,2))[0]
                             assert exact(peer,size)==message(1,256),'missing reused-ID request'
@@ -68,6 +73,7 @@ for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('n
                 elif mode=='cut':want=['submitted','submitted','ended:framing:1,2','ended:framing:','stopped','closed:']
                 elif mode=='write-abort':want=['submitted','ended:abort:1,2','ended:abort:','ended:abort:','stopped','closed:']
                 elif mode=='cancel':want=['submitted','submitted','cancel:1','ignored','submitted','cancel:none','answer:2','answer:1','ended:eof:','ended:eof:','stopped','closed:']
+                elif mode=='edns':want=['submitted','duplicate','extension:field','extension:byte:256','query','ticket:2:1','cancel:1','ignored','submitted','cancel:none','answer:2','answer:1','ended:eof:','stopped','closed:']
                 else:want=['submitted','submitted','closed:1,2']
                 want.append('PASS DNS TCP session')
                 assert run.returncode==0 and not run.stderr and list(map(normalized,run.stdout.splitlines()))==want,(label,number,mode,run,want)

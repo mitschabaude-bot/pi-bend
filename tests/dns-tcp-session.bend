@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/dns-edns.bend as Edns
 import ../packages/runtime/src/dns-tcp-session.bend as Session
 import ../packages/runtime/src/dns-tcp-peer.bend as Peer
 import ../packages/runtime/src/dns-pending.bend as Pending
@@ -31,6 +32,9 @@ def describe(value: Session.Outcome<String, U32>) -> String:
     case Session.Cancelled{None{}}: "cancel:none"
     case Session.Cancelled{Some{Pending.Entry{_, token, _}}}: "cancel:" ++ U32.show(token)
     case Session.Rejected{Session.Registration{Pending.DuplicateId{}}}: "duplicate"
+    case Session.Rejected{Session.Extension{Edns.InvalidField{}}}: "extension:field"
+    case Session.Rejected{Session.Extension{Edns.InvalidByte{value}}}: "extension:byte:" ++ U32.show(value)
+    case Session.Rejected{Session.Extension{Edns.TooLong{}}}: "extension:long"
     case Session.Rejected{Session.Query{_}}: "query"
     case Session.Rejected{Session.InvalidReadSize{}}: "zero"
     case Session.Rejected{Session.Stopped{_}}: "stopped"
@@ -64,6 +68,22 @@ def send(session: Session.Session<String, U32>, +id: U32) -> IO(Session.Session<
     step : Session.Step<String, U32> <- Session.submit(String, U32, session, id, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, id)
     observed(step)
 
+def extension(payload: U32, byte: U32) -> Edns.Query:
+  Edns.Query{payload, True{}, Edns.Option{65001, byte <> 255 <> Nil{}} <> Edns.Option{65001, Nil{}} <> Nil{}}
+
+def ednsObserved(step: Session.Step<String, U32>) -> IO(Session.Session<String, U32>):
+  match step:
+    case Session.Step{session, Session.Submitted{Pending.Ticket{id, serial}}}:
+      do IO<Session.Session<String, U32>>:
+        IO.print("ticket:" ++ U32.show(id) ++ ":" ++ U32.show(serial))
+        return session
+    case other: observed(other)
+
+def sendEdns(session: Session.Session<String, U32>, +id: U32, payload: U32, byte: U32) -> IO(Session.Session<String, U32>):
+  do IO<Session.Session<String, U32>>:
+    step : Session.Step<String, U32> <- Session.submitEdns(String, U32, session, id, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, id, extension(payload, byte))
+    ednsObserved(step)
+
 def read(session: Session.Session<String, U32>, size: U32) -> IO(Session.Session<String, U32>):
   do IO<Session.Session<String, U32>>:
     step : Session.Step<String, U32> <- Session.receive(String, U32, session, size)
@@ -86,6 +106,7 @@ def replies(count: Nat, session: Session.Session<String, U32>) -> IO(Unit):
 
 type Mode is Data:
   Replies{}
+  Extended{}
   Eof{}
   AbortRead{}
   AbortWrite{}
@@ -94,6 +115,7 @@ type Mode is Data:
 
 def mode(value: String) -> Mode:
   match value:
+    case "edns": Extended{}
     case "eof": Eof{}
     case "cut": Eof{}
     case "abort": AbortRead{}
@@ -104,6 +126,22 @@ def mode(value: String) -> Mode:
 
 def run(selected: Mode, controller: Abort.AbortController<String>, session: Session.Session<String, U32>, +ticket: Pending.Ticket) -> IO(Unit):
   match selected:
+    case Extended{}:
+      do IO<Unit>:
+        session : Session.Session<String, U32> <- sendEdns(session, 1, 1232, 0)
+        session : Session.Session<String, U32> <- sendEdns(session, 2, 65536, 0)
+        session : Session.Session<String, U32> <- sendEdns(session, 2, 1232, 256)
+        session : Session.Session<String, U32> <- sendEdns(session, 65536, 1232, 0)
+        session : Session.Session<String, U32> <- sendEdns(session, 2, 1232, 0)
+        session : Session.Session<String, U32> <- observed(Session.cancel(String, U32, session, ticket))
+        session : Session.Session<String, U32> <- read(session, 3)
+        session : Session.Session<String, U32> <- send(session, 1)
+        session : Session.Session<String, U32> <- observed(Session.cancel(String, U32, session, ticket))
+        session : Session.Session<String, U32> <- read(session, 3)
+        session : Session.Session<String, U32> <- read(session, 3)
+        session : Session.Session<String, U32> <- read(session, 3)
+        session : Session.Session<String, U32> <- sendEdns(session, 3, 65536, 0)
+        close(session)
     case CancelQueries{}:
       do IO<Unit>:
         session : Session.Session<String, U32> <- send(session, 2)
@@ -153,11 +191,21 @@ def initial(selected: Mode, controller: Abort.AbortController<String>, step: Ses
         close(session)
         IO.die(Unit, 1, "initial submission failed")
 
-def opened(selected: Mode, controller: Abort.AbortController<String>, result: Result<&2, &1, Peer.Error<String>, Peer.Peer<String>>) -> IO(Unit):
+def first(extended: Bool, session: Session.Session<String, U32>) -> IO(Session.Step<String, U32>):
+  match extended:
+    case True{}: Session.submitEdns(String, U32, session, 1, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, 1, extension(1232, 0))
+    case False{}: Session.submit(String, U32, session, 1, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, 1)
+
+def isExtended(value: Mode) -> Bool:
+  match value:
+    case Extended{}: True{}
+    case _: False{}
+
+def opened(+selected: Mode, controller: Abort.AbortController<String>, result: Result<&2, &1, Peer.Error<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
     case Done{peer}:
       do IO<Unit>:
-        step : Session.Step<String, U32> <- Session.submit(String, U32, Session.adopt(String, U32, peer), 1, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, 1)
+        step : Session.Step<String, U32> <- first(isExtended(selected), Session.adopt(String, U32, peer))
         initial(selected, controller, step)
     case Fail{_}: IO.die(Unit, 1, "peer creation failed")
 
