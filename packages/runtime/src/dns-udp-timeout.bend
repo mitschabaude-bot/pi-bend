@@ -41,3 +41,17 @@ def checked(valid: Bool, timeout: U32, position: Position) -> Result<&2, &2, Err
 # Checked values scale to at most 40 seconds, so U32 arithmetic cannot overflow.
 def budget(+timeout: U32, position: Position) -> Result<&2, &2, Error, Duration>:
   checked(U32.is_le(timeout, 30), timeout, position)
+
+# Prepared UDP budgets are 1..40 seconds. Validate even manually constructed
+# durations before conversion, consuming at most 40 successors of their Nat.
+type MillisecondsError is Data:
+  OutOfRange{}
+
+def countMilliseconds(fuel: Nat, seconds: Nat, accumulated: U32) -> Result<&2, &2, MillisecondsError, U32>:
+  match fuel seconds:
+    case _ Zero{}: Done{accumulated}
+    case Zero{} Succ{_}: Fail{OutOfRange{}}
+    case Succ{rest} Succ{remaining}: countMilliseconds(rest, remaining, (accumulated + 1000 : U32))
+
+def milliseconds(duration: Duration) -> Result<&2, &2, MillisecondsError, U32>:
+  countMilliseconds(40n, seconds(duration), 0)

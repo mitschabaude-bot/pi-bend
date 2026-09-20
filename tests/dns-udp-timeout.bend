@@ -9,10 +9,15 @@ def position(code: String) -> Timeout.Position:
     case "2": Timeout.SecondOfThree{}
     case _: Timeout.ThirdOfThree{}
 
+def converted(seconds: Nat, result: Result<&2, &2, Timeout.MillisecondsError, U32>) -> String:
+  match result:
+    case Fail{_}: "conversion-failed"
+    case Done{milliseconds}: U32.show(U32.from_nat(seconds)) ++ ":" ++ U32.show(milliseconds)
+
 def show(result: Result<&2, &2, Timeout.Error, Timeout.Duration>) -> String:
   match result:
     case Fail{Timeout.InvalidTimeout{value}}: "invalid:" ++ U32.show(value)
-    case Done{duration}: U32.show(U32.from_nat(Timeout.seconds(duration)))
+    case Done{+duration}: converted(Timeout.seconds(duration), Timeout.milliseconds(duration))
 
 def run(args: List<String>) -> IO(Unit):
   match args:

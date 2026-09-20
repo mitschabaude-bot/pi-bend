@@ -20,3 +20,5 @@ def two_checked(valid, timeout):
     case True{}: {==}
 
 def Laws.two_servers_equal_budgets(timeout): two_checked(U32.is_le(timeout, 30), timeout)
+
+def Laws.oversized_duration_rejected(extra): {==}

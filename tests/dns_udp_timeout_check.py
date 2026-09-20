@@ -16,7 +16,8 @@ for count in [1,2,3]:
         code=0 if index==0 else 1 if count==2 else 2 if index==1 else 3
         for timeout in [*range(31),31,32,4294967295]:
             scaled=timeout<<index
-            expected=str(max(1,scaled if index==0 else scaled//count)) if timeout<=30 else f'invalid:{timeout}'
+            seconds=max(1,scaled if index==0 else scaled//count)
+            expected=f'{seconds}:{seconds*1000}' if timeout<=30 else f'invalid:{timeout}'
             cases.append(dict(count=count,index=index,position=code,timeout=timeout,expected=expected))
 args=[arg for case in cases for arg in [str(case['timeout']),str(case['position'])]]
 runs=[]

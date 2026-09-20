@@ -24,3 +24,7 @@ law first_server_undivided:
 law two_servers_equal_budgets:
   for +timeout: U32
   {Timeout.budget(timeout, Timeout.SecondOfTwo{}) == Timeout.budget(timeout, Timeout.First{}) : Result<&2, &2, Timeout.Error, Timeout.Duration>}
+
+law oversized_duration_rejected:
+  for extra: Nat
+  {Timeout.milliseconds(Timeout.Duration{Nat.add(40n, extra)}) == Fail{Timeout.OutOfRange{}} : Result<&2, &2, Timeout.MillisecondsError, U32>}
