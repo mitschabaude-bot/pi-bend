@@ -57,6 +57,7 @@ unsafe_declarations = {
 }
 assert unsafe_declarations == {
     ('packages/runtime/src/callback.bend', 'factory'),
+    ('packages/runtime/src/dns-search-run.bend', 'drive'),
     ('packages/ai/src/utils/event-stream.bend', 'drive'),
     ('packages/runtime/src/schema-value.bend', 'compare'),
     ('packages/ai/src/utils/json.bend', 'encode'),
@@ -90,6 +91,15 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('search-resumes-after-halt', 'packages/runtime/src/dns-search-run.bend',
+         'case Halt{failure}: Finished{Fail{Halted{failure}}}',
+         'case Halt{failure}: Active{cursor, history}', 'laws/dns-search-run.halt_is_terminal'),
+        ('search-discards-answer', 'packages/runtime/src/dns-search-run.bend',
+         'case Answer{value}: Finished{Done{value}}',
+         'case Answer{value}: Active{cursor, history}', 'laws/dns-search-run.answer_is_terminal'),
+        ('search-forgets-initial-failure', 'packages/runtime/src/dns-search-response.bend',
+         'case History{Some{value}, _, _, _}: value',
+         'case History{Some{value}, _, _, last}: last', 'laws/dns-search-run.initial_failure_precedence'),
         ('transport-settings-discarded', 'packages/runtime/src/resolver-transport.bend',
          'Done{Prepared{options, servers}}', 'Done{Prepared{Options.defaults(), servers}}', 'laws/resolver-transport.settings_and_entries_preserved'),
         ('transport-timing-error-ignored', 'packages/runtime/src/resolver-transport.bend',

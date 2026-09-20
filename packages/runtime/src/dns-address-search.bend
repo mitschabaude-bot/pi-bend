@@ -18,11 +18,19 @@ import ./dns-tcp-session.bend as Session
 import ./dns-tcp-connection.bend as TCP
 import ./dns-tcp-frame.bend as Frame
 import ./abortable-socket.bend as SocketIO
+import ./dns-exchange-source.bend as ExchangeSource
+import ./dns-transport.bend as Transport
+import ./dns-udp-servers.bend as UDP
+import ./dns-udp-query.bend as DatagramQuery
+import ./dns-udp-policy.bend as UDPPolicy
+import ./dns-udp-attempt-scope.bend as Attempt
+import ./abortable-datagram.bend as DatagramIO
+import ./datagram-peer.bend as Peer
 
 # The context borrows the ID environment, server selector and deadline signal.
 # Each candidate closes its exchanges before returning.
 type Context<-Environment: Data, -Reason: Data> is Data:
-  Context{environment: Environment, source: Selector.Source<Servers.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Request.Options, kind: U32, maximum: U32}
+  Context{environment: Environment, source: ExchangeSource.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Request.Options, kind: U32, maximum: U32}
 
 type Report<-Reason: Data> is Data:
   Report{result: Result<&2, &2, Run.Error<Lookup.Error<Reason>>, Answer.Selection>, deadline: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>}
@@ -54,22 +62,54 @@ def socketFailure(-Reason: Data, code: U32) -> IO(Run.Outcome<Lookup.Error<Reaso
 
 # Only network failures enter search precedence. Abort variants and cleanup
 # reports must never be classified by errno (even if they contain one).
+def exchangeFailure(-Reason: Data, original: Lookup.Error<Reason>, error: Query.Error<Reason>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
+  match error:
+    case Query.Connection{Connect.SocketError{code, _}}: socketFailure(Reason, code)
+    case Query.Terminated{Session.Transport{TCP.Transport{_, SocketIO.SocketError{code, _}}}}: socketFailure(Reason, code)
+    case Query.Terminated{Session.EndOfStream{}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case _: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Halt{original})
+
+# A failed UDP report keeps both its primary failure and the reason observed
+# while retiring its scope. Parent/default aborts override search continuation.
+def datagramFailure(-Reason: Data, original: Lookup.Error<Reason>, failure: UDP.Failure<Reason>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
+  match failure:
+    case UDP.Rejected{_, UDPPolicy.ServerFailure{}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.ServerFailure{}})
+    case UDP.Rejected{_, _}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case UDP.Exchange{DatagramQuery.Transport{DatagramIO.SocketError{code, _}}}: socketFailure(Reason, code)
+    case UDP.Exchange{DatagramQuery.Opening{Peer.Association{code, _}}}: socketFailure(Reason, code)
+    case UDP.Exchange{DatagramQuery.Aborted{Abort.Supplied{Deadline.Expired{}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case UDP.Exchange{DatagramQuery.Transport{DatagramIO.Aborted{Abort.Supplied{Deadline.Expired{}}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case _: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Halt{original})
+
+def datagramCompleted(-Reason: Data, original: Lookup.Error<Reason>, report: UDP.Report<Reason>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
+  match report:
+    case UDP.Report{_, _, Attempt.ParentAborted{_}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Halt{original})
+    case UDP.Report{_, _, Attempt.UnexpectedDefaultAbort{}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Halt{original})
+    case UDP.Report{_, failure, _}: datagramFailure(Reason, original, failure)
+
+# Only a clean TCP failure can be classified. Preserve the complete original
+# native error for every halt, including a failure during stream cleanup.
+def streamCompleted(-Reason: Data, original: Lookup.Error<Reason>, report: Query.Completed<Reason>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
+  match report:
+    case Query.Completed{Fail{error}, Done{_}}: exchangeFailure(Reason, original, error)
+    case _: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Halt{original})
+
 def completed(-Reason: Data, result: Result<&2, &2, Lookup.Error<Reason>, Answer.Selection>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
   match result:
-    case Fail{Lookup.Exchange{Query.Connection{Connect.SocketError{code, _}}}}: socketFailure(Reason, code)
-    case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Transport{_, SocketIO.SocketError{code, _}}}}}}: socketFailure(Reason, code)
-    case Fail{Lookup.Exchange{Query.Terminated{Session.EndOfStream{}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
-    case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case Fail{Lookup.Transport{Transport.Datagram{UDP.Failed{+report}}}}: datagramCompleted(Reason, Lookup.Transport{Transport.Datagram{UDP.Failed{report}}}, report)
+    case Fail{Lookup.Transport{Transport.Stream{Servers.Failed{+report}}}}: streamCompleted(Reason, Lookup.Transport{Transport.Stream{Servers.Failed{report}}}, report)
+    case Fail{Lookup.Exchange{+error}}: exchangeFailure(Reason, Lookup.Exchange{error}, error)
     case other: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, outcome(Reason, other))
 
 def request(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, context: Context<Environment, Reason>, request: Run.Request) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
   match context request:
     case Context{environment, source, signal, options, kind, maximum} Run.Request{_, name}:
       do IO<Run.Outcome<Lookup.Error<Reason>, Answer.Selection>>:
-        result : Result<&2, &2, Lookup.Error<Reason>, Answer.Selection> <- Lookup.exchangeSourceOptionsWith(~Environment, ~draw, Reason, environment, source, signal, options, kind, name, maximum)
+        result : Result<&2, &2, Lookup.Error<Reason>, Answer.Selection> <- Lookup.exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, source, signal, options, kind, name, maximum)
         completed(Reason, result)
 
-def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, options: Request.Options, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
+def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: ExchangeSource.Source, options: Request.Options, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, signal):
       do IO<Report<Reason>>:
@@ -77,7 +117,7 @@ def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return Report{result, reason}
 
-def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, options: Request.Options, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
+def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: ExchangeSource.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, options: Request.Options, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
   match valid available maximum:
     case False{} _ _: IO.pure(Report<Reason>, Report{Fail{Run.Halted{Lookup.UnsupportedType{}}}, None{}})
     case True{} _ 0: IO.pure(Report<Reason>, Report{Fail{Run.Halted{Lookup.InvalidReadSize{}}}, None{}})
@@ -89,14 +129,17 @@ def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.
 
 # One total deadline spans candidates, server attempts and alias follow-ups.
 # The source must return promptly; arbitrary user IO cannot be force-cancelled.
+def searchTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, +source: ExchangeSource.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, options: Request.Options, +kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
+  startOptions(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), ExchangeSource.available(source), environment, source, milliseconds, parent, options, kind, maximum, cursor)
+
 def searchSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, +source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, options: Request.Options, +kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
-  startOptions(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Selector.available(Servers.Server, source), environment, source, milliseconds, parent, options, kind, maximum, cursor)
+  searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, ExchangeSource.TcpSource{source}, milliseconds, parent, options, kind, maximum, cursor)
 
 def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
-  scopedOptions(~Environment, ~draw, ~Reason, environment, source, Request.defaults(), kind, maximum, cursor, pair)
+  scopedOptions(~Environment, ~draw, ~Reason, environment, ExchangeSource.TcpSource{source}, Request.defaults(), kind, maximum, cursor, pair)
 
 def start(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
-  startOptions(~Environment, ~draw, ~Reason, valid, available, environment, source, milliseconds, parent, Request.defaults(), kind, maximum, cursor)
+  startOptions(~Environment, ~draw, ~Reason, valid, available, environment, ExchangeSource.TcpSource{source}, milliseconds, parent, Request.defaults(), kind, maximum, cursor)
 
 def searchSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, +source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
   searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, Request.defaults(), kind, maximum, cursor)
