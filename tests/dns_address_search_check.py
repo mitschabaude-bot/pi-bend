@@ -1,7 +1,8 @@
 """Single-server DNS search over real loopback TCP exchanges.
 
 Checks DNS RCODE classification, selected-empty replies, search precedence,
-alias follow-ups, shared deadline and terminal source/validation/abort errors.
+alias follow-ups, refusal, EOF/reset/partial framing, shared deadline and
+terminal source/validation/abort errors.
 This is not a server retry, OS configuration or full resolver test.
 """
 import argparse
@@ -71,6 +72,13 @@ cases += [
     dict(label='invalid-size',mode='zero',plan=[],halt='zero'),
     dict(label='invalid-type',mode='type',plan=[],halt='type'),
     dict(label='truncated',plan=[('a.x','truncated')],halt='truncated'),
+    dict(label='refused-suffix',mode='refused',plan=[],dns=2,draws=1),
+    dict(label='refused-initial',mode='refused',ndots=0,plan=[],dns=2,draws=2),
+    dict(label='refused-absolute',mode='refused',name='a.',plan=[],dns=2,draws=1),
+    dict(label='eof-final-answer',plan=[('a.x','eof'),('a','address')],answer='a'),
+    dict(label='partial-frame-final-answer',plan=[('a.x','partial'),('a','address')],answer='a'),
+    dict(label='reset-final-answer',plan=[('a.x','reset'),('a','address')],answer='a'),
+    dict(label='initial-eof-precedence',name='a.b',ndots=1,plan=[('a.b','eof'),('a.b.x',0),('a.b.y',3)],dns=2),
 ]
 rows=[]
 for backend,command in [('native 1',['build/dns-address-search','--threads','1']),('native 4',['build/dns-address-search','--threads','4']),('Bun',[str(bun),'build/dns-address-search.js'])]:
@@ -79,13 +87,20 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
             for case in cases:
                 mode=case.get('mode','direct');plan=case['plan'];name=case.get('name','a')
                 with socket.socket(family,socket.SOCK_STREAM) as listener,ThreadPoolExecutor(max_workers=1) as pool:
-                    listener.bind((host,0));listener.listen(4);listener.settimeout(4)
+                    listener.bind((host,0))
+                    if mode!='refused':listener.listen(4)
+                    listener.settimeout(4)
                     def serve():
                         for index,(owner,value) in enumerate(plan):
                             with listener.accept()[0] as peer:
                                 peer.settimeout(4)
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0]);identifier=[0,65535,4660][min(index,2)]
                                 assert query==struct.pack('!6H',identifier,256,1,0,0,0)+wire(owner)+struct.pack('!HH',kind,1),(case,query)
+                                if value=='eof':continue
+                                if value=='partial':
+                                    peer.sendall(b'\0');continue
+                                if value=='reset':
+                                    peer.setsockopt(socket.SOL_SOCKET,socket.SO_LINGER,struct.pack('ii',1,0));continue
                                 if mode=='deadline' and index==0:time.sleep(.7)
                                 if value=='stall':
                                     assert select.select([peer],[],[],.6)[0],'search restarted deadline'
@@ -95,7 +110,7 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                     future=pool.submit(serve) if plan else None
                     run=subprocess.run([*command,mode,str(number),str(listener.getsockname()[1]),str(15 if mode=='type' else kind),name,str(name.count('.')),str(int(name.endswith('.'))),str(case.get('ndots',2)),case.get('domains','x|y')],cwd=ROOT,capture_output=True,text=True,timeout=7)
                     if future:future.result(timeout=5)
-                    assert not select.select([listener],[],[],0)[0],('unexpected candidate',case,run)
+                    if mode!='refused':assert not select.select([listener],[],[],0)[0],('unexpected candidate',case,run)
                 if 'dns' in case:want=['dns:'+str(case['dns'])]
                 elif 'answer' in case:want=[selected(case['answer'],kind),'none']
                 else:want=[case['halt'],'none']

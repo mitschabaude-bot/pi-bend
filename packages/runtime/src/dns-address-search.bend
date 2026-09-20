@@ -8,6 +8,11 @@ import ./dns-address-lookup.bend as Lookup
 import ./dns-search.bend as Search
 import ./dns-search-response.bend as Response
 import ./dns-search-run.bend as Run
+import ./dns-tcp-query.bend as Query
+import ./dns-tcp-session.bend as Session
+import ./dns-tcp-connection.bend as TCP
+import ./dns-tcp-frame.bend as Frame
+import ./abortable-socket.bend as SocketIO
 
 # One numeric recursive server. The context borrows both the source environment
 # and deadline signal; each candidate closes its exchanges before returning.
@@ -23,9 +28,8 @@ def responseCode(code: U32) -> Response.Cause:
     case 3: Response.Missing{}
     case _: Response.Unrecoverable{}
 
-# DNS response errors participate in search precedence. Other typed failures
-# remain intact, outside DNS precedence. Server retry/transport classification
-# is a separate resolver layer, not an implicit conversion to a missing name.
+# Pure answer classification. The effectful completion adapter below handles
+# platform socket codes; all remaining typed failures pass through intact.
 def outcome(-Reason: Data, result: Result<&2, &2, Lookup.Error<Reason>, Answer.Selection>) -> Run.Outcome<Lookup.Error<Reason>, Answer.Selection>:
   match result:
     case Done{Answer.Selection{_, Nil{}}}: Run.Failed{Response.EmptyAnswer{}}
@@ -33,12 +37,32 @@ def outcome(-Reason: Data, result: Result<&2, &2, Lookup.Error<Reason>, Answer.S
     case Fail{Lookup.Selection{Answer.ResponseCode{code}}}: Run.Failed{responseCode(code)}
     case Fail{error}: Run.Halt{error}
 
+def socketCause(refused: Bool) -> Response.Cause:
+  match refused:
+    case True{}: Response.ConnectionRefused{}
+    case False{}: Response.TemporaryFailure{}
+
+def socketFailure(-Reason: Data, code: U32) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
+  do IO<Run.Outcome<Lookup.Error<Reason>, Answer.Selection>>:
+    refused : Bool <- Socket.isConnectionRefused(code)
+    return Run.Failed{socketCause(refused)}
+
+# Only network failures enter search precedence. Abort variants and cleanup
+# reports must never be classified by errno (even if they contain one).
+def completed(-Reason: Data, result: Result<&2, &2, Lookup.Error<Reason>, Answer.Selection>) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
+  match result:
+    case Fail{Lookup.Exchange{Query.Connection{Connect.SocketError{code, _}}}}: socketFailure(Reason, code)
+    case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Transport{SocketIO.SocketError{code, _}}}}}}: socketFailure(Reason, code)
+    case Fail{Lookup.Exchange{Query.Terminated{Session.EndOfStream{}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case Fail{Lookup.Exchange{Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}}}: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, Run.Failed{Response.TemporaryFailure{}})
+    case other: IO.pure(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>, outcome(Reason, other))
+
 def request(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, context: Context<Environment, Reason>, request: Run.Request) -> IO(Run.Outcome<Lookup.Error<Reason>, Answer.Selection>):
   match context request:
     case Context{environment, address, port, signal, kind, maximum} Run.Request{_, name}:
       do IO<Run.Outcome<Lookup.Error<Reason>, Answer.Selection>>:
         result : Result<&2, &2, Lookup.Error<Reason>, Answer.Selection> <- Lookup.exchangeWith(~Environment, ~draw, Reason, environment, address, port, signal, kind, name, maximum)
-        return outcome(Reason, result)
+        completed(Reason, result)
 
 def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, address: Connect.Address, port: U32, kind: U32, maximum: U32, cursor: Search.Cursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
