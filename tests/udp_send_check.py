@@ -1,8 +1,11 @@
 """Binary UDP sends preserve packets and reject invalid inputs before transmission."""
+import argparse
 import errno,hashlib,json,select,socket,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-send-candidate'
+bun=Path.home()/'.bun/bin/bun'
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path,nargs='?',default=ROOT/'build/bend-udp-send-candidate')
+candidate=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-send-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-send.bend','-o',f'build/udp-send.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-send.c','-lpthread','-lm','-o','build/udp-send'],cwd=ROOT,check=True)

@@ -19,3 +19,25 @@ def UDP.send_bytes(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, 
   IO(Socket & Result<&1, &1, U32 & String, Unit>):
   import "./effs/udp_send_bytes.c"
   import "./effs/udp_send_bytes.js"
+
+# One-shot owned receive and independently copyable cancellation capability.
+# wait consumes the operation, returning its socket and None on cancellation.
+# Some contains the ordinary packet/error result. release returns an unstarted
+# operation's socket. Completion retires the capability; stale cancels are false.
+law UDPRead:
+  Type
+law UDPReadCancel:
+  Data
+
+def UDPRead.new(socket: Socket, max: U32) -> IO(UDPRead & UDPReadCancel):
+  import "./effs/udp_recv_bytes.c"
+  import "./effs/udp_recv_bytes.js"
+def UDPRead.wait(read: UDPRead) -> IO(Socket & Maybe<&1, Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>>):
+  import "./effs/udp_recv_bytes.c"
+  import "./effs/udp_recv_bytes.js"
+def UDPRead.cancel(handle: UDPReadCancel) -> IO(Bool):
+  import "./effs/udp_recv_bytes.c"
+  import "./effs/udp_recv_bytes.js"
+def UDPRead.release(read: UDPRead) -> IO(Socket):
+  import "./effs/udp_recv_bytes.c"
+  import "./effs/udp_recv_bytes.js"

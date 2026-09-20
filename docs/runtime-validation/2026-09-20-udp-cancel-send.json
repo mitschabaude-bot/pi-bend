@@ -1,0 +1,725 @@
+{
+  "scope": "Binary UDP sends preserve packets and reject invalid inputs before transmission.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 0,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 1,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 256,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 4096,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 65507,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 65535,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 65536,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 0,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 255,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 65536,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 1,
+      "mode": "family",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 1,
+      "mode": "zero-port",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 1,
+      "mode": "large-port",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 65508,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 1,
+      "mode": "word",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "size": 1,
+      "mode": "scope",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 0,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 1,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 256,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 4096,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65507,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65535,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65536,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 0,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 255,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65536,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 1,
+      "mode": "family",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 1,
+      "mode": "zero-port",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 1,
+      "mode": "large-port",
+      "error": 22
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65508,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65527,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "size": 65528,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 0,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 1,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 256,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 4096,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 65507,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 65535,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 65536,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 0,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 255,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 65536,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 1,
+      "mode": "family",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 1,
+      "mode": "zero-port",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 1,
+      "mode": "large-port",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 65508,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 1,
+      "mode": "word",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "size": 1,
+      "mode": "scope",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 0,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 1,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 256,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 4096,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65507,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65535,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65536,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 0,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 255,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65536,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 1,
+      "mode": "family",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 1,
+      "mode": "zero-port",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 1,
+      "mode": "large-port",
+      "error": 22
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65508,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65527,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "size": 65528,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 0,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 1,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 256,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 4096,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 65507,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 65535,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 65536,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 0,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 255,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 65536,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 1,
+      "mode": "family",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 1,
+      "mode": "zero-port",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 1,
+      "mode": "large-port",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 65508,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 1,
+      "mode": "word",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "size": 1,
+      "mode": "scope",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 0,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 1,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 256,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 4096,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65507,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65535,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65536,
+      "mode": "ok",
+      "error": 90
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 0,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 255,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65536,
+      "mode": "byte",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 1,
+      "mode": "family",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 1,
+      "mode": "zero-port",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 1,
+      "mode": "large-port",
+      "error": 22
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65508,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65527,
+      "mode": "ok",
+      "error": null
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "size": 65528,
+      "mode": "ok",
+      "error": 90
+    }
+  ],
+  "sha256": {
+    "tests/udp-send.bend": "a4413b472bcb2cc5c800a3f4b6921a3f4246992b446687f05c6d5fcd2ff555ac",
+    "tests/udp_send_check.py": "720382ba8fe695683fe9d0b3604a85ee7253bfd6a0ccb7180d3728bc744711f6",
+    "patches/experimental/udp-bytes/README.md": "a7d3906dd746a46245bdc7c77867fe32e1659fd5a47653256ab7f6032cca2d20",
+    "patches/experimental/udp-bytes/udp_bind_family.c": "5558307fa8ddc562873ac8051e9a632e17eb3805bfa91ce9e4e214829318de8f",
+    "patches/experimental/udp-bytes/udp_recv_bytes.js": "bbf5ea05445bb2877ebae91f5c55e58da369c528e72139586dd7f5ab5c7bbf56",
+    "patches/experimental/udp-bytes/udp_bind_family.js": "4089ca41cc59f51dcc7e3bcfffa446fb28a43943a7e0ffb556e36dbf9da5d560",
+    "patches/experimental/udp-bytes/udp_send_bytes.c": "35bf5bd8d5d0e1fdb81c37ffe16e8bb0d25e58ae494c7f79b3444541d279bff1",
+    "patches/experimental/udp-bytes/udp_send_bytes.js": "410e7e00448ea0a14dd96ae5548789a094ce9918cf33f892b7ae9de3564bad96",
+    "patches/experimental/udp-bytes/base.bend": "62146a894ebd6f4e47d4df30c663ee59d50cb506b9525105d0f621423b9e511b",
+    "patches/experimental/udp-bytes/udp_recv_bytes.c": "92e667a71dff3483dcf5c1852c659b019c9d73f187e7fcefef24a2c076853547"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-cancel-candidate/main.ts",
+        "tests/udp-send.bend",
+        "-o",
+        "build/udp-send.c"
+      ],
+      "elapsed_seconds": 0.526374340057373,
+      "peak_sampled_group_rss_kib": 23808,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-cancel-candidate/main.ts",
+        "tests/udp-send.bend",
+        "-o",
+        "build/udp-send.js"
+      ],
+      "elapsed_seconds": 0.5262663895264268,
+      "peak_sampled_group_rss_kib": 24320,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "ef31d1bfdc2b5d2be742b21deb281db92b373c8876233aaeeed010c2486dd1ac"
+  }
+}
