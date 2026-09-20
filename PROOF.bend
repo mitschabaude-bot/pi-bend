@@ -1,4 +1,5 @@
 import Base
+import ./proofs/numeric-scope.bend as NumericScope
 import ./proofs/numeric-host.bend as NumericHost
 import ./proofs/dns-pair-queries.bend as DNSPairQueries
 import ./proofs/dns-pair-result.bend as DNSPairResult

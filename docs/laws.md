@@ -2,7 +2,17 @@
 
 Gregor authorized agent-authored general specifications on 2026-09-20. Laws must be honest attempts to capture intended behavior, independent of implementation accidents. Prefer universally quantified properties that imply upstream examples. Meaningful boundaries, such as an empty queue, are valid laws; arbitrary regression inputs remain tests. Never weaken a contract to make a proof pass. Laws accompany production implementations; each milestone states which behavior it establishes.
 
-`LAWS.bend` is the public specification entry point, importing component contracts from `laws/`; `PROOF.bend` imports their implementations and supporting lemmas from `proofs/`. `bend PROOF.bend` must succeed. The current import closure reports `All terms check, with 4 unsafe annotations.` The owner imports existing unsafe definitions for event-stream driving, schema-value comparison, JSON encoding and schema-to-JSON conversion, plus an unsafe callback-factory template not counted as a concrete definition. These laws and proofs do not call those annotated definitions or use `@unsafe`. The summary is retained in the validation record; the gate audits the exact five source declarations and rejects unexpected declarations or summary counts. This does not prove termination or correctness of those unrelated routines. The laws file alone intentionally fails because its obligations are open. The native regression entry point runs `scripts/check-proofs.py` before its executable suites.
+`LAWS.bend` is the public specification entry point, importing component contracts from `laws/`; `PROOF.bend` imports their implementations and supporting lemmas from `proofs/`. `PROOF.bend` must check with a compiler supplying its imported runtime primitives (see the current command below). The current import closure reports `All terms check, with 4 unsafe annotations.` The owner imports existing unsafe definitions for event-stream driving, schema-value comparison, JSON encoding and schema-to-JSON conversion, plus the callback-factory and finite DNS-search driver templates not counted as concrete definitions. These laws and proofs do not call those annotated definitions or use `@unsafe`. The summary is retained in the validation record; the gate audits the exact six source declarations and rejects unexpected declarations or summary counts. This does not prove termination or correctness of those unrelated routines. The laws file alone intentionally fails because its obligations are open. The native regression entry point runs `scripts/check-proofs.py` before its executable suites.
+
+## Current compiler requirement
+
+The numeric destination scope laws use the existing connection-address type, whose module imports native connection primitives absent from the installed compiler. The complete proof root therefore currently needs the same isolated compiler candidate as native DNS. Earlier proof records used the installed compiler before this dependency entered the root. Do not install the candidate merely to run the gate: its performance changes remain unapproved.
+
+```sh
+BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" python3 scripts/check-proofs.py
+```
+
+The scope milestone records hashes for the candidate's checker, base and emitter alongside the proof evidence. This is a toolchain dependency, not an unsafe proof or a replacement for the shared connection-address type.
 
 ## FIFO sequence contracts
 

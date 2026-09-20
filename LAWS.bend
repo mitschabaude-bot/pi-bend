@@ -1,4 +1,5 @@
 import Base
+import ./laws/numeric-scope.bend as NumericScope
 import ./laws/numeric-host.bend as NumericHost
 import ./laws/dns-pair-queries.bend as DNSPairQueries
 import ./laws/dns-pair-result.bend as DNSPairResult

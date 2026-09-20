@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('numeric-scope-defaults-failure', 'packages/runtime/src/numeric-scope.bend',
+         'case Fail{error}: Fail{InvalidScope{error}}', 'case Fail{error}: Done{Connect.V6{address, 0}}', 'laws/numeric-scope.failed_scope_is_terminal'),
+        ('numeric-scope-discards-index', 'packages/runtime/src/numeric-scope.bend',
+         'case Done{scope}: Done{Connect.V6{address, scope}}', 'case Done{scope}: Done{Connect.V6{address, 0}}', 'laws/numeric-scope.successful_scope_retained'),
+        ('numeric-scope-erases-request', 'packages/runtime/src/numeric-scope.bend',
+         'case Done{Host.V6{address, Some{zone}}}: ResolveZone{address, zone}', 'case Done{Host.V6{address, Some{zone}}}: Ready{Done{Connect.V6{address, 0}}}', 'laws/numeric-scope.scoped_ipv6_retains_request'),
         ('numeric-host-accepts-wrong-family', 'packages/runtime/src/numeric-host.bend',
          'case Family.IPv4Only{} V6{_, _}: Fail{FamilyMismatch{}}', 'case Family.IPv4Only{} V6{address, zone}: Done{V6{address, zone}}', 'laws/numeric-host.ipv4_rejects_ipv6'),
         ('numeric-host-erases-zone', 'packages/runtime/src/numeric-host.bend',
