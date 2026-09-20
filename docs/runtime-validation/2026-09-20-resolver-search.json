@@ -1,0 +1,52 @@
+{
+  "scope": "Strict option selection connects loaded settings to DNS search without partial application.",
+  "checks": [
+    {
+      "backend": "native 1",
+      "cases": 252
+    },
+    {
+      "backend": "native 4",
+      "cases": 252
+    },
+    {
+      "backend": "Bun",
+      "cases": 252
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/resolver-search.bend": "11b3a1b69f1edc7ac2124b75542610449ded7749d70d24b8e73faa0b351471a0",
+    "tests/resolver-search.bend": "3cd3c49bdbd19b469342ffe76de926c2ac202047bc8579e29d7937e7fafe96f0",
+    "tests/resolver_search_check.py": "a7783f7c5cae946f5afb185bace08aad18d03fb603f08d10eb767d0ec167caf4"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/resolver-search.bend",
+        "-o",
+        "build/resolver-search.c"
+      ],
+      "elapsed_seconds": 17.113041535951197,
+      "peak_sampled_group_rss_kib": 6246012,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/resolver-search.bend",
+        "-o",
+        "build/resolver-search.js"
+      ],
+      "elapsed_seconds": 2.1064382484182715,
+      "peak_sampled_group_rss_kib": 829636,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
