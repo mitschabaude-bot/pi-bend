@@ -1,4 +1,5 @@
 import Base
+import ./proofs/connection-progress.bend as ConnectionProgress
 import ./proofs/connection-attempt-result.bend as ConnectionAttemptResult
 import ./proofs/list-interleave.bend as ListInterleave
 import ./proofs/connection-addresses.bend as ConnectionAddresses

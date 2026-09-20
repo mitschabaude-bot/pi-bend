@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('connection-progress-loses-parent-abort', 'packages/runtime/src/connection-progress.bend',
+         'case _ Some{reason}: Stop{Aborted{reason}}', 'case _ Some{reason}: Advance{}', 'laws/connection-progress.parent_abort_wins'),
+        ('connection-progress-retries-abort', 'packages/runtime/src/connection-progress.bend',
+         'case Fail{Attempt.Aborted{reason}} None{}: Stop{Aborted{reason}}', 'case Fail{Attempt.Aborted{reason}} None{}: Advance{}', 'laws/connection-progress.reported_abort_stops'),
+        ('connection-progress-times-final', 'packages/runtime/src/connection-progress.bend',
+         'case Nil{}: Final{}', 'case Nil{}: NonFinal{}', 'laws/connection-progress.last_attempt_untimed'),
         ('connection-attempt-erases-errno', 'packages/runtime/src/connection-attempt-result.bend',
          'case Connect.SocketError{code, message}: SocketFailure{code, message}\n    case Connect.Aborted{Abort.Supplied{Deadline.Expired{}}}', 'case Connect.SocketError{code, message}: SocketFailure{0, message}\n    case Connect.Aborted{Abort.Supplied{Deadline.Expired{}}}', 'laws/connection-attempt-result.timed_socket_failure_retained'),
         ('connection-attempt-conflates-expiry', 'packages/runtime/src/connection-attempt-result.bend',
