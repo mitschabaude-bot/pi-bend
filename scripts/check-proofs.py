@@ -90,6 +90,15 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('udp-schedule-drops-later-rounds', 'packages/runtime/src/dns-udp-schedule.bend',
+         'case Succ{later}: Cursor{later, servers, servers}',
+         'case Succ{later}: Cursor{Zero{}, servers, servers}', 'laws/dns-udp-schedule.initial_sequence'),
+        ('udp-schedule-skips-pending-servers', 'packages/runtime/src/dns-udp-schedule.bend',
+         'case Cursor{later, servers, first <> rest}: Try{first, Cursor{later, servers, rest}}',
+         'case Cursor{later, servers, first <> rest}: Try{first, Cursor{later, servers, Nil{}}}', 'laws/dns-udp-schedule.next_sequence'),
+        ('udp-schedule-never-restarts', 'packages/runtime/src/dns-udp-schedule.bend',
+         'case Succ{later} first <> rest: Try{first, Cursor{later, servers, rest}}',
+         'case Succ{later} first <> rest: Exhausted{}', 'laws/dns-udp-schedule.next_sequence'),
         ('abort-outcome-discards-reason', 'packages/runtime/src/abort-outcome.bend',
          'case Some{why} _: Aborted{why}', 'case Some{why} _: Cancelled{}', 'laws/abort-outcome.retained_abort_wins'),
         ('abort-outcome-discards-completion', 'packages/runtime/src/abort-outcome.bend',

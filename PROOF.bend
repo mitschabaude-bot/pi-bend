@@ -1,4 +1,5 @@
 import Base
+import ./proofs/dns-udp-schedule.bend as DNSUDPSchedule
 import ./proofs/abort-outcome.bend as AbortOutcome
 import ./proofs/resolver-search.bend as ResolverSearch
 import ./proofs/resolver-request.bend as ResolverRequest
