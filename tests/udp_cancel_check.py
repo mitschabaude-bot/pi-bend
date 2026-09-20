@@ -1,8 +1,8 @@
 """UDP read cancellation, stale capabilities, operation-slot reuse and socket reuse."""
-import hashlib,json,select,socket,subprocess,time
+import hashlib,json,select,socket,subprocess,time,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-cancel-candidate'
+bun=Path.home()/'.bun/bin/bun';candidate=(ROOT/sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'build/bend-udp-cancel-candidate'
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-cancel-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-cancel.bend','-o',f'build/udp-cancel.{suffix}'],cwd=ROOT,check=True)
 audit='''

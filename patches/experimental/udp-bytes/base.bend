@@ -41,3 +41,24 @@ def UDPRead.cancel(handle: UDPReadCancel) -> IO(Bool):
 def UDPRead.release(read: UDPRead) -> IO(Socket):
   import "./effs/udp_recv_bytes.c"
   import "./effs/udp_recv_bytes.js"
+
+# Owned one-shot send. new validates/buffers without transmitting. wait consumes
+# the operation and returns the socket with None for cancellation or Some result.
+# release discards an unstarted send. Retired cancellation handles return False.
+law UDPWrite:
+  Type
+law UDPWriteCancel:
+  Data
+
+def UDPWrite.new(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32, bytes: List<&2, U32>) -> IO(UDPWrite & UDPWriteCancel):
+  import "./effs/udp_send_bytes.c"
+  import "./effs/udp_send_bytes.js"
+def UDPWrite.wait(write: UDPWrite) -> IO(Socket & Maybe<&1, Result<&1, &1, U32 & String, Unit>>):
+  import "./effs/udp_send_bytes.c"
+  import "./effs/udp_send_bytes.js"
+def UDPWrite.cancel(handle: UDPWriteCancel) -> IO(Bool):
+  import "./effs/udp_send_bytes.c"
+  import "./effs/udp_send_bytes.js"
+def UDPWrite.release(write: UDPWrite) -> IO(Socket):
+  import "./effs/udp_send_bytes.c"
+  import "./effs/udp_send_bytes.js"

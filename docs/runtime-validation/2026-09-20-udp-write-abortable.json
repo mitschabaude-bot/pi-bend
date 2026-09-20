@@ -1,0 +1,727 @@
+{
+  "scope": "Abortable UDP receives preserve reasons and retire deadline/observer resources.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "custom",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "custom",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "default",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "default",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "deadline",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "deadline",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "packet",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "packet",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "empty",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "empty",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "short",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "short",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "invalid",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "invalid",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "custom",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "custom",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "default",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "default",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "deadline",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "deadline",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "packet",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "packet",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "empty",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "empty",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "short",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "short",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "invalid",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "invalid",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "custom",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "custom",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "default",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "default",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "deadline",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "deadline",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "packet",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "packet",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "empty",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "empty",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "short",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "short",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "invalid",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "invalid",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "custom",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "custom",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "default",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "default",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "deadline",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "deadline",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "packet",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "packet",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "empty",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "empty",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "short",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "short",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "invalid",
+      "iterations": 1,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "invalid",
+      "iterations": 10,
+      "native_audit": "AUDIT 0 0 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "custom",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "custom",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "default",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "default",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "deadline",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "deadline",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "packet",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "packet",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "empty",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "empty",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "short",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "short",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "invalid",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "invalid",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "custom",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "custom",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "default",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "default",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "deadline",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "deadline",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "packet",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "packet",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "empty",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "empty",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "short",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "short",
+      "iterations": 10,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "invalid",
+      "iterations": 1,
+      "native_audit": ""
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "invalid",
+      "iterations": 10,
+      "native_audit": ""
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/abortable-datagram.bend": "a290db410e4337e3b218a829b10e075cad6240195a16df89c0300ee416ec2e32",
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "tests/abortable-datagram.bend": "9b48003775bdd989429ffa64486a19fbfbc5b1350da58ef7cfe1a76949710d23",
+    "tests/abortable_datagram_check.py": "00cd44ad087e9221888e0adb07bea9166466871ccf36024adc5888c8f0dc7472",
+    "patches/experimental/udp-bytes/README.md": "3aec2bfb30abf1781ba194d6cddb08a313b149048882d698892a2d8d848bae9b",
+    "patches/experimental/udp-bytes/udp_bind_family.c": "5558307fa8ddc562873ac8051e9a632e17eb3805bfa91ce9e4e214829318de8f",
+    "patches/experimental/udp-bytes/udp_recv_bytes.js": "73f973d2fc965b49f3549b991efaa92867a9c771d3061063a5980ce2894f8705",
+    "patches/experimental/udp-bytes/udp_bind_family.js": "4089ca41cc59f51dcc7e3bcfffa446fb28a43943a7e0ffb556e36dbf9da5d560",
+    "patches/experimental/udp-bytes/udp_send_bytes.c": "02c493e61963e93ac0a4991cd889d9c9c3635905720fcdf2497a8c9222995f6e",
+    "patches/experimental/udp-bytes/udp_send_bytes.js": "1310de48811ee2f3f71fad8c4104560fabae45d5c4916cd6b289d850d6b7e0b0",
+    "patches/experimental/udp-bytes/base.bend": "fb62850516d3a4194c2ccf96ba5047efa04b7e7ef76347236fbd106e326125bd",
+    "patches/experimental/udp-bytes/udp_recv_bytes.c": "92e667a71dff3483dcf5c1852c659b019c9d73f187e7fcefef24a2c076853547"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-write-candidate/main.ts",
+        "tests/abortable-datagram.bend",
+        "-o",
+        "build/abortable-datagram.c"
+      ],
+      "elapsed_seconds": 3.6919676894322038,
+      "peak_sampled_group_rss_kib": 1365712,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-write-candidate/main.ts",
+        "tests/abortable-datagram.bend",
+        "-o",
+        "build/abortable-datagram.js"
+      ],
+      "elapsed_seconds": 1.5796487387269735,
+      "peak_sampled_group_rss_kib": 660092,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "ee3835960b2e501cc72e08bff68cc10540a53a325a7a700ab2e88f9581b56fb2"
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "scope": "Test-only EAGAIN injection exercises owned-send parking, cancellation and resume.\n\nRun udp_write_check.py first. No candidate or installed effects are modified.\nThis validates the scheduling branch, not occurrence of real OS backpressure.\n",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "resume_after": 0,
+      "parked_attempts": 24037,
+      "outcome": [
+        "cancelled",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "resume_after": 3,
+      "parked_attempts": 3,
+      "outcome": [
+        "ok",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "resume_after": 0,
+      "parked_attempts": 23766,
+      "outcome": [
+        "cancelled",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "resume_after": 3,
+      "parked_attempts": 3,
+      "outcome": [
+        "ok",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "resume_after": 0,
+      "parked_attempts": 24412,
+      "outcome": [
+        "cancelled",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "resume_after": 3,
+      "parked_attempts": 3,
+      "outcome": [
+        "ok",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "resume_after": 0,
+      "parked_attempts": 24158,
+      "outcome": [
+        "cancelled",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "resume_after": 3,
+      "parked_attempts": 3,
+      "outcome": [
+        "ok",
+        "ok"
+      ],
+      "audit": [
+        "AUDIT 0 0 0 0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "resume_after": 0,
+      "parked_attempts": 11520,
+      "outcome": [
+        "cancelled",
+        "ok"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "resume_after": 3,
+      "parked_attempts": 3,
+      "outcome": [
+        "ok",
+        "ok"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "resume_after": 0,
+      "parked_attempts": 11507,
+      "outcome": [
+        "cancelled",
+        "ok"
+      ],
+      "audit": []
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "resume_after": 3,
+      "parked_attempts": 3,
+      "outcome": [
+        "ok",
+        "ok"
+      ],
+      "audit": []
+    }
+  ],
+  "sha256": {
+    "tests/udp_write_backpressure_check.py": "c4941fb8687d09efef2deabb1b7a987eefb702318b254454db4edf8b9e9023d9",
+    "tests/udp-write.bend": "44bad7ddb9a40eba73b6b80239d7189a6054957f8e9ea744afe398fb7eb78d0d",
+    "build/udp-write-blocked.c": "fe515e5addefa04522fd614566a57bdb4d9ddbdc29140c1faa7a65be3ac95ab7",
+    "build/udp-write-blocked.js": "73f26511b773b6bfea67cc5e0a138bf5d014ff503fd64572350e45775e27151f"
+  },
+  "validated_candidate": {
+    "tests/udp-write.bend": "44bad7ddb9a40eba73b6b80239d7189a6054957f8e9ea744afe398fb7eb78d0d",
+    "tests/udp_write_check.py": "c7e7dcd4496886648dd686e884867d3ff6631f407c351722e1d5370640a816ad",
+    "patches/experimental/udp-bytes/README.md": "9f37a8b92cde1a857d7962ffe91fd63d55ca63ca495cc728e6f9d638b5efb227",
+    "patches/experimental/udp-bytes/udp_bind_family.c": "5558307fa8ddc562873ac8051e9a632e17eb3805bfa91ce9e4e214829318de8f",
+    "patches/experimental/udp-bytes/udp_recv_bytes.js": "73f973d2fc965b49f3549b991efaa92867a9c771d3061063a5980ce2894f8705",
+    "patches/experimental/udp-bytes/udp_bind_family.js": "4089ca41cc59f51dcc7e3bcfffa446fb28a43943a7e0ffb556e36dbf9da5d560",
+    "patches/experimental/udp-bytes/udp_send_bytes.c": "02c493e61963e93ac0a4991cd889d9c9c3635905720fcdf2497a8c9222995f6e",
+    "patches/experimental/udp-bytes/udp_send_bytes.js": "1310de48811ee2f3f71fad8c4104560fabae45d5c4916cd6b289d850d6b7e0b0",
+    "patches/experimental/udp-bytes/base.bend": "fb62850516d3a4194c2ccf96ba5047efa04b7e7ef76347236fbd106e326125bd",
+    "patches/experimental/udp-bytes/udp_recv_bytes.c": "92e667a71dff3483dcf5c1852c659b019c9d73f187e7fcefef24a2c076853547"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "ee3835960b2e501cc72e08bff68cc10540a53a325a7a700ab2e88f9581b56fb2"
+  }
+}

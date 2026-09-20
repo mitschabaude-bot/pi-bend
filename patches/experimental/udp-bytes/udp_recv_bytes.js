@@ -54,7 +54,13 @@ function udpread_wait(row, k) {
     row.waiter = null; row.state = 3;
     return io_tup(row.socket, {$: "Some", value: result});
   }, more => {
-    const wait = {fd: row.socket, out: false, k, more};
+    const wait = {fd: row.socket, out: false, k, more: () => {
+      if (row.state === 2) {
+        row.waiter = null; row.state = 3;
+        return io_tup(row.socket, {$: "None"});
+      }
+      return more();
+    }};
     row.waiter = wait;
     globalThis.BEND_IO.waits.push(wait);
   });
@@ -64,7 +70,7 @@ function udpread_cancel(row) {
   if (row.waiter !== null) {
     const io = globalThis.BEND_IO;
     const index = io.waits.indexOf(row.waiter);
-    if (index < 0) return false;
+    if (index < 0) { row.state = 2; return true; }
     const wait = row.waiter;
     io.waits.splice(index, 1);
     row.waiter = null; row.state = 3;
