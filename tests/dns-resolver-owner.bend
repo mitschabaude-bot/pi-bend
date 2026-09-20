@@ -1,4 +1,6 @@
 import Base
+import ./dns-lookup-options.bend as Options
+import ../packages/runtime/src/dns-query.bend as Query
 import ../packages/runtime/src/dns-tcp-resolver.bend as Resolver
 import ../packages/runtime/src/dns-server-source.bend as Source
 import ../packages/runtime/src/dns-tcp-servers.bend as Servers
@@ -14,16 +16,22 @@ def seed(value: U32) -> IO(Result<&2, &2, Index.Error, U32>):
 def fail(unused: U32) -> IO(Result<&2, &2, Index.Error, U32>):
   IO.pure(Result<&2, &2, Index.Error, U32>, Fail{Index.SourceFailure{11, "unavailable"}})
 
+def requestLabel(request: Query.Options) -> String:
+  match request:
+    case Query.Options{flags, None{}}: U32.show(flags) ++ ":plain"
+    case Query.Options{flags, Some{_}}: U32.show(flags) ++ ":edns"
+
 def selected(pair: Resolver.Owner & Resolver.Resolver) -> IO(Resolver.Owner):
   match pair:
-    case (owner, Resolver.Resolver{source, _, _, _, _}):
+    case (owner, Resolver.Resolver{source, _, _, request, _, _}):
       do IO<Resolver.Owner>:
         servers : List<&2, Servers.Server> <- Source.choose(Servers.Server, source)
         IO.print(RotationTest.csv(RotationNetworkTest.serverPorts(servers, Nil{}), ""))
+        IO.print(requestLabel(request))
         return owner
 
-def config(ports: String, rotate: Bool) -> Resolver.Config:
-  Resolver.Config{ServersTest.serverInput("4", ports), Nil{}, Search.Policy{1, True{}, True{}, False{}}, 5000, 7, rotate}
+def config(ports: String, rotate: Bool, request: Query.Options) -> Resolver.Config:
+  Resolver.Config{ServersTest.serverInput("4", ports), Nil{}, Search.Policy{1, True{}, True{}, False{}}, request, 5000, 7, rotate}
 
 def retained(value: Resolver.Replacement) -> IO(Resolver.Owner):
   match value:
@@ -42,13 +50,13 @@ def exercise(result: Result<&2, &1, Index.Error, Resolver.Owner>) -> IO(Unit):
     case Done{owner}:
       do IO<Unit>:
         first : Resolver.Owner <- selected(Resolver.borrow(owner))
-        failure : Resolver.Replacement <- Resolver.replaceWith(~U32, ~fail, 0, first, config("90,91", True{}))
+        failure : Resolver.Replacement <- Resolver.replaceWith(~U32, ~fail, 0, first, config("90,91", True{}, Options.settings()))
         kept : Resolver.Owner <- retained(failure)
         second : Resolver.Owner <- selected(Resolver.borrow(kept))
-        success : Resolver.Replacement <- Resolver.replaceWith(~U32, ~seed, 0, second, config("40,41", True{}))
+        success : Resolver.Replacement <- Resolver.replaceWith(~U32, ~seed, 0, second, config("40,41", True{}, Options.settings()))
         updated : Resolver.Owner <- retained(success)
         third : Resolver.Owner <- selected(Resolver.borrow(updated))
-        fixed : Resolver.Replacement <- Resolver.replaceWith(~U32, ~fail, 0, third, config("60,61", False{}))
+        fixed : Resolver.Replacement <- Resolver.replaceWith(~U32, ~fail, 0, third, config("60,61", False{}, Query.defaults()))
         final : Resolver.Owner <- retained(fixed)
         fourth : Resolver.Owner <- selected(Resolver.borrow(final))
         fifth : Resolver.Owner <- selected(Resolver.borrow(fourth))
@@ -56,5 +64,5 @@ def exercise(result: Result<&2, &1, Index.Error, Resolver.Owner>) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~seed, 1, config("10,11,12", True{}))
+    owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~seed, 1, config("10,11,12", True{}, Query.defaults()))
     exercise(owner)

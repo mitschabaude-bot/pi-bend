@@ -1,4 +1,5 @@
 import Base
+import ./dns-query.bend as Query
 import ./dns-server-source.bend as Source
 import ./dns-server-initialize.bend as Initialize
 import ./dns-tcp-servers.bend as Servers
@@ -13,13 +14,13 @@ import ./abort.bend as Abort
 # Invalid domains remain candidate failures. OS loading, IPv6 interface
 # resolution and resolver-option interpretation are separate boundaries.
 type Config is Data:
-  Config{servers: List<&2, Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, milliseconds: U32, maximum: U32, rotate: Bool}
+  Config{servers: List<&2, Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, request: Query.Options, milliseconds: U32, maximum: U32, rotate: Bool}
 
 type Owner is Type:
   Owner{config: Config, selector: Source.Owner<Servers.Server>}
 
 type Resolver is Data:
-  Resolver{source: Source.Source<Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, milliseconds: U32, maximum: U32}
+  Resolver{source: Source.Source<Servers.Server>, domains: List<&2, Search.Domain>, policy: Search.Policy, request: Query.Options, milliseconds: U32, maximum: U32}
 
 type Replacement is Type:
   Updated{owner: Owner}
@@ -43,21 +44,21 @@ def configured(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
 
 def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index.Error, U32>), environment: Environment, config: Config) -> IO(Result<&2, &1, Index.Error, Owner>):
   match config:
-    case Config{+servers, domains, policy, milliseconds, maximum, +rotate}:
-      configured(~Environment, ~draw, environment, Config{servers, domains, policy, milliseconds, maximum, rotate}, servers, rotate)
+    case Config{+servers, domains, policy, request, milliseconds, maximum, +rotate}:
+      configured(~Environment, ~draw, environment, Config{servers, domains, policy, request, milliseconds, maximum, rotate}, servers, rotate)
 
 def create(config: Config) -> IO(Result<&2, &1, Index.Error, Owner>):
   createWith(~Unit, ~Index.word, Unit{}, config)
 
 def borrowed(config: Config, pair: Source.Owner<Servers.Server> & Source.Source<Servers.Server>) -> Owner & Resolver:
   match config pair:
-    case Config{servers, +domains, +policy, +milliseconds, +maximum, rotate} Tuple{selector, source}:
-      (Owner{Config{servers, domains, policy, milliseconds, maximum, rotate}, selector}, Resolver{source, domains, policy, milliseconds, maximum})
+    case Config{servers, +domains, +policy, +request, +milliseconds, +maximum, rotate} Tuple{selector, source}:
+      (Owner{Config{servers, domains, policy, request, milliseconds, maximum, rotate}, selector}, Resolver{source, domains, policy, request, milliseconds, maximum})
 
 def borrow(owner: Owner) -> Owner & Resolver:
   match owner:
-    case Owner{Config{servers, domains, policy, milliseconds, maximum, +rotate}, selector}:
-      borrowed(Config{servers, domains, policy, milliseconds, maximum, rotate}, Source.borrow(Servers.Server, rotate, selector))
+    case Owner{Config{servers, domains, policy, request, milliseconds, maximum, +rotate}, selector}:
+      borrowed(Config{servers, domains, policy, request, milliseconds, maximum, rotate}, Source.borrow(Servers.Server, rotate, selector))
 
 # Finish all borrowed operations before close or replacement. Configuration
 # snapshots are immutable; a replacement never mutates an active snapshot.
@@ -87,8 +88,8 @@ def replace(previous: Owner, config: Config) -> IO(Replacement):
 # its candidate, alias and server attempts. The supplied parent stays borrowed.
 def lookupWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, resolver: Resolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, dots: U32, absolute: Bool) -> IO(Network.Report<Reason>):
   match resolver:
-    case Resolver{source, domains, policy, milliseconds, maximum}:
-      Network.searchSourceWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, kind, maximum, Search.startDomains(name, dots, absolute, domains, policy))
+    case Resolver{source, domains, policy, request, milliseconds, maximum}:
+      Network.searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, request, kind, maximum, Search.startDomains(name, dots, absolute, domains, policy))
 
 def lookup(~Reason: Data, resolver: Resolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Name.Name, dots: U32, absolute: Bool) -> IO(Network.Report<Reason>):
   lookupWith(~Unit, ~Id.random, ~Reason, Unit{}, resolver, parent, kind, name, dots, absolute)

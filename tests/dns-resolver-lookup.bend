@@ -1,4 +1,6 @@
 import Base
+import ../packages/runtime/src/dns-query.bend as Query
+import ./dns-lookup-options.bend as Options
 import ../packages/runtime/src/dns-tcp-resolver.bend as Resolver
 import ../packages/runtime/src/dns-search.bend as Search
 import ../packages/runtime/src/dns-name.bend as Name
@@ -35,16 +37,16 @@ def domains(firstInvalid: Bool, laterInvalid: Bool) -> List<&2, Search.Domain>:
 
 def args(values: List<String>) -> IO(Unit):
   match values:
-    case +mode <> family <> ports <> kind <> Nil{}:
+    case options <> +mode <> family <> ports <> kind <> Nil{}:
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +counter : Ref.Ref<U32> <- Ref.new(U32, 0)
-        owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~OwnerTest.seed, 1, Resolver.Config{ServersTest.serverInput(family, ports), domains(String.eq(mode, "invalid-domain"), String.eq(mode, "invalid-later")), Search.Policy{2, True{}, True{}, False{}}, Bool.pick(U32, String.eq(mode, "deadline"), 300, 5000), 7, Bool.not(String.eq(mode, "fixed"))})
+        owner : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.createWith(~U32, ~OwnerTest.seed, 1, Resolver.Config{ServersTest.serverInput(family, ports), domains(String.eq(mode, "invalid-domain"), String.eq(mode, "invalid-later")), Search.Policy{2, True{}, True{}, False{}}, Bool.pick(Query.Options, String.eq(options, "edns"), Options.settings(), Query.defaults()), Bool.pick(U32, String.eq(mode, "deadline"), 300, 5000), 7, Bool.not(String.eq(mode, "fixed"))})
         created(mode, Scalar.decimal(kind, 0), IDs.Source{"direct", counter, parent}, Abort.signal(String, parent), owner)
         draws : U32 <- Ref.dispose(U32, counter)
         IO.print("draws:" ++ U32.show(draws))
         Abort.dispose(String, parent)
-    case _: IO.die(Unit, 1, "expected mode family ports kind")
+    case _: IO.die(Unit, 1, "expected options mode family ports kind")
 
 def main() -> IO(Unit):
   do IO<Unit>:

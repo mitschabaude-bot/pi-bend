@@ -56,6 +56,7 @@ cases=[
  dict(name='empty',servers=0,plan=[],error='no-servers',second_error='no-servers',draws=0),
  dict(name='type',kind=15,plan=[],error='type',second_error='type',draws=0),
 ]
+cases=[dict(case,edns=edns) for case in cases for edns in [False,True]]
 rows=[]
 for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1']),('native 4',['build/dns-resolver-lookup','--threads','4']),('Bun',[str(bun),'build/dns-resolver-lookup.js'])]:
     for number,family,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
@@ -72,7 +73,8 @@ for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1'
                             with listeners[server].accept()[0] as peer:
                                 peer.settimeout(5)
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0])
-                                assert query==struct.pack('!6H',identifier,256,1,0,0,0)+wire(owner)+struct.pack('!HH',kind,1),(case,query)
+                                extension=(b'\0'+struct.pack('!HHIH',41,1232,32768,10)+bytes.fromhex('fde9000200fffde90000')) if case['edns'] else b''
+                                assert query==struct.pack('!6H',identifier,288 if case['edns'] else 256,1,0,0,int(case['edns']))+wire(owner)+struct.pack('!HH',kind,1)+extension,(case,query)
                                 trace.append([server,owner,identifier])
                                 if action=='eof':continue
                                 if action=='reset':
@@ -82,7 +84,7 @@ for backend,command in [('native 1',['build/dns-resolver-lookup','--threads','1'
                                 assert peer.recv(1)==b'','resolver left exchange open'
                     future=pool.submit(serve) if case['plan'] else None
                     ports=','.join(str(sock.getsockname()[1]) for sock in listeners)
-                    run=subprocess.run([*command,case.get('mode','rotate'),str(number),ports,str(case.get('kind',kind))],cwd=ROOT,capture_output=True,text=True,timeout=7)
+                    run=subprocess.run([*command,'edns' if case['edns'] else 'plain',case.get('mode','rotate'),str(number),ports,str(case.get('kind',kind))],cwd=ROOT,capture_output=True,text=True,timeout=7)
                     if future:future.result(timeout=5)
                     for listener in listeners:assert not select.select([listener],[],[],0)[0],('unexpected lookup',case)
                 want=[case['error'] if 'error' in case else selected(case['first'],kind),'none',case.get('reason','none'),case['second_error'] if 'second_error' in case else selected(case['second'],kind),'none','none','draws:'+str(case['draws'])]

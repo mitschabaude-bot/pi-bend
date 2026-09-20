@@ -1,0 +1,97 @@
+{
+  "scope": "Resolver replacement preserves a usable owner on seeding failure.",
+  "checks": [
+    {
+      "backend": "native 1",
+      "trace": [
+        "11,12,10,",
+        "256:plain",
+        "unchanged",
+        "12,10,11,",
+        "256:plain",
+        "updated",
+        "40,41,",
+        "288:edns",
+        "updated",
+        "60,61,",
+        "256:plain",
+        "60,61,",
+        "256:plain"
+      ],
+      "native_live_channels": 0
+    },
+    {
+      "backend": "native 4",
+      "trace": [
+        "11,12,10,",
+        "256:plain",
+        "unchanged",
+        "12,10,11,",
+        "256:plain",
+        "updated",
+        "40,41,",
+        "288:edns",
+        "updated",
+        "60,61,",
+        "256:plain",
+        "60,61,",
+        "256:plain"
+      ],
+      "native_live_channels": 0
+    },
+    {
+      "backend": "Bun",
+      "trace": [
+        "11,12,10,",
+        "256:plain",
+        "unchanged",
+        "12,10,11,",
+        "256:plain",
+        "updated",
+        "40,41,",
+        "288:edns",
+        "updated",
+        "60,61,",
+        "256:plain",
+        "60,61,",
+        "256:plain"
+      ],
+      "native_live_channels": null
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/dns-tcp-resolver.bend": "e57711ce57ce219789941b57b9ef231da90eb9fe4caa638f94a928b265f12592",
+    "tests/dns-resolver-owner.bend": "a448809f101b081b271b1edce1f0aa40425ea05e979945ab7d766770c4840e3c",
+    "tests/dns_resolver_owner_check.py": "b990ef5bdc28ee19b2e6781fd6682be65cdfe94c46c174a3d1236610c0169b06"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/edns-answer-teles/bend2/main.ts",
+        "tests/dns-resolver-owner.bend",
+        "-o",
+        "build/dns-resolver-owner.c"
+      ],
+      "elapsed_seconds": 3.1682444056496024,
+      "peak_sampled_group_rss_kib": 1085312,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/edns-answer-teles/bend2/main.ts",
+        "tests/dns-resolver-owner.bend",
+        "-o",
+        "build/dns-resolver-owner.js"
+      ],
+      "elapsed_seconds": 2.648029143922031,
+      "peak_sampled_group_rss_kib": 1070496,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
