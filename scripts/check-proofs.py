@@ -90,6 +90,14 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('edns-code-uses-version', 'packages/runtime/src/dns-edns-response.bend',
+         'Some{Response{_, upper, _, _, _}}: (upper * 16', 'Some{Response{_, _, version, _, _}}: (version * 16', 'laws/dns-edns-response.response_code_metadata_independent'),
+        ('edns-duplicate-opt-accepted', 'packages/runtime/src/dns-edns-response.bend',
+         'case True{} Done{Some{_}}: Fail{Duplicate{}}', 'case True{} Done{Some{prior}}: Done{Some{prior}}', 'laws/dns-edns-response.second_opt_rejected'),
+        ('edns-misplaced-opt-accepted', 'packages/runtime/src/dns-edns-response.bend',
+         'case True{}: Fail{Misplaced{}}', 'case True{}: Done{None{}}', 'laws/dns-edns-response.misplaced_opt_rejected'),
+        ('udp-policy-ignores-invalid-opt', 'packages/runtime/src/dns-udp-policy.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Done{Accept{}}', 'laws/dns-udp-policy.invalid_extension_stops_policy'),
         ('dns-choice-ignores-forced-tcp', 'packages/runtime/src/dns-transport-choice.bend',
          'case True{}: TCP{}\n    case False{}: automatic', 'case True{}: UDP{}\n    case False{}: automatic', 'laws/dns-transport-choice.forced_tcp'),
         ('dns-choice-allows-extra-byte', 'packages/runtime/src/dns-transport-choice.bend',

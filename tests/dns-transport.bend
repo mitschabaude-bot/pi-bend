@@ -29,6 +29,7 @@ def port(endpoint: Endpoint.Endpoint) -> String:
 def failure(value: Servers.Failure<String>) -> String:
   match value:
     case Servers.Rejected{Message.Header{_, flags, _, _, _, _}, _}: "rejected:" ++ U32.show(flags)
+    case Servers.InvalidExtension{_}: "extension"
     case Servers.InvalidDestination{}: "destination"
     case Servers.InvalidBudget{_}: "budget"
     case Servers.Exchange{error}: QueryTest.outcome(Fail{error})

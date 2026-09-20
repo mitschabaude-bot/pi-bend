@@ -1,4 +1,5 @@
 """Ordered UDP DNS attempts share one total deadline and retire owned resources."""
+import os
 import hashlib
 import json
 import re
@@ -11,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUN = Path.home() / '.bun/bin/bun'
-CANDIDATE = ROOT / 'build/bend-udp-peer-candidate'
+CANDIDATE = Path(os.environ.get('BEND_CANDIDATE', ROOT / 'build/bend-udp-peer-candidate'))
 
 for suffix in ['c', 'js']:
     subprocess.run([
@@ -62,7 +63,7 @@ js_source = js_source.replace(js_needle, js_needle + '\n  servers_attempts++;')
     + js_source)
 
 query = struct.pack('!6H', 42, 256, 1, 0, 0, 0) + b'\0\0\1\0\1'
-modes = ['servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'all-rcode', 'nxdomain', 'first', 'second', 'round', 'exhausted', 'duplicate', 'rotation',
+modes = ['badvers', 'extended-servfail', 'extended-refused', 'opt-duplicate', 'opt-misplaced', 'opt-owner', 'opt-short', 'opt-version', 'servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'all-rcode', 'nxdomain', 'first', 'second', 'round', 'exhausted', 'duplicate', 'rotation',
          'refused', 'all-refused', 'truncated', 'total', 'later', 'pre',
          'pre-default', 'zero', 'empty', 'budget', 'port', 'invalid']
 rows = []
@@ -95,9 +96,10 @@ for backend, command in [
                         wire, client = peer.recvfrom(65536)
                         index = peers.index(peer)
                         received.append((index, time.monotonic() - started))
-                        assert wire == query, (mode, wire.hex())
+                        expected_query = query[:10] + b'\0\1' + query[12:] + b'\0\0\x29\x04\xd0' + bytes(6) if mode in ['badvers', 'extended-servfail', 'extended-refused', 'opt-duplicate', 'opt-misplaced', 'opt-owner', 'opt-short', 'opt-version'] else query
+                        assert wire == expected_query, (mode, wire.hex())
                         respond = (
-                            mode in ['servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'all-rcode', 'nxdomain', 'first', 'truncated', 'refused'] or
+                            mode in ['badvers', 'extended-servfail', 'extended-refused', 'opt-duplicate', 'opt-misplaced', 'opt-owner', 'opt-short', 'opt-version', 'servfail', 'notimp', 'rcode-refused', 'empty-answer', 'rcode-tc', 'all-rcode', 'nxdomain', 'first', 'truncated', 'refused'] or
                             mode in ['second', 'rotation'] and len(received) == 2 or
                             mode == 'round' and len(received) == 3 or
                             mode == 'duplicate' and len(received) == 2
@@ -106,10 +108,21 @@ for backend, command in [
                             flags = 0x8380 if mode == 'truncated' else 0x8180
                             if mode == 'all-rcode' or len(received) == 1:
                                 flags = {'servfail': 0x8182, 'notimp': 0x8184, 'rcode-refused': 0x8185, 'empty-answer': 0x8100, 'rcode-tc': 0x8382, 'all-rcode': 0x8185, 'nxdomain': 0x8183}.get(mode, flags)
-                            peer.sendto(struct.pack('!6H', 42, flags, 1, 0, 0, 0) + query[12:], client)
+                            if mode in ['badvers', 'extended-servfail', 'extended-refused', 'opt-duplicate', 'opt-misplaced', 'opt-owner', 'opt-short', 'opt-version']:
+                                flags = {'extended-servfail': 0x8182, 'extended-refused': 0x8185}.get(mode, 0x8180)
+                                ttl = 1 << 24 if mode in ['badvers', 'extended-servfail', 'extended-refused'] else (7 << 16) | 0x7fff if mode == 'opt-version' else 0
+                                owner = b'\x01a\0' if mode == 'opt-owner' else b'\0'
+                                data = b'\x2a' if mode == 'opt-short' else b''
+                                opt = owner + struct.pack('!HHIH', 41, 1232, ttl, len(data)) + data
+                                if mode == 'opt-duplicate': opt += opt
+                                wire = struct.pack('!6H', 42, flags, 1, int(mode == 'opt-misplaced'), 0, 0 if mode == 'opt-misplaced' else 2 if mode == 'opt-duplicate' else 1) + query[12:] + opt
+                            else:
+                                wire = struct.pack('!6H', 42, flags, 1, 0, 0, 0) + query[12:]
+                            peer.sendto(wire, client)
                 out, err = process.communicate(timeout=1)
                 elapsed = time.monotonic() - started
                 expected_order = {
+                    **{name:[0] for name in ['badvers', 'extended-servfail', 'extended-refused', 'opt-duplicate', 'opt-misplaced', 'opt-owner', 'opt-short', 'opt-version']},
                     'servfail': [0, 1], 'notimp': [0, 1], 'rcode-refused': [0, 1], 'empty-answer': [0, 1], 'rcode-tc': [0, 1], 'all-rcode': [0, 1, 0, 1], 'nxdomain': [0],
                     'first': [0], 'second': [0, 1], 'round': [0, 1, 0],
                     'exhausted': [0, 1, 0, 1], 'duplicate': [0, 0],
@@ -123,6 +136,10 @@ for backend, command in [
                     expected = f'{ports[1]}:rejected:33157:active'
                 elif mode == 'nxdomain':
                     expected = f'{ports[0]}:answer:33155:17:1'
+                elif mode in ['badvers', 'extended-servfail', 'extended-refused', 'opt-version']:
+                    expected = f'{ports[0]}:answer:{flags}:28:0'
+                elif mode in ['opt-duplicate', 'opt-misplaced', 'opt-owner', 'opt-short']:
+                    expected = f'{ports[0]}:extension:active'
                 elif mode == 'truncated':
                     expected = f'{ports[0]}:truncated'
                 elif mode in ['zero', 'empty']:

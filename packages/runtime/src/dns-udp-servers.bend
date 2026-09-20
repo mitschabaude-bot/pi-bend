@@ -9,11 +9,13 @@ import ./dns-udp-query.bend as Query
 import ./dns-query.bend as Request
 import ./dns-message.bend as Message
 import ./dns-udp-policy.bend as Policy
+import ./dns-edns-response.bend as Edns
 import ./abortable-datagram.bend as Datagram
 import ./datagram-peer.bend as Peer
 import ./socket-endpoint.bend as Endpoint
 
 type Failure<-Reason: Data> is Data:
+  InvalidExtension{error: Edns.Error}
   Rejected{header: Message.Header, reason: Policy.Rejection}
   InvalidDestination{}
   InvalidBudget{error: Timeout.MillisecondsError}
@@ -75,8 +77,18 @@ def responseHeader(reply: Query.Reply) -> Message.Header:
     case Query.Truncated{header}: header
     case Query.Answer{Message.Message{_, header, _, _, _, _}}: header
 
-def answered(-Reason: Data, endpoint: Endpoint.Endpoint, +header: Message.Header, reply: Query.Reply, end: Scope.End<Reason>) -> Decision<Reason>:
-  selected(Reason, endpoint, header, reply, end, Policy.header(header, False{}))
+def disposition(reply: Query.Reply) -> Result<&2, &2, Edns.Error, Policy.Decision>:
+  match reply:
+    case Query.Answer{message}: Policy.message(message, False{})
+    case Query.Truncated{header}: Done{Policy.header(header, False{})}
+
+def assessed(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reply: Query.Reply, end: Scope.End<Reason>, result: Result<&2, &2, Edns.Error, Policy.Decision>) -> Decision<Reason>:
+  match result:
+    case Fail{error}: Stop{Report{endpoint, InvalidExtension{error}, end}}
+    case Done{decision}: selected(Reason, endpoint, header, reply, end, decision)
+
+def answered(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, +reply: Query.Reply, end: Scope.End<Reason>) -> Decision<Reason>:
+  assessed(Reason, endpoint, header, reply, end, disposition(reply))
 
 # An accepted reply remains a reply even when scope
 # closure observes a later expiry. Failed attempts retain cleanup-time reasons.

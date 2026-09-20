@@ -22,6 +22,7 @@ def port(endpoint: Endpoint.Endpoint) -> String:
 def failure(value: Servers.Failure<String>) -> String:
   match value:
     case Servers.Rejected{Message.Header{_, flags, _, _, _, _}, _}: "rejected:" ++ U32.show(flags)
+    case Servers.InvalidExtension{_}: "extension"
     case Servers.InvalidDestination{}: "destination"
     case Servers.InvalidBudget{_}: "budget"
     case Servers.Exchange{error}: QueryTest.outcome(Fail{error})
@@ -45,11 +46,23 @@ def entries(+mode: String, +first: Endpoint.Endpoint, second: Endpoint.Endpoint,
     case "rotation": Plan.prepare(Endpoint.Endpoint, 2, first <> second <> third <> Nil{})
     case _: Plan.prepare(Endpoint.Endpoint, 1, first <> second <> Nil{})
 
+def request(mode: String) -> Request.Request:
+  match mode:
+    case "badvers": QueryTest.request("edns")
+    case "extended-servfail": QueryTest.request("edns")
+    case "extended-refused": QueryTest.request("edns")
+    case "opt-duplicate": QueryTest.request("edns")
+    case "opt-misplaced": QueryTest.request("edns")
+    case "opt-owner": QueryTest.request("edns")
+    case "opt-short": QueryTest.request("edns")
+    case "opt-version": QueryTest.request("edns")
+    case other: QueryTest.request(other)
+
 def total(+mode: String, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, pair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Unit):
   match pair:
     case (scope, signal):
       do IO<Unit>:
-        result : Result<&2, &2, Servers.Error<String>, Servers.Reply> <- Servers.exchangeRequest(String, Bool.pick(Nat, String.eq(mode, "zero"), 0n, 2n), servers, signal, QueryTest.request(mode))
+        result : Result<&2, &2, Servers.Error<String>, Servers.Reply> <- Servers.exchangeRequest(String, Bool.pick(Nat, String.eq(mode, "zero"), 0n, 2n), servers, signal, request(mode))
         IO.print(outcome(result))
         ended : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         return Unit{}

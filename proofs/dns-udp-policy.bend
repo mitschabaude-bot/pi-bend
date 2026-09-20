@@ -12,3 +12,5 @@ def Laws.ignore_truncation_accepts(code, empty, truncated):
     case False{}: {==}
     case True{}: {==}
 def Laws.useful_success_matches_other(code, truncated, ignore): {==}
+
+def Laws.invalid_extension_stops_policy(header, ignore, error): {==}

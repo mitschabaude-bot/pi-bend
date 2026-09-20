@@ -1,4 +1,6 @@
 import Base
+import ../packages/runtime/src/dns-message.bend as Message
+import ../packages/runtime/src/dns-edns-response.bend as Edns
 import ../packages/runtime/src/dns-udp-policy.bend as Policy
 
 law server_failure_retries:
@@ -48,3 +50,9 @@ law useful_success_matches_other:
   for +truncated: Bool
   for +ignore: Bool
   {Policy.decide(Policy.Success{}, False{}, truncated, ignore) == Policy.decide(Policy.Other{code}, False{}, truncated, ignore) : Policy.Decision}
+
+law invalid_extension_stops_policy:
+  for header: Message.Header
+  for ignore: Bool
+  for +error: Edns.Error
+  {Policy.inspected(header, ignore, Fail{error}) == Fail{error} : Result<&2, &2, Edns.Error, Policy.Decision>}

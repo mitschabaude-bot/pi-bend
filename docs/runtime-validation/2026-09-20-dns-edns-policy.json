@@ -1,0 +1,3018 @@
+{
+  "scope": "Ordered UDP DNS attempts share one total deadline and retire owned resources.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "badvers",
+      "received": [
+        [
+          0,
+          0.0026254747062921524
+        ]
+      ],
+      "seconds": 0.012893364764750004,
+      "result": "41207:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "extended-servfail",
+      "received": [
+        [
+          0,
+          0.0025502946227788925
+        ]
+      ],
+      "seconds": 0.012712073512375355,
+      "result": "34985:answer:33154:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "extended-refused",
+      "received": [
+        [
+          0,
+          0.0016699805855751038
+        ]
+      ],
+      "seconds": 0.011936310678720474,
+      "result": "42035:answer:33157:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "opt-duplicate",
+      "received": [
+        [
+          0,
+          0.0016023395583033562
+        ]
+      ],
+      "seconds": 0.011804218403995037,
+      "result": "57954:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "opt-misplaced",
+      "received": [
+        [
+          0,
+          0.0014596786350011826
+        ]
+      ],
+      "seconds": 0.01161756832152605,
+      "result": "38464:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "opt-owner",
+      "received": [
+        [
+          0,
+          0.00152627844363451
+        ]
+      ],
+      "seconds": 0.011685768142342567,
+      "result": "47316:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "opt-short",
+      "received": [
+        [
+          0,
+          0.0014063483104109764
+        ]
+      ],
+      "seconds": 0.011561967432498932,
+      "result": "44768:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "opt-version",
+      "received": [
+        [
+          0,
+          0.0014734389260411263
+        ]
+      ],
+      "seconds": 0.011628428474068642,
+      "result": "33232:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "servfail",
+      "received": [
+        [
+          0,
+          0.0014703292399644852
+        ],
+        [
+          1,
+          0.002249442972242832
+        ]
+      ],
+      "seconds": 0.012411631643772125,
+      "result": "47372:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "notimp",
+      "received": [
+        [
+          0,
+          0.0015364186838269234
+        ],
+        [
+          1,
+          0.002320094034075737
+        ]
+      ],
+      "seconds": 0.012476082891225815,
+      "result": "34664:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "rcode-refused",
+      "received": [
+        [
+          0,
+          0.0014770692214369774
+        ],
+        [
+          1,
+          0.002261003479361534
+        ]
+      ],
+      "seconds": 0.012434802018105984,
+      "result": "43276:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "empty-answer",
+      "received": [
+        [
+          0,
+          0.0015318086370825768
+        ],
+        [
+          1,
+          0.0023135337978601456
+        ]
+      ],
+      "seconds": 0.012478192336857319,
+      "result": "42991:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "rcode-tc",
+      "received": [
+        [
+          0,
+          0.0013648178428411484
+        ],
+        [
+          1,
+          0.002141662873327732
+        ]
+      ],
+      "seconds": 0.012297181412577629,
+      "result": "42025:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "all-rcode",
+      "received": [
+        [
+          0,
+          0.0014140782877802849
+        ],
+        [
+          1,
+          0.0021896427497267723
+        ],
+        [
+          0,
+          0.002960747107863426
+        ],
+        [
+          1,
+          0.0037295622751116753
+        ]
+      ],
+      "seconds": 0.013886780478060246,
+      "result": "33139:rejected:33157:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "nxdomain",
+      "received": [
+        [
+          0,
+          0.00141975749284029
+        ]
+      ],
+      "seconds": 0.01157307717949152,
+      "result": "42668:answer:33155:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "first",
+      "received": [
+        [
+          0,
+          0.001468258909881115
+        ]
+      ],
+      "seconds": 0.011619857512414455,
+      "result": "47012:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "second",
+      "received": [
+        [
+          0,
+          0.0013636788353323936
+        ],
+        [
+          1,
+          1.0038457214832306
+        ]
+      ],
+      "seconds": 1.0142120011150837,
+      "result": "49662:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "round",
+      "received": [
+        [
+          0,
+          0.0025252047926187515
+        ],
+        [
+          1,
+          1.00412268191576
+        ],
+        [
+          0,
+          2.005774522200227
+        ]
+      ],
+      "seconds": 2.016041991300881,
+      "result": "46477:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 3"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "exhausted",
+      "received": [
+        [
+          0,
+          0.0030649779364466667
+        ],
+        [
+          1,
+          1.0042826123535633
+        ],
+        [
+          0,
+          2.0059635611250997
+        ],
+        [
+          1,
+          3.0076555786654353
+        ]
+      ],
+      "seconds": 4.016344096511602,
+      "result": "46403:abort:attempt:attempt",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "duplicate",
+      "received": [
+        [
+          0,
+          0.002574554644525051
+        ],
+        [
+          0,
+          1.0042093927040696
+        ]
+      ],
+      "seconds": 1.014568803831935,
+      "result": "56397:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "rotation",
+      "received": [
+        [
+          1,
+          0.0028460565954446793
+        ],
+        [
+          2,
+          1.004054189659655
+        ]
+      ],
+      "seconds": 1.0143081797286868,
+      "result": "48630:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "refused",
+      "received": [
+        [
+          1,
+          0.0035213809460401535
+        ]
+      ],
+      "seconds": 0.01379041001200676,
+      "result": "54571:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "all-refused",
+      "received": [],
+      "seconds": 0.010650292038917542,
+      "result": "38900:socket:111:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "truncated",
+      "received": [
+        [
+          0,
+          0.0021385429427027702
+        ]
+      ],
+      "seconds": 0.012362821958959103,
+      "result": "59222:truncated",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "total",
+      "received": [
+        [
+          0,
+          0.0017772205173969269
+        ],
+        [
+          1,
+          1.0043632630258799
+        ]
+      ],
+      "seconds": 1.2083898354321718,
+      "result": "50823:abort:total:total",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "later",
+      "received": [
+        [
+          0,
+          0.002657155506312847
+        ]
+      ],
+      "seconds": 0.03319649212062359,
+      "result": "43014:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre",
+      "received": [],
+      "seconds": 0.01075737178325653,
+      "result": "44464:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre-default",
+      "received": [],
+      "seconds": 0.010662632063031197,
+      "result": "47120:abort:caller:default:caller:default",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "zero",
+      "received": [],
+      "seconds": 0.010769163258373737,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "empty",
+      "received": [],
+      "seconds": 0.01048900093883276,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "budget",
+      "received": [],
+      "seconds": 0.010589661076664925,
+      "result": "54740:budget:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "port",
+      "received": [],
+      "seconds": 0.010465860366821289,
+      "result": "0:destination:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "invalid",
+      "received": [],
+      "seconds": 0.010547030717134476,
+      "result": "32820:invalid:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "badvers",
+      "received": [
+        [
+          0,
+          0.0016666995361447334
+        ]
+      ],
+      "seconds": 0.011850058101117611,
+      "result": "60013:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "extended-servfail",
+      "received": [
+        [
+          0,
+          0.0025646453723311424
+        ]
+      ],
+      "seconds": 0.012804694473743439,
+      "result": "55504:answer:33154:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "extended-refused",
+      "received": [
+        [
+          0,
+          0.002660275436937809
+        ]
+      ],
+      "seconds": 0.012872864492237568,
+      "result": "53408:answer:33157:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "opt-duplicate",
+      "received": [
+        [
+          0,
+          0.0027595357969403267
+        ]
+      ],
+      "seconds": 0.01301620528101921,
+      "result": "46319:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "opt-misplaced",
+      "received": [
+        [
+          0,
+          0.0025777844712138176
+        ]
+      ],
+      "seconds": 0.01281612366437912,
+      "result": "52632:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "opt-owner",
+      "received": [
+        [
+          0,
+          0.002621365711092949
+        ]
+      ],
+      "seconds": 0.012859324924647808,
+      "result": "42453:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "opt-short",
+      "received": [
+        [
+          0,
+          0.001829291693866253
+        ]
+      ],
+      "seconds": 0.012070800177752972,
+      "result": "59192:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "opt-version",
+      "received": [
+        [
+          0,
+          0.0025993352755904198
+        ]
+      ],
+      "seconds": 0.01284580398350954,
+      "result": "49579:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "servfail",
+      "received": [
+        [
+          0,
+          0.0018441006541252136
+        ],
+        [
+          1,
+          0.003045187331736088
+        ]
+      ],
+      "seconds": 0.013282996602356434,
+      "result": "39436:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "notimp",
+      "received": [
+        [
+          0,
+          0.0016189003363251686
+        ],
+        [
+          1,
+          0.0024009449407458305
+        ]
+      ],
+      "seconds": 0.01264000404626131,
+      "result": "45109:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "rcode-refused",
+      "received": [
+        [
+          0,
+          0.0019508926197886467
+        ],
+        [
+          1,
+          0.0027320263907313347
+        ]
+      ],
+      "seconds": 0.012964156456291676,
+      "result": "58353:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "empty-answer",
+      "received": [
+        [
+          0,
+          0.0025563249364495277
+        ],
+        [
+          1,
+          0.0035329703241586685
+        ]
+      ],
+      "seconds": 0.013754419982433319,
+      "result": "38181:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "rcode-tc",
+      "received": [
+        [
+          0,
+          0.001425148919224739
+        ],
+        [
+          1,
+          0.002208603546023369
+        ]
+      ],
+      "seconds": 0.01243660319596529,
+      "result": "47630:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "all-rcode",
+      "received": [
+        [
+          0,
+          0.002526175230741501
+        ],
+        [
+          1,
+          0.003386920318007469
+        ],
+        [
+          0,
+          0.004155734553933144
+        ],
+        [
+          1,
+          0.0049358392134308815
+        ]
+      ],
+      "seconds": 0.015157558023929596,
+      "result": "45973:rejected:33157:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "nxdomain",
+      "received": [
+        [
+          0,
+          0.002130052074790001
+        ]
+      ],
+      "seconds": 0.01235658023506403,
+      "result": "35129:answer:33155:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "first",
+      "received": [
+        [
+          0,
+          0.0023456932976841927
+        ]
+      ],
+      "seconds": 0.012590942904353142,
+      "result": "48691:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "second",
+      "received": [
+        [
+          0,
+          0.001680709421634674
+        ],
+        [
+          1,
+          1.0041909217834473
+        ]
+      ],
+      "seconds": 1.0144399600103498,
+      "result": "41691:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "round",
+      "received": [
+        [
+          0,
+          0.0026649348437786102
+        ],
+        [
+          1,
+          1.0040394198149443
+        ],
+        [
+          0,
+          2.0054796170443296
+        ]
+      ],
+      "seconds": 2.0158416675403714,
+      "result": "57079:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 3"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "exhausted",
+      "received": [
+        [
+          0,
+          0.0020421622321009636
+        ],
+        [
+          1,
+          1.0043688416481018
+        ],
+        [
+          0,
+          2.0061113191768527
+        ],
+        [
+          1,
+          3.0076203234493732
+        ]
+      ],
+      "seconds": 4.01231724768877,
+      "result": "54884:abort:attempt:attempt",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "duplicate",
+      "received": [
+        [
+          0,
+          0.0027771368622779846
+        ],
+        [
+          0,
+          1.0040537109598517
+        ]
+      ],
+      "seconds": 1.0143143106251955,
+      "result": "50996:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "rotation",
+      "received": [
+        [
+          1,
+          0.0025416454300284386
+        ],
+        [
+          2,
+          1.0036238385364413
+        ]
+      ],
+      "seconds": 1.0138808684423566,
+      "result": "51290:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "refused",
+      "received": [
+        [
+          1,
+          0.0037667015567421913
+        ]
+      ],
+      "seconds": 0.01403128169476986,
+      "result": "57247:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "all-refused",
+      "received": [],
+      "seconds": 0.010632790625095367,
+      "result": "58608:socket:111:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "truncated",
+      "received": [
+        [
+          0,
+          0.0016247685998678207
+        ]
+      ],
+      "seconds": 0.011857487261295319,
+      "result": "48556:truncated",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "total",
+      "received": [
+        [
+          0,
+          0.0019861524924635887
+        ],
+        [
+          1,
+          1.0045425025746226
+        ]
+      ],
+      "seconds": 1.2085033552721143,
+      "result": "40595:abort:total:total",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "later",
+      "received": [
+        [
+          0,
+          0.0028887372463941574
+        ]
+      ],
+      "seconds": 0.033513364382088184,
+      "result": "34226:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre",
+      "received": [],
+      "seconds": 0.010772952809929848,
+      "result": "53323:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre-default",
+      "received": [],
+      "seconds": 0.010701421648263931,
+      "result": "34335:abort:caller:default:caller:default",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "zero",
+      "received": [],
+      "seconds": 0.010590321384370327,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "empty",
+      "received": [],
+      "seconds": 0.010573361068964005,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "budget",
+      "received": [],
+      "seconds": 0.010684851557016373,
+      "result": "56132:budget:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "port",
+      "received": [],
+      "seconds": 0.010586670599877834,
+      "result": "0:destination:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "invalid",
+      "received": [],
+      "seconds": 0.010472151450812817,
+      "result": "42268:invalid:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "badvers",
+      "received": [
+        [
+          0,
+          0.0020060716196894646
+        ]
+      ],
+      "seconds": 0.012300372123718262,
+      "result": "35928:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "extended-servfail",
+      "received": [
+        [
+          0,
+          0.002861226908862591
+        ]
+      ],
+      "seconds": 0.013106726109981537,
+      "result": "49369:answer:33154:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "extended-refused",
+      "received": [
+        [
+          0,
+          0.0026247454807162285
+        ]
+      ],
+      "seconds": 0.012870045378804207,
+      "result": "35923:answer:33157:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "opt-duplicate",
+      "received": [
+        [
+          0,
+          0.0021269414573907852
+        ]
+      ],
+      "seconds": 0.012404101900756359,
+      "result": "51957:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "opt-misplaced",
+      "received": [
+        [
+          0,
+          0.0029288670048117638
+        ]
+      ],
+      "seconds": 0.013176246546208858,
+      "result": "58750:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "opt-owner",
+      "received": [
+        [
+          0,
+          0.0029136575758457184
+        ]
+      ],
+      "seconds": 0.013155176304280758,
+      "result": "44969:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "opt-short",
+      "received": [
+        [
+          0,
+          0.0020614517852663994
+        ]
+      ],
+      "seconds": 0.012299511581659317,
+      "result": "52901:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "opt-version",
+      "received": [
+        [
+          0,
+          0.002678816206753254
+        ]
+      ],
+      "seconds": 0.012914995662868023,
+      "result": "49589:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "servfail",
+      "received": [
+        [
+          0,
+          0.0014688177034258842
+        ],
+        [
+          1,
+          0.0022942926734685898
+        ]
+      ],
+      "seconds": 0.012531162239611149,
+      "result": "48322:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "notimp",
+      "received": [
+        [
+          0,
+          0.0020231222733855247
+        ],
+        [
+          1,
+          0.0028478670865297318
+        ]
+      ],
+      "seconds": 0.013050995767116547,
+      "result": "33676:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "rcode-refused",
+      "received": [
+        [
+          0,
+          0.001970982179045677
+        ],
+        [
+          1,
+          0.0028160177171230316
+        ]
+      ],
+      "seconds": 0.013046585954725742,
+      "result": "36576:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "empty-answer",
+      "received": [
+        [
+          0,
+          0.002531253732740879
+        ],
+        [
+          1,
+          0.0035169394686818123
+        ]
+      ],
+      "seconds": 0.013750389218330383,
+      "result": "52464:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "rcode-tc",
+      "received": [
+        [
+          0,
+          0.0016311388462781906
+        ],
+        [
+          1,
+          0.002477484755218029
+        ]
+      ],
+      "seconds": 0.012704504653811455,
+      "result": "32851:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "all-rcode",
+      "received": [
+        [
+          0,
+          0.0025300253182649612
+        ],
+        [
+          1,
+          0.003690151497721672
+        ],
+        [
+          0,
+          0.004494085907936096
+        ],
+        [
+          1,
+          0.005294911563396454
+        ]
+      ],
+      "seconds": 0.015525029972195625,
+      "result": "59922:rejected:33157:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "nxdomain",
+      "received": [
+        [
+          0,
+          0.0024922536686062813
+        ]
+      ],
+      "seconds": 0.012729943729937077,
+      "result": "58840:answer:33155:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "first",
+      "received": [
+        [
+          0,
+          0.001600649207830429
+        ]
+      ],
+      "seconds": 0.011831198818981647,
+      "result": "48934:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "second",
+      "received": [
+        [
+          0,
+          0.0015897005796432495
+        ],
+        [
+          1,
+          1.0036751283332705
+        ]
+      ],
+      "seconds": 1.0140392882749438,
+      "result": "38917:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "round",
+      "received": [
+        [
+          0,
+          0.0024444134905934334
+        ],
+        [
+          1,
+          1.005013244226575
+        ],
+        [
+          0,
+          2.006615860387683
+        ]
+      ],
+      "seconds": 2.017001741565764,
+      "result": "55689:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 3"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "exhausted",
+      "received": [
+        [
+          0,
+          0.0026902956888079643
+        ],
+        [
+          1,
+          1.0039250887930393
+        ],
+        [
+          0,
+          2.005481632426381
+        ],
+        [
+          1,
+          3.0064608361572027
+        ]
+      ],
+      "seconds": 4.008700664155185,
+      "result": "34314:abort:attempt:attempt",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "duplicate",
+      "received": [
+        [
+          0,
+          0.0027441559359431267
+        ],
+        [
+          0,
+          1.0033225640654564
+        ]
+      ],
+      "seconds": 1.013587444089353,
+      "result": "58645:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "rotation",
+      "received": [
+        [
+          1,
+          0.002611805684864521
+        ],
+        [
+          2,
+          1.0037107076495886
+        ]
+      ],
+      "seconds": 1.0139398472383618,
+      "result": "52381:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "refused",
+      "received": [
+        [
+          1,
+          0.003316218964755535
+        ]
+      ],
+      "seconds": 0.013597139157354832,
+      "result": "38195:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "all-refused",
+      "received": [],
+      "seconds": 0.010593830607831478,
+      "result": "58101:socket:111:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "truncated",
+      "received": [
+        [
+          0,
+          0.0022207926958799362
+        ]
+      ],
+      "seconds": 0.012381530366837978,
+      "result": "46722:truncated",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "total",
+      "received": [
+        [
+          0,
+          0.0025216052308678627
+        ],
+        [
+          1,
+          1.003865199163556
+        ]
+      ],
+      "seconds": 1.2078411905094981,
+      "result": "58057:abort:total:total",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "later",
+      "received": [
+        [
+          0,
+          0.0025728652253746986
+        ]
+      ],
+      "seconds": 0.033214421942830086,
+      "result": "37682:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre",
+      "received": [],
+      "seconds": 0.010829603299498558,
+      "result": "37128:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre-default",
+      "received": [],
+      "seconds": 0.010720793157815933,
+      "result": "34244:abort:caller:default:caller:default",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "zero",
+      "received": [],
+      "seconds": 0.010588521137833595,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "empty",
+      "received": [],
+      "seconds": 0.010661832056939602,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "budget",
+      "received": [],
+      "seconds": 0.010663571767508984,
+      "result": "46793:budget:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "port",
+      "received": [],
+      "seconds": 0.010682942345738411,
+      "result": "0:destination:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "invalid",
+      "received": [],
+      "seconds": 0.010576892644166946,
+      "result": "43477:invalid:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "badvers",
+      "received": [
+        [
+          0,
+          0.002667495980858803
+        ]
+      ],
+      "seconds": 0.012902365066111088,
+      "result": "48536:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "extended-servfail",
+      "received": [
+        [
+          0,
+          0.002533375285565853
+        ]
+      ],
+      "seconds": 0.012889125384390354,
+      "result": "57897:answer:33154:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "extended-refused",
+      "received": [
+        [
+          0,
+          0.002786986529827118
+        ]
+      ],
+      "seconds": 0.012994655407965183,
+      "result": "40587:answer:33157:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "opt-duplicate",
+      "received": [
+        [
+          0,
+          0.0017745299264788628
+        ]
+      ],
+      "seconds": 0.012015048414468765,
+      "result": "50472:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "opt-misplaced",
+      "received": [
+        [
+          0,
+          0.001580159179866314
+        ]
+      ],
+      "seconds": 0.011770118027925491,
+      "result": "39686:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "opt-owner",
+      "received": [
+        [
+          0,
+          0.0017485693097114563
+        ]
+      ],
+      "seconds": 0.012064758688211441,
+      "result": "57507:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "opt-short",
+      "received": [
+        [
+          0,
+          0.0025487542152404785
+        ]
+      ],
+      "seconds": 0.012791253626346588,
+      "result": "40555:extension:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "opt-version",
+      "received": [
+        [
+          0,
+          0.0025724852457642555
+        ]
+      ],
+      "seconds": 0.01284063421189785,
+      "result": "57572:answer:33152:28:0",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "servfail",
+      "received": [
+        [
+          0,
+          0.0028368858620524406
+        ],
+        [
+          1,
+          0.003973702900111675
+        ]
+      ],
+      "seconds": 0.014114911668002605,
+      "result": "41239:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "notimp",
+      "received": [
+        [
+          0,
+          0.0016615195199847221
+        ],
+        [
+          1,
+          0.0025047138333320618
+        ]
+      ],
+      "seconds": 0.012730574235320091,
+      "result": "50366:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "rcode-refused",
+      "received": [
+        [
+          0,
+          0.0025770850479602814
+        ],
+        [
+          1,
+          0.003361630253493786
+        ]
+      ],
+      "seconds": 0.013487478718161583,
+      "result": "57452:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "empty-answer",
+      "received": [
+        [
+          0,
+          0.0018616607412695885
+        ],
+        [
+          1,
+          0.0026990659534931183
+        ]
+      ],
+      "seconds": 0.013207166455686092,
+      "result": "49950:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "rcode-tc",
+      "received": [
+        [
+          0,
+          0.0027450965717434883
+        ],
+        [
+          1,
+          0.0035652117803692818
+        ]
+      ],
+      "seconds": 0.013798930682241917,
+      "result": "53637:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "all-rcode",
+      "received": [
+        [
+          0,
+          0.0025113532319664955
+        ],
+        [
+          1,
+          0.0037692002952098846
+        ],
+        [
+          0,
+          0.004563965834677219
+        ],
+        [
+          1,
+          0.005353771150112152
+        ]
+      ],
+      "seconds": 0.015584739856421947,
+      "result": "56123:rejected:33157:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "nxdomain",
+      "received": [
+        [
+          0,
+          0.0024244850501418114
+        ]
+      ],
+      "seconds": 0.012656443752348423,
+      "result": "58221:answer:33155:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "first",
+      "received": [
+        [
+          0,
+          0.0025840140879154205
+        ]
+      ],
+      "seconds": 0.012816484086215496,
+      "result": "51129:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "second",
+      "received": [
+        [
+          0,
+          0.0017025396227836609
+        ],
+        [
+          1,
+          1.0039704386144876
+        ]
+      ],
+      "seconds": 1.0143334083259106,
+      "result": "47846:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "round",
+      "received": [
+        [
+          0,
+          0.002900046296417713
+        ],
+        [
+          1,
+          1.0044013913720846
+        ],
+        [
+          0,
+          2.0060269366949797
+        ]
+      ],
+      "seconds": 2.016344756819308,
+      "result": "60828:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 3"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "exhausted",
+      "received": [
+        [
+          0,
+          0.0026466650888323784
+        ],
+        [
+          1,
+          1.0040426393970847
+        ],
+        [
+          0,
+          2.0058226957917213
+        ],
+        [
+          1,
+          3.007269429974258
+        ]
+      ],
+      "seconds": 4.0125448470935225,
+      "result": "35737:abort:attempt:attempt",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "duplicate",
+      "received": [
+        [
+          0,
+          0.0026914644986391068
+        ],
+        [
+          0,
+          1.0042366590350866
+        ]
+      ],
+      "seconds": 1.0145945698022842,
+      "result": "59347:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "rotation",
+      "received": [
+        [
+          1,
+          0.0026196958497166634
+        ],
+        [
+          2,
+          1.0038887178525329
+        ]
+      ],
+      "seconds": 1.0142704173922539,
+      "result": "56979:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "refused",
+      "received": [
+        [
+          1,
+          0.0038147326558828354
+        ]
+      ],
+      "seconds": 0.014117902144789696,
+      "result": "59302:answer:33152:17:1",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "all-refused",
+      "received": [],
+      "seconds": 0.010750021785497665,
+      "result": "45166:socket:111:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "truncated",
+      "received": [
+        [
+          0,
+          0.0026821857318282127
+        ]
+      ],
+      "seconds": 0.012928015552461147,
+      "result": "50170:truncated",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "total",
+      "received": [
+        [
+          0,
+          0.002527245320379734
+        ],
+        [
+          1,
+          1.0030589932575822
+        ]
+      ],
+      "seconds": 1.206373831257224,
+      "result": "33224:abort:total:total",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "later",
+      "received": [
+        [
+          0,
+          0.002524944022297859
+        ]
+      ],
+      "seconds": 0.03321903198957443,
+      "result": "46695:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre",
+      "received": [],
+      "seconds": 0.010778931900858879,
+      "result": "39532:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre-default",
+      "received": [],
+      "seconds": 0.010555410757660866,
+      "result": "34342:abort:caller:default:caller:default",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "zero",
+      "received": [],
+      "seconds": 0.010531231760978699,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "empty",
+      "received": [],
+      "seconds": 0.010510831139981747,
+      "result": "empty",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "budget",
+      "received": [],
+      "seconds": 0.010993503034114838,
+      "result": "52966:budget:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "port",
+      "received": [],
+      "seconds": 0.010481760837137699,
+      "result": "0:destination:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "invalid",
+      "received": [],
+      "seconds": 0.010467121377587318,
+      "result": "56165:invalid:active",
+      "audit": "AUDIT 0 0 0 0 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "badvers",
+      "received": [
+        [
+          0,
+          0.3574535511434078
+        ]
+      ],
+      "seconds": 0.3879710277542472,
+      "result": "44089:answer:33152:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "extended-servfail",
+      "received": [
+        [
+          0,
+          0.2117240373045206
+        ]
+      ],
+      "seconds": 0.24217979423701763,
+      "result": "33590:answer:33154:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "extended-refused",
+      "received": [
+        [
+          0,
+          0.20823229663074017
+        ]
+      ],
+      "seconds": 0.23864848259836435,
+      "result": "33647:answer:33157:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "opt-duplicate",
+      "received": [
+        [
+          0,
+          0.2060547238215804
+        ]
+      ],
+      "seconds": 0.23646978940814734,
+      "result": "58453:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "opt-misplaced",
+      "received": [
+        [
+          0,
+          0.20829104725271463
+        ]
+      ],
+      "seconds": 0.2387043833732605,
+      "result": "41626:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "opt-owner",
+      "received": [
+        [
+          0,
+          0.206941869109869
+        ]
+      ],
+      "seconds": 0.23733638506382704,
+      "result": "54914:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "opt-short",
+      "received": [
+        [
+          0,
+          0.20930455345660448
+        ]
+      ],
+      "seconds": 0.2397374091669917,
+      "result": "60014:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "opt-version",
+      "received": [
+        [
+          0,
+          0.21139325480908155
+        ]
+      ],
+      "seconds": 0.241864831186831,
+      "result": "42121:answer:33152:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "servfail",
+      "received": [
+        [
+          0,
+          0.20631426572799683
+        ],
+        [
+          1,
+          0.21587341092526913
+        ]
+      ],
+      "seconds": 0.23610970843583345,
+      "result": "53588:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "notimp",
+      "received": [
+        [
+          0,
+          0.21236927062273026
+        ],
+        [
+          1,
+          0.22195881698280573
+        ]
+      ],
+      "seconds": 0.2423112951219082,
+      "result": "40724:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "rcode-refused",
+      "received": [
+        [
+          0,
+          0.20364829059690237
+        ],
+        [
+          1,
+          0.2132100760936737
+        ]
+      ],
+      "seconds": 0.2435603216290474,
+      "result": "53779:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "empty-answer",
+      "received": [
+        [
+          0,
+          0.21080490108579397
+        ],
+        [
+          1,
+          0.22037891764193773
+        ]
+      ],
+      "seconds": 0.24071927554905415,
+      "result": "44593:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "rcode-tc",
+      "received": [
+        [
+          0,
+          0.2102571791037917
+        ],
+        [
+          1,
+          0.21949288249015808
+        ]
+      ],
+      "seconds": 0.23979664966464043,
+      "result": "44372:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "all-rcode",
+      "received": [
+        [
+          0,
+          0.2072589509189129
+        ],
+        [
+          1,
+          0.21677956636995077
+        ],
+        [
+          0,
+          0.2177984919399023
+        ],
+        [
+          1,
+          0.21861562691628933
+        ]
+      ],
+      "seconds": 0.23896921519190073,
+      "result": "43505:rejected:33157:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "nxdomain",
+      "received": [
+        [
+          0,
+          0.20784481521695852
+        ]
+      ],
+      "seconds": 0.23826794140040874,
+      "result": "55195:answer:33155:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "first",
+      "received": [
+        [
+          0,
+          0.20910974219441414
+        ]
+      ],
+      "seconds": 0.2496056156232953,
+      "result": "35324:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "second",
+      "received": [
+        [
+          0,
+          0.20995676703751087
+        ],
+        [
+          1,
+          1.2076113475486636
+        ]
+      ],
+      "seconds": 1.2380510549992323,
+      "result": "55995:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "round",
+      "received": [
+        [
+          0,
+          0.2049913378432393
+        ],
+        [
+          1,
+          1.2037792559713125
+        ],
+        [
+          0,
+          2.2060738932341337
+        ]
+      ],
+      "seconds": 2.236548990942538,
+      "result": "40932:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 3"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "exhausted",
+      "received": [
+        [
+          0,
+          0.2059326432645321
+        ],
+        [
+          1,
+          1.2027340307831764
+        ],
+        [
+          0,
+          2.2053611194714904
+        ],
+        [
+          1,
+          3.2076168674975634
+        ]
+      ],
+      "seconds": 4.2330554304644465,
+      "result": "36154:abort:attempt:attempt",
+      "audit": "AUDIT 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "duplicate",
+      "received": [
+        [
+          0,
+          0.20998320635408163
+        ],
+        [
+          0,
+          1.2086181715130806
+        ]
+      ],
+      "seconds": 1.239169729873538,
+      "result": "42829:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "rotation",
+      "received": [
+        [
+          1,
+          0.2102692974731326
+        ],
+        [
+          2,
+          1.2080383989959955
+        ]
+      ],
+      "seconds": 1.2384978355839849,
+      "result": "47969:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "refused",
+      "received": [
+        [
+          1,
+          0.20970348548144102
+        ]
+      ],
+      "seconds": 0.2402334725484252,
+      "result": "56688:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "all-refused",
+      "received": [],
+      "seconds": 0.23276972863823175,
+      "result": "42195:socket:111:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "truncated",
+      "received": [
+        [
+          0,
+          0.208501017652452
+        ]
+      ],
+      "seconds": 0.2389374440535903,
+      "result": "39675:truncated",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "total",
+      "received": [
+        [
+          0,
+          0.205537180416286
+        ],
+        [
+          1,
+          1.203522133640945
+        ]
+      ],
+      "seconds": 1.3155259918421507,
+      "result": "41606:abort:total:total",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "later",
+      "received": [
+        [
+          0,
+          0.20636795554310083
+        ]
+      ],
+      "seconds": 0.24686414934694767,
+      "result": "55177:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre",
+      "received": [],
+      "seconds": 0.2219773456454277,
+      "result": "46676:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre-default",
+      "received": [],
+      "seconds": 0.2221049666404724,
+      "result": "44014:abort:caller:default:caller:default",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "zero",
+      "received": [],
+      "seconds": 0.22200066689401865,
+      "result": "empty",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "empty",
+      "received": [],
+      "seconds": 0.21190073806792498,
+      "result": "empty",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "budget",
+      "received": [],
+      "seconds": 0.22203736659139395,
+      "result": "46713:budget:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "port",
+      "received": [],
+      "seconds": 0.2220277665182948,
+      "result": "0:destination:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "invalid",
+      "received": [],
+      "seconds": 0.22200739569962025,
+      "result": "47915:invalid:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "badvers",
+      "received": [
+        [
+          0,
+          0.20502567756921053
+        ]
+      ],
+      "seconds": 0.23539383430033922,
+      "result": "39177:answer:33152:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "extended-servfail",
+      "received": [
+        [
+          0,
+          0.20736983232200146
+        ]
+      ],
+      "seconds": 0.2378130378201604,
+      "result": "43822:answer:33154:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "extended-refused",
+      "received": [
+        [
+          0,
+          0.20613158401101828
+        ]
+      ],
+      "seconds": 0.23650318942964077,
+      "result": "41378:answer:33157:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "opt-duplicate",
+      "received": [
+        [
+          0,
+          0.21223585028201342
+        ]
+      ],
+      "seconds": 0.242618546821177,
+      "result": "54752:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "opt-misplaced",
+      "received": [
+        [
+          0,
+          0.20745501201599836
+        ]
+      ],
+      "seconds": 0.23784480802714825,
+      "result": "51904:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "opt-owner",
+      "received": [
+        [
+          0,
+          0.20673095807433128
+        ]
+      ],
+      "seconds": 0.23711483366787434,
+      "result": "48664:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "opt-short",
+      "received": [
+        [
+          0,
+          0.21747909020632505
+        ]
+      ],
+      "seconds": 0.24789360724389553,
+      "result": "59927:extension:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "opt-version",
+      "received": [
+        [
+          0,
+          0.21039803884923458
+        ]
+      ],
+      "seconds": 0.2408104259520769,
+      "result": "35653:answer:33152:28:0",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "servfail",
+      "received": [
+        [
+          0,
+          0.20426452346146107
+        ],
+        [
+          1,
+          0.21368007734417915
+        ]
+      ],
+      "seconds": 0.24405937362462282,
+      "result": "43979:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "notimp",
+      "received": [
+        [
+          0,
+          0.21933055110275745
+        ],
+        [
+          1,
+          0.22885039635002613
+        ]
+      ],
+      "seconds": 0.2491350332275033,
+      "result": "34264:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "rcode-refused",
+      "received": [
+        [
+          0,
+          0.20527266897261143
+        ],
+        [
+          1,
+          0.21476129349321127
+        ]
+      ],
+      "seconds": 0.2350886119529605,
+      "result": "60993:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "empty-answer",
+      "received": [
+        [
+          0,
+          0.21084633097052574
+        ],
+        [
+          1,
+          0.2203228659927845
+        ]
+      ],
+      "seconds": 0.24065714422613382,
+      "result": "44262:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "rcode-tc",
+      "received": [
+        [
+          0,
+          0.2101042177528143
+        ],
+        [
+          1,
+          0.21929576992988586
+        ]
+      ],
+      "seconds": 0.23961589857935905,
+      "result": "53044:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "all-rcode",
+      "received": [
+        [
+          0,
+          0.20418574288487434
+        ],
+        [
+          1,
+          0.2138418685644865
+        ],
+        [
+          0,
+          0.2148727746680379
+        ],
+        [
+          1,
+          0.21574191935360432
+        ]
+      ],
+      "seconds": 0.23606201726943254,
+      "result": "47361:rejected:33157:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "nxdomain",
+      "received": [
+        [
+          0,
+          0.20760009344667196
+        ]
+      ],
+      "seconds": 0.23792996909469366,
+      "result": "53674:answer:33155:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "first",
+      "received": [
+        [
+          0,
+          0.20690630935132504
+        ]
+      ],
+      "seconds": 0.23731742519885302,
+      "result": "56619:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "second",
+      "received": [
+        [
+          0,
+          0.20828943699598312
+        ],
+        [
+          1,
+          1.2063358603045344
+        ]
+      ],
+      "seconds": 1.226701627485454,
+      "result": "35659:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "round",
+      "received": [
+        [
+          0,
+          0.20568906143307686
+        ],
+        [
+          1,
+          1.203316431492567
+        ],
+        [
+          0,
+          2.205709998495877
+        ]
+      ],
+      "seconds": 2.236162094399333,
+      "result": "37191:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 3"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "exhausted",
+      "received": [
+        [
+          0,
+          0.20683970768004656
+        ],
+        [
+          1,
+          1.203833233565092
+        ],
+        [
+          0,
+          2.206104790791869
+        ],
+        [
+          1,
+          3.2082811165601015
+        ]
+      ],
+      "seconds": 4.230107047595084,
+      "result": "44665:abort:attempt:attempt",
+      "audit": "AUDIT 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "duplicate",
+      "received": [
+        [
+          0,
+          0.2037969408556819
+        ],
+        [
+          0,
+          1.2012331988662481
+        ]
+      ],
+      "seconds": 1.231713275425136,
+      "result": "35467:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "rotation",
+      "received": [
+        [
+          1,
+          0.20391149166971445
+        ],
+        [
+          2,
+          1.2026205966249108
+        ]
+      ],
+      "seconds": 1.2229988751932979,
+      "result": "57977:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "refused",
+      "received": [
+        [
+          1,
+          0.20904040057212114
+        ]
+      ],
+      "seconds": 0.23990336898714304,
+      "result": "36941:answer:33152:17:1",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "all-refused",
+      "received": [],
+      "seconds": 0.23310899082571268,
+      "result": "53903:socket:111:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 4"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "truncated",
+      "received": [
+        [
+          0,
+          0.20997962728142738
+        ]
+      ],
+      "seconds": 0.2404095632955432,
+      "result": "43864:truncated",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "total",
+      "received": [
+        [
+          0,
+          0.20937464199960232
+        ],
+        [
+          1,
+          1.2071771444752812
+        ]
+      ],
+      "seconds": 1.319064092822373,
+      "result": "36429:abort:total:total",
+      "audit": "AUDIT 0 0\nATTEMPTS 2"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "later",
+      "received": [
+        [
+          0,
+          0.2017365274950862
+        ]
+      ],
+      "seconds": 0.24244824331253767,
+      "result": "55289:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0\nATTEMPTS 1"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre",
+      "received": [],
+      "seconds": 0.21547630801796913,
+      "result": "51547:abort:caller:stop:caller:stop",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre-default",
+      "received": [],
+      "seconds": 0.21263333223760128,
+      "result": "54850:abort:caller:default:caller:default",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "zero",
+      "received": [],
+      "seconds": 0.2227828809991479,
+      "result": "empty",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "empty",
+      "received": [],
+      "seconds": 0.21269828267395496,
+      "result": "empty",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "budget",
+      "received": [],
+      "seconds": 0.21262880228459835,
+      "result": "38337:budget:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "port",
+      "received": [],
+      "seconds": 0.22273689974099398,
+      "result": "0:destination:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "invalid",
+      "received": [],
+      "seconds": 0.2227462101727724,
+      "result": "47893:invalid:active",
+      "audit": "AUDIT 0 0\nATTEMPTS 0"
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-datagram.bend": "07464d20e8bc12b0e8f6f7efeeffc35c76af31547e6d330d9aac2284fa410896",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/datagram-peer.bend": "85dd3fd3d6b1696685c425de655382da036f92d925e5f8faffe863ab422d9acc",
+    "packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/dns-edns-response.bend": "2ca8eeb0f26dbdf461be033330a0aea150eb7e834128a07a45b6e995f6dd3ef1",
+    "packages/runtime/src/dns-edns.bend": "e0da21c269c95007c5d271305c219c0387d822623185772fdf2209834474fd56",
+    "packages/runtime/src/dns-message.bend": "a77aabec7636f895ce1a22a490e096185aec10aa64f0f7fd8bb90043997be7ff",
+    "packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "packages/runtime/src/dns-query.bend": "2e0bdc96c1c5e53daf231fc52bb297465efbeb490f98f498423ecbce8e456f45",
+    "packages/runtime/src/dns-response.bend": "2d40b4c34e3c95850a68f4d55709bd7ac9f999f197bf34d55d360ccffe5deb61",
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "packages/runtime/src/dns-tcp-frame.bend": "59c91601b376cab4b889a542ced398cd82439fd21b094febdb269b9eba800dae",
+    "packages/runtime/src/dns-udp-attempt-scope.bend": "4ab54deff52786c6281c04bf17fd334ac1227a678fbbdcc939818ee3533de897",
+    "packages/runtime/src/dns-udp-plan.bend": "d9ee058ca71a8143bfafe2dd4378e1f3125ba672650b6c9b2604cc2edf1b3b31",
+    "packages/runtime/src/dns-udp-policy.bend": "e07290db705a57196283738734eb1b6d015f5fa588db2a0733ce3eaca67e001f",
+    "packages/runtime/src/dns-udp-query.bend": "d87a2993f70c4e1deb96c22c392c66240387b5014695205dcd36cdc3313120f6",
+    "packages/runtime/src/dns-udp-schedule.bend": "c76949a597d5b612af67efaf30a76c1bf4a93a1a7bdf4a72f5a6bd53f3dd597c",
+    "packages/runtime/src/dns-udp-servers.bend": "e1233e1ee23113713b7a0badfcb70b205ec77d108d35de2df4adf1ca6c468b30",
+    "packages/runtime/src/dns-udp-timeout.bend": "631e15078cb1c2285d5f1bfc0e19513f86c065b9d41ad144ca5956ebeb125cb2",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/dns-udp-attempt-scope.bend": "8ddebf3692ef481d4ce391c1cf421c678d0a23da8968228c585d2ac0706e5d63",
+    "tests/dns-udp-query.bend": "ab3382d1e67e2f3e1fca2149a5b51622b483c8571df03c816d4377cdfd53a44f",
+    "tests/dns-udp-servers.bend": "c9338e458654098b80192448b7bf34a8adc7ce761adc7cf2c91494bf1eef6037",
+    "tests/dns_udp_servers_check.py": "27bd0f3744fac862d80075118c34bdf780baebae0c7b5b0522e0fe1c27409c35"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/dns-udp-servers.bend",
+        "-o",
+        "build/dns-udp-servers.c"
+      ],
+      "elapsed_seconds": 100.04198652971536,
+      "peak_sampled_group_rss_kib": 7543132,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/dns-udp-servers.bend",
+        "-o",
+        "build/dns-udp-servers.js"
+      ],
+      "elapsed_seconds": 11.749862244352698,
+      "peak_sampled_group_rss_kib": 4710448,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
