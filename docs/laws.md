@@ -159,3 +159,8 @@ Two more `bounded-bytes` laws guarantee exact in-order completion for every fitt
 ### Retry success ownership
 
 Six `provider-retry` laws quantify over arbitrary Bend value quantities and success/error types, including affine resources. They express IO-program equalities for success, completed/retry continuation dispatch, abort/exhaustion precedence and application failures. The [gate](proof-validation/2026-09-21-provider-retry-owned.json) checks 241 public laws and 59 supporting lemmas and rejects 145 typed mutations. These branch/effect guarantees do not prove termination of arbitrary callbacks or universal resource retirement; [socket ownership and upstream regressions](provider-retry-ownership.md) supply complementary executed evidence. No unsafe declaration was added to the proof root.
+
+
+### Provider HTTP response ownership and diagnostics
+
+Four `provider-http-response` laws quantify over arbitrary source/error types, effect functions, metadata, body owners and diagnostic outcomes. They guarantee immediate unchanged successful handoff, failed-status consumption before producing the failure, preservation of diagnostic results, and status/header projection without losing the original provider error. The [gate](proof-validation/2026-09-21-provider-http-response.json) checks 245 public laws and 59 supporting lemmas and rejects 148 typed mutations. The existing buffered-body IO loop enters the import closure as the eighth exactly audited unsafe annotation; no proof relies on its termination. [Effect and native HTTP checks](provider-http-response.md) cover the actual reads, closes and retry composition.

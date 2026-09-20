@@ -40,10 +40,11 @@ def check(directory, source):
 def accepted(result):
     # The full root includes the previous four concrete annotations plus the
     # two response loops and SSE loop. The body-source module alone reports
-    # three. None supplies proof evidence; exact declarations are audited below.
+    # three. The provider HTTP adapter also imports the buffered-body loop.
+    # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 7 unsafe annotations.'}
+                 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -59,6 +60,7 @@ unsafe_declarations = {
 assert unsafe_declarations == {
     ('packages/runtime/src/callback.bend', 'factory'),
     ('packages/runtime/src/http-response.bend', 'seek'),
+    ('packages/runtime/src/http-body-consume.bend', 'drive'),
     ('packages/runtime/src/http-response.bend', 'drive'),
     ('packages/runtime/src/sse-reader.bend', 'drive'),
     ('packages/runtime/src/dns-search-run.bend', 'drive'),
@@ -204,6 +206,13 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
          'case Done{State{offset, UTF8.Accumulator{UTF8.Decoder{UTF8.Continuation{_, _, _, _}, _}, reversed}}}: Done{String.reverse(reversed)}', 'laws/utf8-strict.incomplete_rejected'),
         ('strict-utf8-loses-invalid-byte-offset', 'packages/runtime/src/utf8-strict.bend',
          'Fail{InvalidByte{offset, byte}}', 'Fail{InvalidByte{0n, byte}}', 'laws/utf8-strict.invalid_byte_rejected'),
+        ('provider-http-discards-success', 'packages/ai/src/utils/provider-http-response.bend',
+         'Done{Response.Response{metadata, body}})', 'Fail{StatusFailure{metadata, Done{""}}})', 'laws/provider-http-response.accepted_owner_has_no_body_io'),
+        ('provider-http-skips-diagnostic-consumption', 'packages/ai/src/utils/provider-http-response.bend',
+         'Consume.textWith(E, State, read, close, limit, body)',
+         'IO.pure(Result<&2, &2, Consume.TextError<E>, String>, Done{""})', 'laws/provider-http-response.rejected_owner_runs_diagnostic_first'),
+        ('provider-http-erases-status', 'packages/ai/src/utils/provider-http-response.bend',
+         'Some{F.fromU32(status)}', 'Some{F.fromU32(0)}', 'laws/provider-http-response.retry_metadata_projection'),
         ('retry-discards-successful-owner', 'packages/ai/src/utils/provider-retry.bend',
          'case _ Done{value}: IO.pure(Decision<v, E, Value>, Finished{Done{value}})', 'case _ Done{value}: IO.pure(Decision<v, E, Value>, Finished{Fail{RequestAborted{}}})', 'laws/provider-retry.success_bypasses_retry_effects'),
         ('retry-continues-after-finish', 'packages/ai/src/utils/provider-retry.bend',

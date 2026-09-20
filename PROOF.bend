@@ -1,4 +1,5 @@
 import Base
+import ./proofs/provider-http-response.bend as ProviderHTTPResponse
 import ./proofs/provider-retry.bend as ProviderRetry
 import ./proofs/http-body-buffer.bend as HTTPBodyBuffer
 import ./proofs/http-abort-classification.bend as HTTPAbortClassification
