@@ -91,6 +91,14 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('dns-pair-hides-terminal-report', 'packages/runtime/src/dns-pair-result.bend',
+         'case Stopped{}: Run.Halt{reports}', 'case Stopped{}: Run.Answer{reports}', 'laws/dns-pair-result.left_terminal_retains_both'),
+        ('dns-pair-swaps-family-reports', 'packages/runtime/src/dns-pair-result.bend',
+         'Reports{Classified{a, da}, Classified{b, db}}', 'Reports{Classified{b, db}, Classified{a, da}}', 'laws/dns-pair-result.left_terminal_retains_both'),
+        ('dns-pair-erases-unavailable-cause', 'packages/runtime/src/dns-pair-result.bend',
+         'case Unavailable{cause} Unavailable{_}: Failed{cause}', 'case Unavailable{cause} Unavailable{_}: Failed{Response.EmptyAnswer{}}', 'laws/dns-pair-result.same_failure_is_stable'),
+        ('dns-pair-ignores-second-error', 'packages/runtime/src/dns-pair-result.bend',
+         'response(Bool.pick(U32, U32.is_eq(ipv4, 0), ipv6, ipv4))', 'response(ipv4)', 'laws/dns-pair-result.empty_reply_defers_to_other_code'),
         ('dns-text-drops-dot', 'packages/runtime/src/dns-search-text.bend',
          'case True{}: Succ{rest}', 'case True{}: rest', 'laws/dns-search-text.leading_dot_counted'),
         ('dns-text-erases-parse-error', 'packages/runtime/src/dns-search-text.bend',
