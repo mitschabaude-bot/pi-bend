@@ -1,0 +1,110 @@
+{
+  "scope": "Configured order survives seeded rotation, in pure and owned APIs.",
+  "checks": [
+    {
+      "backend": "native 1",
+      "sequences": 2563,
+      "api_checks": 5126,
+      "native_live_channels": 0
+    },
+    {
+      "backend": "native 4",
+      "sequences": 2563,
+      "api_checks": 5126,
+      "native_live_channels": 0
+    },
+    {
+      "backend": "Bun",
+      "sequences": 2563,
+      "api_checks": 5126,
+      "native_live_channels": null
+    }
+  ],
+  "case_digest": "e36505b6a23292a267599d77b084107ed4af55ad5396ef11aed7f12ec635bbbb",
+  "sha256": {
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "packages/runtime/src/dns-server-source.bend": "24aff8d196f7844919a7a99825113947e06411924b08805bc7e1a48a3d667874",
+    "tests/dns-server-position.bend": "12751f0e2a8b306ff469c547b93700d39b0a46b554300eeccc555315f115b7d5",
+    "tests/dns_server_position_check.py": "aed763ebc10d4ad902b504bca46c51ec147d39721fc30441b9ee41d3945d81ef"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/dns-server-position.bend",
+        "-o",
+        "build/dns-server-position.c"
+      ],
+      "elapsed_seconds": 0.5273137670010328,
+      "peak_sampled_group_rss_kib": 23424,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/.bend/current/bend2/main.ts",
+        "tests/dns-server-position.bend",
+        "-o",
+        "build/dns-server-position.js"
+      ],
+      "elapsed_seconds": 0.5268533052876592,
+      "peak_sampled_group_rss_kib": 23552,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "regressions": {
+    "dns-server-rotation": {
+      "result_sha256": "61f841decee622ce58aa890a261a7673100021eea4a7cc5c2987e97432795b3b",
+      "scope": "Immutable server rotation and libc first-server sequence comparison.\n\nThe libc random initial position is observed, then used to align the Bend\nstate. This validates subsequent rotation/disable behavior, not random seeding.\n",
+      "checks": [
+        {
+          "backend": "native 1",
+          "cases": 1795,
+          "selections": 24344
+        },
+        {
+          "backend": "native 4",
+          "cases": 1795,
+          "selections": 24344
+        },
+        {
+          "backend": "Bun",
+          "cases": 1795,
+          "selections": 24344
+        }
+      ],
+      "sha256": {
+        "packages/runtime/src/dns-server-rotation.bend": "0a59fe730620ddb9b10d1f9b0190627e5d494d2f75324c2406c0318226377a5c",
+        "tests/dns-server-rotation.bend": "f9af5d449852cd6007f993f8dfcf1d8e7bceb8e9addacc9e425a5eec560b5aab",
+        "tests/dns_server_rotation_check.py": "e70d8149306c90bb6edb293b8b97923e70bf7be7eb01e749cde48d7f6caecc25",
+        "tests/dns-rotation-oracle.c": "0d2476d7b43bb4dc96ee88591680428a092ae1061aa2697e6e7f327feb3fa154",
+        "build/dns-server-rotation": "710c52955bf5386ee8700e633c9b656078a503e5463a44f1bd3f6f4e72439dc3",
+        "build/dns-server-rotation.js": "5ea33e2caa2555f5a68437e2a84b6f49443b69313de8d3b548a428a4df41f313"
+      },
+      "note": "Run before the additional tail-recursive count helper, which is reachable only from the separately retested startAt API."
+    },
+    "dns-server-source": {
+      "result_sha256": "2358ee7f67d5c0d9bbd22f942d8db989673b9f5e64b45435fef6eaf250199af7",
+      "scope": "Concurrent borrowed server selectors: complete orders, atomic steps, teardown.",
+      "checks": {
+        "cases": 210
+      },
+      "sha256": {
+        "packages/runtime/src/dns-server-source.bend": "24aff8d196f7844919a7a99825113947e06411924b08805bc7e1a48a3d667874",
+        "packages/runtime/src/dns-server-rotation.bend": "0a59fe730620ddb9b10d1f9b0190627e5d494d2f75324c2406c0318226377a5c",
+        "tests/dns-server-source.bend": "acac740835d3554dc469f7a344cf30d40bd3907e5a8b7b4745bbdca026bdc90a",
+        "tests/dns_server_source_check.py": "4c87223d94a47f6a316580815534e580389f2b3179b220d6dbd43cfbfbf85335"
+      },
+      "note": "Run before the additional tail-recursive count helper, which is reachable only from the separately retested startAt API."
+    }
+  },
+  "limitations": [
+    "Caller supplies initial offset; OS random seeding and resolver initialization/reload remain implementation work.",
+    "Native zero-live-channel audit applies to this owner fixture."
+  ]
+}

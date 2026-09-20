@@ -14,6 +14,11 @@ def create(-Server: Data, +servers: List<&2, Server>) -> IO(Owner<Server>):
     state : Ref.Ref<Rotation.State<Server>> <- Ref.new(Rotation.State<Server>, Rotation.start(Server, servers))
     return Owner{servers, state}
 
+def createAt(-Server: Data, offset: Nat, +servers: List<&2, Server>) -> IO(Owner<Server>):
+  do IO<Owner<Server>>:
+    state : Ref.Ref<Rotation.State<Server>> <- Ref.new(Rotation.State<Server>, Rotation.startAt(Server, offset, servers))
+    return Owner{servers, state}
+
 # Sources are borrowed. All uses must finish before the owner is closed.
 def borrow(-Server: Data, enabled: Bool, owner: Owner<Server>) -> Owner<Server> & Source<Server>:
   match owner:
