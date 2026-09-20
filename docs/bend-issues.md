@@ -559,3 +559,13 @@ Inspection distinguishes this from global-name shadowing: `parse_bind` gives the
 ### BEND-001/BEND-016 observation: HTTP status and retry composition
 
 The native status/retry fixture compiles on the unchanged isolated candidate in 73.41 seconds with 6,965,968 KiB peak sampled process-group RSS, emitting 28,600,768 bytes of C after five full passes. JS emission takes 6.38 seconds with 2,522,316 KiB and emits 14,453,092 bytes. The [record](bend-issues/2026-09-21-provider-http-retry-compiler.json) retains the exact clean source closure, compiler hashes, phase profiles and slowest definitions. This is another observation of substantial compiler cost for a composed native IO program. The fixture differs from earlier compositions, so the numbers do not demonstrate a performance improvement or isolate a leak. No compiler patch was changed or installed.
+
+### BEND-021 follow-up: error-normalizer character construction
+
+The old error-body normalizer built UTF-16 surrogate units as Bend characters. Its `Bool.pick` evaluated both arguments, so even ASCII constructed an out-of-range character in the unused branch: the reduced Bun fixture failed with `4249536 is not a Unicode scalar value` for `x`. Emoji also attempted invalid surrogate construction. The [record](bend-issues/2026-09-21-error-body-characters.json) retains the old source, reduced fixture, compiler/generated-code identities, failing controls and successful corrected runs.
+
+This was a library representation bug exposed by the already documented native/Bun validation discrepancy, not a new compiler defect. The normalizer now uses a tail-recursive native-character prefix collector with numeric UTF-16 widths. No invalid characters are constructed, and a budget cannot split a character. Two supplemental legacy boundary cases now omit the whole emoji and count all discarded units instead of returning a lone surrogate; ordinary named error-body behavior is preserved. Matching/substrings use native characters. BEND-021's general backend discrepancy remains open; no compiler patch was changed or installed.
+
+### BEND-001/BEND-016 observation: native OpenAI error normalization
+
+The clean native HTTP/error-normalization fixture compiles on the unchanged isolated candidate in 107.17 seconds at 7,563,364 KiB sampled peak process-group RSS, emitting 35,631,465 bytes of C after six passes. JS emission takes 9.61 seconds at 3,540,068 KiB and emits 18,211,661 bytes. The [record](bend-issues/2026-09-21-openai-http-error-compiler.json) preserves source/compiler identities, phase profiles and slowest definitions. These are build observations for another composition, not a performance improvement or new leak attribution. No compiler patch was changed or installed.

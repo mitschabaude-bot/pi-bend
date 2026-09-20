@@ -44,7 +44,7 @@ def accepted(result):
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.'}
+                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -206,6 +206,18 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
          'case Done{State{offset, UTF8.Accumulator{UTF8.Decoder{UTF8.Continuation{_, _, _, _}, _}, reversed}}}: Done{String.reverse(reversed)}', 'laws/utf8-strict.incomplete_rejected'),
         ('strict-utf8-loses-invalid-byte-offset', 'packages/runtime/src/utf8-strict.bend',
          'Fail{InvalidByte{offset, byte}}', 'Fail{InvalidByte{0n, byte}}', 'laws/utf8-strict.invalid_byte_rejected'),
+        ('text-budget-appends-after-stop', 'packages/runtime/src/text-unit-budget.bend',
+         'Stopped{prefix, omitted + width(char)}', 'Stopped{SCon{char, prefix}, omitted + width(char)}', 'laws/text-unit-budget.stopped_prefix_is_stable'),
+        ('text-budget-drops-fitting-character', 'packages/runtime/src/text-unit-budget.bend',
+         'Taking{remaining - size, SCon{char, reversed}}', 'Taking{remaining - size, reversed}', 'laws/text-unit-budget.fitting_character_is_preserved'),
+        ('openai-error-discards-read-cause', 'packages/ai/src/api/openai-http-error.bend',
+         'Fail{DiagnosticReadFailure{metadata, cause}}',
+         'Fail{DiagnosticEncodingFailure{metadata, TextDiagnostic{""}}}', 'laws/openai-http-error.diagnostic_read_failure_retains_cause'),
+        ('openai-error-discards-diagnostic', 'packages/ai/src/api/openai-http-error.bend',
+         'APIError{metadata, diagnostic, statusMessage(Metadata.status(metadata), text)}',
+         'APIError{metadata, TextDiagnostic{""}, statusMessage(Metadata.status(metadata), text)}', 'laws/openai-http-error.construction_retains_diagnostic'),
+        ('openai-error-ignores-envelope', 'packages/ai/src/api/openai-http-error.bend',
+         'case Some{value}: value', 'case Some{value}: fallback', 'laws/openai-http-error.present_error_is_selected'),
         ('provider-http-discards-success', 'packages/ai/src/utils/provider-http-response.bend',
          'Done{Response.Response{metadata, body}})', 'Fail{StatusFailure{metadata, Done{""}}})', 'laws/provider-http-response.accepted_owner_has_no_body_io'),
         ('provider-http-skips-diagnostic-consumption', 'packages/ai/src/utils/provider-http-response.bend',

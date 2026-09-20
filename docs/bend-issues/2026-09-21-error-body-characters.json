@@ -1,0 +1,74 @@
+{
+  "classification": "Library construction of invalid characters, exposed by known native/Bun scalar-validation discrepancy BEND-021. Bool.pick evaluates both arguments, so ASCII also constructs out-of-range characters in the unused branch. No new compiler defect or patch.",
+  "baseline_commit": "e458b77a9a056d56e8e5645251af31b51fcee7c8",
+  "baseline_source": "import Base\nimport ../types.bend as T\nimport ./json.bend as Json\nimport ../../../runtime/src/record.bend as Record\nimport ../../../runtime/src/f64.bend as F\nimport ../../../runtime/src/f64-decimal.bend as Decimal\nimport ../../../runtime/src/text-space.bend as Space\nimport ../../../runtime/src/utf16.bend as Utf16\n\n# Provider adapters supply bodies in their documented preference order.\n# Unread streams and transport-private objects are never diagnostic data.\ntype Body is Data:\n  TextBody{text: String}\n  ParsedBody{value: T.JsonValue}\n  UnavailableBody{}\n\ntype ProviderFailure is Data:\n  ProviderFailure{status: Maybe<&2, F.F64>, message: String, bodies: List<&2, Body>}\n\ntype NormalizedProviderError is Data:\n  NormalizedProviderError{status: Maybe<&2, F.F64>, body: Maybe<&2, String>, message: String, messageCarriesBody: Bool}\n\ntype NormalizationError is Data:\n  NonJsonBody{}\n  NumberFormattingFailure{}\n\ndef MAX_PROVIDER_ERROR_BODY_CHARS() -> Nat: 4000n\n\n# The display cap is measured in UTF-16 units upstream. Preserve that visible\n# contract without changing Bend's native string representation elsewhere.\ndef units(text: String) -> String:\n  match text:\n    case SNil{}: \"\"\n    case SCon{Chr{+code}, rest}:\n      prefix = Bool.pick(String, U32.is_gt(code, 65535), SCon{Chr{(55296 + (code - 65536) / 1024 : U32)}, SCon{Chr{(56320 + (code - 65536) % 1024 : U32)}, SNil{}}}, SCon{Chr{code}, SNil{}})\n      prefix ++ units(rest)\n\ndef truncated(needed: Bool, text: String, maxChars: Nat, omitted: Nat) -> String:\n  match needed:\n    case False{}: Utf16.normalize(text)\n    case True{}: Utf16.normalize(String.take(text, maxChars)) ++ \"... [truncated \" ++ Nat.show(omitted) ++ \" chars]\"\n\ndef truncateUnits(+text: String, +maxChars: Nat) -> String:\n  +size = String.length(text)\n  truncated(Nat.is_gt(size, maxChars), text, maxChars, size - maxChars)\n\ndef truncateErrorText(text: String, maxChars: Nat) -> String:\n  truncateUnits(units(text), maxChars)\n\ndef trimLeading(text: String) -> String:\n  match text:\n    case SNil{}: \"\"\n    case SCon{Chr{+code}, +rest}: Bool.pick(String, Space.whitespace(code), trimLeading(rest), SCon{Chr{code}, rest})\n\ndef trim(text: String) -> String:\n  String.reverse(trimLeading(String.reverse(trimLeading(text))))\n\ndef encodedBody(value: Maybe<&2, String>) -> Result<&2, &2, NormalizationError, Maybe<&2, String>>:\n  match value:\n    case None{}: Fail{NonJsonBody{}}\n    case Some{text}: Done{Some{text}}\n\n# A present text body wins even when trimming later makes it empty. Parsed\n# arrays/scalars and empty objects are not usable error-body explanations.\ndef pickBodyText(bodies: List<&2, Body>) -> Result<&2, &2, NormalizationError, Maybe<&2, String>>:\n  match bodies:\n    case Nil{}: Done{None{}}\n    case TextBody{text} <> _: Done{Some{text}}\n    case ParsedBody{T.JsonObject{Record.Record{Nil{}}}} <> rest: pickBodyText(rest)\n    case ParsedBody{T.JsonObject{fields}} <> _: encodedBody(Json.stringify(T.JsonObject{fields}))\n    case _ <> rest: pickBodyText(rest)\n\ndef nonemptyBody(empty: Bool, text: String) -> Maybe<&2, String>:\n  match empty:\n    case True{}: None{}\n    case False{}: Some{truncateErrorText(text, MAX_PROVIDER_ERROR_BODY_CHARS())}\n\ndef cleanBody(body: Maybe<&2, String>) -> Maybe<&2, String>:\n  match body:\n    case None{}: None{}\n    case Some{text}:\n      +cleaned = trim(text)\n      nonemptyBody(String.is_empty(cleaned), cleaned)\n\ndef carries(message: String, body: Maybe<&2, String>) -> Bool:\n  match body:\n    case None{}: True{}\n    case Some{text}: String.contains(units(message), units(text))\n\ndef normalizeProviderError(error: ProviderFailure) -> Result<&2, &2, NormalizationError, NormalizedProviderError>:\n  match error:\n    case ProviderFailure{status, +message, bodies}:\n      do Result<&2, &2, NormalizationError, NormalizedProviderError>:\n        selected : Maybe<&2, String> <- pickBodyText(bodies)\n        +body : Maybe<&2, String> = cleanBody(selected)\n        return NormalizedProviderError{status, body, message, carries(message, body)}\n\ndef displayBody(alreadyPresent: Bool, body: Maybe<&2, String>, message: String) -> String:\n  match alreadyPresent body:\n    case False{} Some{text}: text\n    case _ _: message\n\ndef statusText(value: Maybe<&2, String>) -> Result<&2, &2, NormalizationError, String>:\n  match value:\n    case None{}: Fail{NumberFormattingFailure{}}\n    case Some{text}: Done{text}\n\ndef formatProviderError(norm: NormalizedProviderError, prefix: Maybe<&2, String>) -> Result<&2, &2, NormalizationError, String>:\n  match norm prefix:\n    case NormalizedProviderError{None{}, _, message, _} _: Done{message}\n    case NormalizedProviderError{Some{status}, body, message, alreadyPresent} Some{name}:\n      do Result<&2, &2, NormalizationError, String>:\n        text : String <- statusText(Decimal.toDecimal(status))\n        return name ++ \" (\" ++ text ++ \"): \" ++ displayBody(alreadyPresent, body, message)\n    case NormalizedProviderError{Some{status}, Some{body}, _, False{}} None{}:\n      do Result<&2, &2, NormalizationError, String>:\n        text : String <- statusText(Decimal.toDecimal(status))\n        return text ++ \": \" ++ body\n    case NormalizedProviderError{_, _, message, _} None{}: Done{message}\n\n# Native callers return typed failures; JSON-valued extension failures have a\n# separate entry point instead of pretending all failures are JS Error objects.\ndef normalizedValue(encoded: Maybe<&2, String>) -> Result<&2, &2, NormalizationError, NormalizedProviderError>:\n  match encoded:\n    case None{}: Fail{NonJsonBody{}}\n    case Some{text}: Done{NormalizedProviderError{None{}, None{}, text, False{}}}\n\ndef normalizeValue(value: T.JsonValue) -> Result<&2, &2, NormalizationError, NormalizedProviderError>:\n  normalizedValue(Json.stringify(value))\n",
+  "reproducer_source": "import Base\nimport ../packages/ai/src/utils/error-body.bend as Body\nimport ../packages/runtime/test/utf8-runner.bend as Text\n\ndef run(args: List<String>) -> IO(Unit):\n  match args:\n    case raw <> _: IO.print(Text.showText(Body.truncateErrorText(raw, 4000n)))\n    case _: IO.pure(Unit, Unit{})\n\ndef main() -> IO(Unit):\n  do IO<Unit>:\n    args : List<String> <- IO.args()\n    run(args)\n",
+  "baseline_generated_js_sha256": "a3adc1654eb0f9dca7045c6628ab719f4d4df5137778f2b647aeeae61b4d795e",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "baseline_runs": [
+    {
+      "input_scalars": 1,
+      "first_codepoint": 120,
+      "exit_code": 1,
+      "stderr": "bend: 4249536 is not a Unicode scalar value\n",
+      "stdout_length": 0
+    },
+    {
+      "input_scalars": 10,
+      "first_codepoint": 120,
+      "exit_code": 1,
+      "stderr": "bend: 4249536 is not a Unicode scalar value\n",
+      "stdout_length": 0
+    },
+    {
+      "input_scalars": 1,
+      "first_codepoint": 128578,
+      "exit_code": 1,
+      "stderr": "bend: 55357 is not a Unicode scalar value\n",
+      "stdout_length": 0
+    },
+    {
+      "input_scalars": 4050,
+      "first_codepoint": 120,
+      "exit_code": 1,
+      "stderr": "bend: 4249536 is not a Unicode scalar value\n",
+      "stdout_length": 0
+    }
+  ],
+  "fixed_runs": [
+    {
+      "input_scalars": 1,
+      "first_codepoint": 120,
+      "exit_code": 0,
+      "expected_output_matched": true
+    },
+    {
+      "input_scalars": 10,
+      "first_codepoint": 120,
+      "exit_code": 0,
+      "expected_output_matched": true
+    },
+    {
+      "input_scalars": 1,
+      "first_codepoint": 128578,
+      "exit_code": 0,
+      "expected_output_matched": true
+    },
+    {
+      "input_scalars": 4050,
+      "first_codepoint": 120,
+      "exit_code": 0,
+      "expected_output_matched": true
+    }
+  ],
+  "fixed_source_sha256": {
+    "packages/ai/src/utils/error-body.bend": "d6eea78140ce7a2c8314cd4df15a82bbf17a50b6d00cf848466d7914d8c571d7",
+    "packages/runtime/src/text-unit-budget.bend": "4a628bb160865017a53d57cd533196be283324ffa9ba518bbad4c9d9c6e88321"
+  },
+  "fixed_generated_js_sha256": "39e105acb6f6ccb70390d142e03e7ba8ce922292f290b3c7e16ec10e69f6b0c3"
+}

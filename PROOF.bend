@@ -1,4 +1,6 @@
 import Base
+import ./proofs/text-unit-budget.bend as TextUnitBudget
+import ./proofs/openai-http-error.bend as OpenAIHTTPError
 import ./proofs/provider-http-response.bend as ProviderHTTPResponse
 import ./proofs/provider-retry.bend as ProviderRetry
 import ./proofs/http-body-buffer.bend as HTTPBodyBuffer

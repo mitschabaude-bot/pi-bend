@@ -5,7 +5,7 @@ import ../../../runtime/src/record.bend as Record
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/f64-decimal.bend as Decimal
 import ../../../runtime/src/text-space.bend as Space
-import ../../../runtime/src/utf16.bend as Utf16
+import ../../../runtime/src/text-unit-budget.bend as Budget
 
 # Provider adapters supply bodies in their documented preference order.
 # Unread streams and transport-private objects are never diagnostic data.
@@ -26,26 +26,15 @@ type NormalizationError is Data:
 
 def MAX_PROVIDER_ERROR_BODY_CHARS() -> Nat: 4000n
 
-# The display cap is measured in UTF-16 units upstream. Preserve that visible
-# contract without changing Bend's native string representation elsewhere.
-def units(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code}, rest}:
-      prefix = Bool.pick(String, U32.is_gt(code, 65535), SCon{Chr{(55296 + (code - 65536) / 1024 : U32)}, SCon{Chr{(56320 + (code - 65536) % 1024 : U32)}, SNil{}}}, SCon{Chr{code}, SNil{}})
-      prefix ++ units(rest)
-
-def truncated(needed: Bool, text: String, maxChars: Nat, omitted: Nat) -> String:
-  match needed:
-    case False{}: Utf16.normalize(text)
-    case True{}: Utf16.normalize(String.take(text, maxChars)) ++ "... [truncated " ++ Nat.show(omitted) ++ " chars]"
-
-def truncateUnits(+text: String, +maxChars: Nat) -> String:
-  +size = String.length(text)
-  truncated(Nat.is_gt(size, maxChars), text, maxChars, size - maxChars)
+# Preserve the upstream UTF-16 unit budget over native characters. A boundary
+# never creates a lone surrogate; omitted counts the actual discarded units.
+def truncated(cut: Budget.Cut) -> String:
+  match cut:
+    case Budget.Cut{prefix, 0n}: prefix
+    case Budget.Cut{prefix, omitted}: prefix ++ "... [truncated " ++ Nat.show(omitted) ++ " chars]"
 
 def truncateErrorText(text: String, maxChars: Nat) -> String:
-  truncateUnits(units(text), maxChars)
+  truncated(Budget.take(text, maxChars))
 
 def trimLeading(text: String) -> String:
   match text:
@@ -85,7 +74,7 @@ def cleanBody(body: Maybe<&2, String>) -> Maybe<&2, String>:
 def carries(message: String, body: Maybe<&2, String>) -> Bool:
   match body:
     case None{}: True{}
-    case Some{text}: String.contains(units(message), units(text))
+    case Some{text}: String.contains(message, text)
 
 def normalizeProviderError(error: ProviderFailure) -> Result<&2, &2, NormalizationError, NormalizedProviderError>:
   match error:
