@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('numeric-host-accepts-wrong-family', 'packages/runtime/src/numeric-host.bend',
+         'case Family.IPv4Only{} V6{_, _}: Fail{FamilyMismatch{}}', 'case Family.IPv4Only{} V6{address, zone}: Done{V6{address, zone}}', 'laws/numeric-host.ipv4_rejects_ipv6'),
+        ('numeric-host-erases-zone', 'packages/runtime/src/numeric-host.bend',
+         'case _ value: Done{value}', 'case _ V6{address, _}: Done{V6{address, None{}}}\n    case _ value: Done{value}', 'laws/numeric-host.unrestricted_preserves_input'),
+        ('numeric-host-replaces-parse-error', 'packages/runtime/src/numeric-host.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Fail{FamilyMismatch{}}', 'laws/numeric-host.failed_parse_retained'),
         ('dns-pair-queries-loses-aaaa-type', 'packages/runtime/src/dns-pair-queries.bend',
          'Message.Question{name, 28, 1}', 'Message.Question{name, 1, 1}', 'laws/dns-pair-queries.shared_query_intent'),
         ('dns-pair-queries-mislabels-first-error', 'packages/runtime/src/dns-pair-queries.bend',
