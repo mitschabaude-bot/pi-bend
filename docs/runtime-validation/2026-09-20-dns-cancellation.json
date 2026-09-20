@@ -1,0 +1,888 @@
+{
+  "pending": {
+    "scope": "Immutable DNS pending-table transitions against an independent Python model.\n\nOffline TCP dispatch contracts; no network, timer or transaction ID generator.\n",
+    "results": [
+      {
+        "backend": "native 1",
+        "sequences": 58,
+        "transitions": 8802
+      },
+      {
+        "backend": "native 4",
+        "sequences": 58,
+        "transitions": 8802
+      },
+      {
+        "backend": "Bun",
+        "sequences": 58,
+        "transitions": 8802
+      }
+    ],
+    "seed": 7766,
+    "sha256": {
+      "packages/runtime/src/dns-pending.bend": "61a792403cc3e320380db9d3edf03f0409f72cb3ea09492cec09c619124a0fc5",
+      "packages/runtime/test/dns-pending.bend": "0d96c70dd4f9602f9c7a8185dbeaa53c55640fba9cd17add36640d5fa8e37611",
+      "tests/dns_pending_check.py": "203e79214d0431f8d37d0808faf10c171a3680f49a90ebc7badd8fdc08839f79",
+      "build/dns-pending": "5e69ccecc695ac36491b9497c85d7ac5fc633d6eda639b1b067e18df55f743ea",
+      "build/dns-pending.js": "678e2b31ad5db791e29ede7e54f1374558ff0cc19f8958d3d8c8a9d291f69c5d"
+    }
+  },
+  "session": {
+    "scope": "Linux IPv4/IPv6 pipelined DNS session dispatch and pending-request settlement.\n\nReal sockets, unchanged generated programs. No exhaustive race/resource audit.\n",
+    "cases": [
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "replies",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "truncated",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "truncated:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "eof",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:eof:1,2",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "cut",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:framing:1,2",
+          "ended:framing:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "abort",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "write-abort",
+        "events": [
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "close",
+        "events": [
+          "submitted",
+          "submitted",
+          "closed:1,2",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 4,
+        "mode": "cancel",
+        "events": [
+          "submitted",
+          "submitted",
+          "cancel:1",
+          "ignored",
+          "submitted",
+          "cancel:none",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "replies",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "truncated",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "truncated:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "eof",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:eof:1,2",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "cut",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:framing:1,2",
+          "ended:framing:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "abort",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "write-abort",
+        "events": [
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "close",
+        "events": [
+          "submitted",
+          "submitted",
+          "closed:1,2",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 1",
+        "family": 6,
+        "mode": "cancel",
+        "events": [
+          "submitted",
+          "submitted",
+          "cancel:1",
+          "ignored",
+          "submitted",
+          "cancel:none",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "replies",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "truncated",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "truncated:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "eof",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:eof:1,2",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "cut",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:framing:1,2",
+          "ended:framing:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "abort",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "write-abort",
+        "events": [
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "close",
+        "events": [
+          "submitted",
+          "submitted",
+          "closed:1,2",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 4,
+        "mode": "cancel",
+        "events": [
+          "submitted",
+          "submitted",
+          "cancel:1",
+          "ignored",
+          "submitted",
+          "cancel:none",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "replies",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "truncated",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "truncated:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "eof",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:eof:1,2",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "cut",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:framing:1,2",
+          "ended:framing:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "abort",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "write-abort",
+        "events": [
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "close",
+        "events": [
+          "submitted",
+          "submitted",
+          "closed:1,2",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "native 4",
+        "family": 6,
+        "mode": "cancel",
+        "events": [
+          "submitted",
+          "submitted",
+          "cancel:1",
+          "ignored",
+          "submitted",
+          "cancel:none",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "replies",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "truncated",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "truncated:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "eof",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:eof:1,2",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "cut",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:framing:1,2",
+          "ended:framing:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "abort",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "write-abort",
+        "events": [
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "close",
+        "events": [
+          "submitted",
+          "submitted",
+          "closed:1,2",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 4,
+        "mode": "cancel",
+        "events": [
+          "submitted",
+          "submitted",
+          "cancel:1",
+          "ignored",
+          "submitted",
+          "cancel:none",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "replies",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "truncated",
+        "events": [
+          "submitted",
+          "submitted",
+          "duplicate",
+          "query",
+          "zero",
+          "ignored",
+          "ignored",
+          "truncated:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "eof",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:eof:1,2",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "cut",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:framing:1,2",
+          "ended:framing:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "abort",
+        "events": [
+          "submitted",
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "write-abort",
+        "events": [
+          "submitted",
+          "ended:abort:1,2",
+          "ended:abort:",
+          "ended:abort:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "close",
+        "events": [
+          "submitted",
+          "submitted",
+          "closed:1,2",
+          "PASS DNS TCP session"
+        ]
+      },
+      {
+        "backend": "Bun",
+        "family": 6,
+        "mode": "cancel",
+        "events": [
+          "submitted",
+          "submitted",
+          "cancel:1",
+          "ignored",
+          "submitted",
+          "cancel:none",
+          "answer:2",
+          "answer:1",
+          "ended:eof:",
+          "ended:eof:",
+          "stopped",
+          "closed:",
+          "PASS DNS TCP session"
+        ]
+      }
+    ],
+    "sha256": {
+      "packages/runtime/src/dns-tcp-session.bend": "66e6eedbdb18ee245e2df76b0fe65d754d8b5325b348332bd24da5375c2e998a",
+      "packages/runtime/src/dns-pending.bend": "61a792403cc3e320380db9d3edf03f0409f72cb3ea09492cec09c619124a0fc5",
+      "tests/dns-tcp-session.bend": "6e6507e38c329815b95de3e5cd8518757079bc198238bb400dc0706b1a8b4d98",
+      "tests/dns_tcp_session_check.py": "b1e2be1bc68b89603cd5f6b13b4a5c69e240adac045a1987337fa0de7bc4c9ba",
+      "build/dns-tcp-session": "58b45e8d0a3a7479475089993d8e0eabe11422ccdd7c53a1001339d2e53b31df",
+      "build/dns-tcp-session.js": "a842155a906b51867bd857ab1cd23eefc1ffbcb2dbb9ececa6870ed6e65d3f3f"
+    },
+    "candidate_sha256": {
+      "base.bend": "1cc487a94fbc13b3f043c7513ed1c966de522d17f5a377e67270f7c19af23dce",
+      "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f"
+    }
+  },
+  "builds": {
+    "dns-pending-build": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "packages/runtime/test/dns-pending.bend",
+        "build/dns-pending"
+      ],
+      "elapsed_seconds": 24.087786795571446,
+      "peak_sampled_group_rss_kib": 7655316,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-pending-js-build": {
+      "command": [
+        "/home/agent/.bend/bin/bend",
+        "packages/runtime/test/dns-pending.bend",
+        "-o",
+        "build/dns-pending.js"
+      ],
+      "elapsed_seconds": 7.469801191240549,
+      "peak_sampled_group_rss_kib": 3380496,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-tcp-session-build": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "tests/dns-tcp-session.bend",
+        "build/dns-tcp-session"
+      ],
+      "elapsed_seconds": 28.469779934734106,
+      "peak_sampled_group_rss_kib": 7385660,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "dns-tcp-session-js-build": {
+      "command": [
+        "/home/agent/code/pi-bend/build/dns-session-compiler",
+        "tests/dns-tcp-session.bend",
+        "-o",
+        "build/dns-tcp-session.js"
+      ],
+      "elapsed_seconds": 2.6319893300533295,
+      "peak_sampled_group_rss_kib": 1027180,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "limitations": [
+    "Tickets are scoped to one session history, not globally unique or unforgeable capabilities.",
+    "Serial exhaustion is induced by a test-only table counter initializer; serials do not wrap in production.",
+    "Cancellation cannot retract bytes or distinguish a delayed matching reply after wire-ID reuse.",
+    "Cancellation admission remains serialized by affine session ownership; no concurrent command driver/deadline policy yet.",
+    "No upstream suite status changed."
+  ]
+}

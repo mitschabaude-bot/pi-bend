@@ -35,11 +35,12 @@ type State is Data:
 type Output is Data:
   Output{state: State, text: String}
 
-def registration(result: Result<&2, &2, Pending.RegistrationError, Unit>) -> String:
+def registration(result: Result<&2, &2, Pending.RegistrationError, Pending.Ticket>) -> String:
   match result:
     case Done{_}: "added"
     case Fail{Pending.DuplicateId{}}: "duplicate"
     case Fail{Pending.InvalidId{}}: "invalid"
+    case Fail{Pending.Exhausted{}}: "exhausted"
 
 def registered(saved: Pending.Pending<U32>, result: Pending.Registered<U32>) -> Output:
   match result:
@@ -48,7 +49,7 @@ def registered(saved: Pending.Pending<U32>, result: Pending.Registered<U32>) -> 
 def token(entry: Maybe<&2, Pending.Entry<U32>>) -> String:
   match entry:
     case None{}: "none"
-    case Some{Pending.Entry{_, value}}: "removed:" ++ U32.show(value)
+    case Some{Pending.Entry{_, value, _}}: "removed:" ++ U32.show(value)
 
 def removed(saved: Pending.Pending<U32>, result: Pending.Removed<U32>) -> Output:
   match result:
@@ -70,6 +71,8 @@ def command(parts: List<&2, String>, state: State) -> Output:
   match parts state:
     case "add" <> id <> value <> kind <> Nil{} State{pending, saved}: registered(saved, Pending.register(U32, pending, Response.Transaction{endpoint(0, True{}), endpoint(0, False{}), Scalar.decimal(id, 0), 0, Message.Question{Name.Name{Nil{}}, Scalar.decimal(kind, 0), 1}}, Scalar.decimal(value, 0)))
     case "remove" <> id <> Nil{} State{pending, saved}: removed(saved, Pending.remove(U32, pending, Scalar.decimal(id, 0)))
+    case "cancel" <> id <> serial <> Nil{} State{pending, saved}: removed(saved, Pending.cancel(U32, pending, Pending.Ticket{Scalar.decimal(id, 0), Scalar.decimal(serial, 0)}))
+    case "seed" <> serial <> Nil{} State{Pending.Pending{entries, _}, saved}: Output{State{Pending.Pending{entries, Some{Scalar.decimal(serial, 0)}}, saved}, "seeded"}
     case "recv" <> mode <> wire <> Nil{} State{pending, saved}: received(saved, Pending.receive(U32, pending, endpoint(Scalar.decimal(mode, 0), False{}), endpoint(0, True{}), octets(wire)))
     case "save" <> Nil{} State{+pending, _}: Output{State{pending, pending}, "saved"}
     case "restore" <> Nil{} State{_, +saved}: Output{State{saved, saved}, "restored"}

@@ -10,8 +10,8 @@ import ../packages/runtime/src/abortable-socket.bend as SocketIO
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Scalar
-import ./dns-tcp-connection.bend as Test
-import ./abortable-socket.bend as Check
+import ../tests/dns-tcp-connection.bend as Test
+import ../tests/abortable-socket.bend as Check
 
 def entries(values: List<&2, Pending.Entry<U32>>, acc: String) -> String:
   match values:
@@ -28,8 +28,7 @@ def failure(value: Session.Failure<String>) -> String:
 def describe(value: Session.Outcome<String, U32>) -> String:
   match value:
     case Session.Submitted{_}: "submitted"
-    case Session.Cancelled{None{}}: "cancel:none"
-    case Session.Cancelled{Some{Pending.Entry{_, token, _}}}: "cancel:" ++ U32.show(token)
+    case Session.Cancelled{_}: "cancelled"
     case Session.Rejected{Session.Registration{Pending.DuplicateId{}}}: "duplicate"
     case Session.Rejected{Session.Query{_}}: "query"
     case Session.Rejected{Session.InvalidReadSize{}}: "zero"
@@ -90,7 +89,6 @@ type Mode is Data:
   AbortRead{}
   AbortWrite{}
   CloseEarly{}
-  CancelQueries{}
 
 def mode(value: String) -> Mode:
   match value:
@@ -99,19 +97,10 @@ def mode(value: String) -> Mode:
     case "abort": AbortRead{}
     case "write-abort": AbortWrite{}
     case "close": CloseEarly{}
-    case "cancel": CancelQueries{}
     case _: Replies{}
 
-def run(selected: Mode, controller: Abort.AbortController<String>, session: Session.Session<String, U32>, +ticket: Pending.Ticket) -> IO(Unit):
+def run(selected: Mode, controller: Abort.AbortController<String>, session: Session.Session<String, U32>) -> IO(Unit):
   match selected:
-    case CancelQueries{}:
-      do IO<Unit>:
-        session : Session.Session<String, U32> <- send(session, 2)
-        session : Session.Session<String, U32> <- observed(Session.cancel(String, U32, session, ticket))
-        session : Session.Session<String, U32> <- read(session, 3)
-        session : Session.Session<String, U32> <- send(session, 1)
-        session : Session.Session<String, U32> <- observed(Session.cancel(String, U32, session, ticket))
-        replies(2n, session)
     case Replies{}:
       do IO<Unit>:
         session : Session.Session<String, U32> <- send(session, 2)
@@ -142,23 +131,12 @@ def run(selected: Mode, controller: Abort.AbortController<String>, session: Sess
         session : Session.Session<String, U32> <- send(session, 2)
         finish(session)
 
-def initial(selected: Mode, controller: Abort.AbortController<String>, step: Session.Step<String, U32>) -> IO(Unit):
-  match step:
-    case Session.Step{session, Session.Submitted{ticket}}:
-      do IO<Unit>:
-        IO.print("submitted")
-        run(selected, controller, session, ticket)
-    case Session.Step{session, _}:
-      do IO<Unit>:
-        close(session)
-        IO.die(Unit, 1, "initial submission failed")
-
 def opened(selected: Mode, controller: Abort.AbortController<String>, result: Result<&2, &1, Peer.Error<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
     case Done{peer}:
       do IO<Unit>:
-        step : Session.Step<String, U32> <- Session.submit(String, U32, Session.adopt(String, U32, peer), 1, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, 1)
-        initial(selected, controller, step)
+        session : Session.Session<String, U32> <- send(Session.adopt(String, U32, peer), 1)
+        run(selected, controller, session)
     case Fail{_}: IO.die(Unit, 1, "peer creation failed")
 
 def args(values: List<String>) -> IO(Unit):

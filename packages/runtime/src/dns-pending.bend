@@ -5,18 +5,24 @@ import ./dns-response.bend as Response
 
 # One table belongs to one transport connection. Tokens are caller-owned
 # correlation values, not callbacks or mutable promises.
+# Tickets are scoped to one session history. Serial numbers never wrap;
+# an exhausted session must be replaced instead of reusing a cancellation key.
+type Ticket is Data:
+  Ticket{id: U32, serial: U32}
+
 type Entry<-Token: Data> is Data:
-  Entry{transaction: Response.Transaction, token: Token}
+  Entry{transaction: Response.Transaction, token: Token, ticket: Ticket}
 
 type Pending<-Token: Data> is Data:
-  Pending{entries: Map<&2, Entry<Token>>}
+  Pending{entries: Map<&2, Entry<Token>>, next: Maybe<&2, U32>}
 
 type RegistrationError is Data:
   InvalidId{}
   DuplicateId{}
+  Exhausted{}
 
 type Registered<-Token: Data> is Data:
-  Registered{pending: Pending<Token>, result: Result<&2, &2, RegistrationError, Unit>}
+  Registered{pending: Pending<Token>, result: Result<&2, &2, RegistrationError, Ticket>}
 
 type Rejection is Data:
   MissingId{}
@@ -35,32 +41,38 @@ type Removed<-Token: Data> is Data:
   Removed{pending: Pending<Token>, entry: Maybe<&2, Entry<Token>>}
 
 def new(-Token: Data) -> Pending<Token>:
-  Pending{Map.new(&2, Entry<Token>)}
+  Pending{Map.new(&2, Entry<Token>), Some{0}}
 
-def inserted(-Token: Data, key: String, entry: Entry<Token>, pair: Map<&2, Entry<Token>> & Bool) -> Registered<Token>:
+def nextSerial(last: Bool, value: U32) -> Maybe<&2, U32>:
+  match last:
+    case True{}: None{}
+    case False{}: Some{(value + 1 : U32)}
+
+def inserted(-Token: Data, +serial: U32, +ticket: Ticket, key: String, entry: Entry<Token>, pair: Map<&2, Entry<Token>> & Bool) -> Registered<Token>:
   match pair:
-    case (entries, True{}): Registered{Pending{entries}, Fail{DuplicateId{}}}
-    case (entries, False{}): Registered{Pending{Map.set(&2, Entry<Token>, entries, key, entry)}, Done{Unit{}}}
+    case (entries, True{}): Registered{Pending{entries, Some{serial}}, Fail{DuplicateId{}}}
+    case (entries, False{}): Registered{Pending{Map.set(&2, Entry<Token>, entries, key, entry), nextSerial(U32.is_eq(serial, 4294967295), serial)}, Done{ticket}}
 
-def registerId(-Token: Data, valid: Bool, pending: Pending<Token>, +id: U32, entry: Entry<Token>) -> Registered<Token>:
+def registerId(-Token: Data, valid: Bool, pending: Pending<Token>, +id: U32, transaction: Response.Transaction, token: Token) -> Registered<Token>:
   match valid pending:
     case False{} pending: Registered{pending, Fail{InvalidId{}}}
-    case True{} Pending{entries}: inserted(Token, Name.key(id), entry, Map.has(&2, Entry<Token>, entries, Name.key(id)))
+    case True{} Pending{entries, None{}}: Registered{Pending{entries, None{}}, Fail{Exhausted{}}}
+    case True{} Pending{entries, Some{+serial}}: inserted(Token, serial, Ticket{id, serial}, Name.key(id), Entry{transaction, token, Ticket{id, serial}}, Map.has(&2, Entry<Token>, entries, Name.key(id)))
 
 # Register before sending. Duplicate IDs never replace an outstanding query.
 # Random ID allocation, retries and deadlines belong to the transport driver.
 def register(-Token: Data, pending: Pending<Token>, transaction: Response.Transaction, token: Token) -> Registered<Token>:
   match transaction:
-    case Response.Transaction{from, to, +id, opcode, question}: registerId(Token, U32.is_le(id, 65535), pending, id, Entry{Response.Transaction{from, to, id, opcode, question}, token})
+    case Response.Transaction{from, to, +id, opcode, question}: registerId(Token, U32.is_le(id, 65535), pending, id, Response.Transaction{from, to, id, opcode, question}, token)
 
-def removed(-Token: Data, pair: Map<&2, Entry<Token>> & Maybe<&2, Entry<Token>>) -> Removed<Token>:
+def removed(-Token: Data, next: Maybe<&2, U32>, pair: Map<&2, Entry<Token>> & Maybe<&2, Entry<Token>>) -> Removed<Token>:
   match pair:
-    case (entries, entry): Removed{Pending{entries}, entry}
+    case (entries, entry): Removed{Pending{entries, next}, entry}
 
 def removeId(-Token: Data, valid: Bool, pending: Pending<Token>, id: U32) -> Removed<Token>:
   match valid pending:
     case False{} pending: Removed{pending, None{}}
-    case True{} Pending{entries}: removed(Token, Map.pop(&2, Entry<Token>, entries, Name.key(id)))
+    case True{} Pending{entries, next}: removed(Token, next, Map.pop(&2, Entry<Token>, entries, Name.key(id)))
 
 # The owner serializes registration/removal; an ID alone is not a capability
 # for cancelling a later query after that ID has been reused.
@@ -76,7 +88,7 @@ def decided(-Token: Data, original: Pending<Token>, remaining: Pending<Token>, t
 def selected(-Token: Data, original: Pending<Token>, id: U32, source: Response.Endpoint, destination: Response.Endpoint, wire: List<&2, U32>, value: Removed<Token>) -> Received<Token>:
   match value:
     case Removed{_, None{}}: Received{original, Ignored{UnknownId{id}}}
-    case Removed{remaining, Some{Entry{transaction, token}}}: decided(Token, original, remaining, token, Response.inspectStream(transaction, source, destination, wire))
+    case Removed{remaining, Some{Entry{transaction, token, _}}}: decided(Token, original, remaining, token, Response.inspectStream(transaction, source, destination, wire))
 
 def identified(-Token: Data, valid: Bool, +pending: Pending<Token>, +id: U32, source: Response.Endpoint, destination: Response.Endpoint, wire: List<&2, U32>) -> Received<Token>:
   match valid:
@@ -100,4 +112,22 @@ def values(-Token: Data, entries: List<&2, Sigma<&2, &2, String, _ => Entry<Toke
 
 def drain(-Token: Data, pending: Pending<Token>) -> List<&2, Entry<Token>>:
   match pending:
-    case Pending{entries}: values(Token, Map.to_list(&2, Entry<Token>, entries), Nil{})
+    case Pending{entries, _}: values(Token, Map.to_list(&2, Entry<Token>, entries), Nil{})
+
+
+def cancelMatch(-Token: Data, equal: Bool, original: Pending<Token>, remaining: Pending<Token>, entry: Entry<Token>) -> Removed<Token>:
+  match equal:
+    case True{}: Removed{remaining, Some{entry}}
+    case False{}: Removed{original, None{}}
+
+def cancelled(-Token: Data, original: Pending<Token>, serial: U32, value: Removed<Token>) -> Removed<Token>:
+  match value:
+    case Removed{_, None{}}: Removed{original, None{}}
+    case Removed{remaining, Some{Entry{transaction, token, Ticket{id, +actual}}}}: cancelMatch(Token, U32.is_eq(serial, actual), original, remaining, Entry{transaction, token, Ticket{id, actual}})
+
+# Stale or repeated cancellation is a no-op, including after ID reuse. This
+# does not retract bytes already sent or prevent an indistinguishable delayed
+# DNS reply after wire-ID reuse; the higher-level transport owns reuse policy.
+def cancel(-Token: Data, +pending: Pending<Token>, ticket: Ticket) -> Removed<Token>:
+  match ticket:
+    case Ticket{id, serial}: cancelled(Token, pending, serial, remove(Token, pending, id))

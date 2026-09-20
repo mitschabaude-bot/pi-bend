@@ -14,11 +14,11 @@ import struct
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');args=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');p.add_argument('--build-limit-gib',type=float,default=8);args=p.parse_args()
 candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-session-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-session-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-session.bend','build/dns-tcp-session'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',str(args.build_limit_gib),'--stats','build/dns-tcp-session-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-session.bend','build/dns-tcp-session'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-session-js-build.json','--',str(launcher),'tests/dns-tcp-session.bend','-o','build/dns-tcp-session.js'],cwd=ROOT,check=True)
 
 def exact(peer,count):
@@ -39,7 +39,7 @@ def normalized(line):
 rows=[]
 for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('native 4',['build/dns-tcp-session','--threads','4']),('Bun',[str(bun),'build/dns-tcp-session.js'])]:
     for family,host,number in [(socket.AF_INET,'127.0.0.1',4),(socket.AF_INET6,'::1',6)]:
-        for mode in ['replies','truncated','eof','cut','abort','write-abort','close']:
+        for mode in ['replies','truncated','eof','cut','abort','write-abort','close','cancel']:
             with socket.socket(family,socket.SOCK_STREAM) as listener,ThreadPoolExecutor(max_workers=1) as pool:
                 listener.bind((host,0));listener.listen(4);listener.settimeout(15)
                 def serve():
@@ -51,6 +51,11 @@ for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('n
                         if mode in ['replies','truncated']:
                             peer.sendall(b''.join(frame(x) for x in [b'\0\2',message(99),message(2,0x8380 if mode=='truncated' else 0x8180),message(1)]))
                             peer.shutdown(socket.SHUT_WR)
+                        elif mode=='cancel':
+                            peer.sendall(frame(message(1)))
+                            size=struct.unpack('!H',exact(peer,2))[0]
+                            assert exact(peer,size)==message(1,256),'missing reused-ID request'
+                            peer.sendall(frame(message(2))+frame(message(1)));peer.shutdown(socket.SHUT_WR)
                         elif mode=='eof':peer.shutdown(socket.SHUT_WR)
                         elif mode=='cut':peer.sendall(b'\0');peer.shutdown(socket.SHUT_WR)
                         assert peer.recv(1)==b'','duplicate, invalid or stopped query reached the wire'
@@ -62,6 +67,7 @@ for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('n
                 elif mode=='abort':want=['submitted','submitted','ended:abort:1,2','ended:abort:','ended:abort:','stopped','closed:']
                 elif mode=='cut':want=['submitted','submitted','ended:framing:1,2','ended:framing:','stopped','closed:']
                 elif mode=='write-abort':want=['submitted','ended:abort:1,2','ended:abort:','ended:abort:','stopped','closed:']
+                elif mode=='cancel':want=['submitted','submitted','cancel:1','ignored','submitted','cancel:none','answer:2','answer:1','ended:eof:','ended:eof:','stopped','closed:']
                 else:want=['submitted','submitted','closed:1,2']
                 want.append('PASS DNS TCP session')
                 assert run.returncode==0 and not run.stderr and list(map(normalized,run.stdout.splitlines()))==want,(label,number,mode,run,want)

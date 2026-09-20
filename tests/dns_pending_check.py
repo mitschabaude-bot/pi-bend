@@ -29,7 +29,7 @@ def receive(table,mode,data):
     if not flags&0x8000:return 'ignore:query'
     if flags&0x7800:return 'ignore:opcode'
     if qd>1:return 'ignore:count'
-    token,kind=table[id]
+    token,kind,_=table[id]
     if qd:
         if len(data)<17:return 'ignore:malformed'
         if data[12:17]!=[0,kind>>8,kind&255,0,1]:return 'ignore:question'
@@ -40,23 +40,34 @@ def receive(table,mode,data):
 
 rng=random.Random(7766);sequences=[]
 def scenario(operations):
-    table={};saved={};commands=[];expected=[]
+    table={};saved={};serial=0;saved_serial=0;commands=[];expected=[]
     for op in operations:
         if op[0]=='add':
             _,id,token,kind=op;commands.append(f'add:{id}:{token}:{kind}')
             if id>65535:expected.append('invalid')
+            elif serial is None:expected.append('exhausted')
             elif id in table:expected.append('duplicate')
-            else:table[id]=(token,kind);expected.append('added')
+            else:table[id]=(token,kind,serial);serial=serial+1 if serial<0xffffffff else None;expected.append('added')
         elif op[0]=='remove':
             _,id=op;commands.append(f'remove:{id}');old=table.pop(id,None);expected.append(f'removed:{old[0]}' if old else 'none')
+        elif op[0]=='cancel':
+            _,id,want_serial=op;commands.append(f'cancel:{id}:{want_serial}')
+            old=table.get(id)
+            if old and old[2]==want_serial:del table[id];expected.append(f'removed:{old[0]}')
+            else:expected.append('none')
+        elif op[0]=='seed':
+            serial=op[1];commands.append(f'seed:{serial}');expected.append('seeded')
         elif op[0]=='recv':
             _,mode,data=op;commands.append('recv:'+str(int(mode))+':'+','.join(map(str,data)));expected.append(receive(table,mode,data))
-        elif op[0]=='save':commands.append('save');saved=table.copy();expected.append('saved')
-        elif op[0]=='restore':commands.append('restore');table=saved.copy();expected.append('restored')
+        elif op[0]=='save':commands.append('save');saved=table.copy();saved_serial=serial;expected.append('saved')
+        elif op[0]=='restore':commands.append('restore');table=saved.copy();serial=saved_serial;expected.append('restored')
     # Drain every retained entry: catches collateral deletion or replacement.
     for id in list(table):commands.append(f'remove:{id}');expected.append(f'removed:{table[id][0]}')
     sequences.append((commands,expected))
 
+# Successful registration advances serial once; duplicate/invalid attempts do not.
+scenario([('add',1,10,1),('add',1,99,28),('add',65536,99,1),('cancel',1,0),('add',1,20,1),('cancel',1,0),('cancel',1,1),('cancel',1,1),('add',2,30,1),('cancel',2,1),('cancel',2,2)])
+scenario([('seed',0xfffffffe),('add',1,10,1),('add',2,20,1),('cancel',1,0xfffffffe),('add',1,30,1),('cancel',2,0),('cancel',2,0xffffffff),('add',3,40,1)])
 for id in [0,1,255,256,32768,65535]:
     scenario([('add',id,41,1),('save',),('add',id,99,28),('recv',1,wire(id)),('recv',0,wire(id,28)),('recv',0,wire(id)),('recv',0,wire(id)),('restore',),('remove',id),('remove',id),('add',id,100,28),('recv',0,wire(id,28,qd=0))])
 scenario([('add',id,id,1) for id in [65536,0xffffffff,0,65535]]+[('remove',id) for id in [65536,0xffffffff]]+[('recv',0,x) for x in [[],[0],[256,0],[0,0xffffffff],[0,0],[0,0]+[256]*10]])
@@ -68,7 +79,7 @@ for sequence in range(48):
     for index in range(128):
         id=rng.choice([0,1,2,255,256,65535,sequence+100]);choice=rng.randrange(10)
         if choice<3:operations.append(('add',id,rng.randrange(0x100000000),rng.choice([1,28])))
-        elif choice==3:operations.append(('remove',rng.choice([id,65536,0xffffffff])))
+        elif choice==3:operations.append(rng.choice([('remove',rng.choice([id,65536,0xffffffff])),('cancel',id,rng.randrange(48))]))
         elif choice==4:operations.append((rng.choice(['save','restore']),))
         else:
             data=wire(id,rng.choice([1,28]),rng.choice([0x8180,0x8380,0x8183,0x8980,0x0100]),rng.choice([0,1,1,2]),rng.choice([0,0,1]))

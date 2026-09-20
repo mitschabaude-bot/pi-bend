@@ -19,7 +19,8 @@ type Session<-Reason: Data, -Token: Data> is Type:
   Session{route: Peer.Route, connection: TCP.Connection<Reason>, pending: Pending.Pending<Token>, ended: Maybe<&2, Failure<Reason>>}
 
 type Outcome<-Reason: Data, -Token: Data> is Data:
-  Submitted{}
+  Submitted{ticket: Pending.Ticket}
+  Cancelled{entry: Maybe<&2, Pending.Entry<Token>>}
   Rejected{error: Error<Reason>}
   Response{delivery: Pending.Delivery<Token>}
   Ended{failure: Failure<Reason>, outstanding: List<&2, Pending.Entry<Token>>}
@@ -37,18 +38,18 @@ def adopt(-Reason: Data, -Token: Data, peer: Peer.Peer<Reason>) -> Session<Reaso
 def failed(-Reason: Data, -Token: Data, route: Peer.Route, connection: TCP.Connection<Reason>, pending: Pending.Pending<Token>, +why: Failure<Reason>) -> Step<Reason, Token>:
   Step{Session{route, connection, Pending.new(Token), Some{why}}, Ended{why, Pending.drain(Token, pending)}}
 
-def sent(-Reason: Data, -Token: Data, route: Peer.Route, pending: Pending.Pending<Token>, pair: TCP.Connection<Reason> & Result<&2, &2, TCP.Error<Reason>, Unit>) -> Step<Reason, Token>:
+def sent(-Reason: Data, -Token: Data, ticket: Pending.Ticket, route: Peer.Route, pending: Pending.Pending<Token>, pair: TCP.Connection<Reason> & Result<&2, &2, TCP.Error<Reason>, Unit>) -> Step<Reason, Token>:
   match pair:
-    case (connection, Done{_}): Step{Session{route, connection, pending, None{}}, Submitted{}}
+    case (connection, Done{_}): Step{Session{route, connection, pending, None{}}, Submitted{ticket}}
     case (connection, Fail{error}): failed(Reason, Token, route, connection, pending, Transport{error})
 
 def registered(-Reason: Data, -Token: Data, route: Peer.Route, connection: TCP.Connection<Reason>, wire: List<&2, U32>, value: Pending.Registered<Token>) -> IO(Step<Reason, Token>):
   match value:
     case Pending.Registered{pending, Fail{error}}: IO.pure(Step<Reason, Token>, Step{Session{route, connection, pending, None{}}, Rejected{Registration{error}}})
-    case Pending.Registered{pending, Done{_}}:
+    case Pending.Registered{pending, Done{ticket}}:
       do IO<Step<Reason, Token>>:
         result : TCP.Connection<Reason> & Result<&2, &2, TCP.Error<Reason>, Unit> <- TCP.send(Reason, connection, wire)
-        return sent(Reason, Token, route, pending, result)
+        return sent(Reason, Token, ticket, route, pending, result)
 
 def encoded(-Reason: Data, -Token: Data, +route: Peer.Route, connection: TCP.Connection<Reason>, pending: Pending.Pending<Token>, id: U32, flags: U32, question: Message.Question, token: Token, result: Result<&2, &2, Message.Error, List<&2, U32>>) -> IO(Step<Reason, Token>):
   match result:
@@ -101,3 +102,14 @@ def close(-Reason: Data, -Token: Data, session: Session<Reason, Token>) -> IO(Cl
       do IO<Closed<Token>>:
         cleanup : Result<&2, &2, Interrupt.Error, Unit> <- TCP.close(Reason, connection)
         return Closed{Pending.drain(Token, pending), cleanup}
+
+
+def cancelled(-Reason: Data, -Token: Data, route: Peer.Route, connection: TCP.Connection<Reason>, ended: Maybe<&2, Failure<Reason>>, result: Pending.Removed<Token>) -> Step<Reason, Token>:
+  match result:
+    case Pending.Removed{pending, entry}: Step{Session{route, connection, pending, ended}, Cancelled{entry}}
+
+# Local request cancellation does not shut down the shared TCP connection.
+# Admission remains serialized by session ownership; no watcher is detached.
+def cancel(-Reason: Data, -Token: Data, session: Session<Reason, Token>, ticket: Pending.Ticket) -> Step<Reason, Token>:
+  match session:
+    case Session{route, connection, pending, ended}: cancelled(Reason, Token, route, connection, ended, Pending.cancel(Token, pending, ticket))
