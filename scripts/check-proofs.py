@@ -91,6 +91,16 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('connection-addresses-erases-hosts', 'packages/runtime/src/connection-addresses.bend',
+         'case first <> rest: host(first) <> hosts(rest)', 'case first <> rest: Nil{}', 'laws/connection-addresses.hosts_count'),
+        ('connection-addresses-erases-answers', 'packages/runtime/src/connection-addresses.bend',
+         'case first <> rest: answer(first) <> answers(rest)', 'case first <> rest: Nil{}', 'laws/connection-addresses.answers_count'),
+        ('connection-addresses-loses-ordered-tail', 'packages/runtime/src/connection-addresses.bend',
+         'Addresses{report, Ordered{first, rest}}', 'Addresses{report, Ordered{first, Nil{}}}', 'laws/connection-addresses.ordered_retains_report_and_occurrences'),
+        ('connection-addresses-loses-sibling', 'packages/runtime/src/connection-addresses.bend',
+         'Paired{first <> rest, other}', 'Paired{first <> rest, Nil{}}', 'laws/connection-addresses.paired_retains_both_groups'),
+        ('connection-addresses-invents-scope', 'packages/runtime/src/connection-addresses.bend',
+         'case DNS.V6{value, _}: Connect.V6{value, 0}', 'case DNS.V6{value, _}: Connect.V6{value, 1}', 'laws/connection-addresses.ipv6_answer_address_retained'),
         ('http-host-loses-numeric-address', 'packages/runtime/src/http-host-route.bend',
          'case Host.IPv4{address}: Numeric{Connect.V4{address}}', 'case Host.IPv4{address}: Invalid{}', 'laws/http-host-route.ipv4_bypasses_lookup'),
         ('http-host-discards-domain', 'packages/runtime/src/http-host-route.bend',

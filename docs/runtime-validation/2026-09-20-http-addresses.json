@@ -1,0 +1,8790 @@
+{
+  "scope": "HTTP connection candidate projection retains original reports, source occurrences and separate DNS families.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:54503"
+      ],
+      "seconds": 0.007022032514214516,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:46967"
+      ],
+      "seconds": 0.0060828672721982,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:56723"
+      ],
+      "seconds": 0.006056756712496281,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:60885"
+      ],
+      "seconds": 0.006539050489664078,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:49353"
+      ],
+      "seconds": 0.007643066346645355,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:45335"
+      ],
+      "seconds": 0.007181192748248577,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:48175"
+      ],
+      "seconds": 0.006606500595808029,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:55689"
+      ],
+      "seconds": 0.006743661127984524,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:40019"
+      ],
+      "seconds": 0.0060469768941402435,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:38859"
+      ],
+      "seconds": 0.1544719459488988,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:53391"
+      ],
+      "seconds": 0.006197907030582428,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:36361"
+      ],
+      "seconds": 0.006408749148249626,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:50457"
+      ],
+      "seconds": 0.005427743308246136,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:37485"
+      ],
+      "seconds": 0.0053705330938100815,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:50227"
+      ],
+      "seconds": 0.005368001759052277,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:39917"
+      ],
+      "seconds": 0.005357692949473858,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:49111"
+      ],
+      "seconds": 0.005353942513465881,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:51907"
+      ],
+      "seconds": 0.0054380521178245544,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:38203"
+      ],
+      "seconds": 0.005395451560616493,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:40999"
+      ],
+      "seconds": 0.006668481044471264,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:43125"
+      ],
+      "seconds": 0.005592864006757736,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:46247"
+      ],
+      "seconds": 0.005537844263017178,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:32943"
+      ],
+      "seconds": 0.005496733821928501,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:39695"
+      ],
+      "seconds": 0.0054789334535598755,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:40011"
+      ],
+      "seconds": 0.00548942293971777,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 4,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:49217"
+      ],
+      "seconds": 0.005539324134588242,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:58367"
+      ],
+      "seconds": 0.006520959548652172,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:46841"
+      ],
+      "seconds": 0.00697439257055521,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:41867"
+      ],
+      "seconds": 0.006300229579210281,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:35031"
+      ],
+      "seconds": 0.007924088276922703,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:42181"
+      ],
+      "seconds": 0.006915281526744366,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:60951"
+      ],
+      "seconds": 0.0068055205047130585,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:53579"
+      ],
+      "seconds": 0.007085172459483147,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:39703"
+      ],
+      "seconds": 0.006855872459709644,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:47541"
+      ],
+      "seconds": 0.006801511161029339,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:47047"
+      ],
+      "seconds": 0.15369225107133389,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:37021"
+      ],
+      "seconds": 0.007135523483157158,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:55893"
+      ],
+      "seconds": 0.007078422233462334,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:56969"
+      ],
+      "seconds": 0.005501353181898594,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:33419"
+      ],
+      "seconds": 0.005492022261023521,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:44749"
+      ],
+      "seconds": 0.005442142486572266,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:32941"
+      ],
+      "seconds": 0.00547375250607729,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:45905"
+      ],
+      "seconds": 0.005463792942464352,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:60765"
+      ],
+      "seconds": 0.005460712127387524,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:36159"
+      ],
+      "seconds": 0.0054707033559679985,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:51031"
+      ],
+      "seconds": 0.007660066708922386,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:52877"
+      ],
+      "seconds": 0.005465293303132057,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:37791"
+      ],
+      "seconds": 0.005472023040056229,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:57009"
+      ],
+      "seconds": 0.005510992370545864,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:35357"
+      ],
+      "seconds": 0.005546423606574535,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:34977"
+      ],
+      "seconds": 0.005491362884640694,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "priority": 6,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:34237"
+      ],
+      "seconds": 0.005479723215103149,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:34113"
+      ],
+      "seconds": 0.006598369218409061,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:45965"
+      ],
+      "seconds": 0.006220277398824692,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:40089"
+      ],
+      "seconds": 0.006315488368272781,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:57583"
+      ],
+      "seconds": 0.006971001625061035,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:36809"
+      ],
+      "seconds": 0.007660366594791412,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:56467"
+      ],
+      "seconds": 0.006567610427737236,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:47475"
+      ],
+      "seconds": 0.0070469435304403305,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:44247"
+      ],
+      "seconds": 0.007768876850605011,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:45557"
+      ],
+      "seconds": 0.006319818086922169,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:45239"
+      ],
+      "seconds": 0.15958772785961628,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:47943"
+      ],
+      "seconds": 0.007185302674770355,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:57743"
+      ],
+      "seconds": 0.006327877752482891,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:52731"
+      ],
+      "seconds": 0.005550054833292961,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:49813"
+      ],
+      "seconds": 0.005503682419657707,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:46385"
+      ],
+      "seconds": 0.005455932579934597,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:41415"
+      ],
+      "seconds": 0.0055062538012862206,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:45273"
+      ],
+      "seconds": 0.005324053578078747,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:36077"
+      ],
+      "seconds": 0.005385612137615681,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:55623"
+      ],
+      "seconds": 0.005483273416757584,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:49013"
+      ],
+      "seconds": 0.006723080761730671,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:57139"
+      ],
+      "seconds": 0.005547543987631798,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:36517"
+      ],
+      "seconds": 0.00546659342944622,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:39403"
+      ],
+      "seconds": 0.005431373603641987,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:37589"
+      ],
+      "seconds": 0.005346102640032768,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:60755"
+      ],
+      "seconds": 0.005305282771587372,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 4,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:34741"
+      ],
+      "seconds": 0.005330061540007591,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:52719"
+      ],
+      "seconds": 0.00635690800845623,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:54047"
+      ],
+      "seconds": 0.006151936948299408,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:43437"
+      ],
+      "seconds": 0.006186637096107006,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:37505"
+      ],
+      "seconds": 0.006621910259127617,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:53405"
+      ],
+      "seconds": 0.006637400947511196,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:36511"
+      ],
+      "seconds": 0.006364419125020504,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:37117"
+      ],
+      "seconds": 0.006622320041060448,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:34473"
+      ],
+      "seconds": 0.006494359113276005,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:39715"
+      ],
+      "seconds": 0.0061449771746993065,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:54853"
+      ],
+      "seconds": 0.15335032995790243,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:48157"
+      ],
+      "seconds": 0.007058362476527691,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:57453"
+      ],
+      "seconds": 0.0062358183786273,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:55821"
+      ],
+      "seconds": 0.005429073236882687,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:60499"
+      ],
+      "seconds": 0.005474073812365532,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:33379"
+      ],
+      "seconds": 0.005466192960739136,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:54337"
+      ],
+      "seconds": 0.0054733529686927795,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:51547"
+      ],
+      "seconds": 0.005607233382761478,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:57083"
+      ],
+      "seconds": 0.005470743402838707,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:46597"
+      ],
+      "seconds": 0.005468723364174366,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:51217"
+      ],
+      "seconds": 0.006616200320422649,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:52141"
+      ],
+      "seconds": 0.005485503934323788,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:41689"
+      ],
+      "seconds": 0.005465332418680191,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:36175"
+      ],
+      "seconds": 0.005474364385008812,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:53701"
+      ],
+      "seconds": 0.005460293032228947,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:56095"
+      ],
+      "seconds": 0.005462983623147011,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "priority": 6,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:54117"
+      ],
+      "seconds": 0.005515414290130138,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:48473"
+      ],
+      "seconds": 0.006593009456992149,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:42665"
+      ],
+      "seconds": 0.006207828409969807,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:41119"
+      ],
+      "seconds": 0.006319679319858551,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:43387"
+      ],
+      "seconds": 0.008082198910415173,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:55381"
+      ],
+      "seconds": 0.006891812197864056,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:41469"
+      ],
+      "seconds": 0.007843837141990662,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:43305"
+      ],
+      "seconds": 0.006938242353498936,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:35535"
+      ],
+      "seconds": 0.007172912359237671,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:46167"
+      ],
+      "seconds": 0.006986422464251518,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:33005"
+      ],
+      "seconds": 0.15444004628807306,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:53145"
+      ],
+      "seconds": 0.007005573250353336,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:43705"
+      ],
+      "seconds": 0.007412855513393879,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:35063"
+      ],
+      "seconds": 0.005442272871732712,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:47291"
+      ],
+      "seconds": 0.005440982989966869,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:43687"
+      ],
+      "seconds": 0.005556254647672176,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:55023"
+      ],
+      "seconds": 0.005538224242627621,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:55775"
+      ],
+      "seconds": 0.00556111428886652,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:50827"
+      ],
+      "seconds": 0.00555813405662775,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:57021"
+      ],
+      "seconds": 0.005536233074963093,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:52175"
+      ],
+      "seconds": 0.006968723610043526,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:48027"
+      ],
+      "seconds": 0.005414532497525215,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:54899"
+      ],
+      "seconds": 0.005441122688353062,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:51255"
+      ],
+      "seconds": 0.00544105377048254,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:49787"
+      ],
+      "seconds": 0.005483313463628292,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:35513"
+      ],
+      "seconds": 0.005470513366162777,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 4,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:53821"
+      ],
+      "seconds": 0.0055476827546954155,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:51725"
+      ],
+      "seconds": 0.006667390465736389,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:59519"
+      ],
+      "seconds": 0.0069220419973134995,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:50747"
+      ],
+      "seconds": 0.006967452354729176,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:57701"
+      ],
+      "seconds": 0.008012307807803154,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:40877"
+      ],
+      "seconds": 0.007840576581656933,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:51577"
+      ],
+      "seconds": 0.007949388585984707,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:43351"
+      ],
+      "seconds": 0.008027749136090279,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:44099"
+      ],
+      "seconds": 0.00815223902463913,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:60355"
+      ],
+      "seconds": 0.0068628620356321335,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:53837"
+      ],
+      "seconds": 0.1544685671105981,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:47471"
+      ],
+      "seconds": 0.00705755315721035,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:36539"
+      ],
+      "seconds": 0.006930612027645111,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:45513"
+      ],
+      "seconds": 0.005408762954175472,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:48083"
+      ],
+      "seconds": 0.005412193015217781,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:40599"
+      ],
+      "seconds": 0.0054253628477454185,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:52893"
+      ],
+      "seconds": 0.00534015242010355,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:54241"
+      ],
+      "seconds": 0.005340223200619221,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:53397"
+      ],
+      "seconds": 0.005369571968913078,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:55325"
+      ],
+      "seconds": 0.005323372781276703,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:48623"
+      ],
+      "seconds": 0.007763327099382877,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:54049"
+      ],
+      "seconds": 0.005476812832057476,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:58669"
+      ],
+      "seconds": 0.0055025238543748856,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:50631"
+      ],
+      "seconds": 0.005492222495377064,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:40693"
+      ],
+      "seconds": 0.0054977936670184135,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:59225"
+      ],
+      "seconds": 0.0054721226915717125,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "priority": 6,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:58571"
+      ],
+      "seconds": 0.00547485426068306,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:52649"
+      ],
+      "seconds": 0.007065583020448685,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:50849"
+      ],
+      "seconds": 0.006859190762042999,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:42943"
+      ],
+      "seconds": 0.007065002806484699,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:43607"
+      ],
+      "seconds": 0.007967188954353333,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:36285"
+      ],
+      "seconds": 0.007751586847007275,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:54971"
+      ],
+      "seconds": 0.006881462410092354,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:40381"
+      ],
+      "seconds": 0.007015341892838478,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:41045"
+      ],
+      "seconds": 0.007092532701790333,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:46587"
+      ],
+      "seconds": 0.006344178691506386,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:50213"
+      ],
+      "seconds": 0.15400871448218822,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:37119"
+      ],
+      "seconds": 0.0070385318249464035,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:44533"
+      ],
+      "seconds": 0.007146213203668594,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:48739"
+      ],
+      "seconds": 0.005483013577759266,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:40841"
+      ],
+      "seconds": 0.005578613840043545,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:36037"
+      ],
+      "seconds": 0.005573703907430172,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:41119"
+      ],
+      "seconds": 0.00555215310305357,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:45627"
+      ],
+      "seconds": 0.005648915655910969,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:54615"
+      ],
+      "seconds": 0.005557933822274208,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:54139"
+      ],
+      "seconds": 0.0055466825142502785,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:44791"
+      ],
+      "seconds": 0.007020161487162113,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:47499"
+      ],
+      "seconds": 0.0055802445858716965,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:57721"
+      ],
+      "seconds": 0.00548042356967926,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:53677"
+      ],
+      "seconds": 0.005499333143234253,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:42641"
+      ],
+      "seconds": 0.005568274296820164,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:33139"
+      ],
+      "seconds": 0.0055002132430672646,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 4,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:55205"
+      ],
+      "seconds": 0.005516682751476765,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:55963"
+      ],
+      "seconds": 0.006566320545971394,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:33671"
+      ],
+      "seconds": 0.006721240468323231,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:57235"
+      ],
+      "seconds": 0.006222588010132313,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:58321"
+      ],
+      "seconds": 0.008182319812476635,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:32993"
+      ],
+      "seconds": 0.006871912628412247,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:44783"
+      ],
+      "seconds": 0.007149234414100647,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:52121"
+      ],
+      "seconds": 0.006776990368962288,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:37201"
+      ],
+      "seconds": 0.008051727898418903,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:39023"
+      ],
+      "seconds": 0.006416399031877518,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:48679"
+      ],
+      "seconds": 0.15389962308108807,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:42327"
+      ],
+      "seconds": 0.007135473191738129,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:47353"
+      ],
+      "seconds": 0.00699189305305481,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:46735"
+      ],
+      "seconds": 0.005436123348772526,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:57855"
+      ],
+      "seconds": 0.0054068127647042274,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:60885"
+      ],
+      "seconds": 0.00536500196903944,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:57395"
+      ],
+      "seconds": 0.0053616734221577644,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:41947"
+      ],
+      "seconds": 0.005354572087526321,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:60717"
+      ],
+      "seconds": 0.005348023027181625,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:33865"
+      ],
+      "seconds": 0.005356631241738796,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:40643"
+      ],
+      "seconds": 0.008001947775483131,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:40261"
+      ],
+      "seconds": 0.005579464137554169,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:42587"
+      ],
+      "seconds": 0.005540804006159306,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:58975"
+      ],
+      "seconds": 0.005542474798858166,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:49941"
+      ],
+      "seconds": 0.005506433546543121,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:34813"
+      ],
+      "seconds": 0.005503052845597267,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "priority": 6,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:37465"
+      ],
+      "seconds": 0.005489792674779892,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:60567"
+      ],
+      "seconds": 0.14566662348806858,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:44027"
+      ],
+      "seconds": 0.08057484775781631,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:55571"
+      ],
+      "seconds": 0.08133395295590162,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:42821"
+      ],
+      "seconds": 0.09108248259872198,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:34677"
+      ],
+      "seconds": 0.09414424933493137,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:60311"
+      ],
+      "seconds": 0.09078841004520655,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:43791"
+      ],
+      "seconds": 0.0935498671606183,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:42961"
+      ],
+      "seconds": 0.08566930890083313,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:58985"
+      ],
+      "seconds": 0.08623344171792269,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:34331"
+      ],
+      "seconds": 0.20864532515406609,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:54861"
+      ],
+      "seconds": 0.0775230498984456,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:36965"
+      ],
+      "seconds": 0.08333523478358984,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:45133"
+      ],
+      "seconds": 0.05112089961767197,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:57225"
+      ],
+      "seconds": 0.05630072019994259,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:33789"
+      ],
+      "seconds": 0.05635485053062439,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:38057"
+      ],
+      "seconds": 0.051248869858682156,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:41829"
+      ],
+      "seconds": 0.056354330852627754,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:45469"
+      ],
+      "seconds": 0.05636348109692335,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:35143"
+      ],
+      "seconds": 0.051251291297376156,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:43831"
+      ],
+      "seconds": 0.09564006980508566,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:59009"
+      ],
+      "seconds": 0.051267681643366814,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:43847"
+      ],
+      "seconds": 0.05114849004894495,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:34123"
+      ],
+      "seconds": 0.05625447165220976,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:38451"
+      ],
+      "seconds": 0.05126902088522911,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:52971"
+      ],
+      "seconds": 0.051131369546055794,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 4,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:52401"
+      ],
+      "seconds": 0.05116917937994003,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:37455"
+      ],
+      "seconds": 0.0848319148644805,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:49563"
+      ],
+      "seconds": 0.08180670533329248,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:54885"
+      ],
+      "seconds": 0.08188064582645893,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:51467"
+      ],
+      "seconds": 0.08892189897596836,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:60873"
+      ],
+      "seconds": 0.08917931001633406,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:34311"
+      ],
+      "seconds": 0.09257106110453606,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:41823"
+      ],
+      "seconds": 0.08932459075003862,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:55295"
+      ],
+      "seconds": 0.08613842260092497,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:33337"
+      ],
+      "seconds": 0.08631953317672014,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:43225"
+      ],
+      "seconds": 0.20636567939072847,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:33713"
+      ],
+      "seconds": 0.07615680154412985,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:35001"
+      ],
+      "seconds": 0.0839138189330697,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:45635"
+      ],
+      "seconds": 0.05127094127237797,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:49191"
+      ],
+      "seconds": 0.05635577067732811,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:48811"
+      ],
+      "seconds": 0.05636216048151255,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:33623"
+      ],
+      "seconds": 0.056343101896345615,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:57493"
+      ],
+      "seconds": 0.05638170149177313,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:36363"
+      ],
+      "seconds": 0.05645464267581701,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:39659"
+      ],
+      "seconds": 0.05129751097410917,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:41563"
+      ],
+      "seconds": 0.08711323793977499,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:57311"
+      ],
+      "seconds": 0.05135465133935213,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:58767"
+      ],
+      "seconds": 0.051255629397928715,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:44683"
+      ],
+      "seconds": 0.051220339722931385,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:43091"
+      ],
+      "seconds": 0.051058050245046616,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:54747"
+      ],
+      "seconds": 0.051107268780469894,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "priority": 6,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:34675"
+      ],
+      "seconds": 0.051200250163674355,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:41755"
+      ],
+      "seconds": 0.09239988960325718,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:56951"
+      ],
+      "seconds": 0.08085229992866516,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:48113"
+      ],
+      "seconds": 0.08179386518895626,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:51615"
+      ],
+      "seconds": 0.09045393764972687,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:44519"
+      ],
+      "seconds": 0.09399159904569387,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:48145"
+      ],
+      "seconds": 0.09239043015986681,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:39523"
+      ],
+      "seconds": 0.09338939562439919,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:46939"
+      ],
+      "seconds": 0.08654099516570568,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:55267"
+      ],
+      "seconds": 0.08583693020045757,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:60751"
+      ],
+      "seconds": 0.20709725562483072,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:48959"
+      ],
+      "seconds": 0.07666001375764608,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:37701"
+      ],
+      "seconds": 0.0834113359451294,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:53123"
+      ],
+      "seconds": 0.051187630742788315,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:60365"
+      ],
+      "seconds": 0.05623430106788874,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:35065"
+      ],
+      "seconds": 0.05623162072151899,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:33515"
+      ],
+      "seconds": 0.051270030438899994,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:44293"
+      ],
+      "seconds": 0.056177299469709396,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:36131"
+      ],
+      "seconds": 0.051246521063148975,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:46185"
+      ],
+      "seconds": 0.05130751058459282,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:46457"
+      ],
+      "seconds": 0.08726380858570337,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:53381"
+      ],
+      "seconds": 0.05131106171756983,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:57709"
+      ],
+      "seconds": 0.051126579754054546,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:42015"
+      ],
+      "seconds": 0.05130238085985184,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:35821"
+      ],
+      "seconds": 0.05639202147722244,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:39185"
+      ],
+      "seconds": 0.051235430873930454,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 4,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:52937"
+      ],
+      "seconds": 0.051197209395468235,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "suffix",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:33127"
+      ],
+      "seconds": 0.08575762994587421,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "partial4",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:rcode:3",
+        "deadline:none",
+        "paired:4,16909060;/",
+        "draws:2",
+        "next:33533"
+      ],
+      "seconds": 0.08109256159514189,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "partial6",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:rcode:3",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:/6,0,0,0,1,0;",
+        "draws:2",
+        "next:37337"
+      ],
+      "seconds": 0.08051201794296503,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "aliases",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "b"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "c"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,98,0,:4,16909060,60;",
+        "6:ok:1,99,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:6",
+        "next:59257"
+      ],
+      "seconds": 0.09433364123106003,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:54845"
+      ],
+      "seconds": 0.08934486098587513,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:49193"
+      ],
+      "seconds": 0.0964342039078474,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "priority",
+      "trace": [
+        [
+          "tcp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "tcp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "tcp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "tcp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:ok:1,97,1,121,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:57779"
+      ],
+      "seconds": 0.09049160871654749,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "exhausted",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ],
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "dns:1",
+        "deadline:none",
+        "no-addresses",
+        "draws:6",
+        "next:56851"
+      ],
+      "seconds": 0.0864066332578659,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "terminal",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:record",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "no-addresses",
+        "draws:2",
+        "next:47729"
+      ],
+      "seconds": 0.08605372067540884,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "deadline",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.y"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.y"
+        ]
+      ],
+      "result": [
+        "halt",
+        "4:ok:1,97,1,121,0,:4,16909060,60;",
+        "6:transport",
+        "deadline:expiry",
+        "no-addresses",
+        "draws:4",
+        "next:51313"
+      ],
+      "seconds": 0.21243932750076056,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "error-second-candidate",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "setup:entropy:4:11",
+        "deadline:none",
+        "no-addresses",
+        "draws:3",
+        "next:51139"
+      ],
+      "seconds": 0.07738279830664396,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "absolute",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,0,:4,16909060,60;",
+        "6:ok:1,97,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:2",
+        "next:38307"
+      ],
+      "seconds": 0.08374546654522419,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": [
+        "setup:zero",
+        "deadline:none",
+        "no-addresses",
+        "draws:0",
+        "next:50083"
+      ],
+      "seconds": 0.05117497965693474,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "local",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;6:0,0,0,9/97/;4:2130706441/97/;",
+        "ordered:4,2130706441;6,0,0,0,9,0;4,2130706441;",
+        "draws:0",
+        "next:47963"
+      ],
+      "seconds": 0.05645543243736029,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-invalid-name",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97,46,46,120/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:46349"
+      ],
+      "seconds": 0.05641724169254303,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-v4",
+      "trace": [],
+      "result": [
+        "local:4:2130706441/97/;",
+        "ordered:4,2130706441;",
+        "draws:0",
+        "next:59553"
+      ],
+      "seconds": 0.05648630205541849,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "local-v6",
+      "trace": [],
+      "result": [
+        "local:6:0,0,0,9/97/;",
+        "ordered:6,0,0,0,9,0;",
+        "draws:0",
+        "next:49877"
+      ],
+      "seconds": 0.056348362006247044,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "source-error",
+      "trace": [],
+      "result": [
+        "source:2",
+        "no-addresses",
+        "draws:0",
+        "next:36971"
+      ],
+      "seconds": 0.05125090014189482,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "invalid-name",
+      "trace": [],
+      "result": [
+        "invalid-name",
+        "no-addresses",
+        "draws:0",
+        "next:55409"
+      ],
+      "seconds": 0.051234169863164425,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "repeat",
+      "trace": [
+        [
+          "udp",
+          0,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          0,
+          28,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          1,
+          "a.x"
+        ],
+        [
+          "udp",
+          1,
+          28,
+          "a.x"
+        ]
+      ],
+      "result": [
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "answer",
+        "4:ok:1,97,1,120,0,:4,16909060,60;",
+        "6:ok:1,97,1,120,0,:6,0,0,0,1,60;",
+        "deadline:none",
+        "paired:4,16909060;/6,0,0,0,1,0;",
+        "draws:4",
+        "next:57351"
+      ],
+      "seconds": 0.08831399492919445,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric4",
+      "trace": [],
+      "result": [
+        "numeric4:2130706433",
+        "ordered:4,2130706433;",
+        "draws:0",
+        "next:55033"
+      ],
+      "seconds": 0.05121038947254419,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric6",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,0,1:0",
+        "ordered:6,0,0,0,1,0;",
+        "draws:0",
+        "next:32969"
+      ],
+      "seconds": 0.05639619193971157,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "numeric-mapped",
+      "trace": [],
+      "result": [
+        "numeric6:0,0,65535,2130706433:0",
+        "ordered:6,0,0,65535,2130706433,0;",
+        "draws:0",
+        "next:47261"
+      ],
+      "seconds": 0.05634612124413252,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "empty-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:34001"
+      ],
+      "seconds": 0.056387211196124554,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "empty-domain",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:56157"
+      ],
+      "seconds": 0.0563688725233078,
+      "audit": "AUDIT 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "priority": 6,
+      "mode": "opaque-host",
+      "trace": [],
+      "result": [
+        "invalid-http-host",
+        "no-addresses",
+        "draws:0",
+        "next:51233"
+      ],
+      "seconds": 0.051254780031740665,
+      "audit": "AUDIT 0 0 0"
+    }
+  ],
+  "candidate": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2",
+  "sha256": {
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-connect.bend": "8e30fc940734a27e40cfaf6895dda4b574e6b316a7deebb1cbe8cdbe9b550151",
+    "packages/runtime/src/abortable-datagram.bend": "07464d20e8bc12b0e8f6f7efeeffc35c76af31547e6d330d9aac2284fa410896",
+    "packages/runtime/src/abortable-socket.bend": "bf97fe0ea84725a5400dace593ab7748df9c1c5982eefec10dff44ab71c7dce5",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/connection-addresses.bend": "9c9260a231cc57a9874fd6d40148c120319235773641bc6c19272e1aafca06cb",
+    "packages/runtime/src/datagram-peer.bend": "85dd3fd3d6b1696685c425de655382da036f92d925e5f8faffe863ab422d9acc",
+    "packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/dns-address-answer.bend": "ad479558794b0b68af71af7125e7730cb2f14d3786d98baded446c57639db3f9",
+    "packages/runtime/src/dns-address-lookup.bend": "0787e98ddb93d2d38d9358592c7484d77b4790fff4bd0f4e15ab1ed71d53e183",
+    "packages/runtime/src/dns-address-pair.bend": "0e63f19a83aa4deb7cd68de27f189b641e74ae95c03a7b3736ae974ce83c1b4a",
+    "packages/runtime/src/dns-address-search.bend": "33f39e891fc54390bd7faa8688ff08f4c463244bd30b86047dea852bcfecd688",
+    "packages/runtime/src/dns-edns-response.bend": "2ca8eeb0f26dbdf461be033330a0aea150eb7e834128a07a45b6e995f6dd3ef1",
+    "packages/runtime/src/dns-edns.bend": "e0da21c269c95007c5d271305c219c0387d822623185772fdf2209834474fd56",
+    "packages/runtime/src/dns-exchange-source.bend": "9b09bfbbd74d645b363ccfa6ef109d2a06f46632e28711ada3f0b881e4d27c89",
+    "packages/runtime/src/dns-id.bend": "3d2026cb6b5aa9fcab2e640ef7dfeca6a4f158c090306fb33f5266f37d073b33",
+    "packages/runtime/src/dns-message.bend": "a77aabec7636f895ce1a22a490e096185aec10aa64f0f7fd8bb90043997be7ff",
+    "packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "packages/runtime/src/dns-pair-classify.bend": "15262001c273c8ac01aa223b8922484ce67710bd7515950c0a52b92045f5f226",
+    "packages/runtime/src/dns-pair-hosts-resolver.bend": "7be610f44aed3c913356fe660b4bcc1a03eaa449ca33fe455526b312ec13065d",
+    "packages/runtime/src/dns-pair-queries.bend": "89bea27d307c55fc25d35aa400154960d11eecc50260cd6ff9ce76f013d39f03",
+    "packages/runtime/src/dns-pair-resolver.bend": "f5fcd49045bbf9a728270dd7fd3894cf211972a9afd9974f37448ba83c15a7fc",
+    "packages/runtime/src/dns-pair-result.bend": "6c57ea0e817512a7a91471ea5f2634caab6ac6c248203a0ccb5635d2c2725877",
+    "packages/runtime/src/dns-pair-search.bend": "f2a93e480c92c9c7d2002da31e7eae7ab7c33830b78a1e9ca566968385a6b3f8",
+    "packages/runtime/src/dns-pair-setup.bend": "ed6f91f83c000f8f874f295317fd02bb949017613da12186ee08cb8d9d55087c",
+    "packages/runtime/src/dns-pending.bend": "61a792403cc3e320380db9d3edf03f0409f72cb3ea09492cec09c619124a0fc5",
+    "packages/runtime/src/dns-presentation.bend": "adf6acc0f09457bbd9feae8b24a612489bf0e1c449678fd0e54ae38314f0cb90",
+    "packages/runtime/src/dns-query.bend": "2e0bdc96c1c5e53daf231fc52bb297465efbeb490f98f498423ecbce8e456f45",
+    "packages/runtime/src/dns-record.bend": "4bcdac18af44d04f13db20266bd20c2057fe2f7ed9faa413dea609f83ef53d64",
+    "packages/runtime/src/dns-resolver.bend": "a6faa841369ccccc0639b7223afdbce0963beae50510629efd0399f42a621227",
+    "packages/runtime/src/dns-response.bend": "2d40b4c34e3c95850a68f4d55709bd7ac9f999f197bf34d55d360ccffe5deb61",
+    "packages/runtime/src/dns-search-response.bend": "a024d01e28fbfb4195cafa80d680f0528779252e5e73ed7e45ed18f8326214fb",
+    "packages/runtime/src/dns-search-run.bend": "879c0bdd352813b8da8c5e97142c4ff44cdfadc3e105ef7e4ab67a31ec247f00",
+    "packages/runtime/src/dns-search-text.bend": "82a5534974be38122b2d7c9a2861b5c647e8a0e2f51654b8643385b78e98afba",
+    "packages/runtime/src/dns-search.bend": "a023407403eee3d6862c65af45b11b9d51ad100b824240a74a510b40d21d1bee",
+    "packages/runtime/src/dns-server-initialize.bend": "a7ad1e6d863a733480cd0d57ed7be5704c695bf077d1c6816a577dafbce64ec1",
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "packages/runtime/src/dns-server-source.bend": "24aff8d196f7844919a7a99825113947e06411924b08805bc7e1a48a3d667874",
+    "packages/runtime/src/dns-tcp-connection.bend": "f7c40b6298c63b83f0d47d112f1b3fe1ca8c9c80eace489e4e4e7ecb196db335",
+    "packages/runtime/src/dns-tcp-frame.bend": "59c91601b376cab4b889a542ced398cd82439fd21b094febdb269b9eba800dae",
+    "packages/runtime/src/dns-tcp-peer.bend": "8b0d6379bef7c3c73d8ff06d0ae202964917f5d21034b0f0c8c24c37c0f0b6cb",
+    "packages/runtime/src/dns-tcp-query.bend": "771fc4b510a9df6e769606a92ffbe62f6e152de906d011a31beee0aa5f51dac3",
+    "packages/runtime/src/dns-tcp-recover.bend": "819dc1dd6b130ff05b517946d7a876289be6624593fd27ef2c89e0b8a457d707",
+    "packages/runtime/src/dns-tcp-servers.bend": "c992954d5dde86baf1f59b99c7634f557faf9e037c6fbfe77da64ac79d65b681",
+    "packages/runtime/src/dns-tcp-session.bend": "bc752d068440092b7bae4fb3762eeb62a795945a6b49432e13eaaeccb7346e78",
+    "packages/runtime/src/dns-transport-choice.bend": "ed0d3f46454c2f2758512c85c4c18bfc117a00c2b86d977d2115be976bf51d1b",
+    "packages/runtime/src/dns-transport.bend": "c298d9f6fea873583f5d3b49cbe7e18810b1abd455b28eef865f975b8b3ac811",
+    "packages/runtime/src/dns-udp-attempt-scope.bend": "4ab54deff52786c6281c04bf17fd334ac1227a678fbbdcc939818ee3533de897",
+    "packages/runtime/src/dns-udp-plan.bend": "d9ee058ca71a8143bfafe2dd4378e1f3125ba672650b6c9b2604cc2edf1b3b31",
+    "packages/runtime/src/dns-udp-policy.bend": "e07290db705a57196283738734eb1b6d015f5fa588db2a0733ce3eaca67e001f",
+    "packages/runtime/src/dns-udp-query.bend": "d87a2993f70c4e1deb96c22c392c66240387b5014695205dcd36cdc3313120f6",
+    "packages/runtime/src/dns-udp-schedule.bend": "c76949a597d5b612af67efaf30a76c1bf4a93a1a7bdf4a72f5a6bd53f3dd597c",
+    "packages/runtime/src/dns-udp-servers.bend": "e1233e1ee23113713b7a0badfcb70b205ec77d108d35de2df4adf1ca6c468b30",
+    "packages/runtime/src/dns-udp-timeout.bend": "631e15078cb1c2285d5f1bfc0e19513f86c065b9d41ad144ca5956ebeb125cb2",
+    "packages/runtime/src/hosts-family.bend": "15f7a54f4ac8390f1699a9157d4b4dc22589b61540260c1537af4aaad3789cdb",
+    "packages/runtime/src/hosts-file.bend": "0b9e68213667cb4e4484ad65ef8dab27dd3a30298fa48b047641d5bb36dcfa3f",
+    "packages/runtime/src/hosts-resolve.bend": "5c7fe35f6c7885c34016ca8aefabd2c7e0ab958e6b397979223945d30547a2d3",
+    "packages/runtime/src/hosts.bend": "0b882b372e9ced2dd09f841b1e8a68afe235d89bf5e559bdf7e8c208342a6d73",
+    "packages/runtime/src/http-addresses.bend": "a0f29ae9dab87809229217e8f73ac70d4b2c79737d4271a3f7a0c7a35ebf14fe",
+    "packages/runtime/src/http-host-resolver.bend": "32615a1b2b821b620781aea2e80e138382e1d3b8e446175b96b10b2d8924ba66",
+    "packages/runtime/src/http-host-route.bend": "c0ef7d165f0b1372fa9c94291efa0c5e34ace797373e24eadf72159e42bebfae",
+    "packages/runtime/src/io-pair.bend": "cacaeb3ca0f8f7ac2a9a9b0355d5b889df64d8c7ebdbe8d9fc8dc98c198571b5",
+    "packages/runtime/src/random-index.bend": "d371dbbc646f34049f7fe46a152d6733f6da847f90cc75ce3cb4fd2d5d8c3efb",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/resolver-address.bend": "faf2ee05a364bc3414d2bfc9a47229ef6f9b4d26888952d3045c92bb366aca0e",
+    "packages/runtime/src/resolver-config.bend": "18eee7247f014e687badaf2f62ee0b76e539239309a87a31bfb6ffbfece80cfc",
+    "packages/runtime/src/resolver-configuration.bend": "cb7fe08bf4005100c544b0a624c99955d798df073ebc125b173fe5ca8cb487fe",
+    "packages/runtime/src/resolver-domains.bend": "2515db3b94d64a6f5fa33dbea2874c85d1d9b7e7ba61ba0e99ee839af30aece9",
+    "packages/runtime/src/resolver-options.bend": "0156b6a1880c2ab1f156ae52cfe4527877bc109c65f0e401940a0a8316278012",
+    "packages/runtime/src/resolver-request.bend": "ac8b9b2e15af84f2e5098ef0fd2c6b70eb69e2880960b78ca19f4af095a8ab48",
+    "packages/runtime/src/resolver-search.bend": "a5a61a7d269df145dc337b8ff769a7a93a83d8d46a450e1a0ec8ab0e87b8b2a5",
+    "packages/runtime/src/resolver-settings.bend": "381a1f0fdef7121bdfc9f6f4fc2b1fa4eb8e764ee54e9c9f94ff92011919bf68",
+    "packages/runtime/src/resolver-transport.bend": "09acf57ec74a90b6d0dcf191bf3042cd0cba9fffbaec9a6eb27a327a7aaff34f",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+    "packages/runtime/src/socket-interrupt.bend": "00c9c2a7ec68ffb37ddebe90ecc88f31df2b9bfac21bc046ddea51ff9b33eb6c",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-host.bend": "fb94caba20dc366bf4a01613991184063779f3a9e58e407c37f77c300cca7c61",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/url-percent.bend": "b66017f8d5d079ef3ed1d170fe798d22464b22bcc2e2ed5e9ec05e502e0a28e4",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/dns-address-answer.bend": "620963d57e1afcb4edd3cc859c52f2b8d54acfce04de526445d6456405a018a7",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/abortable-socket.bend": "d67d2f48d167d609c263ecd8329956418dbb39ed8806f168fcd3445de58b15a5",
+    "tests/dns-address-lookup.bend": "6f48481669a38b4c551059d6d5bd45bc770251dd523161ab2d596383dc1a2320",
+    "tests/dns-address-pair.bend": "bd657af10192f895f35d658b6f20ab9b62d3bcfaac33654b2675de700899fd1a",
+    "tests/dns-lookup-ids.bend": "42f585a7963764b9005f02aadb1a9776b26f6e273ec2c0a7a08c676e6f5af59f",
+    "tests/dns-lookup-random.bend": "5b739daa8a995c5cad2dedbaeae9280e7a77d5410ee1d7f55dea8db198c19e20",
+    "tests/dns-owned-search.bend": "682c9b023bb3d3642184523cf0d829b26e2fe8ead200f5ce633da376078390ff",
+    "tests/dns-presentation.bend": "86be239a67555ee02c8f11d22df06c001b85b9e39e8b4a24361827259d6fff81",
+    "tests/dns-search-response.bend": "9a1540c72b10f6da7c02d9caf630635600976ae7247590062fca3837e274eab1",
+    "tests/dns-search.bend": "009c505ab1b20da5f920e370958a774a9989de33182071e0d77ff45ca081fd64",
+    "tests/dns-tcp-connection.bend": "0de6c97baa2934d8ad95f3012b111b90b7944383375d4e248b95a637fbcfb781",
+    "tests/dns-tcp-query.bend": "65f6bd6ff486b553e9a5561c9df4359401ac9ceedd7648045fb2971736c4be27",
+    "tests/dns-udp-attempt-scope.bend": "8ddebf3692ef481d4ce391c1cf421c678d0a23da8968228c585d2ac0706e5d63",
+    "tests/dns-udp-query.bend": "ab3382d1e67e2f3e1fca2149a5b51622b483c8571df03c816d4377cdfd53a44f",
+    "tests/hosts-file.bend": "3204144c75d85b4080676397f67944688d710f10fe09aae467932b68a5bab090",
+    "tests/http-addresses.bend": "59a3951216a72ae63943a11301cc650cca29fb949968b8fc2fc35bfe1d0ec498",
+    "tests/tcp-bytes-probe.bend": "8fa1175b5f2c55b598368dbdf0d2fa8fca3a5b2af199994e7c919b7d329772cc",
+    "tests/http_addresses_check.py": "d4fdae80f81b28b52ad9325093c361f41476829e379dc9b88d2ac0aced79f04b",
+    "tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/http-addresses.bend",
+        "-o",
+        "build/http-addresses.c"
+      ],
+      "elapsed_seconds": 94.70563514064997,
+      "peak_sampled_group_rss_kib": 4370452,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/http-addresses.bend",
+        "-o",
+        "build/http-addresses.js"
+      ],
+      "elapsed_seconds": 4.784993166103959,
+      "peak_sampled_group_rss_kib": 2174424,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
