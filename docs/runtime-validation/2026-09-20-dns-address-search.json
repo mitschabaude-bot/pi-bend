@@ -1,0 +1,8847 @@
+{
+  "scope": "Single-server DNS search over real loopback TCP exchanges.\n\nChecks DNS RCODE classification, selected-empty replies, search precedence,\nalias follow-ups, shared deadline and terminal source/validation/abort errors.\nThis is not a server retry, OS configuration or full resolver test.\n",
+  "cases": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 1,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "kind": 28,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:4,16909060,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 1,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-0",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            0
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-1",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-2",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            2
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-3",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-4",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            4
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-5",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            5
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-6",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            6
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-7",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            7
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-8",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            8
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-9",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            9
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-10",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            10
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-11",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            11
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-12",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            12
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-13",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            13
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-14",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            14
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "rcode-15",
+        "name": "a.",
+        "ndots": 2,
+        "plan": [
+          [
+            "a",
+            15
+          ]
+        ],
+        "dns": 3
+      },
+      "output": [
+        "dns:3",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "suffix-answer",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "no-data-precedence",
+        "plan": [
+          [
+            "a.x",
+            0
+          ],
+          [
+            "a.y",
+            2
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 4
+      },
+      "output": [
+        "dns:4",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "server-failure-precedence",
+        "plan": [
+          [
+            "a.x",
+            2
+          ],
+          [
+            "a.y",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 2
+      },
+      "output": [
+        "dns:2",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "refused-final-answer",
+        "plan": [
+          [
+            "a.x",
+            5
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "format-error-final-answer",
+        "plan": [
+          [
+            "a.x",
+            1
+          ],
+          [
+            "a",
+            "address"
+          ]
+        ],
+        "answer": "a"
+      },
+      "output": [
+        "ok:1,97,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "initial-precedence",
+        "name": "a.b",
+        "ndots": 1,
+        "plan": [
+          [
+            "a.b",
+            3
+          ],
+          [
+            "a.b.x",
+            0
+          ],
+          [
+            "a.b.y",
+            2
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "alias-answer",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            "address"
+          ]
+        ],
+        "answer": "target"
+      },
+      "output": [
+        "ok:6,116,97,114,103,101,116,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "alias-missing-next-suffix",
+        "plan": [
+          [
+            "a.x",
+            "alias"
+          ],
+          [
+            "target",
+            3
+          ],
+          [
+            "a.y",
+            "address"
+          ]
+        ],
+        "answer": "a.y"
+      },
+      "output": [
+        "ok:1,97,1,121,0,:6,16909060,84281096,151653132,219025168,60;",
+        "none",
+        "none",
+        "draws:3"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "root-suppresses-final",
+        "domains": "x|.",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a",
+            3
+          ]
+        ],
+        "dns": 1
+      },
+      "output": [
+        "dns:1",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "deadline",
+        "mode": "deadline",
+        "plan": [
+          [
+            "a.x",
+            3
+          ],
+          [
+            "a.y",
+            "stall"
+          ]
+        ],
+        "halt": "read:expiry",
+        "reason": "expiry"
+      },
+      "output": [
+        "read:expiry",
+        "none",
+        "expiry",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "source-second",
+        "mode": "error-second",
+        "plan": [
+          [
+            "a.x",
+            3
+          ]
+        ],
+        "halt": "entropy:38:test source unavailable",
+        "draws": 2
+      },
+      "output": [
+        "entropy:38:test source unavailable",
+        "none",
+        "none",
+        "draws:2"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "source-first",
+        "mode": "error-first",
+        "plan": [],
+        "halt": "entropy:11:test source unavailable",
+        "draws": 1
+      },
+      "output": [
+        "entropy:11:test source unavailable",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "pre-abort",
+        "mode": "pre",
+        "plan": [],
+        "halt": "connect:parent",
+        "reason": "parent"
+      },
+      "output": [
+        "connect:parent",
+        "none",
+        "parent",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "invalid-size",
+        "mode": "zero",
+        "plan": [],
+        "halt": "zero"
+      },
+      "output": [
+        "zero",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "invalid-type",
+        "mode": "type",
+        "plan": [],
+        "halt": "type"
+      },
+      "output": [
+        "type",
+        "none",
+        "none",
+        "draws:0"
+      ]
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "kind": 28,
+      "case": {
+        "label": "truncated",
+        "plan": [
+          [
+            "a.x",
+            "truncated"
+          ]
+        ],
+        "halt": "truncated"
+      },
+      "output": [
+        "truncated",
+        "none",
+        "none",
+        "draws:1"
+      ]
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/dns-address-search.bend": "2766a788af1bcc224e360410b8e857ca473b0862a8b1c4f9c43ab670812bf996",
+    "packages/runtime/src/dns-address-lookup.bend": "3d225b2de5be54e862237f4be293e419b4943fe4e262f046fda3def731a84c67",
+    "packages/runtime/src/dns-search-run.bend": "879c0bdd352813b8da8c5e97142c4ff44cdfadc3e105ef7e4ab67a31ec247f00",
+    "packages/runtime/src/dns-search-response.bend": "a024d01e28fbfb4195cafa80d680f0528779252e5e73ed7e45ed18f8326214fb",
+    "tests/dns-address-search.bend": "a8994f2855ec2fe7791d91d04ebc48fdbf02b2c86640809c623379bdd9011442",
+    "tests/dns_address_search_check.py": "be60dc4b39e05924f2bc296244dc6c9b6c7016e84ff8c28764ca411ba65e1b4f",
+    "build/dns-address-search": "9630a7a070cdcb3cbb64ef3aaee5b2c0d0c72e370085359d148d41bfb1d901ee",
+    "build/dns-address-search.js": "73d1c09e296bad6cf11f5185657d6b7695f558826d696c658b6b003d7606857e"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-dns-entropy-candidate/main.ts",
+        "tests/dns-address-search.bend",
+        "-o",
+        "build/dns-address-search.c"
+      ],
+      "elapsed_seconds": 42.377024312503636,
+      "peak_sampled_group_rss_kib": 13128904,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-dns-entropy-candidate/main.ts",
+        "tests/dns-address-search.bend",
+        "-o",
+        "build/dns-address-search.js"
+      ],
+      "elapsed_seconds": 3.1638242434710264,
+      "peak_sampled_group_rss_kib": 1252004,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "base.bend": "1c515d5d4906b97aa56749fd109447b52b58c396a82e073e3cd683f5371a661b",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+  }
+}
