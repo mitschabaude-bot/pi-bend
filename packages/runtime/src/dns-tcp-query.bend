@@ -88,12 +88,21 @@ def report(-Reason: Data, completed: Completed<Reason>, reason: Maybe<&2, Abort.
   match completed:
     case Completed{result, cleanup}: Report{result, cleanup, reason}
 
+# Borrow an existing deadline signal for one exchange. This permits a resolver
+# to keep one total deadline across alias follow-ups; no timer is created here.
+def exchange(-Reason: Data, address: Connect.Address, port: U32, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, id: U32, flags: U32, question: Message.Question, maximum: U32) -> IO(Completed<Reason>):
+  match maximum:
+    case 0: IO.pure(Completed<Reason>, Completed{Fail{InvalidReadSize{}}, Done{Unit{}}})
+    case size:
+      do IO<Completed<Reason>>:
+        result : Result<&2, &1, Connect.Error<Deadline.Cause<Reason>>, Socket> <- Connect.connect(Deadline.Cause<Reason>, address, port, signal)
+        connected(Reason, signal, id, flags, question, size, result)
+
 def scoped(-Reason: Data, address: Connect.Address, port: U32, id: U32, flags: U32, question: Message.Question, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, +signal):
       do IO<Report<Reason>>:
-        result : Result<&2, &1, Connect.Error<Deadline.Cause<Reason>>, Socket> <- Connect.connect(Deadline.Cause<Reason>, address, port, signal)
-        completed : Completed<Reason> <- connected(Reason, signal, id, flags, question, maximum, result)
+        completed : Completed<Reason> <- exchange(Reason, address, port, signal, id, flags, question, maximum)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return report(Reason, completed, reason)
 

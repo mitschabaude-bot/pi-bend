@@ -13,6 +13,17 @@ type Address is Data:
 type Selection is Data:
   Selection{canonical: Name.Name, addresses: List<&2, Address>}
 
+# Retain only traversed alias owners. The terminal name remains eligible for
+# a follow-up query when its address data was absent from this response.
+type History is Data:
+  History{names: Map<&2, Bool>}
+
+type Trace is Data:
+  Trace{selection: Selection, history: History}
+
+def newHistory() -> History:
+  History{Map.new(&2, Bool)}
+
 type Error is Data:
   InvalidName{error: Name.Error}
   InvalidRecord{error: Record.Error}
@@ -126,44 +137,63 @@ def selectNode(index: Index, current: Name.Name, wanted: U32, packet: Name.Packe
   match index:
     case Index{records}: found(current, wanted, packet, Map.get(List<&2, Message.Record>, Nil{}, records, key))
 
+def advanced(key: String, seen: Map<&2, Bool>, state: Step) -> Advance:
+  match state:
+    case Follow{target}: Advance{Map.set(&2, Bool, seen, key, True{}), Follow{target}}
+    case Complete{result}: Advance{seen, Complete{result}}
+
 def visited(index: Index, current: Name.Name, wanted: U32, packet: Name.Packet, +key: String, pair: Map<&2, Bool> & Bool) -> Advance:
   match pair:
     case (seen, True{}): Advance{seen, Complete{Fail{AliasLoop{}}}}
-    case (seen, False{}): Advance{Map.set(&2, Bool, seen, key, True{}), selectNode(index, current, wanted, packet, key)}
+    case (seen, False{}): advanced(key, seen, selectNode(index, current, wanted, packet, key))
 
 def locate(index: Index, current: Name.Name, wanted: U32, packet: Name.Packet, seen: Map<&2, Bool>, result: Result<&2, &2, Error, String>) -> Advance:
   match result:
     case Fail{error}: Advance{seen, Complete{Fail{error}}}
     case Done{+key}: visited(index, current, wanted, packet, key, Map.get(Bool, False{}, seen, key))
 
+def traced(seen: Map<&2, Bool>, result: Result<&2, &2, Error, Selection>) -> Result<&2, &2, Error, Trace>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{selection}: Done{Trace{selection, History{seen}}}
+
 # Every alias hop requires an answer record. Structural fuel is the answer
 # count plus one, not an arbitrary alias-depth limit. The visited index detects
 # cycles immediately instead of repeatedly scanning a duplicate CNAME RRset.
-def walk(fuel: Nat, +index: Index, +packet: Name.Packet, +wanted: U32, progress: Advance) -> Result<&2, &2, Error, Selection>:
+def walk(fuel: Nat, +index: Index, +packet: Name.Packet, +wanted: U32, progress: Advance) -> Result<&2, &2, Error, Trace>:
   match fuel progress:
-    case _ Advance{_, Complete{result}}: result
+    case _ Advance{seen, Complete{result}}: traced(seen, result)
     case Zero{} Advance{_, Follow{_}}: Fail{AliasLoop{}}
     case Succ{rest} Advance{seen, Follow{+current}}: walk(rest, index, packet, wanted, locate(index, current, wanted, packet, seen, nameKey(current)))
 
-def prepared(fuel: Nat, packet: Name.Packet, wanted: U32, name: Name.Name, result: Result<&2, &2, Error, Index>) -> Result<&2, &2, Error, Selection>:
-  match result:
-    case Fail{error}: Fail{error}
-    case Done{index}: walk(fuel, index, packet, wanted, Advance{Map.new(&2, Bool), Follow{name}})
+def prepared(history: History, fuel: Nat, packet: Name.Packet, wanted: U32, name: Name.Name, result: Result<&2, &2, Error, Index>) -> Result<&2, &2, Error, Trace>:
+  match history result:
+    case _ Fail{error}: Fail{error}
+    case History{seen} Done{index}: walk(fuel, index, packet, wanted, Advance{seen, Follow{name}})
 
-def chooseRecords(valid: Bool, wanted: U32, name: Name.Name, packet: Name.Packet, +answers: List<&2, Message.Record>) -> Result<&2, &2, Error, Selection>:
+def chooseRecords(history: History, valid: Bool, wanted: U32, name: Name.Name, packet: Name.Packet, +answers: List<&2, Message.Record>) -> Result<&2, &2, Error, Trace>:
   match valid:
     case False{}: Fail{UnsupportedType{}}
-    case True{}: prepared(Succ{List.length(&2, Message.Record, answers)}, packet, wanted, name, indexed(answers, Done{Index{Map.new(&2, List<&2, Message.Record>)}}))
+    case True{}: prepared(history, Succ{List.length(&2, Message.Record, answers)}, packet, wanted, name, indexed(answers, Done{Index{Map.new(&2, List<&2, Message.Record>)}}))
 
-def selectResponse(code: U32, +wanted: U32, name: Name.Name, packet: Name.Packet, answers: List<&2, Message.Record>) -> Result<&2, &2, Error, Selection>:
+def selectResponse(history: History, code: U32, +wanted: U32, name: Name.Name, packet: Name.Packet, answers: List<&2, Message.Record>) -> Result<&2, &2, Error, Trace>:
   match code:
-    case 0: chooseRecords(U32.is_eq(wanted, 1) || U32.is_eq(wanted, 28), wanted, name, packet, answers)
+    case 0: chooseRecords(history, U32.is_eq(wanted, 1) || U32.is_eq(wanted, 28), wanted, name, packet, answers)
     case code: Fail{ResponseCode{code}}
 
 # Input is a matched, complete response. Only IN answer records contribute;
 # authority/additional data is never promoted to address answers. Empty output
 # is not proof of a cacheable negative answer. TTLs remain raw wire values;
 # normalization, negative/alias caching and follow-up queries are separate.
-def select(+wanted: U32, name: Name.Name, message: Message.Message) -> Result<&2, &2, Error, Selection>:
+def selectWithHistory(history: History, +wanted: U32, name: Name.Name, message: Message.Message) -> Result<&2, &2, Error, Trace>:
   match message:
-    case Message.Message{packet, Message.Header{_, flags, _, _, _, _}, _, answers, _, _}: selectResponse((flags % 16 : U32), wanted, name, packet, answers)
+    case Message.Message{packet, Message.Header{_, flags, _, _, _, _}, _, answers, _, _}: selectResponse(history, (flags % 16 : U32), wanted, name, packet, answers)
+
+
+def selectionOnly(result: Result<&2, &2, Error, Trace>) -> Result<&2, &2, Error, Selection>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{Trace{selection, _}}: Done{selection}
+
+def select(wanted: U32, name: Name.Name, message: Message.Message) -> Result<&2, &2, Error, Selection>:
+  selectionOnly(selectWithHistory(newHistory(), wanted, name, message))
