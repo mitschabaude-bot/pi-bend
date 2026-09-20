@@ -69,7 +69,7 @@ def exact(peer, count):
         data += chunk
     return data
 
-modes = ['normal', 'direct', 'edns', 'tcp-next', 'last', 'duplicate', 'rotation',
+modes = ['forced', 'forced-next', 'forced-pre', 'forced-invalid', 'forced-zero', 'boundary512', 'boundary513', 'normal', 'direct', 'edns', 'tcp-next', 'last', 'duplicate', 'rotation',
          'round', 'rcode', 'truncated', 'refused', 'reset', 'reset-exhausted',
          'partial', 'noise', 'total', 'later', 'size', 'zero', 'pre', 'invalid']
 rows = []
@@ -94,6 +94,10 @@ for backend, command in [('native 1', ['build/dns-transport', '--threads', '1'])
                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 trace = []
                 expected_query = query if mode != 'edns' else query[:10] + b'\0\1' + query[12:] + b'\0\0\x29\x04\xd0' + b'\0'*6
+                if mode in ['boundary512', 'boundary513']:
+                    padding = bytes(480 if mode == 'boundary512' else 481)
+                    opt = b'\0\0\x29\x04\xd0' + bytes(4) + struct.pack('!HHH', len(padding)+4, 12, len(padding)) + padding
+                    expected_query = query[:10] + b'\0\1' + query[12:] + opt
                 while process.poll() is None:
                     assert time.monotonic()-started < 9, (backend, family, mode, 'hung', trace)
                     ready, _, _ = select.select([s for s in udp+tcp if s.fileno() >= 0], [], [], .01)
@@ -115,7 +119,7 @@ for backend, command in [('native 1', ['build/dns-transport', '--threads', '1'])
                             count = struct.unpack('!H', exact(client, 2))[0]
                             assert exact(client, count) == expected_query, (mode, 'tcp bytes')
                             number = len([x for x in trace if x[0] == 'tcp'])
-                            close = mode in ['tcp-next', 'last', 'duplicate', 'rotation', 'round'] and number == 1
+                            close = mode in ['forced-next', 'tcp-next', 'last', 'duplicate', 'rotation', 'round'] and number == 1
                             reset = mode == 'reset' and number == 1 or mode == 'reset-exhausted' and number <= 2
                             if reset:
                                 client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0)); client.close()
@@ -130,6 +134,7 @@ for backend, command in [('native 1', ['build/dns-transport', '--threads', '1'])
                                 client.sendall(struct.pack('!H', len(answer)) + answer)
                 out, err = process.communicate(timeout=1)
                 expected_trace = {
+                    'forced': [('tcp',0)], 'forced-next': [('tcp',0),('tcp',1)], 'forced-pre': [], 'forced-invalid': [], 'forced-zero': [], 'boundary513': [('tcp',0)],
                     'direct': [('udp',0)], 'tcp-next': [('udp',0),('tcp',0),('tcp',1)],
                     'last': [('udp',0),('udp',1),('tcp',1)],
                     'duplicate': [('udp',0),('udp',0),('tcp',0),('tcp',1)],
@@ -141,10 +146,10 @@ for backend, command in [('native 1', ['build/dns-transport', '--threads', '1'])
                     'partial': [('udp',0),('tcp',0),('tcp',1)],
                     'size': [('udp',0)], 'zero': [], 'pre': [], 'invalid': [],
                 }.get(mode, [('udp',0),('tcp',0)])
-                expected = {'last':'tcp:eof', 'rcode':'answer:33154', 'truncated':'truncated',
+                expected = {'forced-pre':'tcp:connect:parent', 'forced-invalid':'encoding', 'forced-zero':'udp:empty', 'last':'tcp:eof', 'rcode':'answer:33154', 'truncated':'truncated',
                             'total':'tcp:read:expiry', 'later':'tcp:read:parent', 'size':'tcp:zero',
                             'zero':'udp:empty', 'pre':f'udp:{ports[0]}:abort:caller:stop:caller:stop',
-                            'invalid':f'udp:{ports[0]}:invalid:active'}.get(mode, 'answer:33152')
+                            'invalid':'encoding'}.get(mode, 'answer:33152')
                 assert trace == expected_trace, (backend, family, mode, trace)
                 assert process.returncode == 0 and out.strip() == expected, (backend, family, mode, out, err)
                 assert err == ('AUDIT 0 0\n' if backend == 'Bun' else 'AUDIT 0 0 0 0 0 0 0\n'), (mode, err)

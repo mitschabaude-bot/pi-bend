@@ -1,4 +1,6 @@
 import Base
+import ../packages/runtime/src/dns-edns.bend as Edns
+import ../packages/runtime/src/dns-name.bend as Name
 import ../packages/runtime/src/dns-transport.bend as Transport
 import ../packages/runtime/src/dns-tcp-query.bend as TCP
 import ../packages/runtime/src/dns-tcp-servers.bend as TCPServers
@@ -34,6 +36,7 @@ def failure(value: Servers.Failure<String>) -> String:
 def outcome(result: Result<&2, &2, Transport.Error<String>, TCP.Reply>) -> String:
   match result:
     case Done{reply}: TCPTest.outcome(Done{reply})
+    case Fail{Transport.Encoding{_}}: "encoding"
     case Fail{Transport.Datagram{error}}: "udp:" ++ UDPTest.outcome(Fail{error})
     case Fail{Transport.Stream{TCPServers.Failed{TCP.Completed{result, Done{_}}}}}: "tcp:" ++ TCPTest.outcome(result)
     case _: "unexpected"
@@ -50,11 +53,32 @@ def entries(+mode: String, +first: Endpoint.Endpoint, second: Endpoint.Endpoint,
     case "rotation": Plan.prepare(Endpoint.Endpoint, 2, first <> second <> third <> Nil{})
     case _: Plan.prepare(Endpoint.Endpoint, 1, first <> second <> Nil{})
 
+def padding(count: Nat) -> List<&2, U32>:
+  match count:
+    case Zero{}: Nil{}
+    case Succ{rest}: 0 <> padding(rest)
+
+def request(+mode: String) -> Request.Request:
+  match mode:
+    case "boundary512": Request.Request{42, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, Some{Edns.Query{1232, False{}, Edns.Option{12, padding(480n)} <> Nil{}}}}
+    case "boundary513": Request.Request{42, 256, Message.Question{Name.Name{Nil{}}, 1, 1}, Some{Edns.Query{1232, False{}, Edns.Option{12, padding(481n)} <> Nil{}}}}
+    case "forced-invalid": QueryTest.request("invalid")
+    case _: QueryTest.request(mode)
+
+def forced(mode: String) -> Bool:
+  match mode:
+    case "forced": True{}
+    case "forced-next": True{}
+    case "forced-pre": True{}
+    case "forced-invalid": True{}
+    case "forced-zero": True{}
+    case _: False{}
+
 def total(+mode: String, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, pair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Unit):
   match pair:
     case (scope, signal):
       do IO<Unit>:
-        result : Result<&2, &2, Transport.Error<String>, TCP.Reply> <- Transport.exchangeRequest(String, Bool.pick(Nat, String.eq(mode, "zero"), 0n, 2n), servers, signal, QueryTest.request(mode), Bool.pick(U32, String.eq(mode, "size"), 0, 7))
+        result : Result<&2, &2, Transport.Error<String>, TCP.Reply> <- Transport.exchangeWith(String, forced(mode), Bool.pick(Nat, String.eq(mode, "zero") || String.eq(mode, "forced-zero"), 0n, 2n), servers, signal, request(mode), Bool.pick(U32, String.eq(mode, "size"), 0, 7))
         IO.print(outcome(result))
         ended : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         return Unit{}
@@ -73,7 +97,7 @@ def prepared(+mode: String, result: Result<&2, &2, Plan.Error, List<&2, Plan.Att
     case Done{servers}:
       do IO<Unit>:
         +controller : Abort.AbortController<String> <- Abort.new(String)
-        ScopeTest.before(mode, controller)
+        ScopeTest.before(Bool.pick(String, String.eq(mode, "forced-pre"), "pre", mode), controller)
         task : Chan(Unit) <- IO.fork(Unit, later(mode, controller))
         scope : Deadline.Scope<String> <- Deadline.create(String, Bool.pick(U32, String.eq(mode, "total"), 1200, 7000), Abort.signal(String, controller))
         total(mode, chosen(Rotation.choose(Plan.Attempt<Endpoint.Endpoint>, True{}, Rotation.startAt(Plan.Attempt<Endpoint.Endpoint>, Bool.pick(Nat, String.eq(mode, "rotation"), 1n, 0n), servers))), Deadline.borrow(String, scope))

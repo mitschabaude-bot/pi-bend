@@ -1,4 +1,5 @@
 import Base
+import ./laws/dns-transport-choice.bend as DNSTransportChoice
 import ./laws/dns-udp-policy.bend as DNSUDPPolicy
 import ./laws/dns-udp-plan.bend as DNSUDPPlan
 import ./laws/dns-udp-timeout.bend as DNSUDPTimeout

@@ -1,0 +1,3013 @@
+{
+  "scope": "Live UDP-to-TCP DNS switching preserves the request, selected pass and total deadline.",
+  "candidate": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2",
+  "c_input": null,
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012461883947253227,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "forced-next",
+      "trace": [
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013134407810866833,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "forced-pre",
+      "trace": [],
+      "result": "tcp:connect:parent",
+      "seconds": 0.010460692457854748,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "forced-invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.010310341604053974,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "forced-zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010321601293981075,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "boundary512",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012324944138526917,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "boundary513",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012078721076250076,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "normal",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.011882221326231956,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "direct",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.011024165898561478,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012543085031211376,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "tcp-next",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013955633156001568,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "last",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "tcp:eof",
+      "seconds": 0.011981232091784477,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "duplicate",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012906096875667572,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "rotation",
+      "trace": [
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          2
+        ],
+        [
+          "tcp",
+          2
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012564444914460182,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "round",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012711366638541222,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "rcode",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33154",
+      "seconds": 0.011671029031276703,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "truncated",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "truncated",
+      "seconds": 0.011842540465295315,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "refused",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012571625411510468,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "reset",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012446544133126736,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "reset-exhausted",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013452420011162758,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "partial",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012897277250885963,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "noise",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013116568326950073,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "total",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:expiry",
+      "seconds": 1.2063570721074939,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "later",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:parent",
+      "seconds": 0.30817620921880007,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "size",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "tcp:zero",
+      "seconds": 0.011948821134865284,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010882885195314884,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre",
+      "trace": [],
+      "result": "udp:35775:abort:caller:stop:caller:stop",
+      "seconds": 0.010720064863562584,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.010566102340817451,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013018947094678879,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "forced-next",
+      "trace": [
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01373923197388649,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "forced-pre",
+      "trace": [],
+      "result": "tcp:connect:parent",
+      "seconds": 0.010704273357987404,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "forced-invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.01059490256011486,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "forced-zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010589683428406715,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "boundary512",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01214747317135334,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "boundary513",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01264533493667841,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "normal",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013443360105156898,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "direct",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.011700290255248547,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012128781527280807,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "tcp-next",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.014169154688715935,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "last",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "tcp:eof",
+      "seconds": 0.01264080498367548,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "duplicate",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013317259028553963,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "rotation",
+      "trace": [
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          2
+        ],
+        [
+          "tcp",
+          2
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013049806468188763,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "round",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013973533175885677,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "rcode",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33154",
+      "seconds": 0.012197522446513176,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "truncated",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "truncated",
+      "seconds": 0.0120929516851902,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "refused",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01299496740102768,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "reset",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.014069253578782082,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "reset-exhausted",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013599380850791931,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "partial",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013383789919316769,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "noise",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013132757507264614,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "total",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:expiry",
+      "seconds": 1.2059038281440735,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "later",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:parent",
+      "seconds": 0.304970390163362,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "size",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "tcp:zero",
+      "seconds": 0.012160012498497963,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010671722702682018,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre",
+      "trace": [],
+      "result": "udp:41809:abort:caller:stop:caller:stop",
+      "seconds": 0.010559763759374619,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.010539981536567211,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012815406545996666,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "forced-next",
+      "trace": [
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01383518148213625,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "forced-pre",
+      "trace": [],
+      "result": "tcp:connect:parent",
+      "seconds": 0.010435391217470169,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "forced-invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.010322480462491512,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "forced-zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010308481752872467,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "boundary512",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012196372263133526,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "boundary513",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012894885614514351,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "normal",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013257498852908611,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "direct",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.011600698344409466,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012142431922256947,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "tcp-next",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013770201243460178,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "last",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "tcp:eof",
+      "seconds": 0.013371068984270096,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "duplicate",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.014023102819919586,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "rotation",
+      "trace": [
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          2
+        ],
+        [
+          "tcp",
+          2
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.014087872579693794,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "round",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.014055424369871616,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "rcode",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33154",
+      "seconds": 0.013211848214268684,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "truncated",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "truncated",
+      "seconds": 0.013187768869102001,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "refused",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01270163431763649,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "reset",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013425580225884914,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "reset-exhausted",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.015763514675199986,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "partial",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013718310743570328,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "noise",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013208399526774883,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "total",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:expiry",
+      "seconds": 1.2058066371828318,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "later",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:parent",
+      "seconds": 0.30521946121007204,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "size",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "tcp:zero",
+      "seconds": 0.012005491182208061,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010506393387913704,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre",
+      "trace": [],
+      "result": "udp:60753:abort:caller:stop:caller:stop",
+      "seconds": 0.010424692183732986,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.01042599231004715,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012174011208117008,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "forced-next",
+      "trace": [
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013369849883019924,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "forced-pre",
+      "trace": [],
+      "result": "tcp:connect:parent",
+      "seconds": 0.010691364295780659,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "forced-invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.010597462765872478,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "forced-zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010568312369287014,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "boundary512",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012131191790103912,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "boundary513",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.011855930089950562,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "normal",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01286159548908472,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "direct",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.011227026581764221,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01218407228589058,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "tcp-next",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.012679086066782475,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "last",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "tcp:eof",
+      "seconds": 0.013524849899113178,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "duplicate",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.014070702716708183,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "rotation",
+      "trace": [
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          2
+        ],
+        [
+          "tcp",
+          2
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013961073011159897,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "round",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013518469408154488,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "rcode",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33154",
+      "seconds": 0.012414333410561085,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "truncated",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "truncated",
+      "seconds": 0.01286347582936287,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "refused",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013529631309211254,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "reset",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013359819538891315,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "reset-exhausted",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013874401338398457,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "partial",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.01374307181686163,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "noise",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.013044256716966629,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "total",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:expiry",
+      "seconds": 1.2075562067329884,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "later",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:parent",
+      "seconds": 0.3047969173640013,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "size",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "tcp:zero",
+      "seconds": 0.01142351794987917,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.010588113218545914,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre",
+      "trace": [],
+      "result": "udp:43495:abort:caller:stop:caller:stop",
+      "seconds": 0.0104063106700778,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.010303100571036339,
+      "audit": "AUDIT 0 0 0 0 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.2830621199682355,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "forced-next",
+      "trace": [
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.15980506967753172,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "forced-pre",
+      "trace": [],
+      "result": "tcp:connect:parent",
+      "seconds": 0.15170304011553526,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "forced-invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.1418089922517538,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "forced-zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.15171895921230316,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "boundary512",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.1876296540722251,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "boundary513",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17368716094642878,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "normal",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16688449028879404,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "direct",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16456128656864166,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17740141227841377,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "tcp-next",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16963681671768427,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "last",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "tcp:eof",
+      "seconds": 0.1695853667333722,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "duplicate",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17549137119203806,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "rotation",
+      "trace": [
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          2
+        ],
+        [
+          "tcp",
+          2
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17428371403366327,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "round",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17454470600932837,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "rcode",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33154",
+      "seconds": 0.1736908508464694,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "truncated",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "truncated",
+      "seconds": 0.1687816921621561,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "refused",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17950829677283764,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "reset",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.1700615594163537,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "reset-exhausted",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17312065791338682,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "partial",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.1722316313534975,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "noise",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.1689240923151374,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "total",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:expiry",
+      "seconds": 1.3018322438001633,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "later",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:parent",
+      "seconds": 0.4614242371171713,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "size",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "tcp:zero",
+      "seconds": 0.16630560718476772,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.14197580236941576,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre",
+      "trace": [],
+      "result": "udp:34105:abort:caller:stop:caller:stop",
+      "seconds": 0.1420203922316432,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.14204888232052326,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "forced",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16694814059883356,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "forced-next",
+      "trace": [
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.15878431219607592,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "forced-pre",
+      "trace": [],
+      "result": "tcp:connect:parent",
+      "seconds": 0.15173595026135445,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "forced-invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.1415683189406991,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "forced-zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.141455358825624,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "boundary512",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17660532798618078,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "boundary513",
+      "trace": [
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17085635289549828,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "normal",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17844193801283836,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "direct",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16512249875813723,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "edns",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16908993292599916,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "tcp-next",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16955212596803904,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "last",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "tcp:eof",
+      "seconds": 0.17187435925006866,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "duplicate",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.172938066534698,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "rotation",
+      "trace": [
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          2
+        ],
+        [
+          "tcp",
+          2
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17390657123178244,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "round",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "udp",
+          1
+        ],
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17188343033194542,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "rcode",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33154",
+      "seconds": 0.17656108736991882,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "truncated",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "truncated",
+      "seconds": 0.16808088682591915,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "refused",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.1715047676116228,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "reset",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16931745503097773,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "reset-exhausted",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16984383761882782,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "partial",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ],
+        [
+          "tcp",
+          1
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.17513972893357277,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "noise",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "answer:33152",
+      "seconds": 0.16847839951515198,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "total",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:expiry",
+      "seconds": 1.3033302323892713,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "later",
+      "trace": [
+        [
+          "udp",
+          0
+        ],
+        [
+          "tcp",
+          0
+        ]
+      ],
+      "result": "tcp:read:parent",
+      "seconds": 0.4493405846878886,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "size",
+      "trace": [
+        [
+          "udp",
+          0
+        ]
+      ],
+      "result": "tcp:zero",
+      "seconds": 0.16164637822657824,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "zero",
+      "trace": [],
+      "result": "udp:empty",
+      "seconds": 0.14160303957760334,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre",
+      "trace": [],
+      "result": "udp:37949:abort:caller:stop:caller:stop",
+      "seconds": 0.1414721393957734,
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "invalid",
+      "trace": [],
+      "result": "encoding",
+      "seconds": 0.14147941954433918,
+      "audit": "AUDIT 0 0"
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-connect.bend": "8e30fc940734a27e40cfaf6895dda4b574e6b316a7deebb1cbe8cdbe9b550151",
+    "packages/runtime/src/abortable-datagram.bend": "07464d20e8bc12b0e8f6f7efeeffc35c76af31547e6d330d9aac2284fa410896",
+    "packages/runtime/src/abortable-socket.bend": "bf97fe0ea84725a5400dace593ab7748df9c1c5982eefec10dff44ab71c7dce5",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/datagram-peer.bend": "85dd3fd3d6b1696685c425de655382da036f92d925e5f8faffe863ab422d9acc",
+    "packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/dns-edns.bend": "e0da21c269c95007c5d271305c219c0387d822623185772fdf2209834474fd56",
+    "packages/runtime/src/dns-message.bend": "a77aabec7636f895ce1a22a490e096185aec10aa64f0f7fd8bb90043997be7ff",
+    "packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "packages/runtime/src/dns-pending.bend": "61a792403cc3e320380db9d3edf03f0409f72cb3ea09492cec09c619124a0fc5",
+    "packages/runtime/src/dns-query.bend": "2e0bdc96c1c5e53daf231fc52bb297465efbeb490f98f498423ecbce8e456f45",
+    "packages/runtime/src/dns-response.bend": "2d40b4c34e3c95850a68f4d55709bd7ac9f999f197bf34d55d360ccffe5deb61",
+    "packages/runtime/src/dns-server-rotation.bend": "f0f26f0ef8a1162e54811e604c8ef598cfe11a36d214f2a416cc6866eec6b9de",
+    "packages/runtime/src/dns-tcp-connection.bend": "f7c40b6298c63b83f0d47d112f1b3fe1ca8c9c80eace489e4e4e7ecb196db335",
+    "packages/runtime/src/dns-tcp-frame.bend": "59c91601b376cab4b889a542ced398cd82439fd21b094febdb269b9eba800dae",
+    "packages/runtime/src/dns-tcp-peer.bend": "8b0d6379bef7c3c73d8ff06d0ae202964917f5d21034b0f0c8c24c37c0f0b6cb",
+    "packages/runtime/src/dns-tcp-query.bend": "771fc4b510a9df6e769606a92ffbe62f6e152de906d011a31beee0aa5f51dac3",
+    "packages/runtime/src/dns-tcp-recover.bend": "819dc1dd6b130ff05b517946d7a876289be6624593fd27ef2c89e0b8a457d707",
+    "packages/runtime/src/dns-tcp-servers.bend": "c992954d5dde86baf1f59b99c7634f557faf9e037c6fbfe77da64ac79d65b681",
+    "packages/runtime/src/dns-tcp-session.bend": "bc752d068440092b7bae4fb3762eeb62a795945a6b49432e13eaaeccb7346e78",
+    "packages/runtime/src/dns-transport-choice.bend": "ed0d3f46454c2f2758512c85c4c18bfc117a00c2b86d977d2115be976bf51d1b",
+    "packages/runtime/src/dns-transport.bend": "c298d9f6fea873583f5d3b49cbe7e18810b1abd455b28eef865f975b8b3ac811",
+    "packages/runtime/src/dns-udp-attempt-scope.bend": "4ab54deff52786c6281c04bf17fd334ac1227a678fbbdcc939818ee3533de897",
+    "packages/runtime/src/dns-udp-plan.bend": "d9ee058ca71a8143bfafe2dd4378e1f3125ba672650b6c9b2604cc2edf1b3b31",
+    "packages/runtime/src/dns-udp-policy.bend": "4b29fcff780dc8ed3d909e063e1424f1c78104b41d69735fedfb18f832935ab3",
+    "packages/runtime/src/dns-udp-query.bend": "d87a2993f70c4e1deb96c22c392c66240387b5014695205dcd36cdc3313120f6",
+    "packages/runtime/src/dns-udp-schedule.bend": "c76949a597d5b612af67efaf30a76c1bf4a93a1a7bdf4a72f5a6bd53f3dd597c",
+    "packages/runtime/src/dns-udp-servers.bend": "2c14dba202118385a98ad8fbf8aa1420e638cdcb00f2a1a0697785707653f124",
+    "packages/runtime/src/dns-udp-timeout.bend": "631e15078cb1c2285d5f1bfc0e19513f86c065b9d41ad144ca5956ebeb125cb2",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+    "packages/runtime/src/socket-interrupt.bend": "00c9c2a7ec68ffb37ddebe90ecc88f31df2b9bfac21bc046ddea51ff9b33eb6c",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/abortable-socket.bend": "d67d2f48d167d609c263ecd8329956418dbb39ed8806f168fcd3445de58b15a5",
+    "tests/dns-tcp-connection.bend": "0de6c97baa2934d8ad95f3012b111b90b7944383375d4e248b95a637fbcfb781",
+    "tests/dns-tcp-query.bend": "65f6bd6ff486b553e9a5561c9df4359401ac9ceedd7648045fb2971736c4be27",
+    "tests/dns-transport.bend": "6f974463cfb76adad8392486a0816aec6aa958d304e00b953d0bf45e77eb923e",
+    "tests/dns-udp-attempt-scope.bend": "8ddebf3692ef481d4ce391c1cf421c678d0a23da8968228c585d2ac0706e5d63",
+    "tests/dns-udp-query.bend": "ab3382d1e67e2f3e1fca2149a5b51622b483c8571df03c816d4377cdfd53a44f",
+    "tests/dns-udp-servers.bend": "fd2a5208a867d165bdde0cc51b14140c10f5ecf55f2d85cee39372239c7906b0",
+    "tests/tcp-bytes-probe.bend": "8fa1175b5f2c55b598368dbdf0d2fa8fca3a5b2af199994e7c919b7d329772cc",
+    "tests/dns_transport_check.py": "53aeec45de7858c9de95266e9ab6363f5972e33ca8d10c95e8628d70cc6ea647"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/dns-transport.bend",
+        "-o",
+        "build/dns-transport.c"
+      ],
+      "elapsed_seconds": 42.72031192295253,
+      "peak_sampled_group_rss_kib": 4772432,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/dns-transport.bend",
+        "-o",
+        "build/dns-transport.js"
+      ],
+      "elapsed_seconds": 7.438972738571465,
+      "peak_sampled_group_rss_kib": 2797544,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

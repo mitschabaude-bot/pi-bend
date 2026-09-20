@@ -20,3 +20,14 @@ def defaults() -> Options: Options{256, None{}}
 def create(options: Options, id: U32, question: Message.Question) -> Request:
   match options:
     case Options{flags, extension}: Request{id, flags, question, extension}
+
+# Shared checked wire encoding for transport selection and transmission.
+def encoded(value: Result<&2, &2, Message.Error, List<&2, U32>>) -> Result<&2, &2, Edns.Error, List<&2, U32>>:
+  match value:
+    case Fail{error}: Fail{Edns.Message{error}}
+    case Done{bytes}: Done{bytes}
+
+def encode(request: Request) -> Result<&2, &2, Edns.Error, List<&2, U32>>:
+  match request:
+    case Request{id, flags, question, None{}}: encoded(Message.query(id, flags, question))
+    case Request{id, flags, question, Some{extension}}: Edns.query(id, flags, question, extension)

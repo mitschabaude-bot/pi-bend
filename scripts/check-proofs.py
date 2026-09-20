@@ -90,6 +90,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('dns-choice-ignores-forced-tcp', 'packages/runtime/src/dns-transport-choice.bend',
+         'case True{}: TCP{}\n    case False{}: automatic', 'case True{}: UDP{}\n    case False{}: automatic', 'laws/dns-transport-choice.forced_tcp'),
+        ('dns-choice-allows-extra-byte', 'packages/runtime/src/dns-transport-choice.bend',
+         'case Zero{} _ <> _: True{}', 'case Zero{} _ <> _: False{}', 'laws/dns-transport-choice.exact_budget'),
+        ('dns-choice-accepts-encoding-error', 'packages/runtime/src/dns-transport-choice.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Done{UDP{}}', 'laws/dns-transport-choice.invalid_encoding_stops_selection'),
         ('udp-fallback-restarts-server-list', 'packages/runtime/src/dns-udp-schedule.bend',
          'case Cursor{_, _, remaining}: selected <> remaining', 'case Cursor{_, original, _}: selected <> original', 'laws/dns-udp-schedule.fallback_current_pass'),
         ('udp-policy-accepts-server-failure', 'packages/runtime/src/dns-udp-policy.bend',

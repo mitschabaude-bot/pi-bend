@@ -10,8 +10,11 @@ import ./dns-tcp-servers.bend as Stream
 import ./abortable-connect.bend as Connect
 import ./socket-endpoint.bend as Endpoint
 import ./dns-query.bend as Request
+import ./dns-transport-choice.bend as Choice
+import ./dns-edns.bend as Edns
 
 type Error<-Reason: Data> is Data:
+  Encoding{error: Edns.Error}
   Datagram{error: UDP.Error<Reason>}
   Stream{error: Stream.Error<Reason>}
 
@@ -68,7 +71,19 @@ def drive(-Reason: Data, fuel: Nat, step: Schedule.Step<Plan.Attempt<Endpoint.En
         decision : UDP.Decision<Reason> <- UDP.attempt(Reason, selected, signal, request)
         drive(Reason, rest, Schedule.next(Plan.Attempt<Endpoint.Endpoint>, next), signal, request, maximum, transitioned(Reason, selected, next, decision))
 
-# Borrow the same total deadline across UDP, TCP connect and every TCP read.
-# Request encoding/ID/EDNS options are unchanged across the transport switch.
-def exchangeRequest(-Reason: Data, +attempts: Nat, +servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Request.Request, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, TCP.Reply>):
-  drive(Reason, Nat.mul(attempts, List.length(&2, Plan.Attempt<Endpoint.Endpoint>, servers)), Schedule.next(Plan.Attempt<Endpoint.Endpoint>, Schedule.start(Plan.Attempt<Endpoint.Endpoint>, attempts, servers)), signal, request, maximum, Continue{None{}})
+def prepared(-Reason: Data, +attempts: Nat, +servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Request.Request, maximum: U32, choice: Result<&2, &2, Edns.Error, Choice.Mode>) -> IO(Result<&2, &2, Error<Reason>, TCP.Reply>):
+  match choice:
+    case Fail{error}: IO.pure(Result<&2, &2, Error<Reason>, TCP.Reply>, Fail{Encoding{error}})
+    case Done{Choice.UDP{}}: drive(Reason, Nat.mul(attempts, List.length(&2, Plan.Attempt<Endpoint.Endpoint>, servers)), Schedule.next(Plan.Attempt<Endpoint.Endpoint>, Schedule.start(Plan.Attempt<Endpoint.Endpoint>, attempts, servers)), signal, request, maximum, Continue{None{}})
+    case Done{Choice.TCP{}}: drive(Reason, Zero{}, Schedule.Exhausted{}, signal, request, maximum, Fallback{entries(servers)})
+
+# Forced and oversized requests start with one TCP pass. Zero configured
+# attempts never opens a transport, including when TCP is explicitly forced.
+def exchangeWith(-Reason: Data, forced: Bool, attempts: Nat, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Request.Request, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, TCP.Reply>):
+  match attempts:
+    case Zero{}: IO.pure(Result<&2, &2, Error<Reason>, TCP.Reply>, Fail{Datagram{UDP.NoAttempts{}}})
+    case count: prepared(Reason, count, servers, signal, request, maximum, Choice.prepare(forced, request))
+
+# Borrow the same total deadline across initial selection, UDP and TCP.
+def exchangeRequest(-Reason: Data, attempts: Nat, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Request.Request, maximum: U32) -> IO(Result<&2, &2, Error<Reason>, TCP.Reply>):
+  exchangeWith(Reason, False{}, attempts, servers, signal, request, maximum)

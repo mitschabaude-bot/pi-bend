@@ -18,15 +18,8 @@ type Error<-Reason: Data> is Data:
   Opening{error: Peer.Error}
   Transport{error: Datagram.Error<Reason>}
 
-def encoded(value: Result<&2, &2, Message.Error, List<&2, U32>>) -> Result<&2, &2, Edns.Error, List<&2, U32>>:
-  match value:
-    case Fail{error}: Fail{Edns.Message{error}}
-    case Done{bytes}: Done{bytes}
-
 def encode(request: Request.Request) -> Result<&2, &2, Edns.Error, List<&2, U32>>:
-  match request:
-    case Request.Request{id, flags, question, None{}}: encoded(Message.query(id, flags, question))
-    case Request.Request{id, flags, question, Some{extension}}: Edns.query(id, flags, question, extension)
+  Request.encode(request)
 
 def endpoint(value: Endpoint.Endpoint) -> Response.Endpoint:
   match value:
