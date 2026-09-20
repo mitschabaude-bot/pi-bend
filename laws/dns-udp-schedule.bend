@@ -44,3 +44,11 @@ law no_servers:
   for -Server: Data
   for count: Nat
   {Schedule.next(Server, Schedule.start(Server, count, Nil{})) == Schedule.Exhausted{} : Schedule.Step<Server>}
+
+# The driver's structural recursion budget covers the complete selected order
+# across all rounds, for arbitrary server values, duplicates and list sizes.
+law initial_count:
+  for -Server: Data
+  for +count: Nat
+  for +servers: List<&2, Server>
+  {List.length(&2, Server, remaining(Server, Schedule.start(Server, count, servers))) == Nat.mul(count, List.length(&2, Server, servers)) : Nat}
