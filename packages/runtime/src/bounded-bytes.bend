@@ -10,4 +10,3 @@ def consumed(bytes: List<&2, U32>, state: State) -> State:
     case _ State{_, reversed, True{}}: State{0n, reversed, True{}}
     case _ <> _ State{0n, reversed, False{}}: State{0n, reversed, True{}}
     case byte <> rest State{1n+remaining, reversed, False{}}: consumed(rest, State{remaining, byte <> reversed, False{}})
-
