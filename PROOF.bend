@@ -7,3 +7,4 @@ import ./proofs/string-set.bend as StringSet
 import ./proofs/ordered-map.bend as OrderedMap
 import ./proofs/list-reverse.bend as ListReverse
 import ./proofs/line-decoder.bend as LineDecoder
+import ./proofs/sse-decoder.bend as SSEDecoder

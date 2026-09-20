@@ -73,6 +73,18 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('flush-drops-pending-lines', 'packages/runtime/src/line-decoder.bend',
+         'case LineDecoder{pending}: consume(LineDecoder{pending}, 10)',
+         'case LineDecoder{pending}: Decoded{create(), Nil{}}', 'laws/line-decoder.flush_result'),
+        ('flush-drops-line-before-carriage-return', 'packages/runtime/src/line-decoder.bend',
+         'case Nil{}: Decoded{create(), line(before) <> Nil{}}',
+         'case Nil{}: Decoded{create(), Nil{}}', 'laws/line-decoder.flush_result'),
+        ('sse-empty-block-retains-diagnostics', 'packages/runtime/src/sse-decoder.bend',
+         'case SSEDecoder{None{}, Nil{}, _}: Decoded{create(), None{}}',
+         'case SSEDecoder{None{}, Nil{}, raw}: Decoded{SSEDecoder{None{}, Nil{}, raw}, None{}}', 'laws/sse-decoder.blank_clears_buffers'),
+        ('sse-empty-block-emits-event', 'packages/runtime/src/sse-decoder.bend',
+         'case SSEDecoder{None{}, Nil{}, _}: Decoded{create(), None{}}',
+         'case SSEDecoder{None{}, Nil{}, _}: Decoded{create(), Some{ServerSentEvent{None{}, "", Nil{}}}}', 'laws/sse-decoder.repeated_blank'),
         ('line-chunk-resets-pending-state', 'packages/runtime/src/line-decoder.bend',
          'collect(bytes, Decoded{decoder, Nil{}}, Nil{})',
          'collect(bytes, Decoded{create(), Nil{}}, Nil{})', 'laws/line-decoder.empty_chunk'),

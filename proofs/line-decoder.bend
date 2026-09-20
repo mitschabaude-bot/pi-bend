@@ -109,3 +109,16 @@ def Laws.continuation_output(decoder, lines, bytes):
   %Equal.sym(List<&2, String>, Line.prepend(lines, Nil{}), List.reverse(&2, String, lines), prepend_reverse(lines, Nil{})) : {Line.collect(bytes, Line.Decoded{decoder, Nil{}}, _) == Laws.withPrefix(lines, Line.decode(decoder, bytes)) : Line.Decoded}
   %Reverse.involution(String, lines) : {Line.collect(bytes, Line.Decoded{decoder, Nil{}}, List.reverse(&2, String, lines)) == Laws.withPrefix(_, Line.decode(decoder, bytes)) : Line.Decoded}
   collect_prefixed(bytes, Line.Decoded{decoder, Nil{}}, Nil{}, List.reverse(&2, String, lines))
+
+def Laws.flush_result(pending):
+  match pending:
+    case Line.Reading{Nil{}}: {==}
+    case Line.Reading{_ <> _}: {==}
+    case Line.AfterCarriageReturn{_, Nil{}}: {==}
+    case Line.AfterCarriageReturn{_, _ <> _}: {==}
+
+def Laws.repeated_flush(decoder):
+  match decoder:
+    case Line.LineDecoder{pending}:
+      %Equal.sym(Line.Decoded, Line.flush(Line.LineDecoder{pending}), Line.Decoded{Line.create(), Laws.pendingLines(pending)}, Laws.flush_result(pending)) : {Line.flush(Laws.decoderOf(_)) == Line.Decoded{Line.create(), Nil{}} : Line.Decoded}
+      {==}

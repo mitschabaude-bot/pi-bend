@@ -1,4 +1,5 @@
 import Base
+import ./laws/sse-decoder.bend as SSEDecoder
 import ./laws/line-decoder.bend as LineDecoder
 import ./laws/ordered-map.bend as OrderedMap
 import ./laws/record.bend as Record
