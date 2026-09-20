@@ -27,3 +27,10 @@ law remove_preserves_other_head:
   for +key: String
   for different: {False{} == String.eq(name, key) : Bool}
   {R.remove(A, R.Record{R.Property{name, value} <> rest}, key) == R.Record{R.Property{name, value} <> R.removeProperties(A, rest, key)} : R.Record<A>}
+
+law lookup_after_set:
+  for -A: Data
+  for record: R.Record<A>
+  for +key: String
+  for +value: A
+  {R.get(A, R.set(A, record, key, value), key) == Some{value} : Maybe<&2, A>}

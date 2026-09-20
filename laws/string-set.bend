@@ -14,3 +14,8 @@ law remove_idempotent:
   for +values: Set.Set
   for +value: String
   {Set.remove(Set.remove(values, value), value) == Set.remove(values, value) : Set.Set}
+
+law insert_membership:
+  for values: Set.Set
+  for +value: String
+  {Set.contains(Set.insert(values, value), value) == True{} : Bool}

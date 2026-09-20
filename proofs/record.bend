@@ -1,4 +1,5 @@
 import Base
+import ./string-equality.bend as StringEquality
 import ../laws/record.bend as Laws
 import ../packages/runtime/src/record.bend as R
 
@@ -76,3 +77,44 @@ def Laws.remove_idempotent(A, record, key):
 def Laws.remove_preserves_other_head(A, name, value, rest, key, different):
   %different : {R.Record{Bool.pick(List<&2, R.Property<A>>, _, R.removeProperties(A, rest, key), R.Property{name, value} <> R.removeProperties(A, rest, key))} == R.Record{R.Property{name, value} <> R.removeProperties(A, rest, key)} : R.Record<A>}
   {==}
+
+law set_head_lookup:
+  for -A: Data
+  for +name: String
+  for +old: A
+  for +rest: List<&2, R.Property<A>>
+  for +key: String
+  for +value: A
+  for +same: Bool
+  for equal: {same == String.eq(key, name) : Bool}
+  for found: {R.getProperties(A, R.setProperties(A, rest, key, value), key) == Some{value} : Maybe<&2, A>}
+  {R.getProperties(A, Bool.pick(List<&2, R.Property<A>>, same, R.Property{key, value} <> rest, R.Property{name, old} <> R.setProperties(A, rest, key, value)), key) == Some{value} : Maybe<&2, A>}
+
+def set_head_lookup(A, name, old, rest, key, value, same, equal, found):
+  match same:
+    case True{}:
+      %StringEquality.eq_reflexive(key) : {Bool.pick(Maybe<&2, A>, _, Some{value}, R.getProperties(A, rest, key)) == Some{value} : Maybe<&2, A>}
+      {==}
+    case False{}:
+      %StringEquality.eq_symmetric(key, name) : {Bool.pick(Maybe<&2, A>, _, Some{old}, R.getProperties(A, R.setProperties(A, rest, key, value), key)) == Some{value} : Maybe<&2, A>}
+      %equal : {Bool.pick(Maybe<&2, A>, _, Some{old}, R.getProperties(A, R.setProperties(A, rest, key, value), key)) == Some{value} : Maybe<&2, A>}
+      found
+
+law set_properties_lookup:
+  for -A: Data
+  for properties: List<&2, R.Property<A>>
+  for +key: String
+  for +value: A
+  {R.getProperties(A, R.setProperties(A, properties, key, value), key) == Some{value} : Maybe<&2, A>}
+
+def set_properties_lookup(A, properties, key, value):
+  match properties:
+    case Nil{}:
+      %StringEquality.eq_reflexive(key) : {Bool.pick(Maybe<&2, A>, _, Some{value}, None{}) == Some{value} : Maybe<&2, A>}
+      {==}
+    case R.Property{+name, old} <> +rest:
+      set_head_lookup(A, name, old, rest, key, value, String.eq(key, name), {==}, set_properties_lookup(A, rest, key, value))
+
+def Laws.lookup_after_set(A, record, key, value):
+  match record:
+    case R.Record{properties}: set_properties_lookup(A, properties, key, value)
