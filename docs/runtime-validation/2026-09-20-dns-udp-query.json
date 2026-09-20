@@ -1,0 +1,1161 @@
+{
+  "scope": "Live numeric UDP DNS attempts under nested deadlines; reply filtering, encoding and cleanup.",
+  "runs": [
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "answer",
+      "seconds": 0.0016398178413510323,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "edns",
+      "seconds": 0.0020579295232892036,
+      "request_hex": "002a01000001000000000001000001000100002904d0000000000000",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "truncated",
+      "seconds": 0.0025378819555044174,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "truncated",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "noise-then-answer",
+      "seconds": 0.0023544002324342728,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "noise",
+      "seconds": 1.0027793860062957,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "silent",
+      "seconds": 1.0035975184291601,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "large",
+      "seconds": 0.005495656281709671,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:4125:255",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "rcode",
+      "seconds": 0.002294049598276615,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33155:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "total",
+      "seconds": 0.022664387710392475,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:total",
+        "total"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "later",
+      "seconds": 0.022170244716107845,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre",
+      "seconds": 0.0024539316073060036,
+      "request_hex": null,
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "pre-default",
+      "seconds": 0.002042279578745365,
+      "request_hex": null,
+      "result": [
+        "abort:caller:default",
+        "caller:default"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "invalid",
+      "seconds": 0.0015651276335120201,
+      "request_hex": null,
+      "result": [
+        "invalid",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "port",
+      "seconds": 0.0019404683262109756,
+      "request_hex": null,
+      "result": [
+        "association:22",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 4,
+      "mode": "refused",
+      "seconds": 0.0016097482293844223,
+      "request_hex": null,
+      "result": [
+        "socket:111",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "answer",
+      "seconds": 0.0016738083213567734,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "edns",
+      "seconds": 0.0015366682782769203,
+      "request_hex": "002a01000001000000000001000001000100002904d0000000000000",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "truncated",
+      "seconds": 0.001516137272119522,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "truncated",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "noise-then-answer",
+      "seconds": 0.0030183447524905205,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "noise",
+      "seconds": 1.0034865299239755,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "silent",
+      "seconds": 1.0037372838705778,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "large",
+      "seconds": 0.004829113371670246,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:4125:255",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "rcode",
+      "seconds": 0.0026368312537670135,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33155:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "total",
+      "seconds": 0.022219655103981495,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:total",
+        "total"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "later",
+      "seconds": 0.022859087213873863,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre",
+      "seconds": 0.0022989409044384956,
+      "request_hex": null,
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "pre-default",
+      "seconds": 0.0025825416669249535,
+      "request_hex": null,
+      "result": [
+        "abort:caller:default",
+        "caller:default"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "invalid",
+      "seconds": 0.0024792924523353577,
+      "request_hex": null,
+      "result": [
+        "invalid",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "port",
+      "seconds": 0.00254778191447258,
+      "request_hex": null,
+      "result": [
+        "association:22",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 1",
+      "family": 6,
+      "mode": "refused",
+      "seconds": 0.0016090581193566322,
+      "request_hex": null,
+      "result": [
+        "socket:111",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "answer",
+      "seconds": 0.0015586968511343002,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "edns",
+      "seconds": 0.0015530083328485489,
+      "request_hex": "002a01000001000000000001000001000100002904d0000000000000",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "truncated",
+      "seconds": 0.0015247464179992676,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "truncated",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "noise-then-answer",
+      "seconds": 0.003008483909070492,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "noise",
+      "seconds": 1.0031737219542265,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "silent",
+      "seconds": 1.0035442672669888,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "large",
+      "seconds": 0.008446980267763138,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:4125:255",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "rcode",
+      "seconds": 0.0027770735323429108,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33155:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "total",
+      "seconds": 0.0225465577095747,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:total",
+        "total"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "later",
+      "seconds": 0.02212647534906864,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre",
+      "seconds": 0.0020386390388011932,
+      "request_hex": null,
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "pre-default",
+      "seconds": 0.00242709182202816,
+      "request_hex": null,
+      "result": [
+        "abort:caller:default",
+        "caller:default"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "invalid",
+      "seconds": 0.002205059863626957,
+      "request_hex": null,
+      "result": [
+        "invalid",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "port",
+      "seconds": 0.0013583162799477577,
+      "request_hex": null,
+      "result": [
+        "association:22",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 4,
+      "mode": "refused",
+      "seconds": 0.0014624064788222313,
+      "request_hex": null,
+      "result": [
+        "socket:111",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "answer",
+      "seconds": 0.0015300167724490166,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "edns",
+      "seconds": 0.0014770664274692535,
+      "request_hex": "002a01000001000000000001000001000100002904d0000000000000",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "truncated",
+      "seconds": 0.0020221099257469177,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "truncated",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "noise-then-answer",
+      "seconds": 0.0016664676368236542,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "noise",
+      "seconds": 1.003334908746183,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "silent",
+      "seconds": 1.0039924439042807,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "large",
+      "seconds": 0.007768337614834309,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:4125:255",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "rcode",
+      "seconds": 0.002657441422343254,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33155:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "total",
+      "seconds": 0.022951267659664154,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:total",
+        "total"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "later",
+      "seconds": 0.022610947489738464,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre",
+      "seconds": 0.002591182477772236,
+      "request_hex": null,
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "pre-default",
+      "seconds": 0.0015673069283366203,
+      "request_hex": null,
+      "result": [
+        "abort:caller:default",
+        "caller:default"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "invalid",
+      "seconds": 0.0026119230315089226,
+      "request_hex": null,
+      "result": [
+        "invalid",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "port",
+      "seconds": 0.0025013424456119537,
+      "request_hex": null,
+      "result": [
+        "association:22",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "native 4",
+      "family": 6,
+      "mode": "refused",
+      "seconds": 0.0016590263694524765,
+      "request_hex": null,
+      "result": [
+        "socket:111",
+        "active"
+      ],
+      "audit": "AUDIT 0 0 0 0 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "answer",
+      "seconds": 0.048303757794201374,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "edns",
+      "seconds": 0.0487501909956336,
+      "request_hex": "002a01000001000000000001000001000100002904d0000000000000",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "truncated",
+      "seconds": 0.04783888626843691,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "truncated",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "noise-then-answer",
+      "seconds": 0.05390765517950058,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "noise",
+      "seconds": 1.0501518342643976,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "silent",
+      "seconds": 1.0396677562966943,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "large",
+      "seconds": 0.10101127903908491,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:4125:255",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "rcode",
+      "seconds": 0.04677116125822067,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33155:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "total",
+      "seconds": 0.057080780155956745,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:total",
+        "total"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "later",
+      "seconds": 0.06299571879208088,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre",
+      "seconds": 0.03696323465555906,
+      "request_hex": null,
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "pre-default",
+      "seconds": 0.03684183396399021,
+      "request_hex": null,
+      "result": [
+        "abort:caller:default",
+        "caller:default"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "invalid",
+      "seconds": 0.037574938498437405,
+      "request_hex": null,
+      "result": [
+        "invalid",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "port",
+      "seconds": 0.03885004390031099,
+      "request_hex": null,
+      "result": [
+        "association:22",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 4,
+      "mode": "refused",
+      "seconds": 0.041706657968461514,
+      "request_hex": null,
+      "result": [
+        "socket:111",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "answer",
+      "seconds": 0.04717645421624184,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "edns",
+      "seconds": 0.04828807897865772,
+      "request_hex": "002a01000001000000000001000001000100002904d0000000000000",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "truncated",
+      "seconds": 0.047285725362598896,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "truncated",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "noise-then-answer",
+      "seconds": 0.05370734538882971,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "noise",
+      "seconds": 1.0497007062658668,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "silent",
+      "seconds": 1.0411077188327909,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:attempt",
+        "attempt"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "large",
+      "seconds": 0.10510608926415443,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33152:4125:255",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "rcode",
+      "seconds": 0.04734258446842432,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "answer:33155:17:1",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "total",
+      "seconds": 0.0560268759727478,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:total",
+        "total"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "later",
+      "seconds": 0.0622964845970273,
+      "request_hex": "002a010000010000000000000000010001",
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre",
+      "seconds": 0.03674092423170805,
+      "request_hex": null,
+      "result": [
+        "abort:caller:stop",
+        "caller:stop"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "pre-default",
+      "seconds": 0.03747945744544268,
+      "request_hex": null,
+      "result": [
+        "abort:caller:default",
+        "caller:default"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "invalid",
+      "seconds": 0.03652029391378164,
+      "request_hex": null,
+      "result": [
+        "invalid",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "port",
+      "seconds": 0.03934043738991022,
+      "request_hex": null,
+      "result": [
+        "association:22",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    },
+    {
+      "backend": "Bun",
+      "family": 6,
+      "mode": "refused",
+      "seconds": 0.04259717185050249,
+      "request_hex": null,
+      "result": [
+        "socket:111",
+        "active"
+      ],
+      "audit": "AUDIT 0 0"
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/abort-outcome.bend": "d8a823b6e5b210b50f5ccc4e5fd7eda34f67818ecb7261416da481bb5430a687",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-datagram.bend": "07464d20e8bc12b0e8f6f7efeeffc35c76af31547e6d330d9aac2284fa410896",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/datagram-peer.bend": "85dd3fd3d6b1696685c425de655382da036f92d925e5f8faffe863ab422d9acc",
+    "packages/runtime/src/deadline.bend": "aeb4486c3c51ea4ed42e59cfd810ce4da214abf7d4ade39a87d8e3d13f296171",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/dns-edns.bend": "e0da21c269c95007c5d271305c219c0387d822623185772fdf2209834474fd56",
+    "packages/runtime/src/dns-message.bend": "a77aabec7636f895ce1a22a490e096185aec10aa64f0f7fd8bb90043997be7ff",
+    "packages/runtime/src/dns-name.bend": "3b02d238792c1904a8a3217e7d49908bb4f6482cf56483690e0d662ab1008cde",
+    "packages/runtime/src/dns-query.bend": "78b35ef45bd8667cd003629adaa1fbe261a8d41c4e588e8eddc1d86918164905",
+    "packages/runtime/src/dns-response.bend": "2d40b4c34e3c95850a68f4d55709bd7ac9f999f197bf34d55d360ccffe5deb61",
+    "packages/runtime/src/dns-tcp-frame.bend": "59c91601b376cab4b889a542ced398cd82439fd21b094febdb269b9eba800dae",
+    "packages/runtime/src/dns-udp-attempt-scope.bend": "4ab54deff52786c6281c04bf17fd334ac1227a678fbbdcc939818ee3533de897",
+    "packages/runtime/src/dns-udp-query.bend": "36380fb8d95f96e5d960a48952d16ca9d65844fe116cccf8c326cc11d8198a89",
+    "packages/runtime/src/dns-udp-timeout.bend": "631e15078cb1c2285d5f1bfc0e19513f86c065b9d41ad144ca5956ebeb125cb2",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/socket-endpoint.bend": "314453bd54749b14aac35e1787a28980a50df788b9c6eff2e616f653ec395c20",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/dns-udp-attempt-scope.bend": "8ddebf3692ef481d4ce391c1cf421c678d0a23da8968228c585d2ac0706e5d63",
+    "tests/dns-udp-query.bend": "ab3382d1e67e2f3e1fca2149a5b51622b483c8571df03c816d4377cdfd53a44f",
+    "tests/dns_udp_query_check.py": "24e787951ec3fcee3374aa31f84a2a9ec6368fd47e3a0075823d1ce37a366df9",
+    "patches/experimental/udp-bytes/README.md": "9f9cb71f7a8b36edece643b970939d26b15aea000f15d1897c84d50cd50a85ea",
+    "patches/experimental/udp-bytes/udp_bind_family.c": "5558307fa8ddc562873ac8051e9a632e17eb3805bfa91ce9e4e214829318de8f",
+    "patches/experimental/udp-bytes/udp_recv_bytes.js": "73f973d2fc965b49f3549b991efaa92867a9c771d3061063a5980ce2894f8705",
+    "patches/experimental/udp-bytes/udp_connect_peer.c": "365c80ff8cd05ce1b30330e1a5dbb020a4d8805d3d44d6a86976677873956845",
+    "patches/experimental/udp-bytes/udp_bind_family.js": "4089ca41cc59f51dcc7e3bcfffa446fb28a43943a7e0ffb556e36dbf9da5d560",
+    "patches/experimental/udp-bytes/udp_send_bytes.c": "02c493e61963e93ac0a4991cd889d9c9c3635905720fcdf2497a8c9222995f6e",
+    "patches/experimental/udp-bytes/udp_send_bytes.js": "1310de48811ee2f3f71fad8c4104560fabae45d5c4916cd6b289d850d6b7e0b0",
+    "patches/experimental/udp-bytes/base.bend": "d1e0eeb75e6f2ededae8154ab1738f65444caf07d5378ad15769963342fe27b6",
+    "patches/experimental/udp-bytes/udp_connect_peer.js": "6503919a4594a636a32be889635193c8c172e1b351d95bf510e2f626ea7e415e",
+    "patches/experimental/udp-bytes/udp_recv_bytes.c": "92e667a71dff3483dcf5c1852c659b019c9d73f187e7fcefef24a2c076853547"
+  },
+  "compiler_sha256": {
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-peer-candidate/main.ts",
+        "tests/dns-udp-query.bend",
+        "-o",
+        "build/dns-udp-query.c"
+      ],
+      "elapsed_seconds": 12.259988228790462,
+      "peak_sampled_group_rss_kib": 4826940,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-udp-peer-candidate/main.ts",
+        "tests/dns-udp-query.bend",
+        "-o",
+        "build/dns-udp-query.js"
+      ],
+      "elapsed_seconds": 1.5884788231924176,
+      "peak_sampled_group_rss_kib": 594500,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

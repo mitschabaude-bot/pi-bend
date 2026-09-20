@@ -62,3 +62,9 @@ def UDPWrite.cancel(handle: UDPWriteCancel) -> IO(Bool):
 def UDPWrite.release(write: UDPWrite) -> IO(Socket):
   import "./effs/udp_send_bytes.c"
   import "./effs/udp_send_bytes.js"
+
+# Associate an existing UDP socket with a numeric peer; return ownership on
+# success/error. No hostname lookup, handshake, socket duplication or closure.
+def UDP.connect_peer(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32) -> IO(Socket & Result<&1, &1, U32 & String, Unit>):
+  import "./effs/udp_connect_peer.c"
+  import "./effs/udp_connect_peer.js"
