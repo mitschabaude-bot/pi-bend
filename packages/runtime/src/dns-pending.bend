@@ -90,3 +90,14 @@ def receive(-Token: Data, pending: Pending<Token>, source: Response.Endpoint, de
   match wire:
     case +high <> +low <> rest: identified(Token, U32.is_le(high, 255) && U32.is_le(low, 255), pending, ((high * 256) + low : U32), source, destination, high <> low <> rest)
     case _: Received{pending, Ignored{MissingId{}}}
+
+# Connection-wide settlement returns every still-pending correlation exactly
+# once to the driver. Ordering is deliberately not a request-order guarantee.
+def values(-Token: Data, entries: List<&2, Sigma<&2, &2, String, _ => Entry<Token>>>, reversed: List<&2, Entry<Token>>) -> List<&2, Entry<Token>>:
+  match entries:
+    case Nil{}: List.reverse(&2, Entry<Token>, reversed)
+    case (_, entry) <> rest: values(Token, rest, entry <> reversed)
+
+def drain(-Token: Data, pending: Pending<Token>) -> List<&2, Entry<Token>>:
+  match pending:
+    case Pending{entries}: values(Token, Map.to_list(&2, Entry<Token>, entries), Nil{})
