@@ -1,4 +1,5 @@
 import Base
+import ./proofs/hosts-resolve.bend as HostsResolve
 import ./proofs/utf8-strict.bend as UTF8Strict
 import ./proofs/bounded-bytes.bend as BoundedBytes
 import ./proofs/hosts.bend as Hosts

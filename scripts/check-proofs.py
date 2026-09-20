@@ -91,6 +91,14 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('hosts-dispatch-ignores-source-error', 'packages/runtime/src/hosts-resolve.bend',
+         'case Fail{error}: SourceFailure{error}', 'case Fail{error}: Query{family, name}', 'laws/hosts-resolve.source_error_is_terminal'),
+        ('hosts-dispatch-queries-despite-local-result', 'packages/runtime/src/hosts-resolve.bend',
+         'case first <> rest: Local{first, rest}', 'case first <> rest: Query{family, name}', 'laws/hosts-resolve.eligible_rows_are_local'),
+        ('hosts-dispatch-erases-query-name', 'packages/runtime/src/hosts-resolve.bend',
+         'case Nil{}: Query{family, name}', 'case Nil{}: Query{family, ""}', 'laws/hosts-resolve.empty_database_queries_original'),
+        ('hosts-family-admits-wrong-family', 'packages/runtime/src/hosts-family.bend',
+         'case _ _: False{}', 'case _ _: True{}', 'laws/hosts-resolve.ipv4_excludes_ipv6'),
         ('strict-utf8-erases-first-error', 'packages/runtime/src/utf8-strict.bend',
          'case _ Fail{error}: Fail{error}', 'case _ Fail{error}: Fail{IncompleteSequence{0n}}', 'laws/utf8-strict.failure_retained'),
         ('strict-utf8-accepts-truncated-text', 'packages/runtime/src/utf8-strict.bend',
