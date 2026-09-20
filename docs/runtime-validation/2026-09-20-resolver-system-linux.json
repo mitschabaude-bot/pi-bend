@@ -1,0 +1,56 @@
+{
+  "scope": "Linux resolver open-error defaults, lazy hostname and strict failure boundaries.",
+  "reference": "https://raw.githubusercontent.com/bminor/glibc/glibc-2.39/resolv/res_init.c",
+  "checks": [
+    {
+      "backend": "native 1",
+      "cases": 903,
+      "fixture_owned_fds_after": 0
+    },
+    {
+      "backend": "native 4",
+      "cases": 903,
+      "fixture_owned_fds_after": 0
+    },
+    {
+      "backend": "Bun",
+      "cases": 903,
+      "fixture_owned_fds_after": null
+    }
+  ],
+  "sha256": {
+    "packages/runtime/src/resolver-system-linux.bend": "dc3d7fa7fe1d1e6581f6850642c0db35cb378734a00ef06ff6d8f5738d220759",
+    "tests/resolver-system-linux.bend": "615b742866fc303cbead87aae1dbda512c6a6e6513db4ae8b8026ddb91f0d024",
+    "tests/resolver_system_linux_check.py": "e5325612dba183fceb20d69c8b848fb8636e2d34bba8239f5f224f97a62376ad"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-hostname-candidate/main.ts",
+        "tests/resolver-system-linux.bend",
+        "-o",
+        "build/resolver-system-linux.c"
+      ],
+      "elapsed_seconds": 19.811942864209414,
+      "peak_sampled_group_rss_kib": 7403352,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-hostname-candidate/main.ts",
+        "tests/resolver-system-linux.bend",
+        "-o",
+        "build/resolver-system-linux.js"
+      ],
+      "elapsed_seconds": 2.1109358249232173,
+      "peak_sampled_group_rss_kib": 699600,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}
