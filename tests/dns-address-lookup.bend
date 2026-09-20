@@ -12,6 +12,7 @@ def outcome(value: Result<&2, &2, Lookup.Error<String>, Answer.Selection>) -> St
   match value:
     case Done{selection}: AnswerTest.show(Done{selection})
     case Fail{Lookup.InvalidReadSize{}}: "zero"
+    case Fail{Lookup.NoServers{}}: "no-servers"
     case Fail{Lookup.UnsupportedType{}}: "type"
     case Fail{Lookup.Exchange{error}}: QueryTest.outcome(Fail{error})
     case Fail{Lookup.Selection{error}}: AnswerTest.show(Fail{error})

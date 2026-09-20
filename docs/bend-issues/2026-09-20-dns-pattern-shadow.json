@@ -1,0 +1,15 @@
+{
+  "issue": "BEND-012",
+  "source": "tests/compiler-pattern-shadow.bend",
+  "source_sha256": "3ccf72b347c45199c40d9bc0aed4b9173d2e02d5bad3a5e54ec120b172b5788a",
+  "wrapper": "import Base\nimport ../tests/compiler-pattern-shadow.bend as Shadow\ndef main() -> IO(Unit): IO.print(U32.show(Shadow.number(Shadow.Sample{1})))\n",
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "Error:\n- expected : a pattern (a binder or a constructor)\n- observed : ../tests/compiler-pattern-shadow.number\nLocation:\n 9 |   match value:\n10>|     case Sample{number}: number\n11 | \n",
+  "compiler_sha256": {
+    "base.bend": "1401db4d6c225d62ee6990a2d1328206f9633479c3d19a659e0bd354fa81c587",
+    "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+  }
+}

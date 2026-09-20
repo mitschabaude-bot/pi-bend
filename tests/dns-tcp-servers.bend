@@ -39,12 +39,12 @@ def run(mode: String, servers: List<&2, Servers.Server>, kind: U32, pair: Deadli
 
 def args(values: List<String>) -> IO(Unit):
   match values:
-    case +mode <> family <> ports <> kind <> Nil{}:
+    case +mode <> family <> portText <> kind <> Nil{}:
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         QueryTest.prepare(String.eq(mode, "pre"), False{}, parent)
         scope : Deadline.Scope<String> <- Deadline.create(String, Bool.pick(U32, String.eq(mode, "deadline"), 1000, 5000), Abort.signal(String, parent))
-        run(mode, serverInput(family, ports), Scalar.decimal(kind, 0), Deadline.borrow(String, scope))
+        run(mode, serverInput(family, portText), Scalar.decimal(kind, 0), Deadline.borrow(String, scope))
         Abort.dispose(String, parent)
     case _: IO.die(Unit, 1, "expected mode family ports kind")
 

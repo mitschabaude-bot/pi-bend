@@ -77,7 +77,8 @@ cases += [
     dict(label='refused-absolute',mode='refused',name='a.',plan=[],dns=2,draws=1),
     dict(label='eof-final-answer',plan=[('a.x','eof'),('a','address')],answer='a'),
     dict(label='partial-frame-final-answer',plan=[('a.x','partial'),('a','address')],answer='a'),
-    dict(label='reset-final-answer',plan=[('a.x','reset'),('a','address')],answer='a'),
+    dict(label='reset-final-answer',plan=[('a.x','reset'),('a.x','reset'),('a','address')],ids=[0,0,65535],draws=2,answer='a'),
+    dict(label='reset-recovery-answer',plan=[('a.x','reset'),('a.x','address')],ids=[0,0],draws=1,answer='a.x'),
     dict(label='initial-eof-precedence',name='a.b',ndots=1,plan=[('a.b','eof'),('a.b.x',0),('a.b.y',3)],dns=2),
 ]
 rows=[]
@@ -94,7 +95,7 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                         for index,(owner,value) in enumerate(plan):
                             with listener.accept()[0] as peer:
                                 peer.settimeout(4)
-                                query=exact(peer,struct.unpack('!H',exact(peer,2))[0]);identifier=[0,65535,4660][min(index,2)]
+                                query=exact(peer,struct.unpack('!H',exact(peer,2))[0]);identifier=case.get('ids',[0,65535,4660])[min(index,2)]
                                 assert query==struct.pack('!6H',identifier,256,1,0,0,0)+wire(owner)+struct.pack('!HH',kind,1),(case,query)
                                 if value=='eof':continue
                                 if value=='partial':
