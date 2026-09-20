@@ -90,6 +90,16 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('udp-duration-can-be-zero', 'packages/runtime/src/dns-udp-timeout.bend',
+         'case Duration{additional}: Succ{additional}', 'case Duration{additional}: additional', 'laws/dns-udp-timeout.duration_positive'),
+        ('udp-zero-timeout-floor-is-two', 'packages/runtime/src/dns-udp-timeout.bend',
+         'case Zero{}: Duration{Zero{}}', 'case Zero{}: Duration{Succ{Zero{}}}', 'laws/dns-udp-timeout.zero_floor'),
+        ('udp-positive-timeout-inflated', 'packages/runtime/src/dns-udp-timeout.bend',
+         'case Succ{rest}: Duration{rest}', 'case Succ{rest}: Duration{Succ{rest}}', 'laws/dns-udp-timeout.positive_preserved'),
+        ('udp-first-timeout-discarded', 'packages/runtime/src/dns-udp-timeout.bend',
+         'case First{}: timeout', 'case First{}: 0', 'laws/dns-udp-timeout.first_server_undivided'),
+        ('udp-two-server-budget-halved', 'packages/runtime/src/dns-udp-timeout.bend',
+         'case SecondOfTwo{}: timeout', 'case SecondOfTwo{}: (timeout / 2 : U32)', 'proofs/dns-udp-timeout.two_checked'),
         ('udp-schedule-drops-later-rounds', 'packages/runtime/src/dns-udp-schedule.bend',
          'case Succ{later}: Cursor{later, servers, servers}',
          'case Succ{later}: Cursor{Zero{}, servers, servers}', 'laws/dns-udp-schedule.initial_sequence'),
