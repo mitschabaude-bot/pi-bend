@@ -1,0 +1,66 @@
+{
+  "results": {
+    "scope": "Pure address-answer selection against an independent record-set model.\n\nGenerated DNS packets include binary names, aliases, section separation and\nmalformed relevant RDATA. This is not a complete stub resolver or DNSSEC test.\n",
+    "results": [
+      {
+        "backend": "native 1",
+        "cases": 900
+      },
+      {
+        "backend": "native 4",
+        "cases": 900
+      },
+      {
+        "backend": "Bun",
+        "cases": 900
+      }
+    ],
+    "seed": 1034,
+    "sha256": {
+      "packages/runtime/src/dns-address-answer.bend": "173e52f9e1a312450f8167506de0147f0213e5b2f2ddf2933d56071f02a2f681",
+      "packages/runtime/test/dns-address-answer.bend": "4383f5c1b0d7ed13779b9be83328347809a83ee66a9ec2cecd39f7a72a439b02",
+      "tests/dns_address_answer_check.py": "d79efe2706c4ee3c78bf9e1fb3a41c54b634585ac34bd7ef774f788bef5129d3",
+      "build/dns-address-answer": "3859e492f1b15ae6663ab95e9c691ce3b09a03e935960e8766c6661738193aba",
+      "build/dns-address-answer.js": "7e4902503e512711692bfedd27f883bae3af6df81a74d1c36beebaf1e672c081"
+    }
+  },
+  "native_build": {
+    "command": [
+      "sh",
+      "scripts/build-pure.sh",
+      "packages/runtime/test/dns-address-answer.bend",
+      "build/dns-address-answer"
+    ],
+    "elapsed_seconds": 15.546256206929684,
+    "peak_sampled_group_rss_kib": 3793860,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "js_build": {
+    "command": [
+      "/home/agent/.bend/bin/bend",
+      "packages/runtime/test/dns-address-answer.bend",
+      "-o",
+      "build/dns-address-answer.js"
+    ],
+    "elapsed_seconds": 1.0529512483626604,
+    "peak_sampled_group_rss_kib": 313964,
+    "limit_gib": 8.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "references": [
+    "https://www.rfc-editor.org/rfc/rfc1034.html#section-3.6.2",
+    "https://www.rfc-editor.org/rfc/rfc1034.html#section-5.3.3",
+    "https://www.rfc-editor.org/rfc/rfc2181.txt"
+  ],
+  "limitations": [
+    "Input must already be a matched, complete response to an IN address query.",
+    "Only ordinary header RCODE is reported; extended EDNS errors, DNSSEC, cache trust and negative-cache interpretation remain outside this module.",
+    "CNAME target conflicts and coexistence with A/AAAA are rejected; this is not a complete validator of all CNAME/DNSSEC coexistence rules.",
+    "Address TTLs remain raw wire values, without normalization or cache expiration policy.",
+    "Empty address output, including after aliases, is not proof of a cacheable negative answer.",
+    "No live resolver orchestration or upstream suite status change."
+  ]
+}
