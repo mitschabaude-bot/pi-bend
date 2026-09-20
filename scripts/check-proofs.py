@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('dns-text-drops-dot', 'packages/runtime/src/dns-search-text.bend',
+         'case True{}: Succ{rest}', 'case True{}: rest', 'laws/dns-search-text.leading_dot_counted'),
+        ('dns-text-erases-parse-error', 'packages/runtime/src/dns-search-text.bend',
+         'case Fail{error}: Fail{error}', 'case Fail{error}: Fail{Presentation.RawNul{}}', 'laws/dns-search-text.invalid_input_is_terminal'),
+        ('dns-text-discards-absolute', 'packages/runtime/src/dns-search-text.bend',
+         'Input{name, U32.from_nat(dots(text)), absolute}', 'Input{name, U32.from_nat(dots(text)), False{}}', 'laws/dns-search-text.prepared_fields_retained'),
         ('hosts-dispatch-ignores-source-error', 'packages/runtime/src/hosts-resolve.bend',
          'case Fail{error}: SourceFailure{error}', 'case Fail{error}: Query{family, name}', 'laws/hosts-resolve.source_error_is_terminal'),
         ('hosts-dispatch-queries-despite-local-result', 'packages/runtime/src/hosts-resolve.bend',

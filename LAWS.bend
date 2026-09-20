@@ -1,4 +1,5 @@
 import Base
+import ./laws/dns-search-text.bend as DNSSearchText
 import ./laws/hosts-resolve.bend as HostsResolve
 import ./laws/utf8-strict.bend as UTF8Strict
 import ./laws/bounded-bytes.bend as BoundedBytes
