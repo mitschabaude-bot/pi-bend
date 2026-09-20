@@ -46,4 +46,4 @@ python3 tests/http_body_source_check.py
 python3 tests/http_exchange_sse_check.py --worktree "$PWD/build/http-resolved-clean"
 ```
 
-[Native OpenAI Responses-reader composition](openai-http-reader.md) now consumes this source. Assistant-message processing over this transport, provider policy, text/JSON body consumption, TLS, redirects, decompression, pooling and full native provider adoption remain pending. This is response ownership and acquired streaming atop the existing cleartext exchange, not completion of Fetch or the pi port.
+[Native OpenAI Responses-reader composition](openai-http-reader.md) now consumes this source. The canonical assistant processor is also connected through this owner. Provider policy, text/JSON body consumption, TLS, redirects, decompression, pooling and full native provider adoption remain pending. This is response ownership and acquired streaming atop the existing cleartext exchange, not completion of Fetch or the pi port.

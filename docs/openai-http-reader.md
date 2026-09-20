@@ -24,4 +24,16 @@ python3 tests/openai_http_errors_check.py --worktree "$PWD/build/http-resolved-c
 python3 tests/openai_http_reader_check.py --worktree "$PWD/build/http-resolved-clean"
 ```
 
-This evidence stops at the canonical typed Responses reader. Assistant-message processing over this native transport, provider status/retry/error-body policy, TLS, redirects, decompression, authentication integration and the full coding-agent/TUI port remain unfinished. No authenticated OpenAI-model or complete-provider claim follows from these loopback cases; upstream suite statuses are unchanged.
+Provider status/retry/error-body policy, TLS, redirects, decompression, authentication integration and the full coding-agent/TUI port remain unfinished. No authenticated OpenAI-model or complete-provider claim follows from these loopback cases; upstream suite statuses are unchanged.
+
+## Owned assistant-message processing
+
+`process` transfers the reader owner into the existing `processResponsesStream` implementation and disposes that owner when processing returns. `Processed` keeps the canonical `RunResult` (including partial output and its typed failure) alongside subsequent owner-disposal results. The sink, optional pricing callbacks, provider hooks and parent signal remain borrowed. The processor’s existing iterator-close behavior still preserves a primary failure over a simultaneous close failure; this wrapper does not claim to recover a cleanup error already discarded by that policy.
+
+The new integration fixture feeds real loopback HTTP bodies through socket ownership, HTTP framing, SSE, JSON, wire decoding and the canonical assistant processor. Its test-only oracle executes the actual pinned pi processor from `46c9de402`, taking immutable snapshots at emission as previously agreed. Assertions compare text-start/delta/end order, Unicode content, partial output after failures, final response ID, stop reason, token accounting and binary64 cost bits. Cases include fixed/chunked/EOF framing, incomplete and missing-terminal responses, sink/provider failures, malformed JSON/wire/API events, and truncation both before and after a completed terminal response. A completed provider response must not conceal a later transport failure.
+
+This addition is effectful composition, with no new pure algorithm or law. All 211 archived proof-input hashes still match the existing 227-law gate; no concrete integration case is presented as a theorem. All 90 [integration executions](runtime-validation/2026-09-20-openai-http-process.json) pass: fifteen cases on native one/four threads and Bun, each with production and audited programs. The record captures finite execution and resource audits. Native audits check channels, parked IO and sockets (descriptors 0–4095); Bun audits check explicit channels and live/waiting IO. Peers must observe closure, which can be TCP reset when the failing consumer leaves unread bytes, or EOF otherwise.
+
+```sh
+python3 tests/openai_http_process_check.py --worktree "$PWD/build/http-resolved-clean"
+```

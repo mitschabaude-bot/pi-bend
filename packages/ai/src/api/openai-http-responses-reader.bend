@@ -8,6 +8,10 @@ import ../../../runtime/src/http-socket-exchange.bend as Exchange
 import ../../../runtime/src/http-response.bend as Response
 import ../../../runtime/src/http-body-source.bend as Source
 import ../../../runtime/src/sse-reader.bend as Bytes
+import ./openai-responses-stream-pricing.bend as Pricing
+import ../types.bend as Types
+import ../../../runtime/src/schema-value.bend as Value
+import ../../../runtime/src/callback.bend as Callback
 
 # Hooks are borrowed from the provider. This owner retires the provider reader
 # before its HTTP byte-source callbacks, including an entirely unread body.
@@ -53,3 +57,20 @@ def dispose(-Reason: Data, -E: Data, owner: Owner<Reason, E>) -> IO(Result<&2, &
         first : Result<&2, &2, Reader.Error<Errors.TransportError(Reason)>, Unit> <- Reader.dispose(Errors.TransportError(Reason), E, reader)
         second : Result<&2, &2, SSE.ReadError<Errors.TransportError(Reason)>, Unit> <- Source.dispose(Exchange.Exchange<Reason>, SSE.ReadError<Errors.TransportError(Reason)>, source)
         return outcome(Reason, first, second)
+
+type Processed<-Reason: Data, -G: Data, -E: Data> is Data:
+  Processed{result: Stream.RunResult<G, E>, disposal: Result<&2, &2, CloseError<Reason>, Unit>}
+
+def processBorrowed(-Reason: Data, -G: Data, -E: Data, -J: Data, output: Types.AssistantMessage<Value.Value, G>, sink: Callback.Callback<Types.AssistantMessageEvent<Value.Value, G>, Result<&2, &2, E, Unit>>, model: Types.Model<J>, options: Pricing.OpenAIResponsesStreamOptions<E>, pair: Owner<Reason, E> & Stream.Reader<E>) -> IO(Processed<Reason, G, E>):
+  match pair:
+    case (owner, reader):
+      do IO<Processed<Reason, G, E>>:
+        result : Stream.RunResult<G, E> <- Stream.processResponsesStream(G, E, J, reader, output, sink, model, options)
+        cleanup : Result<&2, &2, CloseError<Reason>, Unit> <- dispose(Reason, E, owner)
+        return Processed{result, cleanup}
+
+# Own the entire processing lifetime. Keep the processor's partial output and
+# primary result even if subsequent owner disposal fails. Sink/pricing/abort
+# callbacks and the parent signal remain borrowed until this operation returns.
+def process(-Reason: Data, -G: Data, -E: Data, -J: Data, owner: Owner<Reason, E>, output: Types.AssistantMessage<Value.Value, G>, sink: Callback.Callback<Types.AssistantMessageEvent<Value.Value, G>, Result<&2, &2, E, Unit>>, model: Types.Model<J>, options: Pricing.OpenAIResponsesStreamOptions<E>) -> IO(Processed<Reason, G, E>):
+  processBorrowed(Reason, G, E, J, output, sink, model, options, borrow(Reason, E, owner))
