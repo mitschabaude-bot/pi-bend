@@ -69,3 +69,5 @@ def Laws.initial_count(Server, count, servers):
       %append_length(Server, servers, Laws.rounds(Server, rest, servers)) : {_ == Nat.add(List.length(&2, Server, servers), Nat.mul(rest, List.length(&2, Server, servers))) : Nat}
       %rounds_length(Server, rest, servers) : {Nat.add(List.length(&2, Server, servers), _) == Nat.add(List.length(&2, Server, servers), Nat.mul(rest, List.length(&2, Server, servers))) : Nat}
       {==}
+
+def Laws.fallback_current_pass(Server, selected, later, original, pending): {==}

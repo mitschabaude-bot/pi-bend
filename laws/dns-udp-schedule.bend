@@ -52,3 +52,13 @@ law initial_count:
   for +count: Nat
   for +servers: List<&2, Server>
   {List.length(&2, Server, remaining(Server, Schedule.start(Server, count, servers))) == Nat.mul(count, List.length(&2, Server, servers)) : Nat}
+
+# Switching transports preserves the exact occurrence and remaining suffix,
+# independently of later retry rounds or earlier duplicate server values.
+law fallback_current_pass:
+  for -Server: Data
+  for +selected: Server
+  for later: Nat
+  for original: List<&2, Server>
+  for +pending: List<&2, Server>
+  {Schedule.fallback(Server, selected, Schedule.Cursor{later, original, pending}) == selected <> pending : List<&2, Server>}

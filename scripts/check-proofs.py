@@ -90,6 +90,8 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('udp-fallback-restarts-server-list', 'packages/runtime/src/dns-udp-schedule.bend',
+         'case Cursor{_, _, remaining}: selected <> remaining', 'case Cursor{_, original, _}: selected <> original', 'laws/dns-udp-schedule.fallback_current_pass'),
         ('udp-policy-accepts-server-failure', 'packages/runtime/src/dns-udp-policy.bend',
          'case FailureCode{}: Retry{ServerFailure{}}', 'case FailureCode{}: Accept{}', 'laws/dns-udp-policy.server_failure_retries'),
         ('udp-policy-accepts-unhelpful-empty', 'packages/runtime/src/dns-udp-policy.bend',
