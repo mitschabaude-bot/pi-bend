@@ -91,6 +91,12 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('http-response-metadata-erases-fields', 'packages/runtime/src/http-response-metadata.bend',
+         'appendFields(fields, Headers.new()), exposeBody', 'Headers.new(), exposeBody', 'laws/http-response-metadata.received_headers_retained'),
+        ('http-response-metadata-accepts-300', 'packages/runtime/src/http-response-metadata.bend',
+         'U32.is_lt(code, 300)', 'U32.is_le(code, 300)', 'laws/http-response-metadata.success_classification'),
+        ('http-response-metadata-erases-exposure', 'packages/runtime/src/http-response-metadata.bend',
+         'case Metadata{_, _, expose}: expose', 'case Metadata{_, _, expose}: False{}', 'laws/http-response-metadata.exposure_retained'),
         ('http-exchange-plan-conflates-tls', 'packages/runtime/src/http-exchange-plan.bend',
          'case URL.Endpoint{URL.TLS{}, _, _, _, _} _: Rejected{TLSRequired{}}',
          'case URL.Endpoint{URL.TLS{}, _, _, _, _} _: Rejected{InvalidReadSize{}}', 'laws/http-exchange-plan.tls_cannot_start_cleartext'),
