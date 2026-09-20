@@ -1,4 +1,6 @@
 import Base
+import ./resolver-request.bend as Request
+import ./dns-query.bend as Query
 import ./resolver-options.bend as Options
 import ./resolver-settings.bend as Settings
 import ./resolver-domains.bend as Domains
@@ -38,3 +40,19 @@ def fromSettingsStrict(settings: Settings.Settings) -> Result<&2, &2, List<&2, O
 def start(configuration: Configuration, base: Name.Name, dots: U32, absolute: Bool) -> Search.Cursor:
   match configuration:
     case Configuration{options, Domains.Report{domains, _}}: Search.startDomains(base, dots, absolute, domains, policy(options))
+
+# Both projections come from the same immutable, already-validated settings.
+# Retry/rotation/transport settings remain available in Configuration.options.
+type Plan is Data:
+  Plan{request: Query.Options, cursor: Search.Cursor}
+
+def preparedRequest(prepared: Request.Prepared) -> Query.Options:
+  match prepared:
+    case Request.Prepared{_, request}: request
+
+def requestOptions(configuration: Configuration) -> Query.Options:
+  match configuration:
+    case Configuration{options, _}: preparedRequest(Request.prepare(options))
+
+def plan(+configuration: Configuration, base: Name.Name, dots: U32, absolute: Bool) -> Plan:
+  Plan{requestOptions(configuration), start(configuration, base, dots, absolute)}

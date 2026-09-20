@@ -1,0 +1,60 @@
+{
+  "scope": "Single-server DNS search over real loopback TCP exchanges.\n\nChecks DNS RCODE classification, selected-empty replies, search precedence,\nalias follow-ups, refusal, EOF/reset/partial framing, shared deadline and\nterminal source/validation/abort errors.\nEach scenario runs through both the default wrapper and explicit request options.\nThis is not a server retry, OS configuration or full resolver test.\n",
+  "configured": false,
+  "sha256": {
+    "packages/runtime/src/dns-edns-response.bend": "2ca8eeb0f26dbdf461be033330a0aea150eb7e834128a07a45b6e995f6dd3ef1",
+    "packages/runtime/src/dns-address-answer.bend": "ad479558794b0b68af71af7125e7730cb2f14d3786d98baded446c57639db3f9",
+    "packages/runtime/src/dns-address-search.bend": "70850746a8a2545526540d699d6d3f8d1ceaf53bc02b6ed32cfc1b5591c5e70e",
+    "packages/runtime/src/dns-address-lookup.bend": "348db19edda46375b776444cf4d705e0e3b2a212c1dc1dd4983bb9b4c85e9035",
+    "packages/runtime/src/dns-search-run.bend": "879c0bdd352813b8da8c5e97142c4ff44cdfadc3e105ef7e4ab67a31ec247f00",
+    "packages/runtime/src/dns-search-response.bend": "a024d01e28fbfb4195cafa80d680f0528779252e5e73ed7e45ed18f8326214fb",
+    "tests/dns-address-search.bend": "77c0344211ec0e50d9faecd6df6cba2b256cb157f5eda6ee7564b3589c266f90",
+    "tests/dns-lookup-options.bend": "22241ad0ba8d0ad1f58f622d9f75851ed232442dbb4e9af7b8090d38eecf1bad",
+    "packages/runtime/src/resolver-search.bend": "a5a61a7d269df145dc337b8ff769a7a93a83d8d46a450e1a0ec8ab0e87b8b2a5",
+    "packages/runtime/src/resolver-request.bend": "ac8b9b2e15af84f2e5098ef0fd2c6b70eb69e2880960b78ca19f4af095a8ab48",
+    "tests/dns_address_search_check.py": "21b16121ef5279e50d2b2debc6f9713da560e0291e74a379412a8a0842d53675",
+    "build/dns-address-search": "e9494bd3478594ea2bb2cd2dcc1562cbebb71613910c97d9b21ca9ac31ef550d",
+    "build/dns-address-search.js": "d29c26fb4a60b860e4d281470a52ad3d5a373f180e6b9875eabbaea9d88fb895"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/edns-answer-teles/bend2/main.ts",
+        "tests/dns-address-search.bend",
+        "-o",
+        "build/dns-address-search.c"
+      ],
+      "elapsed_seconds": 44.48091529216617,
+      "peak_sampled_group_rss_kib": 2958168,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "/home/agent/code/pi-bend/build/bend-profiles/edns-answer-teles/bend2/main.ts",
+        "tests/dns-address-search.bend",
+        "-o",
+        "build/dns-address-search.js"
+      ],
+      "elapsed_seconds": 3.7133850287646055,
+      "peak_sampled_group_rss_kib": 1400520,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compiler_sha256": {
+    "base.bend": "ba9ec8ed9cb648dd45025ea4439e882f1541f754ed3366f2b205977e99367e53",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715"
+  },
+  "passed_cases_by_backend": {
+    "native 1": 368,
+    "native 4": 368,
+    "Bun": 368
+  }
+}

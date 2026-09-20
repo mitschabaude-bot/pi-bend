@@ -90,6 +90,11 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('resolver-plan-discards-request-policy', 'packages/runtime/src/resolver-search.bend',
+         'Plan{requestOptions(configuration), start(', 'Plan{Query.defaults(), start(', 'laws/resolver-search.preserves_request_policy'),
+        ('resolver-plan-discards-dot-count', 'packages/runtime/src/resolver-search.bend',
+         'Plan{requestOptions(configuration), start(configuration, base, dots, absolute)}',
+         'Plan{requestOptions(configuration), start(configuration, base, 0, absolute)}', 'laws/resolver-search.preserves_search_policy'),
         ('resolver-request-discards-settings', 'packages/runtime/src/resolver-request.bend',
          'Prepared{options, selected(', 'Prepared{Resolver.defaults(), selected(', 'laws/resolver-request.preserves_settings'),
         ('resolver-request-accepts-diagnostics', 'packages/runtime/src/resolver-request.bend',

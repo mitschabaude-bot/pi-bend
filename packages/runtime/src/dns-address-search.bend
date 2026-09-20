@@ -1,4 +1,6 @@
 import Base
+import ./resolver-search.bend as Configuration
+import ./dns-name.bend as Name
 import ./abort.bend as Abort
 import ./deadline.bend as Deadline
 import ./abortable-connect.bend as Connect
@@ -115,3 +117,12 @@ def searchWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Er
 
 def searchRandom(~Reason: Data, address: Connect.Address, port: U32, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Search.Cursor) -> IO(Report<Reason>):
   searchWith(~Unit, ~Id.random, ~Reason, Unit{}, address, port, milliseconds, parent, kind, maximum, cursor)
+
+# Resolved server ownership and the total deadline remain explicit. This layer
+# consumes search/request policy, not timeout/attempt scheduling or reload.
+def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, plan: Configuration.Plan) -> IO(Report<Reason>):
+  match plan:
+    case Configuration.Plan{options, cursor}: searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, options, kind, maximum, cursor)
+
+def searchConfiguredWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.Error, U32>), ~Reason: Data, environment: Environment, source: Selector.Source<Servers.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, configuration: Configuration.Configuration, name: Name.Name, dots: U32, absolute: Bool) -> IO(Report<Reason>):
+  planned(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, kind, maximum, Configuration.plan(configuration, name, dots, absolute))

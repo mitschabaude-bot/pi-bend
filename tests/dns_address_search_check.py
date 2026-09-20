@@ -21,12 +21,14 @@ ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('candidate',type=Path)
 p.add_argument('--no-build',action='store_true')
+p.add_argument('--configured',action='store_true',help='Parse resolver settings and use the configured search entry point')
 p.add_argument('--build-limit-gib',type=float,default=16)
 a=p.parse_args();candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
+fixture='dns-configured-search' if a.configured else 'dns-address-search'
 if not a.no_build:
     for suffix in ['c','js']:
-        subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',str(a.build_limit_gib),'--stats',f'build/dns-address-search-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-address-search.bend','-o',f'build/dns-address-search.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-address-search.c','-lpthread','-lm','-o','build/dns-address-search'],cwd=ROOT,check=True)
+        subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',str(a.build_limit_gib),'--stats',f'build/{fixture}-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),f'tests/{fixture}.bend','-o',f'build/{fixture}.{suffix}'],cwd=ROOT,check=True)
+subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{fixture}.c','-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
 
 def wire(text):
     return b''.join(bytes([len(label)])+label.encode() for label in text.rstrip('.').split('.'))+b'\0'
@@ -94,9 +96,14 @@ for code in [16,18,19,4095]:
     cases.append(dict(label='extended-'+str(code),plan=[('a.x',dict(code=code)),('a','address')],answer='a'))
 cases.append(dict(label='extended-success',plan=[('a.x',dict(code=0))],answer='a.x'))
 cases.append(dict(label='malformed-opt',plan=[('a.x',dict(code=0,data=[0,1,0,1]))],halt='extension'))
+if a.configured:
+    cases += [
+        dict(label='no-tld-suppresses-final',extra='no-tld-query',plan=[('a.x',3),('a.y',3)],dns=1),
+        dict(label='no-tld-keeps-absolute',extra='no-tld-query',name='a.',plan=[('a','address')],answer='a'),
+    ]
 cases=[dict(case,edns=edns) for case in cases for edns in [False,True]]
 rows=[]
-for backend,command in [('native 1',['build/dns-address-search','--threads','1']),('native 4',['build/dns-address-search','--threads','4']),('Bun',[str(bun),'build/dns-address-search.js'])]:
+for backend,command in [('native 1',[f'build/{fixture}','--threads','1']),('native 4',[f'build/{fixture}','--threads','4']),('Bun',[str(bun),f'build/{fixture}.js'])]:
     for number,family,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
         for kind in [1,28]:
             for case in cases:
@@ -110,7 +117,7 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                             with listener.accept()[0] as peer:
                                 peer.settimeout(4)
                                 query=exact(peer,struct.unpack('!H',exact(peer,2))[0]);identifier=case.get('ids',[0,65535,4660])[min(index,2)]
-                                extension=(b'\0'+struct.pack('!HHIH',41,1232,32768,10)+bytes.fromhex('fde9000200fffde90000')) if case['edns'] else b''
+                                extension=(b'\0'+(struct.pack('!HHIH',41,1200,0,0) if a.configured else struct.pack('!HHIH',41,1232,32768,10)+bytes.fromhex('fde9000200fffde90000'))) if case['edns'] else b''
                                 expected=struct.pack('!6H',identifier,288 if case['edns'] else 256,1,0,0,int(case['edns']))+wire(owner)+struct.pack('!HH',kind,1)+extension
                                 assert query==expected,(case,query,expected)
                                 if value=='eof':continue
@@ -125,7 +132,7 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                                     peer.sendall(reply(identifier,owner,kind,value))
                                 assert peer.recv(1)==b'','exchange not closed'
                     future=pool.submit(serve) if plan else None
-                    run=subprocess.run([*command,'edns' if case['edns'] else 'plain',mode,str(number),str(listener.getsockname()[1]),str(15 if mode=='type' else kind),name,str(name.count('.')),str(int(name.endswith('.'))),str(case.get('ndots',2)),case.get('domains','x|y')],cwd=ROOT,capture_output=True,text=True,timeout=7)
+                    run=subprocess.run([*command,'edns' if case['edns'] else 'plain',mode,str(number),str(listener.getsockname()[1]),str(15 if mode=='type' else kind),name,str(name.count('.')),str(int(name.endswith('.'))),str(case.get('ndots',2)),case.get('domains','x|y'),*([case.get('extra','')] if a.configured else [])],cwd=ROOT,capture_output=True,text=True,timeout=7)
                     if future:future.result(timeout=5)
                     if mode!='refused':assert not select.select([listener],[],[],0)[0],('unexpected candidate',case,run)
                 if 'dns' in case:want=['dns:'+str(case['dns'])]
@@ -135,6 +142,6 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,output=want))
     print(f'{backend}: {len(cases)*4} live search cases PASS',flush=True)
-paths=['packages/runtime/src/dns-edns-response.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend','tests/dns-address-search.bend','tests/dns-lookup-options.bend','tests/dns_address_search_check.py','build/dns-address-search','build/dns-address-search.js']
-r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-address-search-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
-(ROOT/'build/dns-address-search-result.json').write_text(json.dumps(r,indent=2)+'\n')
+paths=['packages/runtime/src/dns-edns-response.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend',f'tests/{fixture}.bend','tests/dns-lookup-options.bend','packages/runtime/src/resolver-search.bend','packages/runtime/src/resolver-request.bend','tests/dns_address_search_check.py',f'build/{fixture}',f'build/{fixture}.js']
+r=dict(scope=__doc__,configured=a.configured,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/{fixture}-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
+(ROOT/f'build/{fixture}-result.json').write_text(json.dumps(r,indent=2)+'\n')
