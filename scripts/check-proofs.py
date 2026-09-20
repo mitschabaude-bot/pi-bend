@@ -95,6 +95,10 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('http-abort-classification-hides-combined', 'packages/runtime/src/http-abort-classification.bend',
+         'case Progress.FailureWithCleanup{_, _}: False{}', 'case Progress.FailureWithCleanup{_, _}: True{}', 'laws/http-abort-classification.combined_failures_are_not_cancellation'),
+        ('http-abort-classification-ignores-transport', 'packages/runtime/src/http-abort-classification.bend',
+         'case Progress.TransportFailure{cause}: classify(cause)', 'case Progress.TransportFailure{cause}: False{}', 'laws/http-abort-classification.lone_transport_uses_classifier'),
         ('http-body-source-erases-bytes', 'packages/runtime/src/http-body-source.bend',
          'Done{Some{SSE.Bytes{bytes}}}', 'Done{Some{SSE.Bytes{Nil{}}}}', 'laws/http-body-source.bytes_are_not_decoded_or_changed'),
         ('http-body-source-eof-becomes-chunk', 'packages/runtime/src/http-body-source.bend',

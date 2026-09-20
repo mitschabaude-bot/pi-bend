@@ -1,4 +1,5 @@
 import Base
+import ./laws/http-abort-classification.bend as HTTPAbortClassification
 import ./laws/http-body-source.bend as HTTPBodySource
 import ./laws/http-response-progress.bend as HTTPResponseProgress
 import ./laws/http-response-metadata.bend as HTTPResponseMetadata
