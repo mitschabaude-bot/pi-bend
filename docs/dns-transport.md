@@ -1,6 +1,6 @@
 # Resolver transport work
 
-The reusable resolver implemented so far is explicitly TCP. The OS loader produces settings and diagnostics; it does not yet select UDP or provide complete system hostname resolution. Hosts files, address-family ordering, UDP exchanges, EDNS fallback and final configuration acceptance remain required work.
+The system configuration loader now prepares the native UDP/TCP resolver, including timeout budgets, retry counts, transport selection, request options and persistent rotation. Explicit TCP APIs remain available. This is not complete system hostname resolution: hosts-file integration, address-family orchestration and remaining related option semantics, reload integration and adoption of the isolated runtime/compiler candidates remain unfinished. The sections below record the implementation milestones; their earlier pending-work notes describe their state at that milestone.
 
 ## Scheduling boundary
 
@@ -8,7 +8,7 @@ The pinned [glibc 2.39 transport implementation](https://raw.githubusercontent.c
 
 Our explicit total deadline remains a caller limit spanning TCP candidates, aliases, server failover and the permitted reset recovery. Keeping that deadline also avoids inheriting the reference TCP path's blocking-wait behavior. Parsed timeout/attempt values remain in the retained configuration for the UDP implementation.
 
-## Next implementation
+## Original UDP implementation boundary
 
 The original Bend UDP effects use string payloads and IPv4 socket addresses, without a receive truncation indicator. The isolated UDP candidate now supplies binary payloads, IPv4 and IPv6 endpoints, and explicit detection of truncated datagrams. Complete correctness, resource and relevant performance checks before adoption. Keep DNS parsing, query matching, retry decisions, EDNS policy and search behavior in pure Bend.
 
@@ -125,3 +125,9 @@ The new generic laws prove immediate termination of the pure received-outcome tr
 Replacement constructs the next owner first. If seeding fails, it returns the typed error and still-usable previous owner, including its selector position and configuration. On success it closes the previous selector after construction. All borrowed lookups must settle before replacement or close; snapshots do not make use-after-close valid. Explicit TCP ownership remains available separately.
 
 Generic laws specify complete configuration assembly, transport-error preservation and common search/transport settings for arbitrary server types and values. They do not establish IO lifetime or randomness. Live owner/search and replacement fixtures check those integrations. System configuration loading still produces the explicit TCP configuration and remains the next migration boundary; this owner is not yet selected by the default system loader.
+
+## System configuration to native owner
+
+`resolver-system-config.loadWith` now returns `resolver-configuration.Config<Endpoint>` in `Prepared.resolver`, ready for `dns-resolver.create`/`createWith`. It converts resolved server entries without dropping numeric addresses, ports, IPv6 scope IDs, duplicate occurrences or configured order. Strict option acceptance precedes transport-plan preparation. A plan error returns `InvalidTransport` with the complete source report; option and IO loading errors retain their existing typed forms. Successful preparation retains the source report and search configuration alongside the native settings and allocates no owner until explicitly requested.
+
+The transport preparation's one-to-three-server boundary now applies to system configuration: more than three entries are rejected rather than silently truncated. Missing/unreadable configuration defaults and source diagnostics retain their established policy. The loader fixture checks actual temporary-file/environment/interface handling, one/two/three-server timing, retry and feature retention, four-server rejection, source diagnostics and creation/closure of an owner for accepted results. It does not send DNS packets; the preceding owner/search suite supplies network evidence. The prototype CLI and HTTP hostname-resolution path have not been migrated by this change.

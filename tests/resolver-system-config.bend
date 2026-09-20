@@ -1,6 +1,15 @@
 import Base
+import ../packages/runtime/src/dns-resolver.bend as Owner
+import ../packages/runtime/src/random-index.bend as Index
 import ../packages/runtime/src/resolver-system-config.bend as System
-import ../packages/runtime/src/dns-tcp-resolver.bend as Resolver
+import ../packages/runtime/src/resolver-configuration.bend as Resolver
+import ../packages/runtime/src/resolver-transport.bend as Transport
+import ../packages/runtime/src/resolver-options.bend as Options
+import ../packages/runtime/src/resolver-search.bend as Configuration
+import ../packages/runtime/src/dns-transport.bend as Network
+import ../packages/runtime/src/dns-udp-plan.bend as Plan
+import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/socket-endpoint.bend as Endpoint
 import ../packages/runtime/src/dns-search.bend as Search
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./resolver-system-servers.bend as SourceTest
@@ -10,16 +19,57 @@ import ./resolver-load.bend as LoadTest
 import ./resolver-options.bend as OptionsTest
 import ./resolver-request.bend as RequestTest
 
-def config(value: Resolver.Config) -> IO(Unit):
+def limits(policy: Search.Policy, rotate: Bool, milliseconds: U32, maximum: U32) -> IO(Unit):
+  match policy:
+    case Search.Policy{ndots, defaults, search, noTld}: IO.print("config:" ++ U32.show(ndots) ++ OptionsTest.bit(defaults) ++ OptionsTest.bit(search) ++ OptionsTest.bit(noTld) ++ OptionsTest.bit(rotate) ++ ":" ++ U32.show(milliseconds) ++ ":" ++ U32.show(maximum))
+
+def budget(entries: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> String:
+  match entries:
+    case Nil{}: ""
+    case Plan.Attempt{_, _, duration} <> rest: U32.show(U32.from_nat(Timeout.seconds(duration))) ++ "," ++ budget(rest)
+
+def transport(options: Options.Options, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
+  match options:
+    case Options.Options{ndots, +timeout, +attempts, +features}: IO.print("transport:" ++ U32.show(timeout) ++ ":" ++ U32.show(attempts) ++ ":" ++ budget(servers) ++ ":" ++ OptionsTest.flags(OptionsTest.features(), Options.Options{ndots, timeout, attempts, features}, ""))
+
+def config(value: Resolver.Config<Endpoint.Endpoint>) -> IO(Unit):
   match value:
-    case Resolver.Config{servers, _, Search.Policy{ndots, defaults, search, noTld}, request, milliseconds, maximum, rotate}:
+    case Resolver.Config{Transport.Prepared{+options, +servers}, domains, milliseconds, maximum}:
       do IO<Unit>:
-        IO.print("config:" ++ U32.show(ndots) ++ OptionsTest.bit(defaults) ++ OptionsTest.bit(search) ++ OptionsTest.bit(noTld) ++ OptionsTest.bit(rotate) ++ ":" ++ U32.show(milliseconds) ++ ":" ++ U32.show(maximum))
-        IO.print(RequestTest.query(request))
-        ServersTest.servers(servers)
+        limits(Configuration.policy(options), Options.enabled(Options.Rotate{}, options), milliseconds, maximum)
+        IO.print(RequestTest.query(Configuration.requestOptions(Configuration.Configuration{options, domains})))
+        ServersTest.servers(Network.entries(servers))
+        transport(options, servers)
+
+def invalid(error: Plan.Error) -> String:
+  match error:
+    case Plan.NoServers{}: "no-servers"
+    case Plan.TooManyServers{}: "too-many"
+    case Plan.InvalidTimeout{seconds}: "timeout:" ++ U32.show(seconds)
+
+def seed(unused: Unit) -> IO(Result<&2, &2, Index.Error, U32>):
+  IO.pure(Result<&2, &2, Index.Error, U32>, Done{0})
+
+def created(value: Result<&2, &1, Index.Error, Owner.Owner>) -> IO(Unit):
+  match value:
+    case Fail{_}: IO.die(Unit, 1, "owner creation failed")
+    case Done{owner}:
+      do IO<Unit>:
+        Owner.close(owner)
+        IO.print("owner:closed")
+
+def initialize(+value: Resolver.Config<Endpoint.Endpoint>) -> IO(Unit):
+  do IO<Unit>:
+    config(value)
+    owner : Result<&2, &1, Index.Error, Owner.Owner> <- Owner.createWith(~Unit, ~seed, Unit{}, value)
+    created(owner)
 
 def report(value: Result<&2, &2, System.Error<String>, System.Prepared>) -> IO(Unit):
   match value:
+    case Fail{System.InvalidTransport{source, error}}:
+      do IO<Unit>:
+        SourceTest.report(Done{source})
+        IO.print("transport-rejected:" ++ invalid(error))
     case Fail{System.Loading{error}}: LoadTest.report(Fail{error})
     case Fail{System.InvalidOptions{source, errors}}:
       do IO<Unit>:
@@ -29,7 +79,7 @@ def report(value: Result<&2, &2, System.Error<String>, System.Prepared>) -> IO(U
     case Done{System.Prepared{source, _, resolver}}:
       do IO<Unit>:
         SourceTest.report(Done{source})
-        config(resolver)
+        initialize(resolver)
 
 def args(values: List<String>) -> IO(Unit):
   match values:
