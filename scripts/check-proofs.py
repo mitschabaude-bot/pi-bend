@@ -73,6 +73,9 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('replacement-duplicates-old-entry', 'packages/runtime/src/record.bend',
+         'String.eq(key, name), Property{key, value} <> rest',
+         'String.eq(key, name), Property{key, value} <> (Property{name, old} <> rest)', 'proofs/record.set_properties_lookup'),
         ('insertion-drops-new-key', 'packages/runtime/src/record.bend',
          'case Nil{}: Property{key, value} <> Nil{}',
          'case Nil{}: Nil{}', 'proofs/record.set_properties_lookup'),

@@ -34,3 +34,19 @@ law lookup_after_set:
   for +key: String
   for +value: A
   {R.get(A, R.set(A, record, key, value), key) == Some{value} : Maybe<&2, A>}
+
+# Two writes have exactly the same result as the final write alone.
+law set_overwrite:
+  for -A: Data
+  for +record: R.Record<A>
+  for +key: String
+  for first: A
+  for +last: A
+  {R.set(A, R.set(A, record, key, first), key, last) == R.set(A, record, key, last) : R.Record<A>}
+
+law remove_after_set:
+  for -A: Data
+  for +record: R.Record<A>
+  for +key: String
+  for value: A
+  {R.remove(A, R.set(A, record, key, value), key) == R.remove(A, record, key) : R.Record<A>}

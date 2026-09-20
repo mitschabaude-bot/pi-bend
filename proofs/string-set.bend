@@ -21,3 +21,13 @@ def Laws.insert_membership(values, value):
   match values:
     case Set.Set{entries}:
       Equal.cong(Maybe<&2, Unit>, Bool, result => Bool.not(Maybe.is_none(&2, Unit, result)), R.get(Unit, R.set(Unit, entries, value, Unit{}), value), Some{Unit{}}, RecordLaws.lookup_after_set(Unit, entries, value, Unit{}))
+
+def Laws.insert_idempotent(values, value):
+  match values:
+    case Set.Set{entries}:
+      Equal.cong(R.Record<Unit>, Set.Set, record => Set.Set{record}, R.set(Unit, R.set(Unit, entries, value, Unit{}), value, Unit{}), R.set(Unit, entries, value, Unit{}), RecordLaws.set_overwrite(Unit, entries, value, Unit{}, Unit{}))
+
+def Laws.remove_after_insert(values, value):
+  match values:
+    case Set.Set{entries}:
+      Equal.cong(R.Record<Unit>, Set.Set, record => Set.Set{record}, R.remove(Unit, R.set(Unit, entries, value, Unit{}), value), R.remove(Unit, entries, value), RecordLaws.remove_after_set(Unit, entries, value, Unit{}))

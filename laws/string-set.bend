@@ -19,3 +19,13 @@ law insert_membership:
   for values: Set.Set
   for +value: String
   {Set.contains(Set.insert(values, value), value) == True{} : Bool}
+
+law insert_idempotent:
+  for +values: Set.Set
+  for +value: String
+  {Set.insert(Set.insert(values, value), value) == Set.insert(values, value) : Set.Set}
+
+law remove_after_insert:
+  for +values: Set.Set
+  for +value: String
+  {Set.remove(Set.insert(values, value), value) == Set.remove(values, value) : Set.Set}
