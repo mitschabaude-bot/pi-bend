@@ -1,4 +1,5 @@
 import Base
+import ./laws/agent-events.bend as AgentEvents
 import ./laws/agent-owner.bend as AgentOwner
 import ./laws/sse-decoder.bend as SSEDecoder
 import ./laws/line-decoder.bend as LineDecoder

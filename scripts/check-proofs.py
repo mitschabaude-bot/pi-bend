@@ -90,6 +90,18 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('message-start-discards-history', 'packages/agent/src/agent-state.bend',
+         'T.MessageStart{message}: T.AgentState{model, thinking, tools, messages, streaming, Some{message}, pending, error}',
+         'T.MessageStart{message}: T.AgentState{model, thinking, tools, Nil{}, streaming, Some{message}, pending, error}', 'laws/agent-events.message_start'),
+        ('message-end-does-not-append', 'packages/agent/src/agent-state.bend',
+         'tools, List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>, messages, message <> Nil{}), streaming, None{}, pending, error}',
+         'tools, messages, streaming, None{}, pending, error}', 'laws/agent-events.message_end'),
+        ('agent-end-declares-idle', 'packages/agent/src/agent-state.bend',
+         'T.AgentEnd{_}: T.AgentState{model, thinking, tools, messages, streaming, None{}, pending, error}',
+         'T.AgentEnd{_}: T.AgentState{model, thinking, tools, messages, False{}, None{}, pending, error}', 'laws/agent-events.events_preserve_configuration'),
+        ('agent-end-retains-partial-message', 'packages/agent/src/agent-state.bend',
+         'T.AgentEnd{_}: T.AgentState{model, thinking, tools, messages, streaming, None{}, pending, error}',
+         'T.AgentEnd{_}: T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error}', 'laws/agent-events.agent_end'),
         ('enqueue-changes-agent-state', 'packages/agent/src/agent-runtime.bend',
          '(OwnedState{state, Q.enqueue(T.AgentMessage<P, A, G, D, C>, queues, kind, message)}, Unit{})',
          '(OwnedState{State.beginRun(P, A, G, D, C, V, S, E, J, state), Q.enqueue(T.AgentMessage<P, A, G, D, C>, queues, kind, message)}, Unit{})', 'laws/agent-owner.enqueue_preserves_state'),
