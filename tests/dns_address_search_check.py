@@ -20,10 +20,11 @@ ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('candidate',type=Path)
 p.add_argument('--no-build',action='store_true')
+p.add_argument('--build-limit-gib',type=float,default=16)
 a=p.parse_args();candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
     for suffix in ['c','js']:
-        subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats',f'build/dns-address-search-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-address-search.bend','-o',f'build/dns-address-search.{suffix}'],cwd=ROOT,check=True)
+        subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',str(a.build_limit_gib),'--stats',f'build/dns-address-search-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-address-search.bend','-o',f'build/dns-address-search.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-address-search.c','-lpthread','-lm','-o','build/dns-address-search'],cwd=ROOT,check=True)
 
 def wire(text):
@@ -36,16 +37,21 @@ def exact(peer,size):
     return data
 
 def reply(identifier,owner,kind,value):
-    code=value if isinstance(value,int) else 0
-    flags=0x8180|code;rr=b'';count=0
-    if value=='address':
+    extension=value if isinstance(value,dict) else None
+    code=extension['code'] if extension else value if isinstance(value,int) else 0
+    flags=0x8180|(code & 15);rr=b'';count=0
+    if value=='address' or extension:
         data=bytes(range(1,5 if kind==1 else 17));count=1
         rr=wire(owner)+struct.pack('!HHIH',kind,1,60,len(data))+data
     if value=='alias':
         data=wire('target');count=1
         rr=wire(owner)+struct.pack('!HHIH',5,1,60,len(data))+data
     if value=='truncated':flags |= 512
-    packet=struct.pack('!6H',identifier,flags,1,count,0,0)+wire(owner)+struct.pack('!HH',kind,1)+rr
+    extra=b''
+    if extension:
+        data=bytes(extension.get('data',[]))
+        extra=b'\0'+struct.pack('!HHIH',41,1232,(code>>4)<<24,len(data))+data
+    packet=struct.pack('!6H',identifier,flags,1,count,0,bool(extension))+wire(owner)+struct.pack('!HH',kind,1)+rr+extra
     return struct.pack('!H',len(packet))+packet
 
 def selected(owner,kind):
@@ -81,6 +87,12 @@ cases += [
     dict(label='reset-recovery-answer',plan=[('a.x','reset'),('a.x','address')],ids=[0,0],draws=1,answer='a.x'),
     dict(label='initial-eof-precedence',name='a.b',ndots=1,plan=[('a.b','eof'),('a.b.x',0),('a.b.y',3)],dns=2),
 ]
+# Deliberately unsolicited OPT metadata checks that address extraction cannot
+# accept an extended error, even on the current plain-query transport path.
+for code in [16,18,19,4095]:
+    cases.append(dict(label='extended-'+str(code),plan=[('a.x',dict(code=code)),('a','address')],answer='a'))
+cases.append(dict(label='extended-success',plan=[('a.x',dict(code=0))],answer='a.x'))
+cases.append(dict(label='malformed-opt',plan=[('a.x',dict(code=0,data=[0,1,0,1]))],halt='extension'))
 rows=[]
 for backend,command in [('native 1',['build/dns-address-search','--threads','1']),('native 4',['build/dns-address-search','--threads','4']),('Bun',[str(bun),'build/dns-address-search.js'])]:
     for number,family,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
@@ -119,6 +131,6 @@ for backend,command in [('native 1',['build/dns-address-search','--threads','1']
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,output=want))
     print(f'{backend}: {len(cases)*4} live search cases PASS',flush=True)
-paths=['packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend','tests/dns-address-search.bend','tests/dns_address_search_check.py','build/dns-address-search','build/dns-address-search.js']
+paths=['packages/runtime/src/dns-edns-response.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend','tests/dns-address-search.bend','tests/dns_address_search_check.py','build/dns-address-search','build/dns-address-search.js']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-address-search-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-address-search-result.json').write_text(json.dumps(r,indent=2)+'\n')

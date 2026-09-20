@@ -3,6 +3,7 @@ import ./dns-name.bend as Name
 import ./dns-message.bend as Message
 import ./dns-record.bend as Record
 import ./dns-response.bend as Response
+import ./dns-edns-response.bend as Edns
 import ./url-ipv4.bend as IPv4
 import ./url-ipv6.bend as IPv6
 
@@ -27,6 +28,7 @@ def newHistory() -> History:
 type Error is Data:
   InvalidName{error: Name.Error}
   InvalidRecord{error: Record.Error}
+  InvalidExtension{error: Edns.Error}
   UnsupportedType{}
   ResponseCode{code: U32}
   AliasLoop{}
@@ -181,13 +183,17 @@ def selectResponse(history: History, code: U32, +wanted: U32, name: Name.Name, p
     case 0: chooseRecords(history, U32.is_eq(wanted, 1) || U32.is_eq(wanted, 28), wanted, name, packet, answers)
     case code: Fail{ResponseCode{code}}
 
+def selectExtension(history: History, wanted: U32, name: Name.Name, message: Message.Message, extension: Result<&2, &2, Edns.Error, Maybe<&2, Edns.Response>>) -> Result<&2, &2, Error, Trace>:
+  match message extension:
+    case _ Fail{error}: Fail{InvalidExtension{error}}
+    case Message.Message{packet, header, _, answers, _, _} Done{value}: selectResponse(history, Edns.responseCode(header, value), wanted, name, packet, answers)
+
 # Input is a matched, complete response. Only IN answer records contribute;
 # authority/additional data is never promoted to address answers. Empty output
 # is not proof of a cacheable negative answer. TTLs remain raw wire values;
 # normalization, negative/alias caching and follow-up queries are separate.
-def selectWithHistory(history: History, +wanted: U32, name: Name.Name, message: Message.Message) -> Result<&2, &2, Error, Trace>:
-  match message:
-    case Message.Message{packet, Message.Header{_, flags, _, _, _, _}, _, answers, _, _}: selectResponse(history, (flags % 16 : U32), wanted, name, packet, answers)
+def selectWithHistory(history: History, +wanted: U32, name: Name.Name, +message: Message.Message) -> Result<&2, &2, Error, Trace>:
+  selectExtension(history, wanted, name, message, Edns.inspect(message))
 
 
 def selectionOnly(result: Result<&2, &2, Error, Trace>) -> Result<&2, &2, Error, Selection>:

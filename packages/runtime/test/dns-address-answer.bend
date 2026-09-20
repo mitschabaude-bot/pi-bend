@@ -34,6 +34,7 @@ def show(value: Result<&2, &2, Answer.Error, Answer.Selection>) -> String:
     case Done{Answer.Selection{name, values}}: "ok:" ++ encoded(Name.encode(name)) ++ ":" ++ addresses(values, "")
     case Fail{Answer.InvalidName{_}}: "name"
     case Fail{Answer.InvalidRecord{_}}: "record"
+    case Fail{Answer.InvalidExtension{_}}: "extension"
     case Fail{Answer.UnsupportedType{}}: "type"
     case Fail{Answer.ResponseCode{code}}: "rcode:" ++ U32.show(code)
     case Fail{Answer.AliasLoop{}}: "loop"

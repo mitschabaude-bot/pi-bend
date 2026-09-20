@@ -61,12 +61,12 @@ def expected(query,kind,answers,rcode):
         return 'ok:'+''.join(str(x)+',' for x in name(current))+':'+''.join(addresses)
 
 cases=[]
-def add(query,kind,answers,authority=(),additional=(),rcode=0):
+def add(query,kind,answers,authority=(),additional=(),rcode=0,extension_error=False):
     def encode(r):
         owner=b'\xc0\x0c' if r['owner']==tuple(query) else name(r['owner'])
         return owner+struct.pack('!HHIH',r['kind'],r['klass'],r['ttl'],len(r['data']))+r['data']
-    packet=struct.pack('!6H',42,0x8180|rcode,1,len(answers),len(authority),len(additional))+name(query)+struct.pack('!HH',kind,1)+b''.join(encode(r) for section in [answers,authority,additional] for r in section)
-    cases.append((str(kind)+':'+','.join(map(str,packet)),expected(query,kind,answers,rcode)))
+    packet=struct.pack('!6H',42,0x8180|(rcode & 15),1,len(answers),len(authority),len(additional))+name(query)+struct.pack('!HH',kind,1)+b''.join(encode(r) for section in [answers,authority,additional] for r in section)
+    cases.append((str(kind)+':'+','.join(map(str,packet)),'extension' if extension_error else expected(query,kind,answers,rcode)))
 
 q=(b'Example',b'COM');end=(b'Target',b'COM');v4=bytes([1,2,3,4]);v6=bytes(range(16))
 for kind,data in [(1,v4),(28,v6)]:
@@ -113,6 +113,21 @@ for _ in range(500):
     for _ in range(rng.randrange(1,5)):answer.append(rr(labels[-1],kind,rng.randbytes(4 if kind==1 else 16),rng.randrange(0x100000000)))
     answer.extend([rr((b'noise',),kind,b'bad'),rr(labels[-1],16,b'ignored')]);rng.shuffle(answer)
     add(labels[0],kind,answer)
+# A matching address must never hide an extended DNS error. Lower nibbles
+# include zero (BADVERS) and ordinary retry/search error codes.
+for kind,data in [(1,v4),(28,v6)]:
+    for upper in [0,1,2,255]:
+        for low in [0,2,3,15]:
+            for version in [0,1,255]:
+                opt=rr((),41,b'',ttl=(upper<<24)|(version<<16)|65535,klass=1232)
+                add(q,kind,[rr(q,kind,data)],additional=[opt],rcode=upper*16+low)
+    opt=rr((),41,b'',klass=1232)
+    for additional in [[opt,opt],[rr(q,41,b'',klass=1232)],[rr((),41,b'\0\1\0\1',klass=1232)]]:
+        add(q,kind,[rr(q,kind,data)],additional=additional,extension_error=True)
+    add(q,kind,[rr(q,kind,data),opt],extension_error=True)
+    add(q,kind,[rr(q,kind,data)],authority=[opt],extension_error=True)
+    # Unknown and duplicate options do not affect address extraction.
+    add(q,kind,[rr(q,kind,data)],additional=[rr((),41,b'\xfd\xe9\0\1\xff\xfd\xe9\0\0',klass=1)])
 rows=[]
 for label,command in [('native 1',['build/dns-address-answer','--threads','1']),('native 4',['build/dns-address-answer','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/dns-address-answer.js'])]:
     for start in range(0,len(cases),20):
