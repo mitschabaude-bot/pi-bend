@@ -1,6 +1,25 @@
 --- a/bend2/bend.ts
 +++ b/bend2/bend.ts
-@@ -705,6 +705,15 @@
+@@ -402,7 +402,18 @@
+   return { $: "ADT", k, x, r, s };
+ }
+ 
++const EMPTY_CTRS = new WeakMap<Span, Map<Name, HTerm>>();
++
+ export function Ctr<X>(k: Name, x: TermOf<X>[], s?: Span): TermOf<X> {
++  if (x.length === 0 && s !== undefined) {
++    let cells = EMPTY_CTRS.get(s);
++    const got = cells?.get(k);
++    if (got !== undefined) return got as TermOf<X>;
++    const out = { $: "Ctr", k, x, s } as TermOf<X>;
++    if (cells === undefined) EMPTY_CTRS.set(s, cells = new Map());
++    cells.set(k, out as HTerm);
++    return out;
++  }
+   return { $: "Ctr", k, x, s };
+ }
+ 
+@@ -705,6 +716,15 @@
    return t;
  }
  
@@ -16,7 +35,7 @@
  export function term_higher(tm: LTerm, env: Env = null): HTerm {
    switch (tm.$) {
      case "Var": {
-@@ -771,6 +780,7 @@
+@@ -771,6 +791,7 @@
        return ADT(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s, tm.r);
      }
      case "Ctr": {
@@ -24,7 +43,7 @@
        return Ctr(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s);
      }
      case "Mat": {
-@@ -839,6 +849,7 @@
+@@ -839,6 +860,7 @@
        return ADT(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s, tm.r);
      }
      case "Ctr": {
@@ -32,7 +51,7 @@
        return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);
      }
      case "Mat": {
-@@ -1135,9 +1146,19 @@
+@@ -1135,9 +1157,19 @@
  // ====
  
  export function word_to_term(n: U32, s?: Span): LTerm {
@@ -53,7 +72,7 @@
    }
    return out;
  }
-@@ -1984,9 +2005,11 @@
+@@ -1984,9 +2016,11 @@
          cs.push(parse_char(p));
        }
        const spn = parse_span(p, beg);
@@ -67,7 +86,7 @@
      }
      case "?": {
        parse_bump(p);
-@@ -3553,7 +3576,17 @@
+@@ -3553,7 +3587,17 @@
        }
        const tel = tele_fill(book, ctr.T, t_wnf.x, ctx, lhs.def, tm.s);
        const { xs, us } = tele_check(book, lhs, tel, tm.x, qt, ctx, d, tm.s);

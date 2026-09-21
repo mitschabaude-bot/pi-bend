@@ -1,0 +1,190 @@
+{
+  "status": "Investigation; only the separately validated candidate may be installed.",
+  "scope": "Reduced original string fallback fixture, baseline installed at d0a4e54.",
+  "phase_samples": [
+    {
+      "phase": "load-end",
+      "rss": 316293120,
+      "heapTotal": 253534208,
+      "heapUsed": 154113901,
+      "external": 2114605,
+      "arrayBuffers": 100
+    },
+    {
+      "phase": "validate-end",
+      "rss": 579784704,
+      "heapTotal": 499983360,
+      "heapUsed": 193749476,
+      "external": 3168436,
+      "arrayBuffers": 100
+    },
+    {
+      "phase": "carb-end",
+      "pass": 0,
+      "time": 1790019000655,
+      "rss": 816988160,
+      "heapTotal": 673577984,
+      "heapUsed": 368708320,
+      "external": 3700512,
+      "arrayBuffers": 100,
+      "probes": 1,
+      "teles": 0,
+      "opens": 0,
+      "uses": 0,
+      "folds": 0,
+      "spines": 0,
+      "consts": 0,
+      "defs": 18
+    }
+  ],
+  "retention": [
+    {
+      "order": "ev",
+      "phase": "checked",
+      "heap_bytes": 192052140,
+      "objects": 4978541,
+      "classes": {
+        "Object": 2103256,
+        "Array": 1379089,
+        "Function": 28360,
+        "JSLexicalEnvironment": 66372
+      }
+    },
+    {
+      "order": "ev",
+      "phase": "drop-e",
+      "heap_bytes": 116316492,
+      "objects": 3228864,
+      "classes": {
+        "Object": 1091658,
+        "Array": 1048090,
+        "Function": 6341,
+        "JSLexicalEnvironment": 12311
+      }
+    },
+    {
+      "order": "ev",
+      "phase": "drop-v",
+      "heap_bytes": 5059452,
+      "objects": 34245,
+      "classes": {
+        "Object": 12707,
+        "Array": 1323,
+        "Function": 2762,
+        "JSLexicalEnvironment": 1574
+      }
+    },
+    {
+      "order": "ve",
+      "phase": "checked",
+      "heap_bytes": 192064136,
+      "objects": 4978546,
+      "classes": {
+        "Object": 2103256,
+        "Array": 1379089,
+        "Function": 28360,
+        "JSLexicalEnvironment": 66372
+      }
+    },
+    {
+      "order": "ve",
+      "phase": "drop-v",
+      "heap_bytes": 191825343,
+      "objects": 4973701,
+      "classes": {
+        "Object": 2100319,
+        "Array": 1378647,
+        "Function": 28105,
+        "JSLexicalEnvironment": 65604
+      }
+    },
+    {
+      "order": "ve",
+      "phase": "drop-e",
+      "heap_bytes": 5051863,
+      "objects": 34244,
+      "classes": {
+        "Object": 12707,
+        "Array": 1323,
+        "Function": 2762,
+        "JSLexicalEnvironment": 1574
+      }
+    }
+  ],
+  "retention_method": "After successful book_valid, diagnostic-only clones delete parsed v and checked e roots in opposite orders, yield the event loop, then collect and report JSC heap statistics. They exit without compilation. These are retention measurements, not proof tests or proposed production changes.",
+  "findings": [
+    "Checked representations retain almost all parsed bodies: removing parsed roots first drops only about 0.24 MB, whereas removing checked roots first drops about 76 MB.",
+    "The remaining parsed representation retains about 111 MB above the no-body baseline.",
+    "RSS includes allocator capacity and transient objects; these post-collection heap measurements are different quantities."
+  ],
+  "excluded_experiments": [
+    {
+      "command": [
+        "bun",
+        "build/bend-profiles/pattern-substitution-sharing-clean/bend2/main.ts",
+        "tests/compiler-string-pattern-return.bend",
+        "-o",
+        "build/compiler-memory-reading/pattern-substitution-sharing-small.c"
+      ],
+      "elapsed_seconds": 4.234439286403358,
+      "peak_sampled_group_rss_kib": 859092,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "name": "pattern-substitution-sharing",
+      "conclusion": "No compelling improvement on the target fixture.",
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-profiles/checked-constructor-types-clean/bend2/main.ts",
+        "tests/compiler-string-pattern-return.bend",
+        "-o",
+        "build/compiler-memory-reading/checked-constructor-types-small.c"
+      ],
+      "elapsed_seconds": 4.241241477429867,
+      "peak_sampled_group_rss_kib": 870500,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "name": "checked-constructor-types",
+      "conclusion": "No compelling improvement on the target fixture.",
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-profiles/reconstructed-word-sharing-clean/bend2/main.ts",
+        "tests/compiler-string-pattern-return.bend",
+        "-o",
+        "build/compiler-memory-reading/reconstructed-word-sharing-small.c"
+      ],
+      "elapsed_seconds": 4.233434163965285,
+      "peak_sampled_group_rss_kib": 864952,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "name": "reconstructed-word-sharing",
+      "conclusion": "No compelling improvement on the target fixture.",
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-profiles/reconstructed-word-marking-clean/bend2/main.ts",
+        "tests/compiler-string-pattern-return.bend",
+        "-o",
+        "build/compiler-memory-reading/reconstructed-word-marking-small.c"
+      ],
+      "elapsed_seconds": 4.237743202596903,
+      "peak_sampled_group_rss_kib": 1102904,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "name": "reconstructed-word-marking",
+      "conclusion": "Increased peak RSS; rejected.",
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    }
+  ]
+}
