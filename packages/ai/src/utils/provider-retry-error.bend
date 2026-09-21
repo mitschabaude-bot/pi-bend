@@ -34,5 +34,6 @@ def original(-E: Data, error: R.RequestFailure<E>) -> E:
 def render(-E: Data, error: R.RetryFailure<E>, renderOriginal: E -> RenderedError) -> Result<&2, &2, FormattingError, RenderedError>:
   match error:
     case R.RequestFailed{failure}: Done{renderOriginal(original(E, failure))}
+    case R.SleepRejected{_}: Done{RenderedError{"InvalidRetryDelay", "Retry delay is outside the native timer range"}}
     case R.RequestAborted{}: Done{createAbortError()}
     case R.DelayRejected{failure, providerMessage}: delayError(failure, providerMessage)

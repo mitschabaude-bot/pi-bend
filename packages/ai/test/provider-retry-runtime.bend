@@ -11,7 +11,7 @@ import ../../runtime/src/ref.bend as Ref
 
 def parserBody(environment: Unit, text: String) -> IO(F.F64): IO.pure(F.F64, F.fromU32(1234))
 
-def expectSleep(result: Result<&2, &2, Unit, Unit>) -> IO(Unit):
+def expectSleep(result: Result<&2, &2, Retry.SleepError, Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.print("slept")
     case Fail{_}: IO.die(Unit, 1, "unexpected cancellation")
@@ -28,7 +28,7 @@ def inspectEffects(effects: Retry.Effects<String>) -> IO(Unit):
         IO.print("random " ++ T.scalar(F.toBits(second)))
         IO.print("now " ++ T.scalar(F.toBits(epoch)))
         IO.print("parsed " ++ T.scalar(F.toBits(parsed)))
-        result : Result<&2, &2, Unit, Unit> <- C.call(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep, Retry.SleepInput{F.fromU32(0), None{}})
+        result : Result<&2, &2, Retry.SleepError, Unit> <- C.call(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, sleep, Retry.SleepInput{F.fromU32(0), None{}})
         expectSleep(result)
 
 def useBorrowed(pair: Runtime.Runtime<String> & Retry.Effects<String>) -> IO(Unit):

@@ -21,7 +21,7 @@ def counts(counter: Ref.Ref<U32>, calls: U32, timers: U32) -> IO(Unit):
     check(U32.is_eq(actual, calls), "request count")
     check(U32.is_eq(pending, timers), "pending timer count")
 
-def sleepBody(environment: Unit, input: R.SleepInput<String>) -> IO(Result<&2, &2, Unit, Unit>):
+def sleepBody(environment: Unit, input: R.SleepInput<String>) -> IO(Result<&2, &2, R.SleepError, Unit>):
   Sleep.sleep(String, input)
 
 def limit(result: Result<&2, &2, E.FormattingError, E.RenderedError>) -> IO(Unit):
@@ -92,7 +92,7 @@ def run(+mode: U32, +configuration: T.Config) -> IO(Unit):
         +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~T.randomBody, Unit{})
         +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~T.dateBody, Unit{})
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~T.nowBody, Unit{})
-        +sleep : C.Callback<R.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Unit, ~R.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleepBody, Unit{})
+        +sleep : C.Callback<R.SleepInput<String>, Result<&2, &2, R.SleepError, Unit>> <- C.create(~Unit, ~R.SleepInput<String>, ~Result<&2, &2, R.SleepError, Unit>, ~sleepBody, Unit{})
         task : Chan(Result<&2, &2, R.RetryFailure<String>, String>) <- IO.fork(Result<&2, &2, R.RetryFailure<String>, String>, R.retryProviderRequest(String, String, String, request, R.Effects{random, date, now, sleep}, R.ProviderRetryOptions{retries, cap, signal(mode, controller)}))
         TestClock.barrier()
         result : Result<&2, &2, R.RetryFailure<String>, String> <- observe(mode, counter, controller, task)
@@ -101,7 +101,7 @@ def run(+mode: U32, +configuration: T.Config) -> IO(Unit):
         C.dispose(Unit, F.F64, random)
         C.dispose(String, F.F64, date)
         C.dispose(Unit, F.F64, now)
-        C.dispose(R.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
+        C.dispose(R.SleepInput<String>, Result<&2, &2, R.SleepError, Unit>, sleep)
         previous : U32 <- Ref.dispose(U32, counter)
         A.dispose(String, controller)
         IO.print("PASS " ++ name(mode))

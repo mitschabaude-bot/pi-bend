@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='retry-clock-') as dire
  negative=subprocess.run([str(folder/'early'),'--threads','1','0'],cwd=ROOT,text=True,capture_output=True,timeout=10)
  assert negative.returncode!=0 and 'request count' in negative.stdout+negative.stderr,negative
  print('early-deadline sensitivity control PASS',flush=True)
-(ROOT/'docs/bend-issues/2026-09-19-retry-virtual-clock.json').write_text(json.dumps(dict(
+(ROOT/'build/retry-duration-virtual-clock-result.json').write_text(json.dumps(dict(
  scope='Five original test names/contracts on native one/four threads with virtual io_tick. Production timer code remains byte-identical. Original error identity becomes native original-value preservation. Harness is test-only; no installed compiler changes.',
  source_sha256={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [fixture,upstream,ROOT/'tests/virtual-clock/base.bend',ROOT/'tests/virtual-clock/effect.c',ROOT/'tests/virtual-clock/controls.c']},
  timer_sha256=hashlib.sha256(timer.encode()).hexdigest(),samples=records,early_deadline_control='failed at request count as required'),indent=2)+'\n')

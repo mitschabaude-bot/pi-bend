@@ -72,8 +72,8 @@ def consumed(value: Result<&2, &2, Consume.TextError<Attempt.ReadError(String)>,
     case Done{text}: IO.print("body:" ++ text)
     case Fail{_}: IO.print("body-error")
 
-def sleep(environment: Unit, input: Retry.SleepInput<String>) -> IO(Result<&2, &2, Unit, Unit>):
-  do IO<Result<&2, &2, Unit, Unit>>:
+def sleep(environment: Unit, input: Retry.SleepInput<String>) -> IO(Result<&2, &2, Retry.SleepError, Unit>):
+  do IO<Result<&2, &2, Retry.SleepError, Unit>>:
     IO.print("sleep")
     Sleep.sleep(String, input)
 
@@ -180,7 +180,7 @@ def run(+mode: U32, port: U32, pair: Resolver.Owner & Resolver.Resolver) -> IO(U
         +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.randomBody, Unit{})
         +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Effects.dateBody, Unit{})
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.nowBody, Unit{})
-        +delay : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Unit, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleep, Unit{})
+        +delay : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Unit, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~sleep, Unit{})
         result : Result<&2, &1, Driver.Error<String>, Owner()> <- Acquire.run(~String, ~String, ~State(), ~envelopeError, client(mode, port), model(), T.JsonString{"original"}, Bool.pick(Maybe<&2, T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{payload}), Bool.pick(Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{response}), attempt, Retry.Effects{random, date, now, delay}, Retry.ProviderRetryOptions{Some{1n}, None{}, Some{Abort.signal(String, parent)}}, release(U32.is_eq(mode, 6)))
         C.dispose(Envelope.Request, Outcome(), attempt)
         C.dispose(Envelope.Request, Outcome(), nativeRequest)
@@ -191,7 +191,7 @@ def run(+mode: U32, port: U32, pair: Resolver.Owner & Resolver.Resolver) -> IO(U
         C.dispose(Unit, F.F64, random)
         C.dispose(String, F.F64, date)
         C.dispose(Unit, F.F64, now)
-        C.dispose(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, delay)
+        C.dispose(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, delay)
         count : U32 <- R.dispose(U32, counter)
         IO.print("count:" ++ U32.show(count))
         Resolver.close(resolverOwner)

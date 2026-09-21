@@ -1,0 +1,64 @@
+{
+  "scope": "Five original test names/contracts on native one/four threads with virtual io_tick. Production timer code remains byte-identical. Original error identity becomes native original-value preservation. Harness is test-only; no installed compiler changes.",
+  "source_sha256": {
+    "/home/agent/code/pi-bend/packages/ai/test/provider-retry-named.bend": "91e8ed0229ff41d6ebbba50fa1e99bef4661a0c8230c196e84c408c4a0a8c2f4",
+    "/home/agent/code/pi-mono/packages/ai/test/provider-retry.test.ts": "c5070cb70ce88a21102fa7588da49c94937b86f098bac4d26b9dc0d38988304e",
+    "/home/agent/code/pi-bend/tests/virtual-clock/base.bend": "f5b8f235899edd7d038cf84d1563a22a2b274a181096e548957e83de9daae338",
+    "/home/agent/code/pi-bend/tests/virtual-clock/effect.c": "6cac8678033b05b4e6609b13b6fa0299b8e69937e043460c7457bb6195b89c85",
+    "/home/agent/code/pi-bend/tests/virtual-clock/controls.c": "0f559f9ae3e82b35b6a5bec85551ff148790882538f5592c789356e74c4ffbc7"
+  },
+  "timer_sha256": "b6985cd3adb6ce750d13837594c2b6f2afe88761e48d42734431f92b5592f51a",
+  "samples": [
+    {
+      "threads": 1,
+      "name": "retries retryable provider errors",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 1,
+      "name": "does not retry errors the provider marks as non-retryable",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 1,
+      "name": "rejects a provider-requested retry delay above the limit",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 1,
+      "name": "allows disabling the provider-requested retry delay cap",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 1,
+      "name": "aborts a provider-requested retry delay",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 4,
+      "name": "retries retryable provider errors",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 4,
+      "name": "does not retry errors the provider marks as non-retryable",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 4,
+      "name": "rejects a provider-requested retry delay above the limit",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 4,
+      "name": "allows disabling the provider-requested retry delay cap",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    },
+    {
+      "threads": 4,
+      "name": "aborts a provider-requested retry delay",
+      "audit": "CLOCK_AUDIT 0 0 0"
+    }
+  ],
+  "early_deadline_control": "failed at request count as required"
+}

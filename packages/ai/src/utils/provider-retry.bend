@@ -1,5 +1,6 @@
 import Base
 import ./provider-retry-policy.bend as P
+import ../../../runtime/src/timer-delay.bend as Delay
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/abort.bend as A
 import ../../../runtime/src/callback.bend as C
@@ -13,9 +14,14 @@ type RequestFailure<-E: Data> is Data:
   Provider{error: ProviderError<E>}
   Other{original: E}
 
+type SleepError is Data:
+  SleepAborted{}
+  InvalidSleepDuration{error: Delay.Error}
+
 type RetryFailure<-E: Data> is Data:
   RequestFailed{error: RequestFailure<E>}
   RequestAborted{}
+  SleepRejected{error: Delay.Error}
   DelayRejected{error: P.DelayError, providerMessage: String}
 
 type ProviderRetryOptions<-Reason: Data> is Data:
@@ -27,7 +33,7 @@ type SleepInput<-Reason: Data> is Data:
 # Effect handles are borrowed for the duration of the request loop. The caller
 # owns their disposal; production and virtual-time tests use the same loop.
 type Effects<-Reason: Data> is Data:
-  Effects{random: C.Callback<Unit, F.F64>, parseDate: C.Callback<String, F.F64>, now: C.Callback<Unit, F.F64>, sleep: C.Callback<SleepInput<Reason>, Result<&2, &2, Unit, Unit>>}
+  Effects{random: C.Callback<Unit, F.F64>, parseDate: C.Callback<String, F.F64>, now: C.Callback<Unit, F.F64>, sleep: C.Callback<SleepInput<Reason>, Result<&2, &2, SleepError, Unit>>}
 
 type Decision<v, -E: Data, -Value: Kind(v)> is Kind(v):
   Finished{result: Result<&2, v, RetryFailure<E>, Value>}
@@ -53,17 +59,18 @@ def delay(-Reason: Data, effects: Effects<Reason>, source: P.DelaySource, index:
             current : F.F64 <- C.call(Unit, F.F64, now, Unit{})
             return P.resolveServerDate(epoch, current, maximum)
 
-def afterSleep(v, -E: Data, -Value: Kind(v), result: Result<&2, &2, Unit, Unit>) -> Decision<v, E, Value>:
+def afterSleep(v, -E: Data, -Value: Kind(v), result: Result<&2, &2, SleepError, Unit>) -> Decision<v, E, Value>:
   match result:
     case Done{_}: Retry{}
-    case Fail{_}: Finished{Fail{RequestAborted{}}}
+    case Fail{SleepAborted{}}: Finished{Fail{RequestAborted{}}}
+    case Fail{InvalidSleepDuration{error}}: Finished{Fail{SleepRejected{error}}}
 
 def sleepDelay(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, signal: Maybe<&2, A.AbortSignal<Reason>>, message: String, result: Result<&2, &2, P.DelayError, F.F64>) -> IO(Decision<v, E, Value>):
   match effects result:
     case _ Fail{error}: IO.pure(Decision<v, E, Value>, Finished{Fail{DelayRejected{error, message}}})
     case Effects{_, _, _, sleep} Done{milliseconds}:
       do IO<Decision<v, E, Value>>:
-        slept : Result<&2, &2, Unit, Unit> <- C.call(SleepInput<Reason>, Result<&2, &2, Unit, Unit>, sleep, SleepInput{milliseconds, signal})
+        slept : Result<&2, &2, SleepError, Unit> <- C.call(SleepInput<Reason>, Result<&2, &2, SleepError, Unit>, sleep, SleepInput{milliseconds, signal})
         return afterSleep(v, E, Value, slept)
 
 def providerDecision(v, -Reason: Data, -E: Data, -Value: Kind(v), +effects: Effects<Reason>, options: ProviderRetryOptions<Reason>, index: Nat, error: ProviderError<E>, retryable: Bool) -> IO(Decision<v, E, Value>):

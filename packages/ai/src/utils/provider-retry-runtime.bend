@@ -15,7 +15,7 @@ type Runtime<-Reason: Data> is Type:
 
 def nowBody(environment: Unit, unused: Unit) -> IO(F.F64): Date.now()
 
-def sleepBody(~Reason: Data, environment: Unit, input: Retry.SleepInput<Reason>) -> IO(Result<&2, &2, Unit, Unit>):
+def sleepBody(~Reason: Data, environment: Unit, input: Retry.SleepInput<Reason>) -> IO(Result<&2, &2, Retry.SleepError, Unit>):
   Sleep.sleep(Reason, input)
 
 # This constructor takes ownership of the supplied generator. It also permits
@@ -24,7 +24,7 @@ def fromGenerator(~Reason: Data, parseDate: C.Callback<String, F.F64>, +generato
   do IO<Runtime<Reason>>:
     random : C.Callback<Unit, F.F64> <- Jitter.create(generator)
     now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~nowBody, Unit{})
-    sleep : C.Callback<Retry.SleepInput<Reason>, Result<&2, &2, Unit, Unit>> <- C.create(~Unit, ~Retry.SleepInput<Reason>, ~Result<&2, &2, Unit, Unit>, ~(sleepBody(~Reason)), Unit{})
+    sleep : C.Callback<Retry.SleepInput<Reason>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Unit, ~Retry.SleepInput<Reason>, ~Result<&2, &2, Retry.SleepError, Unit>, ~(sleepBody(~Reason)), Unit{})
     return Runtime{Retry.Effects{random, parseDate, now, sleep}, generator}
 
 def initialized(~Reason: Data, parseDate: C.Callback<String, F.F64>, result: Result<&2, &2, Seed.SeedError, Random.Generator>) -> IO(Result<&2, &1, Seed.SeedError, Runtime<Reason>>):
@@ -52,5 +52,5 @@ def dispose(-Reason: Data, runtime: Runtime<Reason>) -> IO(Unit):
       do IO<Unit>:
         C.dispose(Unit, F.F64, random)
         C.dispose(Unit, F.F64, now)
-        C.dispose(Retry.SleepInput<Reason>, Result<&2, &2, Unit, Unit>, sleep)
+        C.dispose(Retry.SleepInput<Reason>, Result<&2, &2, Retry.SleepError, Unit>, sleep)
         Random.dispose(generator)

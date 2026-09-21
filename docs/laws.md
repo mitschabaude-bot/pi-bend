@@ -201,3 +201,7 @@ Three generic laws preserve all prepared client settings and payload, forbid tra
 ## Retry error embedding
 
 Six `provider-retry-map` laws establish identity and composition of error embedding, retention of provider metadata and terminal classification, and unchanged transfer of arbitrary affine success owners. The [full gate](proof-validation/2026-09-21-openai-responses-native-client.json) checks 408 public laws and 65 supporting lemmas and rejects 223 typed mutations, open obligations and a missing proof. The nineteen named unsafe declarations remain unchanged. [The native callback design](openai-responses-native-client.md) separates these pure guarantees from actual callback/transport ownership checks.
+
+### Strict native retry durations (2026-09-21)
+
+Three retry laws retain invalid-duration causes, distinguish cancellation and allow continuation after successful sleep. A fourth law rejects invalid durations without allocating a timer or cancellation observer for any error and signal. The [full gate](proof-validation/2026-09-21-retry-duration.json) checks 412 public laws and 65 supporting lemmas and rejects 225 typed mutations, open obligations and a missing proof. Nineteen existing unsafe declarations are unchanged. These laws establish control flow and error preservation; the [duration record](retry-duration.md) separates them from numeric boundary tests and timer/resource audits.

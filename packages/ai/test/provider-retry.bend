@@ -66,15 +66,15 @@ def scalar(value: W.U64) -> String:
   match value:
     case W.U64{high, low}: U32.show(high) ++ ":" ++ U32.show(low)
 
-def sleepResult(abort: Bool) -> Result<&2, &2, Unit, Unit>:
+def sleepResult(abort: Bool) -> Result<&2, &2, P.SleepError, Unit>:
   match abort:
-    case True{}: Fail{Unit{}}
+    case True{}: Fail{P.SleepAborted{}}
     case False{}: Done{Unit{}}
 
-def sleepBody(abort: Bool, input: P.SleepInput<String>) -> IO(Result<&2, &2, Unit, Unit>):
+def sleepBody(abort: Bool, input: P.SleepInput<String>) -> IO(Result<&2, &2, P.SleepError, Unit>):
   match input:
     case P.SleepInput{ms, _}:
-      do IO<Result<&2, &2, Unit, Unit>>:
+      do IO<Result<&2, &2, P.SleepError, Unit>>:
         IO.print("sleep " ++ scalar(F.toBits(ms)))
         return sleepResult(abort)
 
@@ -94,12 +94,13 @@ def showLimit(result: Result<&2, &2, Error.FormattingError, Error.RenderedError>
 def show(result: Result<&2, &2, P.RetryFailure<String>, String>) -> IO(Unit):
   match result:
     case Done{value}: IO.print("done " ++ value)
+    case Fail{P.SleepRejected{_}}: IO.print("invalid-sleep-duration")
     case Fail{P.RequestAborted{}}: IO.print("abort")
     case Fail{P.DelayRejected{error, message}}: showLimit(Error.delayError(error, message))
     case Fail{P.RequestFailed{P.Other{original}}}: IO.print("other " ++ original)
     case Fail{P.RequestFailed{P.Provider{P.ProviderError{original, _, _, _, _, _}}}}: IO.print("provider " ++ original)
 
-def runWithSleep(+configuration: Config, sleep: C.Callback<P.SleepInput<String>, Result<&2, &2, Unit, Unit>>) -> IO(Unit):
+def runWithSleep(+configuration: Config, sleep: C.Callback<P.SleepInput<String>, Result<&2, &2, P.SleepError, Unit>>) -> IO(Unit):
   match configuration:
     case Config{_, retries, _, cap, aborted, abortSleep}:
       do IO<Unit>:
@@ -124,9 +125,9 @@ def run(+configuration: Config) -> IO(Unit):
   match configuration:
     case Config{_, _, _, _, _, abortSleep}:
       do IO<Unit>:
-        +sleep : C.Callback<P.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~P.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleepBody, abortSleep)
+        +sleep : C.Callback<P.SleepInput<String>, Result<&2, &2, P.SleepError, Unit>> <- C.create(~Bool, ~P.SleepInput<String>, ~Result<&2, &2, P.SleepError, Unit>, ~sleepBody, abortSleep)
         runWithSleep(configuration, sleep)
-        C.dispose(P.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
+        C.dispose(P.SleepInput<String>, Result<&2, &2, P.SleepError, Unit>, sleep)
 
 def arguments(values: List<String>) -> IO(Unit):
   match values:

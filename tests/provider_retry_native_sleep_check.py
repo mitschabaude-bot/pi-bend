@@ -13,6 +13,11 @@ if '--no-build' not in sys.argv:
  subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','40','--',str(bun),str(candidate/'main.ts'),'packages/ai/test/provider-retry-native-sleep.bend','-o',str(binary)+'.c'],cwd=ROOT,check=True)
  subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(binary)+'.c','-lpthread','-lm','-o',str(binary)],check=True)
 expected=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/provider_retry_reference.mts'],cwd=ROOT,text=True))
+# Approved strict-input adaptation: upstream setTimeout turns a NaN delay into
+# 1ms and retries. The native adapter instead rejects before allocating a timer.
+assert expected[11]=='request\ndate invalid-date\nnow\nsleep 2146959360:0\nrequest\ndone ok\n'
+expected[11]='request\ndate invalid-date\nnow\nsleep 2146959360:0\ninvalid-sleep-duration\n'
+
 source=(candidate/'effs/timer.c').read_text()
 text=Path(str(binary)+'.c').read_text()
 assert source in text,'generated timer effect differs from candidate'
@@ -45,9 +50,9 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='retry-timer-audit-') a
    start=time.monotonic();result=subprocess.run([str(folder/'run'),'--threads',str(threads),str(mode)],cwd=ROOT,capture_output=True,text=True,check=True,timeout=10)
    elapsed=time.monotonic()-start
    assert result.stdout==trace,(threads,mode,result.stdout,trace)
-   created=[1,0,0,1,1,0,0,2,0,0,1,1][mode]
+   created=[1,0,0,1,1,0,0,2,0,0,1,0][mode]
    cancelled=1 if mode==4 else 0
    assert result.stderr==f'RETRY_TIMER_AUDIT {created} {cancelled} 0 0 0\n',(threads,mode,result.stderr)
    records.append(dict(threads=threads,mode=mode,seconds=elapsed,created=created,cancelled_parked=cancelled,live=0,waiting=0,channels=0))
   print(threads,'threads: 12 real-timer retry traces and cleanup PASS',flush=True)
-(ROOT/'docs/bend-issues/2026-09-19-retry-native-timers.json').write_text(json.dumps(dict(scope='Real native timers plus instrumented lifetime checks; not a performance comparison or virtual-time boundary proof.',source_sha256=hashlib.sha256(text.encode()).hexdigest(),timer_sha256=hashlib.sha256(source.encode()).hexdigest(),samples=records),indent=2)+'\n')
+(ROOT/'build/retry-duration-native-timers-result.json').write_text(json.dumps(dict(scope='Real native timers plus instrumented lifetime checks; not a performance comparison or virtual-time boundary proof.',source_sha256=hashlib.sha256(text.encode()).hexdigest(),timer_sha256=hashlib.sha256(source.encode()).hexdigest(),samples=records),indent=2)+'\n')

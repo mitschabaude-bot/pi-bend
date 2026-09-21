@@ -11,3 +11,7 @@ def Laws.retry_invokes_continuation(v, E, Value, next): {==}
 def Laws.abort_stops_failed_request(v, Reason, E, Value, effects, options, index, error, exhausted): {==}
 def Laws.exhaustion_preserves_failure(v, Reason, E, Value, effects, options, index, error): {==}
 def Laws.application_failure_is_not_retried(v, Reason, E, Value, effects, options, index, error): {==}
+
+def Laws.invalid_sleep_retains_cause(v, E, Value, error): {==}
+def Laws.sleep_cancellation_is_abort(v, E, Value): {==}
+def Laws.completed_sleep_allows_retry(v, E, Value): {==}

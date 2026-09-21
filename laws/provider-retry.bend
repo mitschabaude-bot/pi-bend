@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/timer-delay.bend as Delay
 import ../packages/ai/src/utils/provider-retry.bend as Retry
 
 # These IO-program equalities quantify over affine as well as copyable values.
@@ -63,3 +64,22 @@ law application_failure_is_not_retried:
   for index: Nat
   for error: E
   {Retry.classify(v, Reason, E, Value, effects, options, index, Retry.Other{error}) == IO.pure(Retry.Decision<v, E, Value>, Retry.Finished{Fail{Retry.RequestFailed{Retry.Other{error}}}}) : IO(Retry.Decision<v, E, Value>)}
+
+law invalid_sleep_retains_cause:
+  for -v: Quant
+  for -E: Data
+  for -Value: Kind(v)
+  for error: Delay.Error
+  {Retry.afterSleep(v, E, Value, Fail{Retry.InvalidSleepDuration{error}}) == Retry.Finished{Fail{Retry.SleepRejected{error}}} : Retry.Decision<v, E, Value>}
+
+law sleep_cancellation_is_abort:
+  for -v: Quant
+  for -E: Data
+  for -Value: Kind(v)
+  {Retry.afterSleep(v, E, Value, Fail{Retry.SleepAborted{}}) == Retry.Finished{Fail{Retry.RequestAborted{}}} : Retry.Decision<v, E, Value>}
+
+law completed_sleep_allows_retry:
+  for -v: Quant
+  for -E: Data
+  for -Value: Kind(v)
+  {Retry.afterSleep(v, E, Value, Done{Unit{}}) == Retry.Retry{} : Retry.Decision<v, E, Value>}

@@ -75,6 +75,7 @@ def finished(value: Result<&2, &1, Retry.RetryFailure<Failure>, Response.Respons
   match value:
     case Fail{Retry.RequestFailed{Retry.Provider{_}}}: IO.print("failed:status")
     case Fail{Retry.RequestFailed{Retry.Other{_}}}: IO.print("failed:diagnostic-or-transport")
+    case Fail{Retry.SleepRejected{_}}: IO.print("invalid-sleep-duration")
     case Fail{Retry.RequestAborted{}}: IO.print("failed:aborted")
     case Fail{Retry.DelayRejected{_, _}}: IO.print("failed:delay")
     case Done{Response.Response{metadata, body}}:
@@ -93,14 +94,14 @@ def run(port: U32, retries: Nat, limit: Nat, prepared: Result<&2, &2, Request.Re
         +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Reference.randomBody, Unit{})
         +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Reference.dateBody, Unit{})
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Reference.nowBody, Unit{})
-        +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~Reference.sleepBody, False{})
+        +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~Reference.sleepBody, False{})
         result : Result<&2, &1, Retry.RetryFailure<Failure>, Response.Response<Exchange.Exchange<String>>> <- Retry.retryProviderRequestOwned(String, Failure, Response.Response<Exchange.Exchange<String>>, request, Retry.Effects{random, date, now, sleep}, Retry.ProviderRetryOptions{Some{retries}, None{}, Some{A.signal(String, controller)}})
         finished(result)
         C.dispose(Unit, Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, request)
         C.dispose(Unit, F.F64, random)
         C.dispose(String, F.F64, date)
         C.dispose(Unit, F.F64, now)
-        C.dispose(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
+        C.dispose(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, sleep)
         A.dispose(String, controller)
 
 def arguments(values: List<String>) -> IO(Unit):

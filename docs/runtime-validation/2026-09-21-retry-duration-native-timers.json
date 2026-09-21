@@ -1,0 +1,247 @@
+{
+  "scope": "Real native timers plus instrumented lifetime checks; not a performance comparison or virtual-time boundary proof.",
+  "source_sha256": "1d55f6fc1a4dbfb9ee78e0b2dc1dadeffbf97ed738e498dd279d3d25b8a7fc1c",
+  "timer_sha256": "b6985cd3adb6ce750d13837594c2b6f2afe88761e48d42734431f92b5592f51a",
+  "samples": [
+    {
+      "threads": 1,
+      "mode": 0,
+      "seconds": 1.005881803110242,
+      "created": 1,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 1,
+      "seconds": 0.0019946331158280373,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 2,
+      "seconds": 0.003288591280579567,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 3,
+      "seconds": 2.0051415618509054,
+      "created": 1,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 4,
+      "seconds": 0.008734176866710186,
+      "created": 1,
+      "cancelled_parked": 1,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 5,
+      "seconds": 0.001254519447684288,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 6,
+      "seconds": 0.0008104052394628525,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 7,
+      "seconds": 1.502694983035326,
+      "created": 2,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 8,
+      "seconds": 0.001950693316757679,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 9,
+      "seconds": 0.0016447808593511581,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 10,
+      "seconds": 0.0045025404542684555,
+      "created": 1,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 1,
+      "mode": 11,
+      "seconds": 0.0008632447570562363,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 0,
+      "seconds": 1.0063937855884433,
+      "created": 1,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 1,
+      "seconds": 0.00193807203322649,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 2,
+      "seconds": 0.005334366112947464,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 3,
+      "seconds": 2.0075345942750573,
+      "created": 1,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 4,
+      "seconds": 0.009644023142755032,
+      "created": 1,
+      "cancelled_parked": 1,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 5,
+      "seconds": 0.0016292901709675789,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 6,
+      "seconds": 0.0009885374456644058,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 7,
+      "seconds": 1.503290164284408,
+      "created": 2,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 8,
+      "seconds": 0.0020409226417541504,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 9,
+      "seconds": 0.0019422126933932304,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 10,
+      "seconds": 0.006941855885088444,
+      "created": 1,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    },
+    {
+      "threads": 4,
+      "mode": 11,
+      "seconds": 0.0013155397027730942,
+      "created": 0,
+      "cancelled_parked": 0,
+      "live": 0,
+      "waiting": 0,
+      "channels": 0
+    }
+  ]
+}

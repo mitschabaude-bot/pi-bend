@@ -53,7 +53,7 @@ def acquire(port: U32, +mode: U32, +controller: A.AbortController<String>) -> IO
     +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Reference.randomBody, Unit{})
     +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Reference.dateBody, Unit{})
     +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Reference.nowBody, Unit{})
-    +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~Reference.sleepBody, False{})
+    +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~Reference.sleepBody, False{})
     result : Result<&2, &1, Request.Error<String>, Requests.Owner()> <- Request.run(~String, ~Requests.Payload(), ~String, ~String, ~Requests.Owner(), "model", T.PresentValue{7}, Some{payload}, Some{response}, request, Retry.Effects{random, date, now, sleep}, Retry.ProviderRetryOptions{Some{2n}, None{}, Some{A.signal(String, controller)}}, View.inspect(Exchange.Exchange<String>), Requests.release(False{}))
     C.dispose(Requests.Payload(), Result<&2, &1, Retry.RequestFailure<String>, Requests.Owner()>, request)
     C.dispose(T.PayloadInput<Requests.Payload(), String>, Result<&2, &2, String, Maybe<&2, Requests.Payload()>>, payload)
@@ -61,7 +61,7 @@ def acquire(port: U32, +mode: U32, +controller: A.AbortController<String>) -> IO
     C.dispose(Unit, F.F64, random)
     C.dispose(String, F.F64, date)
     C.dispose(Unit, F.F64, now)
-    C.dispose(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
+    C.dispose(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, sleep)
     return requestResult(result)
 
 def detail(value: Message()) -> String:

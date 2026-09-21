@@ -57,8 +57,8 @@ def request(environment: Environment, unused: Unit) -> IO(Outcome()):
         IO.print("request")
         Attempt.run(~String, ~File.Failure, envelope, signal, fetch, limit)
 
-def sleep(environment: Unit, input: Retry.SleepInput<String>) -> IO(Result<&2, &2, Unit, Unit>):
-  do IO<Result<&2, &2, Unit, Unit>>:
+def sleep(environment: Unit, input: Retry.SleepInput<String>) -> IO(Result<&2, &2, Retry.SleepError, Unit>):
+  do IO<Result<&2, &2, Retry.SleepError, Unit>>:
     IO.print("sleep")
     Sleep.sleep(String, input)
 
@@ -87,6 +87,7 @@ def consumed(value: Result<&2, &2, Consume.TextError<ReadError()>, String>) -> I
 def finished(value: Result<&2, &1, Retry.RetryFailure<ErrorValue()>, Response.Response<State()>>) -> IO(Unit):
   match value:
     case Fail{Retry.RequestFailed{cause}}: failure(cause)
+    case Fail{Retry.SleepRejected{_}}: IO.print("invalid-sleep-duration")
     case Fail{Retry.RequestAborted{}}: IO.print("aborted")
     case Fail{Retry.DelayRejected{_, _}}: IO.print("delay-rejected")
     case Done{Response.Response{_, body}}:
@@ -106,7 +107,7 @@ def run(+route: U32, port: U32, timeout: U32, limit: Nat, pre: Bool, pair: Resol
         +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.randomBody, Unit{})
         +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Effects.dateBody, Unit{})
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.nowBody, Unit{})
-        +delay : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Unit, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleep, Unit{})
+        +delay : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Unit, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~sleep, Unit{})
         Effects.preAbort(pre, parent)
         result : Result<&2, &1, Retry.RetryFailure<ErrorValue()>, Response.Response<State()>> <- Retry.retryProviderRequestOwned(String, ErrorValue(), Response.Response<State()>, attempt, Retry.Effects{random, date, now, delay}, Retry.ProviderRetryOptions{Some{1n}, None{}, Some{Abort.signal(String, parent)}})
         finished(result)
@@ -115,7 +116,7 @@ def run(+route: U32, port: U32, timeout: U32, limit: Nat, pre: Bool, pair: Resol
         C.dispose(Unit, F.F64, random)
         C.dispose(String, F.F64, date)
         C.dispose(Unit, F.F64, now)
-        C.dispose(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, delay)
+        C.dispose(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, delay)
         count : U32 <- R.dispose(U32, counter)
         IO.print("count:" ++ U32.show(count))
         Resolver.close(owner)

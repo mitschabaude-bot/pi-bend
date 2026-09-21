@@ -122,6 +122,7 @@ def released(next: Response.Next<String, Scope.State<String, Transport>>) -> IO(
 def finished(result: Result<&2, &1, Retry.RetryFailure<Error()>, Owner()>) -> IO(Unit):
   match result:
     case Fail{Retry.RequestFailed{cause}}: failure(cause)
+    case Fail{Retry.SleepRejected{_}}: IO.print("invalid-sleep-duration")
     case Fail{Retry.RequestAborted{}}: IO.print("aborted")
     case Fail{Retry.DelayRejected{_, _}}: IO.print("delay-rejected")
     case Done{Response.Response{_, body}}:
@@ -139,7 +140,7 @@ def run(+mode: U32) -> IO(Unit):
     +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.randomBody, Unit{})
     +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Effects.dateBody, Unit{})
     +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.nowBody, Unit{})
-    +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~Effects.sleepBody, False{})
+    +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~Effects.sleepBody, False{})
     Effects.preAbort(U32.is_eq(mode, 12), parent)
     result : Result<&2, &1, Retry.RetryFailure<Error()>, Owner()> <- Retry.retryProviderRequestOwned(String, Error(), Owner(), request, Retry.Effects{random, date, now, sleep}, Retry.ProviderRetryOptions{Some{1n}, None{}, Some{Abort.signal(String, parent)}})
     finished(result)
@@ -148,7 +149,7 @@ def run(+mode: U32) -> IO(Unit):
     C.dispose(Unit, F.F64, random)
     C.dispose(String, F.F64, date)
     C.dispose(Unit, F.F64, now)
-    C.dispose(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
+    C.dispose(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, sleep)
     count : U32 <- R.dispose(U32, counter)
     IO.print("count:" ++ U32.show(count))
     Abort.dispose(String, parent)

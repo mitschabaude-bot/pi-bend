@@ -130,7 +130,7 @@ def run(port: U32, +mode: U32) -> IO(Unit):
     +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Reference.randomBody, Unit{})
     +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Reference.dateBody, Unit{})
     +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Reference.nowBody, Unit{})
-    +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~Reference.sleepBody, False{})
+    +sleep : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Bool, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~Reference.sleepBody, False{})
     result : Result<&2, &1, Driver.Error<String>, Owner()> <- Driver.run(~String, ~Payload(), ~String, ~String, ~Owner(), "model", T.PresentValue{7}, Bool.pick(Maybe<&2, T.PayloadCallback(Payload(), String, String)>, U32.is_eq(mode, 0) || U32.is_eq(mode, 9), None{}, Some{payload}), Bool.pick(Maybe<&2, T.ResponseCallback(String, String)>, U32.is_eq(mode, 0) || U32.is_eq(mode, 8), None{}, Some{response}), request, Retry.Effects{random, date, now, sleep}, Retry.ProviderRetryOptions{Some{2n}, None{}, Some{A.signal(String, controller)}}, View.inspect(Exchange.Exchange<String>), release(U32.is_eq(mode, 6)))
     finished(result)
     C.dispose(Payload(), Result<&2, &1, Retry.RequestFailure<String>, Owner()>, request)
@@ -139,7 +139,7 @@ def run(port: U32, +mode: U32) -> IO(Unit):
     C.dispose(Unit, F.F64, random)
     C.dispose(String, F.F64, date)
     C.dispose(Unit, F.F64, now)
-    C.dispose(Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>, sleep)
+    C.dispose(Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>, sleep)
     A.dispose(String, controller)
 
 def arguments(values: List<String>) -> IO(Unit):
