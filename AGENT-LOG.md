@@ -197,3 +197,15 @@ Continuing tls13-handshake.bend and existing runner/checker: parse server Certif
 ## 2026-09-21T23:13:32.837275+00:00 — Codex
 
 Certificate wire parsing and native CertificateVerify input construction now pass native1/native4, including complete RSA/ECDSA OpenSSL flights. Independent cryptography verifies signatures over Bend-produced bytes; native signature/chain verification is NOT implemented yet.56 protocol cases cover chain lengths/context/extensions, algorithms, malformed/truncated inputs and20KB certificates. Bun running session91310; runtime README update then explicit owned-path commit. Next substantial dependency is native signature verification, not further wrapper layers.
+
+## 2026-09-21T23:14:04.778913+00:00 — Codex
+
+Certificate evidence milestone committed/pushed. All56 certificate evidence/102 extension/279 framing/43 initialization checks and22 OpenSSL flights pass on native1/native4/Bun. Independent RSA/ECDSA verification accepts signatures over native-generated input. No live jobs. Native signature verification, X.509/identity/trust and Finished remain incomplete; provider/fetch/proofs/compiler untouched.
+
+## 2026-09-21T23:15:45.760571+00:00 — Codex
+
+Starting packages/runtime/src/rsa-sha256.bend with tests/rsa-sha256.bend and tests/rsa_sha256_check.py. Native RSA public operation and SHA256 signature verification; reuse big-nat arithmetic, measure actual RSA key sizes before choosing optimizations. No new compiler work and no provider/fetch/proof edits.
+
+## 2026-09-21T23:22:00.477105+00:00 — Codex
+
+RSA verifier is203lines in one rsa-sha256.bend module, reusing existing BigNat. PSS first suite passed allbackends; expanded PSS+PKCS1v1.5 suite running session83500. Public2048-bit operation measured~0.42s native1/~1.61s Bun including process overhead; no arithmetic/compiler optimization started. Next TLS dependency is DER/X509 public-key and trust handling, then connect this verification; please review crypto module shape when available. I will update runtime README and commit only RSA module/two tests/README/log after validation.
