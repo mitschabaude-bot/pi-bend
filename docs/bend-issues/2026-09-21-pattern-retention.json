@@ -185,6 +185,163 @@
       "name": "reconstructed-word-marking",
       "conclusion": "Increased peak RSS; rejected.",
       "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "name": "usage-map-sharing",
+      "change": "After recursively combining persistent-map values and children, return an unchanged input node instead of allocating an identical Bin.",
+      "status": "Not installed: reduced-fixture time worsened while the paired memory difference was small.",
+      "small_pairs": [
+        {
+          "source": "tests/compiler-string-pattern-return.bend",
+          "round": 0,
+          "variant": "baseline",
+          "wall_seconds": 3.8438195353373885,
+          "peak_kib": 760056,
+          "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        },
+        {
+          "source": "tests/compiler-string-pattern-return.bend",
+          "round": 0,
+          "variant": "candidate",
+          "wall_seconds": 3.898608446121216,
+          "peak_kib": 739636,
+          "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        },
+        {
+          "source": "tests/compiler-string-pattern-return.bend",
+          "round": 1,
+          "variant": "candidate",
+          "wall_seconds": 3.9134682742878795,
+          "peak_kib": 750848,
+          "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        },
+        {
+          "source": "tests/compiler-string-pattern-return.bend",
+          "round": 1,
+          "variant": "baseline",
+          "wall_seconds": 3.8387116910889745,
+          "peak_kib": 752164,
+          "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        },
+        {
+          "source": "tests/compiler-string-pattern-return.bend",
+          "round": 2,
+          "variant": "baseline",
+          "wall_seconds": 3.867691345512867,
+          "peak_kib": 758108,
+          "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        },
+        {
+          "source": "tests/compiler-string-pattern-return.bend",
+          "round": 2,
+          "variant": "candidate",
+          "wall_seconds": 3.9199384916573763,
+          "peak_kib": 847492,
+          "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        },
+        {
+          "source": "tests/typed-do-shadow.bend",
+          "round": 0,
+          "variant": "baseline",
+          "wall_seconds": 0.16183739714324474,
+          "peak_kib": 83216,
+          "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        {
+          "source": "tests/typed-do-shadow.bend",
+          "round": 0,
+          "variant": "candidate",
+          "wall_seconds": 0.15712963044643402,
+          "peak_kib": 83056,
+          "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        {
+          "source": "tests/typed-do-shadow.bend",
+          "round": 1,
+          "variant": "candidate",
+          "wall_seconds": 0.15657222922891378,
+          "peak_kib": 87688,
+          "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        {
+          "source": "tests/typed-do-shadow.bend",
+          "round": 1,
+          "variant": "baseline",
+          "wall_seconds": 0.15220536570996046,
+          "peak_kib": 84936,
+          "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        {
+          "source": "tests/typed-do-shadow.bend",
+          "round": 2,
+          "variant": "baseline",
+          "wall_seconds": 0.15553255192935467,
+          "peak_kib": 85604,
+          "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        {
+          "source": "tests/typed-do-shadow.bend",
+          "round": 2,
+          "variant": "candidate",
+          "wall_seconds": 0.15552126336842775,
+          "peak_kib": 84324,
+          "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        },
+        {
+          "source": "tests/aes128.bend",
+          "round": 0,
+          "variant": "baseline",
+          "wall_seconds": 0.319614521227777,
+          "peak_kib": 103324,
+          "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        },
+        {
+          "source": "tests/aes128.bend",
+          "round": 0,
+          "variant": "candidate",
+          "wall_seconds": 0.3032640954479575,
+          "peak_kib": 103196,
+          "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        },
+        {
+          "source": "tests/aes128.bend",
+          "round": 1,
+          "variant": "candidate",
+          "wall_seconds": 0.3085909020155668,
+          "peak_kib": 104920,
+          "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        },
+        {
+          "source": "tests/aes128.bend",
+          "round": 1,
+          "variant": "baseline",
+          "wall_seconds": 0.3099989900365472,
+          "peak_kib": 107364,
+          "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        },
+        {
+          "source": "tests/aes128.bend",
+          "round": 2,
+          "variant": "baseline",
+          "wall_seconds": 0.315235598012805,
+          "peak_kib": 106432,
+          "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        },
+        {
+          "source": "tests/aes128.bend",
+          "round": 2,
+          "variant": "candidate",
+          "wall_seconds": 0.31188385002315044,
+          "peak_kib": 105796,
+          "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        }
+      ],
+      "medians": {
+        "classifier_baseline_seconds": 3.8438195353373885,
+        "classifier_candidate_seconds": 3.9134682742878795,
+        "classifier_baseline_peak_kib": 758108,
+        "classifier_candidate_peak_kib": 750848
+      }
     }
   ]
 }
