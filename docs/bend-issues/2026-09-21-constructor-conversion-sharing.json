@@ -1,0 +1,151 @@
+{
+  "status": "Not installed; no substantial reduced-fixture improvement, so no full build warranted.",
+  "patch": "--- a/bend.ts\n+++ b/bend.ts\n@@ -792,7 +792,9 @@\n     }\n     case \"Ctr\": {\n       if (WORD_TREES.has(tm) || STRING_TREES.has(tm)) return tm as HTerm;\n-      return Ctr(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s);\n+      const xs = tm.x.map((x) => term_higher(x, env));\n+      return xs.every((x, i) => x === tm.x[i]) ? tm as HTerm\n+        : Ctr(tm.k, xs, tm.s);\n     }\n     case \"Mat\": {\n       return Mat(tm.k, term_higher(tm.h, env), term_higher(tm.m, env), tm.s, tm.ks);\n@@ -861,7 +863,9 @@\n     }\n     case \"Ctr\": {\n       if (WORD_TREES.has(tm) || STRING_TREES.has(tm)) return tm as LTerm;\n-      return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);\n+      const xs = tm.x.map((x) => term_lower(x, d));\n+      return xs.every((x, i) => x === tm.x[i]) ? tm as LTerm\n+        : Ctr(tm.k, xs, tm.s);\n     }\n     case \"Mat\": {\n       return Mat(tm.k, term_lower(tm.h, d), term_lower(tm.m, d), tm.s, tm.ks);\n",
+  "small_pairs": [
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 3.8593617789447308,
+      "peak_kib": 749488,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 3.921980571001768,
+      "peak_kib": 751996,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 3.822304849512875,
+      "peak_kib": 718088,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 3.84822756331414,
+      "peak_kib": 784488,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 3.815540269948542,
+      "peak_kib": 765780,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 3.91844120901078,
+      "peak_kib": 796904,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.1541717043146491,
+      "peak_kib": 84080,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.1583908349275589,
+      "peak_kib": 86096,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.15985259134322405,
+      "peak_kib": 85044,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.15891276858747005,
+      "peak_kib": 83112,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.1586017170920968,
+      "peak_kib": 83120,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.15609359368681908,
+      "peak_kib": 84704,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.33282813895493746,
+      "peak_kib": 104212,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.3203862886875868,
+      "peak_kib": 103776,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.31073424126952887,
+      "peak_kib": 107308,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.3134185550734401,
+      "peak_kib": 104440,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.31693618278950453,
+      "peak_kib": 105976,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.31601263862103224,
+      "peak_kib": 102896,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    }
+  ],
+  "validation": "Exact generated C for all reduced pairs; no checker changes. Additional correctness/performance work is not justified for this unadopted experiment."
+}

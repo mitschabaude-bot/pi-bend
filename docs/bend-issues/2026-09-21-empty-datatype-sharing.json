@@ -1,0 +1,176 @@
+{
+  "status": "Not installed: full peak reduction is under one percent; small timing results are mixed.",
+  "patch": "--- a/bend.ts\n+++ b/bend.ts\n@@ -398,7 +398,18 @@\n   return { $: \"App\", f, x, s };\n }\n \n+const EMPTY_ADTS = new WeakMap<Span, Map<Name, HTerm>>();\n+\n export function ADT<X>(k: Name, x: TermOf<X>[], s?: Span, r: Name[] = []): TermOf<X> {\n+  if (x.length === 0 && r.length === 0 && s !== undefined) {\n+    let cells = EMPTY_ADTS.get(s);\n+    const got = cells?.get(k);\n+    if (got !== undefined) return got as TermOf<X>;\n+    const out = { $: \"ADT\", k, x, r, s } as TermOf<X>;\n+    if (cells === undefined) EMPTY_ADTS.set(s, cells = new Map());\n+    cells.set(k, out as HTerm);\n+    return out;\n+  }\n   return { $: \"ADT\", k, x, r, s };\n }\n \n",
+  "small_pairs": [
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 3.82824148517102,
+      "peak_kib": 800208,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 3.6400130996480584,
+      "peak_kib": 709672,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 3.7373101403936744,
+      "peak_kib": 788900,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 3.968681731261313,
+      "peak_kib": 772908,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 3.859841304831207,
+      "peak_kib": 727692,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 3.746750373393297,
+      "peak_kib": 776732,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.16739759594202042,
+      "peak_kib": 85076,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.15677433460950851,
+      "peak_kib": 85664,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.16862171329557896,
+      "peak_kib": 85448,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.15779506973922253,
+      "peak_kib": 88288,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.15150952246040106,
+      "peak_kib": 83400,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.1547335423529148,
+      "peak_kib": 81152,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.32272045221179724,
+      "peak_kib": 103016,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.3215498048812151,
+      "peak_kib": 102856,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.3140140511095524,
+      "peak_kib": 103216,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.29972176533192396,
+      "peak_kib": 104924,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.30160205718129873,
+      "peak_kib": 105920,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.29968319553881884,
+      "peak_kib": 104300,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    }
+  ],
+  "full": {
+    "seconds": 200.61664400808513,
+    "sampled_peak_rss_bytes": 8362131456,
+    "peak_rss_bytes": 8361795584,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "full_metadata": {
+    "source": "/home/agent/code/pi-bend/tests/openai-system-defaults.bend",
+    "source_sha256": "15b82c8f8d70b1e322ea4ddcc38139c0f1e4cafba94ba139e861ed212f6fa297",
+    "compiler": "/home/agent/code/pi-bend/build/bend-profiles/empty-datatype-sharing-clean/bend2",
+    "compiler_sha256": "85d7a28f339e759539d641c5cc48dd45b90fdc333206b4f15a6cfa18a91490e4",
+    "compiler_files_sha256": {
+      "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+      "bend.ts": "425845b732cf7b28ed01d8d5faf2da96f7ea372623d4f67368f32c33b6c68f60",
+      "comp.ts": "85d7a28f339e759539d641c5cc48dd45b90fdc333206b4f15a6cfa18a91490e4",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    },
+    "smol": false,
+    "clear_teles": false,
+    "gc_passes": false,
+    "rss_limit_gib": 14.0,
+    "bun_version": "1.4.0"
+  },
+  "output_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+  "validation": "Field/fallback and indexed word suite, word literals, string literals: exact C and JS; native one/four threads and Bun pass. Positive generic proof gate passes. Correctness jobs overlapped; their timings are not controlled benchmarks."
+}

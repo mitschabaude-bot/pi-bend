@@ -1,0 +1,268 @@
+{
+  "families": [
+    {
+      "family": "Ctr:WCon",
+      "count": 597410,
+      "bytes": 28675680
+    },
+    {
+      "family": "Ctr:Succ",
+      "count": 96648,
+      "bytes": 4639104
+    },
+    {
+      "family": "ADT:Word.Con",
+      "count": 58218,
+      "bytes": 3725952
+    },
+    {
+      "family": "ADT:Bool",
+      "count": 53852,
+      "bytes": 3446528
+    },
+    {
+      "family": "Ctr:Chr",
+      "count": 36975,
+      "bytes": 1774800
+    },
+    {
+      "family": "Ctr:U32",
+      "count": 36953,
+      "bytes": 1773744
+    },
+    {
+      "family": "Ctr:SCon",
+      "count": 33884,
+      "bytes": 1626432
+    },
+    {
+      "family": "ADT:String",
+      "count": 23500,
+      "bytes": 1504000
+    },
+    {
+      "family": "ADT:Char",
+      "count": 16986,
+      "bytes": 1087104
+    },
+    {
+      "family": "ADT:U32",
+      "count": 9931,
+      "bytes": 635584
+    },
+    {
+      "family": "Ctr:False",
+      "count": 1530,
+      "bytes": 73440
+    },
+    {
+      "family": "Ctr:True",
+      "count": 386,
+      "bytes": 18528
+    },
+    {
+      "family": "ADT:Map",
+      "count": 369,
+      "bytes": 23616
+    },
+    {
+      "family": "ADT:List",
+      "count": 347,
+      "bytes": 22208
+    },
+    {
+      "family": "ADT:Word.Nil",
+      "count": 246,
+      "bytes": 15744
+    },
+    {
+      "family": "ADT:Array",
+      "count": 184,
+      "bytes": 11776
+    },
+    {
+      "family": "ADT:Maybe",
+      "count": 182,
+      "bytes": 11648
+    },
+    {
+      "family": "Ctr:Zero",
+      "count": 163,
+      "bytes": 7824
+    },
+    {
+      "family": "Ctr:Tuple",
+      "count": 157,
+      "bytes": 7536
+    },
+    {
+      "family": "ADT:Nat",
+      "count": 118,
+      "bytes": 7552
+    },
+    {
+      "family": "Ctr:WNil",
+      "count": 117,
+      "bytes": 5616
+    },
+    {
+      "family": "ADT:Sigma",
+      "count": 105,
+      "bytes": 6720
+    },
+    {
+      "family": "Ctr:SNil",
+      "count": 90,
+      "bytes": 4320
+    },
+    {
+      "family": "ADT:Result",
+      "count": 73,
+      "bytes": 4672
+    },
+    {
+      "family": "Ctr:Con",
+      "count": 67,
+      "bytes": 3216
+    },
+    {
+      "family": "Ctr:Nil",
+      "count": 66,
+      "bytes": 3168
+    },
+    {
+      "family": "ADT:Cmp",
+      "count": 46,
+      "bytes": 2944
+    },
+    {
+      "family": "Ctr:MLeaf",
+      "count": 40,
+      "bytes": 1920
+    },
+    {
+      "family": "Ctr:None",
+      "count": 33,
+      "bytes": 1584
+    },
+    {
+      "family": "Ctr:MNode",
+      "count": 31,
+      "bytes": 1488
+    },
+    {
+      "family": "Ctr:MTip",
+      "count": 31,
+      "bytes": 1488
+    },
+    {
+      "family": "Ctr:Some",
+      "count": 27,
+      "bytes": 1296
+    },
+    {
+      "family": "Ctr:EQ",
+      "count": 25,
+      "bytes": 1200
+    },
+    {
+      "family": "Ctr:GT",
+      "count": 25,
+      "bytes": 1200
+    },
+    {
+      "family": "Ctr:LT",
+      "count": 25,
+      "bytes": 1200
+    },
+    {
+      "family": "ADT:undefined",
+      "count": 22,
+      "bytes": 1408
+    },
+    {
+      "family": "Ctr:ALeaf",
+      "count": 16,
+      "bytes": 768
+    },
+    {
+      "family": "Ctr:ANode",
+      "count": 15,
+      "bytes": 720
+    },
+    {
+      "family": "ADT:Unit",
+      "count": 13,
+      "bytes": 832
+    },
+    {
+      "family": "ADT:IO.OP",
+      "count": 12,
+      "bytes": 768
+    },
+    {
+      "family": "Ctr:Unit",
+      "count": 10,
+      "bytes": 480
+    },
+    {
+      "family": "ADT:App",
+      "count": 7,
+      "bytes": 448
+    },
+    {
+      "family": "ADT:Image",
+      "count": 6,
+      "bytes": 384
+    },
+    {
+      "family": "Ctr:Done",
+      "count": 6,
+      "bytes": 288
+    },
+    {
+      "family": "Ctr:Fail",
+      "count": 6,
+      "bytes": 288
+    },
+    {
+      "family": "ADT:Event",
+      "count": 5,
+      "bytes": 320
+    },
+    {
+      "family": "ADT:Either",
+      "count": 4,
+      "bytes": 256
+    },
+    {
+      "family": "Ctr:F32",
+      "count": 4,
+      "bytes": 192
+    },
+    {
+      "family": "Ctr:Halt",
+      "count": 2,
+      "bytes": 96
+    },
+    {
+      "family": "Ctr:App",
+      "count": 2,
+      "bytes": 96
+    },
+    {
+      "family": "ADT:F32",
+      "count": 1,
+      "bytes": 64
+    }
+  ],
+  "closed_adt_instances": 100920,
+  "closed_adt_distinct_span_and_name": 106,
+  "scope": "Installed compiler on original reduced fallback fixture, heap snapshot on CLI exit; not peak RSS or allocation-stack sampling.",
+  "compiler_hashes": {
+    "bend.ts": "acba5df7f2226f6403b709d96e48f74a733e7a4a0bc3a43308f34cffbf549475",
+    "comp.ts": "85d7a28f339e759539d641c5cc48dd45b90fdc333206b4f15a6cfa18a91490e4"
+  },
+  "method": "bun --heap-prof emits a V8-format heap snapshot in this build. Object property edges identify Ctr/ADT families; zero-argument/exclusion arrays contain no element edges. Distinct keys are exact source-span node identity plus datatype name.",
+  "trace_function_count": 0
+}
