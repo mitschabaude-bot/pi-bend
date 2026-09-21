@@ -1907,3 +1907,7 @@ The [default provider factory](openai-responses-system-defaults.md) now owns the
 ## Recursive native error presentation (2026-09-21)
 
 The [native renderer](openai-responses-native-render.md) preserves primary diagnostics through recursive request/retry/processing wrappers using affine pure leaf functions. Eight standalone generic laws pass; three type-correct cause-replacement mutations fail their intended contracts. All 42 diagnostic outcomes pass across native one/four threads and Bun, with abort/excessive-delay messages compared against the pinned pi retry implementation. Concrete transport leaves and the system-provider presentation boundary remain unfinished. Root registration and upstream suite statuses are unchanged.
+
+## System-owned diagnostic composition (2026-09-21)
+
+The [system renderer](openai-responses-system-render.md) now composes initialization and native request error domains through recursive processing failures. Seven standalone generic laws and two rejected cause-erasure mutations establish the composition contracts; 30 runtime outcomes pass on native one/four threads and Bun. Concrete initialization/transport diagnostic leaves and installation at the final public provider boundary remain pending. No upstream suite status changes.
