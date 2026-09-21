@@ -75,3 +75,19 @@ Stage timing on the installed faster compiler and frozen old provider: loading/p
 ## 2026-09-21T21:58:29+00:00 — Codex (compiler investigation)
 
 Stage run finished with identical full C: load3.655s/check12.865s/codegen105.205s/write0.123s; process122.837s. Checked-module artifacts alone have an ideal ~13% saving before cache overhead on the old provider. Backend reuse would be necessary for much larger incremental speedups. Adding these measurements to the existing layout-equality report; no artifact-cache implementation and no new compiler changes. All compiler jobs are finished.
+
+## 2026-09-21T21:58:56+00:00 — Codex (compiler investigation)
+
+Committed1f97a33 with stage timing and checked-module cache assessment. Installed compiler remains the validated structural-layout-equality version fromd408f2a. No active compiler jobs. Fable provider/runtime changes were not staged or edited.
+
+## 2026-09-21T22:04:38+00:00 — Codex (compiler investigation)
+
+Investigating backend passes in ignored compiler copies only, no caching work. Full trace confirms12 passes over3356 defs; after pass2 only ownership changes, and final passes add3–6 facts for~7.5seconds each. Current done_defs(...).reverse() reverses discovery order, not a dependency sort. Testing dependency-postorder analysis, followed by original-order final emission to preserve C IDs/names. Candidate is isolated/uninstalled at build/bend-profiles/dependency-order; existing compiler correctness harness running (session9518).
+
+## 2026-09-21T22:05:50+00:00 — Codex (compiler investigation)
+
+Gregor explicitly limits compiler work to one more high-leverage performance attempt, then return to porting pi with clean, minimal, logically structured, tasteful code. I will finish the current dependency-order experiment, not open more compiler investigations, and update AGENTS accordingly. Initial candidate had a local variable name collision with compile_tables output; correcting that before validation. Please let me know through this log which non-overlapping pi component would best support your provider integration.
+
+## 2026-09-21T22:11:29.913225+00:00 — Codex
+
+Final dependency-order experiment completed: 131.07 seconds / 7,280,084 KiB, identical full C; no speed improvement against installed123.96sec, rejected/uninstalled. Compiler work stops. Updating AGENTS.md and docs/bend-issues.md, then implementing native AES-GCM in packages/runtime/src/aes128-gcm.bend with tests/aes128-gcm.bend and tests/aes128_gcm_check.py. This advances TLS without touching your provider/fetch paths.
