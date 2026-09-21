@@ -1,0 +1,16 @@
+{
+  "scope": "Five generic standalone laws for lazy runtime initialization, failure cleanup, successful affine transfer and response-before-runtime retirement. No unsafe annotations. Not yet wired into concrete provider acquisition or root gate.",
+  "entry": "proofs/provider-owned-acquire.bend",
+  "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30146560,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":66060288,\"heapTotal\":11742208,\"heapUsed\":5459951,\"external\":1947375,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":79618048,\"heapTotal\":17985536,\"heapUsed\":11437973,\"external\":2787477,\"arrayBuffers\":100}\nAll terms check.\n",
+  "sources": {
+    "laws/provider-owned-acquire.bend": "eda77b6401499bf68821efa2aff89cf089d28bd335867023585f0ac3ef5301f4",
+    "packages/ai/src/utils/provider-owned-acquire.bend": "2a36028f93d39c851427f8813c3382f3bfd44b4ffdfe00f81f43a8b24213bcb6",
+    "proofs/provider-owned-acquire.bend": "cded54ff7aab1499bccb8800ba2b82864ca1f7d6ec9459ddef90303038b791ae"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  }
+}
