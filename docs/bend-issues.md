@@ -8,6 +8,8 @@ Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with ei
 
 ## BEND-001 — Native compilation consumes tens of GiB
 
+An [isolated early-output-release candidate](bend-issues/2026-09-21-unstable-output.json) stops retaining C text once a monotonic optimization fact changes during a pass. All analysis continues; the final stable pass emits normally. Its eleven unstable passes finished with zero retained segment lines, and the complete output is byte-identical. Full compilation measured 317 seconds and 9.74 GiB sampled peak versus the installed 319 seconds/10.08 GiB. It is retained under `patches/experimental/bend-discard-unstable-output.patch`, not installed while comparing a smaller change that compacts completed function text. Word, string-fallback, indexed-word and captured/concurrent callback regressions pass on native one/four threads and Bun.
+
 [Same-span word-tail sharing](bend-issues/2026-09-21-word-tail-sharing.json) was rejected: explicitly reachable checked objects fell from 17.72 to 17.24 million, but the full sampled peak rose from 10.08 to 12.56 GiB (319 to 316 seconds, identical C). The cause of this RSS increase is not established. The candidate remains uninstalled.
 
 A [checked-syntax census](bend-issues/2026-09-21-checked-node-census.json) now finds 17,720,108 explicitly reachable objects, including 4,693,409 arrays, 2,337,032 annotations and 2,157,378 word-bit constructors. It excludes closure environments and source spans, so these are node counts, not a heap dominator analysis. Remaining literal representation is a concrete next target; any sharing must preserve checked values, bit widths and source diagnostics.

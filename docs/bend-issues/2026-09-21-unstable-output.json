@@ -1,0 +1,307 @@
+{
+  "status": "Validated candidate, not installed while comparing the smaller completed-segment compaction change.",
+  "patch": "--- a/comp.ts\n+++ b/comp.ts\n@@ -71,6 +71,7 @@\n };\n \n type File = Carb & {\n+  emit: boolean;\n   spares: { words: number; name: string; z: boolean }[];\n   fresh: Map<string, number>;\n   uses: Map<Probe, Bind>;\n@@ -1527,7 +1528,7 @@\n // ====\n \n function file_new(cb: Carb, decl: string): File {\n-  return { ...cb, decl, segs: [], seg: seg_new(\"\", BOX, []), tab: 2,\n+  return { ...cb, emit: true, decl, segs: [], seg: seg_new(\"\", BOX, []), tab: 2,\n     cids: new Map(), tabs: new Map(), spins: [], spun: new Map(), clos: new Set(),\n     img: [], lits: new Map(), reqs: \"\", fuel: 0, fresh: new Map(), spares: [],\n     uses: new Map(), brwl: new Map(), rest: [], def: \"\" };\n@@ -1536,7 +1537,7 @@\n const FILE_INDENT = \"  \".repeat(16);\n \n function file_push(fl: File, line: string): void {\n-  fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);\n+  if (fl.emit) fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);\n }\n \n // Block\n@@ -2188,14 +2189,14 @@\n   seg.fid = name;\n   const dst = val_new(seg.ret.ks.map(() => name_local(fl, \"v\")), seg.ret);\n   emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);\n-  fl.spins.push([name, [`${seg.lines.length < SPIN_FAR ? \"INLINE\" : \"FAR\"} Term ${name}(Env e, THR Term* o${\n+  fl.spins.push([name, fl.emit ? [`${seg.lines.length < SPIN_FAR ? \"INLINE\" : \"FAR\"} Term ${name}(Env e, THR Term* o${\n     seg.ks.map((k, i) => `, ${lay_c(k)} r${i}`).join(\"\")}) {`,\n   \"  u32 wpoll = 0;\",\n   ...dst.ws.map((v, j) => `  ${lay_c(seg.ret.ks[j])} ${v} = 0;`),\n   ...seg_take(seg).map((l) => \"  \" + l),\n   \"  WL_SPIN\", ...seg.lines, \"  break;\", \"  }\",\n   ...dst.ws.map((v, j) => `  o[${j}] = ${v};`),\n-  \"  return 1;\", \"}\"].join(\"\\n\"), seg.refs]);\n+  \"  return 1;\", \"}\"].join(\"\\n\") : \"\", seg.refs]);\n   Object.assign(fl, outer);\n   return name;\n }\n@@ -2880,6 +2881,7 @@\n   const pass = (defs: [Bend.Name, Def][]): File => {\n     [cb.lend, BRWS].forEach((m) => m.clear());\n     const fl = file_new(cb, \"Term\");\n+    const count = cb.own.size + cb.hot.size + cb.stat.size;\n     for (const k of SRCS.keys()) {\n       for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {\n         fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);\n@@ -2887,6 +2889,12 @@\n     }\n     for (const [k, tld] of defs) {\n       compile_def(fl, k, tld);\n+      // These sets only grow: once they change, this pass's source is discarded.\n+      if (fl.emit && count !== cb.own.size + cb.hot.size + cb.stat.size) {\n+        fl.emit = false;\n+        for (const seg of fl.segs) seg.lines = [];\n+        for (const spin of fl.spins) spin[1] = \"\";\n+      }\n     }\n     compile_reqs(fl);\n     facts_lend(cb);\n",
+  "source_audit": [
+    "own/hot/stat are monotonic sets: all writes found are add; no clear/delete or assignments during a compile. Their summed sizes detect that the current pass is already unstable.",
+    "compile_def still performs all analysis and emission computations. Only retention in file_push is skipped after instability is known.",
+    "Prior Seg.lines and spin source strings are cleared once. Segment metadata, names, references, layouts and optimization facts remain.",
+    "Native Seg.lines is otherwise read only to form spin text, its inline/far declaration, and final C. Spin text is read only after convergence.",
+    "Nested emit_native saves/restores File state, but instability is marked only between top-level definitions, after nested emission returns.",
+    "Foreign request processing and facts_lend still run. If they discover the first change, existing end-pass handling discards the File normally.",
+    "JavaScript file_new starts emit=true and never enters the native pass loop, so its emitted text is unchanged."
+  ],
+  "baseline_comp_sha256": "18dbaf7b9fee941767e1128220fba758ba23dbaaf3709475bf7a9c732875023c",
+  "candidate_comp_sha256": "d814296bb5f7da60339386d9d2e10588ce9458319ce4ccc1d3049ec19fbd9d35",
+  "field_regression": {
+    "compiler-string-pattern-return": {
+      "artifacts": {
+        "baseline": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        },
+        "candidate": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        }
+      },
+      "cases_per_backend": 109,
+      "source_sha256": "ec4585980bc2e8a5715ca91d8697eef2dc9b33d8531c073ebcdd0a6563285662"
+    },
+    "compiler-word-field-cache": {
+      "artifacts": {
+        "baseline": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        },
+        "candidate": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        }
+      },
+      "cases_per_backend": 10,
+      "source_sha256": "a8635a010af66691b952d2f08fbe091ceb8991ec9ca22ec1bfb9c6f216bc3428"
+    },
+    "compilers": {
+      "baseline": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "18dbaf7b9fee941767e1128220fba758ba23dbaaf3709475bf7a9c732875023c",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "candidate": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "d814296bb5f7da60339386d9d2e10588ce9458319ce4ccc1d3049ec19fbd9d35",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      }
+    }
+  },
+  "word_regression": {
+    "baseline": {
+      "compiler": {
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "18dbaf7b9fee941767e1128220fba758ba23dbaaf3709475bf7a9c732875023c",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "programs": {
+        ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+        ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+      }
+    },
+    "candidate": {
+      "compiler": {
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "d814296bb5f7da60339386d9d2e10588ce9458319ce4ccc1d3049ec19fbd9d35",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "programs": {
+        ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+        ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+      }
+    },
+    "source_sha256": "d2962519d26b72a9fd9623d3e0914c8691db4694c196d6539fc404d4b85e5b69",
+    "harness_sha256": "d62a0998058333c6bdf7ffadc6a6bf69ecd8216021dbfea11e9bc996b07f903a",
+    "expected": [
+      "0:0:0",
+      "1:1:1",
+      "2147483648:2147483648:1",
+      "4294967295:4294967295:1",
+      "0",
+      "2147483648",
+      "1065353216",
+      "1036831949",
+      "8388608",
+      "1",
+      "2139095039",
+      "0:0:0",
+      "1:1:1",
+      "2:2:1",
+      "255:255:1",
+      "65535:65535:1",
+      "2147483648:2147483648:1",
+      "4294967295:4294967295:1"
+    ],
+    "backends": [
+      "native-1",
+      "native-4",
+      "bun"
+    ]
+  },
+  "callback_regression": {
+    ".c": "e0c281441ec06d7d9ac113f5c723d66875e6dfcc8169af0910ce121b0719f358",
+    ".js": "54a538135f6aea98d6ce8bc928d95a59ca4c7cc7cd57ffa41860a11aee4cdda0"
+  },
+  "full": {
+    "seconds": 316.685984890908,
+    "sampled_peak_rss_bytes": 10453868544,
+    "peak_rss_bytes": 10478596096,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "baseline_full": {
+    "seconds": 319.1867097290233,
+    "sampled_peak_rss_bytes": 10827862016,
+    "peak_rss_bytes": 10865299456,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "full_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+  "small_pairs": [
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 6.081014299765229,
+      "peak_kib": 1025960,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 6.096903136000037,
+      "peak_kib": 1061924,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 6.0708180805668235,
+      "peak_kib": 956276,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 6.352896749973297,
+      "peak_kib": 1176592,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 5.953507162630558,
+      "peak_kib": 1070636,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 6.176357991062105,
+      "peak_kib": 1004080,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.1574508622288704,
+      "peak_kib": 86508,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.15894781053066254,
+      "peak_kib": 81956,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.15576348174363375,
+      "peak_kib": 85320,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.16938654705882072,
+      "peak_kib": 92588,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.15745348203927279,
+      "peak_kib": 85044,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.16949643660336733,
+      "peak_kib": 84836,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.3397303204983473,
+      "peak_kib": 112952,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.3611677223816514,
+      "peak_kib": 122712,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.32109013199806213,
+      "peak_kib": 110904,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.3379576876759529,
+      "peak_kib": 111488,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.33413564320653677,
+      "peak_kib": 114204,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.3345643663778901,
+      "peak_kib": 113312,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    }
+  ],
+  "output_trace": [
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-message.recordData\",\"lines\":21}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-message.record\",\"lines\":760}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-response.inspect\",\"lines\":28796}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-name.step\",\"lines\":3329}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-message.recordFields\",\"lines\":204}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-message.section~0\",\"lines\":1120}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-address-answer.relevant\",\"lines\":39540}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-address-answer.scan\",\"lines\":44982}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-address-answer.found\",\"lines\":47323}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-address-answer.visited\",\"lines\":59723}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-DISCARD {\"definition\":\"../packages/runtime/src/dns-edns-response.inspect\",\"lines\":83836}",
+    "OUTPUT-PASS {\"emit\":false,\"segments\":14906,\"lines\":0}",
+    "OUTPUT-PASS {\"emit\":true,\"segments\":14906,\"lines\":5345121}"
+  ],
+  "limitations": [
+    "Full shared-host build overlapped short correctness jobs.",
+    "About3.5% sampled-RSS reduction; remaining peak is still9.74GiB.",
+    "Not proof of a universal no-performance-regression claim."
+  ]
+}

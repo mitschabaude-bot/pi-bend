@@ -1,0 +1,66 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -71,6 +71,7 @@
+ };
+
+ type File = Carb & {
++  emit: boolean;
+   spares: { words: number; name: string; z: boolean }[];
+   fresh: Map<string, number>;
+   uses: Map<Probe, Bind>;
+@@ -1527,7 +1528,7 @@
+ // ====
+
+ function file_new(cb: Carb, decl: string): File {
+-  return { ...cb, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
++  return { ...cb, emit: true, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
+     cids: new Map(), tabs: new Map(), spins: [], spun: new Map(), clos: new Set(),
+     img: [], lits: new Map(), reqs: "", fuel: 0, fresh: new Map(), spares: [],
+     uses: new Map(), brwl: new Map(), rest: [], def: "" };
+@@ -1536,7 +1537,7 @@
+ const FILE_INDENT = "  ".repeat(16);
+
+ function file_push(fl: File, line: string): void {
+-  fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);
++  if (fl.emit) fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);
+ }
+
+ // Block
+@@ -2188,14 +2189,14 @@
+   seg.fid = name;
+   const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
+   emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
+-  fl.spins.push([name, [`${seg.lines.length < SPIN_FAR ? "INLINE" : "FAR"} Term ${name}(Env e, THR Term* o${
++  fl.spins.push([name, fl.emit ? [`${seg.lines.length < SPIN_FAR ? "INLINE" : "FAR"} Term ${name}(Env e, THR Term* o${
+     seg.ks.map((k, i) => `, ${lay_c(k)} r${i}`).join("")}) {`,
+   "  u32 wpoll = 0;",
+   ...dst.ws.map((v, j) => `  ${lay_c(seg.ret.ks[j])} ${v} = 0;`),
+   ...seg_take(seg).map((l) => "  " + l),
+   "  WL_SPIN", ...seg.lines, "  break;", "  }",
+   ...dst.ws.map((v, j) => `  o[${j}] = ${v};`),
+-  "  return 1;", "}"].join("\n"), seg.refs]);
++  "  return 1;", "}"].join("\n") : "", seg.refs]);
+   Object.assign(fl, outer);
+   return name;
+ }
+@@ -2880,6 +2881,7 @@
+   const pass = (defs: [Bend.Name, Def][]): File => {
+     [cb.lend, BRWS].forEach((m) => m.clear());
+     const fl = file_new(cb, "Term");
++    const count = cb.own.size + cb.hot.size + cb.stat.size;
+     for (const k of SRCS.keys()) {
+       for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
+         fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
+@@ -2887,6 +2889,12 @@
+     }
+     for (const [k, tld] of defs) {
+       compile_def(fl, k, tld);
++      // These sets only grow: once they change, this pass's source is discarded.
++      if (fl.emit && count !== cb.own.size + cb.hot.size + cb.stat.size) {
++        fl.emit = false;
++        for (const seg of fl.segs) seg.lines = [];
++        for (const spin of fl.spins) spin[1] = "";
++      }
+     }
+     compile_reqs(fl);
+     facts_lend(cb);
