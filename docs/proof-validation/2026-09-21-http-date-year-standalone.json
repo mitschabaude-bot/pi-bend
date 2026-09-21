@@ -1,0 +1,19 @@
+{
+  "scope": "Four standalone laws and three supporting lemmas: literal-year handling, weekday independence and reference-error preservation. No unsafe annotations. Does not prove the complete rolling-window arithmetic; not yet registered in full root.",
+  "entry": "proofs/http-date-year.bend",
+  "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30277632,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":105644032,\"heapTotal\":42181632,\"heapUsed\":13939689,\"external\":2139649,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":235487232,\"heapTotal\":148957184,\"heapUsed\":51578761,\"external\":2879545,\"arrayBuffers\":100}\nAll terms check.\n",
+  "sources": {
+    "laws/http-date-year.bend": "f814ccff31e9b28e01ef9cfa8acda1419739eadae906d1896da76f9e9739db8e",
+    "packages/runtime/src/calendar.bend": "39b1e7aedfa881508a9aed5923ac48c18ba7bad9ea583dbddcf24932d3083e7b",
+    "packages/runtime/src/http-date-syntax.bend": "095c9afa454769a4f9da24925bf3bb46bab20f7ada4dd0351b152c5f1947e256",
+    "packages/runtime/src/http-date-year.bend": "dc97acb9b3f4951f87b689c79b86a5c830f260ac15689244f02fb08ada4b0029",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "proofs/http-date-year.bend": "e0c3d442fb953967bf8ab9b640d295ce5cc84f4df32804eb6e0b50e0d28730c2"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  }
+}
