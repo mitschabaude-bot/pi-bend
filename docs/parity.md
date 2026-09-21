@@ -1902,3 +1902,8 @@ The [envelope-error renderer](openai-responses-envelope-error.md) now covers typ
 ## Default clock and SSE policy assembly — Bun validation (2026-09-21)
 
 The [default provider factory](openai-responses-system-defaults.md) now owns the default SSE callbacks and samples the wall clock before initialization/preparation, with injectable clock and timestamp alternatives. All 36 plain/audited Bun sessions pass with stable event/final timestamps and zero residual resources. Native C generation exceeded 44 GiB and 49 GiB guards; no native execution of this factory is claimed. Its original clock/retirement law pair remains outside the accepted proof gate because the clock law overflows the checker. A candidate that checks it was rejected for a discarded-argument performance regression. No upstream suite status is promoted.
+
+
+## Recursive native error presentation (2026-09-21)
+
+The [native renderer](openai-responses-native-render.md) preserves primary diagnostics through recursive request/retry/processing wrappers using affine pure leaf functions. Eight standalone generic laws pass; three type-correct cause-replacement mutations fail their intended contracts. All 42 diagnostic outcomes pass across native one/four threads and Bun, with abort/excessive-delay messages compared against the pinned pi retry implementation. Concrete transport leaves and the system-provider presentation boundary remain unfinished. Root registration and upstream suite statuses are unchanged.
