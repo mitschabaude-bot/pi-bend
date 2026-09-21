@@ -15,3 +15,5 @@ python3 tests/openai_system_render_check.py
 ```
 
 All [30 runtime outcomes](runtime-validation/2026-09-21-system-render.json) pass on native one/four threads and Bun. The [standalone proof record](proof-validation/2026-09-21-system-render-standalone.json) also records two type-correct cause-erasure mutations failing their intended initialization/request contracts. [Build evidence](bend-issues/2026-09-21-system-render-compiler.json) retains source/program hashes and guarded measurements.
+
+Proof integration update: the component laws are now included in the [552-law root check](proof-validation/2026-09-21-diagnostic-root.json), alongside 74 supporting lemmas. Earlier standalone counts and historical validation descriptions above do not limit their current registration.

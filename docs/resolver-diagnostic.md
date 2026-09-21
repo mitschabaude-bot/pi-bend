@@ -13,3 +13,5 @@ BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" sh scripts/bui
 bun build/bend-profiles/dns-transport-teles/bend2/main.ts tests/resolver-diagnostic.bend -o build/resolver-diagnostic.js
 python3 tests/resolver_diagnostic_check.py
 ```
+
+Proof integration update: the component laws are now included in the [552-law root check](proof-validation/2026-09-21-diagnostic-root.json), alongside 74 supporting lemmas. Earlier standalone counts and historical validation descriptions above do not limit their current registration.

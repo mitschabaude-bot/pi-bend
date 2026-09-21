@@ -95,3 +95,7 @@ import ./laws/openai-responses-system-error.bend as OpenAIResponsesSystemError
 import ./laws/openai-responses-system-provider.bend as OpenAIResponsesSystemProvider
 import ./laws/openai-responses-stream-error.bend as OpenAIResponsesStreamError
 import ./laws/openai-responses-envelope-error.bend as OpenAIResponsesEnvelopeError
+import ./laws/openai-responses-native-render.bend as OpenAIResponsesNativeRender
+import ./laws/openai-responses-system-render.bend as OpenAIResponsesSystemRender
+import ./laws/resolver-diagnostic.bend as ResolverDiagnostic
+import ./laws/openai-responses-initialization-error.bend as OpenAIResponsesInitializationError

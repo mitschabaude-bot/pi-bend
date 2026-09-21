@@ -96,3 +96,7 @@ import ./proofs/openai-responses-system-error.bend as OpenAIResponsesSystemError
 import ./proofs/openai-responses-system-provider.bend as OpenAIResponsesSystemProvider
 import ./proofs/openai-responses-stream-error.bend as OpenAIResponsesStreamError
 import ./proofs/openai-responses-envelope-error.bend as OpenAIResponsesEnvelopeError
+import ./proofs/openai-responses-native-render.bend as OpenAIResponsesNativeRender
+import ./proofs/openai-responses-system-render.bend as OpenAIResponsesSystemRender
+import ./proofs/resolver-diagnostic.bend as ResolverDiagnostic
+import ./proofs/openai-responses-initialization-error.bend as OpenAIResponsesInitializationError

@@ -15,3 +15,5 @@ python3 tests/openai_native_render_check.py
 ```
 
 All [42 diagnostic outcomes](runtime-validation/2026-09-21-native-render.json) pass across native one/four threads and Bun. The [compiler record](bend-issues/2026-09-21-native-render-compiler.json) records source/program hashes and guarded emission/build measurements. This fixture uses the accepted isolated compiler, with no experimental lifetime change.
+
+Proof integration update: the component laws are now included in the [552-law root check](proof-validation/2026-09-21-diagnostic-root.json), alongside 74 supporting lemmas. Earlier standalone counts and historical validation descriptions above do not limit their current registration.

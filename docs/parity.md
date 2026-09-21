@@ -1925,3 +1925,8 @@ The shared [resolver diagnostic module](resolver-diagnostic.md) now retains nati
 ## Concrete initialization diagnostics (2026-09-21)
 
 The [initialization formatter](openai-responses-initialization-error.md) now presents resolver configuration and entropy initialization failures, preserving OS causes and short-read counts. Six generic laws and 30 native/Bun runtime outcomes pass. Installation into the final provider renderer and concrete transport leaves remain pending. Upstream suite statuses remain unchanged.
+
+
+## Diagnostic proof integration (2026-09-21)
+
+The completed [trusted-compiler root check](proof-validation/2026-09-21-diagnostic-root.json) proves 552 public laws and 74 supporting lemmas, including all thirty recently added native/system presentation, resolver diagnostic and initialization laws. No negative tests or altered implementations are generated. Runtime and upstream suite statuses are unchanged; the default-clock proof remains outside this root.
