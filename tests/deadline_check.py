@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory(dir=root / 'build', prefix='deadline-') as dire
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',str(root/'build'/('deadline-'+suffix+'-build.json')),'--',str(bun), str(candidate / 'main.ts'), str(fixture), '-o', str(folder / ('run.' + suffix))], cwd=root, check=True)
     subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'production')],check=True)
     for label,command in [('native-1',[str(folder/'production'),'--threads','1']),('native-4',[str(folder/'production'),'--threads','4']),('bun',[str(bun),str(folder/'run.js')])]:
-        for mode in ['pre','all']:
+        for mode in ['pre','all','disarm']:
             run=subprocess.run([*command,mode],capture_output=True,text=True,check=True,timeout=10)
             assert run.stdout=='PASS deadline\n' and not run.stderr,(label,mode,run)
             results.append(dict(backend=label,mode=mode,instrumented=False))
@@ -53,7 +53,7 @@ static void __attribute__((destructor)) sleep_audit(void) {
     for backend, command in [('native-1', [str(folder / 'run'), '--threads', '1']),
                              ('native-4', [str(folder / 'run'), '--threads', '4']),
                              ('bun', [str(bun), str(folder / 'run.js')])]:
-        for mode in ['pre','all']:
+        for mode in ['pre','all','disarm']:
           for repetition in range(4):
             start = time.monotonic()
             result = subprocess.run([*command,mode], capture_output=True, text=True, check=True, timeout=10)
@@ -61,7 +61,7 @@ static void __attribute__((destructor)) sleep_audit(void) {
             fields = result.stderr.split()
             assert fields[0] == 'DEADLINE_AUDIT' and len(fields) == 8, result.stderr
             created, closed, live, peak, parked, waiting, channels = map(int, fields[1:])
-            assert created == closed == (0 if mode=='pre' else 194), result.stderr
+            assert created == closed == dict(pre=0, all=194, disarm=67)[mode], result.stderr
             assert live == waiting == 0, result.stderr
             if mode=='all':assert peak>=64 and parked>=1,result.stderr
             assert channels == (0 if backend.startswith('native') else -1), result.stderr
@@ -73,6 +73,6 @@ static void __attribute__((destructor)) sleep_audit(void) {
 sources = [fixture, root / 'packages/runtime/src/deadline.bend', root/'tests/deadline_check.py',
            candidate / 'base.bend', candidate / 'effs/timer.c', candidate / 'effs/timer.js']
 (root / 'build/deadline-result.json').write_text(json.dumps(dict(
-    scope='Pre-aborted parents allocate no timers. Early close, expiry, parent reuse, broadcast to 64 scopes, 64 parent/expiry races and 32 close/expiry races per full run. Six unmodified runs plus 24 instrumented runs. Native exit audit includes all channel rows; Bun audits timers only. Finite lifecycle checks, not a benchmark or exhaustive race proof.',
+    scope='Pre-aborted parents allocate no timers. Early close, expiry, parent reuse, broadcast to 64 scopes, 64 parent/expiry races and 32 close/expiry races per full run. Disarming preserves parent forwarding, retires the timer, is repeatable, preserves settled expiry and handles pre-aborted parents; stale timer cancellation leaves a reused slot alive. Nine unmodified runs plus 36 instrumented runs. Native exit audit includes all channel rows; Bun audits timers only. Finite lifecycle checks, not a benchmark or exhaustive race proof.',
     sources={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}, samples=results,
 ), indent=2) + '\n')

@@ -160,8 +160,66 @@ def basic() -> IO(Unit):
     broadcast()
     races(16n)
 
+def pending(pair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Deadline.Scope<String>):
+  match pair:
+    case (scope, signal):
+      do IO<Deadline.Scope<String>>:
+        aborted : Bool <- Abort.aborted(Deadline.Cause<String>, signal)
+        assertTrue(Bool.not(aborted))
+        return scope
+
+def disarmedScopes(values: List<&1, Deadline.Scope<String>>) -> IO(List<&1, Deadline.Scope<String>>):
+  match values:
+    case Nil{}: IO.pure(List<&1, Deadline.Scope<String>>, Nil{})
+    case scope <> rest:
+      do IO<List<&1, Deadline.Scope<String>>>:
+        scope : Deadline.Scope<String> <- Deadline.disarm(String, scope)
+        scope : Deadline.Scope<String> <- Deadline.disarm(String, scope)
+        rest : List<&1, Deadline.Scope<String>> <- disarmedScopes(rest)
+        return scope <> rest
+
+def disarmExpired(pair: Deadline.Scope<String> & String) -> IO(Unit):
+  match pair:
+    case (scope, why):
+      do IO<Unit>:
+        assertTrue(String.eq(why, "expiry"))
+        scope : Deadline.Scope<String> <- Deadline.disarm(String, scope)
+        waitAndClose(scope, "expiry")
+
+def disarming() -> IO(Unit):
+  do IO<Unit>:
+    +parent : Abort.AbortController<String> <- Abort.new(String)
+    scope : Deadline.Scope<String> <- Deadline.create(String, 1000, Abort.signal(String, parent))
+    scope : Deadline.Scope<String> <- Deadline.disarm(String, scope)
+    scope : Deadline.Scope<String> <- Deadline.disarm(String, scope)
+    IO.sleep(1100)
+    scope : Deadline.Scope<String> <- pending(Deadline.borrow(String, scope))
+    why : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
+    assertTrue(String.eq(retained(why), "none"))
+    scope : Deadline.Scope<String> <- Deadline.create(String, 0, Abort.signal(String, parent))
+    pair : Deadline.Scope<String> & String <- waitBorrowed(Deadline.borrow(String, scope))
+    disarmExpired(pair)
+    owners : List<&1, Deadline.Scope<String>> <- scopes(64n, Abort.signal(String, parent), Nil{})
+    owners : List<&1, Deadline.Scope<String>> <- disarmedScopes(owners)
+    # Reuse a retired timer slot before forwarding parent cancellation.
+    # The parent's stale cancellation capability must not stop this timer.
+    +unrelated : Abort.AbortController<String> <- Abort.new(String)
+    other : Deadline.Scope<String> <- Deadline.create(String, 50, Abort.signal(String, unrelated))
+    won : Bool <- Abort.abort(String, parent, Some{"stop"})
+    closedScopes(owners)
+    waitAndClose(other, "expiry")
+    Abort.dispose(String, unrelated)
+    scope : Deadline.Scope<String> <- Deadline.create(String, 0, Abort.signal(String, parent))
+    scope : Deadline.Scope<String> <- Deadline.disarm(String, scope)
+    waitAndClose(scope, "stop")
+    Abort.dispose(String, parent)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
+    case "disarm" <> Nil{}:
+      do IO<Unit>:
+        disarming()
+        IO.print("PASS deadline")
     case "pre" <> Nil{}:
       do IO<Unit>:
         pre(None{}, "default")

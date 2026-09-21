@@ -9,6 +9,7 @@ type Cause<-Reason: Data> is Data:
 
 type Lifetime<-Reason: Data> is Type:
   Lifetime{timer: TimerCancel, observation: Deferred.Cancellation<Abort.AbortReason<Reason>>, parentTask: Chan(Unit), timerTask: Chan(Unit)}
+  Following{observation: Deferred.Cancellation<Abort.AbortReason<Reason>>, parentTask: Chan(Unit)}
 
 type Scope<-Reason: Data> is Type:
   Scope{controller: Abort.AbortController<Cause<Reason>>, lifetime: Maybe<&1, Lifetime<Reason>>}
@@ -92,6 +93,11 @@ def borrow(-Reason: Data, scope: Scope<Reason>) -> Scope<Reason> & Abort.AbortSi
 def retire(-Reason: Data, lifetime: Maybe<&1, Lifetime<Reason>>) -> IO(Unit):
   match lifetime:
     case None{}: IO.pure(Unit, Unit{})
+    case Some{Following{cancellation, parentTask}}:
+      do IO<Unit>:
+        removed : Bool <- Deferred.cancel(Abort.AbortReason<Reason>, cancellation)
+        IO.join(Unit, parentTask)
+        return Unit{}
     case Some{Lifetime{handle, cancellation, parentTask, timerTask}}:
       do IO<Unit>:
         cancelled : Bool <- Timer.cancel(handle)
@@ -99,6 +105,27 @@ def retire(-Reason: Data, lifetime: Maybe<&1, Lifetime<Reason>>) -> IO(Unit):
         IO.join(Unit, parentTask)
         IO.join(Unit, timerTask)
         return Unit{}
+
+# Fetch headers end the timeout budget, but the response body still borrows
+# the child signal. Join the timer worker before returning; an expiry that
+# already won remains settled. Parent forwarding lives until close.
+def disarmLifetime(-Reason: Data, lifetime: Maybe<&1, Lifetime<Reason>>) -> IO(Maybe<&1, Lifetime<Reason>>):
+  match lifetime:
+    case None{}: IO.pure(Maybe<&1, Lifetime<Reason>>, None{})
+    case Some{Following{cancellation, parentTask}}:
+      IO.pure(Maybe<&1, Lifetime<Reason>>, Some{Following{cancellation, parentTask}})
+    case Some{Lifetime{handle, cancellation, parentTask, timerTask}}:
+      do IO<Maybe<&1, Lifetime<Reason>>>:
+        cancelled : Bool <- Timer.cancel(handle)
+        IO.join(Unit, timerTask)
+        return Some{Following{cancellation, parentTask}}
+
+def disarm(-Reason: Data, scope: Scope<Reason>) -> IO(Scope<Reason>):
+  match scope:
+    case Scope{controller, lifetime}:
+      do IO<Scope<Reason>>:
+        following : Maybe<&1, Lifetime<Reason>> <- disarmLifetime(Reason, lifetime)
+        return Scope{controller, following}
 
 # Always close, including after expiry/parent abort. Stop unused background
 # work, join both tasks, then dispose the child signal. Return its immutable
