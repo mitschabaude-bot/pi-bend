@@ -1897,3 +1897,8 @@ The [system-owned provider](openai-responses-system-provider.md) connects actual
 ## Responses envelope diagnostics (2026-09-21)
 
 The [envelope-error renderer](openai-responses-envelope-error.md) now covers typed URL/query, timeout, header, authentication and payload-construction failures. Three standalone generic propagation laws pass, and two well-typed cause-erasure mutations are rejected. Native one/four threads and Bun check 66 outcomes, comparing timeout/authentication text with the actual SDK and recording native strict-validation diagnostics separately. The full provider renderer, root law registration and unchanged upstream suite gaps remain pending.
+
+
+## Default clock and SSE policy assembly — Bun validation (2026-09-21)
+
+The [default provider factory](openai-responses-system-defaults.md) now owns the default SSE callbacks and samples the wall clock before initialization/preparation, with injectable clock and timestamp alternatives. All 36 plain/audited Bun sessions pass with stable event/final timestamps and zero residual resources. Native C generation exceeded 44 GiB and 49 GiB guards; no native execution of this factory is claimed. Its original clock/retirement law pair remains outside the accepted proof gate because the clock law overflows the checker. A candidate that checks it was rejected for a discarded-argument performance regression. No upstream suite status is promoted.
