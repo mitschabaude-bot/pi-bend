@@ -86,3 +86,7 @@ import ./laws/openai-responses-cleartext-runtime.bend as OpenAIResponsesCleartex
 import ./laws/calendar-inverse.bend as CalendarInverse
 import ./laws/http-date-year.bend as HTTPDateYear
 import ./laws/http-date.bend as HTTPDate
+import ./laws/openai-responses-cleartext-default-runtime.bend as OpenAIResponsesCleartextDefaultRuntime
+import ./laws/openai-responses-cleartext-system-runtime.bend as OpenAIResponsesCleartextSystemRuntime
+import ./laws/provider-owned-acquire.bend as ProviderOwnedAcquire
+import ./laws/openai-responses-payload-plan.bend as OpenAIResponsesPayloadPlan

@@ -53,10 +53,14 @@ def accepted(result):
     # The isolated service-tier callback module reports five existing instances.
     # Cleartext dependency-owner initialization specializes existing runtime
     # terms: standalone module 16, its concrete law entry 23, full root 31.
+    # System-owner registration also imports the existing file-fold driver:
+    # twenty-one exact declarations; standalone default/system entries report
+    # seventeen/twenty-five specialized annotations; the expanded root
+    # reports thirty-four (observed in build/owned-root-check.log).
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 5 unsafe annotations.', 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.', 'All terms check, with 21 unsafe annotations.', 'All terms check, with 22 unsafe annotations.', 'All terms check, with 16 unsafe annotations.', 'All terms check, with 23 unsafe annotations.', 'All terms check, with 31 unsafe annotations.', 'All terms check, with 10 unsafe annotations.'}
+                 'All terms check, with 5 unsafe annotations.', 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.', 'All terms check, with 21 unsafe annotations.', 'All terms check, with 22 unsafe annotations.', 'All terms check, with 16 unsafe annotations.', 'All terms check, with 23 unsafe annotations.', 'All terms check, with 31 unsafe annotations.', 'All terms check, with 10 unsafe annotations.', 'All terms check, with 17 unsafe annotations.', 'All terms check, with 25 unsafe annotations.', 'All terms check, with 34 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -75,6 +79,7 @@ assert unsafe_declarations == {
     ('packages/ai/src/api/openai-responses-stream.bend', 'loop'),
     ('packages/ai/src/api/openai-sse-reader.bend', 'drive'),
     ('packages/runtime/src/callback.bend', 'factory'),
+    ('packages/runtime/src/file-fold.bend', 'drive'),
     ('packages/runtime/src/http-response.bend', 'seek'),
     ('packages/runtime/src/http-body-consume.bend', 'drive'),
     ('packages/runtime/src/http-response.bend', 'drive'),
@@ -121,6 +126,14 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('default-runtime-forgets-date-retirement', 'packages/ai/src/api/openai-responses-cleartext-default-runtime.bend', '        C.dispose(String, F.F64, date)\n        return Fail{cause}', '        return Fail{cause}', 'laws/openai-responses-cleartext-default-runtime.initialization_failure_retires_date_before_returning_cause'),
+        ('default-runtime-retires-date-before-users', 'packages/ai/src/api/openai-responses-cleartext-default-runtime.bend', '        Runtime.dispose(Reason, Source, runtime)\n        C.dispose(String, F.F64, date)', '        C.dispose(String, F.F64, date)\n        Runtime.dispose(Reason, Source, runtime)', 'laws/openai-responses-cleartext-default-runtime.retry_runtime_retires_before_date_callback'),
+        ('owned-acquisition-failure-leaks-runtime', 'packages/ai/src/utils/provider-owned-acquire.bend', '        retire(runtime)\n        return Fail{AcquisitionFailure{cause}}', '        return Fail{AcquisitionFailure{cause}}', 'laws/provider-owned-acquire.acquisition_failure_retires_runtime_before_return'),
+        ('owned-response-close-after-runtime', 'packages/ai/src/utils/provider-owned-acquire.bend', '        result : Result<&2, &2, E, Unit> <- close(response)\n        retire(runtime)', '        retire(runtime)\n        result : Result<&2, &2, E, Unit> <- close(response)', 'laws/provider-owned-acquire.response_close_precedes_runtime_retirement'),
+        ('validated-wire-drops-response-hook', 'packages/ai/src/api/openai-responses-payload-plan.bend', 'Done{Wire{original, request, response, retry}}', 'Done{Wire{original, request, None{}, retry}}', 'laws/openai-responses-payload-plan.validated_wire_retains_original_preparation_and_callbacks'),
+        ('payload-failure-loses-typed-cause', 'packages/ai/src/api/openai-responses-payload-plan.bend', 'case Fail{cause}: Fail{Errors.AcquisitionFailure{Acquire.AcquisitionFailed{cause}}}', 'case Fail{cause}: Fail{Errors.EnvelopeFailure{Envelope.NonFinitePayload{}}}', 'laws/openai-responses-payload-plan.payload_failure_preserves_typed_cause'),
+        ('wire-abort-loses-precedence', 'packages/ai/src/api/openai-responses-payload-plan.bend', 'case True{} _: Fail{Errors.AcquisitionFailure{Acquire.AcquisitionFailed{Request.RequestFailure{Retry.RequestAborted{}}}}}', 'case True{} _: Fail{Errors.EnvelopeFailure{Envelope.NonFinitePayload{}}}', 'laws/openai-responses-payload-plan.observed_cancellation_prevents_runtime_initialization'),
+        ('wire-envelope-failure-loses-cause', 'packages/ai/src/api/openai-responses-payload-plan.bend', 'Retry.Other{Errors.EnvelopeFailure{cause}}', 'Retry.Other{Errors.EnvelopeFailure{Envelope.NonFinitePayload{}}}', 'laws/openai-responses-payload-plan.envelope_failure_retains_cause_without_cancellation'),
         ('inverse-calendar-skips-reconstruction', 'packages/runtime/src/calendar-inverse.bend', 'verified(value, same(epoch, C.toEpochMilliseconds(value)))', 'verified(value, True{})', 'proofs/calendar-inverse.checked_result'),
         ('http-literal-year-changed', 'packages/runtime/src/http-date-year.bend', 'Done{year}, Fail{OutsideCalendar{}}', 'Done{(year + 1 : U32)}, Fail{OutsideCalendar{}}', 'laws/http-date-year.imf_year_is_literal'),
         ('http-leap-second-lossy-unix-conversion', 'packages/runtime/src/http-date.bend', 'case LeapSecond{_}: Fail{LeapSecondNotRepresentable{}}', 'case LeapSecond{value}: Done{value}', 'laws/http-date.leap_seconds_never_silently_become_unix_timestamps'),

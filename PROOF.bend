@@ -87,3 +87,7 @@ import ./proofs/openai-responses-cleartext-runtime.bend as OpenAIResponsesCleart
 import ./proofs/calendar-inverse.bend as CalendarInverse
 import ./proofs/http-date-year.bend as HTTPDateYear
 import ./proofs/http-date.bend as HTTPDate
+import ./proofs/openai-responses-cleartext-default-runtime.bend as OpenAIResponsesCleartextDefaultRuntime
+import ./proofs/openai-responses-cleartext-system-runtime.bend as OpenAIResponsesCleartextSystemRuntime
+import ./proofs/provider-owned-acquire.bend as ProviderOwnedAcquire
+import ./proofs/openai-responses-payload-plan.bend as OpenAIResponsesPayloadPlan
