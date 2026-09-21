@@ -1,9 +1,9 @@
 {
-  "scope": "Four standalone laws and three supporting lemmas: literal-year handling, weekday independence and reference-error preservation. No unsafe annotations. Does not prove the complete rolling-window arithmetic; not yet registered in full root.",
+  "scope": "Four standalone laws and three supporting lemmas. Literal-year expectation is independently specified in the law module; weekday independence and reference-error preservation are also proved. Does not prove the complete rolling-window arithmetic. No unsafe annotations; not yet registered in full root.",
   "entry": "proofs/http-date-year.bend",
-  "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30277632,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":105644032,\"heapTotal\":42181632,\"heapUsed\":13939689,\"external\":2139649,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":235487232,\"heapTotal\":148957184,\"heapUsed\":51578761,\"external\":2879545,\"arrayBuffers\":100}\nAll terms check.\n",
+  "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":103714816,\"heapTotal\":40690688,\"heapUsed\":14250401,\"external\":2060913,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":227708928,\"heapTotal\":140912640,\"heapUsed\":53457159,\"external\":2869463,\"arrayBuffers\":100}\nAll terms check.\n",
   "sources": {
-    "laws/http-date-year.bend": "f814ccff31e9b28e01ef9cfa8acda1419739eadae906d1896da76f9e9739db8e",
+    "laws/http-date-year.bend": "a1e8e62f63f277c1c5173573d396ab48d9d1d55c189b0ae58ebd9db52984ce9b",
     "packages/runtime/src/calendar.bend": "39b1e7aedfa881508a9aed5923ac48c18ba7bad9ea583dbddcf24932d3083e7b",
     "packages/runtime/src/http-date-syntax.bend": "095c9afa454769a4f9da24925bf3bb46bab20f7ada4dd0351b152c5f1947e256",
     "packages/runtime/src/http-date-year.bend": "dc97acb9b3f4951f87b689c79b86a5c830f260ac15689244f02fb08ada4b0029",
