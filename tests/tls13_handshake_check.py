@@ -230,6 +230,63 @@ invalid_cases += [('d:localhost:' + encode([0] * pos + [256] + [0] * (95 - pos))
 invalid_cases += [('e:' + str(code), 'entropy:' + str(code)) for code in [4, 5, 11, 38]]
 invalid_cases += [('os:bad_name', 'name')]
 
+def framing_cases():
+    messages = [bytes([kind]) + size.to_bytes(3, 'big') + rng.randbytes(size)
+                for kind, size in [(8, 0), (11, 1), (15, 32), (20, 64)]]
+    wire = b''.join(messages)
+    cases = []
+    # Every two-way split and every incomplete prefix, plus byte-at-a-time and
+    # randomized multi-chunk inputs. Expectations come from the wire format.
+    chunks = [[wire[:cut], wire[cut:]] for cut in range(len(wire) + 1)]
+    chunks += [[wire[:cut]] for cut in range(len(wire))]
+    chunks += [[bytes([byte]) for byte in wire], [b'', wire, b'']]
+    for _ in range(40):
+        cuts = sorted([0, len(wire)] + [rng.randrange(len(wire) + 1) for _ in range(12)])
+        chunks.append([wire[a:b] for a, b in zip(cuts, cuts[1:])])
+    for parts in chunks:
+        data = b''.join(parts)
+        complete, offset = [], 0
+        while len(data) - offset >= 4:
+            end = offset + 4 + int.from_bytes(data[offset + 1:offset + 4], 'big')
+            if end > len(data):
+                break
+            complete.append(data[offset:end])
+            offset = end
+        cases.append(('f:64:' + '/'.join(encode(part) for part in parts),
+                      ('complete' if offset == len(data) else 'partial', complete)))
+    # A certificate-sized body spans TLS record payloads and exercises the
+    # multi-byte length and tail-recursive buffering path.
+    large = b'\x0b' + (20000).to_bytes(3, 'big') + bytes(20000)
+    for cut in [3, 16384, len(large)]:
+        cases.append(('f:20000:' + encode(large[:cut]) + '/' + encode(large[cut:]),
+                      ('complete', [large])))
+    cases += [('f:0:8,0,0,0', ('complete', [bytes([8, 0, 0, 0])])),
+              ('f:0:8,0,0/1', 'large:1:0'),
+              ('f:64:11,255,255/255', 'large:16777215:64'),
+              ('f:64:8,0,0,65', 'large:65:64'),
+              ('f:64:256', 'byte'), ('f:64:8,0/256', 'byte'),
+              ('f:64:8,0,0,1/256', 'byte')]
+    return cases
+
+
+def check_framing(command):
+    cases = framing_cases()
+    run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT,
+                         capture_output=True, text=True, timeout=90)
+    assert run.returncode == 0, run.stderr[-2000:]
+    lines = run.stdout.splitlines()
+    assert len(lines) == len(cases)
+    for line, (arg, expected) in zip(lines, cases):
+        if isinstance(expected, str):
+            assert line == expected, (arg, line, expected)
+        else:
+            status, messages = expected
+            assert line.count(status) == 1, (arg, line, expected)
+            actual = line.replace(status, '').split('|')[1:]
+            assert actual == [encode(m) for m in messages], (arg, line, expected)
+    return len(cases)
+
+
 with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
     contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa']]
     for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
@@ -269,4 +326,5 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             assert results[1].endswith('|receive-error'), (name, results[1])
             for actual, (_, expected) in zip(results[2:], bad):
                 assert actual == expected, (name, actual, expected)
-        print(f'{name}: {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)
+        count = check_framing(command)
+        print(f'{name}: {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)

@@ -236,3 +236,61 @@ def acceptServerHello(pending: Pending, +serverHello: List<&2, U32>) -> Result<&
         Result.bind(&2, &2, Error, List<&2, U32>, Secrets, parseServerHello(session, serverHello), point =>
           Result.bind(&2, &2, Error, List<&2, U32>, Secrets, exchanged(X.sharedSecret(privateKey, point)), shared =>
             secrets(shared, hello, serverHello))))
+
+# Record boundaries do not delimit handshake messages. Retain each byte once
+# in reverse order until its uint24-sized body is complete; emit exact wire
+# messages for transcript hashing. The caller sets a body-size resource limit.
+type Buffer is Data:
+  Header{reverse: List<&2, U32>, needed: U32, length: U32}
+  Body{reverse: List<&2, U32>, remaining: U32}
+
+type FramingError is Data:
+  InvalidByte{}
+  MessageTooLarge{length: U32, limit: U32}
+
+type Batch is Data:
+  Batch{buffer: Buffer, messages: List<&2, List<&2, U32>>}
+
+def emptyBuffer() -> Buffer:
+  Header{Nil{}, 4, 0}
+
+def atBoundary(buffer: Buffer) -> Bool:
+  match buffer:
+    case Header{Nil{}, 4, 0}: True{}
+    case _: False{}
+
+def headerComplete(allowed: Bool, +size: U32, limit: U32, reverse: List<&2, U32>, messages: List<&2, List<&2, U32>>) -> Result<&2, &2, FramingError, Batch>:
+  match allowed size:
+    case False{} _: Fail{MessageTooLarge{size, limit}}
+    case True{} 0: Done{Batch{emptyBuffer(), List.reverse(&2, U32, reverse) <> messages}}
+    case True{} _: Done{Batch{Body{reverse, size}, messages}}
+
+def bufferByte(+byte: U32, +limit: U32, buffer: Buffer, messages: List<&2, List<&2, U32>>) -> Result<&2, &2, FramingError, Batch>:
+  match buffer:
+    case Header{reverse, 4, _}: Done{Batch{Header{byte <> reverse, 3, 0}, messages}}
+    case Header{reverse, 1, length}:
+      +size = (length * 256 + byte : U32)
+      headerComplete(U32.is_le(size, limit), size, limit, byte <> reverse, messages)
+    case Header{reverse, needed, length}: Done{Batch{Header{byte <> reverse, (needed - 1 : U32), (length * 256 + byte : U32)}, messages}}
+    case Body{reverse, 1}: Done{Batch{emptyBuffer(), List.reverse(&2, U32, byte <> reverse) <> messages}}
+    case Body{reverse, remaining}: Done{Batch{Body{byte <> reverse, (remaining - 1 : U32)}, messages}}
+
+def checkedByte(valid: Bool, byte: U32, limit: U32, buffer: Buffer, messages: List<&2, List<&2, U32>>) -> Result<&2, &2, FramingError, Batch>:
+  match valid:
+    case False{}: Fail{InvalidByte{}}
+    case True{}: bufferByte(byte, limit, buffer, messages)
+
+def feedBytes(bytes: List<&2, U32>, +limit: U32, result: Result<&2, &2, FramingError, Batch>) -> Result<&2, &2, FramingError, Batch>:
+  match bytes result:
+    case Nil{} result: result
+    case _ Fail{cause}: Fail{cause}
+    case +byte <> rest Done{Batch{buffer, messages}}:
+      feedBytes(rest, limit, checkedByte(U32.is_le(byte, 255), byte, limit, buffer, messages))
+
+def orderedBatch(result: Result<&2, &2, FramingError, Batch>) -> Result<&2, &2, FramingError, Batch>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{Batch{buffer, messages}}: Done{Batch{buffer, List.reverse(&2, List<&2, U32>, messages)}}
+
+def feed(limit: U32, buffer: Buffer, bytes: List<&2, U32>) -> Result<&2, &2, FramingError, Batch>:
+  orderedBatch(feedBytes(bytes, limit, Done{Batch{buffer, Nil{}}}))

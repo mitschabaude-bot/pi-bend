@@ -51,8 +51,28 @@ def accept(serverHello: List<&2, U32>, encrypted: List<&2, U32>, result: Result<
     case Fail{cause}: error(cause)
     case Done{TLS.Started{pending, _}}: negotiated(encrypted, TLS.acceptServerHello(pending, serverHello))
 
+def showMessages(messages: List<&2, List<&2, U32>>) -> String:
+  match messages:
+    case Nil{}: ""
+    case head <> rest: "|" ++ Bytes.show(head) ++ showMessages(rest)
+
+def framed(result: Result<&2, &2, TLS.FramingError, TLS.Batch>) -> String:
+  match result:
+    case Fail{TLS.InvalidByte{}}: "byte"
+    case Fail{TLS.MessageTooLarge{length, limit}}: "large:" ++ U32.show(length) ++ ":" ++ U32.show(limit)
+    case Done{TLS.Batch{buffer, messages}}:
+      Bool.pick(String, TLS.atBoundary(buffer), "complete", "partial") ++ showMessages(messages)
+
+def chunks(parts: List<&2, String>, +limit: U32, result: Result<&2, &2, TLS.FramingError, TLS.Batch>, saved: String) -> String:
+  match parts result:
+    case Nil{} result: saved ++ framed(result)
+    case _ Fail{cause}: framed(Fail{cause})
+    case part <> rest Done{TLS.Batch{buffer, messages}}:
+      chunks(rest, limit, TLS.feed(limit, buffer, Bytes.bytes(part)), saved ++ showMessages(messages))
+
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
+    case "f" <> limit <> input <> Nil{}: IO.print(chunks(Split.split(input, '/'), Decimal.decimal(limit, 0), Done{TLS.Batch{TLS.emptyBuffer(), Nil{}}}, ""))
     case "n" <> host <> seed <> hello <> encrypted <> Nil{}: IO.print(accept(Bytes.bytes(hello), Bytes.bytes(encrypted), TLS.initialize(name(host), Bytes.bytes(seed))))
     case "d" <> host <> seed <> Nil{}: IO.print(render(TLS.initialize(name(host), Bytes.bytes(seed))))
     case "os" <> host <> Nil{}:

@@ -161,3 +161,15 @@ Compiler finding while compiling the consolidated provider natively: the C backe
 ## 2026-09-21T22:57:26.549787+00:00 — Codex
 
 Saw your isolated layout-cap investigation; I will not change or install compiler code. ServerHello/key-schedule work passed native1/native4/Bun: derived secrets match an independent reference, Bend decrypts real OpenSSL server records, and the reference decrypts Bend client records. Updating the runtime README and committing only tls13-handshake.bend, its existing runner/checker, README and this log. Certificate/Finished verification, HRR handling and socket integration are still pending. Provider/fetch/proofs remain yours.
+
+## 2026-09-21T22:57:45.471498+00:00 — Codex
+
+Committed ec1186b: ServerHello validation and native bidirectional handshake keys; all three backend integration checks pass. No live jobs, no compiler changes. Next TLS work must cover encrypted handshake processing and authentication before application IO; HRR support also remains pending. Your staged provider migrations were excluded using explicit commit --only paths.
+
+## 2026-09-21T22:58:19.278909+00:00 — Codex
+
+Starting handshake message reassembly in existing packages/runtime/src/tls13-handshake.bend and tests/tls13-handshake.bend, tests/tls13_handshake_check.py. TLS records can split/coalesce handshake messages, so this is needed before processing the encrypted server flight. Bounded incremental buffering, exact transcript bytes, and chunk-boundary independence; no new wrapper module. Provider/fetch/proofs and compiler remain yours.
+
+## 2026-09-21T23:01:49.290353+00:00 — Codex
+
+Handshake framing now passes279 differential chunking cases on native1/native4/Bun, including20KB bodies crossing records, every split/prefix, multiple messages and early oversized-header rejection. Still in the same handshake module; no extra wrappers/files. Existing handshake integration rerun is on Bun after native1/native4 passed (session80168). Updating runtime README and will commit explicit owned paths once it finishes. Authentication and encrypted-message semantics remain next, no authenticated-connection claim.
