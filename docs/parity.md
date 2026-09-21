@@ -1887,3 +1887,8 @@ The [90-execution record](runtime-validation/2026-09-21-owned-acquire.json) cove
 ## Responses streaming diagnostics (2026-09-21)
 
 The [typed streaming-error renderer](openai-responses-stream-error.md) preserves transport/callback and terminal diagnostics, separates primary SSE parse causes from debug context, and renders unambiguous native protocol paths. Streaming API errors retain the existing native message-field policy without inventing an HTTP failure status. Eight standalone generic laws pass and three well-typed cause-erasure mutations are rejected. Native one/four threads and Bun verify 51 diagnostics, including actual SDK/pinned pi comparisons and separately identified native adaptations. The full system-provider error renderer remains pending; upstream suite statuses and the 502-law root count are unchanged.
+
+
+## System-owned Responses provider sessions (2026-09-21)
+
+The [system-owned provider](openai-responses-system-provider.md) connects actual preparation, hook adapters, lazy native acquisition, body processing and asynchronous session finalization. A provider error domain preserves initialization, acquisition, recursive stream and cleanup causes. All 108 plain/audited sessions pass across native one/four threads and Bun, including grammar metadata after payload replacement, early configuration avoidance, callback lifetimes and malformed SSE. Four standalone composition/cause-transfer laws pass; root counts and upstream suite statuses remain unchanged. The native default clock/SSE factory has separate pending native validation; complete error rendering, custom fetch, TLS, authentication lifecycle and the full pi port remain unfinished.

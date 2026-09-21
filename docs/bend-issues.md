@@ -728,3 +728,8 @@ The owned Responses acquisition fixture emits C in 567.61 seconds at 35,837,252 
 ### BEND-001/BEND-016 observation: streaming-error rendering (2026-09-21)
 
 The standalone streaming-error fixture emits C in 91.68 seconds at 18,361,260 KiB sampled peak RSS and JavaScript in 25.20 seconds at 11,364,872 KiB. This small pure executable imports the broader provider type closure; its generic proof validation alone approaches 10 GiB. The [compiler record](bend-issues/2026-09-21-stream-error-compiler.json) retains source/compiler hashes and guarded measurements. Clang is excluded, and these workload observations do not establish a leak or a controlled performance comparison.
+
+
+### BEND-001/BEND-016 observation: system-owned provider composition (2026-09-21)
+
+The system-provider fixture emits approximately 194 MiB of C in 753.86 seconds at 42,610,480 KiB sampled peak RSS. Both Clang builds continued after the orchestrating runner was terminated with status 143; their processes were inspected, monitored and allowed to finish without restart. Fresh plain/audited executables passed all 72 native integration cases. The cause of runner termination is unknown; this is not evidence of a compiler crash or memory leak. Full Clang-phase exit status and peak/time measurements were lost with the original guards. The [record](bend-issues/2026-09-21-system-provider-compiler.json) preserves the available evidence without substituting the observer's partial measurements for full-build statistics.
