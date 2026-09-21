@@ -1,0 +1,44 @@
+--- a/bend2/bend.ts
++++ b/bend2/bend.ts
+@@ -707,6 +707,7 @@
+ 
+ // Literal word trees are closed and immutable in either term representation.
+ const WORD_TREES = new WeakSet<object>();
++const WORD_LITERALS = new WeakMap<Span, Map<number, LTerm>>();
+ 
+ export function term_higher(tm: LTerm, env: Env = null): HTerm {
+   switch (tm.$) {
+@@ -1140,11 +1141,20 @@
+ // ====
+ 
+ export function word_to_term(n: U32, s?: Span): LTerm {
++  const words = s === undefined ? undefined : WORD_LITERALS.get(s);
++  const cached = words?.get(n);
++  if (cached !== undefined) return cached;
+   let out: LTerm = Ctr("WNil", [], s);
++  const zero: LTerm = Ctr("False", [], s);
++  const one: LTerm = Ctr("True", [], s);
+   for (let i = 31; i >= 0; i--) {
+-    out = Ctr("WCon", [Ctr((n >>> i) & 1 ? "True" : "False", [], s), out], s);
++    out = Ctr("WCon", [(n >>> i) & 1 ? one : zero, out], s);
+   }
+   WORD_TREES.add(out);
++  if (s !== undefined) {
++    if (words !== undefined) words.set(n, out);
++    else WORD_LITERALS.set(s, new Map([[n, out]]));
++  }
+   return out;
+ }
+ 
+@@ -3562,8 +3572,9 @@
+       // A checked literal word is emitted atomically; its bit tree needs no
+       // per-bit type annotations. Validation above still checks every field.
+       const word = (t_wnf.k === "U32" || t_wnf.k === "F32")
+-        && u32_from_term(tm, t_wnf.k) !== null;
+-      return Check(word ? term_lower(tm) : Ctr(tm.k, xs, tm.s), ty, us);
++        ? u32_from_term(tm, t_wnf.k) : null;
++      return Check(word === null ? Ctr(tm.k, xs, tm.s)
++        : Ctr(tm.k, [word_to_term(word, tm.s)], tm.s), ty, us);
+     }
+     // T == @q s:D<p..> -> P
+     // D.c[k] = @r1 x1:F1 -> .. -> D<p..>

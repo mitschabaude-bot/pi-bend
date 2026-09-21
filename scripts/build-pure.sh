@@ -6,7 +6,9 @@ cd "$ROOT"
 SOURCE=${1:?Bend entry point required}
 OUTPUT=${2:?Output path required}
 mkdir -p "$(dirname -- "$OUTPUT")"
-"${BEND:-$HOME/.bend/bin/bend}" "$SOURCE" -o "$OUTPUT.c"
+PI_BEND_DEFAULT="$ROOT/build/bend-native-toolchain/bend2/main.ts"
+[ -x "$PI_BEND_DEFAULT" ] || PI_BEND_DEFAULT="$HOME/.bend/bin/bend"
+"${BEND:-$PI_BEND_DEFAULT}" "$SOURCE" -o "$OUTPUT.c"
 # Generic records can produce C match trees deeper than Clang's default 256.
 # This changes only the generated-code parser limit, not runtime behavior.
 PI_BEND_CC=${CC:-clang}

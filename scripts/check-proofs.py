@@ -11,7 +11,8 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+NATIVE_COMPILER = ROOT / 'build/bend-native-toolchain/bend2/main.ts'
+BEND = os.environ.get('BEND', str(NATIVE_COMPILER if NATIVE_COMPILER.is_file() else Path.home() / '.bend/bin/bend'))
 def import_closure():
     pending = [ROOT / 'LAWS.bend', ROOT / 'PROOF.bend']
     visited = set()
