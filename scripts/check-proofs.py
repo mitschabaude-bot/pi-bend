@@ -43,10 +43,12 @@ def accepted(result):
     # traversal and Responses processing; its concrete specializations bring
     # the root summary to twelve. The body-source module alone reports
     # three. The provider HTTP adapter also imports the buffered-body loop.
+    # The concrete native callback reaches six existing transport loops; the
+    # full root now reports nineteen. These are not new unsafe definitions.
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.'}
+                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 19 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -69,6 +71,12 @@ assert unsafe_declarations == {
     ('packages/runtime/src/http-response.bend', 'drive'),
     ('packages/runtime/src/sse-reader.bend', 'drive'),
     ('packages/runtime/src/dns-search-run.bend', 'drive'),
+    ('packages/runtime/src/dns-address-lookup.bend', 'drive'),
+    ('packages/runtime/src/dns-tcp-connection.bend', 'drive'),
+    ('packages/runtime/src/dns-tcp-query.bend', 'read'),
+    ('packages/runtime/src/dns-udp-query.bend', 'read'),
+    ('packages/runtime/src/http-response-reader.bend', 'drive'),
+    ('packages/runtime/src/random-index.bend', 'retry'),
     ('packages/ai/src/utils/event-stream.bend', 'drive'),
     ('packages/runtime/src/schema-value.bend', 'compare'),
     ('packages/ai/src/utils/json.bend', 'encode'),
@@ -104,6 +112,8 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('native-fetch-drops-header-attempts', 'packages/ai/src/api/openai-responses-cleartext-fetch.bend', 'Fail{HeaderFailure{resolution, attempts, cause}}', 'Fail{HeaderFailure{resolution, Nil{}, cause}}', 'laws/openai-responses-cleartext-fetch.header_failure_retains_trace_and_cause'),
+        ('native-fetch-replaces-unresolved-cause', 'packages/ai/src/api/openai-responses-cleartext-fetch.bend', 'Fail{Unresolved{resolution}}', 'Fail{Rejected{Plan.TLSRequired{}}}', 'laws/openai-responses-cleartext-fetch.unresolved_request_preserves_resolution'),
         ('timer-conversion-skips-roundtrip', 'packages/runtime/src/timer-milliseconds.bend', 'checked(value, word, F.compare(value, F.fromU32(word)))', 'checked(value, word, Some{EQ{}})', 'laws/timer-milliseconds.accepted_durations_round_trip'),
         ('timer-conversion-rejects-exact', 'packages/runtime/src/timer-milliseconds.bend', 'case Some{EQ{}}: Done{milliseconds}', 'case Some{EQ{}}: Fail{Unrepresentable{value}}', 'laws/timer-milliseconds.exact_conversion_retains_duration'),
         ('timer-conversion-rounds-mismatch', 'packages/runtime/src/timer-milliseconds.bend', 'case _: Fail{Unrepresentable{value}}', 'case _: Done{milliseconds}', 'laws/timer-milliseconds.smaller_conversion_is_rejected'),

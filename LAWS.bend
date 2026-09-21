@@ -1,3 +1,4 @@
+import ./laws/openai-responses-cleartext-fetch.bend as ResponsesCleartextFetch
 import ./laws/timer-milliseconds.bend as TimerMilliseconds
 import ./laws/openai-responses-fetch.bend as ResponsesFetch
 import ./laws/json-finite.bend as JsonFinite
