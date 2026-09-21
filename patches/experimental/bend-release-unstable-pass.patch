@@ -1,0 +1,21 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -2891,13 +2891,14 @@
+   // Emitted callees first until a pass changes nothing (own, hot and poly
+   // only grow): that pass is kept.
+   let fl: File | undefined;
+-  let was: string;
++  let changed: boolean;
+   do {
+-    was = facts();
+-    fl = undefined;
++    const was = facts();
+     fl = pass(done_defs(cb).reverse());
++    changed = was !== facts();
++    if (changed) fl = undefined;
+     Bun.gc(true);
+-  } while (was !== facts());
++  } while (changed);
+   const reach = (from: string[], set = new Set<string>()): Set<string> => {
+     const grab = (fid: string) => set.has(fid) || (set.add(fid)
+       && (fl.segs.find((s) => s.fid === fid)?.refs
