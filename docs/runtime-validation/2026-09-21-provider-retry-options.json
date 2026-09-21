@@ -1,0 +1,49 @@
+{
+  "scope": "All pairs of absent, finite, fractional, negative, signed-zero, range-boundary and nonfinite retry-count/delay-limit inputs. Checks error precedence, cause bits and exact accepted fields. Generic signal-independence laws are separate.",
+  "sources": {
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry-options.bend": "72da19b86660eb2c71636ab62b839ea85e236ad8b7db050bb24e6e0c9c33348a",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry-policy.bend": "147cb7293c4c1aeeaa8cd3a52f9ec26bd9fa875e6278d9aa7b3653ce6166c898",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry.bend": "74d0777516ac1cb202585bdf03021dec048c25ed9888b590bb216c8d5f3e49e6",
+    "/home/agent/code/pi-bend/packages/ai/test/provider-retry-options.bend": "405d03f0b057c9c33384dde5a0a46d1803280e5a12b9c77410d16737071dc906",
+    "/home/agent/code/pi-bend/packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "/home/agent/code/pi-bend/packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "/home/agent/code/pi-bend/packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "/home/agent/code/pi-bend/packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64-natural.bend": "2be11f14bccbca7c0d56c1ce0c0b57d049914ffce56947c7e7a99e3fbe8bc829",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64-ratio.bend": "ac20c44b90946b88148bd6f01fcc2c664fb818aa1e4dbd35b44d556443459f06",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "/home/agent/code/pi-bend/packages/runtime/src/number-string.bend": "35c4aee2b8c5ff65f99cdfd6e3b57051e422b6117826415a5abba2b188ab5705",
+    "/home/agent/code/pi-bend/packages/runtime/src/parse-float.bend": "99364e06ff85ec69154df8570dace2af522caa80ef9f7165303c626c200255ba",
+    "/home/agent/code/pi-bend/packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "/home/agent/code/pi-bend/packages/runtime/src/text-space.bend": "58db43cb9289c3e0de14bb641a10f9eed1f323f4ab28eb25f999578892c2b8e9",
+    "/home/agent/code/pi-bend/packages/runtime/src/timer-delay.bend": "7f0892b67b7fb1fb3254ee00d455980817dce58515abc87cd9d216b15a617ea9",
+    "/home/agent/code/pi-bend/packages/runtime/src/timer-milliseconds.bend": "2dc34a22f25ffc8e917fcd359e947225b09aa02105e823ea86c0fc8d218a6bca",
+    "/home/agent/code/pi-bend/packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "/home/agent/code/pi-bend/packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "/home/agent/code/pi-bend/packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "/home/agent/code/pi-bend/packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "/home/agent/code/pi-bend/packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "/home/agent/code/pi-bend/tests/provider_retry_options_check.py": "92d6fdf916a2efcce01b7cf08cc75969f435a12e5fba7ebed7c0497d1ded714f"
+  },
+  "programs": {
+    "/home/agent/code/pi-bend/build/provider-retry-options": "4a04f9358c7127d470c60f528fdf9dad942f51f9e815feece171aeced0a0de9f",
+    "/home/agent/code/pi-bend/build/provider-retry-options.js": "1552c7ea7f2716de1fc4438838f6b4f5aed5e07cabe80fc0e9e54bc251bba628"
+  },
+  "samples": [
+    {
+      "backend": "native-1",
+      "cases": 324,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "cases": 324,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "cases": 324,
+      "passed": true
+    }
+  ]
+}

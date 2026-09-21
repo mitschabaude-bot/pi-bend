@@ -37,6 +37,8 @@ CASES=[
  ('null',9,b'null',1,[PAYLOAD,'request',RESPONSE,'accepted','body:ok','count:1']),
  ('invalid-url',10,None,0,[PAYLOAD,'failed:request:url','count:0']),
  ('invalid-timeout',11,None,0,[PAYLOAD,'failed:request:headers','count:0']),
+ ('invalid-retry-count',12,None,0,['failed:options:count','count:0']),
+ ('invalid-delay-limit',13,None,0,['failed:options:limit','count:0']),
 ]
 
 def serve(listener,body,count):

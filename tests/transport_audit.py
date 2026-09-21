@@ -6,25 +6,26 @@ def replace_once(source, before, after):
     assert source.count(before) == 1, before
     return source.replace(before, after)
 
-def transport_audit(prefix, candidate):
-    c = Path(f'{prefix}.c').read_text()
-    original = (candidate / 'effs/timer.c').read_text()
-    changed = 'static unsigned probe_created,probe_live,probe_peak;\n' + original
-    changed = replace_once(changed, '  row->gen += 1;', '  probe_created++; probe_live++; if(probe_live>probe_peak)probe_peak=probe_live;\n  row->gen += 1;')
-    changed = replace_once(changed, '  row->live = 0;', '  probe_live--;\n  row->live = 0;')
-    audit = r'''
-    static void __attribute__((destructor)) attempt_audit(void) {
-     unsigned timers=0,waiters=0,channels=0,connects=0,fds=0,sockets=0,udp=0;
-     for(u32 i=0;i<udp_read_len;i++)udp+=udp_read_rows[i].live;
-     for(u32 i=0;i<udp_write_len;i++)udp+=udp_write_rows[i].live;
-     for(u32 i=0;i<timer_len;i++){timers+=timer_rows[i].live;waiters+=timer_rows[i].waiter!=NULL;}
-     for(u32 i=0;i<chan_len;i++)channels+=chan_rows[i].live;
-     for(u32 i=0;i<connect_len;i++){connects+=connect_rows[i].live;fds+=connect_rows[i].fd>=0;waiters+=connect_rows[i].waiter!=NULL;}
-     for(int fd=0;fd<4096;fd++){int type;socklen_t n=sizeof(type);if(getsockopt(fd,SOL_SOCKET,SO_TYPE,&type,&n)==0)sockets++;}
-     fprintf(stderr,"RESOURCES %u %u %u %u %u %u %u %u %u %u %u\n",probe_created,probe_peak,probe_live,timers,waiters,channels,connects,fds,sockets,io_park.head!=NULL,udp);
-    }
-    '''
-    Path(f'{prefix}-audit.c').write_text(replace_once(c, original, changed) + audit)
+def transport_audit(prefix, candidate, js_only=False):
+    if not js_only:
+        c = Path(f'{prefix}.c').read_text()
+        original = (candidate / 'effs/timer.c').read_text()
+        changed = 'static unsigned probe_created,probe_live,probe_peak;\n' + original
+        changed = replace_once(changed, '  row->gen += 1;', '  probe_created++; probe_live++; if(probe_live>probe_peak)probe_peak=probe_live;\n  row->gen += 1;')
+        changed = replace_once(changed, '  row->live = 0;', '  probe_live--;\n  row->live = 0;')
+        audit = r'''
+        static void __attribute__((destructor)) attempt_audit(void) {
+         unsigned timers=0,waiters=0,channels=0,connects=0,fds=0,sockets=0,udp=0;
+         for(u32 i=0;i<udp_read_len;i++)udp+=udp_read_rows[i].live;
+         for(u32 i=0;i<udp_write_len;i++)udp+=udp_write_rows[i].live;
+         for(u32 i=0;i<timer_len;i++){timers+=timer_rows[i].live;waiters+=timer_rows[i].waiter!=NULL;}
+         for(u32 i=0;i<chan_len;i++)channels+=chan_rows[i].live;
+         for(u32 i=0;i<connect_len;i++){connects+=connect_rows[i].live;fds+=connect_rows[i].fd>=0;waiters+=connect_rows[i].waiter!=NULL;}
+         for(int fd=0;fd<4096;fd++){int type;socklen_t n=sizeof(type);if(getsockopt(fd,SOL_SOCKET,SO_TYPE,&type,&n)==0)sockets++;}
+         fprintf(stderr,"RESOURCES %u %u %u %u %u %u %u %u %u %u %u\n",probe_created,probe_peak,probe_live,timers,waiters,channels,connects,fds,sockets,io_park.head!=NULL,udp);
+        }
+        '''
+        Path(f'{prefix}-audit.c').write_text(replace_once(c, original, changed) + audit)
     js = Path(f'{prefix}.js').read_text()
     original = (candidate / 'effs/timer.js').read_text()
     changed = original
@@ -56,9 +57,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('prefix', type=Path)
     parser.add_argument('compiler', type=Path)
-    parser.add_argument('--compile', action='store_true')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--compile', action='store_true')
+    mode.add_argument('--js-only', action='store_true')
     args = parser.parse_args()
-    transport_audit(args.prefix, args.compiler)
+    transport_audit(args.prefix, args.compiler, args.js_only)
     if args.compile:
         for suffix in ['', '-audit']:
             subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{args.prefix}{suffix}.c', '-lpthread', '-lm', '-o', f'{args.prefix}{suffix}'], check=True)

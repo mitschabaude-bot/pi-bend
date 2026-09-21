@@ -1,3 +1,6 @@
+import ./proofs/provider-retry-options.bend as RetryOptions
+import ./proofs/provider-retry-config.bend as RetryConfig
+import ./proofs/openai-responses-configured-acquire.bend as ConfiguredAcquire
 import ./proofs/provider-retry-sleep.bend as RetrySleep
 import ./proofs/provider-retry-map.bend as RetryMap
 import ./proofs/openai-responses-acquire.bend as ResponsesAcquire

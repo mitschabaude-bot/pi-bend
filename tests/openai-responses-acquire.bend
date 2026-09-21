@@ -1,4 +1,8 @@
 import Base
+import ../packages/ai/src/api/openai-responses-configured-acquire.bend as ConfiguredAcquire
+import ../packages/ai/src/api/openai-responses-prepare.bend as Preparation
+import ../packages/ai/src/api/openai-responses-policy.bend as Policy
+import ../packages/ai/src/utils/provider-retry-options.bend as RetryOptions
 import ../packages/ai/src/api/openai-responses-cleartext-attempt.bend as Attempt
 import ../packages/ai/src/api/openai-responses-attempt.bend as Generic
 import ../packages/ai/src/api/openai-responses-cleartext-fetch.bend as Native
@@ -163,6 +167,18 @@ def envelopeError(error: Envelope.Error) -> String:
     case Envelope.HeaderFailure{_}: "headers"
     case Envelope.PayloadEncodingFailure{}: "encoding"
 
+def finishedConfigured(value: ConfiguredAcquire.Outcome(String, State())) -> IO(Unit):
+  match value:
+    case Fail{ConfiguredAcquire.InvalidOptions{RetryOptions.InvalidRetryCount{_}}}: IO.print("failed:options:count")
+    case Fail{ConfiguredAcquire.InvalidOptions{RetryOptions.InvalidDelayLimit{_}}}: IO.print("failed:options:limit")
+    case Fail{ConfiguredAcquire.AcquisitionFailed{cause}}: finished(Fail{cause})
+    case Done{body}: finished(Done{body})
+
+def acquire(+mode: U32, settings: Acquire.Client, signal: Abort.AbortSignal<String>, payload: T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String), response: T.ResponseCallback(T.Model<T.JsonValue>, String), attempt: C.Callback<Envelope.Request, Outcome()>, effects: Retry.Effects<String>) -> IO(ConfiguredAcquire.Outcome(String, State())):
+  match settings:
+    case Acquire.Client{url, defaults, apiKey, headers, +baseUrl, timeout}:
+      ConfiguredAcquire.run(~String, ~Unit, ~Unit, ~String, ~State(), ~envelopeError, url, defaults, model(), Preparation.Prepared{apiKey, baseUrl, headers, T.JsonString{"original"}, Policy.getCompat("openai", baseUrl, None{}), Record.new(String), T.CacheShort{}}, T.ProviderRequestOptions{Some{signal}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{payload}), Bool.pick(Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{response}), None{}, timeout, Some{Bool.pick(F.F64, U32.is_eq(mode, 12), F.nan(), F.fromU32(1))}, Bool.pick(Maybe<&2, F.F64>, U32.is_eq(mode, 13), Some{F.nan()}, None{})}, attempt, effects, release(U32.is_eq(mode, 6)))
+
 def client(+mode: U32, port: U32) -> Acquire.Client:
   Acquire.Client{Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.Options{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}}, HeaderDefaults.Defaults{"pi-bend-test", Record.new(String), None{}, None{}}, "fixture-key", Record.new(T.Nullable<String>), Bool.pick(String, U32.is_eq(mode, 10), "not a URL", "http://127.0.0.1:" ++ U32.show(port) ++ "/v1"), Some{Bool.pick(F.F64, U32.is_eq(mode, 11), F.nan(), F.fromU32(1000))}}
 
@@ -181,10 +197,10 @@ def run(+mode: U32, port: U32, pair: Resolver.Owner & Resolver.Resolver) -> IO(U
         +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~Effects.dateBody, Unit{})
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.nowBody, Unit{})
         +delay : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Retry.SleepError, Unit>> <- C.create(~Unit, ~Retry.SleepInput<String>, ~Result<&2, &2, Retry.SleepError, Unit>, ~sleep, Unit{})
-        result : Result<&2, &1, Driver.Error<String>, Owner()> <- Acquire.run(~String, ~String, ~State(), ~envelopeError, client(mode, port), model(), T.JsonString{"original"}, Bool.pick(Maybe<&2, T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{payload}), Bool.pick(Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{response}), attempt, Retry.Effects{random, date, now, delay}, Retry.ProviderRetryOptions{Some{1n}, None{}, Some{Abort.signal(String, parent)}}, release(U32.is_eq(mode, 6)))
+        result : ConfiguredAcquire.Outcome(String, State()) <- acquire(mode, client(mode, port), Abort.signal(String, parent), payload, response, attempt, Retry.Effects{random, date, now, delay})
         C.dispose(Envelope.Request, Outcome(), attempt)
         C.dispose(Envelope.Request, Outcome(), nativeRequest)
-        finished(result)
+        finishedConfigured(result)
         C.dispose(Fetch.Input<String>, Attempt.FetchResult(String, File.Failure), fetch)
         C.dispose(T.PayloadInput<T.JsonValue, T.Model<T.JsonValue>>, Result<&2, &2, String, Maybe<&2, T.JsonValue>>, payload)
         C.dispose(T.ResponseInput<T.Model<T.JsonValue>>, Result<&2, &2, String, Unit>, response)
