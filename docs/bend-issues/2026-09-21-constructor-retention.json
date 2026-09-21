@@ -389,7 +389,7 @@
     }
   },
   "compact_checked_words": {
-    "status": "Not adopted. Word compaction alone hit 40 GiB guard in pass 3. Combined with the previously isolated old-pass lifetime patch, full emission is running under the same guard.",
+    "status": "Combined candidate completed all 12 passes with C identical to previously native-validated factory. Not installed/adopted; peak remains33.25GiB. Single full-workload timing comparison, not a general no-regression claim.",
     "scope": "Retain outer type of structurally literal U32/F32 after all original constructor and field checks run; inner raw bit tree replaces its annotated copy. Native/JS emit literal words atomically. Initial reduced C is byte-identical to baseline.",
     "small_seconds_peak_rss_kib": "1.73 505968",
     "small_c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418",
@@ -585,6 +585,32 @@
         "spines": 467,
         "consts": 27446
       }
-    ]
+    ],
+    "combined_full_emission": {
+      "stats": {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "build/bend-profiles/compact-words-release-pass/bend2/main.ts",
+          "tests/openai-system-defaults.bend",
+          "-o",
+          "build/compiler-memory-reading/compact-release-defaults.c"
+        ],
+        "elapsed_seconds": 703.9980419566855,
+        "peak_sampled_group_rss_kib": 34859752,
+        "limit_gib": 40.0,
+        "stopped": false,
+        "child_exit_code": 0
+      },
+      "c_sha256": "e1b7dbdb4fec2dfcdcb0e99b9f9722c252e72ec4739a8547185fad4a5f6e1ad9",
+      "reference_c_sha256": "e1b7dbdb4fec2dfcdcb0e99b9f9722c252e72ec4739a8547185fad4a5f6e1ad9",
+      "identical_c": true
+    },
+    "native_validation_reference": "docs/runtime-validation/2026-09-21-system-defaults-native.json; same complete C SHA-256 and unchanged source closure; 72 previous native executions apply to this identical emitted program, not fresh runs.",
+    "combined_compiler_sha256": {
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "bend.ts": "69de2d74ae90e394f0763bfcd327001ea4e1536cd4b0a570a32ca113ee8998c7",
+      "comp.ts": "f8b4f1951121c4f230181d548cd0c4fa6540edb91064406be7840801f3221005",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    }
   }
 }
