@@ -1,5 +1,5 @@
 import Base
-import ../LAWS.bend as Laws
+import ../laws/fifo.bend as Laws
 import ../packages/runtime/src/fifo.bend as Fifo
 
 # Algebraic lemmas for the existing Base operations; no runtime replacement.

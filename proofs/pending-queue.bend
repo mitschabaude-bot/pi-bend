@@ -1,6 +1,6 @@
 import Base
 import ./fifo.bend as FifoProof
-import ../LAWS.bend as FifoLaws
+import ../laws/fifo.bend as FifoLaws
 import ../laws/pending-queue.bend as Laws
 import ../packages/runtime/src/fifo.bend as Fifo
 import ../packages/agent/src/pending-message-queue.bend as Queue

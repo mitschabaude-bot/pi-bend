@@ -48,7 +48,7 @@ def accepted(result):
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 19 unsafe annotations.'}
+                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -107,11 +107,14 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         module.write_text(original.replace(before, after))
         typed = check(directory, 'packages/runtime/src/fifo.bend')
         accepted(typed)  # Rule out a syntax/type error as the reason for rejection.
-        proof = check(directory, 'PROOF.bend')
-        rejected(proof, f'LAWS.{law}')
+        proof = check(directory, 'proofs/fifo.bend')
+        rejected(proof, f'laws/fifo.{law}')
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('native-retry-ignores-plan-rejection', 'packages/ai/src/api/openai-responses-native-error.bend', 'case Native.Rejected{_}: Attempt.NonRetryable{}', 'case Native.Rejected{_}: connection()', 'laws/openai-responses-native-error.rejected_transport_plan_is_terminal'),
+        ('native-retry-overwrites-invalid-dns-setup', 'packages/ai/src/api/openai-responses-native-error.bend', 'case DNS.Report{Fail{Search.Halted{DNS.SetupFailed{cause}}}, _}: setup(Reason, cause)', 'case DNS.Report{Fail{Search.Halted{DNS.SetupFailed{cause}}}, why}: dnsDeadline(Reason, setup(Reason, cause), why)', 'laws/openai-responses-native-error.invalid_dns_encoding_precedes_late_deadline'),
+        ('native-retry-hides-header-cleanup', 'packages/ai/src/api/openai-responses-native-error.bend', 'case Progress.FailureWithCleanup{_, _}: Attempt.NonRetryable{}', 'case Progress.FailureWithCleanup{primary, _}: headerPrimary(Reason, primary)', 'laws/openai-responses-native-error.header_cleanup_failure_cannot_be_hidden_by_primary_classification'),
         ('responses-attempt-retries-configuration', 'packages/ai/src/api/openai-responses-attempt.bend', 'case NonRetryable{}: Retry.Other{original}\n    case other:', 'case NonRetryable{}: connection(E, original, "configuration")\n    case other:', 'laws/openai-responses-attempt.configuration_failure_is_terminal'),
         ('responses-attempt-drops-http-message', 'packages/ai/src/api/openai-responses-attempt.bend', 'HTTPFailure{HTTPError.APIError{metadata, value, message}}, message, metadata)', 'HTTPFailure{HTTPError.APIError{metadata, value, message}}, "", metadata)', 'laws/openai-responses-attempt.http_failure_retains_diagnostic_and_policy'),
         ('native-fetch-drops-header-attempts', 'packages/ai/src/api/openai-responses-cleartext-fetch.bend', 'Fail{HeaderFailure{resolution, attempts, cause}}', 'Fail{HeaderFailure{resolution, Nil{}, cause}}', 'laws/openai-responses-cleartext-fetch.header_failure_retains_trace_and_cause'),
@@ -583,8 +586,8 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
                 pending.append(companion)
             for imported in re.findall(r'^import (\.[^\s]+)', path.read_text(), re.MULTILINE):
                 pending.append(str((path.parent / imported).resolve().relative_to(directory)))
-        # FIFO/pending-queue proofs import the global laws. Their complete
-        # proof environment is still required to discharge every obligation.
+        # A future proof importing the global root still requires its complete
+        # proof environment. Queue contracts now have a local laws module.
         if 'LAWS.bend' in visited:
             return 'PROOF.bend'
         entry = 'mutation-proof-' + Path(module).stem + '.bend'
