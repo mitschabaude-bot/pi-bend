@@ -1,0 +1,18 @@
+--- a/bend2/bend.ts
++++ b/bend2/bend.ts
+@@ -771,6 +771,7 @@
+       return ADT(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s, tm.r);
+     }
+     case "Ctr": {
++      if (tm.x.length === 0) return tm as HTerm;
+       return Ctr(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s);
+     }
+     case "Mat": {
+@@ -839,6 +840,7 @@
+       return ADT(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s, tm.r);
+     }
+     case "Ctr": {
++      if (tm.x.length === 0) return tm as LTerm;
+       return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);
+     }
+     case "Mat": {

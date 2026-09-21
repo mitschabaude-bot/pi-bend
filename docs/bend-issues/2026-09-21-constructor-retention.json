@@ -1,0 +1,203 @@
+{
+  "scope": "Reduced six-string pattern fixture; full large-workload allocation attribution remains unresolved. Heap counts alone do not establish reachability; rooted snapshot keeps book and generated C explicitly on globalThis after Bun.gc(true).",
+  "fixture": "tests/compiler-string-match.bend",
+  "fixture_sha256": "d022befff92c7b0457631bcd98a78bfa6b99c623776bfabeea91018f4a864493",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "snapshot_script": "import * as Bend from '../bend-profiles/dns-transport-teles/bend2/bend.ts';\nimport * as Comp from '../bend-profiles/dns-transport-teles/bend2/comp.ts';\nconst book=Bend.book_nil();\nawait Bend.book_load(book,process.cwd()+'/tests/compiler-string-match.bend','',new Map());\nBend.book_valid(book);\n(globalThis as any).investigationBook=book;\n(globalThis as any).investigationC=Comp.compile_book(book);\nBun.gc(true);\nconsole.error('RETAINED',process.memoryUsage());\nawait Bun.write('build/compiler-memory-reading/rooted.heapprofile',Bun.generateHeapSnapshot('v8'));\nconsole.error('Book remains accessible',Object.keys((globalThis as any).investigationBook.tlds).length);\n",
+  "snapshot_sha256": "9b5b6d3245b6981a4e28bb1faa2608dab3a7f5052dec70bc6ffe615f2eeb9984",
+  "retainer_algorithm": "Breadth-first traversal from V8 snapshot root, omitting weak edges. For each Ctr whose k points to WCon, count the first six edges of its shortest root path. These are path categories, not dominator or exclusive retained-byte counts.",
+  "wcon_shortest_root_prefixes": {
+    ".investigationBook.tlds.classify.e.x": 157118,
+    ".investigationBook.tlds.classify.v.h": 103552,
+    ".investigationBook.tlds.IO.join.go.e.x": 1056,
+    ".investigationBook.tlds.IO.join.go.v.f": 1024,
+    "not reachable by non-weak edges": 480,
+    ".investigationBook.tlds.Bool.show.e.x": 288,
+    ".investigationBook.tlds.main.e.x": 288,
+    ".investigationBook.tlds.main.v.x": 288,
+    ".investigationBook.tlds.U32.read.go.e.x": 192,
+    ".investigationBook.tlds.Char.is_space.e.x": 160,
+    ".investigationBook.tlds.Bool.show.v.h": 160,
+    ".investigationBook.tlds.U32.show.fin.e.x": 160,
+    ".investigationBook.tlds.Bool.show.v.m": 128,
+    ".investigationBook.tlds.Nat.read.go.e.x": 128,
+    ".investigationBook.tlds.Char.is_digit.e.x": 96,
+    ".investigationBook.tlds.Char.is_upper.e.x": 96,
+    ".investigationBook.tlds.Char.is_lower.e.x": 96,
+    ".investigationBook.tlds.Char.is_space.v.h": 96,
+    ".investigationBook.tlds.Map.bit.u.e.x": 96,
+    ".investigationBook.tlds.U32.read.go.v.m": 96,
+    ".investigationBook.tlds.U32.show.fin.v.f": 96,
+    ".investigationBook.tlds.IO.fork.e.x": 64,
+    ".investigationBook.tlds.Char.is_digit.v.h": 64,
+    ".investigationBook.tlds.Char.is_upper.v.h": 64,
+    ".investigationBook.tlds.Char.is_lower.v.h": 64,
+    ".investigationBook.tlds.Bool.to_u32.e.x": 64,
+    ".investigationBook.tlds.Map.bit.u.v.f": 64,
+    ".investigationBook.tlds.Array.swap.at.e.x": 64,
+    ".investigationBook.tlds.Nat.read.max.e.x": 64,
+    ".investigationBook.tlds.Nat.read.go.v.m": 64,
+    ".investigationBook.tlds.U32.divmod.go.e.x": 33,
+    ".investigationBook.tlds.IO.fork.v.f": 32,
+    ".investigationBook.tlds.U32.is_even.v.f": 32,
+    ".investigationBook.tlds.U32.pow.v.f": 32,
+    ".investigationBook.tlds.U32.is_even.e.x": 32,
+    ".investigationBook.tlds.U32.pow.e.x": 32,
+    ".investigationBook.tlds.F32.round.e.x": 32,
+    ".investigationBook.tlds.U32.div.if.e.x": 32,
+    ".investigationBook.tlds.U32.divmod.go.v.h": 32,
+    ".investigationBook.tlds.U32.div.if.v.f": 32,
+    ".investigationBook.tlds.F32.round.v.f": 32,
+    ".investigationBook.tlds.F32.pi.e.x": 32,
+    ".investigationBook.tlds.U32.from_nat.v.h": 32,
+    ".investigationBook.tlds.U32.from_nat.e.x": 32,
+    ".investigationBook.tlds.F32.pi.v.x": 32,
+    ".investigationBook.tlds.U32.is_zero.v.f": 32,
+    ".investigationBook.tlds.U32.is_zero.e.x": 32,
+    ".investigationBook.tlds.Char.to_lower.e.x": 32,
+    ".investigationBook.tlds.Char.to_upper.e.x": 32,
+    ".investigationBook.tlds.Bool.to_u32.v.h": 32,
+    ".investigationBook.tlds.Char.to_lower.v.f": 32,
+    ".investigationBook.tlds.Char.to_upper.v.f": 32,
+    ".investigationBook.tlds.Bool.to_u32.v.m": 32,
+    ".investigationBook.tlds.Array.get.at.e.x": 32,
+    ".investigationBook.tlds.Array.get.at.v.f": 32,
+    ".investigationBook.tlds.Array.size.v.f": 32,
+    ".investigationBook.tlds.U32.read.v.m": 32,
+    ".investigationBook.tlds.Array.size.e.x": 32,
+    ".investigationBook.tlds.U32.read.e.x": 32,
+    ".investigationBook.tlds.U32.show.if.v.f": 32,
+    ".investigationBook.tlds.Array.swap.at.v.f": 32,
+    ".investigationBook.tlds.U32.show.if.e.x": 32,
+    ".investigationBook.tlds.Nat.read.max.v.f": 32,
+    ".investigationBook.tlds.Nat.read.max.v.x": 32,
+    ".investigationBook.tlds.String.lines.v.f": 32,
+    ".investigationBook.tlds.String.lines.e.x": 32,
+    ".investigationBook.tlds.classify.v.m": 32,
+    ".investigationBook.tlds.Word.add_comm.go.e.x": 24,
+    ".investigationBook.tlds.Word.adc.e.x": 3,
+    ".investigationBook.tlds.Word.xor.e.x": 3,
+    ".investigationBook.tlds.Word.and.e.x": 3,
+    ".investigationBook.tlds.Word.or.e.x": 3,
+    ".investigationBook.tlds.U32.divmod.go.fin.v.f": 2,
+    ".investigationBook.tlds.U32.divmod.go.fin.e.x": 2,
+    ".investigationBook.tlds.Word.mul.go.e.x": 2,
+    ".investigationBook.tlds.Word.add_comm.arm.T.B": 2,
+    ".investigationBook.tlds.Word.inc.v.m": 2,
+    ".investigationBook.tlds.Word.inc.e.x": 2,
+    ".investigationBook.tlds.Word.cmp.e.x": 2,
+    ".investigationBook.tlds.Word.shr.pad.e.x": 2,
+    ".investigationBook.tlds.Word.adc.con.v.f": 1,
+    ".investigationBook.tlds.Word.add_comm.arm.v.f": 1,
+    ".investigationBook.tlds.Word.adc.con.e.x": 1,
+    ".investigationBook.tlds.Word.add_comm.arm.e.x": 1,
+    ".investigationBook.tlds.Word.shr.pad.v.h": 1,
+    ".investigationBook.tlds.Word.shr.pad.v.m": 1,
+    ".investigationBook.tlds.Word.shl.v.m": 1,
+    ".investigationBook.tlds.Word.shl.e.x": 1,
+    ".investigationBook.tlds.Word.shl.put.v.m": 1,
+    ".investigationBook.tlds.Word.shl.put.e.x": 1,
+    ".investigationBook.tlds.Word.shl.out.con.e.x": 1,
+    ".investigationBook.tlds.Word.xor.v.m": 1,
+    ".investigationBook.tlds.Word.shl.out.con.v.f": 1,
+    ".investigationBook.tlds.Word.or.v.m": 1,
+    ".investigationBook.tlds.Word.and.v.m": 1,
+    ".investigationBook.tlds.Word.not.v.m": 1,
+    ".investigationBook.tlds.Word.not.e.x": 1,
+    ".investigationBook.tlds.Word.zero.e.x": 1,
+    ".investigationBook.tlds.Word.zero.v.m": 1
+  },
+  "constructor_sharing_experiment": {
+    "scope": "Unadopted conversion experiment reuses Ctr when every converted child is identical. Lower memory but consistently slower timings in this limited comparison; no no-regression claim.",
+    "paired_reduced_runs": [
+      {
+        "kind": "baseline",
+        "seconds": 1.94,
+        "peak_rss_kib": 572072,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "shared",
+        "seconds": 2.0,
+        "peak_rss_kib": 546688,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "shared",
+        "seconds": 2.01,
+        "peak_rss_kib": 566704,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "baseline",
+        "seconds": 1.91,
+        "peak_rss_kib": 594052,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "baseline",
+        "seconds": 1.9,
+        "peak_rss_kib": 602696,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "shared",
+        "seconds": 1.96,
+        "peak_rss_kib": 600324,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      }
+    ],
+    "proof_baseline_seconds_peak_rss_kib": "18.63 10817288",
+    "proof_candidate_seconds_peak_rss_kib": "19.28 9162992",
+    "both_proofs": "All terms check, with 41 unsafe annotations."
+  },
+  "empty_constructor_experiment": {
+    "scope": "Two-line candidate reuses only empty constructors in term_higher and term_lower. Isolated and not adopted. Three alternating reduced pairs; one full-root proof comparison. Larger emission comparison running. Shared-host observations do not establish universal performance neutrality.",
+    "paired_reduced_runs": [
+      {
+        "kind": "baseline",
+        "seconds": 1.94,
+        "peak_rss_kib": 676724,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "shared",
+        "seconds": 1.88,
+        "peak_rss_kib": 536896,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "shared",
+        "seconds": 1.92,
+        "peak_rss_kib": 555956,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "baseline",
+        "seconds": 1.98,
+        "peak_rss_kib": 684188,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "baseline",
+        "seconds": 1.98,
+        "peak_rss_kib": 607432,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "kind": "shared",
+        "seconds": 1.89,
+        "peak_rss_kib": 532428,
+        "sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      }
+    ],
+    "proof_baseline_seconds_peak_rss_kib": "18.37 10560700",
+    "proof_candidate_seconds_peak_rss_kib": "17.08 9486384",
+    "both_proofs": "All terms check, with 41 unsafe annotations."
+  }
+}
