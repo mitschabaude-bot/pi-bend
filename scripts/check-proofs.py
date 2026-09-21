@@ -97,6 +97,22 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('lifecycle-ignores-cancellation', 'packages/ai/src/api/openai-responses-lifecycle.bend',
+         'case True{} _: Fail{RequestAborted{}}', 'case True{} _: Fail{MissingStopReason{}}', 'laws/openai-responses-lifecycle.cancellation_precedes_stop_reason'),
+        ('lifecycle-drops-partial-content', 'packages/ai/src/api/openai-responses-lifecycle.bend',
+         'T.AssistantMessage{content, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, stopReason(aborted)',
+         'T.AssistantMessage{Nil{}, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, stopReason(aborted)', 'laws/openai-responses-lifecycle.failure_preserves_unrelated_fields'),
+        ('lifecycle-hides-processing-failure', 'packages/ai/src/api/openai-responses-lifecycle.bend',
+         'case Some{cause} _: Some{ProcessingFailure{cause}}', 'case Some{cause} _: None{}', 'laws/openai-responses-lifecycle.primary_failure_precedes_cleanup'),
+        ('lifecycle-hides-primary-on-delivery-failure', 'packages/ai/src/api/openai-responses-lifecycle.bend',
+         'case Failed{reason, output, primary}: Failed{reason, output, primary}',
+         'case Failed{reason, output, primary}: Successful{T.DoneStop{}, output}', 'laws/openai-responses-lifecycle.failed_delivery_retains_primary'),
+        ('lifecycle-skips-stream-close', 'packages/ai/src/api/openai-responses-driver.bend',
+         'C.call(T.AssistantMessage<A, G>, Unit, finish, Life.message(A, G, E, terminal))',
+         'IO.pure(Unit, Unit{})', 'laws/openai-responses-lifecycle.close_precedes_run_result'),
+        ('lifecycle-changes-done-reason', 'packages/ai/src/api/openai-responses-lifecycle.bend',
+         'case Successful{reason, output}: T.StreamDone{reason, output}',
+         'case Successful{reason, output}: T.StreamDone{T.DoneStop{}, output}', 'laws/openai-responses-lifecycle.successful_event_retains_message'),
         ('http-abort-classification-hides-combined', 'packages/runtime/src/http-abort-classification.bend',
          'case Progress.FailureWithCleanup{_, _}: False{}', 'case Progress.FailureWithCleanup{_, _}: True{}', 'laws/http-abort-classification.combined_failures_are_not_cancellation'),
         ('http-abort-classification-ignores-transport', 'packages/runtime/src/http-abort-classification.bend',

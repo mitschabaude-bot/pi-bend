@@ -1,3 +1,4 @@
+import ./proofs/openai-responses-lifecycle.bend as OpenAILifecycle
 import Base
 import ./proofs/provider-response-view.bend as ProviderResponseView
 import ./proofs/provider-request.bend as ProviderRequest

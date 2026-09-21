@@ -42,7 +42,7 @@ def payloadHook(+mode: U32, input: T.PayloadInput<Payload(), String>) -> IO(Resu
 def header(value: Maybe<&2, String>) -> String:
   match value:
     case None{}: "missing"
-    case Some{text}: text
+    case Some{headerText}: headerText
 
 def responseHook(+mode: U32, input: T.ResponseInput<String>) -> IO(Result<&2, &2, String, Unit>):
   match input:

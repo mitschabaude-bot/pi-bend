@@ -577,3 +577,13 @@ Importing the provider request module exposed the existing global-name/pattern-b
 ### BEND-001/BEND-016 observation: provider hooks and HTTP retry
 
 The native request-hook fixture compiles on the unchanged isolated candidate in 64.79 seconds at 5,763,740 KiB sampled peak process-group RSS. JS emission takes 6.39 seconds at 2,609,368 KiB. The [record](bend-issues/2026-09-21-provider-request-compiler.json) preserves the clean source closure, compiler identity, guard measurements, generated sizes and build profiles. These are build costs for a different composition, not evidence of an improvement or an isolated leak. No compiler patch was changed or installed.
+
+### BEND-012 recurrence: imported request fixture
+
+Composing the outer provider fixture imports the previous request fixture under a namespace. Its `Some{text}` binder then resolves to the same-module `text` helper. A [record](bend-issues/2026-09-21-provider-driver-shadow.json) retains the old source identity and diagnostic. The minimal local correction names that header binder `headerText`; request behavior is unchanged. This is the existing resolver defect, not a new classification or a compiler fix.
+
+### BEND-001/BEND-016 observation: outer provider and concurrent stream consumers
+
+The unchanged isolated compiler emits the complete HTTP/SSE/outer-driver fixture in 300.08 seconds at 20,023,780 KiB sampled peak process-group RSS. JS emission takes 29.47 seconds at 12,436,728 KiB. The [record](bend-issues/2026-09-21-openai-provider-driver-compiler.json) preserves source/compiler identities, build measurements, generated sizes and emission profiles. All eleven C passes emit the same 6,655 segments; ownership facts rise from 1,577 to 1,750, with passes six through ten adding one fact each. This repeats the documented full-pass propagation cost; the specific chain is not reduced. These observations do not establish a new leak or a performance improvement, and no compiler patch was changed or installed.
+
+A previous native build was intentionally stopped after the Bun integration exposed a test renderer that collapsed the aborted stop reason to `other`. The corrected fixture renders every actual stop-reason variant and was rebuilt for the final validation. The interrupted build is recorded as superseded fixture work, not an RSS guard failure or a compiler regression.
