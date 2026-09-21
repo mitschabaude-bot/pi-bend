@@ -197,3 +197,7 @@ Nine new laws preserve typed native failure categories and cancellation/deadline
 ## Responses acquisition bridge
 
 Three generic laws preserve all prepared client settings and payload, forbid transport effects for any envelope failure, and transfer successful envelopes unchanged. The existing provider-request laws supply hook selection and cleanup contracts. The [full gate](proof-validation/2026-09-21-openai-responses-acquire.json) checks 402 public laws and 65 supporting lemmas and rejects 221 well-typed mutations, open obligations and a missing proof. Its nineteen named unsafe declarations are unchanged. [Acquisition design](openai-responses-acquire.md) describes the boundary and separates pure contracts from network/resource validation.
+
+## Retry error embedding
+
+Six `provider-retry-map` laws establish identity and composition of error embedding, retention of provider metadata and terminal classification, and unchanged transfer of arbitrary affine success owners. The [full gate](proof-validation/2026-09-21-openai-responses-native-client.json) checks 408 public laws and 65 supporting lemmas and rejects 223 typed mutations, open obligations and a missing proof. The nineteen named unsafe declarations remain unchanged. [The native callback design](openai-responses-native-client.md) separates these pure guarantees from actual callback/transport ownership checks.

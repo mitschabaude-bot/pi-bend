@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import hashlib
+import argparse
 import json
 import re
 import socket
@@ -10,7 +11,13 @@ import struct
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-PREFIX=ROOT/'build/openai-responses-acquire'
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--prefix',type=Path,default=ROOT/'build/openai-responses-acquire')
+mode=parser.add_mutually_exclusive_group()
+mode.add_argument('--js-only',action='store_true')
+mode.add_argument('--js-audit',action='store_true')
+args=parser.parse_args()
+PREFIX=args.prefix.resolve()
 BUN=str(Path.home()/'.bun/bin/bun')
 PAYLOAD='payload:"original":target'
 # The fixture renders the exact binary64 status bits.
@@ -105,5 +112,5 @@ while pending:
 visited.update([Path(__file__).resolve(),ROOT/'tests/transport_audit.py',ROOT/'tests/channel_audit.py'])
 programs=[Path(arg) for _,command in backends for arg in command if str(PREFIX) in arg]
 if '--js-only' not in sys.argv:programs.extend(Path(str(PREFIX)+suffix) for suffix in (['-audit.js'] if '--js-audit' in sys.argv else ['-audit','-audit.js']))
-record=dict(scope='Actual native cleartext fetch and attempt composed with canonical envelope serialization, payload/response hooks, provider retry and native sleep. Complete upload bytes and peer release verified. Cleanup failure is injected after real body release. Generic bridge preserves caller-supplied typed errors; this fixture renders errors as strings. No TLS or completed provider/session claim.',sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(visited)},programs={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(programs))},samples=results)
+record=dict(scope='Actual native cleartext fetch and owned native request callback composed with canonical envelope serialization, payload/response hooks, provider retry and native sleep. Complete upload bytes and peer release verified. Request callback factories are disposed before consuming a returned successful body. Cleanup failure is injected after real body release. Generic bridge preserves caller-supplied typed errors; this fixture renders errors as strings. No TLS or completed provider/session claim.',sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(visited)},programs={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(programs))},samples=results)
 Path(str(PREFIX)+('-js-audit-result.json' if '--js-audit' in sys.argv else '-js-result.json' if '--js-only' in sys.argv else '-result.json')).write_text(json.dumps(record,indent=2)+'\n')

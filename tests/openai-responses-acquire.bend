@@ -37,6 +37,7 @@ import ./http-resolved-exchange.bend as Setup
 
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/api/openai-responses-acquire.bend as Acquire
+import ../packages/ai/src/api/openai-responses-cleartext-request.bend as NativeRequest
 import ../packages/ai/src/api/openai-request-headers.bend as HeaderDefaults
 import ../packages/ai/src/utils/provider-request.bend as Driver
 import ../packages/runtime/src/record.bend as Record
@@ -114,24 +115,16 @@ def responseHook(+mode: U32, input: T.ResponseInput<T.Model<T.JsonValue>>) -> IO
         IO.print("response:" ++ Effects.scalar(F.toBits(status)) ++ ":" ++ modelId(model))
         return Bool.pick(Result<&2, &2, String, Unit>, U32.is_eq(mode, 5) || U32.is_eq(mode, 6), Fail{"response"}, Done{Unit{}})
 
-def mapped(value: Attempt.Outcome(String, File.Failure)) -> Outcome():
-  match value:
-    case Done{owner}: Done{owner}
-    case Fail{Retry.Other{cause}}: Fail{Retry.Other{original(cause)}}
-    case Fail{Retry.Provider{Retry.ProviderError{cause, message, status, hint, ms, seconds}}}:
-      Fail{Retry.Provider{Retry.ProviderError{original(cause), message, status, hint, ms, seconds}}}
-
 type Environment is Data:
-  Environment{signal: Abort.AbortSignal<String>, fetch: C.Callback<Fetch.Input<String>, Attempt.FetchResult(String, File.Failure)>, counter: R.Ref<U32>}
+  Environment{native: C.Callback<Envelope.Request, Outcome()>, counter: R.Ref<U32>}
 
 def request(environment: Environment, wire: Envelope.Request) -> IO(Outcome()):
   match environment:
-    case Environment{signal, fetch, counter}:
+    case Environment{native, counter}:
       do IO<Outcome()>:
         ignored : Unit <- R.modify(U32, Unit, counter, value => increment(value))
         IO.print("request")
-        result : Attempt.Outcome(String, File.Failure) <- Attempt.run(~String, ~File.Failure, wire, signal, fetch, 65536n)
-        return mapped(result)
+        C.call(Envelope.Request, Outcome(), native, wire)
 
 def released(fails: Bool, value: Response.Next<Attempt.ReadError(String), State()>) -> Result<&2, &2, String, Unit>:
   match value:
@@ -180,7 +173,8 @@ def run(+mode: U32, port: U32, pair: Resolver.Owner & Resolver.Resolver) -> IO(U
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +counter : R.Ref<U32> <- R.new(U32, 0)
         +fetch : C.Callback<Fetch.Input<String>, Attempt.FetchResult(String, File.Failure)> <- Native.create(~String, ~File.Failure, Native.Context{resolver, Setup.database(0, False{}), Setup.options(0, False{})})
-        +attempt : C.Callback<Envelope.Request, Outcome()> <- C.create(~Environment, ~Envelope.Request, ~Outcome(), ~request, Environment{Abort.signal(String, parent), fetch, counter})
+        +nativeRequest : C.Callback<Envelope.Request, Outcome()> <- NativeRequest.create(~String, ~File.Failure, ~String, ~original, Abort.signal(String, parent), fetch, 65536n)
+        +attempt : C.Callback<Envelope.Request, Outcome()> <- C.create(~Environment, ~Envelope.Request, ~Outcome(), ~request, Environment{nativeRequest, counter})
         +payload : T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String) <- C.create(~U32, ~(T.PayloadInput<T.JsonValue, T.Model<T.JsonValue>>), ~(Result<&2, &2, String, Maybe<&2, T.JsonValue>>), ~(selectedMode => input => payloadHook(selectedMode, input)), mode)
         +response : T.ResponseCallback(T.Model<T.JsonValue>, String) <- C.create(~U32, ~(T.ResponseInput<T.Model<T.JsonValue>>), ~(Result<&2, &2, String, Unit>), ~(selectedMode => input => responseHook(selectedMode, input)), mode)
         +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.randomBody, Unit{})
@@ -188,8 +182,9 @@ def run(+mode: U32, port: U32, pair: Resolver.Owner & Resolver.Resolver) -> IO(U
         +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~Effects.nowBody, Unit{})
         +delay : C.Callback<Retry.SleepInput<String>, Result<&2, &2, Unit, Unit>> <- C.create(~Unit, ~Retry.SleepInput<String>, ~Result<&2, &2, Unit, Unit>, ~sleep, Unit{})
         result : Result<&2, &1, Driver.Error<String>, Owner()> <- Acquire.run(~String, ~String, ~State(), ~envelopeError, client(mode, port), model(), T.JsonString{"original"}, Bool.pick(Maybe<&2, T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{payload}), Bool.pick(Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, String)>, U32.is_eq(mode, 0), None{}, Some{response}), attempt, Retry.Effects{random, date, now, delay}, Retry.ProviderRetryOptions{Some{1n}, None{}, Some{Abort.signal(String, parent)}}, release(U32.is_eq(mode, 6)))
-        finished(result)
         C.dispose(Envelope.Request, Outcome(), attempt)
+        C.dispose(Envelope.Request, Outcome(), nativeRequest)
+        finished(result)
         C.dispose(Fetch.Input<String>, Attempt.FetchResult(String, File.Failure), fetch)
         C.dispose(T.PayloadInput<T.JsonValue, T.Model<T.JsonValue>>, Result<&2, &2, String, Maybe<&2, T.JsonValue>>, payload)
         C.dispose(T.ResponseInput<T.Model<T.JsonValue>>, Result<&2, &2, String, Unit>, response)

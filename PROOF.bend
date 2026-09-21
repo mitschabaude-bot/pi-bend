@@ -1,3 +1,4 @@
+import ./proofs/provider-retry-map.bend as RetryMap
 import ./proofs/openai-responses-acquire.bend as ResponsesAcquire
 import ./proofs/openai-responses-native-error.bend as NativeError
 import ./proofs/openai-responses-attempt.bend as ResponsesAttempt
