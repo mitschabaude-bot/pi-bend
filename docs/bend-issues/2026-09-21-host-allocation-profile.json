@@ -407,6 +407,61 @@
       "seconds": 190.61011940892786,
       "sampled_peak_rss_bytes": 8017899520,
       "source": "2026-09-21-unused-match-types.json"
-    }
+    },
+    "decision": "Keep Bun as default: user prioritizes speed over further memory reduction. Node remains a profiling host."
+  },
+  "field_filter_candidate": {
+    "decision": "not adopted: no demonstrated material speed or peak-memory improvement",
+    "patch": "--- a/bend2/comp.ts\n+++ b/bend2/comp.ts\n@@ -1080,8 +1080,18 @@\n function ctr_flds(book: Bend.Book, k: Bend.Name,\n   xs: HTerm[]): HTerm[] {\n   const ctr = book.ctrs[k];\n-  const qs = ctr && ctr_tail(book, ctr).map(([q]) => q);\n-  return xs.filter((_, j) => qs?.[j] === undefined || quant_live(qs[j]));\n+  if (xs.length === 0 || ctr === undefined) return xs;\n+  const doms = ctr_tail(book, ctr);\n+  // Constructor fields are immutable; copy only when a field is erased.\n+  let live: HTerm[] | null = null;\n+  for (let j = 0; j < xs.length; j++) {\n+    if (doms[j] !== undefined && !quant_live(doms[j][0])) {\n+      if (live === null) live = xs.slice(0, j);\n+    } else if (live !== null) {\n+      live.push(xs[j]);\n+    }\n+  }\n+  return live ?? xs;\n }\n \n function ctr_build(fl: File, k: Bend.Name, exprs: string[],\n",
+    "full": {
+      "command": [
+        "bun",
+        "build/bend-profiles/field-filter-sharing/bend2/main.ts",
+        "build/compiler-memory-reading/provider-baseline-62ef5b3/tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/field-filter-full.c"
+      ],
+      "elapsed_seconds": 188.1714853933081,
+      "peak_sampled_group_rss_kib": 7924760,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "full_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "small_medians": {
+      "compiler-string-pattern-return": {
+        "baseline": {
+          "seconds": 3.5436516776680946,
+          "peak_rss_kib": 721700
+        },
+        "candidate": {
+          "seconds": 3.5122155444696546,
+          "peak_rss_kib": 739704
+        }
+      },
+      "typed-do-shadow": {
+        "baseline": {
+          "seconds": 0.15171610936522484,
+          "peak_rss_kib": 81940
+        },
+        "candidate": {
+          "seconds": 0.15885456185787916,
+          "peak_rss_kib": 84936
+        }
+      },
+      "aes128": {
+        "baseline": {
+          "seconds": 0.3074502032250166,
+          "peak_rss_kib": 103520
+        },
+        "candidate": {
+          "seconds": 0.28606107644736767,
+          "peak_rss_kib": 104596
+        }
+      }
+    },
+    "small_timing_limitation": "Three alternating pairs overlapped the Node full run.",
+    "correctness": "compiler_field_cache.py passed 109 string fallback, ten indexed word, four dynamic Nat cases on native one/four threads and Bun; identical C and JS for every fixture.",
+    "fixture_revision": "62ef5b3 archived packages/ and tests/; provider cleanup does not change this fixture"
   }
 }

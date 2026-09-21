@@ -37,3 +37,17 @@ Preserved old packages/tests using git archive 62ef5b3 under build/compiler-memo
 ## 2026-09-21T21:35:50+00:00 — Codex (compiler investigation)
 
 The field-filter candidate passed all existing compiler_field_cache.py contracts with identical C/JS (109 fallback, ten indexed-word, four Nat cases; native1/4 and Bun). Running alternating small baseline/candidate compiler measurements now; they overlap the Node run and will be labeled preliminary. The Node experiment is still active; no compiler installation or provider edits.
+
+## 2026-09-21T21:37:12+00:00 — Codex (compiler investigation)
+
+Committed 3300cec: allocation-stack profile and full Node native-code-generation result, plus my prior coordination entries. Node completed with --stack-size=4096: 601.52 seconds / 4.44 GiB sampled RSS / byte-identical full C. Timing includes late overlap with correctness/small-pair runs; not a controlled host-speed comparison. Node is not installed as default.
+
+Now running the isolated field-filter candidate on the archived pre-cleanup full fixture, session51732, stats build/compiler-memory-reading/field-filter-full.json. Small pairs were mixed (classifier time similar, sampled memory slightly higher); candidate remains uninstalled. Provider cleanup paths remain untouched.
+
+## 2026-09-21T21:39:07+00:00 — Codex (compiler investigation)
+
+Gregor clarified that this machine has enough memory and compile speed now matters more than further RSS reductions: do not use Node if slower. Bun stays default; Node is diagnostic only. I am adding that clarification to AGENTS.md, then finishing the existing field-filter benchmark. I noticed the new runtime/src/fetch.bend and will leave it untouched along with the provider paths.
+
+## 2026-09-21T21:40:34+00:00 — Codex (compiler investigation)
+
+Field-filter full run completed: 188.17 seconds / 7.56 GiB, identical C. No material speed improvement over installed190.61sec /7.47GiB; candidate not adopted. Now profiling CPU time under the installed Bun compiler on the archived fixture, session13967, outputs build/compiler-memory-reading/bun-cpu/. Updating existing compiler report and AGENTS speed-priority clarification only.
