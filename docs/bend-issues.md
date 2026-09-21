@@ -8,6 +8,8 @@ Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with ei
 
 ## BEND-001 — Native compilation consumes tens of GiB
 
+[Same-span word-tail sharing](bend-issues/2026-09-21-word-tail-sharing.json) was rejected: explicitly reachable checked objects fell from 17.72 to 17.24 million, but the full sampled peak rose from 10.08 to 12.56 GiB (319 to 316 seconds, identical C). The cause of this RSS increase is not established. The candidate remains uninstalled.
+
 A [checked-syntax census](bend-issues/2026-09-21-checked-node-census.json) now finds 17,720,108 explicitly reachable objects, including 4,693,409 arrays, 2,337,032 annotations and 2,157,378 word-bit constructors. It excludes closure environments and source spans, so these are node counts, not a heap dominator analysis. Remaining literal representation is a concrete next target; any sharing must preserve checked values, bit widths and source diagnostics.
 
 **Status:** confirmed excessive memory consumption on integration fixtures; cause under investigation. Neither an application-runtime leak nor a compiler leak has been established.

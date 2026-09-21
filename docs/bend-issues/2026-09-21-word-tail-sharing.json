@@ -1,0 +1,237 @@
+{
+  "status": "Rejected, not installed. Reduced checked node count did not translate to lower full compiler RSS.",
+  "full_candidate": {
+    "seconds": 316.185256046243,
+    "sampled_peak_rss_bytes": 13484695552,
+    "peak_rss_bytes": 13532336128,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "full_baseline": {
+    "seconds": 319.1867097290233,
+    "sampled_peak_rss_bytes": 10827862016,
+    "peak_rss_bytes": 10865299456,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "full_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+  "small_pairs": [
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 5.932522758841515,
+      "peak_kib": 983392,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 5.924323598854244,
+      "peak_kib": 974716,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 5.866928038187325,
+      "peak_kib": 999524,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 6.047350935637951,
+      "peak_kib": 1007472,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 6.038193140178919,
+      "peak_kib": 1164252,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 5.940745043568313,
+      "peak_kib": 975980,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.15643855556845665,
+      "peak_kib": 85684,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.15619078371673822,
+      "peak_kib": 83560,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.15994575899094343,
+      "peak_kib": 89856,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.16107998695224524,
+      "peak_kib": 85480,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.16445785015821457,
+      "peak_kib": 94004,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.16329148225486279,
+      "peak_kib": 85584,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.31493725534528494,
+      "peak_kib": 112972,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.3332458380609751,
+      "peak_kib": 115032,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.34208244644105434,
+      "peak_kib": 120244,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.33282848447561264,
+      "peak_kib": 112264,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.3246348099783063,
+      "peak_kib": 115464,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.33178906701505184,
+      "peak_kib": 120300,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    }
+  ],
+  "positive_value_checks": {
+    "cases": 5330,
+    "script_sha256": "162c97a1cf2afa4abe2602b34cf3025b524c8feef8b5311b4e3f40ccf18d7051",
+    "checks": [
+      "32 exact bits",
+      "same Span on every node",
+      "no sharing across distinct Span objects"
+    ]
+  },
+  "patch": "--- a/bend.ts\n+++ b/bend.ts\n@@ -1144,10 +1144,20 @@\n   const words = s === undefined ? undefined : WORD_LITERALS.get(s);\n   const cached = words?.get(n);\n   if (cached !== undefined) return cached;\n-  let out: LTerm = Ctr(\"WNil\", [], s);\n+  const seed = words?.entries().next().value;\n+  let bits = 32;\n+  let out: LTerm;\n+  if (seed !== undefined) {\n+    // Above the highest differing bit, the same-span words share a tail.\n+    bits = 32 - Math.clz32(n ^ seed[0]);\n+    out = seed[1];\n+    for (let i = 0; i < bits; i++) out = (out as Extract<LTerm, { $: \"Ctr\" }>).x[1];\n+  } else {\n+    out = Ctr(\"WNil\", [], s);\n+  }\n   const zero: LTerm = Ctr(\"False\", [], s);\n   const one: LTerm = Ctr(\"True\", [], s);\n-  for (let i = 31; i >= 0; i--) {\n+  for (let i = bits - 1; i >= 0; i--) {\n     out = Ctr(\"WCon\", [(n >>> i) & 1 ? one : zero, out], s);\n   }\n   WORD_TREES.add(out);\n",
+  "limitations": [
+    "Short regression jobs overlapped the full shared-host build; timings are not an isolated CPU benchmark.",
+    "Fewer reachable objects is not proof of lower live-byte size, allocation volume or RSS.",
+    "The reason for the larger peak is not established; do not attribute it to a particular GC heuristic without evidence."
+  ],
+  "checked_baseline": {
+    "objects": 17720108,
+    "arrays": 4693409,
+    "arraySlots": 6610997,
+    "counts": {
+      "Ann": 2337032,
+      "Var": 3240100,
+      "App": 608928,
+      "Ref": 1481620,
+      "All": 375307,
+      "ADT": 255351,
+      "Qua": 22591,
+      "Lone": 10416,
+      "Lam": 201978,
+      "Typ": 28345,
+      "Many": 4901,
+      "None": 3663,
+      "Qnt": 9576,
+      "Mat": 72063,
+      "Ctr": 4355505,
+      "Min": 3413,
+      "Let": 1390,
+      "Efq": 5721,
+      "Eql": 31,
+      "Rfl": 3,
+      "Rwt": 3
+    },
+    "WCon": 2157378
+  },
+  "checked_candidate": {
+    "objects": 17241706,
+    "arrays": 4454208,
+    "arraySlots": 6151805,
+    "counts": {
+      "Ann": 2337032,
+      "Var": 3240100,
+      "App": 608928,
+      "Ref": 1481620,
+      "All": 375307,
+      "ADT": 255351,
+      "Qua": 22591,
+      "Lone": 10416,
+      "Lam": 201978,
+      "Typ": 28345,
+      "Many": 4901,
+      "None": 3663,
+      "Qnt": 9576,
+      "Mat": 72063,
+      "Ctr": 4116304,
+      "Min": 3413,
+      "Let": 1390,
+      "Efq": 5721,
+      "Eql": 31,
+      "Rfl": 3,
+      "Rwt": 3
+    },
+    "WCon": 1927782
+  }
+}
