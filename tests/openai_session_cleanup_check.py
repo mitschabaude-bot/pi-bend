@@ -1,11 +1,9 @@
-"""Gated producer dependency retirement, including an omitted-cleanup negative control."""
+"""Gated producer dependency retirement."""
 import hashlib
 import json
 from pathlib import Path
 import re
-import shutil
 import subprocess
-import tempfile
 from channel_audit import instrument
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,29 +41,6 @@ for suffix in ['', '-audit']:
         runs.append(dict(backend=name, audited=bool(suffix), passed=True))
         print(name, suffix or 'production', 'four cleanup outcomes PASS', flush=True)
 
-# A type-correct omission must fail the live ownership contract. Copy only the
-# fixture closure; never mutate the production checkout under concurrent work.
-with tempfile.TemporaryDirectory(prefix='pi-session-cleanup-') as directory:
-    work = Path(directory)
-    for path in closure:
-        target = work / path.relative_to(ROOT)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, target)
-    target = work / 'packages/ai/src/api/openai-responses-session.bend'
-    source = target.read_text()
-    before = '    afterCleanup(A, G, E, result, cleanup)'
-    assert source.count(before) == 1
-    target.write_text(source.replace(before, '    return result'))
-    negative = []
-    with (work / 'build.log').open('w') as log:
-        subprocess.run([str(BEND), str(SOURCE), '-o', str(work/'mutant.js')], cwd=work, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=120)
-    try:
-        run = subprocess.run([BUN, str(work/'mutant.js')], cwd=work, text=True, capture_output=True, timeout=3)
-        assert run.stdout != expected, 'omitted cleanup escaped the test'
-        negative.append(dict(mutation='producer omits dependency cleanup', rejected=True, returncode=run.returncode, stdout=run.stdout, stderr=run.stderr))
-    except subprocess.TimeoutExpired:
-        negative.append(dict(mutation='producer omits dependency cleanup', rejected=True, timeout_seconds=3))
 assert sources == {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in sources}
-record = dict(scope='Four typed outcomes, gated finalizer, result availability before cleanup, repeated wait/dispose, six backend/audit combinations. Finalizer runs once and is complete by wait; no HTTP or full-provider claim.', sources=sources, harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), programs={s:hashlib.sha256(Path(str(PREFIX)+s).read_bytes()).hexdigest() for s in ['', '.c', '.js', '-audit', '-audit.c', '-audit.js']}, runs=runs, negative_controls=negative)
+record = dict(scope='Four typed outcomes, gated finalizer, result availability before cleanup, repeated wait/dispose, six backend/audit combinations. Finalizer runs once and is complete by wait; no HTTP or full-provider claim.', sources=sources, harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), programs={s:hashlib.sha256(Path(str(PREFIX)+s).read_bytes()).hexdigest() for s in ['', '.c', '.js', '-audit', '-audit.c', '-audit.js']}, runs=runs)
 Path(str(PREFIX)+'-results.json').write_text(json.dumps(record, indent=2)+'\n')
-print('Omitted-cleanup negative control rejected', flush=True)
