@@ -1,3 +1,5 @@
+import ./proofs/provider-header-state.bend as ProviderHeaderState
+import ./proofs/openai-request-headers.bend as OpenAIRequestHeaders
 import ./proofs/openai-responses-options.bend as OpenAIOptions
 import ./proofs/openai-responses-prepare.bend as OpenAIPrepare
 import ./proofs/openai-responses-session.bend as OpenAISession

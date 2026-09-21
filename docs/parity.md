@@ -1792,3 +1792,7 @@ Added a production affine session owner that starts the canonical event stream/d
 ### Native Responses request preparation (2026-09-21)
 
 Added complete native Responses options and production preparation composed from existing transcript, credential, cache, grammar, header and payload modules. Fixed explicit `serviceTier: null` in the existing body projection. Twelve laws cover option reconstruction, preparation results/errors, API selection, effect-free rejection and nullable field semantics; 372 upstream-source comparisons pass on native one/four threads and Bun, and 917 existing parameter comparisons pass on both native thread counts. No suite status changes. [Scope and evidence](openai-responses-preparation.md) retain the remaining transport/session/authentication and full-agent work.
+
+### Native OpenAI request headers (2026-09-21)
+
+Added immutable normalized header settings with explicit removal provenance and OpenAI default/auth/client/body/request layering. Authentication overrides, organization/project fields, timeout validation/header conversion and typed failures match the pinned SDK over 399 cases on native one/four threads and Bun. Twenty-four generic/boundary laws and eleven added mutations cover core contracts. URL/body preparation and transport/session composition remain pending; no original suite is promoted. See [scope and evidence](openai-request-headers.md).
