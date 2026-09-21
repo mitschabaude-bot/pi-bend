@@ -444,5 +444,41 @@
   "limitations": [
     "Shared-host measurements, one unprofiled full run per version and alternating small pairs; no universal performance guarantee.",
     "Full pi port remains incomplete."
-  ]
+  ],
+  "post_install_stage_timing": {
+    "stages": [
+      {
+        "stage": "load",
+        "seconds": 3.655010546
+      },
+      {
+        "stage": "check",
+        "seconds": 12.864601084000002
+      },
+      {
+        "stage": "compile",
+        "seconds": 105.204777296
+      },
+      {
+        "stage": "write",
+        "seconds": 0.12313666199998988
+      }
+    ],
+    "run": {
+      "command": [
+        "bun",
+        "build/compiler-memory-reading/measure-stages.ts",
+        "build/compiler-memory-reading/provider-baseline-62ef5b3/tests/openai-system-defaults.bend",
+        "build/compiler-memory-reading/layout-equality-stages.c"
+      ],
+      "elapsed_seconds": 122.8366047590971,
+      "peak_sampled_group_rss_kib": 7261096,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "driver_source": "import * as fs from 'node:fs';\nimport * as path from 'node:path';\nimport * as Bend from '../bend-native-toolchain/bend2/bend.ts';\nimport * as Comp from '../bend-native-toolchain/bend2/comp.ts';\nconst [source, output] = process.argv.slice(2);\nconst book = Bend.book_nil();\nlet start = performance.now();\nawait Bend.book_load(book, path.resolve(source), '', new Map());\nconst load = performance.now();\nconsole.log(JSON.stringify({stage:'load',seconds:(load-start)/1000}));\nBend.book_valid(book);\nconst check = performance.now();\nconsole.log(JSON.stringify({stage:'check',seconds:(check-load)/1000}));\nif (book.hols + book.open !== 0) throw new Error('Unfilled definitions');\nconst c = Comp.compile_book(book);\nconst compile = performance.now();\nconsole.log(JSON.stringify({stage:'compile',seconds:(compile-check)/1000}));\nfs.writeFileSync(output, c);\nconsole.log(JSON.stringify({stage:'write',seconds:(performance.now()-compile)/1000}));\n",
+    "interpretation": "Loading and checking total16.52seconds, about13% of full build elapsed time before artifact overhead. Most time is backend generation; persistent checked modules alone cannot remove this dominant cost. No artifact cache implemented."
+  }
 }

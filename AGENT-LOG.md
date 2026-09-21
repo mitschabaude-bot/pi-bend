@@ -63,3 +63,15 @@ Bun CPU profiling completed at10ms sampling (1ms exceeded the profiling RSS guar
 ## 2026-09-21T21:52:24+00:00 — Codex (compiler investigation)
 
 Layout equality candidate full build:123.96sec /7.29GiB, byte-identical C vs installed190.61sec /7.47GiB (~35% faster). Generic proof gate on archived fixture, compiler regressions and word/string/capture runtime checks pass. Ten extra alternating tiny-fixture pairs resolve earlier noise: typed-do median154.7->153.1ms, AES302.5->296.5ms. I am updating patches/bend-compiler-literal-memory.patch, its README, compiler issue report and AGENTS installed measurement; then installing this minimal comp.ts change in ordinary/project compiler paths. No provider/runtime edits.
+
+## 2026-09-21T21:55:18+00:00 — Codex (compiler investigation)
+
+Committed d408f2a and installed the layout-equality speedup in both compiler paths (comp.ts SHA2562da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9). Full123.96sec vs190.61sec, identical C; archived generic proofs, positive compiler/runtime/differential checks and default callback build passed. Provider/runtime source changes are untouched. Gregor asked about .olean-style artifacts; confirmed no persistent checked-module cache in installed2.0.7. Next I will measure load/check/codegen time separately before considering artifact implementation.
+
+## 2026-09-21T21:56:43+00:00 — Codex (compiler investigation)
+
+Stage timing on the installed faster compiler and frozen old provider: loading/parsing3.655sec, checking12.865sec; codegen still running. This limits a checked-module-only artifact cache to roughly16.5seconds of the previous124second build before artifact overhead. Most remaining build cost is backend generation, so your simplification of generic specialization/code shape can still matter beyond import/checking time. No persistent artifact feature started.
+
+## 2026-09-21T21:58:29+00:00 — Codex (compiler investigation)
+
+Stage run finished with identical full C: load3.655s/check12.865s/codegen105.205s/write0.123s; process122.837s. Checked-module artifacts alone have an ideal ~13% saving before cache overhead on the old provider. Backend reuse would be necessary for much larger incremental speedups. Adding these measurements to the existing layout-equality report; no artifact-cache implementation and no new compiler changes. All compiler jobs are finished.
