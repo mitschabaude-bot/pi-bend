@@ -151,5 +151,133 @@
     "child_exit_code": 0
   },
   "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06",
-  "identical": true
+  "identical": true,
+  "paired": {
+    "scope": "Three alternating paired emissions of identical stream-error source; all C outputs byte-identical. Shared host with root proof gate; uncertainty remains.",
+    "runs": [
+      {
+        "variant": "baseline",
+        "index": 0,
+        "stats": {
+          "command": [
+            "bun",
+            "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+            "tests/openai-stream-error.bend",
+            "-o",
+            "build/release-pass-paired-baseline-0.c"
+          ],
+          "elapsed_seconds": 84.61003810819238,
+          "peak_sampled_group_rss_kib": 18390364,
+          "limit_gib": 24.0,
+          "stopped": false,
+          "child_exit_code": 0
+        },
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      },
+      {
+        "variant": "candidate",
+        "index": 0,
+        "stats": {
+          "command": [
+            "bun",
+            "build/bend-profiles/release-previous-pass/bend2/main.ts",
+            "tests/openai-stream-error.bend",
+            "-o",
+            "build/release-pass-paired-candidate-0.c"
+          ],
+          "elapsed_seconds": 84.48184535466135,
+          "peak_sampled_group_rss_kib": 18370140,
+          "limit_gib": 24.0,
+          "stopped": false,
+          "child_exit_code": 0
+        },
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      },
+      {
+        "variant": "candidate",
+        "index": 1,
+        "stats": {
+          "command": [
+            "bun",
+            "build/bend-profiles/release-previous-pass/bend2/main.ts",
+            "tests/openai-stream-error.bend",
+            "-o",
+            "build/release-pass-paired-candidate-1.c"
+          ],
+          "elapsed_seconds": 84.54067957401276,
+          "peak_sampled_group_rss_kib": 18388156,
+          "limit_gib": 24.0,
+          "stopped": false,
+          "child_exit_code": 0
+        },
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      },
+      {
+        "variant": "baseline",
+        "index": 1,
+        "stats": {
+          "command": [
+            "bun",
+            "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+            "tests/openai-stream-error.bend",
+            "-o",
+            "build/release-pass-paired-baseline-1.c"
+          ],
+          "elapsed_seconds": 84.03682544827461,
+          "peak_sampled_group_rss_kib": 18375108,
+          "limit_gib": 24.0,
+          "stopped": false,
+          "child_exit_code": 0
+        },
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      },
+      {
+        "variant": "baseline",
+        "index": 2,
+        "stats": {
+          "command": [
+            "bun",
+            "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+            "tests/openai-stream-error.bend",
+            "-o",
+            "build/release-pass-paired-baseline-2.c"
+          ],
+          "elapsed_seconds": 85.15030006412417,
+          "peak_sampled_group_rss_kib": 18360196,
+          "limit_gib": 24.0,
+          "stopped": false,
+          "child_exit_code": 0
+        },
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      },
+      {
+        "variant": "candidate",
+        "index": 2,
+        "stats": {
+          "command": [
+            "bun",
+            "build/bend-profiles/release-previous-pass/bend2/main.ts",
+            "tests/openai-stream-error.bend",
+            "-o",
+            "build/release-pass-paired-candidate-2.c"
+          ],
+          "elapsed_seconds": 86.22524935007095,
+          "peak_sampled_group_rss_kib": 17964176,
+          "limit_gib": 24.0,
+          "stopped": false,
+          "child_exit_code": 0
+        },
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      }
+    ],
+    "baseline_median": {
+      "elapsed_seconds": 84.61003810819238,
+      "peak_sampled_group_rss_kib": 18375108
+    },
+    "candidate_median": {
+      "elapsed_seconds": 84.54067957401276,
+      "peak_sampled_group_rss_kib": 18370140
+    },
+    "interpretation": "No consistent memory improvement or demonstrated speed improvement on this fixture; all six C outputs identical. Candidate remains unadopted. Shared-host measurements do not establish performance equivalence across workloads."
+  }
 }
