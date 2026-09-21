@@ -1139,5 +1139,5 @@
     "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/partial-json/dist/options.js": "779b2aded6d4e2ec6171ea9d5d5d97551e8c3258b6e78a01d2e9fc6235865b36",
     "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/partial-json/package.json": "42b3ae6c99ec959249f8eb4d3da7fdb44ec1f96ec627fa7f9ca5487a4e80963f"
   },
-  "finding": "Factored construction and named closed renderer did not materially reduce JS memory: old22,133,324KiB versus factored22,136,764KiB. Both36 Bun checks pass. No claim that duplicated branches explain the native cliff. New C emission queued after full proof gate with50GiB guard and53GiB initial available-memory condition."
+  "finding": "Factored construction and named closed renderer did not materially reduce JS memory: old22,133,324KiB versus factored22,136,764KiB. Both36 Bun checks pass. No claim that duplicated branches explain the native cliff. New C emission queued after full proof gate with49GiB guard and51GiB initial available-memory condition."
 }
