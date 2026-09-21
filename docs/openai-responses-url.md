@@ -36,3 +36,7 @@ BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" python3 tests/
 ```
 
 The runner guards native rebuilds at 16 GiB and JS rebuilds at 10 GiB; it reports compiler failure rather than silently changing compilers. `--no-build` reuses already-built artifacts and is appropriate only when their sources have been verified unchanged.
+
+## Empty-base oracle correction
+
+Envelope integration revealed that the initial URL oracle parsed the raw joined address before calling the SDK. For an explicit empty base this reported a URL error without observing the SDK constructor's fallback to `https://api.openai.com/v1`. The corrected oracle now calls the actual SDK first and records that fallback separately. The native URL builder deliberately continues rejecting the empty value under the approved strict-configuration policy. The revised 1,109-case corpus passes on native one/four threads and Bun without a production URL-code change; [the correction record](runtime-validation/2026-09-21-openai-responses-url-oracle-correction.json) preserves the accurate SDK observation. The initial record is retained as historical evidence, not overwritten to hide the oracle error.

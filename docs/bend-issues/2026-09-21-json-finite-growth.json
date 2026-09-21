@@ -1,0 +1,35 @@
+{
+  "scope": "BEND-019 recurrence: eager recursive boolean tail versus lazy continuation, 65536 array/object entries. No compiler patch. Width growth coverage; not a theorem about arbitrary-depth runtime stack use.",
+  "before_source": "import Base\nimport ../types.bend as T\nimport ../../../runtime/src/f64.bend as F\nimport ../../../runtime/src/record.bend as R\n\ndef number(value: F.Decoded) -> Bool:\n  match value:\n    case F.Finite{_, _, _}: True{}\n    case _: False{}\n\n# Validate the numeric leaves before serializing a provider payload.\ndef valid(value: T.JsonValue) -> Bool:\n  match value:\n    case T.JsonNumber{value}: number(F.decode(value))\n    case T.JsonArray{Nil{}}: True{}\n    case T.JsonArray{head <> rest}: valid(head) && valid(T.JsonArray{rest})\n    case T.JsonObject{R.Record{Nil{}}}: True{}\n    case T.JsonObject{R.Record{R.Property{_, value} <> rest}}: valid(value) && valid(T.JsonObject{R.Record{rest}})\n    case _: True{}\n",
+  "before_fixture": "import Base\nimport ../packages/ai/src/types.bend as T\nimport ./json-finite-before.bend as S\nimport ../packages/runtime/src/record.bend as R\n\ndef values(count: Nat, built: List<&2, T.JsonValue>) -> List<&2, T.JsonValue>:\n  match count:\n    case Zero{}: built\n    case Succ{rest}: values(rest, T.JsonNull{} <> built)\n\ndef fields(count: Nat, built: List<&2, R.Property<T.JsonValue>>) -> List<&2, R.Property<T.JsonValue>>:\n  match count:\n    case Zero{}: built\n    case Succ{+rest}: fields(rest, R.Property{Nat.show(rest), T.JsonNull{}} <> built)\n\ndef check(valid: Bool, label: String) -> IO(Unit):\n  match valid:\n    case False{}: IO.die(Unit, 1, \"FAIL \" ++ label)\n    case True{}: IO.print(\"PASS \" ++ label)\n\ndef main() -> IO(Unit):\n  do IO<Unit>:\n    check(S.valid(T.JsonArray{values(65536n, Nil{})}), \"finite array\")\n    check(S.valid(T.JsonObject{R.Record{fields(65536n, Nil{})}}), \"finite object\")\n",
+  "before_js": {
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "bend: memory fault (machine stack overflow?)\n"
+  },
+  "native_before": {
+    "native1": "PASS finite array\nPASS finite object\n",
+    "native4": "PASS finite array\nPASS finite object\n"
+  },
+  "after": {
+    "native1": "PASS finite array\nPASS finite object\n",
+    "native4": "PASS finite array\nPASS finite object\n",
+    "js": "PASS finite array\nPASS finite object\n"
+  },
+  "sha256": {
+    "packages/ai/src/utils/json-finite.bend": "ff4a68c2c69a52f7a79cfbfc2a4cbb2c1a53049faaa5ff9f049b2f93ed537a13",
+    "tests/json-finite-growth.bend": "543a62013151e1589deab44029c44feefd819e957d27f7742e605f2fd17b05fd",
+    "build/json-finite-growth-before.bend": "af6cecb9957ff89f56a71efef8664f08d6c3a65546745d5b25905e9448e28742",
+    "build/json-finite-before.bend": "0763f88f9bf161bac2a0a7f5ef5bfb77f74a7973954f8437cf01942b9d819c37",
+    "build/json-finite-growth-before": "95d5801904109fbc33bc3def0a13f18770b41d261762ef49bb41973922fef8df",
+    "build/json-finite-growth-before.js": "74c7ab191e48bf3dcea9b4809a50e93252529e9d793cef3c6828f93950368484",
+    "build/json-finite-growth": "7a9f51c245045cf8dce8734019192680a6b9513b8ceb1ee61099c060e61d7efc",
+    "build/json-finite-growth.js": "53273b8983d9b238ba2b8bc592f672f89fe8c031a8add42edb7296611b713ed2"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  }
+}

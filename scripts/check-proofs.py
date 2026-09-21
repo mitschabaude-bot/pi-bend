@@ -104,6 +104,13 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('finite-validator-accepts-infinity', 'packages/ai/src/utils/json-finite.bend', 'case _: False{}', 'case _: True{}', 'laws/json-finite.infinities_are_rejected'),
+        ('finite-validator-skips-number', 'packages/ai/src/utils/json-finite.bend', 'case T.JsonNumber{value}: number(F.decode(value))', 'case T.JsonNumber{value}: True{}', 'laws/json-finite.invalid_numeric_leaf_is_rejected'),
+        ('finite-validator-skips-array-head', 'packages/ai/src/utils/json-finite.bend', 'case T.JsonArray{head <> rest}: Bool.pick(Unit -> Bool, valid(head), unused => valid(T.JsonArray{rest}), unused => False{})(Unit{})', 'case T.JsonArray{head <> rest}: valid(T.JsonArray{rest})', 'laws/json-finite.array_checks_head_and_tail'),
+        ('envelope-accepts-invalid-payload', 'packages/ai/src/api/openai-responses-envelope.bend', 'case False{}: Fail{NonFinitePayload{}}', 'case False{}: Done{"null"}', 'laws/openai-responses-envelope.invalid_payload_has_no_body'),
+        ('envelope-drops-encoded-body', 'packages/ai/src/api/openai-responses-envelope.bend', 'case Some{text}: Done{text}', 'case Some{text}: Done{""}', 'laws/openai-responses-envelope.encoding_retains_text'),
+        ('envelope-changes-custom-fetch-method', 'packages/ai/src/api/openai-responses-envelope.bend', 'Request{url, "post", fields, body, timeout}', 'Request{url, "POST", fields, body, timeout}', 'laws/openai-responses-envelope.completed_request_retains_fields'),
+        ('envelope-invents-timeout-header', 'packages/ai/src/api/openai-responses-envelope.bend', 'case None{}: Done{None{}}', 'case None{}: Done{Some{"600"}}', 'laws/openai-responses-envelope.absent_timeout_has_no_header'),
         ('strict-form-loses-value', 'packages/runtime/src/url-form-strict.bend', 'case Some{name} Some{value}: Done{Form.Entry{name, value}}', 'case Some{name} Some{value}: Done{Form.Entry{name, ""}}', 'laws/url-form-strict.decoded_values_are_preserved'),
         ('strict-form-name-error-loses-position', 'packages/runtime/src/url-form-strict.bend', 'case None{} _: Fail{InvalidName{field}}', 'case None{} _: Fail{InvalidName{Zero{}}}', 'laws/url-form-strict.invalid_name_precedes_value'),
         ('strict-form-value-error-wrong-component', 'packages/runtime/src/url-form-strict.bend', 'case Some{_} None{}: Fail{InvalidValue{field}}', 'case Some{_} None{}: Fail{InvalidName{field}}', 'laws/url-form-strict.invalid_value_retains_position'),

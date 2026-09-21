@@ -20,3 +20,7 @@ BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" python3 tests/
 ```
 
 This is a production header component for the prepared-request path. Joining it to URL/body preparation, custom-fetch/native transport dispatch, typed response handling and the asynchronous provider session remains necessary. Workload-identity/admin credentials and idempotency configuration are outside pi's string-key Responses call path and are not claimed here. Native TLS/authentication refresh, other providers and full coding-agent/TUI parity remain unfinished. No upstream suite status changes.
+
+## Request-envelope integration
+
+The standalone `build` helper resolves its missing timeout to 600,000 ms before deriving a header, and its isolated SDK harness supplies that effective value explicitly. This is not the entire SDK `buildRequest` boundary: the SDK passes the original, possibly omitted timeout to header construction while returning an effective timeout separately. [The Responses envelope](openai-responses-envelope.md) therefore validates the effective timeout and calls the staged `layered` operation using the original timeout specification. An omitted timeout yields a 600,000 ms request timeout with no `X-Stainless-Timeout` header. Integrated actual-SDK cases cover this distinction, including explicit zero and explicit 600,000 ms.

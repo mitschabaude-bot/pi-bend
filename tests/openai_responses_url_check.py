@@ -61,17 +61,22 @@ const rows=JSON.parse(await new Response(process.stdin).text());
 const out=rows.map(base=>{
  const address=base+(base.endsWith('/')?'responses':'/responses');
  try {
+  const client=new OpenAI({apiKey:'test-only',baseURL:base,adminAPIKey:null,organization:null,project:null,webhookSecret:null});
+  const sdk=client.buildURL('/responses',undefined);
+  if(!base) return {emptyBase:true,sdk};
   const before=new URL(address);
-  const client=new OpenAI({apiKey:'test-only',baseURL:base});
-  return {query:before.search.slice(1), original:before.toString(), sdk:client.buildURL('/responses',undefined)};
+  return {query:before.search.slice(1), original:before.toString(), sdk};
  } catch(error) {return {error:String(error)}}
 });
 console.log(JSON.stringify(out));
 '''.replace('SDK',str(SDK))
-observations=json.loads(subprocess.check_output(['node','--input-type=module','-e',NODE],input=json.dumps(bases),text=True))
+observations=json.loads(subprocess.check_output(['node','--input-type=module','-e',NODE],input=json.dumps(bases),text=True,env={k:v for k,v in os.environ.items() if not k.startswith('OPENAI_')}))
 adaptations=[]
 for base, observed in zip(bases,observations,strict=True):
-    if 'error' in observed:
+    if observed.get('emptyBase'):
+        expected='invalid-url'
+        adaptations.append(dict(base=base,reason='reject explicit empty base URL instead of SDK default',sdk=observed['sdk'],expected=expected))
+    elif 'error' in observed:
         expected='invalid-url'
     else:
         error, tuples=parsed(observed['query'])
