@@ -287,3 +287,54 @@ def basicConstraints(extension: Extension) -> Result<&2, &2, Error, BasicConstra
       Result.bind(&2, &2, Error, DER.Node, BasicConstraints, decoded(DER.Node,DER.one(value)), node =>
         Result.bind(&2, &2, Error, List<&2, DER.Node>, BasicConstraints, decoded(List<&2, DER.Node>,DER.sequence(node)), basicFields))
     case _: Fail{InvalidCertificate{}}
+
+type KeyUsage is Data:
+  KeyUsage{digitalSignature: Bool, contentCommitment: Bool, keyEncipherment: Bool, dataEncipherment: Bool, keyAgreement: Bool, keyCertSign: Bool, crlSign: Bool, encipherOnly: Bool, decipherOnly: Bool}
+
+def flag(byte: U32, mask: U32) -> Bool:
+  Bool.not(U32.is_eq(U32.and(byte,mask),0))
+
+def usageFlags(+first: U32, last: Bool) -> KeyUsage:
+  KeyUsage{flag(first,128),flag(first,64),flag(first,32),flag(first,16),flag(first,8),flag(first,4),flag(first,2),flag(first,1),last}
+
+def zeroBits(fuel: Nat, +byte: U32) -> Nat:
+  match fuel:
+    case 0n: 0n
+    case 1n+fuel: Bool.pick(Nat,flag(byte,1),0n,1n+zeroBits(fuel,U32.shr(byte)))
+
+# KeyUsage is a named-bit list: DER omits every trailing zero bit, and RFC5280
+# requires at least one usage bit. The nine bits are preserved without imposing
+# algorithm-specific authorization here.
+def usageBits(bits: DER.Bits) -> Result<&2, &2, Error, KeyUsage>:
+  match bits:
+    case DER.Bits{unused,+first <> Nil{}}:
+      Bool.pick(Result<&2, &2, Error, KeyUsage>, U32.is_gt(first,0) && Nat.is_eq(U32.to_nat(unused),zeroBits(8n,first)), Done{usageFlags(first,False{})}, Fail{InvalidCertificate{}})
+    case DER.Bits{7,first <> 128 <> Nil{}}: Done{usageFlags(first,True{})}
+    case _: Fail{InvalidCertificate{}}
+
+def keyUsage(extension: Extension) -> Result<&2, &2, Error, KeyUsage>:
+  match extension:
+    case Extension{85 <> 29 <> 15 <> Nil{},_,value}:
+      Result.bind(&2, &2, Error, DER.Node, KeyUsage, decoded(DER.Node,DER.one(value)), node =>
+        Result.bind(&2, &2, Error, DER.Bits, KeyUsage, decoded(DER.Bits,DER.bits(node)), usageBits))
+    case _: Fail{InvalidCertificate{}}
+
+def purposeList(nodes: List<&2, DER.Node>, reversed: List<&2, List<&2, U32>>) -> Result<&2, &2, Error, List<&2, List<&2, U32>>>:
+  match nodes:
+    case Nil{}: Done{List.reverse(&2,List<&2,U32>,reversed)}
+    case DER.Node{DER.Tag{0,False{},6},_,+head <> +tail} <> rest:
+      checked = Bool.pick(Result<&2, &2, Error, Unit>, oidGroups(head <> tail,True{}), Done{Unit{}}, Fail{InvalidCertificate{}})
+      Result.bind(&2, &2, Error, Unit, List<&2, List<&2, U32>>, checked, unused => purposeList(rest,(head <> tail) <> reversed))
+    case _: Fail{InvalidCertificate{}}
+
+def purposes(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, List<&2, List<&2, U32>>>:
+  match nodes:
+    case Nil{}: Fail{InvalidCertificate{}}
+    case head <> rest: purposeList(head <> rest,Nil{})
+
+def extendedKeyUsage(extension: Extension) -> Result<&2, &2, Error, List<&2, List<&2, U32>>>:
+  match extension:
+    case Extension{85 <> 29 <> 37 <> Nil{},_,value}:
+      Result.bind(&2, &2, Error, DER.Node, List<&2, List<&2, U32>>, decoded(DER.Node,DER.one(value)), node =>
+        Result.bind(&2, &2, Error, List<&2, DER.Node>, List<&2, List<&2, U32>>, decoded(List<&2, DER.Node>,DER.sequence(node)), purposes))
+    case _: Fail{InvalidCertificate{}}

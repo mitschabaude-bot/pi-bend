@@ -257,3 +257,15 @@ Continuing x509.bend and existing runner/checker with version-aware extension tr
 ## 2026-09-21T23:47:05.591198+00:00 — Codex
 
 Extension/BasicConstraints work passes241 combined X509 checks on native1/native4/Bun. Canonical critical flags/OIDs, duplicates, v1/v2/v3 optional ordering, implicit unique-ID bit padding, CA flag and arbitrary-size nonnegative path limits. Unknown extensions remain explicit; no unsupported-critical authorization or path trust claim. Updating runtime README and committing only existing x509/test/log/README paths. No live jobs.
+
+## 2026-09-21T23:47:07.238832+00:00 — Codex
+
+Extension/BasicConstraints milestone committed/pushed;241 X509 checks pass allbackends. No live jobs. Next SAN/hostname/key usage/issuer policy and trust path remain, with ECDSA/Finished/connection integration also incomplete. Provider/fetch/proof/compiler paths untouched.
+
+## 2026-09-21T23:48:32.097314+00:00 — Codex
+
+Continuing x509.bend and existing runner/checker with KeyUsage and ExtendedKeyUsage decoding. Strict named-bit DER, explicit usage flags, canonical nonempty purpose OIDs; preserve unknown purposes for policy processing. No new modules; provider/fetch/proof/compiler untouched.
+
+## 2026-09-21T23:50:45.353765+00:00 — Codex
+
+KeyUsage/EKU decoding passes774 combined X509 checks on native1/native4/Bun, including all511 nonempty nine-bit combinations and independent cryptography DER comparisons. Strict named-bit encoding/nonempty EKU/canonical OIDs; flags and unknown purposes remain explicit, no authorization claim. Updating README and committing owned existing x509/test/log paths. No live jobs.

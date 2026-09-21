@@ -81,8 +81,26 @@ def basic(result: Result<&2, &2, X509.Error, X509.BasicConstraints>) -> String:
     case Fail{cause}: error(cause)
     case Done{X509.BasicConstraints{ca,path}}: Bool.pick(String,ca,"ca:","leaf:") ++ pathLength(path)
 
+def usage(result: Result<&2, &2, X509.Error, X509.KeyUsage>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{X509.KeyUsage{a,b,c,d,e,f,g,h,i}}:
+      U32.show((Bool.to_u32(a) + Bool.to_u32(b)*2 + Bool.to_u32(c)*4 + Bool.to_u32(d)*8 + Bool.to_u32(e)*16 + Bool.to_u32(f)*32 + Bool.to_u32(g)*64 + Bool.to_u32(h)*128 + Bool.to_u32(i)*256 : U32))
+
+def purposeBytes(values: List<&2, List<&2, U32>>, reverse: String) -> String:
+  match values:
+    case Nil{}: String.reverse(reverse)
+    case value <> rest: purposeBytes(rest,String.reverse(Bytes.show(value)) ++ "|" ++ reverse)
+
+def purposeResult(result: Result<&2, &2, X509.Error, List<&2, List<&2, U32>>>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{values}: "purposes" ++ purposeBytes(values,"")
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "ku" <> bytes <> Nil{}: usage(X509.keyUsage(X509.Extension{85 <> 29 <> 15 <> Nil{},False{},Bytes.bytes(bytes)}))
+    case "eku" <> bytes <> Nil{}: purposeResult(X509.extendedKeyUsage(X509.Extension{85 <> 29 <> 37 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "ex" <> bytes <> Nil{}: extensionResult(Result.bind(&2, &2, X509.Error, X509.Certificate, List<&2, X509.Extension>, X509.parse(Bytes.bytes(bytes)), X509.extensions))
     case "basic" <> bytes <> Nil{}: basic(X509.basicConstraints(X509.Extension{85 <> 29 <> 19 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "t" <> bytes <> Nil{}: instant(Result.bind(&2, &2, X509.Error, DER.Node, W.U64, X509.decoded(DER.Node, DER.one(Bytes.bytes(bytes))), X509.time))

@@ -6,7 +6,7 @@ import random
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,6 +46,8 @@ def make_certificate(name, public_key, issuer, signing_key, serial):
             .serial_number(serial).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=1))
             .add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]), False)
             .add_extension(x509.BasicConstraints(ca=(name == issuer), path_length=2 if name == issuer else None), True)
+            .add_extension(x509.KeyUsage(name != issuer, False, False, False, False, name == issuer, name == issuer, False, False), True)
+            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), False)
             .sign(signing_key, hashes.SHA256()))
 
 
@@ -252,6 +254,34 @@ for optional, expected in [(uid2+uid1,'certificate'),(uid1+uid1,'certificate'),
                            (ext_field+uid1,'certificate'),(ext_field+ext_field,'certificate'),
                            (tlv(163,tlv(48,valid)+tlv(5,b'')),'encoding')]:
     cases.append(('ex:' + encode(with_optional(optional)),expected))
+
+for mask in range(1,512):
+    flags = [bool(mask & (1 << i)) for i in range(9)]
+    text = ''.join('1' if b else '0' for b in flags).rstrip('0')
+    unused = -len(text) % 8
+    payload = int(text + '0'*unused,2).to_bytes((len(text)+7)//8,'big')
+    wire = tlv(3,bytes([unused]) + payload)
+    if flags[4] or not (flags[7] or flags[8]):
+        assert x509.KeyUsage(*flags).public_bytes() == wire
+    cases.append(('ku:' + encode(wire),str(mask)))
+for wire, expected in [(b'\x03\x01\x00','certificate'),(b'\x03\x02\x00\x00','certificate'),
+                       (b'\x03\x02\x00\x80','certificate'),(b'\x03\x03\x00\x80\x00','certificate'),
+                       (b'\x03\x03\x06\x00\x40','certificate'),(b'\x03\x02\x07\x81','encoding'),
+                       (b'\x03\x04\x07\x80\x00\x80','certificate'),(b'\x23\x02\x07\x80','encoding')]:
+    cases.append(('ku:' + encode(wire),expected))
+server_purpose = bytes([43,6,1,5,5,7,3,1])
+client_purpose = bytes([43,6,1,5,5,7,3,2])
+any_purpose = bytes([85,29,37,0])
+for purposes in [[server_purpose],[client_purpose],[any_purpose],
+                 [server_purpose,client_purpose,unknown_oid],[unknown_oid,server_purpose],
+                 [server_purpose,server_purpose]]:
+    wire = tlv(48,b''.join(tlv(6,p) for p in purposes))
+    cases.append(('eku:' + encode(wire),'purposes' + ''.join('|' + encode(p) for p in purposes)))
+assert x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]).public_bytes() == tlv(48,tlv(6,server_purpose))
+for content in [b'',tlv(6,b''),tlv(6,b'\x80\x2a'),tlv(6,b'\x2a\x80\x01'),
+                tlv(6,b'\x2a\x81'),tlv(4,server_purpose),tlv(38,server_purpose)]:
+    cases.append(('eku:' + encode(tlv(48,content)),'certificate'))
+cases.append(('eku:' + encode(tlv(48,tlv(6,server_purpose)) + b'\x00'),'encoding'))
 
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),
