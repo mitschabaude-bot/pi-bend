@@ -8,7 +8,11 @@ Last updated: 2026-09-19. Current local compiler: Bend 2.0.7, Bun 1.4.0, with ei
 
 ## BEND-001 — Native compilation consumes tens of GiB
 
+A [checked-syntax census](bend-issues/2026-09-21-checked-node-census.json) now finds 17,720,108 explicitly reachable objects, including 4,693,409 arrays, 2,337,032 annotations and 2,157,378 word-bit constructors. It excludes closure environments and source spans, so these are node counts, not a heap dominator analysis. Remaining literal representation is a concrete next target; any sharing must preserve checked values, bit widths and source diagnostics.
+
 **Status:** confirmed excessive memory consumption on integration fixtures; cause under investigation. Neither an application-runtime leak nor a compiler leak has been established.
+
+The latest [adopted probe-table fix](bend-issues/2026-09-21-scoped-probes.json) clears opened runtime variables alongside their per-definition caches, preserving the persistent erased-variable sentinel. The table previously accumulated 2,902,413 entries over twelve native passes; the candidate stayed below 10,600 at observed definition boundaries. The full output is byte-identical, sampled peak is 10.08 GiB versus 10.25 GiB, and elapsed time is 319 versus 322 seconds. Reduced instrumentation also shows 25% fewer usage-tree node allocations because variable indices no longer grow across definitions. This is a small improvement, installed in both default compiler locations; the first pass still approaches 10 GiB. Small benchmarks are noisy (the tiny typed-do median is about 9 ms slower), so no universal performance claim follows.
 
 The compiler process (Bun running `bend2/main.ts`, emitting C) reached roughly 58 GB RSS during Responses integration compilation and the host began swapping. These were process observations, not instrumented exact peaks. The generated terminal fixture C was approximately 46 MB. The coding agent was not executing. The terminal tests ultimately passed all 119 scenarios on one/four threads after batching them into groups of 16. This does not establish that batching fixes the cause.
 

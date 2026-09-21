@@ -1,0 +1,257 @@
+{
+  "status": "Adopted in ordinary and default native compilers; remaining excessive memory unresolved.",
+  "patch": "--- a/comp.ts\n+++ b/comp.ts\n@@ -678,6 +678,7 @@\n }\n \n function memo_gc(): void {\n+  PROBES.length = 1; // Keep DUMMY; opened binders belong to this definition.\n   [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS].forEach((m) => m.clear());\n }\n \n",
+  "scope_audit": [
+    "memo_gc is called only at reachable-definition discovery, native top-level definition compilation, and JavaScript top-level definition compilation. Nested native calls do not clear it.",
+    "OPENS contains opened bodies/probes; USES contains numeric probe indices. Both clear at the same boundary.",
+    "Def.h is raised from closed checked syntax. def_raise opens it for inspection without storing the opened body in the definition.",
+    "SIGS retains declared parameter types plus immutable layouts, not opened runtime binder probes. NODES retains layouts only.",
+    "emit_open resets the per-function uses map; persistent emitted segments retain strings, references by name, and layouts.",
+    "DUMMY is the one persistent probe, kept at index zero."
+  ],
+  "small_benchmarks": [
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 6.052129098214209,
+      "peak_kib": 1024532,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 6.049548871815205,
+      "peak_kib": 991820,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 5.955247604288161,
+      "peak_kib": 983468,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 6.013672262430191,
+      "peak_kib": 976192,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 5.903739958070219,
+      "peak_kib": 1167912,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 6.0756838489323854,
+      "peak_kib": 956960,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.1538206720724702,
+      "peak_kib": 83400,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.15380057226866484,
+      "peak_kib": 85324,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.18337977025657892,
+      "peak_kib": 84308,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.15582987386733294,
+      "peak_kib": 83672,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.1620845189318061,
+      "peak_kib": 83484,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.1650438066571951,
+      "peak_kib": 82584,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.3180850548669696,
+      "peak_kib": 112388,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.3183094058185816,
+      "peak_kib": 111580,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.32361177541315556,
+      "peak_kib": 116156,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.3303287336602807,
+      "peak_kib": 112616,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.3100236179307103,
+      "peak_kib": 113996,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.31923041120171547,
+      "peak_kib": 112500,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    }
+  ],
+  "reduced_allocation_count": {
+    "baseline_start": 90553,
+    "baseline_end": 667161,
+    "candidate_start": 90553,
+    "candidate_end": 524747,
+    "baseline_end_probes": 34432,
+    "candidate_end_probes": 3,
+    "identical_generated_c": true
+  },
+  "callback_regression": {
+    "baseline": {
+      ".c": "e0c281441ec06d7d9ac113f5c723d66875e6dfcc8169af0910ce121b0719f358",
+      ".js": "54a538135f6aea98d6ce8bc928d95a59ca4c7cc7cd57ffa41860a11aee4cdda0"
+    },
+    "candidate": {
+      ".c": "e0c281441ec06d7d9ac113f5c723d66875e6dfcc8169af0910ce121b0719f358",
+      ".js": "54a538135f6aea98d6ce8bc928d95a59ca4c7cc7cd57ffa41860a11aee4cdda0"
+    }
+  },
+  "field_regression": {
+    "compiler-string-pattern-return": {
+      "artifacts": {
+        "baseline": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        },
+        "candidate": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        }
+      },
+      "cases_per_backend": 109,
+      "source_sha256": "ec4585980bc2e8a5715ca91d8697eef2dc9b33d8531c073ebcdd0a6563285662"
+    },
+    "compiler-word-field-cache": {
+      "artifacts": {
+        "baseline": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        },
+        "candidate": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        }
+      },
+      "cases_per_backend": 10,
+      "source_sha256": "a8635a010af66691b952d2f08fbe091ceb8991ec9ca22ec1bfb9c6f216bc3428"
+    },
+    "compilers": {
+      "baseline": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "ef87d335b645d98c9b006b6e543813fc8aa76c034b0c8a13ae4240eafd10f0fa",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "candidate": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "18dbaf7b9fee941767e1128220fba758ba23dbaaf3709475bf7a9c732875023c",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      }
+    }
+  },
+  "limitations": [
+    "Small fixture differences are noisy, including about9ms slower typed-do median.",
+    "Some short diagnostic and regression jobs overlapped the full build on this shared host.",
+    "Full generated C is byte-identical to the installed predecessor."
+  ],
+  "full_build": {
+    "seconds": 319.1867097290233,
+    "sampled_peak_rss_bytes": 10827862016,
+    "peak_rss_bytes": 10865299456,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "full_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+  "previous_full_build": {
+    "command": [
+      "bun",
+      "build/bend-profiles/layout-cache-release-profile/bend2/main.ts",
+      "tests/openai-system-defaults.bend",
+      "-o",
+      "build/compiler-memory-reading/layout-release-defaults.c"
+    ],
+    "elapsed_seconds": 321.66839533206075,
+    "peak_sampled_group_rss_kib": 10743584,
+    "limit_gib": 20.0,
+    "stopped": false,
+    "child_exit_code": 0
+  },
+  "installed_comp_ts_sha256": "18dbaf7b9fee941767e1128220fba758ba23dbaaf3709475bf7a9c732875023c",
+  "default_path_validation": {
+    "callback_native_threads": [
+      1,
+      4
+    ],
+    "aggregate_patch_replay": "exact",
+    "installed_and_native_compilers_match": true
+  }
+}
