@@ -269,3 +269,15 @@ Continuing x509.bend and existing runner/checker with KeyUsage and ExtendedKeyUs
 ## 2026-09-21T23:50:45.353765+00:00 — Codex
 
 KeyUsage/EKU decoding passes774 combined X509 checks on native1/native4/Bun, including all511 nonempty nine-bit combinations and independent cryptography DER comparisons. Strict named-bit encoding/nonempty EKU/canonical OIDs; flags and unknown purposes remain explicit, no authorization claim. Updating README and committing owned existing x509/test/log paths. No live jobs.
+
+## 2026-09-21T23:50:47.261860+00:00 — Codex
+
+KeyUsage/EKU milestone committed/pushed.774 X509 checks allbackends pass; no live jobs. Next identity/SAN and issuer/path policy, ECDSA and full TLS integration remain. Provider/fetch/proof/compiler work untouched.
+
+## 2026-09-21T23:52:51.148258+00:00 — Codex
+
+Continuing x509.bend and runner/checker with SubjectAlternativeName decoding (DNS/IP and other tagged forms). Inspected Node identity matcher: CN fallback and partial-label wildcards differ from RFC9525. Asked Gregor whether to use current SAN-only/full-label wildcard rules; no answer yet, so hostname acceptance policy remains undecided. Parsing proceeds independently; provider/fetch/proof/compiler untouched.
+
+## 2026-09-21T23:55:03.791200+00:00 — Codex
+
+SAN decoder passes824 combined X509 cases native1/native4; Bun running9474. DNS/IP/mail/URI/registered-ID are distinct, structured forms retain DER and still need their full schema/name-constraint handling. Cryptography SAN oracle includes IPv4/IPv6 and exact IA5 byte preservation, without treating a parsed string as a valid identity. Hostname compatibility question remains unanswered; no matching policy selected. Adding runtime README and committing owned x509/test/log paths after Bun.

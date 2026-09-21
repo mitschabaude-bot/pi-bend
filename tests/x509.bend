@@ -97,8 +97,33 @@ def purposeResult(result: Result<&2, &2, X509.Error, List<&2, List<&2, U32>>>) -
     case Fail{cause}: error(cause)
     case Done{values}: "purposes" ++ purposeBytes(values,"")
 
+def textBytes(text: String, reverse: List<&2,U32>) -> List<&2,U32>:
+  match text:
+    case SNil{}: List.reverse(&2,U32,reverse)
+    case SCon{Chr{byte},rest}: textBytes(rest,byte <> reverse)
+
+def generalName(value: X509.GeneralName) -> String:
+  match value:
+    case X509.DnsName{text}: "dns:" ++ Bytes.show(textBytes(text,Nil{}))
+    case X509.IpAddress{bytes}: "ip:" ++ Bytes.show(bytes)
+    case X509.Mailbox{text}: "mail:" ++ Bytes.show(textBytes(text,Nil{}))
+    case X509.Uri{text}: "uri:" ++ Bytes.show(textBytes(text,Nil{}))
+    case X509.RegisteredId{oid}: "oid:" ++ Bytes.show(oid)
+    case X509.StructuredName{node}: "structured:" ++ Bytes.show(DER.encoded(node))
+
+def nameList(values: List<&2,X509.GeneralName>, reverse: String) -> String:
+  match values:
+    case Nil{}: String.reverse(reverse)
+    case head <> tail: nameList(tail,String.reverse(generalName(head)) ++ "|" ++ reverse)
+
+def names(result: Result<&2,&2,X509.Error,List<&2,X509.GeneralName>>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{values}: "names" ++ nameList(values,"")
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "san" <> bytes <> Nil{}: names(X509.subjectAltNames(X509.Extension{85 <> 29 <> 17 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "ku" <> bytes <> Nil{}: usage(X509.keyUsage(X509.Extension{85 <> 29 <> 15 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "eku" <> bytes <> Nil{}: purposeResult(X509.extendedKeyUsage(X509.Extension{85 <> 29 <> 37 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "ex" <> bytes <> Nil{}: extensionResult(Result.bind(&2, &2, X509.Error, X509.Certificate, List<&2, X509.Extension>, X509.parse(Bytes.bytes(bytes)), X509.extensions))

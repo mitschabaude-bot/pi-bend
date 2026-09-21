@@ -338,3 +338,59 @@ def extendedKeyUsage(extension: Extension) -> Result<&2, &2, Error, List<&2, Lis
       Result.bind(&2, &2, Error, DER.Node, List<&2, List<&2, U32>>, decoded(DER.Node,DER.one(value)), node =>
         Result.bind(&2, &2, Error, List<&2, DER.Node>, List<&2, List<&2, U32>>, decoded(List<&2, DER.Node>,DER.sequence(node)), purposes))
     case _: Fail{InvalidCertificate{}}
+
+type GeneralName is Data:
+  DnsName{value: String}
+  IpAddress{bytes: List<&2, U32>}
+  Mailbox{value: String}
+  Uri{value: String}
+  RegisteredId{oid: List<&2, U32>}
+  StructuredName{node: DER.Node}
+
+def ia5(bytes: List<&2, U32>, reverse: String) -> Result<&2, &2, Error, String>:
+  match bytes:
+    case Nil{}: Done{String.reverse(reverse)}
+    case +byte <> rest:
+      checked = Bool.pick(Result<&2, &2, Error, Unit>, U32.is_lt(byte,128), Done{Unit{}}, Fail{InvalidCertificate{}})
+      Result.bind(&2, &2, Error, Unit, String, checked, unused => ia5(rest,SCon{Chr{byte},reverse}))
+
+# Decode identifiers without normalizing or matching them. Other ASN.1 name
+# forms are retained explicitly for later name-constraint and schema handling.
+def generalName(node: DER.Node) -> Result<&2, &2, Error, GeneralName>:
+  match node:
+    case DER.Node{DER.Tag{2,False{},2},_,head <> tail}:
+      Result.bind(&2, &2, Error, String, GeneralName, ia5(head <> tail,""), text => Done{DnsName{text}})
+    case DER.Node{DER.Tag{2,False{},1},_,head <> tail}:
+      Result.bind(&2, &2, Error, String, GeneralName, ia5(head <> tail,""), text => Done{Mailbox{text}})
+    case DER.Node{DER.Tag{2,False{},6},_,head <> tail}:
+      Result.bind(&2, &2, Error, String, GeneralName, ia5(head <> tail,""), text => Done{Uri{text}})
+    case DER.Node{DER.Tag{2,False{},7},_,+bytes}:
+      +size = DER.length(bytes,0n)
+      Bool.pick(Result<&2, &2, Error, GeneralName>, Nat.is_eq(size,4n) || Nat.is_eq(size,16n), Done{IpAddress{bytes}}, Fail{InvalidCertificate{}})
+    case DER.Node{DER.Tag{2,False{},8},_,+head <> +tail}:
+      Bool.pick(Result<&2, &2, Error, GeneralName>, oidGroups(head <> tail,True{}), Done{RegisteredId{head <> tail}}, Fail{InvalidCertificate{}})
+    case DER.Node{DER.Tag{2,True{},+kind},header,+body}:
+      allowed = Bool.pick(Result<&2, &2, Error, Unit>, U32.is_eq(kind,0) || U32.is_eq(kind,3) || U32.is_eq(kind,4) || U32.is_eq(kind,5), Done{Unit{}}, Fail{InvalidCertificate{}})
+      Result.bind(&2, &2, Error, Unit, GeneralName, allowed, unused =>
+        Result.bind(&2, &2, Error, List<&2, DER.Node>, GeneralName, decoded(List<&2, DER.Node>,DER.all(body)), unused =>
+          Done{StructuredName{DER.Node{DER.Tag{2,True{},kind},header,body}}}))
+    case _: Fail{InvalidCertificate{}}
+
+def generalNames(nodes: List<&2, DER.Node>, result: Result<&2, &2, Error, List<&2, GeneralName>>) -> Result<&2, &2, Error, List<&2, GeneralName>>:
+  match nodes result:
+    case _ Fail{cause}: Fail{cause}
+    case Nil{} Done{reversed}: Done{List.reverse(&2,GeneralName,reversed)}
+    case head <> tail Done{reversed}:
+      generalNames(tail,Result.bind(&2, &2, Error, GeneralName, List<&2, GeneralName>, generalName(head), name => Done{name <> reversed}))
+
+def nonemptyNames(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, List<&2, GeneralName>>:
+  match nodes:
+    case Nil{}: Fail{InvalidCertificate{}}
+    case head <> tail: generalNames(head <> tail,Done{Nil{}})
+
+def subjectAltNames(extension: Extension) -> Result<&2, &2, Error, List<&2, GeneralName>>:
+  match extension:
+    case Extension{85 <> 29 <> 17 <> Nil{},_,value}:
+      Result.bind(&2, &2, Error, DER.Node, List<&2, GeneralName>, decoded(DER.Node,DER.one(value)), node =>
+        Result.bind(&2, &2, Error, List<&2, DER.Node>, List<&2, GeneralName>, decoded(List<&2, DER.Node>,DER.sequence(node)), nonemptyNames))
+    case _: Fail{InvalidCertificate{}}

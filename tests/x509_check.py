@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
 import random
+import ipaddress
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
@@ -282,6 +283,40 @@ for content in [b'',tlv(6,b''),tlv(6,b'\x80\x2a'),tlv(6,b'\x2a\x80\x01'),
                 tlv(6,b'\x2a\x81'),tlv(4,server_purpose),tlv(38,server_purpose)]:
     cases.append(('eku:' + encode(tlv(48,content)),'certificate'))
 cases.append(('eku:' + encode(tlv(48,tlv(6,server_purpose)) + b'\x00'),'encoding'))
+
+san_values = [x509.DNSName('localhost'),x509.DNSName('*.example.com'),x509.DNSName('xn--bcher-kva.example'),
+              x509.IPAddress(ipaddress.ip_address('127.0.0.1')),x509.IPAddress(ipaddress.ip_address('2001:db8::1')),
+              x509.RFC822Name('test@example.com'),x509.UniformResourceIdentifier('https://example.com/path'),
+              x509.RegisteredID(x509.ObjectIdentifier('1.2.3.4')),
+              x509.DirectoryName(subject),x509.OtherName(x509.ObjectIdentifier('1.2.3.4'),tlv(12,b'value'))]
+for values in [[value] for value in san_values] + [san_values]:
+    wire = x509.SubjectAlternativeName(values).public_bytes()
+    expected = 'names'
+    for value,node in zip(values,children(wire)):
+        if isinstance(value,x509.DNSName): kind, data = 'dns',value.value.encode()
+        elif isinstance(value,x509.IPAddress): kind, data = 'ip',value.value.packed
+        elif isinstance(value,x509.RFC822Name): kind, data = 'mail',value.value.encode()
+        elif isinstance(value,x509.UniformResourceIdentifier): kind, data = 'uri',value.value.encode()
+        elif isinstance(value,x509.RegisteredID): kind, data = 'oid',unknown_oid
+        else: kind, data = 'structured',node
+        expected += '|' + kind + ':' + encode(data)
+    cases.append(('san:' + encode(wire),expected))
+# IA5 is decoded without normalization or identity matching. Embedded bytes
+# stay intact; the identity policy must separately reject unsuitable DNS names.
+for text in [b'EXAMPLE.com',b'api*.example.com',b'a,b.example',b'a\x00.example']:
+    cases.append(('san:' + encode(tlv(48,tlv(130,text))),'names|dns:' + encode(text)))
+for tag in [129,130,134]:
+    for value in [b'',b'\x80',b'\xff',b'\xc3\xa4']:
+        cases.append(('san:' + encode(tlv(48,tlv(tag,value))),'certificate'))
+for size in [0,1,3,5,15,17,32]:
+    cases.append(('san:' + encode(tlv(48,tlv(135,bytes(size)))),'certificate'))
+for value in [b'',b'\x80\x2a',b'\x2a\x80\x01',b'\x2a\x81']:
+    cases.append(('san:' + encode(tlv(48,tlv(136,value))),'certificate'))
+for tag in [128,131,132,133,137,162,167,168,169]:
+    cases.append(('san:' + encode(tlv(48,tlv(tag,b'\x05\x00'))),'certificate'))
+cases += [('san:' + encode(tlv(48,b'')),'certificate'),
+          ('san:' + encode(tlv(48,tlv(164,b'\x30\x01'))),'encoding'),
+          ('san:' + encode(tlv(48,tlv(130,b'example.com')) + b'\x00'),'encoding')]
 
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),
