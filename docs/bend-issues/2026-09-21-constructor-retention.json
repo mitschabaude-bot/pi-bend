@@ -389,7 +389,7 @@
     }
   },
   "compact_checked_words": {
-    "status": "isolated and not adopted; full proof comparison passed; default-factory emission running",
+    "status": "Not adopted. Word compaction alone hit 40 GiB guard in pass 3. Combined with the previously isolated old-pass lifetime patch, full emission is running under the same guard.",
     "scope": "Retain outer type of structurally literal U32/F32 after all original constructor and field checks run; inner raw bit tree replaces its annotated copy. Native/JS emit literal words atomically. Initial reduced C is byte-identical to baseline.",
     "small_seconds_peak_rss_kib": "1.73 505968",
     "small_c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418",
@@ -423,6 +423,168 @@
         "child_exit_code": 0
       }
     },
-    "proof_result": "Both check the complete existing PROOF.bend root: All terms check, with 41 unsafe annotations."
+    "proof_result": "Both check the complete existing PROOF.bend root: All terms check, with 41 unsafe annotations.",
+    "full_emission": {
+      "command": [
+        "/home/agent/.bun/bin/bun",
+        "build/bend-profiles/compact-checked-words/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/compact-defaults.c"
+      ],
+      "elapsed_seconds": 176.8909030854702,
+      "peak_sampled_group_rss_kib": 42020944,
+      "limit_gib": 40.0,
+      "stopped": true,
+      "child_exit_code": -15
+    },
+    "focused_runtime_validation": {
+      "baseline": {
+        "compiler": {
+          "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+          "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+          "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "programs": {
+          ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+          ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+        }
+      },
+      "candidate": {
+        "compiler": {
+          "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+          "bend.ts": "69de2d74ae90e394f0763bfcd327001ea4e1536cd4b0a570a32ca113ee8998c7",
+          "comp.ts": "f8b4f1951121c4f230181d548cd0c4fa6540edb91064406be7840801f3221005",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "programs": {
+          ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+          ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+        }
+      },
+      "source_sha256": "d2962519d26b72a9fd9623d3e0914c8691db4694c196d6539fc404d4b85e5b69",
+      "harness_sha256": "d62a0998058333c6bdf7ffadc6a6bf69ecd8216021dbfea11e9bc996b07f903a",
+      "expected": [
+        "0:0:0",
+        "1:1:1",
+        "2147483648:2147483648:1",
+        "4294967295:4294967295:1",
+        "0",
+        "2147483648",
+        "1065353216",
+        "1036831949",
+        "8388608",
+        "1",
+        "2139095039",
+        "0:0:0",
+        "1:1:1",
+        "2:2:1",
+        "255:255:1",
+        "65535:65535:1",
+        "2147483648:2147483648:1",
+        "4294967295:4294967295:1"
+      ],
+      "backends": [
+        "native-1",
+        "native-4",
+        "bun"
+      ]
+    },
+    "focused_runtime_scope": "Combined word-compaction/pass-lifetime compiler versus baseline: byte-identical C and JS; native one/four threads and Bun agree with integer/IEEE-754 bit expectations. Covers boxed generic values, constructor reconstruction, runtime input and normal/subnormal/signed-zero float words. No negative proof controls.",
+    "alone_phase_memory": [
+      {
+        "phase": "load-end",
+        "rss": 4035018752,
+        "heapTotal": 3913977856,
+        "heapUsed": 1768374244,
+        "external": 4097876,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "validate-end",
+        "rss": 8544362496,
+        "heapTotal": 8353602560,
+        "heapUsed": 4770938861,
+        "external": 5693293,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "pass-end",
+        "pass": 1,
+        "time": 1790004827381,
+        "rss": 28543631360,
+        "heapTotal": 26012978176,
+        "heapUsed": 6794748151,
+        "external": 251273543,
+        "arrayBuffers": 100,
+        "probes": 551766,
+        "teles": 808,
+        "opens": 62,
+        "uses": 1012,
+        "folds": 254,
+        "spines": 467,
+        "consts": 27446,
+        "segments": 14906,
+        "own": 4003,
+        "hot": 3321,
+        "stat": 38
+      },
+      {
+        "phase": "pass-after-gc",
+        "pass": 1,
+        "time": 1790004828716,
+        "rss": 27131920384,
+        "heapTotal": 13901368320,
+        "heapUsed": 6730048978,
+        "external": 268174034,
+        "arrayBuffers": 100,
+        "probes": 551766,
+        "teles": 808,
+        "opens": 62,
+        "uses": 1012,
+        "folds": 254,
+        "spines": 467,
+        "consts": 27446
+      },
+      {
+        "phase": "pass-end",
+        "pass": 2,
+        "time": 1790004881724,
+        "rss": 32659931136,
+        "heapTotal": 26658570240,
+        "heapUsed": 19614732509,
+        "external": 535570717,
+        "arrayBuffers": 100,
+        "probes": 765463,
+        "teles": 708,
+        "opens": 62,
+        "uses": 1008,
+        "folds": 254,
+        "spines": 467,
+        "consts": 27446,
+        "segments": 14906,
+        "own": 4418,
+        "hot": 3850,
+        "stat": 38
+      },
+      {
+        "phase": "pass-after-gc",
+        "pass": 2,
+        "time": 1790004885981,
+        "rss": 29635452928,
+        "heapTotal": 24849102848,
+        "heapUsed": 15982054031,
+        "external": 302066655,
+        "arrayBuffers": 100,
+        "probes": 765463,
+        "teles": 708,
+        "opens": 62,
+        "uses": 1008,
+        "folds": 254,
+        "spines": 467,
+        "consts": 27446
+      }
+    ]
   }
 }
