@@ -193,3 +193,7 @@ Twenty-four new laws cover immutable header layer/entry composition, replacement
 ## Native Responses retry classification
 
 Nine new laws preserve typed native failure categories and cancellation/deadline precedence over arbitrary error payloads. The [native attempt design](openai-responses-native-attempt.md) states their limits and complementary network/resource checks. The [full gate](proof-validation/2026-09-21-openai-responses-native-attempt.json) checks 399 public laws and 65 supporting lemmas and rejects 219 well-typed mutations, open obligations and a missing proof. The nineteen named unsafe declarations remain unchanged. Existing FIFO laws and helpers moved verbatim into `laws/fifo.bend`; queue mutation proofs now import that module locally, while full-root validation remains mandatory.
+
+## Responses acquisition bridge
+
+Three generic laws preserve all prepared client settings and payload, forbid transport effects for any envelope failure, and transfer successful envelopes unchanged. The existing provider-request laws supply hook selection and cleanup contracts. The [full gate](proof-validation/2026-09-21-openai-responses-acquire.json) checks 402 public laws and 65 supporting lemmas and rejects 221 well-typed mutations, open obligations and a missing proof. Its nineteen named unsafe declarations are unchanged. [Acquisition design](openai-responses-acquire.md) describes the boundary and separates pure contracts from network/resource validation.

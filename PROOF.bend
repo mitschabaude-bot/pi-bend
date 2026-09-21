@@ -1,3 +1,4 @@
+import ./proofs/openai-responses-acquire.bend as ResponsesAcquire
 import ./proofs/openai-responses-native-error.bend as NativeError
 import ./proofs/openai-responses-attempt.bend as ResponsesAttempt
 import ./proofs/openai-responses-cleartext-fetch.bend as ResponsesCleartextFetch

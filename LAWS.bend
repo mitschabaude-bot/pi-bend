@@ -1,3 +1,4 @@
+import ./laws/openai-responses-acquire.bend as ResponsesAcquire
 import ./laws/openai-responses-native-error.bend as NativeError
 import ./laws/fifo.bend as Fifo
 import ./laws/openai-responses-attempt.bend as ResponsesAttempt
