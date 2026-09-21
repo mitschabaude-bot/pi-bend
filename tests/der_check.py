@@ -124,6 +124,13 @@ for key in [rsa.generate_private_key(public_exponent=65537, key_size=2048), ec.g
     assert prefix + body == cert.tbs_certificate_bytes
     cases.append(('o:' + encode(cert.tbs_certificate_bytes), encode(cert.tbs_certificate_bytes)))
 
+for count in [0, 1, 20, 5000]:
+    body = b'\x05\x00' * count
+    wire = header(0, True, 16, len(body)) + body
+    cases.append(('s:' + encode(wire), 'nodes' + '|5,0' * count))
+cases += [('s:48,1,5', 'truncated'), ('s:48,3,5,0,4', 'truncated'),
+          ('s:16,0', 'tag'), ('s:48,4,5,0,4,128', 'canonical')]
+
 for name, command in [('native-1', ['build/der', '--threads', '1']),
                       ('native-4', ['build/der', '--threads', '4']),
                       ('bun', ['bun', 'build/der.js'])]:

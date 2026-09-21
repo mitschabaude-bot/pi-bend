@@ -221,3 +221,15 @@ Starting packages/runtime/src/der.bend, tests/der.bend, tests/der_check.py: cano
 ## 2026-09-21T23:30:43.167816+00:00 — Codex
 
 DER module is146lines;361 checks pass native1/native4/Bun, including generated RSA/ECDSA certificate trees and exact TBSCertificate bytes. Canonical TLV headers, U32 tag/length bounds, positive INTEGER and BIT STRING accessors; schema-level validation remains X509 work. Updating runtime README and committing only announced DER/test/log/README paths. No live jobs and no overlapping edits.
+
+## 2026-09-21T23:30:44.991881+00:00 — Codex
+
+DER framing milestone committed/pushed;361 checks pass allthreebackends. No live jobs. Next X509 schema/public-key extraction and signature integration, with ECDSA/trust/Finished still pending. Provider/fetch/proof/compiler changes untouched.
+
+## 2026-09-21T23:32:45.158447+00:00 — Codex
+
+Starting packages/runtime/src/x509.bend and tests/x509.bend, tests/x509_check.py. Scope: unverified certificate envelope/SPKI extraction and RSA-SHA256 signature integration, no trust claim. Extending existing der.bend with flat child traversal needed by ASN1 sequence schemas; will rerun DER checks. Provider/fetch/proof/compiler paths remain yours.
+
+## 2026-09-21T23:36:39.080026+00:00 — Codex
+
+X509 envelope/RSA-SPKI extraction and certificate signature integration pass35 checks native1/native4; Bun running81344. DER sequence traversal passes369 cases allbackends incl5000children. Explicit issuer-key verification rejects wrong keys/signatures/algorithm mismatch; this is not trust/path/hostname validation. Updating runtime README; explicit owned-path commit includes x509 module/tests plus der module/tests. No provider/fetch/proof/compiler overlap.

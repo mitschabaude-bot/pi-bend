@@ -144,3 +144,25 @@ def bits(node: Node) -> Result<&2, &2, Error, Bits>:
           Fail{NonCanonical{}}))
     case Node{Tag{0, False{}, 3}, _, Nil{}}: Fail{InvalidValue{}}
     case _: Fail{UnexpectedTag{}}
+
+def length(bytes: List<&2, U32>, count: Nat) -> Nat:
+  match bytes:
+    case Nil{}: count
+    case _ <> rest: length(rest, 1n+count)
+
+def siblings(fuel: Nat, result: Result<&2, &2, Error, Read>, reversed: List<&2, Node>) -> Result<&2, &2, Error, List<&2, Node>>:
+  match fuel result:
+    case _ Fail{cause}: Fail{cause}
+    case _ Done{Read{node, Nil{}}}: Done{List.reverse(&2, Node, node <> reversed)}
+    case 1n+fuel Done{Read{node, rest}}: siblings(fuel, read(rest), node <> reversed)
+    case _ _: Fail{Truncated{}}
+
+def all(bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, Node>>:
+  match bytes:
+    case Nil{}: Done{Nil{}}
+    case +head <> +rest: siblings(length(rest, 1n), read(head <> rest), Nil{})
+
+def sequence(node: Node) -> Result<&2, &2, Error, List<&2, Node>>:
+  match node:
+    case Node{Tag{0, True{}, 16}, _, bytes}: all(bytes)
+    case _: Fail{UnexpectedTag{}}

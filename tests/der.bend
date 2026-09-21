@@ -38,8 +38,19 @@ def bits(result: Result<&2, &2, DER.Error, DER.Bits>) -> String:
     case Fail{cause}: error(cause)
     case Done{DER.Bits{unused, bytes}}: U32.show(unused) ++ ":" ++ Bytes.show(bytes)
 
+def nodeList(values: List<&2, DER.Node>, reverse: String) -> String:
+  match values:
+    case Nil{}: String.reverse(reverse)
+    case value <> rest: nodeList(rest, String.reverse(Bytes.show(DER.encoded(value))) ++ "|" ++ reverse)
+
+def sequence(result: Result<&2, &2, DER.Error, List<&2, DER.Node>>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{values}: "nodes" ++ nodeList(values, "")
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "s" <> bytes <> Nil{}: sequence(Result.bind(&2, &2, DER.Error, DER.Node, List<&2, DER.Node>, DER.one(Bytes.bytes(bytes)), DER.sequence))
     case "r" <> bytes <> Nil{}: parsed(DER.read(Bytes.bytes(bytes)))
     case "o" <> bytes <> Nil{}: whole(DER.one(Bytes.bytes(bytes)))
     case "u" <> bytes <> Nil{}: unsigned(Result.bind(&2, &2, DER.Error, DER.Node, List<&2, U32>, DER.one(Bytes.bytes(bytes)), DER.unsigned))
