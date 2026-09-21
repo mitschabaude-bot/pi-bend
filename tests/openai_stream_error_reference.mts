@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import { normalizeProviderError, formatProviderError } from '../../pi-mono/packages/ai/src/utils/error-body.ts';
+const require = createRequire(import.meta.url);
+const path = '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/openai';
+const { APIError } = require(path);
+const version = JSON.parse(fs.readFileSync(path + '/package.json', 'utf8')).version;
+if (version !== '6.40.0') throw new Error('Unexpected SDK version ' + version);
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+console.log(JSON.stringify({version, messages: input.map(error => formatProviderError(normalizeProviderError(new APIError(undefined, error, undefined, new Headers())), 'OpenAI API error'))}));

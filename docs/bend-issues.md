@@ -723,3 +723,8 @@ The default cleartext dependency-owner fixture emits C in 322.32 seconds at 15,8
 The system-loading fixture emits C in 28.94 seconds at 4,660,296 KiB sampled group peak RSS and JavaScript in 7.57 seconds at 2,802,444 KiB. The [source/compiler record](bend-issues/2026-09-21-system-settings-compiler.json) is another shared-host workload observation; it excludes Clang and does not establish a performance comparison.
 
 The owned Responses acquisition fixture emits C in 567.61 seconds at 35,837,252 KiB sampled group peak RSS and JavaScript in 36.39 seconds at 15,189,496 KiB. The [source/compiler record](bend-issues/2026-09-21-owned-acquire-compiler.json) retains emitted program hashes and aggregated definition timings. These are shared-host observations of the existing compiler; Clang is excluded and no controlled performance comparison or new patch is claimed.
+
+
+### BEND-001/BEND-016 observation: streaming-error rendering (2026-09-21)
+
+The standalone streaming-error fixture emits C in 91.68 seconds at 18,361,260 KiB sampled peak RSS and JavaScript in 25.20 seconds at 11,364,872 KiB. This small pure executable imports the broader provider type closure; its generic proof validation alone approaches 10 GiB. The [compiler record](bend-issues/2026-09-21-stream-error-compiler.json) retains source/compiler hashes and guarded measurements. Clang is excluded, and these workload observations do not establish a leak or a controlled performance comparison.
