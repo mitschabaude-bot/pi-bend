@@ -1,0 +1,42 @@
+{
+  "scope": "NIST standard vectors, padding boundaries, random byte strings and streaming partitions, invalid-byte rejection; no TLS integration or formal SHA-256 equivalence claim.",
+  "runs": {
+    "native-1": {
+      "cases": 355,
+      "outputs_sha256": "d575b7d0ae80bdb09849ee9dc6eca6a495db7571c5e39c75316189c783f31454"
+    },
+    "native-4": {
+      "cases": 355,
+      "outputs_sha256": "d575b7d0ae80bdb09849ee9dc6eca6a495db7571c5e39c75316189c783f31454"
+    },
+    "bun": {
+      "cases": 355,
+      "outputs_sha256": "d575b7d0ae80bdb09849ee9dc6eca6a495db7571c5e39c75316189c783f31454"
+    }
+  },
+  "sources": {
+    "packages/runtime/src/sha256.bend": "b632343011f6519c1efbf00fc940e7e7fd90c718f14adbdc2fbdea4f69e80311",
+    "laws/sha256.bend": "a12910b86e81b574c138a670a0b1ee73ea7301e7c63883e81c3ac8a12e91f718",
+    "proofs/sha256.bend": "2dfd25ab3f005c2ee425b0773a421ccb6002b46d4b44db9fa6ec7c4ee30763c1",
+    "tests/sha256.bend": "4cd37cb6684531338f3b216589218131e70230c51d64ca0157e5d4d98cbf8bfc",
+    "tests/sha256_check.py": "53267f2d596e22e2ff813cfcb658171be01ab1ed7b7aa63155a5fd7bd215f1ab"
+  },
+  "programs": {
+    "build/sha256": "2a432ea4705f7137e84d34205b9b8c605e957a99fbe4cee17a9a5168248c504c",
+    "build/sha256.c": "162eb096d5160b3b5814588b9b436fd65984badfdaef03fb15987b87086bc936",
+    "build/sha256.js": "28cee27f76ad0701bf451a68b9bb416302f6cf458be320403af81dda6c628387"
+  },
+  "proof": {
+    "result": "All terms check, with 41 unsafe annotations.",
+    "roots": {
+      "LAWS.bend": "05335206a8f05414765d10a29ba76431a60b45809eccf08663f42104003db937",
+      "PROOF.bend": "0baec29bd496b29caf0dd9021df687f30a9ed3dc6b800e8588b98a126e95300e"
+    },
+    "scope": "Universal chunk composition preserves complete state and first error; not a proof of equivalence to FIPS 180-4."
+  },
+  "compiler": {
+    "build/bend-profiles/dns-transport-teles/bend2/main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "build/bend-profiles/dns-transport-teles/bend2/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "build/bend-profiles/dns-transport-teles/bend2/comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091"
+  }
+}

@@ -1,3 +1,4 @@
+import ./proofs/sha256.bend as SHA256
 import ./proofs/openai-body-responses-reader.bend as BodyReader
 import ./proofs/openai-responses-process-result.bend as ProcessResult
 import ./proofs/provider-retry-options.bend as RetryOptions
