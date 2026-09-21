@@ -36,6 +36,14 @@ law unjustified_equal:
   {identity(x) == identity(y) : Nat}
 def unjustified_equal(x, y): {==}
 ''',
+    'constant-unused-finite-argument': (ROOT / 'tests/compiler-unused-argument.bend').read_text(),
+    'constant-unused-recursive-argument': '''import Base
+@unsafe def loop(unused: Unit) -> Nat: loop(Unit{})
+def constant(unused: Nat) -> Nat: 0n
+law discarded_argument:
+  {constant(loop(Unit{})) == constant(0n) : Nat}
+def discarded_argument(): {==}
+''',
 }
 records = []
 with tempfile.TemporaryDirectory(prefix='bend-io-equality-') as directory:
@@ -57,5 +65,5 @@ with tempfile.TemporaryDirectory(prefix='bend-io-equality-') as directory:
             assert status != 'timeout' and not checked and 'Error:' in output, (name, status, output)
         records.append(dict(case=name, source=text, status=status, checked=checked, seconds=time.monotonic()-start, output=output))
         print(name, status, 'checked' if checked else 'not checked', flush=True)
-record = dict(scope=__doc__, timeout_seconds=args.timeout, compiler=str(compiler), sources={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path(__file__).resolve(), ROOT / 'tests/compiler-io-equality.bend']}, compiler_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in compiler.parent.iterdir() if p.suffix in ['.ts', '.bend']}, runs=records)
+record = dict(scope=__doc__, timeout_seconds=args.timeout, compiler=str(compiler), sources={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in [Path(__file__).resolve(), ROOT / 'tests/compiler-io-equality.bend', ROOT / 'tests/compiler-unused-argument.bend']}, compiler_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in compiler.parent.iterdir() if p.suffix in ['.ts', '.bend']}, runs=records)
 args.output.write_text(json.dumps(record, indent=2) + '\n')

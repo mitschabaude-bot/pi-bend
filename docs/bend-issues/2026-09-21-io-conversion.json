@@ -1742,5 +1742,6 @@
     "/home/agent/code/pi-mono/packages/ai/src/utils/error-body.ts": "7170181ae6926709fe4ab7ac6b5b51c46ffe906868a7aac3c7627cb28ad77c09",
     "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/openai/core/error.js": "da1608f20141771610ddd7deb14ca5696d92dffdc11fa9d8840d5cc81109257f",
     "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/openai/package.json": "62ce25ffb47afe5cbbf80e8574297d79ea72b2ef3e5087d91e0e3e1bf38c2ebc"
-  }
+  },
+  "adoption_status": "REJECTED: forces discarded arguments and regresses a total safe proof; see2026-09-21-io-conversion-laziness.json. Prior green gate does not override this counterexample."
 }

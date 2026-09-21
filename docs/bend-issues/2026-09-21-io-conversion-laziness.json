@@ -1,0 +1,187 @@
+{
+  "scope": "Positive-congruence candidate REJECTED for adoption. Eager conversion of unused arguments causes a checking-performance regression even in a total safe program. Baseline accepts without evaluating the discarded argument; candidate times out. No installed/project compiler changed.",
+  "controls": {
+    "baseline": {
+      "scope": "Bounded conversion-checking probe; never executes the recursive IO program.",
+      "timeout_seconds": 5,
+      "compiler": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+      "sources": {
+        "tests/compiler_io_equality_check.py": "220915e91110e5deb44456596084bcbe972bc45f90a7ccaeae65baff8d42793c",
+        "tests/compiler-io-equality.bend": "c7018acefc2cffa9525621820d4603d90083613244c1c59d40e80257cf9eec5b",
+        "tests/compiler-unused-argument.bend": "66f78199a9d9a54ae2b93af21cb6474d905dce2e017bbba689ee8f3466c94af8"
+      },
+      "compiler_sha256": {
+        "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+        "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+        "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "runs": [
+        {
+          "case": "recursive-wrapper",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    repeat(Unit{})\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {wrapped(Unit{}) == repeat(Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": "timeout",
+          "checked": false,
+          "seconds": 5.015042227692902,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":29884416,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":64225280,\"heapTotal\":11676672,\"heapUsed\":3988935,\"external\":1845895,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "recursive-direct",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    repeat(Unit{})\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {repeat(Unit{}) == repeat(Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": "timeout",
+          "checked": false,
+          "seconds": 5.017820752225816,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":29884416,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65536000,\"heapTotal\":11660288,\"heapUsed\":3969807,\"external\":1815183,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "finite-wrapper",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    return Unit{}\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {wrapped(Unit{}) == repeat(Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.11637966707348824,
+          "output": "All terms check, with 1 unsafe annotation.\nPROFILE {\"phase\":\"load-start\",\"rss\":30146560,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65929216,\"heapTotal\":11709440,\"heapUsed\":3985728,\"external\":1830496,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":80302080,\"heapTotal\":18427904,\"heapUsed\":11206274,\"external\":2672882,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "unequal-control",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    return Unit{}\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {wrapped(Unit{}) == IO.pure(Unit, Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": 1,
+          "checked": false,
+          "seconds": 0.11466245539486408,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30146560,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65929216,\"heapTotal\":10577920,\"heapUsed\":4340622,\"external\":1855134,\"arrayBuffers\":100}\nError:\n- expected : R => k => IO.print(\"tick\", R, x => k(Unit{}))\n- observed : R => k => k(Unit{})\nLocation: same_program\n15 | \n16>| def same_program(): {==}\n17 | \n"
+        },
+        {
+          "case": "constant-distinct-arguments",
+          "source": "import Base\ndef constant(unused: Nat) -> Nat: 0n\nlaw constant_equal:\n  for x: Nat\n  for y: Nat\n  {constant(x) == constant(y) : Nat}\ndef constant_equal(x, y): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.1117995847016573,
+          "output": "All terms check.\nPROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":66584576,\"heapTotal\":11545600,\"heapUsed\":3940148,\"external\":1804580,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":79872000,\"heapTotal\":18362368,\"heapUsed\":10959655,\"external\":2516983,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "unequal-arguments",
+          "source": "import Base\ndef identity(value: Nat) -> Nat: value\nlaw unjustified_equal:\n  for x: Nat\n  for y: Nat\n  {identity(x) == identity(y) : Nat}\ndef unjustified_equal(x, y): {==}\n",
+          "status": 1,
+          "checked": false,
+          "seconds": 0.12161430437117815,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":29491200,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65929216,\"heapTotal\":11545600,\"heapUsed\":3990979,\"external\":1820771,\"arrayBuffers\":100}\nError:\n- expected : x\n- observed : y\nContext:\n- x : Nat\n- y : Nat\nLocation: unjustified_equal\n6 |   {identity(x) == identity(y) : Nat}\n7>| def unjustified_equal(x, y): {==}\n8 | \n"
+        },
+        {
+          "case": "constant-unused-finite-argument",
+          "source": "import Base\n\ndef slow(value: Nat) -> Nat:\n  match value:\n    case 0n: 0n\n    case 1n+n: slow(n)\n\ndef constant(unused: Nat) -> Nat: 0n\nlaw unused_argument:\n  {constant(slow(100000000n)) == constant(0n) : Nat}\ndef unused_argument(): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.10909983608871698,
+          "output": "All terms check.\nPROFILE {\"phase\":\"load-start\",\"rss\":29491200,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65011712,\"heapTotal\":11627520,\"heapUsed\":3985963,\"external\":1844667,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":81395712,\"heapTotal\":18378752,\"heapUsed\":11106835,\"external\":2581443,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "constant-unused-recursive-argument",
+          "source": "import Base\n@unsafe def loop(unused: Unit) -> Nat: loop(Unit{})\ndef constant(unused: Nat) -> Nat: 0n\nlaw discarded_argument:\n  {constant(loop(Unit{})) == constant(0n) : Nat}\ndef discarded_argument(): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.11262701079249382,
+          "output": "All terms check, with 1 unsafe annotation.\nPROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65404928,\"heapTotal\":11529216,\"heapUsed\":3915253,\"external\":1780725,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":79802368,\"heapTotal\":18411520,\"heapUsed\":11040429,\"external\":2521773,\"arrayBuffers\":100}\n"
+        }
+      ]
+    },
+    "candidate": {
+      "scope": "Bounded conversion-checking probe; never executes the recursive IO program.",
+      "timeout_seconds": 5,
+      "compiler": "/home/agent/code/pi-bend/build/bend-profiles/io-conversion-congruence/bend2/main.ts",
+      "sources": {
+        "tests/compiler_io_equality_check.py": "220915e91110e5deb44456596084bcbe972bc45f90a7ccaeae65baff8d42793c",
+        "tests/compiler-io-equality.bend": "c7018acefc2cffa9525621820d4603d90083613244c1c59d40e80257cf9eec5b",
+        "tests/compiler-unused-argument.bend": "66f78199a9d9a54ae2b93af21cb6474d905dce2e017bbba689ee8f3466c94af8"
+      },
+      "compiler_sha256": {
+        "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+        "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+        "bend.ts": "f8ff66504a239a18dc225e15e3dcb0893c1624f0a50cc8bfdb7fa99ddbcdf3b2",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "runs": [
+        {
+          "case": "recursive-wrapper",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    repeat(Unit{})\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {wrapped(Unit{}) == repeat(Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": "timeout",
+          "checked": false,
+          "seconds": 5.030752716585994,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":67108864,\"heapTotal\":11709440,\"heapUsed\":5511692,\"external\":1993660,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "recursive-direct",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    repeat(Unit{})\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {repeat(Unit{}) == repeat(Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.12432264257222414,
+          "output": "All terms check, with 1 unsafe annotation.\nPROFILE {\"phase\":\"load-start\",\"rss\":30277632,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65273856,\"heapTotal\":11398144,\"heapUsed\":4079776,\"external\":1836256,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":83984384,\"heapTotal\":18936832,\"heapUsed\":10706656,\"external\":2565568,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "finite-wrapper",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    return Unit{}\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {wrapped(Unit{}) == repeat(Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.11830640025436878,
+          "output": "All terms check, with 1 unsafe annotation.\nPROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65404928,\"heapTotal\":11725824,\"heapUsed\":3971212,\"external\":1817164,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":78741504,\"heapTotal\":17575936,\"heapUsed\":10129466,\"external\":2415914,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "unequal-control",
+          "source": "import Base\n\n# Checker-only reproducer: no main and no execution of this IO program.\n# Recursion is intentionally unsafe, as in callback server loops. This probes\n# conversion checking, not a claim that the recursive program terminates.\n@unsafe def repeat(unused: Unit) -> IO(Unit):\n  do IO<Unit>:\n    IO.print(\"tick\")\n    return Unit{}\n\ndef wrapped(unused: Unit) -> IO(Unit): repeat(Unit{})\n\nlaw same_program:\n  {wrapped(Unit{}) == IO.pure(Unit, Unit{}) : IO(Unit)}\n\ndef same_program(): {==}\n",
+          "status": 1,
+          "checked": false,
+          "seconds": 0.1365189179778099,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30277632,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65798144,\"heapTotal\":11660288,\"heapUsed\":3958429,\"external\":1810477,\"arrayBuffers\":100}\nError:\n- expected : R => k => IO.print(\"tick\", R, x => k(Unit{}))\n- observed : R => k => k(Unit{})\nLocation: same_program\n15 | \n16>| def same_program(): {==}\n17 | \n"
+        },
+        {
+          "case": "constant-distinct-arguments",
+          "source": "import Base\ndef constant(unused: Nat) -> Nat: 0n\nlaw constant_equal:\n  for x: Nat\n  for y: Nat\n  {constant(x) == constant(y) : Nat}\ndef constant_equal(x, y): {==}\n",
+          "status": 0,
+          "checked": true,
+          "seconds": 0.14422119222581387,
+          "output": "All terms check.\nPROFILE {\"phase\":\"load-start\",\"rss\":30146560,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":66584576,\"heapTotal\":11430912,\"heapUsed\":3953033,\"external\":1780873,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":82153472,\"heapTotal\":19034112,\"heapUsed\":11091346,\"external\":2693234,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "unequal-arguments",
+          "source": "import Base\ndef identity(value: Nat) -> Nat: value\nlaw unjustified_equal:\n  for x: Nat\n  for y: Nat\n  {identity(x) == identity(y) : Nat}\ndef unjustified_equal(x, y): {==}\n",
+          "status": 1,
+          "checked": false,
+          "seconds": 0.13069669716060162,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":66060288,\"heapTotal\":11316224,\"heapUsed\":4029713,\"external\":1827281,\"arrayBuffers\":100}\nError:\n- expected : x\n- observed : y\nContext:\n- x : Nat\n- y : Nat\nLocation: unjustified_equal\n6 |   {identity(x) == identity(y) : Nat}\n7>| def unjustified_equal(x, y): {==}\n8 | \n"
+        },
+        {
+          "case": "constant-unused-finite-argument",
+          "source": "import Base\n\ndef slow(value: Nat) -> Nat:\n  match value:\n    case 0n: 0n\n    case 1n+n: slow(n)\n\ndef constant(unused: Nat) -> Nat: 0n\nlaw unused_argument:\n  {constant(slow(100000000n)) == constant(0n) : Nat}\ndef unused_argument(): {==}\n",
+          "status": "timeout",
+          "checked": false,
+          "seconds": 5.179083539173007,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65404928,\"heapTotal\":11611136,\"heapUsed\":4004827,\"external\":1849627,\"arrayBuffers\":100}\n"
+        },
+        {
+          "case": "constant-unused-recursive-argument",
+          "source": "import Base\n@unsafe def loop(unused: Unit) -> Nat: loop(Unit{})\ndef constant(unused: Nat) -> Nat: 0n\nlaw discarded_argument:\n  {constant(loop(Unit{})) == constant(0n) : Nat}\ndef discarded_argument(): {==}\n",
+          "status": "timeout",
+          "checked": false,
+          "seconds": 5.015266486443579,
+          "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30146560,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":64880640,\"heapTotal\":11561984,\"heapUsed\":3999597,\"external\":1839309,\"arrayBuffers\":100}\n"
+        }
+      ]
+    }
+  },
+  "reduced_finite": [
+    {
+      "variant": "dns-transport-teles",
+      "status": 0,
+      "seconds": 0.1130708996206522,
+      "output": "All terms check.\nPROFILE {\"phase\":\"load-start\",\"rss\":30408704,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":64880640,\"heapTotal\":10627072,\"heapUsed\":4294441,\"external\":1857433,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":81645568,\"heapTotal\":18541568,\"heapUsed\":11497594,\"external\":2823146,\"arrayBuffers\":100}\n",
+      "source": "import Base\n\ndef slow(value: Nat) -> Nat:\n  match value:\n    case 0n: 0n\n    case 1n+n: slow(n)\n\ndef constant(unused: Nat) -> Nat: 0n\nlaw unused_argument:\n  {constant(slow(100000000n)) == constant(0n) : Nat}\ndef unused_argument(): {==}\n",
+      "sha256": "66f78199a9d9a54ae2b93af21cb6474d905dce2e017bbba689ee8f3466c94af8"
+    },
+    {
+      "variant": "io-conversion-congruence",
+      "status": "timeout",
+      "seconds": 5.158493577502668,
+      "output": "PROFILE {\"phase\":\"load-start\",\"rss\":30408704,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":66191360,\"heapTotal\":11578368,\"heapUsed\":4002862,\"external\":1845918,\"arrayBuffers\":100}\n",
+      "source": "import Base\n\ndef slow(value: Nat) -> Nat:\n  match value:\n    case 0n: 0n\n    case 1n+n: slow(n)\n\ndef constant(unused: Nat) -> Nat: 0n\nlaw unused_argument:\n  {constant(slow(100000000n)) == constant(0n) : Nat}\ndef unused_argument(): {==}\n",
+      "sha256": "66f78199a9d9a54ae2b93af21cb6474d905dce2e017bbba689ee8f3466c94af8"
+    }
+  ]
+}
