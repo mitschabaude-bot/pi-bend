@@ -1930,3 +1930,8 @@ The [initialization formatter](openai-responses-initialization-error.md) now pre
 ## Diagnostic proof integration (2026-09-21)
 
 The completed [trusted-compiler root check](proof-validation/2026-09-21-diagnostic-root.json) proves 552 public laws and 74 supporting lemmas, including all thirty recently added native/system presentation, resolver diagnostic and initialization laws. No negative tests or altered implementations are generated. Runtime and upstream suite statuses are unchanged; the default-clock proof remains outside this root.
+
+
+## Standard system initialization presentation (2026-09-21)
+
+The system renderer now exposes `format` with the concrete initialization handler installed, while preserving `render` for callers supplying custom presentation. The [553-law proof root](proof-validation/2026-09-21-system-format-root.json) includes its generic initialization contract. All [36 native/Bun runtime outcomes](runtime-validation/2026-09-21-system-format.json) pass, including the default handler through 96 nested processing wrappers. Concrete transport leaves and final public-provider installation remain unfinished. No upstream suite is promoted.

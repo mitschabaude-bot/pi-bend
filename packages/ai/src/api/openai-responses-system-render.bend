@@ -1,4 +1,5 @@
 import Base
+import ./openai-responses-initialization-error.bend as Initialization
 import ./openai-responses-system-error.bend as Error
 import ./openai-responses-cleartext-system-runtime.bend as System
 import ./openai-responses-native-render.bend as Native
@@ -25,3 +26,10 @@ def render(-Reason: Data, -Hook: Data, leaves: Native.Leaves<Reason, System.Sour
     case Error.ProcessingFailure{Stream.ApplyServiceTierPricingFailure{cause}}: render(Reason, Hook, leaves, initialize, cause)
     case Error.ProcessingFailure{Stream.ContentFailure{cause}}: Done{Sampling.errorMessage(cause)}
     case Error.ProcessingFailure{Stream.TerminalFailure{cause}}: Done{Terminal.errorMessage(cause)}
+
+# Default initialization presentation for the system-owned provider. Transport
+# and application leaves remain explicit until their own adapters are supplied.
+def initialization(cause: System.Error) -> Format.Formatted(): Done{Initialization.format(cause)}
+
+def format(-Reason: Data, -Hook: Data, leaves: Native.Leaves<Reason, System.SourceError(), Hook>, error: Error.Error<Reason, Hook>) -> Format.Formatted():
+  render(Reason, Hook, leaves, initialization, error)

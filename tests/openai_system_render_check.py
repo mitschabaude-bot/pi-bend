@@ -6,6 +6,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--backend', choices=['all','bun','native'], default='all')
 args = parser.parse_args()
 expected = ['entropy source failed','formatting-failure','primary','formatting-failure','release cause','formatting-failure','reader','disposal','formatting-failure','formatting-failure']
+expected += ['Could not obtain retry entropy (code 5): entropy source failed'] * 2
 prefix = ROOT/'build/openai-system-render'
 commands = [('native-1',[str(prefix),'--threads','1']),('native-4',[str(prefix),'--threads','4']),('bun',['bun',str(prefix)+'.js'])]
 runs = []

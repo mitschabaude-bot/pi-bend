@@ -8,3 +8,5 @@ def Laws.read_wrapper_preserves_system_cause(Reason, Hook, leaves, initialize, c
 def Laws.emit_wrapper_preserves_system_cause(Reason, Hook, leaves, initialize, cause): {==}
 def Laws.tier_wrapper_preserves_system_cause(Reason, Hook, leaves, initialize, cause): {==}
 def Laws.pricing_wrapper_preserves_system_cause(Reason, Hook, leaves, initialize, cause): {==}
+
+def Laws.standard_initialization_preserves_concrete_diagnostic(Reason, Hook, leaves, cause): {==}

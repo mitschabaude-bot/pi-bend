@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/src/api/openai-responses-initialization-error.bend as Initialization
 import ../packages/ai/src/api/openai-responses-system-render.bend as Render
 import ../packages/ai/src/api/openai-responses-system-error.bend as E
 import ../packages/ai/src/api/openai-responses-cleartext-system-runtime.bend as System
@@ -63,3 +64,10 @@ law pricing_wrapper_preserves_system_cause:
   for initialize: System.Error -> Format.Formatted()
   for cause: E.Error<Reason, Hook>
   {Render.render(Reason, Hook, leaves, initialize, E.ProcessingFailure{Stream.ApplyServiceTierPricingFailure{cause}}) == Render.render(Reason, Hook, leaves, initialize, cause) : Format.Formatted()}
+
+law standard_initialization_preserves_concrete_diagnostic:
+  for -Reason: Data
+  for -Hook: Data
+  for leaves: Native.Leaves<Reason, System.SourceError(), Hook>
+  for cause: System.Error
+  {Render.format(Reason, Hook, leaves, E.AcquisitionFailure{Owned.InitializationFailure{cause}}) == Done{Initialization.format(cause)} : Format.Formatted()}

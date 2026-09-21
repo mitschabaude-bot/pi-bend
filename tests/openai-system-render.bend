@@ -54,3 +54,5 @@ def main() -> IO(Unit):
     show(False{}, E.DisposalFailure{Body.ReaderFailure{Reader.ProtocolFailure{Decode.MissingField{Nil{}}}}})
     show(True{}, E.ReaderFailure{Reader.ProtocolFailure{Decode.MissingField{Nil{}}}})
     show(True{}, E.DisposalFailure{Body.ReaderFailure{Reader.ProtocolFailure{Decode.MissingField{Nil{}}}}})
+    output(Render.format(Unit, String, leaves(False{}), initial()))
+    output(Render.format(Unit, String, leaves(False{}), wrap(24n, initial())))
