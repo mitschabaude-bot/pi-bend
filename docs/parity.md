@@ -1920,3 +1920,8 @@ The completed [root gate](proof-validation/2026-09-21-provider-rendering.json) c
 ## Concrete resolver diagnostic leaves (2026-09-21)
 
 The shared [resolver diagnostic module](resolver-diagnostic.md) now retains native configuration failure details in immutable message lists. Nine standalone generic laws and three rejected information-loss mutations cover ordering, counts, tokens, OS codes/messages and wrapper propagation; 45 native/Bun runtime outcomes pass. These are native diagnostics, not claims to reproduce libc-specific text. System initialization composition and the remaining transport diagnostic leaves are still pending. Upstream suite statuses remain unchanged.
+
+
+## Concrete initialization diagnostics (2026-09-21)
+
+The [initialization formatter](openai-responses-initialization-error.md) now presents resolver configuration and entropy initialization failures, preserving OS causes and short-read counts. Six generic laws and 30 native/Bun runtime outcomes pass. Installation into the final provider renderer and concrete transport leaves remain pending. Upstream suite statuses remain unchanged.

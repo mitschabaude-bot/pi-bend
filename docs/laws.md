@@ -247,3 +247,5 @@ The [provider rendering and default-hook gate](proof-validation/2026-09-21-provi
 Nine [resolver diagnostic laws](resolver-diagnostic.md) pass standalone, including inductive option-count and concatenation invariants and arbitrary token/code/message preservation. Three type-correct information-loss mutations are rejected. These complement the fifteen standalone native/system renderer laws; none of these twenty-four is included in the completed 522-law root count.
 
 At Gregor’s request, the [trusted-compiler check](proof-validation/2026-09-21-trusted-proof-gate.json) now checks the unchanged 522-law/74-lemma root directly, without generating broken implementations or negative proof cases. The source audit and hashes remain. This run passes in 19.24 seconds; historical mutation campaigns are not part of the continuing workflow.
+
+Six [concrete initialization diagnostic laws](openai-responses-initialization-error.md) pass standalone, preserving arbitrary OS causes, short-read counts and diagnostic collections. Singleton display is proved by structural induction. These remain outside the 522-law root; no mutation tests were run.
