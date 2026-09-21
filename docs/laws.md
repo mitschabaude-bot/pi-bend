@@ -217,3 +217,7 @@ The [full gate](proof-validation/2026-09-21-scoped-responses.json) checks 429 pu
 ### Producer-owned session cleanup (2026-09-21)
 
 The [full gate](proof-validation/2026-09-21-session-cleanup.json) checks 430 public laws and 67 supporting lemmas and rejects 232 typed mutations. The new law quantifies every lifecycle result and dependency cleanup program, requiring cleanup before returning that unchanged result. [The ownership design and IO evidence](session-owned-cleanup.md) cover the producer wiring, gated retirement, repeated joins and existing provider-session regressions. The unsafe source declaration set is unchanged.
+
+### Native Responses session composition (2026-09-21)
+
+Eight generic laws preserve supplied cancellation ownership, borrowed/local signal identity, affine response transfer, typed acquisition failures and canonical options during signal binding. The [full gate](proof-validation/2026-09-21-native-session.json) checks 438 public laws and 67 supporting lemmas and rejects 235 typed mutations, including caller-signal disposal, dropped cancellation and dropped response hooks. The existing unsafe declaration set is unchanged. [Runtime evidence](openai-native-session.md) separately exercises the composed transport and asynchronous lifecycle.

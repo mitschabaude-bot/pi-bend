@@ -1,6 +1,6 @@
 // Exact pinned outer wrapper and processor, with injected client/effects.
 import fs from 'node:fs';
-import {stripTypeScriptTypes} from 'node:module';
+import {createRequire,stripTypeScriptTypes} from 'node:module';
 import {headersToRecord} from '../../pi-mono/packages/ai/src/utils/headers.ts';
 import {normalizeProviderError,formatProviderError} from '../../pi-mono/packages/ai/src/utils/error-body.ts';
 import {processStream} from './responses_stream_reference.mts';
@@ -16,6 +16,13 @@ const scalars=s=>Array.from(s,c=>c.codePointAt(0)).join(',');
 function bits(n,sep=','){const b=Buffer.alloc(8);b.writeDoubleBE(n);return b.readUInt32BE(0)+sep+b.readUInt32BE(4);}
 function shownMessage(m){const u=m.usage;return 'output:'+m.content.map(c=>c.type==='text'?scalars(c.text)+';':'other;').join('')+':'+(m.responseId??'none')+':'+m.stopReason+':'+[u.input,u.output,u.cacheRead,u.cacheWrite,u.totalTokens,u.cost.total].map(n=>bits(n)).join(':')+':error:'+(m.errorMessage===undefined?'none':scalars(m.errorMessage));}
 const input=JSON.parse(fs.readFileSync(0,'utf8'));const results=[];
+let StatusError;
+if(input.some(c=>c.sdkStatusError)){
+ const path='/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/openai';
+ if(JSON.parse(fs.readFileSync(path+'/package.json','utf8')).version!=='6.40.0')throw Error('SDK version mismatch');
+ StatusError=createRequire(import.meta.url)(path).APIError;
+}
+
 for(const c of input){
  const trace=[],retained=[],sent=[];let attempt=0;
  const output={role:'assistant',content:[],api:'openai-responses',provider:'openai',model:'test',timestamp:123,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'pending'};
@@ -28,9 +35,12 @@ for(const c of input){
  const retry=new Function('Math','sleep',retrySource+'\nfunction abortableSleep(ms,signal){return sleep(ms);}\nreturn retryProviderRequest;')(math,async ms=>trace.push('sleep '+bits(ms,':')));
  async function* read(){let ended=false;try{yield* c.events;if(c.mode===10){trace.push('diagnostic');throw Error('json');}ended=true;}finally{if(!ended){trace.push('abort-hook');if(c.abortCallerOnIteratorClose!==false)signal.aborted=true;}}}
  const client={responses:{create:(payload,opts)=>({withResponse:async()=>{
-  if(opts.maxRetries!==0)throw Error('SDK retries enabled');trace.push('request:'+String(payload));sent.push(JSON.stringify(payload));
+  if(opts.maxRetries!==0)throw Error('SDK retries enabled');
+  // The real SDK rejects an already-aborted request before network dispatch.
+  if(opts.signal?.aborted)throw Error('Request aborted');
+  trace.push('request:'+String(payload));sent.push(JSON.stringify(payload));
   const status=c.statuses[attempt++];if(status===undefined)throw Error('unexpected attempt');
-  if(status<200||status>=300)throw Object.assign(Error('original'),{status,headers:new Headers()});
+  if(status<200||status>=300)throw c.sdkStatusError?StatusError.generate(status,{error:{message:'original'}},undefined,new Headers()):Object.assign(Error('original'),{status,headers:new Headers()});
   return {data:read(),response:{status,headers:new Headers({'x-response':'ok'})}};
  }})}};
  const stream={push(e){const m=e.partial??e.message??e.error;trace.push('emit:'+e.type+':'+shownMessage(m));

@@ -22,6 +22,7 @@ import ./laws/openai-request-headers.bend as OpenAIRequestHeaders
 import ./laws/openai-responses-options.bend as OpenAIOptions
 import ./laws/openai-responses-prepare.bend as OpenAIPrepare
 import ./laws/openai-responses-session.bend as OpenAISession
+import ./laws/openai-responses-native-session.bend as OpenAIResponsesNativeSession
 import ./laws/openai-responses-lifecycle.bend as OpenAILifecycle
 import Base
 import ./laws/provider-response-view.bend as ProviderResponseView

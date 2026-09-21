@@ -21,6 +21,7 @@ import ./proofs/openai-request-headers.bend as OpenAIRequestHeaders
 import ./proofs/openai-responses-options.bend as OpenAIOptions
 import ./proofs/openai-responses-prepare.bend as OpenAIPrepare
 import ./proofs/openai-responses-session.bend as OpenAISession
+import ./proofs/openai-responses-native-session.bend as OpenAIResponsesNativeSession
 import ./proofs/openai-responses-lifecycle.bend as OpenAILifecycle
 import Base
 import ./proofs/provider-response-view.bend as ProviderResponseView
