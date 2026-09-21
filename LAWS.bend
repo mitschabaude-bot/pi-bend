@@ -1,3 +1,5 @@
+import ./laws/url-form-strict.bend as URLFormStrict
+import ./laws/openai-responses-url.bend as OpenAIResponsesURL
 import ./laws/url-search-params.bend as URLSearchParams
 import ./laws/provider-header-state.bend as ProviderHeaderState
 import ./laws/openai-request-headers.bend as OpenAIRequestHeaders

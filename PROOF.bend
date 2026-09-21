@@ -1,3 +1,5 @@
+import ./proofs/url-form-strict.bend as URLFormStrict
+import ./proofs/openai-responses-url.bend as OpenAIResponsesURL
 import ./proofs/url-search-params.bend as URLSearchParams
 import ./proofs/provider-header-state.bend as ProviderHeaderState
 import ./proofs/openai-request-headers.bend as OpenAIRequestHeaders

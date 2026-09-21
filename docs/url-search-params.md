@@ -2,11 +2,11 @@
 
 `runtime/src/url-form.bend` and `url-search-params.bend` implement UTF-8 form encoding and persistent ordered name/value tuples. Repeated names are intentional protocol data, including repeated OAuth scopes; they are not object properties. Append, replacement and deletion return new values. Replacement retains the first matching position and removes later matches. Optional value-specific deletion removes only matching pairs. Lookups distinguish an absent name from a present empty value.
 
-The optional sort operation follows the URLSearchParams API's stable UTF-16 name ordering; it does not sort requests implicitly. No JavaScript object reflection, prototype behavior, property enumeration or mutable iterator aliasing is involved. The encoder is directly useful for native form request bodies. Full OpenAI URL/body preparation and provider integration remain pending.
+The optional sort operation follows the URLSearchParams API's stable UTF-16 name ordering; it does not sort requests implicitly. No JavaScript object reflection, prototype behavior, property enumeration or mutable iterator aliasing is involved. The encoder is directly useful for native form request bodies. The Responses URL component now uses strict parsing; body preparation and provider integration remain pending.
 
-## Parsing boundary still to finish
+## Parsing boundary
 
-The carried-forward `parse` draft currently implements the [URL Standard form parser](https://url.spec.whatwg.org/#concept-urlencoded-parser), including replacement-mode malformed UTF-8 and literal incomplete percent escapes. This is a compatibility parser, **not an approved strict provider-configuration boundary**. The project favors rejecting malformed configuration; add a typed strict entry point before adopting parsing into the native provider request path. Passing the conformance corpus does not settle this API design choice. No meaningful upstream pi test is promoted by this work.
+The `parse` compatibility entry point implements the [URL Standard form parser](https://url.spec.whatwg.org/#concept-urlencoded-parser), including replacement-mode malformed UTF-8 and literal incomplete percent escapes. This is a compatibility parser, **not an approved strict provider-configuration boundary**. The project favors rejecting malformed configuration; the native provider path now uses `url-form-strict.bend`, which rejects malformed escapes/UTF-8 with typed component and field-position errors. Passing the compatibility corpus does not make its permissive parser the preferred configuration API. No meaningful upstream pi test is promoted by this work.
 
 ## Generic laws
 
@@ -20,7 +20,7 @@ The query corpus has 1,141 cases, executed on native one/four threads and Bun (3
 
 The unmodified Node v24.18.0 parser disagrees with that byte-oriented oracle in 31 cases; the raw observations remain in the validation record. A reduced example is `x=%FFé🙂`: the standard yields a replacement character followed by `é🙂`, while raw Node yields two replacement characters followed by `=B`. `tests/url_search_params_node_reproducer.mjs` reproduces this without Bend or networking. Installed Node's `querystring` fallback writes UTF-16 code units into an eight-bit Buffer after `decodeURIComponent` throws; inspection of `internal/url` confirms its form parser calls that unescape function. This accounts for truncation of the literal non-ASCII input. We retain source hashes and do not copy this corruption into Bend.
 
-The strict provider boundary should reject the malformed escape/encoding cases, not rely on either permissive result. Neither the oracle adjustment nor the compatibility parser changes that intended boundary.
+The strict provider boundary rejects the malformed escape/encoding cases. Neither the oracle adjustment nor the compatibility parser changes that boundary. See [native Responses URLs](openai-responses-url.md).
 
 ## Validated milestone
 
