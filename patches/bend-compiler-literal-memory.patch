@@ -1,6 +1,6 @@
 --- a/bend2/bend.ts
 +++ b/bend2/bend.ts
-@@ -705,6 +705,10 @@
+@@ -705,6 +705,14 @@
    return t;
  }
 
@@ -8,10 +8,14 @@
 +const WORD_TREES = new WeakSet<object>();
 +const WORD_LITERALS = new WeakMap<Span, Map<number, LTerm>>();
 +
++export function word_is_literal(tm: HTerm): boolean {
++  return WORD_TREES.has(tm);
++}
++
  export function term_higher(tm: LTerm, env: Env = null): HTerm {
    switch (tm.$) {
      case "Var": {
-@@ -771,6 +775,7 @@
+@@ -771,6 +779,7 @@
        return ADT(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s, tm.r);
      }
      case "Ctr": {
@@ -19,7 +23,7 @@
        return Ctr(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s);
      }
      case "Mat": {
-@@ -839,6 +844,7 @@
+@@ -839,6 +848,7 @@
        return ADT(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s, tm.r);
      }
      case "Ctr": {
@@ -27,7 +31,7 @@
        return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);
      }
      case "Mat": {
-@@ -1135,9 +1141,19 @@
+@@ -1135,9 +1145,19 @@
  // ====
 
  export function word_to_term(n: U32, s?: Span): LTerm {
@@ -48,7 +52,7 @@
    }
    return out;
  }
-@@ -3553,7 +3569,12 @@
+@@ -3553,7 +3573,12 @@
        }
        const tel = tele_fill(book, ctr.T, t_wnf.x, ctx, lhs.def, tm.s);
        const { xs, us } = tele_check(book, lhs, tel, tm.x, qt, ctx, d, tm.s);
@@ -101,7 +105,17 @@
      const live = apps.map((_, i) => i >= qs.length || quant_live(qs[i][0]));
      const all = apps.map((a) => a.x);
      const args = all.filter((_, i) => live[i]);
-@@ -932,14 +937,23 @@
+@@ -800,7 +805,8 @@
+
+ function term_const(t: HTerm): boolean {
+   const s = Bend.term_strip(t);
+-  return s.$ === "Ctr" && memo(CONSTS, s, () => s.x.every(term_const));
++  return s.$ === "Ctr" && (Bend.word_is_literal(s)
++    || memo(CONSTS, s, () => s.x.every(term_const)));
+ }
+
+ function term_use(u: UMap, p: Probe): number {
+@@ -932,14 +938,23 @@
  // An Array is a block, and an IO.OP holds the foreign requests beyond its
  // constructors: boxes.
  function lay_of(book: Bend.Book, A: HTerm | null): Lay {
@@ -133,7 +147,7 @@
  }
 
  function lay_fields(book: Bend.Book, As: (HTerm | null)[]): Field[] {
-@@ -1032,10 +1046,30 @@
+@@ -1032,10 +1047,30 @@
 
  // A constructor's fields: the last n domains of its type, over the
  // datatype's arguments `xs` when given.
@@ -167,7 +181,7 @@
  }
 
  function ctr_doms(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): HTerm[] {
-@@ -1502,14 +1536,16 @@
+@@ -1502,14 +1537,16 @@
  // ====
 
  function file_new(cb: Carb, decl: string): File {
@@ -186,7 +200,7 @@
  }
 
  // Block
-@@ -2161,14 +2197,14 @@
+@@ -2161,14 +2198,14 @@
    seg.fid = name;
    const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
    emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
@@ -203,7 +217,7 @@
    Object.assign(fl, outer);
    return name;
  }
-@@ -2853,6 +2889,7 @@
+@@ -2853,6 +2890,7 @@
    const pass = (defs: [Bend.Name, Def][]): File => {
      [cb.lend, BRWS].forEach((m) => m.clear());
      const fl = file_new(cb, "Term");
@@ -211,7 +225,7 @@
      for (const k of SRCS.keys()) {
        for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
          fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
-@@ -2860,6 +2897,12 @@
+@@ -2860,6 +2898,12 @@
      }
      for (const [k, tld] of defs) {
        compile_def(fl, k, tld);
@@ -224,7 +238,7 @@
      }
      compile_reqs(fl);
      facts_lend(cb);
-@@ -2867,12 +2910,15 @@
+@@ -2867,12 +2911,15 @@
    };
    // Emitted callees first until a pass changes nothing (own, hot and poly
    // only grow): that pass is kept.
