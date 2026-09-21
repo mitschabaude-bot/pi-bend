@@ -15,12 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--worktree', type=Path, default=ROOT)
 parser.add_argument('--no-build', action='store_true')
+parser.add_argument('--prefix', type=Path, default=Path('build/openai-http-process'))
 args = parser.parse_args()
 WORK = args.worktree.resolve()
 BEND = Path(os.environ.get('BEND', ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts')).resolve()
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'tests/openai-http-process.bend'
-prefix = WORK / 'build/openai-http-process'
+prefix = WORK / args.prefix
 if not args.no_build:
     for backend in ['c', 'js']:
         with Path(f'{prefix}-{backend}-build.log').open('w') as log:
@@ -149,7 +150,8 @@ base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=WORK, text=True
 new_files = {'packages/runtime/src/http-response.bend', 'packages/runtime/src/http-response-progress.bend',
              'packages/runtime/src/http-response-metadata.bend', 'packages/runtime/src/http-exchange-response.bend',
              'packages/runtime/src/http-body-source.bend', 'packages/runtime/src/http-abort-classification.bend',
-             'packages/ai/src/api/openai-http-errors.bend', 'packages/ai/src/api/openai-http-responses-reader.bend', SOURCE}
+             'packages/ai/src/api/openai-http-errors.bend', 'packages/ai/src/api/openai-http-responses-reader.bend',
+             'packages/ai/src/api/openai-body-responses-reader.bend', SOURCE}
 for path in visited:
     name = str(path.relative_to(WORK))
     reference = (ROOT / name).read_bytes() if name in new_files else subprocess.check_output(['git', 'show', base + ':' + name], cwd=WORK)
@@ -168,4 +170,4 @@ record = {
     'compiler_sha256': {name: hashlib.sha256((BEND.parent / name).read_bytes()).hexdigest() for name in ['main.ts', 'bend.ts', 'comp.ts', 'base.bend']},
     'builds': {backend: json.loads(Path(f'{prefix}-{backend}-build.json').read_text()) for backend in ['c', 'js']},
 }
-(ROOT / 'build/openai-http-process-results.json').write_text(json.dumps(record, indent=2) + '\n')
+Path(str(prefix)+'-results.json').write_text(json.dumps(record, indent=2) + '\n')

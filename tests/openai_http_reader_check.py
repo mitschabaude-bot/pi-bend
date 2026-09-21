@@ -9,22 +9,26 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from channel_audit import instrument
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--worktree', type=Path, default=ROOT)
 parser.add_argument('--no-build', action='store_true')
+parser.add_argument('--source', default='tests/openai-http-responses-reader.bend')
+parser.add_argument('--prefix', type=Path, default=Path('build/openai-http-reader'))
+parser.add_argument('--limit-gib', type=float, default=16)
 args = parser.parse_args()
 WORK = args.worktree.resolve()
 BEND = Path(os.environ.get('BEND', ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts')).resolve()
 BUN = str(Path.home() / '.bun/bin/bun')
-SOURCE = 'tests/openai-http-responses-reader.bend'
-prefix = WORK / 'build/openai-http-reader'
+SOURCE = args.source
+prefix = WORK / args.prefix
 if not args.no_build:
     for backend in ['c', 'js']:
         with Path(f'{prefix}-{backend}-build.log').open('w') as log:
-            subprocess.run([sys.executable, str(ROOT / 'scripts/run-rss-guarded.py'), '--limit-gib', '16',
+            subprocess.run([sys.executable, str(ROOT / 'scripts/run-rss-guarded.py'), '--limit-gib', str(args.limit_gib),
                             '--stats', f'{prefix}-{backend}-build.json', '--', str(BEND), SOURCE, '-o', f'{prefix}.{backend}'],
                            cwd=WORK, check=True, stdout=log, stderr=subprocess.STDOUT)
 
@@ -38,6 +42,26 @@ static void __attribute__((destructor)) openai_http_reader_audit(void) {
 }
 ''')
 Path(f'{prefix}-audit.js').write_text(instrument(Path(f'{prefix}.js').read_text()))
+scoped = SOURCE == 'tests/openai-scoped-responses-reader.bend'
+if scoped:
+    with Path(f'{prefix}-audit.c').open('a') as output:
+        output.write(r'''
+static void __attribute__((destructor)) scoped_timer_audit(void) {
+  unsigned live=0,waiting=0;
+  for(u32 i=0;i<timer_len;i++){live+=timer_rows[i].live;waiting+=timer_rows[i].waiter!=NULL;}
+  fprintf(stderr,"TIMERS %u %u\n",live,waiting);
+}
+''')
+    js = Path(f'{prefix}-audit.js').read_text()
+    original = (BEND.parent/'effs/timer.js').read_text()
+    assert js.count(original)==1
+    needle='  return io_tup(row, row);'
+    assert original.count(needle)==1
+    changed=original.replace(needle,'  scopedTimerRows.push(row);\n'+needle)
+    js=js.replace(original,changed)
+    js="const scopedTimerRows=[];process.on('exit',()=>console.error('TIMERS',scopedTimerRows.filter(x=>x.state!==3).length,scopedTimerRows.filter(x=>x.waiter!==null).length));\n"+js
+    Path(f'{prefix}-audit.js').write_text(js)
+
 for suffix in ['', '-audit']:
     subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c',
                     '-lpthread', '-lm', '-o', str(prefix) + suffix], cwd=WORK, check=True)
@@ -71,6 +95,8 @@ cases = [
     ('api-error', 0, fixed(frame({'error': {'message': 'failed'}})), ['abort-hook', 'error:api']),
     ('empty', 0, fixed(b''), ['end']),
 ]
+if scoped:
+    cases.append(('past-header-deadline', 0, fixed(payload), normal))
 runs = []
 for audited in [False, True]:
     suffix = '-audit' if audited else ''
@@ -94,7 +120,13 @@ for audited in [False, True]:
                                 assert part, 'request ended before head'
                                 request += part
                             assert request.startswith(b'GET /sse HTTP/1.1\r\n'), request
-                            peer.sendall(wire)
+                            if name == 'past-header-deadline':
+                                headers, body = wire.split(b'\r\n\r\n', 1)
+                                peer.sendall(headers + b'\r\n\r\n')
+                                time.sleep(1.15)
+                                peer.sendall(body)
+                            else:
+                                peer.sendall(wire)
                             if mode == 0:
                                 peer.shutdown(socket.SHUT_WR)
                             assert peer.recv(4096) == b'', 'owner did not close peer or wrote extra bytes'
@@ -110,7 +142,8 @@ for audited in [False, True]:
                     thread.join(timeout=12)
                 assert not thread.is_alive() and not errors and peers == ['closed'], (backend, name, errors, peers)
             assert result.stdout.splitlines() == wanted + ['dispose:ok'], (backend, name, result.stdout, wanted)
-            assert result.stderr == ('AUDIT 0 0 0\n' if audited else ''), (backend, name, result.stderr)
+            expected_audit = ['AUDIT 0 0 0'] + (['TIMERS 0 0'] if scoped else [])
+            assert sorted(result.stderr.splitlines()) == (sorted(expected_audit) if audited else []), (backend, name, result.stderr)
             runs.append({'backend': backend, 'audited': audited, 'case': name, 'peer_closed': True, 'passed': True})
         print(backend, 'audited' if audited else 'production', len(cases), 'native Responses reader cases PASS', flush=True)
 
@@ -125,12 +158,16 @@ base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=WORK, text=True
 new_files = {'packages/runtime/src/http-response.bend', 'packages/runtime/src/http-response-progress.bend',
              'packages/runtime/src/http-response-metadata.bend', 'packages/runtime/src/http-exchange-response.bend',
              'packages/runtime/src/http-body-source.bend', 'packages/runtime/src/http-abort-classification.bend',
-             'packages/ai/src/api/openai-http-errors.bend', 'packages/ai/src/api/openai-http-responses-reader.bend', SOURCE}
+             'packages/ai/src/api/openai-http-errors.bend', 'packages/ai/src/api/openai-http-responses-reader.bend',
+             'packages/ai/src/api/openai-body-responses-reader.bend', SOURCE}
+if SOURCE == 'tests/openai-scoped-responses-reader.bend':
+    new_files.update({'packages/ai/src/api/openai-body-responses-reader.bend', 'packages/ai/src/api/openai-responses-scoped-reader.bend'})
 for path in visited:
     name = str(path.relative_to(WORK))
     reference = (ROOT / name).read_bytes() if name in new_files else subprocess.check_output(['git', 'show', base + ':' + name], cwd=WORK)
     assert path.read_bytes() == reference, name
 record = {
+    'deadline_scope_audited': scoped,
     'scope': 'Real cleartext socket through response ownership, callback byte source, OpenAI SSE/JSON policy and typed Responses wire reader. Native live-channel/parked-IO/socket (fd 0..4095) audit; Bun explicit-channel/live-IO/waiting-IO audit and peer EOF. Finite cases, not universal resource proof.',
     'validated_checkout': {'base_commit': base, 'new_files': sorted(new_files), 'pending_form_drafts_included': False},
     'runs': runs,
@@ -141,4 +178,4 @@ record = {
     'compiler_sha256': {name: hashlib.sha256((BEND.parent / name).read_bytes()).hexdigest() for name in ['main.ts', 'bend.ts', 'comp.ts', 'base.bend']},
     'builds': {backend: json.loads(Path(f'{prefix}-{backend}-build.json').read_text()) for backend in ['c', 'js']},
 }
-(ROOT / 'build/openai-http-reader-results.json').write_text(json.dumps(record, indent=2) + '\n')
+Path(str(prefix) + '-results.json').write_text(json.dumps(record, indent=2) + '\n')

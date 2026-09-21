@@ -1,0 +1,681 @@
+{
+  "deadline_scope_audited": false,
+  "scope": "Real cleartext socket through response ownership, callback byte source, OpenAI SSE/JSON policy and typed Responses wire reader. Native live-channel/parked-IO/socket (fd 0..4095) audit; Bun explicit-channel/live-IO/waiting-IO audit and peer EOF. Finite cases, not universal resource proof.",
+  "validated_checkout": {
+    "base_commit": "bf3d9bd246ebad7baa0e62fe68f22d1dfdf541fd",
+    "new_files": [
+      "packages/ai/src/api/openai-body-responses-reader.bend",
+      "packages/ai/src/api/openai-http-errors.bend",
+      "packages/ai/src/api/openai-http-responses-reader.bend",
+      "packages/runtime/src/http-abort-classification.bend",
+      "packages/runtime/src/http-body-source.bend",
+      "packages/runtime/src/http-exchange-response.bend",
+      "packages/runtime/src/http-response-metadata.bend",
+      "packages/runtime/src/http-response-progress.bend",
+      "packages/runtime/src/http-response.bend",
+      "tests/openai-http-responses-reader.bend"
+    ],
+    "pending_form_drafts_included": false
+  },
+  "runs": [
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "fixed",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "chunked",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "eof",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "early",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "unread",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "cancel",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "done-truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "invalid-json",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "invalid-wire",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "api-error",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "case": "empty",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "fixed",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "chunked",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "eof",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "early",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "unread",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "cancel",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "done-truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "invalid-json",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "invalid-wire",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "api-error",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "case": "empty",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "fixed",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "chunked",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "eof",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "early",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "unread",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "cancel",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "done-truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "invalid-json",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "invalid-wire",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "api-error",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "case": "empty",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "fixed",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "chunked",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "eof",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "early",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "unread",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "cancel",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "done-truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "invalid-json",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "invalid-wire",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "api-error",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "case": "empty",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "fixed",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "chunked",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "eof",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "early",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "unread",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "cancel",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "done-truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "invalid-json",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "invalid-wire",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "api-error",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "case": "empty",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "fixed",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "chunked",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "eof",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "early",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "unread",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "cancel",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "done-truncated",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "invalid-json",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "invalid-wire",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "api-error",
+      "peer_closed": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "case": "empty",
+      "peer_closed": true,
+      "passed": true
+    }
+  ],
+  "source_sha256": {
+    "packages/ai/src/api/constrained-sampling.bend": "a9fafa7a0cca26e66e4b891a97428be9fb57ba7d577bb5f562a4829d677aab26",
+    "packages/ai/src/api/openai-body-responses-reader.bend": "eb80152b0c3cd1d8b3976ee979b2763b2fcb26bac6b245c7c88d53fedde8df3a",
+    "packages/ai/src/api/openai-http-errors.bend": "15ff2365632d694bb0033d3e2885a3401d812f5ec44011200ad297dcc59783c9",
+    "packages/ai/src/api/openai-http-responses-reader.bend": "d397eb4eef65a2a270059e0f8421216f99a752e9f615ff14d863fd186278adba",
+    "packages/ai/src/api/openai-responses-reader.bend": "607402d9c4a217a7db82d9afe2f3bebe7e129c52cf540f6d5bde2aea48342607",
+    "packages/ai/src/api/openai-responses-stream-content.bend": "c951d75deeb42febc26d2758d8ceb4246e070626526fc56be4f1b6a340644817",
+    "packages/ai/src/api/openai-responses-stream-pricing.bend": "02554486bcb7a51a9acc2b73731df16081e73c747188335a94c27ec976de8ff9",
+    "packages/ai/src/api/openai-responses-stream-state.bend": "739ff83776ae04d1b95fc449b4e6e634df77eacefb77396342c0d26e45082a11",
+    "packages/ai/src/api/openai-responses-stream.bend": "ee56d34a44b3b4aee8e25458e83b4e8c2485655877a743be88113e5b37dcfef8",
+    "packages/ai/src/api/openai-responses-terminal.bend": "97c5be14f4862bfc8f003a22b45c059eaf1fea02aa1b83ee118a4934bb86005a",
+    "packages/ai/src/api/openai-responses-wire-items.bend": "f0f919688b13f5f81434eb9c7c571bd9fa9ec64a56288b8ba044dfcbf4b68eac",
+    "packages/ai/src/api/openai-responses-wire-terminal.bend": "3c16c0761c759bbc2d3e7a10bf6ba022ce6edc82dd1c5f24da8279ea18b2aeb1",
+    "packages/ai/src/api/openai-responses-wire.bend": "1f8f4407f5d9ff3b94f14b50d5c8ccb32e8de262c337e513f50da83235eb3143",
+    "packages/ai/src/api/openai-sse-json.bend": "8187a7557f6e5907274774eacd4a85cc4f6fc38d300207649bc40f2212eced5e",
+    "packages/ai/src/api/openai-sse-reader.bend": "f2dbd4cf2a8a8d16e0c5d6e56ce1fd271a8f5a9084996afe86eb03523ab22c3a",
+    "packages/ai/src/api/openai-text-signature.bend": "0a489deb12eb7b29aea145e564d0ca3de943bec6be76e529138ca4b44c1cefae",
+    "packages/ai/src/api/strict-json-schema.bend": "781f111646e16b764c5bfb8e0c4488ddb4854a854f9cae0b3f67a2dbdbd24c5d",
+    "packages/ai/src/api/transform-messages.bend": "e06716820c57ea2c2070b4e1c4b10e26dce3e2df4ccdc16232ccb152c9293e69",
+    "packages/ai/src/api/transform-tool-results.bend": "7a8e1d827939f176ab87b6eef0df62092706466fcc0396e5b80dfdf843d24327",
+    "packages/ai/src/types.bend": "bc6deda8d2420b596a6ef01f6b795d9d886abcbde3c8c59262ba4da978a975aa",
+    "packages/ai/src/utils/cost.bend": "45072ce71b65f0f04db8f5c5fdd491d7b8c597c30ca09239d030884b5f2a7fac",
+    "packages/ai/src/utils/diagnostics.bend": "a3aa280272a74b6f1b89454e240a8d20e44f961f6404b408c6bd5e81edb1401c",
+    "packages/ai/src/utils/json-parse.bend": "d709a70a9de85211ce0be67fce64fdf440de63daa7c5de7c556084989eedab2c",
+    "packages/ai/src/utils/json.bend": "97a543c0ba39d84d871078b66d02c9c915165b0e4e957367296f16882fd02123",
+    "packages/ai/src/utils/model-api.bend": "6bb1bb25801b6bef3f059a37cdd1c90fd3e17687fdd283f6f9e12809ed40693b",
+    "packages/ai/src/utils/schema-json.bend": "b62984e33e4293cf315b7abe90f1a5c94d032c58f5113f5a700c242f81e66148",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-socket.bend": "bf97fe0ea84725a5400dace593ab7748df9c1c5982eefec10dff44ab71c7dce5",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/bounded-bytes.bend": "ca3fc3b391a2eabb4de79ef5e6ee71a3b3a216acb82d9140fdc9548f8f4421e9",
+    "packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "packages/runtime/src/date.bend": "d86681a2e71f1b22a277ebf0459ae973d7745759a26f9ca51b7b0402280090ca",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/f64-decimal.bend": "ca92981fee2ac39cadb8f3be014f101ccdaf54a1e212036d82d5b1b25f7f83d9",
+    "packages/runtime/src/f64-ratio.bend": "ac20c44b90946b88148bd6f01fcc2c664fb818aa1e4dbd35b44d556443459f06",
+    "packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "packages/runtime/src/headers.bend": "9978dc8b32df82059c8c09345003077db13ee4127f7c8944a9888f8c8a0d6602",
+    "packages/runtime/src/http-abort-classification.bend": "704ba2f4ba289eb348c8a960e1738e897467b5822ed98d2fe747d2cbc6ed1871",
+    "packages/runtime/src/http-body-buffer.bend": "2eef5a96bf5cf6312a535ead2ce2241ce24bc566ff7e57c8d40557d7e49609ba",
+    "packages/runtime/src/http-body-consume.bend": "147bddd07c305213f0c30c1fd5c991c4b3211f9c0d96c404a4d0b536e4f72482",
+    "packages/runtime/src/http-body-source.bend": "982d5867dc93e90256e16a4ebba1874fac0decf3cb0d3217bf87ba6ab038b1f9",
+    "packages/runtime/src/http-body.bend": "7388c006dedb8d5f10966ebdeceae913ac631de005348f891745ce1bcebcf52f",
+    "packages/runtime/src/http-buffered-body.bend": "eefb0045831b4a8785ba8e7f921eadffa8838f1a501468b56b18cc75bffbc562",
+    "packages/runtime/src/http-buffered-framing.bend": "d7af5d68f07845d478ebdf8fb9676db218a1655a997094190c9c1f592abf08dc",
+    "packages/runtime/src/http-buffered-request.bend": "5bdff0dce96d495682d9cf227ac4a495257816b17158608cf0dc41ee9676c449",
+    "packages/runtime/src/http-chunk-size.bend": "6a9562c2bf1d4acbf621173dbc1f177735c16eb8e63801bc34c2a6f347ed0dbe",
+    "packages/runtime/src/http-chunked-body.bend": "eafa17ba24b7feef64c6194734200a9f65abf1b4214061124954aedf3ba75918",
+    "packages/runtime/src/http-chunked-upload.bend": "5385a078a1096f602dc5211ddaea5d47c19f3a3b9815fdf65c42d828d0497598",
+    "packages/runtime/src/http-content-length.bend": "c5fbb68c029b3f203cc6721ffdf5eb77be38e69c3922dba1f3a8a970b8b37ae3",
+    "packages/runtime/src/http-exchange-response.bend": "ff191397f0ee0aa89233b98369fe846256ec4266f5a880704a615e8d9c34c31e",
+    "packages/runtime/src/http-field.bend": "7a2b9e89f6760294f6e40fe5135e1bde32a9e897ed99a2ac8101a0abdefabcf2",
+    "packages/runtime/src/http-fixed-body.bend": "fed0fed0522429e5beee2da28827e5ac41781a6222733b9381847954f19adaa6",
+    "packages/runtime/src/http-framing-fields.bend": "ea95cd26537356a9aa45ba7734e024c80f85209e68fd5b136aca3c3bf46adea3",
+    "packages/runtime/src/http-head.bend": "e8d8d955c879224dedb8831171f77bc26ddb4581137713f1fa95dd0f52f7e59f",
+    "packages/runtime/src/http-header.bend": "5e9a18dd5c72942bf11013344eafb5d94d7a7156cd50f632e7b307488ab58b3e",
+    "packages/runtime/src/http-line.bend": "f1165cfec3c4b32f3d5d83ddd60f1fed30d4c058a02272bed826d4eef5a34f66",
+    "packages/runtime/src/http-request-head.bend": "017d911d05f8d9ef26cf70697381491eeaccbd1514f3cca1fdee27f1dc609575",
+    "packages/runtime/src/http-request-method.bend": "03821f93b39ffd656279817c22cb3b02961b17c2c521b77ac1dfb0388ee8261e",
+    "packages/runtime/src/http-response-metadata.bend": "fb6e92273c328abb777646913cadc35343e97e4edcd954b42dca7c1734c3df64",
+    "packages/runtime/src/http-response-policy.bend": "ab878b0ac93379f9cd86117adb46c5649ef979cf5febd2af13d09f49a86f09cd",
+    "packages/runtime/src/http-response-progress.bend": "0df44f82f8cbc2d08d1c19975465a74eb989f154a6f7380d867744fb1f250547",
+    "packages/runtime/src/http-response-reader.bend": "39da1f6ed88ea562131f611a12db9c10fbaa210b642ee91867ccb815162c1324",
+    "packages/runtime/src/http-response-stream.bend": "005f900a423cd03555fe954e4f161e8fb31e688f5db502be2574da2f8ec7c53f",
+    "packages/runtime/src/http-response-termination.bend": "ffa0780a05554dbd5b00c1bcd755412a425c8aa54e2a3a80f7f35d48480a09cd",
+    "packages/runtime/src/http-response.bend": "fec2e80358f3a498147862e9472d9b0cf2e28547b679dc80bdd526d339eba92b",
+    "packages/runtime/src/http-socket-exchange.bend": "f56e79179378c9930a1e81e356558a49f388d53e82506b451dd716e31b1a1f4f",
+    "packages/runtime/src/http-socket-source.bend": "b0e15d9a99a2b1237544f90e2c71ffb59fe3dcfc9fa0b2b1fafdcbb5bebfee9a",
+    "packages/runtime/src/http-status.bend": "43170e7135a2b96b1d7bfbd48bfde2357404ece662292c8c30ff86d432022960",
+    "packages/runtime/src/http-transport-callbacks.bend": "07b8bde39e4379c91119a9b5c999382c2266544a178ea3312af96147a90e2929",
+    "packages/runtime/src/http-url.bend": "e24a5384a3fabbc95ee235e55125869125be73731c1fc925b996cf349b9ca087",
+    "packages/runtime/src/json-decode.bend": "2f8b3617406c163bfaff0450f1fc52e513660578411d270cf561142eb07971f3",
+    "packages/runtime/src/json-parse.bend": "4cbb8bbbe782652eab46842cc842388ca25ad448a12936a109b27f7ca694f5c6",
+    "packages/runtime/src/json-string.bend": "93f65f1397f5866062c196d1a7964edbe29612543e702134da86211bfcd8b17c",
+    "packages/runtime/src/line-decoder.bend": "c6a2a29dd95f10fd9f5e850d0c1584dc9b2806fe2818e47f131d167ccf9798c9",
+    "packages/runtime/src/number-string.bend": "35c4aee2b8c5ff65f99cdfd6e3b57051e422b6117826415a5abba2b188ab5705",
+    "packages/runtime/src/partial-json.bend": "3ee4ed2829f0631225e15422a475e30d62fa3bc42d05b3c66f25fd0be83654d1",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/schema-value.bend": "0829df30e23dc6011a1b0a1d29b7fc222241acba258aa692af1b740b6cacc8a9",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/socket-interrupt.bend": "00c9c2a7ec68ffb37ddebe90ecc88f31df2b9bfac21bc046ddea51ff9b33eb6c",
+    "packages/runtime/src/socket-upload.bend": "638c4290639a7b1e0694ab1a64aa92d149ee1df2b23c76ef6b44a861f79af016",
+    "packages/runtime/src/socket-writer.bend": "99c4b697f1e081199c06bee500f2d9f6137f157b92d1afec00bc95b6ea43cb6e",
+    "packages/runtime/src/sse-chunks.bend": "308f75d50380961133124357f38dc2666a87c1b25855a0240305309cf6681d09",
+    "packages/runtime/src/sse-decoder.bend": "edad73cf2db7bed6c67b3f5e724ff4567ba1b2a571f7aaafa496630c1b141c39",
+    "packages/runtime/src/sse-reader.bend": "26aa691647b6664af32aa67b6a16db09016492ed9d44d89fe4fb615438a18000",
+    "packages/runtime/src/sse-stream.bend": "ec083830a8334aad03028a4918da815b9f8afa674f472ed14440da8cbed63f9d",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/text-space.bend": "58db43cb9289c3e0de14bb641a10f9eed1f323f4ab28eb25f999578892c2b8e9",
+    "packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-form.bend": "a2087e2fc18d39429d14d29541fe3e7030bba799acf53fdbc91a996e66be8404",
+    "packages/runtime/src/url-host.bend": "fb94caba20dc366bf4a01613991184063779f3a9e58e407c37f77c300cca7c61",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/url-percent.bend": "b66017f8d5d079ef3ed1d170fe798d22464b22bcc2e2ed5e9ec05e502e0a28e4",
+    "packages/runtime/src/url-record.bend": "482752bbfdaceafd4c5a22800cc71aaa337a17650c40601a7cbb9e56cac053bb",
+    "packages/runtime/src/url-scheme.bend": "988f2be33c24df6db98d499b82f0f4c2fadbb9ac106bce9c962ca3f48a632629",
+    "packages/runtime/src/url-search-params.bend": "e11ea0ad351d2e1a83cd8133e089304f3535f1e46d2cff12f898611d7c3c7ed1",
+    "packages/runtime/src/url-serialize.bend": "92ea7768af456b3df76db45517d7e4bbe983b54d24da253d5173310f98ed4b66",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8-strict.bend": "2e0aafa95b71aa44b3642c1c234656037ea8f8136a91cd589535c2764bada840",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/openai-http-responses-reader.bend": "54830e4935151c290e224ba2f4c55e0494c808cbd83c39859f1ff9c3a25d83ab"
+  },
+  "harness_sha256": {
+    "tests/openai_http_reader_check.py": "61b1bbee67988e659d6fa7247e22de86d709bac9647da01b03c4a0c99d484a64",
+    "tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1"
+  },
+  "program_sha256": {
+    "": "431c1b2a024c52ba95ab53c08aaa36612837f46e0e3acda15ac624d7017f4f9a",
+    ".c": "3a948eb932eb7c4532fb0c208dad30a9cf9f9672f19ddc427ec8a03d0cc3570b",
+    ".js": "b50062e8d9239bd70f6afb145ce45ed6002821de0a285b798b3078ff8f4e906a",
+    "-audit": "fb2db4ca03b18c546dcea858d118b1a259398ab7cf7d71f71ca6dbdbddacb2d6",
+    "-audit.c": "232bef34acd5fc93e12b890f00f78b4991a8c3154fabfb8dd5018cd3c9f23da5",
+    "-audit.js": "207b37fa0894715115130210525ec91d601770d53a3f24387a8afe7ebe1c72b1"
+  },
+  "compiler_command": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/openai-http-responses-reader.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/openai-http-reader-delegated.c"
+      ],
+      "elapsed_seconds": 108.27586442790926,
+      "peak_sampled_group_rss_kib": 15265364,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/openai-http-responses-reader.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/openai-http-reader-delegated.js"
+      ],
+      "elapsed_seconds": 19.75402414985001,
+      "peak_sampled_group_rss_kib": 8361024,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

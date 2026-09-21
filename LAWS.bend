@@ -1,3 +1,5 @@
+import ./laws/openai-body-responses-reader.bend as BodyReader
+import ./laws/openai-responses-process-result.bend as ProcessResult
 import ./laws/provider-retry-options.bend as RetryOptions
 import ./laws/provider-retry-config.bend as RetryConfig
 import ./laws/openai-responses-configured-acquire.bend as ConfiguredAcquire

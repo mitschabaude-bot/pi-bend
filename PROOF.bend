@@ -1,3 +1,5 @@
+import ./proofs/openai-body-responses-reader.bend as BodyReader
+import ./proofs/openai-responses-process-result.bend as ProcessResult
 import ./proofs/provider-retry-options.bend as RetryOptions
 import ./proofs/provider-retry-config.bend as RetryConfig
 import ./proofs/openai-responses-configured-acquire.bend as ConfiguredAcquire

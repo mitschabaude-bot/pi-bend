@@ -47,10 +47,13 @@ def accepted(result):
     # full root now reports nineteen. These are not new unsafe definitions.
     # Configured acquisition instantiates two additional existing unsafe terms;
     # the exact source declaration set remains nineteen and is audited below.
+    # The shared body reader additionally reaches the existing provider SSE loop:
+    # twenty source declarations, twenty-two full-root instances; the isolated
+    # generic reader/result modules report ten existing instances.
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.', 'All terms check, with 21 unsafe annotations.'}
+                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.', 'All terms check, with 21 unsafe annotations.', 'All terms check, with 22 unsafe annotations.', 'All terms check, with 10 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -67,6 +70,7 @@ assert unsafe_declarations == {
     ('packages/ai/src/api/strict-json-schema.bend', 'run'),
     ('packages/ai/src/api/strict-json-schema.bend', 'nullAllowed'),
     ('packages/ai/src/api/openai-responses-stream.bend', 'loop'),
+    ('packages/ai/src/api/openai-sse-reader.bend', 'drive'),
     ('packages/runtime/src/callback.bend', 'factory'),
     ('packages/runtime/src/http-response.bend', 'seek'),
     ('packages/runtime/src/http-body-consume.bend', 'drive'),
@@ -114,6 +118,9 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('body-reader-loses-secondary-disposal-error', 'packages/ai/src/api/openai-body-responses-reader.bend', 'case Fail{first} Fail{second}: Fail{BothFailures{first, second}}', 'case Fail{first} Fail{second}: Fail{ReaderFailure{first}}', 'laws/openai-body-responses-reader.simultaneous_disposal_failures_are_retained_in_order'),
+        ('processed-result-drops-cleanup', 'packages/ai/src/api/openai-responses-process-result.bend', 'cleanup(Transport, E, disposalError, disposal)', 'None{}', 'laws/openai-responses-process-result.simultaneous_failures_retain_message_and_both_causes'),
+        ('processed-result-drops-primary', 'packages/ai/src/api/openai-responses-process-result.bend', 'failure(E, processingError, error)', 'None{}', 'laws/openai-responses-process-result.simultaneous_failures_retain_message_and_both_causes'),
         ('retry-options-drops-limit', 'packages/ai/src/utils/provider-retry-options.bend', 'Done{Retry.ProviderRetryOptions{retries, limit, signal}}', 'Done{Retry.ProviderRetryOptions{retries, None{}, signal}}', 'laws/provider-retry-options.accepted_options_preserve_all_fields'),
         ('retry-options-allows-invalid-limit', 'packages/ai/src/utils/provider-retry-options.bend', 'case False{}: Fail{InvalidDelayLimit{value}}', 'case False{}: Done{Some{value}}', 'laws/provider-retry-options.invalid_delay_retains_original_value'),
         ('retry-config-drops-signal', 'packages/ai/src/utils/provider-retry-config.bend', 'Options.resolve(Reason, retries, limit, signal)', 'Options.resolve(Reason, retries, limit, None{})', 'laws/provider-retry-config.request_uses_only_retry_settings'),
