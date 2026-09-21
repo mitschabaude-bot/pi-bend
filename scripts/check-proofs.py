@@ -50,10 +50,11 @@ def accepted(result):
     # The shared body reader additionally reaches the existing provider SSE loop:
     # twenty source declarations, twenty-two full-root instances; the isolated
     # generic reader/result modules report ten existing instances.
+    # The isolated service-tier callback module reports five existing instances.
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.', 'All terms check, with 21 unsafe annotations.', 'All terms check, with 22 unsafe annotations.', 'All terms check, with 10 unsafe annotations.'}
+                 'All terms check, with 5 unsafe annotations.', 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.', 'All terms check, with 13 unsafe annotations.', 'All terms check, with 14 unsafe annotations.', 'All terms check, with 19 unsafe annotations.', 'All terms check, with 21 unsafe annotations.', 'All terms check, with 22 unsafe annotations.', 'All terms check, with 10 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -118,6 +119,9 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('tier-pricing-alters-token-count', 'packages/ai/src/api/openai-responses-service-tier.bend', 'T.Usage{input, output, read, write, longWrite, reasoning, total, scaleCosts(factor, costs)}', 'T.Usage{F.fromU32(0), output, read, write, longWrite, reasoning, total, scaleCosts(factor, costs)}', 'laws/openai-responses-service-tier.pricing_preserves_all_token_counters'),
+        ('tier-pricing-changes-unchanged-usage', 'packages/ai/src/api/openai-responses-service-tier.bend', 'case Unchanged{} original: original', 'case Unchanged{} T.Usage{input, output, read, write, longWrite, reasoning, total, costs}: T.Usage{input, output, read, write, longWrite, reasoning, F.fromU32(0), costs}', 'laws/openai-responses-service-tier.unchanged_tier_preserves_entire_usage'),
+        ('tier-pricing-omits-cache-write-cost', 'packages/ai/src/api/openai-responses-service-tier.bend', 'F.add(F.add(F.add(input, output), read), write)', 'F.add(F.add(input, output), read)', 'laws/openai-responses-service-tier.scaled_cost_total_uses_component_order'),
         ('body-reader-loses-secondary-disposal-error', 'packages/ai/src/api/openai-body-responses-reader.bend', 'case Fail{first} Fail{second}: Fail{BothFailures{first, second}}', 'case Fail{first} Fail{second}: Fail{ReaderFailure{first}}', 'laws/openai-body-responses-reader.simultaneous_disposal_failures_are_retained_in_order'),
         ('processed-result-drops-cleanup', 'packages/ai/src/api/openai-responses-process-result.bend', 'cleanup(Transport, E, disposalError, disposal)', 'None{}', 'laws/openai-responses-process-result.simultaneous_failures_retain_message_and_both_causes'),
         ('processed-result-drops-primary', 'packages/ai/src/api/openai-responses-process-result.bend', 'failure(E, processingError, error)', 'None{}', 'laws/openai-responses-process-result.simultaneous_failures_retain_message_and_both_causes'),

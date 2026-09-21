@@ -1,0 +1,110 @@
+{
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "scope": "Actual pinned service-tier policy, exact binary64 component and left-associated total results. NaNs compared by classification; signed zeros, subnormals, overflow, cancellation and stale unchanged totals included. Generic counter-preservation laws are separate. Every vector uses the reusable pricing callback factory and disposes it. Audited native channels/parked IO and Bun channels/live/waiting IO end at zero.",
+  "reference_commit": "46c9de402bddf46b03c3b9f46487b777aaa41861",
+  "runs": [
+    {
+      "backend": "native-1",
+      "audited": false,
+      "cases": 520,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "cases": 520,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "cases": 520,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "cases": 520,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "cases": 520,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "cases": 520,
+      "passed": true
+    }
+  ],
+  "sources": {
+    "/home/agent/code/pi-bend/packages/ai/src/api/constrained-sampling.bend": "a9fafa7a0cca26e66e4b891a97428be9fb57ba7d577bb5f562a4829d677aab26",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-responses-service-tier.bend": "1da929d5f6900db2987b0f08cd7d568c10f36e090b5c0edc9b69eeacda8e8624",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-responses-stream-content.bend": "c951d75deeb42febc26d2758d8ceb4246e070626526fc56be4f1b6a340644817",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-responses-stream-defaults.bend": "345303971b038fb0ada038231deb5876c4ce7bb2e1a2cb67d20d223ad4287b99",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-responses-stream-pricing.bend": "02554486bcb7a51a9acc2b73731df16081e73c747188335a94c27ec976de8ff9",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-responses-stream-state.bend": "739ff83776ae04d1b95fc449b4e6e634df77eacefb77396342c0d26e45082a11",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-responses-terminal.bend": "97c5be14f4862bfc8f003a22b45c059eaf1fea02aa1b83ee118a4934bb86005a",
+    "/home/agent/code/pi-bend/packages/ai/src/api/openai-text-signature.bend": "0a489deb12eb7b29aea145e564d0ca3de943bec6be76e529138ca4b44c1cefae",
+    "/home/agent/code/pi-bend/packages/ai/src/api/strict-json-schema.bend": "781f111646e16b764c5bfb8e0c4488ddb4854a854f9cae0b3f67a2dbdbd24c5d",
+    "/home/agent/code/pi-bend/packages/ai/src/api/transform-messages.bend": "e06716820c57ea2c2070b4e1c4b10e26dce3e2df4ccdc16232ccb152c9293e69",
+    "/home/agent/code/pi-bend/packages/ai/src/api/transform-tool-results.bend": "7a8e1d827939f176ab87b6eef0df62092706466fcc0396e5b80dfdf843d24327",
+    "/home/agent/code/pi-bend/packages/ai/src/types.bend": "bc6deda8d2420b596a6ef01f6b795d9d886abcbde3c8c59262ba4da978a975aa",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/cost.bend": "45072ce71b65f0f04db8f5c5fdd491d7b8c597c30ca09239d030884b5f2a7fac",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/diagnostics.bend": "a3aa280272a74b6f1b89454e240a8d20e44f961f6404b408c6bd5e81edb1401c",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/json-parse.bend": "d709a70a9de85211ce0be67fce64fdf440de63daa7c5de7c556084989eedab2c",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/json.bend": "97a543c0ba39d84d871078b66d02c9c915165b0e4e957367296f16882fd02123",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/model-api.bend": "6bb1bb25801b6bef3f059a37cdd1c90fd3e17687fdd283f6f9e12809ed40693b",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry-options.bend": "72da19b86660eb2c71636ab62b839ea85e236ad8b7db050bb24e6e0c9c33348a",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry-policy.bend": "147cb7293c4c1aeeaa8cd3a52f9ec26bd9fa875e6278d9aa7b3653ce6166c898",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/provider-retry.bend": "74d0777516ac1cb202585bdf03021dec048c25ed9888b590bb216c8d5f3e49e6",
+    "/home/agent/code/pi-bend/packages/ai/src/utils/schema-json.bend": "b62984e33e4293cf315b7abe90f1a5c94d032c58f5113f5a700c242f81e66148",
+    "/home/agent/code/pi-bend/packages/ai/test/openai-responses-stream-defaults.bend": "9ec1a70b03c33ab103c8d9402e5eb26482c8327ed370d7f9a5ca6805bc49bf1d",
+    "/home/agent/code/pi-bend/packages/ai/test/provider-retry-options.bend": "405d03f0b057c9c33384dde5a0a46d1803280e5a12b9c77410d16737071dc906",
+    "/home/agent/code/pi-bend/packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "/home/agent/code/pi-bend/packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "/home/agent/code/pi-bend/packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "/home/agent/code/pi-bend/packages/runtime/src/date.bend": "d86681a2e71f1b22a277ebf0459ae973d7745759a26f9ca51b7b0402280090ca",
+    "/home/agent/code/pi-bend/packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64-decimal.bend": "ca92981fee2ac39cadb8f3be014f101ccdaf54a1e212036d82d5b1b25f7f83d9",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64-natural.bend": "2be11f14bccbca7c0d56c1ce0c0b57d049914ffce56947c7e7a99e3fbe8bc829",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64-ratio.bend": "ac20c44b90946b88148bd6f01fcc2c664fb818aa1e4dbd35b44d556443459f06",
+    "/home/agent/code/pi-bend/packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "/home/agent/code/pi-bend/packages/runtime/src/json-parse.bend": "4cbb8bbbe782652eab46842cc842388ca25ad448a12936a109b27f7ca694f5c6",
+    "/home/agent/code/pi-bend/packages/runtime/src/json-string.bend": "93f65f1397f5866062c196d1a7964edbe29612543e702134da86211bfcd8b17c",
+    "/home/agent/code/pi-bend/packages/runtime/src/number-string.bend": "35c4aee2b8c5ff65f99cdfd6e3b57051e422b6117826415a5abba2b188ab5705",
+    "/home/agent/code/pi-bend/packages/runtime/src/parse-float.bend": "99364e06ff85ec69154df8570dace2af522caa80ef9f7165303c626c200255ba",
+    "/home/agent/code/pi-bend/packages/runtime/src/partial-json.bend": "3ee4ed2829f0631225e15422a475e30d62fa3bc42d05b3c66f25fd0be83654d1",
+    "/home/agent/code/pi-bend/packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "/home/agent/code/pi-bend/packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "/home/agent/code/pi-bend/packages/runtime/src/schema-value.bend": "0829df30e23dc6011a1b0a1d29b7fc222241acba258aa692af1b740b6cacc8a9",
+    "/home/agent/code/pi-bend/packages/runtime/src/text-space.bend": "58db43cb9289c3e0de14bb641a10f9eed1f323f4ab28eb25f999578892c2b8e9",
+    "/home/agent/code/pi-bend/packages/runtime/src/timer-delay.bend": "7f0892b67b7fb1fb3254ee00d455980817dce58515abc87cd9d216b15a617ea9",
+    "/home/agent/code/pi-bend/packages/runtime/src/timer-milliseconds.bend": "2dc34a22f25ffc8e917fcd359e947225b09aa02105e823ea86c0fc8d218a6bca",
+    "/home/agent/code/pi-bend/packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "/home/agent/code/pi-bend/packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "/home/agent/code/pi-bend/packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "/home/agent/code/pi-bend/packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "/home/agent/code/pi-bend/packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "/home/agent/code/pi-bend/tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1",
+    "/home/agent/code/pi-bend/tests/openai_service_tier_check.py": "ca49f87324053df2719d26a31510299c7c1c6be465da80caae1a64e54a5daf95",
+    "/home/agent/code/pi-bend/tests/openai_service_tier_reference.mts": "c1e6280bfb9edc0f0181ed64f4ac008ae13e30fc2c9ff15f30f30ec9c717c32c",
+    "/home/agent/code/pi-mono/packages/ai/src/api/openai-responses.ts": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479"
+  },
+  "programs": {
+    "/home/agent/code/pi-bend/build/openai-stream-defaults": "6e0e619dd843a2a76ea5ccb4ee9c63278cf922cc956678c365a3523fafcfd0c1",
+    "/home/agent/code/pi-bend/build/openai-stream-defaults.c": "dd5e09ff9ad169e921c6784d4fc37b8d4a254738cba28c28dd67f87301cb61e9",
+    "/home/agent/code/pi-bend/build/openai-stream-defaults.js": "facb3d27f194293c9dd8654e83e1ab16db46ac4f31dcab9c2d33f51c9653ed52",
+    "/home/agent/code/pi-bend/build/openai-stream-defaults-audit": "5ee12adfc85929ccd2cf912bcc058660405ede5531a6003bb511dd076cb94158",
+    "/home/agent/code/pi-bend/build/openai-stream-defaults-audit.c": "d43a2d121c55536e35b24d75fa127c059695ed25af84d153438081fa33d80558",
+    "/home/agent/code/pi-bend/build/openai-stream-defaults-audit.js": "21e7371baea4b835dfb5918c7065d2745046b2815e4018c3b21d57199e61b5a7"
+  }
+}

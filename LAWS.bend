@@ -74,3 +74,4 @@ import ./laws/record.bend as Record
 import ./laws/string-set.bend as StringSet
 import ./laws/agent-queues.bend as AgentQueues
 import ./laws/pending-queue.bend as Pending
+import ./laws/openai-responses-service-tier.bend as OpenAIResponsesServiceTier

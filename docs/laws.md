@@ -221,3 +221,7 @@ The [full gate](proof-validation/2026-09-21-session-cleanup.json) checks 430 pub
 ### Native Responses session composition (2026-09-21)
 
 Eight generic laws preserve supplied cancellation ownership, borrowed/local signal identity, affine response transfer, typed acquisition failures and canonical options during signal binding. The [full gate](proof-validation/2026-09-21-native-session.json) checks 438 public laws and 67 supporting lemmas and rejects 235 typed mutations, including caller-signal disposal, dropped cancellation and dropped response hooks. The existing unsafe declaration set is unchanged. [Runtime evidence](openai-native-session.md) separately exercises the composed transport and asynchronous lifecycle.
+
+### Default service-tier pricing (2026-09-21)
+
+Five generic laws cover unchanged usage, all token counters, absent tiers, model-independent flex policy and scaled cost calculation. The [full gate](proof-validation/2026-09-21-service-tier.json) checks 443 public laws and 67 supporting lemmas and rejects 238 typed mutations; three new mutations alter token counts, change unchanged usage or omit cache-write cost. [The pricing design](openai-responses-service-tier.md) distinguishes these guarantees from numeric/runtime evidence and the two separately checked owner laws, which are not yet registered in the root. The unsafe declaration set is unchanged.
