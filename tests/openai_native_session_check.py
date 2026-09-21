@@ -8,6 +8,7 @@ parser.add_argument('--prefix',type=Path,default=ROOT/'build/openai-native-sessi
 parser.add_argument('--backends',nargs='+',choices=['native-1','native-4','bun'],default=['native-1','native-4','bun'])
 parser.add_argument('--source',type=Path,default=Path('tests/openai-native-session.bend'))
 parser.add_argument('--default-pricing',action='store_true')
+parser.add_argument('--provider-core',action='store_true')
 parser.add_argument('--audit',action='store_true')
 parser.add_argument('--prepare-audit',action='store_true')
 args=parser.parse_args();prefix=args.prefix.resolve()
@@ -36,7 +37,19 @@ if args.default_pricing:
             terminal=json.loads(json.dumps(completed))
             if response_tier is not None:terminal['response']['service_tier']=response_tier
             cases.append(dict(mode=mode,events=normal[:-1]+[terminal],statuses=[200],supplied=supplied,slow=False,serviceTier=tier,modelId=model_id))
+prepared_cases=[]
+if args.provider_core:
+    for supplied in [False,True]:
+        cases.append(dict(mode=30,events=[],statuses=[],supplied=supplied,slow=False))
+    preparation_inputs=[]
+    for c in cases:
+        preparation_inputs.append(dict(model=dict(id=c.get('modelId','test'),name='Test',api='openai-responses',provider='openai',baseUrl='http://127.0.0.1/v1',reasoning=False,input=['text'],cost=dict(input=1000000,output=2000000,cacheRead=3000000,cacheWrite=4000000),contextWindow=128000,maxTokens=4096),messages=[dict(role='system',content='initial',timestamp=1),dict(role='user',content='hello',timestamp=1)],options=dict(apiKey='' if c['mode']==30 else 'fixture-key',env={},**({'serviceTier':c['serviceTier']} if 'serviceTier' in c else {}))))
+    prepared_cases=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/responses_prepare_reference.mts'],cwd=ROOT,input=json.dumps(preparation_inputs),text=True))
 oracle=[dict(c, mode=2 if c['mode']==22 else c['mode'], defaultPricing=args.default_pricing, sdkStatusError=True, abortCallerOnIteratorClose=False, preaborted=c['mode']==23 and c['supplied']) for c in cases]
+if args.provider_core:
+    for c,prepared in zip(oracle,prepared_cases,strict=True):
+        c.update(structuredPayload=True,params=prepared.get('payload'))
+        if 'error' in prepared:c['preparationError']=prepared['error']
 reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
 assert reference_commit.startswith('46c9de402')
 reference=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/openai_provider_driver_reference.mts'],cwd=ROOT,input=json.dumps(oracle),text=True))
@@ -44,7 +57,7 @@ frame=lambda event:('data: '+json.dumps(event,ensure_ascii=False,separators=(','
 runs=[]
 for backend,command in [('native-1',[str(program),'--threads','1']),('native-4',[str(program),'--threads','4']),('bun',[str(Path.home()/'.bun/bin/bun'),str(program)+'.js'])]:
     if backend not in args.backends:continue
-    for case,original in zip(cases,reference['results'],strict=True):
+    for case_index,(case,original) in enumerate(zip(cases,reference['results'],strict=True)):
         assert original['unhandled'] is None
         trace=[line for line in original['trace'] if not line.startswith('emit:') and line!='close']
         wanted=trace+[f"run:{original['error'] or 'ok'}:cleanup:none:delivery:none"]+original['retained']+[original['final']]+['caller:'+('aborted' if case['mode']==23 else 'live')]
@@ -71,7 +84,9 @@ for backend,command in [('native-1',[str(program),'--threads','1']),('native-4',
                             size=int(headers[b'content-length'])
                             while len(body)<size:
                                 chunk=peer.recv(4096);assert chunk;body+=chunk
-                            assert body==b'7' and headers[b'authorization'].strip()==b'bearer fixture-key',(head,body)
+                            assert headers[b'authorization'].strip()==b'bearer fixture-key',(head,body)
+                            if args.provider_core:assert json.loads(body)==prepared_cases[case_index]['payload'],(body,prepared_cases[case_index])
+                            else:assert body==b'7',body
                             index=len(requests);requests.append(body.decode());assert index<len(case['statuses']),'extra request'
                             status=case['statuses'][index]
                             if status==200:
@@ -92,6 +107,14 @@ for backend,command in [('native-1',[str(program),'--threads','1']),('native-4',
         assert result.returncode==0,(backend,case,result)
         assert sorted(result.stderr.splitlines())==(['AUDIT 0 0 0','TIMERS 0 0'] if args.audit else []),(backend,case,result.stderr)
         actual=result.stdout.splitlines()
+        if args.provider_core:
+            def canonical(line):
+                if line.startswith('payload:') and line.endswith(':model'):
+                    return 'payload:'+json.dumps(json.loads(line[8:-6]),sort_keys=True,separators=(',',':'))+':model'
+                if line.startswith('request:'):
+                    return 'request:'+json.dumps(json.loads(line[8:]),sort_keys=True,separators=(',',':'))
+                return line
+            actual=list(map(canonical,actual));wanted=list(map(canonical,wanted))
         if actual!=wanted:
             Path(str(prefix)+'-mismatch.json').write_text(json.dumps(dict(backend=backend,case=case,actual=actual,wanted=wanted),indent=2)+'\n')
         assert actual==wanted,(backend,case['mode'],case['supplied'],actual,wanted)
@@ -102,6 +125,7 @@ while pending:
     path=pending.pop().resolve()
     if path in seen:continue
     seen.add(path);pending.extend(path.parent/name for name in re.findall(r'^import (\.[^\s]+)',path.read_text(),re.M))
+if args.provider_core:seen.add(ROOT/'tests/responses_prepare_reference.mts')
 seen.update([ROOT/'tests/scoped_session_audit.py',ROOT/'tests/channel_audit.py',Path(__file__).resolve(),ROOT/'tests/openai_provider_driver_reference.mts',ROOT/'tests/responses_stream_reference.mts'])
 upstream=ROOT.parent/'pi-mono/packages/ai/src'
 seen.update(upstream/n for n in ['api/openai-responses.ts','api/openai-responses-shared.ts','api/constrained-sampling.ts','models.ts','utils/json-parse.ts','utils/headers.ts','utils/error-body.ts','utils/provider-retry.ts'])
@@ -110,5 +134,5 @@ for dependency in ['openai','partial-json']:
     seen.add(deps/dependency/'package.json')
     seen.update((deps/dependency).rglob('*.js'))
 programs=[Path(str(program)+suffix) for suffix in ['', '.c', '.js'] if Path(str(program)+suffix).exists()]
-record=dict(default_pricing=args.default_pricing,fixture=str(args.source),program_sha256={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in programs},scope='Composed cleartext native session: actual envelope/hooks/retry/request/body/session. Supplied and owned parents, retained snapshots, final result, peer closure. Native channel/parked-IO/socket (fd 0..4095), Bun channel/live-IO/waiting-IO and both timer/waiter audits when enabled. Finite cases, not a universal resource proof.',reference_commit=reference_commit,sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(seen)},runs=runs)
+record=dict(provider_core=args.provider_core,preparation_reference=prepared_cases,default_pricing=args.default_pricing,fixture=str(args.source),program_sha256={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in programs},scope='Composed cleartext native session: actual envelope/hooks/retry/request/body/session. Supplied and owned parents, retained snapshots, final result, peer closure. Native channel/parked-IO/socket (fd 0..4095), Bun channel/live-IO/waiting-IO and both timer/waiter audits when enabled. Finite cases, not a universal resource proof.',reference_commit=reference_commit,sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(seen)},runs=runs)
 Path(str(program)+'-'+','.join(args.backends)+'-results.json').write_text(json.dumps(record,indent=2)+'\n')

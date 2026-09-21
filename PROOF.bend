@@ -79,3 +79,11 @@ import ./proofs/openai-responses-service-tier.bend as OpenAIResponsesServiceTier
 import ./proofs/openai-responses-stream-defaults.bend as OpenAIResponsesStreamDefaults
 import ./proofs/openai-responses-default-session.bend as OpenAIResponsesDefaultSession
 import ./proofs/provider-hook-map.bend as ProviderHookMap
+import ./proofs/provider-hook-options.bend as ProviderHookOptions
+import ./proofs/openai-responses-prepared-acquire.bend as OpenAIResponsesPreparedAcquire
+import ./proofs/openai-responses-preparation-error.bend as OpenAIResponsesPreparationError
+import ./proofs/provider-request-error.bend as ProviderRequestError
+import ./proofs/openai-responses-cleartext-runtime.bend as OpenAIResponsesCleartextRuntime
+import ./proofs/calendar-inverse.bend as CalendarInverse
+import ./proofs/http-date-year.bend as HTTPDateYear
+import ./proofs/http-date.bend as HTTPDate

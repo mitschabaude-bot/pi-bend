@@ -1,4 +1,5 @@
 import Base
+import ./openai-responses-prepare.bend as Preparation
 import ./openai-responses-cleartext-attempt.bend as Attempt
 import ./openai-responses-envelope.bend as Envelope
 import ./openai-responses-configured-acquire.bend as Acquire
@@ -12,6 +13,7 @@ import ../../../runtime/src/http-response-progress.bend as Progress
 # transport, request policy and processing stages retain their typed causes.
 # Rendering belongs to the provider boundary and never controls retry policy.
 type Error<-Reason: Data, -SourceError: Data, -HookError: Data> is Data:
+  PreparationFailure{cause: Preparation.Error}
   HookFailure{cause: HookError}
   EnvelopeFailure{cause: Envelope.Error}
   AttemptFailure{cause: Attempt.Error(Reason, SourceError)}
@@ -27,3 +29,5 @@ def reader(-Reason: Data, -SourceError: Data, -HookError: Data, cause: Reader.Er
 def processing(-Reason: Data, -SourceError: Data, -HookError: Data, cause: Stream.Error<Error<Reason, SourceError, HookError>>) -> Error<Reason, SourceError, HookError>: ProcessingFailure{cause}
 def disposal(-Reason: Data, -SourceError: Data, -HookError: Data, cause: Body.CloseError<Scoped.TransportError(Reason)>) -> Error<Reason, SourceError, HookError>: DisposalFailure{cause}
 def release(-Reason: Data, -SourceError: Data, -HookError: Data, cause: Progress.Error<Attempt.ReadError(Reason)>) -> Error<Reason, SourceError, HookError>: ReleaseFailure{cause}
+
+def preparation(-Reason: Data, -SourceError: Data, -HookError: Data, cause: Preparation.Error) -> Error<Reason, SourceError, HookError>: PreparationFailure{cause}

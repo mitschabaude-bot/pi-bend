@@ -78,3 +78,11 @@ import ./laws/openai-responses-service-tier.bend as OpenAIResponsesServiceTier
 import ./laws/openai-responses-stream-defaults.bend as OpenAIResponsesStreamDefaults
 import ./laws/openai-responses-default-session.bend as OpenAIResponsesDefaultSession
 import ./laws/provider-hook-map.bend as ProviderHookMap
+import ./laws/provider-hook-options.bend as ProviderHookOptions
+import ./laws/openai-responses-prepared-acquire.bend as OpenAIResponsesPreparedAcquire
+import ./laws/openai-responses-preparation-error.bend as OpenAIResponsesPreparationError
+import ./laws/provider-request-error.bend as ProviderRequestError
+import ./laws/openai-responses-cleartext-runtime.bend as OpenAIResponsesCleartextRuntime
+import ./laws/calendar-inverse.bend as CalendarInverse
+import ./laws/http-date-year.bend as HTTPDateYear
+import ./laws/http-date.bend as HTTPDate
