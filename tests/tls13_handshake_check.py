@@ -15,7 +15,7 @@ import tempfile
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, x25519
+from cryptography.hazmat.primitives.asymmetric import ec, rsa, x25519, padding
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -155,13 +155,16 @@ def accepted(context, seen, wire, session, host):
     assert selected[43] == b'\x03\x04'
     assert selected[51][:4] == b'\x00\x1d\x00\x20' and len(selected[51]) == 36
     assert server.selected_alpn_protocol() == 'http/1.1'
+    protected = []
     while records.offset < len(records.data):
         header = records.take(3)
         body = records.vector(2)
         if header[0] == 23:
-            return server_hello, header + len(body).to_bytes(2, 'big') + body, selected[51][4:]
-        assert header[0] == 20 and body == b'\x01'
-    raise AssertionError('server sent no protected handshake record')
+            protected.append(header + len(body).to_bytes(2, 'big') + body)
+        else:
+            assert header[0] == 20 and body == b'\x01'
+    assert protected, 'server sent no protected handshake record'
+    return server_hello, protected[0], selected[51][4:], protected
 
 
 def expand(secret, label, context, size):
@@ -171,7 +174,7 @@ def expand(secret, label, context, size):
 
 
 def verify_keys(line, seed, client_hello, flight):
-    server_hello, encrypted, point = flight
+    server_hello, encrypted, point, protected = flight
     shared = x25519.X25519PrivateKey.from_private_bytes(seed[32:64]).exchange(x25519.X25519PublicKey.from_public_bytes(point))
     early = hmac.digest(bytes(32), bytes(32), 'sha256')
     secret = hmac.digest(expand(early, b'derived', hashlib.sha256(b'').digest(), 32), shared, 'sha256')
@@ -184,7 +187,13 @@ def verify_keys(line, seed, client_hello, flight):
     assert received == str(inner[-1]) + ':' + encode(inner[:-1])
     sent = octets(sent)
     assert AESGCM(expand(client, b'key', b'', 16)).decrypt(expand(client, b'iv', b'', 12), sent[5:], sent[:5]) == b'\x14\x00\x00\x00\x16'
-    return inner[:-1]
+    plaintext = []
+    for sequence, record in enumerate(protected):
+        nonce = (int.from_bytes(expand(server, b'iv', b'', 12), 'big') ^ sequence).to_bytes(12, 'big')
+        clear = AESGCM(expand(server, b'key', b'', 16)).decrypt(nonce, record[5:], record[:5]).rstrip(b'\x00')
+        assert clear[-1] == 22
+        plaintext.append(clear[:-1])
+    return b''.join(plaintext)
 
 
 def malformed(hello):
@@ -340,6 +349,84 @@ def check_extensions(command):
     return len(cases)
 
 
+def handshake_message(kind, body):
+    return bytes([kind]) + len(body).to_bytes(3, 'big') + body
+
+
+def check_certificates(command):
+    def certificate(entries, context=b''):
+        chain = b''.join(len(value).to_bytes(3, 'big') + value + b'\x00\x00' for value in entries)
+        return handshake_message(11, bytes([len(context)]) + context + len(chain).to_bytes(3, 'big') + chain)
+
+    cases = []
+    for chain in [[b'a'], [b'a', b'bc'], [bytes(20000)], [bytes([i]) for i in range(100)]]:
+        cases.append(('cert:' + encode(certificate(chain)), 'certificates' + ''.join('|' + encode(c) for c in chain)))
+    for bad in [certificate([]), certificate([b'']), certificate([b'a'], b'x'), certificate([b'a']) + b'\x00']:
+        cases.append(('cert:' + encode(bad), 'handshake'))
+    good = certificate([b'abc', b'def'])
+    for cut in range(len(good)):
+        cases.append(('cert:' + encode(good[:cut]), 'handshake'))
+    for index in [0, 3, 4, 7, 10, 14, 15]:
+        bad = bytearray(good)
+        bad[index] ^= 1
+        cases.append(('cert:' + encode(bad), 'handshake'))
+    for index in [0, 7, 11, len(good)-1]:
+        bad = list(good)
+        bad[index] = 256
+        cases.append(('cert:' + encode(bad), 'handshake'))
+    for algorithm in [1027, 2052]:
+        for length in [1, 64, 72, 256]:
+            signature = rng.randbytes(length)
+            transcript = rng.randbytes(111)
+            wire = handshake_message(15, algorithm.to_bytes(2, 'big') + length.to_bytes(2, 'big') + signature)
+            signed = bytes([32]) * 64 + b'TLS 1.3, server CertificateVerify\x00' + hashlib.sha256(transcript).digest()
+            cases.append(('cv:' + encode(transcript) + ':' + encode(wire), str(algorithm) + '|' + encode(signature) + '|' + encode(signed)))
+    for body, expected in [(b'\x04\x01\x00\x01x', 'parameters'), (b'\x08\x09\x00\x01x', 'parameters'),
+                           (b'\x04\x03\x00\x00', 'handshake'), (b'\x04\x03\x00\x02x', 'handshake'),
+                           (b'\x08\x04\x00\x01xy', 'handshake')]:
+        cases.append(('cv::' + encode(handshake_message(15, body)), expected))
+    run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT, capture_output=True, text=True, timeout=90)
+    assert run.returncode == 0, run.stderr[-2000:]
+    lines = run.stdout.splitlines()
+    assert len(lines) == len(cases)
+    for actual, (arg, expected) in zip(lines, cases):
+        assert actual == expected, (arg, actual, expected)
+    return len(cases)
+
+
+def verify_server_evidence(command, prefix, content):
+    messages, cursor = [], Cursor(content)
+    while cursor.offset < len(cursor.data):
+        kind = cursor.take(1)[0]
+        messages.append(handshake_message(kind, cursor.vector(3)))
+    assert [m[0] for m in messages] == [8, 11, 15, 20]
+    ee, certificate, cv, _ = messages
+    body = Cursor(certificate[4:])
+    assert body.vector(1) == b''
+    chain = Cursor(body.vector(3))
+    body.end()
+    certificates = []
+    while chain.offset < len(chain.data):
+        certificates.append(chain.vector(3))
+        assert chain.vector(2) == b''
+    transcript = prefix + ee + certificate
+    run = subprocess.run(command + ['cert:' + encode(certificate), 'cv:' + encode(transcript) + ':' + encode(cv)],
+                         cwd=ROOT, capture_output=True, text=True, timeout=90)
+    assert run.returncode == 0, run.stderr[-2000:]
+    extracted, signature_result = run.stdout.splitlines()
+    assert extracted == 'certificates' + ''.join('|' + encode(c) for c in certificates)
+    algorithm, signature, signed = signature_result.split('|')
+    signature, signed = octets(signature), octets(signed)
+    assert int(algorithm) == int.from_bytes(cv[4:6], 'big') and signature == cv[8:]
+    assert signed == bytes([32]) * 64 + b'TLS 1.3, server CertificateVerify\x00' + hashlib.sha256(transcript).digest()
+    key = x509.load_der_x509_certificate(certificates[0]).public_key()
+    if algorithm == '1027':
+        key.verify(signature, signed, ec.ECDSA(hashes.SHA256()))
+    else:
+        assert algorithm == '2052'
+        key.verify(signature, signed, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32), hashes.SHA256())
+
+
 with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
     contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa']]
     for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
@@ -360,7 +447,7 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
         for line, (_, expected) in zip(lines[len(valid_cases):], invalid_cases):
             assert line == expected, (name, line, expected)
         for seed, wire, flight in flights:
-            hello, encrypted, _ = flight
+            hello, encrypted, _, _ = flight
             prefix = 'n:localhost:' + encode(seed) + ':'
             probes = [hello]
             # Accept either legal ordering of the two ServerHello extensions.
@@ -374,6 +461,7 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             results = output.stdout.splitlines()
             assert len(results) == len(args)
             content = verify_keys(results[0], seed, wire, flight)
+            verify_server_evidence(command, wire[5:] + hello, content)
             size = 4 + int.from_bytes(content[1:4], 'big')
             ee = content[:size]
             assert ee[0] == 8
@@ -387,6 +475,7 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             assert results[1].endswith('|receive-error'), (name, results[1])
             for actual, (_, expected) in zip(results[2:], bad):
                 assert actual == expected, (name, actual, expected)
+        certificate_count = check_certificates(command)
         extension_count = check_extensions(command)
         count = check_framing(command)
-        print(f'{name}: {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)
+        print(f'{name}: {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)

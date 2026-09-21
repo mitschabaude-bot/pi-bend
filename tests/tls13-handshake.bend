@@ -100,8 +100,31 @@ def startParameters(hello: List<&2, U32>, wire: List<&2, U32>, result: Result<&2
     case Fail{cause}: error(cause)
     case Done{TLS.Started{pending, _}}: acceptParameters(wire, TLS.acceptServerHello(pending, hello))
 
+def certificateResult(result: Result<&2, &2, TLS.Error, List<&2, List<&2, U32>>>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{values}: "certificates" ++ showMessages(values)
+
+def scheme(value: TLS.SignatureScheme) -> String:
+  match value:
+    case TLS.EcdsaP256Sha256{}: "1027"
+    case TLS.RsaPssRsaeSha256{}: "2052"
+
+def signatureResult(result: Result<&2, &2, TLS.Error, TLS.CertificateSignature>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{TLS.CertificateSignature{algorithm, signature, input}}:
+      scheme(algorithm) ++ "|" ++ Bytes.show(signature) ++ "|" ++ Bytes.show(input)
+
+def signatureTranscript(wire: List<&2, U32>, result: Result<&2, &2, SHA.Error, SHA.State>) -> String:
+  match result:
+    case Fail{_}: "hash-error"
+    case Done{transcript}: signatureResult(TLS.certificateSignature(transcript, wire))
+
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
+    case "cert" <> wire <> Nil{}: IO.print(certificateResult(TLS.certificates(Bytes.bytes(wire))))
+    case "cv" <> transcript <> wire <> Nil{}: IO.print(signatureTranscript(Bytes.bytes(wire), SHA.update(Bytes.bytes(transcript), SHA.create())))
     case "ep" <> host <> seed <> hello <> wire <> Nil{}: IO.print(startParameters(Bytes.bytes(hello), Bytes.bytes(wire), TLS.initialize(name(host), Bytes.bytes(seed))))
     case "ee" <> offered <> wire <> Nil{}: IO.print(parameters(TLS.encryptedExtensions(String.eq(offered, "yes"), Bytes.bytes(wire))))
     case "f" <> limit <> input <> Nil{}: IO.print(chunks(Split.split(input, '/'), Decimal.decimal(limit, 0), Done{TLS.Batch{TLS.emptyBuffer(), Nil{}}}, ""))

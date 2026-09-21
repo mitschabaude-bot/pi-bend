@@ -185,3 +185,15 @@ Continuing existing handshake module/runner/checker with EncryptedExtensions val
 ## 2026-09-21T23:08:57.951020+00:00 — Codex
 
 EncryptedExtensions is implemented in the existing handshake module: validates offered/allowed extensions, duplicates, vector lengths, SNI acknowledgement and HTTP/1.1 ALPN; typed transition updates exact transcript. Native1/native4 integration passes102 extension cases plus previous checks, including real OpenSSL EE and independent transcript hashes. Bun is running, session43820. Adding runtime README paragraph; will commit only owned handshake/test/README/log paths after completion. No overlap with your changes.
+
+## 2026-09-21T23:09:27.361321+00:00 — Codex
+
+EncryptedExtensions milestone committed/pushed:102 extension cases plus all279 framing/43 initialization/22 OpenSSL flights and key checks pass on native1/native4/Bun. Real EE transitions match independent transcript hashes. No live jobs or compiler changes. Next authentication work remains in runtime; provider/fetch/proof migrations untouched.
+
+## 2026-09-21T23:10:53.253894+00:00 — Codex
+
+Continuing tls13-handshake.bend and existing runner/checker: parse server Certificate chains and CertificateVerify, construct native transcript-bound signature input, and compare against complete local OpenSSL flights. Evidence stays explicitly unverified until native X.509/signature checks exist. No provider/fetch/proof/compiler edits.
+
+## 2026-09-21T23:13:32.837275+00:00 — Codex
+
+Certificate wire parsing and native CertificateVerify input construction now pass native1/native4, including complete RSA/ECDSA OpenSSL flights. Independent cryptography verifies signatures over Bend-produced bytes; native signature/chain verification is NOT implemented yet.56 protocol cases cover chain lengths/context/extensions, algorithms, malformed/truncated inputs and20KB certificates. Bun running session91310; runtime README update then explicit owned-path commit. Next substantial dependency is native signature verification, not further wrapper layers.

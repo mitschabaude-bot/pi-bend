@@ -7,8 +7,8 @@ import ./tls13-kdf.bend as KDF
 import ./aes128.bend as AES
 import ./aes128-gcm.bend as GCM
 
-# Initial TLS 1.3 client flight. The affine Pending state retains the private
-# key and exact transcript bytes; it is not an authenticated connection.
+# TLS 1.3 handshake framing and negotiation. Affine states retain key epochs
+# and exact transcripts; none yet represents an authenticated connection.
 type Error is Data:
   EntropyFailure{code: U32, message: String}
   InvalidRandomness{}
@@ -400,3 +400,62 @@ def acceptEncryptedExtensions(handshake: Handshake, +wire: List<&2, U32>) -> Res
   match handshake:
     case Handshake{+name, transcript, secret, client, server, write, read}:
       parameterState(Handshake{name, transcript, secret, client, server, write, read}, wire, encryptedExtensions(offeredServerName(name), wire))
+
+# Wire evidence only: certificates must still undergo DER, chain, identity and
+# signature verification. Our ClientHello requests no certificate extensions.
+type CertificateEntry is Data:
+  CertificateEntry{bytes: List<&2, U32>, rest: List<&2, U32>}
+
+def certificateFragment(result: Result<&2, &2, Record.Error, Record.Fragment>) -> Result<&2, &2, Error, CertificateEntry>:
+  match result:
+    case Done{Record.Fragment{head <> tail, 0 <> 0 <> rest}}: Done{CertificateEntry{head <> tail, rest}}
+    case _: Fail{MalformedHandshake{}}
+
+def certificateEntry(bytes: List<&2, U32>) -> Result<&2, &2, Error, CertificateEntry>:
+  match bytes:
+    case a <> b <> c <> rest:
+      certificateFragment(Record.take(U32.to_nat((a * 65536 + b * 256 + c : U32)), rest, Nil{}))
+    case _: Fail{MalformedHandshake{}}
+
+def certificateEntries(fuel: Nat, result: Result<&2, &2, Error, CertificateEntry>, reversed: List<&2, List<&2, U32>>) -> Result<&2, &2, Error, List<&2, List<&2, U32>>>:
+  match fuel result:
+    case _ Fail{cause}: Fail{cause}
+    case _ Done{CertificateEntry{bytes, Nil{}}}: Done{List.reverse(&2, List<&2, U32>, bytes <> reversed)}
+    case 1n+fuel Done{CertificateEntry{bytes, rest}}: certificateEntries(fuel, certificateEntry(rest), bytes <> reversed)
+    case _ _: Fail{MalformedHandshake{}}
+
+def certificateBody(bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, List<&2, U32>>>:
+  match bytes:
+    case 0 <> a <> b <> c <> +rest:
+      +size = Record.length(rest, 0n)
+      Result.bind(&2, &2, Error, Unit, List<&2, List<&2, U32>>, require(Nat.is_eq(size, U32.to_nat((a * 65536 + b * 256 + c : U32)))), unused =>
+        certificateEntries(size, certificateEntry(rest), Nil{}))
+    case _: Fail{MalformedHandshake{}}
+
+def certificates(wire: List<&2, U32>) -> Result<&2, &2, Error, List<&2, List<&2, U32>>>:
+  Result.bind(&2, &2, Error, List<&2, U32>, List<&2, List<&2, U32>>, messageBody(11, wire), certificateBody)
+
+type SignatureScheme is Data:
+  EcdsaP256Sha256{}
+  RsaPssRsaeSha256{}
+
+type CertificateSignature is Data:
+  CertificateSignature{scheme: SignatureScheme, signature: List<&2, U32>, signedBytes: List<&2, U32>}
+
+def signatureBytes(scheme: SignatureScheme, signedBytes: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, CertificateSignature>:
+  match bytes:
+    case +a <> +b <> +signature:
+      Result.bind(&2, &2, Error, Unit, CertificateSignature, require(Nat.is_eq(Record.length(signature, 0n), U32.to_nat((a * 256 + b : U32))) && U32.is_gt((a * 256 + b : U32), 0)), unused =>
+        Done{CertificateSignature{scheme, signature, signedBytes}})
+    case _: Fail{MalformedHandshake{}}
+
+def certificateVerifyBody(signedBytes: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, CertificateSignature>:
+  match bytes:
+    case 4 <> 3 <> rest: signatureBytes(EcdsaP256Sha256{}, signedBytes, rest)
+    case 8 <> 4 <> rest: signatureBytes(RsaPssRsaeSha256{}, signedBytes, rest)
+    case _: Fail{RejectedParameters{}}
+
+def certificateSignature(transcript: SHA.State, wire: List<&2, U32>) -> Result<&2, &2, Error, CertificateSignature>:
+  Result.bind(&2, &2, Error, List<&2, U32>, CertificateSignature, messageBody(15, wire), body =>
+    Result.bind(&2, &2, Error, SHA.Digest, CertificateSignature, hashResult(SHA.Digest, SHA.finish(transcript)), hash =>
+      certificateVerifyBody(X.repeat(64n, 32, Record.append(ascii("TLS 1.3, server CertificateVerify"), 0 <> SHA.toBytes(hash))), body)))
