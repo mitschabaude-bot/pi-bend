@@ -72,26 +72,27 @@
    spares: { words: number; name: string; z: boolean }[];
    fresh: Map<string, number>;
    uses: Map<Probe, Bind>;
-@@ -590,6 +591,8 @@
+@@ -590,6 +591,9 @@
  const USES: Map<HTerm, UMap> = new Map();
 
  const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();
 +const TAILS = new Map<Bend.Ctr, Map<HTerm | number, Dom[]>>();
 +const LAYS = new Map<HTerm | null, Lay>();
++const CLOSED_LAYS = new Map<Bend.ADT, Map<number, Lay>>();
 
  const SRCS: Map<Bend.Name, Src> = new Map();
 
-@@ -676,7 +679,8 @@
+@@ -676,7 +680,8 @@
  }
 
  function memo_gc(): void {
 -  [OPENS, USES, FOLDS, SPINES, CONSTS].forEach((m) => m.clear());
 +  PROBES.length = 1; // Keep DUMMY; opened binders belong to this definition.
-+  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS].forEach((m) => m.clear());
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS].forEach((m) => m.clear());
  }
 
  // Probe
-@@ -737,7 +741,7 @@
+@@ -737,7 +742,7 @@
      apps.reverse();
      const tld = c.$ === "Ref" ? def_body(cf, c.k) : undefined;
      const T = tld?.$ === "Def" ? tld.T : ty_ann(h);
@@ -100,7 +101,7 @@
      const live = apps.map((_, i) => i >= qs.length || quant_live(qs[i][0]));
      const all = apps.map((a) => a.x);
      const args = all.filter((_, i) => live[i]);
-@@ -932,14 +936,16 @@
+@@ -932,14 +937,23 @@
  // An Array is a block, and an IO.OP holds the foreign requests beyond its
  // constructors: boxes.
  function lay_of(book: Bend.Book, A: HTerm | null): Lay {
@@ -118,14 +119,21 @@
 +      return BOX;
 +    }
 +    const tld = book.tlds[t.k];
-+    return WORDS[t.k] ?? (t.k === "Array" || t.k === "IO.OP" || tld?.$ !== "ADT"
-+      || lay_cyclic(book, t.k) ? BOX : lay_pack(tld.c.map((c): Arm =>
-+      ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) }))));
++    if (WORDS[t.k] !== undefined) return WORDS[t.k];
++    if (t.k === "Array" || t.k === "IO.OP" || tld?.$ !== "ADT"
++      || lay_cyclic(book, t.k)) return BOX;
++    const get = () => lay_pack(tld.c.map((c): Arm =>
++      ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) })));
++    const key = tld.n === 0 && t.x.length === 0 ? 0
++      : t.k === "Word.Con" && t.x.length === 1
++        ? ctr_index(book.ctrs.WCon, t.x[0]) : null;
++    return typeof key === "number"
++      ? memo(memo(CLOSED_LAYS, tld, () => new Map()), key, get) : get();
 +  });
  }
 
  function lay_fields(book: Bend.Book, As: (HTerm | null)[]): Field[] {
-@@ -1032,10 +1038,30 @@
+@@ -1032,10 +1046,30 @@
 
  // A constructor's fields: the last n domains of its type, over the
  // datatype's arguments `xs` when given.
@@ -159,7 +167,7 @@
  }
 
  function ctr_doms(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): HTerm[] {
-@@ -1502,14 +1528,16 @@
+@@ -1502,14 +1536,16 @@
  // ====
 
  function file_new(cb: Carb, decl: string): File {
@@ -178,7 +186,7 @@
  }
 
  // Block
-@@ -2161,14 +2189,14 @@
+@@ -2161,14 +2197,14 @@
    seg.fid = name;
    const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
    emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
@@ -195,7 +203,7 @@
    Object.assign(fl, outer);
    return name;
  }
-@@ -2853,6 +2881,7 @@
+@@ -2853,6 +2889,7 @@
    const pass = (defs: [Bend.Name, Def][]): File => {
      [cb.lend, BRWS].forEach((m) => m.clear());
      const fl = file_new(cb, "Term");
@@ -203,7 +211,7 @@
      for (const k of SRCS.keys()) {
        for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
          fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
-@@ -2860,6 +2889,12 @@
+@@ -2860,6 +2897,12 @@
      }
      for (const [k, tld] of defs) {
        compile_def(fl, k, tld);
@@ -216,7 +224,7 @@
      }
      compile_reqs(fl);
      facts_lend(cb);
-@@ -2867,12 +2902,15 @@
+@@ -2867,12 +2910,15 @@
    };
    // Emitted callees first until a pass changes nothing (own, hot and poly
    // only grow): that pass is kept.
