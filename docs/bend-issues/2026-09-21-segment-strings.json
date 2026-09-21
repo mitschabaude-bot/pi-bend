@@ -1,0 +1,209 @@
+{
+  "status": "Rejected, not installed; larger full peak than both baseline and early-discard candidate.",
+  "patch": "--- a/comp.ts\n+++ b/comp.ts\n@@ -2886,7 +2886,12 @@\n       }\n     }\n     for (const [k, tld] of defs) {\n+      const first = fl.segs.length;\n       compile_def(fl, k, tld);\n+      for (let i = first; i < fl.segs.length; i++) {\n+        const seg = fl.segs[i];\n+        if (seg.lines.length > 1) seg.lines = [seg.lines.join(\"\\n\")];\n+      }\n     }\n     compile_reqs(fl);\n     facts_lend(cb);\n",
+  "audit": [
+    "Runs after top-level compile_def has returned; nested emission and spin source assembly are complete.",
+    "Only newly added segments are compacted. Old segments are not edited by later definitions; later references use their metadata and names.",
+    "The sole native line-count consumer determines a spin declaration inside emit_native, before the compaction boundary.",
+    "Joining an array with newline and then spreading that one string into the final newline join preserves bytes. Zero/one-line arrays are unchanged.",
+    "Segment count, order, metadata and optimization facts are unchanged. JavaScript emission does not enter the native pass."
+  ],
+  "field_regression": {
+    "compiler-string-pattern-return": {
+      "artifacts": {
+        "baseline": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        },
+        "candidate": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        }
+      },
+      "cases_per_backend": 109,
+      "source_sha256": "ec4585980bc2e8a5715ca91d8697eef2dc9b33d8531c073ebcdd0a6563285662"
+    },
+    "compiler-word-field-cache": {
+      "artifacts": {
+        "baseline": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        },
+        "candidate": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        }
+      },
+      "cases_per_backend": 10,
+      "source_sha256": "a8635a010af66691b952d2f08fbe091ceb8991ec9ca22ec1bfb9c6f216bc3428"
+    },
+    "compilers": {
+      "baseline": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "18dbaf7b9fee941767e1128220fba758ba23dbaaf3709475bf7a9c732875023c",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "candidate": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "827a3445d45c177fde57e6c78337adee37921705c978052dc5680486b3f4d0a3",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      }
+    }
+  },
+  "small_pairs": [
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 6.055481920950115,
+      "peak_kib": 990300,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 5.924204631708562,
+      "peak_kib": 1011712,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 5.9779652282595634,
+      "peak_kib": 937192,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 6.11913381703198,
+      "peak_kib": 1015840,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 6.0073226960375905,
+      "peak_kib": 1019976,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/compiler-string-pattern-return.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 6.061985379084945,
+      "peak_kib": 1205136,
+      "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.15011433232575655,
+      "peak_kib": 82940,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.1655022855848074,
+      "peak_kib": 84504,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.16439879965037107,
+      "peak_kib": 87832,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.16189042385667562,
+      "peak_kib": 90160,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.16046871431171894,
+      "peak_kib": 81688,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/typed-do-shadow.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.1717800237238407,
+      "peak_kib": 82696,
+      "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "baseline",
+      "wall_seconds": 0.32867820747196674,
+      "peak_kib": 113780,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 0,
+      "variant": "candidate",
+      "wall_seconds": 0.3288906179368496,
+      "peak_kib": 112832,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "candidate",
+      "wall_seconds": 0.3238510973751545,
+      "peak_kib": 117320,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 1,
+      "variant": "baseline",
+      "wall_seconds": 0.32505648490041494,
+      "peak_kib": 120184,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "baseline",
+      "wall_seconds": 0.33067155070602894,
+      "peak_kib": 122732,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    },
+    {
+      "source": "tests/aes128.bend",
+      "round": 2,
+      "variant": "candidate",
+      "wall_seconds": 0.3395115230232477,
+      "peak_kib": 119236,
+      "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+    }
+  ],
+  "full": {
+    "seconds": 323.1874692803249,
+    "sampled_peak_rss_bytes": 13130215424,
+    "peak_rss_bytes": 13129084928,
+    "rss_guard_stopped": false,
+    "returncode": 0
+  },
+  "full_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6"
+}

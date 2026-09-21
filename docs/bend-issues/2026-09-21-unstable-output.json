@@ -1,5 +1,5 @@
 {
-  "status": "Validated candidate, not installed while comparing the smaller completed-segment compaction change.",
+  "status": "Adopted in ordinary/default native compilers after rejecting completed-segment compaction.",
   "patch": "--- a/comp.ts\n+++ b/comp.ts\n@@ -71,6 +71,7 @@\n };\n \n type File = Carb & {\n+  emit: boolean;\n   spares: { words: number; name: string; z: boolean }[];\n   fresh: Map<string, number>;\n   uses: Map<Probe, Bind>;\n@@ -1527,7 +1528,7 @@\n // ====\n \n function file_new(cb: Carb, decl: string): File {\n-  return { ...cb, decl, segs: [], seg: seg_new(\"\", BOX, []), tab: 2,\n+  return { ...cb, emit: true, decl, segs: [], seg: seg_new(\"\", BOX, []), tab: 2,\n     cids: new Map(), tabs: new Map(), spins: [], spun: new Map(), clos: new Set(),\n     img: [], lits: new Map(), reqs: \"\", fuel: 0, fresh: new Map(), spares: [],\n     uses: new Map(), brwl: new Map(), rest: [], def: \"\" };\n@@ -1536,7 +1537,7 @@\n const FILE_INDENT = \"  \".repeat(16);\n \n function file_push(fl: File, line: string): void {\n-  fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);\n+  if (fl.emit) fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);\n }\n \n // Block\n@@ -2188,14 +2189,14 @@\n   seg.fid = name;\n   const dst = val_new(seg.ret.ks.map(() => name_local(fl, \"v\")), seg.ret);\n   emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);\n-  fl.spins.push([name, [`${seg.lines.length < SPIN_FAR ? \"INLINE\" : \"FAR\"} Term ${name}(Env e, THR Term* o${\n+  fl.spins.push([name, fl.emit ? [`${seg.lines.length < SPIN_FAR ? \"INLINE\" : \"FAR\"} Term ${name}(Env e, THR Term* o${\n     seg.ks.map((k, i) => `, ${lay_c(k)} r${i}`).join(\"\")}) {`,\n   \"  u32 wpoll = 0;\",\n   ...dst.ws.map((v, j) => `  ${lay_c(seg.ret.ks[j])} ${v} = 0;`),\n   ...seg_take(seg).map((l) => \"  \" + l),\n   \"  WL_SPIN\", ...seg.lines, \"  break;\", \"  }\",\n   ...dst.ws.map((v, j) => `  o[${j}] = ${v};`),\n-  \"  return 1;\", \"}\"].join(\"\\n\"), seg.refs]);\n+  \"  return 1;\", \"}\"].join(\"\\n\") : \"\", seg.refs]);\n   Object.assign(fl, outer);\n   return name;\n }\n@@ -2880,6 +2881,7 @@\n   const pass = (defs: [Bend.Name, Def][]): File => {\n     [cb.lend, BRWS].forEach((m) => m.clear());\n     const fl = file_new(cb, \"Term\");\n+    const count = cb.own.size + cb.hot.size + cb.stat.size;\n     for (const k of SRCS.keys()) {\n       for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {\n         fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);\n@@ -2887,6 +2889,12 @@\n     }\n     for (const [k, tld] of defs) {\n       compile_def(fl, k, tld);\n+      // These sets only grow: once they change, this pass's source is discarded.\n+      if (fl.emit && count !== cb.own.size + cb.hot.size + cb.stat.size) {\n+        fl.emit = false;\n+        for (const seg of fl.segs) seg.lines = [];\n+        for (const spin of fl.spins) spin[1] = \"\";\n+      }\n     }\n     compile_reqs(fl);\n     facts_lend(cb);\n",
   "source_audit": [
     "own/hot/stat are monotonic sets: all writes found are add; no clear/delete or assignments during a compile. Their summed sizes detect that the current pass is already unstable.",
@@ -303,5 +303,14 @@
     "Full shared-host build overlapped short correctness jobs.",
     "About3.5% sampled-RSS reduction; remaining peak is still9.74GiB.",
     "Not proof of a universal no-performance-regression claim."
-  ]
+  ],
+  "installed_comp_sha256": "d814296bb5f7da60339386d9d2e10588ce9458319ce4ccc1d3049ec19fbd9d35",
+  "default_path_validation": {
+    "native_callback_threads": [
+      1,
+      4
+    ],
+    "aggregate_patch_replay": "exact",
+    "ordinary_native_compilers_match": true
+  }
 }

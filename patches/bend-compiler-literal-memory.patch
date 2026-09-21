@@ -64,7 +64,15 @@
      // D.c[k] = @r1 x1:F1 -> .. -> D<p..>
 --- a/bend2/comp.ts
 +++ b/bend2/comp.ts
-@@ -590,6 +590,8 @@
+@@ -71,6 +71,7 @@
+ };
+
+ type File = Carb & {
++  emit: boolean;
+   spares: { words: number; name: string; z: boolean }[];
+   fresh: Map<string, number>;
+   uses: Map<Probe, Bind>;
+@@ -590,6 +591,8 @@
  const USES: Map<HTerm, UMap> = new Map();
 
  const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();
@@ -73,7 +81,7 @@
 
  const SRCS: Map<Bend.Name, Src> = new Map();
 
-@@ -676,7 +678,8 @@
+@@ -676,7 +679,8 @@
  }
 
  function memo_gc(): void {
@@ -83,7 +91,7 @@
  }
 
  // Probe
-@@ -737,7 +740,7 @@
+@@ -737,7 +741,7 @@
      apps.reverse();
      const tld = c.$ === "Ref" ? def_body(cf, c.k) : undefined;
      const T = tld?.$ === "Def" ? tld.T : ty_ann(h);
@@ -92,7 +100,7 @@
      const live = apps.map((_, i) => i >= qs.length || quant_live(qs[i][0]));
      const all = apps.map((a) => a.x);
      const args = all.filter((_, i) => live[i]);
-@@ -932,14 +935,16 @@
+@@ -932,14 +936,16 @@
  // An Array is a block, and an IO.OP holds the foreign requests beyond its
  // constructors: boxes.
  function lay_of(book: Bend.Book, A: HTerm | null): Lay {
@@ -117,7 +125,7 @@
  }
 
  function lay_fields(book: Bend.Book, As: (HTerm | null)[]): Field[] {
-@@ -1032,10 +1037,30 @@
+@@ -1032,10 +1038,30 @@
 
  // A constructor's fields: the last n domains of its type, over the
  // datatype's arguments `xs` when given.
@@ -151,7 +159,14 @@
  }
 
  function ctr_doms(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): HTerm[] {
-@@ -1508,8 +1533,10 @@
+@@ -1502,14 +1528,16 @@
+ // ====
+
+ function file_new(cb: Carb, decl: string): File {
+-  return { ...cb, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
++  return { ...cb, emit: true, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
+     cids: new Map(), tabs: new Map(), spins: [], spun: new Map(), clos: new Set(),
+     img: [], lits: new Map(), reqs: "", fuel: 0, fresh: new Map(), spares: [],
      uses: new Map(), brwl: new Map(), rest: [], def: "" };
  }
 
@@ -159,11 +174,49 @@
 +
  function file_push(fl: File, line: string): void {
 -  fl.seg.lines.push("  ".repeat(fl.tab) + line);
-+  fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);
++  if (fl.emit) fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);
  }
 
  // Block
-@@ -2867,12 +2894,15 @@
+@@ -2161,14 +2189,14 @@
+   seg.fid = name;
+   const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
+   emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
+-  fl.spins.push([name, [`${seg.lines.length < SPIN_FAR ? "INLINE" : "FAR"} Term ${name}(Env e, THR Term* o${
++  fl.spins.push([name, fl.emit ? [`${seg.lines.length < SPIN_FAR ? "INLINE" : "FAR"} Term ${name}(Env e, THR Term* o${
+     seg.ks.map((k, i) => `, ${lay_c(k)} r${i}`).join("")}) {`,
+   "  u32 wpoll = 0;",
+   ...dst.ws.map((v, j) => `  ${lay_c(seg.ret.ks[j])} ${v} = 0;`),
+   ...seg_take(seg).map((l) => "  " + l),
+   "  WL_SPIN", ...seg.lines, "  break;", "  }",
+   ...dst.ws.map((v, j) => `  o[${j}] = ${v};`),
+-  "  return 1;", "}"].join("\n"), seg.refs]);
++  "  return 1;", "}"].join("\n") : "", seg.refs]);
+   Object.assign(fl, outer);
+   return name;
+ }
+@@ -2853,6 +2881,7 @@
+   const pass = (defs: [Bend.Name, Def][]): File => {
+     [cb.lend, BRWS].forEach((m) => m.clear());
+     const fl = file_new(cb, "Term");
++    const count = cb.own.size + cb.hot.size + cb.stat.size;
+     for (const k of SRCS.keys()) {
+       for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
+         fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
+@@ -2860,6 +2889,12 @@
+     }
+     for (const [k, tld] of defs) {
+       compile_def(fl, k, tld);
++      // These sets only grow: once they change, this pass's source is discarded.
++      if (fl.emit && count !== cb.own.size + cb.hot.size + cb.stat.size) {
++        fl.emit = false;
++        for (const seg of fl.segs) seg.lines = [];
++        for (const spin of fl.spins) spin[1] = "";
++      }
+     }
+     compile_reqs(fl);
+     facts_lend(cb);
+@@ -2867,12 +2902,15 @@
    };
    // Emitted callees first until a pass changes nothing (own, hot and poly
    // only grow): that pass is kept.
