@@ -20,7 +20,7 @@ Seven finite-value laws cover numeric classification, invalid numeric leaves, ar
 
 The fixture executes actual SDK `buildRequest` with fake credentials and no network. Platform metadata is injected explicitly from that oracle for comparison; production callers must provide native Bend identity. It retains raw SDK falsy-body omission, non-finite conversion and empty-base fallback alongside the approved native results. A separate serialization probe obtains SDK JSON-header precedence for the explicit-present-body cases without concealing the original SDK output.
 
-This component must still be connected to borrowed custom-fetch/native transport handles, actual timeout scheduling, response acquisition, the retry adapter and the existing asynchronous provider session. Native TLS/auth refresh, complete other-provider support, agent/TUI parity and native extensions remain unfinished. No upstream pi suite status changes.
+The [Responses fetch adapter](openai-responses-fetch.md) now connects this envelope to borrowed injectable callbacks, exact native timeout validation and response ownership. Actual native transport selection and retry/status/asynchronous-session assembly remain pending. Native TLS/auth refresh, complete other-provider support, agent/TUI parity and native extensions remain unfinished. No upstream pi suite status changes.
 
 ## Validation
 

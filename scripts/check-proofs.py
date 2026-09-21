@@ -104,6 +104,11 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('timer-conversion-skips-roundtrip', 'packages/runtime/src/timer-milliseconds.bend', 'checked(value, word, F.compare(value, F.fromU32(word)))', 'checked(value, word, Some{EQ{}})', 'laws/timer-milliseconds.accepted_durations_round_trip'),
+        ('timer-conversion-rejects-exact', 'packages/runtime/src/timer-milliseconds.bend', 'case Some{EQ{}}: Done{milliseconds}', 'case Some{EQ{}}: Fail{Unrepresentable{value}}', 'laws/timer-milliseconds.exact_conversion_retains_duration'),
+        ('timer-conversion-rounds-mismatch', 'packages/runtime/src/timer-milliseconds.bend', 'case _: Fail{Unrepresentable{value}}', 'case _: Done{milliseconds}', 'laws/timer-milliseconds.smaller_conversion_is_rejected'),
+        ('responses-fetch-drops-body', 'packages/ai/src/api/openai-responses-fetch.bend', 'Input{url, String.to_upper(method), headers, body, signal}', 'Input{url, String.to_upper(method), headers, "", signal}', 'laws/openai-responses-fetch.fetch_input_retains_request'),
+        ('responses-fetch-ignores-custom', 'packages/ai/src/api/openai-responses-fetch.bend', 'case Some{fetch}: fetch', 'case Some{fetch}: native', 'laws/openai-responses-fetch.custom_fetch_takes_precedence'),
         ('finite-validator-accepts-infinity', 'packages/ai/src/utils/json-finite.bend', 'case _: False{}', 'case _: True{}', 'laws/json-finite.infinities_are_rejected'),
         ('finite-validator-skips-number', 'packages/ai/src/utils/json-finite.bend', 'case T.JsonNumber{value}: number(F.decode(value))', 'case T.JsonNumber{value}: True{}', 'laws/json-finite.invalid_numeric_leaf_is_rejected'),
         ('finite-validator-skips-array-head', 'packages/ai/src/utils/json-finite.bend', 'case T.JsonArray{head <> rest}: Bool.pick(Unit -> Bool, valid(head), unused => valid(T.JsonArray{rest}), unused => False{})(Unit{})', 'case T.JsonArray{head <> rest}: valid(T.JsonArray{rest})', 'laws/json-finite.array_checks_head_and_tail'),
