@@ -1,6 +1,8 @@
 import Base
 import ./der.bend as DER
 import ./rsa-sha256.bend as RSA
+import ./calendar.bend as Calendar
+import ./u64.bend as W
 
 # Parsed wire evidence, not an authenticated identity. Trust, validity, names,
 # constraints and extensions must be checked before a TLS connection is usable.
@@ -9,6 +11,9 @@ type Error is Data:
   InvalidCertificate{}
   UnsupportedAlgorithm{}
   Signature{cause: RSA.Error}
+  InvalidTime{}
+  NotYetValid{}
+  Expired{}
 
 type Certificate is Data:
   Certificate{tbs: DER.Node, algorithm: DER.Node, signature: List<&2, U32>}
@@ -100,3 +105,76 @@ def verifyRsaSha256(issuer: RSA.PublicKey, certificate: Certificate) -> Result<&
           Result.bind(&2, &2, Error, Unit, Unit, matchingAlgorithm(nodes, algorithm), unused =>
             rsaResult(Unit, RSA.verifyPkcs1(issuer, DER.encoded(tbs), signature)))))
     case _: Fail{UnsupportedAlgorithm{}}
+
+# RFC 5280 times require seconds and a literal Z, without offsets/fractions.
+# The calendar primitive validates civil fields and supplies exact signed epochs.
+type Validity is Data:
+  Validity{notBefore: W.U64, notAfter: W.U64}
+
+def digits(bytes: List<&2, U32>) -> Bool:
+  match bytes:
+    case Nil{}: True{}
+    case +byte <> rest: U32.is_ge(byte, 48) && U32.is_le(byte, 57) && digits(rest)
+
+def pair(a: U32, b: U32) -> U32:
+  ((a - 48) * 10 + b - 48 : U32)
+
+def epoch(result: Result<&2, &2, Calendar.CalendarError, W.U64>) -> Result<&2, &2, Error, W.U64>:
+  match result:
+    case Fail{_}: Fail{InvalidTime{}}
+    case Done{value}: Done{value}
+
+def timeParts(year: U32, bytes: List<&2, U32>) -> Result<&2, &2, Error, W.U64>:
+  match bytes:
+    case +a <> +b <> +c <> +d <> +e <> +f <> +g <> +h <> +i <> +j <> 90 <> Nil{}:
+      checked = Bool.pick(Result<&2, &2, Error, Unit>, digits(a <> b <> c <> d <> e <> f <> g <> h <> i <> j <> Nil{}), Done{Unit{}}, Fail{InvalidTime{}})
+      Result.bind(&2, &2, Error, Unit, W.U64, checked, unused => epoch(Calendar.toEpochMilliseconds(Calendar.CivilTime{year, pair(a,b), pair(c,d), pair(e,f), pair(g,h), pair(i,j), 0})))
+    case _: Fail{InvalidTime{}}
+
+def timeYear(valid: Bool, year: U32, rest: List<&2, U32>) -> Result<&2, &2, Error, W.U64>:
+  match valid:
+    case False{}: Fail{InvalidTime{}}
+    case True{}: timeParts(year, rest)
+
+def time(node: DER.Node) -> Result<&2, &2, Error, W.U64>:
+  match node:
+    case DER.Node{DER.Tag{0, False{}, 23}, _, +a <> +b <> rest}:
+      +year = pair(a,b)
+      timeYear(digits(a <> b <> Nil{}), (Bool.pick(U32, U32.is_ge(year, 50), 1900, 2000) + year : U32), rest)
+    case DER.Node{DER.Tag{0, False{}, 24}, _, +a <> +b <> +c <> +d <> rest}:
+      timeYear(digits(a <> b <> c <> d <> Nil{}), (pair(a,b) * 100 + pair(c,d) : U32), rest)
+    case _: Fail{InvalidTime{}}
+
+def signedCompare(left: W.U64, right: W.U64) -> Cmp:
+  match left right:
+    case W.U64{a,b} W.U64{c,d}: W.compare(W.U64{U32.xor(a,2147483648),b}, W.U64{U32.xor(c,2147483648),d})
+
+def interval(+start: W.U64, +end: W.U64) -> Result<&2, &2, Error, Validity>:
+  Bool.pick(Result<&2, &2, Error, Validity>, W.atLeast(signedCompare(end,start)), Done{Validity{start,end}}, Fail{InvalidTime{}})
+
+def validityTimes(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, Validity>:
+  match nodes:
+    case start <> end <> Nil{}:
+      Result.bind(&2, &2, Error, W.U64, Validity, time(start), a =>
+        Result.bind(&2, &2, Error, W.U64, Validity, time(end), b => interval(a,b)))
+    case _: Fail{InvalidTime{}}
+
+def validityFields(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, Validity>:
+  match nodes:
+    case _ <> _ <> _ <> value <> _:
+      Result.bind(&2, &2, Error, List<&2, DER.Node>, Validity, decoded(List<&2, DER.Node>, DER.sequence(value)), validityTimes)
+    case _: Fail{InvalidCertificate{}}
+
+def validity(certificate: Certificate) -> Result<&2, &2, Error, Validity>:
+  match certificate:
+    case Certificate{tbs, _, _}: Result.bind(&2, &2, Error, List<&2, DER.Node>, Validity, fields(tbs), validityFields)
+
+def checkedValidity(before: Cmp, after: Cmp) -> Result<&2, &2, Error, Unit>:
+  match before after:
+    case LT{} _: Fail{NotYetValid{}}
+    case _ GT{}: Fail{Expired{}}
+    case _ _: Done{Unit{}}
+
+def validAt(+now: W.U64, validity: Validity) -> Result<&2, &2, Error, Unit>:
+  match validity:
+    case Validity{start,end}: checkedValidity(signedCompare(now,start), signedCompare(now,end))

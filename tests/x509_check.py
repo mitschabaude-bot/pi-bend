@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
+import random
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
@@ -122,6 +123,62 @@ bad_fields = fields[:6] + [bad_spki] + fields[7:]
 bad = tlv(48, tlv(48, b''.join(bad_fields)) + algorithm + signature)
 cases.append(('k:' + encode(bad), 'encoding'))
 
+def milliseconds(value):
+    delta = value - datetime(1970, 1, 1, tzinfo=timezone.utc)
+    return delta.days * 86400000 + delta.seconds * 1000 + delta.microseconds // 1000
+
+
+def words(value):
+    value %= 2**64
+    return str(value >> 32) + ',' + str(value & (2**32-1))
+
+
+def time_wire(value, generalized=True):
+    year = f'{value.year:04}' if generalized else f'{value.year % 100:02}'
+    text = year + f'{value.month:02}{value.day:02}{value.hour:02}{value.minute:02}{value.second:02}Z'
+    return tlv(24 if generalized else 23, text.encode())
+
+
+rng = random.Random(5280)
+for year in [1, 1900, 1950, 1969, 1970, 1999, 2000, 2049, 2050, 2100, 2400, 9999]:
+    for month, day in [(1, 1), (2, 28), (12, 31)]:
+        value = datetime(year, month, day, 23, 59, 59, tzinfo=timezone.utc)
+        cases.append(('t:' + encode(time_wire(value)), words(milliseconds(value))))
+        if 1950 <= year <= 2049:
+            cases.append(('t:' + encode(time_wire(value, False)), words(milliseconds(value))))
+for _ in range(60):
+    value = datetime(rng.randrange(1,10000), rng.randrange(1,13), rng.randrange(1,29),
+                     rng.randrange(24), rng.randrange(60), rng.randrange(60), tzinfo=timezone.utc)
+    cases.append(('t:' + encode(time_wire(value)), words(milliseconds(value))))
+for year in [2000, 2024, 2400]:
+    value = datetime(year, 2, 29, tzinfo=timezone.utc)
+    cases.append(('t:' + encode(time_wire(value)), words(milliseconds(value))))
+for text in ['20230229000000Z', '21000229000000Z', '19000229000000Z', '20260001000000Z',
+             '20261301000000Z', '20260100000000Z', '20260431000000Z', '20260101240000Z',
+             '20260101006000Z', '20260101000060Z', '20260101000000+0000', '20260101000000.0Z',
+             '202601010000Z', '20260101000000z', '202a0101000000Z', '100000101000000Z']:
+    cases.append(('t:' + encode(tlv(24, text.encode())), 'time'))
+for text in ['5001010000Z', '500101000000+0000', '500101000000.0Z', '500101000000z', '5a0101000000Z']:
+    cases.append(('t:' + encode(tlv(23, text.encode())), 'time'))
+cases.append(('t:' + encode(tlv(4, b'20260101000000Z')), 'time'))
+
+for start, end in [(datetime(1950,1,1,tzinfo=timezone.utc), datetime(2000,1,1,tzinfo=timezone.utc)),
+                   (datetime(1969,12,31,23,59,59,tzinfo=timezone.utc), datetime(1970,1,1,tzinfo=timezone.utc)),
+                   (datetime(2050,1,1,tzinfo=timezone.utc), datetime(9999,12,31,23,59,59,tzinfo=timezone.utc))]:
+    period = tlv(48, time_wire(start) + time_wire(end))
+    cases.append(('range:' + encode(period), words(milliseconds(start)) + '|' + words(milliseconds(end))))
+    cases.append(('range:' + encode(tlv(48,time_wire(end)+time_wire(start))), 'time'))
+    changed_fields = list(fields)
+    changed_fields[4] = period
+    dated = tlv(48, tlv(48,b''.join(changed_fields)) + algorithm + signature)
+    for at, expected in [(milliseconds(start)-1,'early'),(milliseconds(start),'ok'),
+                         (milliseconds(end),'ok'),(milliseconds(end)+1,'expired')]:
+        cases.append(('a:' + encode(dated) + ':' + words(at).replace(',',':'), expected))
+value = datetime(2000,2,29,tzinfo=timezone.utc)
+cases.append(('range:' + encode(tlv(48,time_wire(value)*2)), words(milliseconds(value)) + '|' + words(milliseconds(value))))
+for content in [b'', time_wire(value), time_wire(value)*3]:
+    cases.append(('range:' + encode(tlv(48,content)), 'time'))
+
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),
                       ('bun', ['bun', 'build/x509.js'])]:
@@ -131,4 +188,4 @@ for name, command in [('native-1', ['build/x509', '--threads', '1']),
     assert len(lines) == len(cases), (name, len(lines), len(cases))
     for i, (actual, (_, expected)) in enumerate(zip(lines, cases)):
         assert actual == expected, (name, i, actual[:100], expected[:100])
-    print(f'{name}: {len(cases)} X509 extraction/signature checks PASS', flush=True)
+    print(f'{name}: {len(cases)} X509 extraction/signature/time checks PASS', flush=True)

@@ -233,3 +233,15 @@ Starting packages/runtime/src/x509.bend and tests/x509.bend, tests/x509_check.py
 ## 2026-09-21T23:36:39.080026+00:00 — Codex
 
 X509 envelope/RSA-SPKI extraction and certificate signature integration pass35 checks native1/native4; Bun running81344. DER sequence traversal passes369 cases allbackends incl5000children. Explicit issuer-key verification rejects wrong keys/signatures/algorithm mismatch; this is not trust/path/hostname validation. Updating runtime README; explicit owned-path commit includes x509 module/tests plus der module/tests. No provider/fetch/proof/compiler overlap.
+
+## 2026-09-21T23:36:59.875485+00:00 — Codex
+
+X509 extraction/signature milestone committed/pushed.35 X509 checks and369 DER checks pass native1/native4/Bun. No live jobs. Certificate trust/field semantics, ECDSA and TLS connection completion remain incomplete; provider/fetch/proof/compiler paths untouched.
+
+## 2026-09-21T23:37:59.302941+00:00 — Codex
+
+Continuing x509.bend and its runner/checker: RFC5280 validity-time parsing, reuse calendar.bend/u64.bend, reject malformed dates and reversed intervals, check supplied wall-clock instants at inclusive bounds. No new modules; provider/fetch/proof/compiler paths untouched.
+
+## 2026-09-21T23:41:55.769488+00:00 — Codex
+
+X509 time parsing/checking passes196 combined extraction/signature/time cases on native1/native4/Bun. Reuses calendar/u64; exact signed epoch comparison, UTC-year pivot, Gregorian validity, reversed ranges and inclusive endpoints. Updating runtime README and committing existing x509/test/log/README paths only. No live jobs; hostname/extensions/path trust and ECDSA still pending.
