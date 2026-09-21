@@ -198,6 +198,231 @@
     ],
     "proof_baseline_seconds_peak_rss_kib": "18.37 10560700",
     "proof_candidate_seconds_peak_rss_kib": "17.08 9486384",
-    "both_proofs": "All terms check, with 41 unsafe annotations."
+    "both_proofs": "All terms check, with 41 unsafe annotations.",
+    "larger_emission_comparison": [
+      {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+          "tests/openai-stream-error.bend",
+          "-o",
+          "build/compiler-memory-reading/stream-error-baseline.c"
+        ],
+        "elapsed_seconds": 78.79885796457529,
+        "peak_sampled_group_rss_kib": 18454692,
+        "limit_gib": 24.0,
+        "stopped": false,
+        "child_exit_code": 0,
+        "kind": "baseline",
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      },
+      {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "build/bend-profiles/share-constructor-leaves/bend2/main.ts",
+          "tests/openai-stream-error.bend",
+          "-o",
+          "build/compiler-memory-reading/stream-error-leaves.c"
+        ],
+        "elapsed_seconds": 77.74357426911592,
+        "peak_sampled_group_rss_kib": 17229248,
+        "limit_gib": 24.0,
+        "stopped": false,
+        "child_exit_code": 0,
+        "kind": "leaves",
+        "c_sha256": "37797726d4f26a9b34cf8ca1ae552e063c9bcc7eabd4705d1d463db8d9707d06"
+      }
+    ],
+    "larger_scope": "One sequential larger pair, byte-identical C. Shared host; a small diagnostic ran briefly during baseline. This is memory evidence, not a controlled speed claim."
+  },
+  "full_default_fixture_attribution": {
+    "scope": "Diagnostic-only subprocess: validate first, collect after an event-loop turn at each phase, then release representations. No code generation or law validation is attempted after release. First annotation traversal omitted App.x and is excluded; the complete traversal below includes it.",
+    "release_script": "import * as Bend from '../bend-profiles/dns-transport-teles/bend2/bend.ts';\nconst book=Bend.book_nil();\n(globalThis as any).retentionBook=book;\nasync function measure(phase:string) {\n await Bun.sleep(0);\n Bun.gc(true);\n console.log(JSON.stringify({phase,...process.memoryUsage(),definitions:Object.keys(book.tlds).length}));\n}\nawait Bend.book_load(book,process.cwd()+'/'+process.argv[2],'',new Map());\nawait measure('loaded');\nBend.book_valid(book);\nconsole.log('All terms check; diagnostic releases occur only after validation.');\nawait measure('checked');\nfor (const d of Object.values(book.tlds)) if (d.$==='Def') delete d.e;\nawait measure('without-checked-bodies');\nfor (const d of Object.values(book.tlds)) if (d.$==='Def') d.v=null;\nawait measure('without-source-bodies');\nbook.tmps=Object.create(null);\nawait measure('without-templates');\n",
+    "annotation_release_script": "import * as Bend from '../bend-profiles/dns-transport-teles/bend2/bend.ts';\nconst book=Bend.book_nil();\n(globalThis as any).retentionBook=book;\nasync function measure(phase:string) {\n await Bun.sleep(0);\n Bun.gc(true);\n console.log(JSON.stringify({phase,...process.memoryUsage(),definitions:Object.keys(book.tlds).length}));\n}\nawait Bend.book_load(book,process.cwd()+'/'+process.argv[2],'',new Map());\nawait measure('loaded');\nBend.book_valid(book);\nconsole.log('All terms check; diagnostic releases occur only after validation.');\nawait measure('checked');\nconst counts: Record<string,number> = {};\nfunction removeAnnotations() {\n  const seen = new WeakSet<object>();\n  const stack: any[] = Object.values(book.tlds).flatMap(d => d.$==='Def' && d.e ? [d.e] : []);\n  while (stack.length) {\n    const t=stack.pop();\n    if (!t || typeof t!=='object' || seen.has(t)) continue;\n    seen.add(t);\n    counts[t.$]=(counts[t.$]??0)+1;\n    if (t.$==='Ann') {stack.push(t.x);delete t.T;continue;}\n    for (const k of ['f','A','B','a','b','h','m','e','p','g','T']) if (t[k] && typeof t[k]==='object') stack.push(t[k]);\n    if (t.x && typeof t.x==='object' && !Array.isArray(t.x)) stack.push(t.x);\n    for (const k of ['x','v']) if (Array.isArray(t[k])) stack.push(...t[k]);\n  }\n}\nremoveAnnotations();\nconsole.log(JSON.stringify({phase:'checked-syntax-counts',counts}));\nawait measure('without-annotation-types');\nfor (const d of Object.values(book.tlds)) if (d.$==='Def') delete d.e;\nawait measure('without-checked-bodies');\nfor (const d of Object.values(book.tlds)) if (d.$==='Def') d.v=null;\nawait measure('without-source-bodies');\nbook.tmps=Object.create(null);\nawait measure('without-templates');\n",
+    "release_phases": [
+      {
+        "phase": "loaded",
+        "rss": 4062089216,
+        "heapTotal": 2774566912,
+        "heapUsed": 1823814561,
+        "external": 4934689,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "checked",
+        "rss": 16972742656,
+        "heapTotal": 14261913600,
+        "heapUsed": 8912231762,
+        "external": 6394834,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "without-checked-bodies",
+        "rss": 16966778880,
+        "heapTotal": 2774583296,
+        "heapUsed": 1825080546,
+        "external": 6152994,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "without-source-bodies",
+        "rss": 16806543360,
+        "heapTotal": 216483840,
+        "heapUsed": 21286314,
+        "external": 5833930,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "without-templates",
+        "rss": 16739958784,
+        "heapTotal": 209040384,
+        "heapUsed": 21056140,
+        "external": 5935420,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      }
+    ],
+    "annotation_release_phases": [
+      {
+        "phase": "loaded",
+        "rss": 3979194368,
+        "heapTotal": 2699400192,
+        "heapUsed": 1823958525,
+        "external": 5072493,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "checked",
+        "rss": 16921399296,
+        "heapTotal": 14239092736,
+        "heapUsed": 8912259639,
+        "external": 6417223,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "checked-syntax-counts",
+        "counts": {
+          "Ann": 17394477,
+          "App": 148334,
+          "Lam": 201439,
+          "Var": 125621,
+          "Ref": 82193,
+          "ADT": 14474,
+          "Qua": 9495,
+          "Mat": 72063,
+          "Ctr": 16733473,
+          "All": 264,
+          "Let": 1390,
+          "Efq": 5721,
+          "Rfl": 3,
+          "Rwt": 3,
+          "Eql": 3,
+          "Typ": 1
+        }
+      },
+      {
+        "phase": "without-annotation-types",
+        "rss": 16919556096,
+        "heapTotal": 11077079040,
+        "heapUsed": 4573204634,
+        "external": 5777994,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "without-checked-bodies",
+        "rss": 16920547328,
+        "heapTotal": 2699448320,
+        "heapUsed": 1824761168,
+        "external": 5837328,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "without-source-bodies",
+        "rss": 16504459264,
+        "heapTotal": 215470080,
+        "heapUsed": 20693111,
+        "external": 5240663,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      },
+      {
+        "phase": "without-templates",
+        "rss": 16403664896,
+        "heapTotal": 208582656,
+        "heapUsed": 20163620,
+        "external": 5058996,
+        "arrayBuffers": 100,
+        "definitions": 5404
+      }
+    ],
+    "release_stats": {
+      "command": [
+        "bun",
+        "build/compiler-memory-reading/checker-retention.ts",
+        "tests/openai-system-defaults.bend"
+      ],
+      "elapsed_seconds": 29.98055314645171,
+      "peak_sampled_group_rss_kib": 16575652,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "annotation_release_stats": {
+      "command": [
+        "bun",
+        "build/compiler-memory-reading/checker-annotations.ts",
+        "tests/openai-system-defaults.bend"
+      ],
+      "elapsed_seconds": 39.58647752646357,
+      "peak_sampled_group_rss_kib": 18121156,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "compact_checked_words": {
+    "status": "isolated and not adopted; full proof comparison passed; default-factory emission running",
+    "scope": "Retain outer type of structurally literal U32/F32 after all original constructor and field checks run; inner raw bit tree replaces its annotated copy. Native/JS emit literal words atomically. Initial reduced C is byte-identical to baseline.",
+    "small_seconds_peak_rss_kib": "1.73 505968",
+    "small_c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418",
+    "post_collection_heap_mib": {
+      "baseline": 140,
+      "candidate": 84
+    },
+    "proof_comparison": {
+      "baseline": {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+          "PROOF.bend"
+        ],
+        "elapsed_seconds": 18.733004675246775,
+        "peak_sampled_group_rss_kib": 10096788,
+        "limit_gib": 20.0,
+        "stopped": false,
+        "child_exit_code": 0
+      },
+      "compact": {
+        "command": [
+          "/home/agent/.bun/bin/bun",
+          "build/bend-profiles/compact-checked-words/bend2/main.ts",
+          "PROOF.bend"
+        ],
+        "elapsed_seconds": 18.232273314148188,
+        "peak_sampled_group_rss_kib": 8640536,
+        "limit_gib": 20.0,
+        "stopped": false,
+        "child_exit_code": 0
+      }
+    },
+    "proof_result": "Both check the complete existing PROOF.bend root: All terms check, with 41 unsafe annotations."
   }
 }
