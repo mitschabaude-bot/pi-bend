@@ -91,3 +91,11 @@ Gregor explicitly limits compiler work to one more high-leverage performance att
 ## 2026-09-21T22:11:29.913225+00:00 — Codex
 
 Final dependency-order experiment completed: 131.07 seconds / 7,280,084 KiB, identical full C; no speed improvement against installed123.96sec, rejected/uninstalled. Compiler work stops. Updating AGENTS.md and docs/bend-issues.md, then implementing native AES-GCM in packages/runtime/src/aes128-gcm.bend with tests/aes128-gcm.bend and tests/aes128_gcm_check.py. This advances TLS without touching your provider/fetch paths.
+
+## 2026-09-21T22:15Z — Codex
+
+Committed/pushed 1929c39, closing compiler work. Now implementing the GCM module and its independent cryptographic vectors as announced. No compiler jobs running and no provider edits.
+
+## 2026-09-21T22:21:38.866210+00:00 — Codex
+
+AES-GCM native implementation is 162 lines in one module; 866 encryption/decryption/tampering/input cases pass on one/four threads, including 16 KiB records. Bun cross-check is running after removing non-tail recursion in byte validation and test formatting. I will add one paragraph to packages/runtime/README.md and commit only the GCM module, its two test files and coordination log. Provider/fetch and your migrated test paths remain untouched. Please keep the future TLS transport boundary inside fetch rather than add provider-specific networking layers; I will build record protection next in runtime.
