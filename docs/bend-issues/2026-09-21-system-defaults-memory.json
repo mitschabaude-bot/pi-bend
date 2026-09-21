@@ -1139,5 +1139,33 @@
     "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/partial-json/dist/options.js": "779b2aded6d4e2ec6171ea9d5d5d97551e8c3258b6e78a01d2e9fc6235865b36",
     "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/partial-json/package.json": "42b3ae6c99ec959249f8eb4d3da7fdb44ec1f96ec627fa7f9ca5487a4e80963f"
   },
-  "finding": "Factored construction and named closed renderer did not materially reduce JS memory: old22,133,324KiB versus factored22,136,764KiB. Both36 Bun checks pass. No claim that duplicated branches explain the native cliff. New C emission queued after full proof gate with49GiB guard and51GiB initial available-memory condition."
+  "finding": "Factored construction and named closed renderer did not materially reduce JS memory: old22,133,324KiB versus factored22,136,764KiB. Both36 Bun checks pass. No claim that duplicated branches explain the native cliff. New C emission queued after full proof gate with49GiB guard and51GiB initial available-memory condition. Second49GiB run also stopped, duringpass8 at51,775,528KiB after484.83sec; no executable. No further memory-budget escalation planned.",
+  "second_c_stats": {
+    "command": [
+      "bun",
+      "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+      "tests/openai-system-defaults.bend",
+      "-o",
+      "build/openai-system-defaults.c"
+    ],
+    "elapsed_seconds": 484.83250471856445,
+    "peak_sampled_group_rss_kib": 51775528,
+    "limit_gib": 49.0,
+    "stopped": true,
+    "child_exit_code": -15
+  },
+  "second_c_tail": [
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999599173,\"rss\":51675484160,\"heapTotal\":45686516736,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1938240,\"teles\":6,\"opens\":3,\"uses\":25,\"folds\":3,\"spines\":12,\"consts\":67,\"name\":\"../packages/runtime/src/http-header.byteValue\",\"ms\":1,\"segments\":5149}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999599173,\"rss\":51675484160,\"heapTotal\":45686565888,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1938244,\"teles\":13,\"opens\":4,\"uses\":10,\"folds\":0,\"spines\":3,\"consts\":5,\"name\":\"../packages/runtime/src/http-header.checkedValue\",\"ms\":0,\"segments\":5150}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999599284,\"rss\":51808129024,\"heapTotal\":45808151552,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1939108,\"teles\":18498,\"opens\":864,\"uses\":1728,\"folds\":0,\"spines\":447,\"consts\":447,\"name\":\"../packages/runtime/src/http-header.punctuation\",\"ms\":111,\"segments\":5151}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999599284,\"rss\":51808260096,\"heapTotal\":45808348160,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1939114,\"teles\":28,\"opens\":6,\"uses\":33,\"folds\":0,\"spines\":10,\"consts\":4,\"name\":\"../packages/ai/src/api/openai-responses-terminal.selectedSignature\",\"ms\":0,\"segments\":5153}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999599658,\"rss\":52234592256,\"heapTotal\":46193224704,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1940291,\"teles\":64264,\"opens\":1177,\"uses\":17096,\"folds\":93,\"spines\":1253,\"consts\":5858,\"name\":\"../packages/runtime/src/partial-json.step\",\"ms\":374,\"segments\":5246}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999600000,\"rss\":52565549056,\"heapTotal\":46495853568,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1941067,\"teles\":49810,\"opens\":776,\"uses\":9246,\"folds\":5,\"spines\":580,\"consts\":4195,\"name\":\"../packages/ai/src/utils/json-parse.transition\",\"ms\":341,\"segments\":5312}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999600000,\"rss\":52565549056,\"heapTotal\":46495869952,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1941068,\"teles\":6,\"opens\":1,\"uses\":2,\"folds\":0,\"spines\":2,\"consts\":138,\"name\":\"../packages/ai/src/utils/json-parse.finishRepair\",\"ms\":0,\"segments\":5313}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999600000,\"rss\":52565680128,\"heapTotal\":46496017408,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1941072,\"teles\":11,\"opens\":4,\"uses\":22,\"folds\":2,\"spines\":20,\"consts\":1,\"name\":\"../packages/runtime/src/json-decode.list~1\",\"ms\":0,\"segments\":5317}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999600000,\"rss\":52565811200,\"heapTotal\":46496050176,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1941073,\"teles\":16,\"opens\":1,\"uses\":2,\"folds\":0,\"spines\":2,\"consts\":1,\"name\":\"../packages/ai/src/api/openai-responses-wire-terminal.flatten\",\"ms\":0,\"segments\":5318}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999600001,\"rss\":52566204416,\"heapTotal\":46496410624,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1941078,\"teles\":20,\"opens\":5,\"uses\":27,\"folds\":3,\"spines\":22,\"consts\":409,\"name\":\"../packages/ai/src/api/openai-responses-wire-terminal.reason\",\"ms\":1,\"segments\":5323}",
+    "PROFILE {\"phase\":\"def-end\",\"pass\":8,\"time\":1789999600004,\"rss\":52568039424,\"heapTotal\":46498163712,\"heapUsed\":20272993444,\"external\":303534420,\"arrayBuffers\":100,\"probes\":1941100,\"teles\":130,\"opens\":22,\"uses\":145,\"folds\":5,\"spines\":102,\"consts\":1843,\"name\":\"../packages/ai/src/api/openai-responses-wire-items.custom\",\"ms\":3,\"segments\":5344}",
+    "RSS guard stopped build at 51775528 KiB (limit 49 GiB)"
+  ]
 }

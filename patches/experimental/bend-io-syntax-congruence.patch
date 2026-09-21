@@ -1,0 +1,41 @@
+--- a/bend2/bend.ts
++++ b/bend2/bend.ts
+@@ -3160,10 +3160,38 @@
+ // same walk, kinds exact, no swap (a swap under EQ is harmless, so
+ // the All case swaps unconditionally).
+ 
++// Bounded positive syntactic equality: never reduce applications or open
++// closures. Conversion still handles every case this shortcut cannot prove.
++function term_same_syntax(lhs: HTerm, rhs: HTerm): boolean {
++  const todo: [HTerm, HTerm][] = [[lhs, rhs]];
++  for (let fuel = 64; todo.length > 0 && fuel > 0; --fuel) {
++    const [a, b] = todo.pop()!;
++    if (a === b) continue;
++    if (a.$ === "Var" && a.v !== undefined) { todo.push([a.v, b]); continue; }
++    if (b.$ === "Var" && b.v !== undefined) { todo.push([a, b.v]); continue; }
++    if (a.$ === "Ann") { todo.push([a.x, b]); continue; }
++    if (b.$ === "Ann") { todo.push([a, b.x]); continue; }
++    if (a.$ === "Ref" && b.$ === "Ref" && a.k === b.k) continue;
++    if (a.$ === "Var" && b.$ === "Var" && a.i >= 0 && a.i === b.i) continue;
++    if (a.$ === "App" && b.$ === "App") {
++      todo.push([a.x, b.x], [a.f, b.f]); continue;
++    }
++    if (a.$ === "Ctr" && b.$ === "Ctr" && a.k === b.k && a.x.length === b.x.length) {
++      if (a.x.length + todo.length >= fuel) return false;
++      for (let i = 0; i < a.x.length; ++i) todo.push([a.x[i], b.x[i]]);
++      continue;
++    }
++    return false;
++  }
++  return todo.length === 0;
++}
++
+ export function term_compare(mode: "EQ" | "LE", book: Book, lhs: HTerm, rhs: HTerm, dep: number = 0): boolean {
+   if (lhs === rhs) {
+     return true;
+   }
++  if (lhs.$ === "Ref" && rhs.$ === "Ref" && lhs.k === rhs.k) return true;
++  if (lhs.$ === "App" && rhs.$ === "App" && term_same_syntax(lhs, rhs)) return true;
+   const a = term_wnf(book, lhs);
+   const b = term_wnf(book, rhs);
+   if (a === b) {

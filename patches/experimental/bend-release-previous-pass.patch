@@ -1,0 +1,16 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -2871,11 +2871,12 @@
+   };
+   // Emitted callees first until a pass changes nothing (own, hot and poly
+   // only grow): that pass is kept.
+-  let fl: File;
++  let fl: File | undefined;
+   let was: string;
+   do {
+     was = facts();
+     ++profilePass; profileMark("pass-start");
++    fl = undefined;
+     fl = pass(done_defs(cb).reverse());
+     profileMark("pass-end", {segments:fl.segs.length, own:cb.own.size, hot:cb.hot.size, stat:cb.stat.size});
+     Bun.gc(true); profileMark("pass-after-gc");
