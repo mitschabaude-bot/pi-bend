@@ -84,3 +84,11 @@ law running_disposal_joins_before_stream_retirement:
   for stream: Events.AssistantMessageEventStream(A, G)
   for task: Chan(Life.RunResult<A, G, E>)
   {Session.dispose(A, G, E, Session.Running{stream, task}) == IO.bind(Life.RunResult<A, G, E>, Life.RunResult<A, G, E>, IO.join(Life.RunResult<A, G, E>, task), result => IO.bind(Unit, Life.RunResult<A, G, E>, Events.disposeAssistantMessageEventStream(A, G, stream), ignored => IO.pure(Life.RunResult<A, G, E>, result))) : IO(Life.RunResult<A, G, E>)}
+
+law dependency_cleanup_precedes_unchanged_result:
+  for -A: Data
+  for -G: Data
+  for -E: Data
+  for result: Life.RunResult<A, G, E>
+  for cleanup: IO(Unit)
+  {Session.afterCleanup(A, G, E, result, cleanup) == IO.bind(Unit, Life.RunResult<A, G, E>, cleanup, ignored => IO.pure(Life.RunResult<A, G, E>, result)) : IO(Life.RunResult<A, G, E>)}

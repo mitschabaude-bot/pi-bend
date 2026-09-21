@@ -32,15 +32,31 @@ def produce(~E: Data, ~render: E -> String, -A: Data, -G: Data, -Owner: Type, +s
     result : Life.RunResult<A, G, E> <- Driver.run(~E, ~render, A, G, Owner, Driver.Effects{sink, signal, finish}, output, acquire, process(sink), release)
     retire(A, G, E, sink, finish, result)
 
-# Return the stream owner without waiting for acquisition or its first event.
-# Publication uses the canonical nonfailing event stream, not an extension sink.
-def start(~A: Data, ~G: Data, ~E: Data, ~render: E -> String, -Owner: Type, output: T.AssistantMessage<A, G>, signal: C.Callback<Unit, Bool>, acquire: IO(Result<&2, &1, E, Owner>), process: C.Callback<T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>> -> Owner -> T.AssistantMessage<A, G> -> IO(Life.Processed<A, G, E>), release: Owner -> IO(Result<&2, &2, E, Unit>)) -> IO(Run<A, G, E>):
+# Finish dependency retirement before exposing the producer result to wait.
+def afterCleanup(-A: Data, -G: Data, -E: Data, result: Life.RunResult<A, G, E>, cleanup: IO(Unit)) -> IO(Life.RunResult<A, G, E>):
+  do IO<Life.RunResult<A, G, E>>:
+    cleanup
+    return result
+
+def produceWithCleanup(~E: Data, ~render: E -> String, -A: Data, -G: Data, -Owner: Type, +sink: C.Callback<T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>>, signal: C.Callback<Unit, Bool>, +finish: C.Callback<T.AssistantMessage<A, G>, Unit>, output: T.AssistantMessage<A, G>, acquire: IO(Result<&2, &1, E, Owner>), process: C.Callback<T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>> -> Owner -> T.AssistantMessage<A, G> -> IO(Life.Processed<A, G, E>), release: Owner -> IO(Result<&2, &2, E, Unit>), cleanup: IO(Unit)) -> IO(Life.RunResult<A, G, E>):
+  do IO<Life.RunResult<A, G, E>>:
+    result : Life.RunResult<A, G, E> <- produce(~E, ~render, A, G, Owner, sink, signal, finish, output, acquire, process, release)
+    afterCleanup(A, G, E, result, cleanup)
+
+# The producer owns this finalizer and runs it exactly once after every typed
+# outcome and publication callback retirement. wait also joins this cleanup.
+# Returns the canonical event stream without waiting for acquisition.
+def startWithCleanup(~A: Data, ~G: Data, ~E: Data, ~render: E -> String, -Owner: Type, output: T.AssistantMessage<A, G>, signal: C.Callback<Unit, Bool>, acquire: IO(Result<&2, &1, E, Owner>), process: C.Callback<T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>> -> Owner -> T.AssistantMessage<A, G> -> IO(Life.Processed<A, G, E>), release: Owner -> IO(Result<&2, &2, E, Unit>), cleanup: IO(Unit)) -> IO(Run<A, G, E>):
   do IO<Run<A, G, E>>:
     +stream : Events.AssistantMessageEventStream(A, G) <- Events.createAssistantMessageEventStream(~A, ~G)
     +sink : C.Callback<T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>> <- C.create(~Events.AssistantMessageEventStream(A, G), ~T.AssistantMessageEvent<A, G>, ~Result<&2, &2, E, Unit>, ~(publish(A, G, E)), stream)
     +finish : C.Callback<T.AssistantMessage<A, G>, Unit> <- C.create(~Events.AssistantMessageEventStream(A, G), ~T.AssistantMessage<A, G>, ~Unit, ~(end(A, G)), stream)
-    task : Chan(Life.RunResult<A, G, E>) <- IO.fork(Life.RunResult<A, G, E>, produce(~E, ~render, A, G, Owner, sink, signal, finish, output, acquire, process, release))
+    task : Chan(Life.RunResult<A, G, E>) <- IO.fork(Life.RunResult<A, G, E>, produceWithCleanup(~E, ~render, A, G, Owner, sink, signal, finish, output, acquire, process, release, cleanup))
     return Running{stream, task}
+
+# Existing callers retain their own dependency lifetimes.
+def start(~A: Data, ~G: Data, ~E: Data, ~render: E -> String, -Owner: Type, output: T.AssistantMessage<A, G>, signal: C.Callback<Unit, Bool>, acquire: IO(Result<&2, &1, E, Owner>), process: C.Callback<T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>> -> Owner -> T.AssistantMessage<A, G> -> IO(Life.Processed<A, G, E>), release: Owner -> IO(Result<&2, &2, E, Unit>)) -> IO(Run<A, G, E>):
+  startWithCleanup(~A, ~G, ~E, ~render, Owner, output, signal, acquire, process, release, IO.pure(Unit, Unit{}))
 
 def borrow(-A: Data, -G: Data, -E: Data, owner: Run<A, G, E>) -> Run<A, G, E> & Events.AssistantMessageEventStream(A, G):
   match owner:

@@ -1,0 +1,72 @@
+{
+  "scope": "Four typed outcomes, gated finalizer, result availability before cleanup, repeated wait/dispose, six backend/audit combinations. Finalizer runs once and is complete by wait; no HTTP or full-provider claim.",
+  "sources": {
+    "packages/ai/src/api/openai-responses-driver.bend": "db624a7b45a5333742804e8118e757dd5bad89ff88ba1c091e89cb815612381b",
+    "packages/ai/src/api/openai-responses-lifecycle.bend": "f3cfabe03e1a83a98e9ec9cbd8968ff185956c48038818b51d64f07ad5d8180e",
+    "packages/ai/src/api/openai-responses-session.bend": "ee858dcef1b66de0da5736d3612dc2e02caddd1e9b2ed285c99b3d928b109ffd",
+    "packages/ai/src/types.bend": "bc6deda8d2420b596a6ef01f6b795d9d886abcbde3c8c59262ba4da978a975aa",
+    "packages/ai/src/utils/diagnostics.bend": "a3aa280272a74b6f1b89454e240a8d20e44f961f6404b408c6bd5e81edb1401c",
+    "packages/ai/src/utils/event-stream.bend": "84c8268ed244989dc5806f2ebf42579fda7309e38b5f8fb8e92e934b3bbcddf2",
+    "packages/ai/src/utils/model-api.bend": "6bb1bb25801b6bef3f059a37cdd1c90fd3e17687fdd283f6f9e12809ed40693b",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "packages/runtime/src/fifo.bend": "8f811a6bd64ada414cb2b0145a3d9b778b2b6162e800dafcf2289ea216290992",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "tests/openai-session-cleanup.bend": "cdffec34c7672132e971177fd93553869d7fc389715dcf4883d93acca24e66be"
+  },
+  "harness_sha256": "e7e44bb487a27a63cb38e3ce52d67f9ce8cfad939027aa0878f830bcb32d32cd",
+  "programs": {
+    "": "d9ea358d7025e032f1093ff4e3c06287419f77983d9f422901bb33737c87c11f",
+    ".c": "611ea69585a14fb7e0bbd013a02378375f203a11c6402bdd5a71bb8919a8ea4d",
+    ".js": "485b16a39bec74d2a614bc449ab60590894e2d128cd27caeec803f37e62ba2a9",
+    "-audit": "ba668fae87e87aaccf2242ecd003e0a98d1fb4d68cd3239bf04226655e25aa83",
+    "-audit.c": "c3d4797c1d0be817f11623cc497c2d95ba5a55f75d862fb6f17d8ec723974aa7",
+    "-audit.js": "6570fe1a95eca4f50de83f84d1421d7615c26062e4bb8d045d2b4f916fdc37af"
+  },
+  "runs": [
+    {
+      "backend": "native-1",
+      "audited": false,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "passed": true
+    }
+  ],
+  "negative_controls": [
+    {
+      "mutation": "producer omits dependency cleanup",
+      "rejected": true,
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "bend: deadlock: every computation waits on a channel\n"
+    }
+  ]
+}

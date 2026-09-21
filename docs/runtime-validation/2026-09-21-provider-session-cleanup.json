@@ -1,0 +1,1822 @@
+{
+  "scope": "Owned asynchronous Responses session composes the canonical driver/hooks/retries, real HTTP/SSE processing and concurrent canonical stream consumers. Actual pinned wrapper/processor oracle, explicit cleanup adaptations, nonfailing canonical publication. Test-selected string presentation of typed internal causes; no complete serialized provider/auth/TLS/TUI claim.",
+  "reference_commit": "46c9de402bddf46b03c3b9f46487b777aaa41861",
+  "reference": {
+    "wrapper": "try {\nconst nextParams = await options?.onPayload?.(params, model);\n\t\t\tif (nextParams !== undefined) {\n\t\t\t\tparams = nextParams                                 ;\n\t\t\t}\n\t\t\tconst requestOptions = {\n\t\t\t\t...(options?.signal ? { signal: options.signal } : {}),\n\t\t\t\t...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),\n\t\t\t\tmaxRetries: 0,\n\t\t\t};\n\t\t\tconst { data: openaiStream, response } = await retryProviderRequest(\n\t\t\t\t() => client.responses.create(params, requestOptions).withResponse(),\n\t\t\t\t{\n\t\t\t\t\tmaxRetries: options?.maxRetries,\n\t\t\t\t\tmaxRetryDelayMs: options?.maxRetryDelayMs,\n\t\t\t\t\tsignal: options?.signal,\n\t\t\t\t},\n\t\t\t);\n\t\t\tawait options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);\n\t\t\tstream.push({ type: \"start\", partial: output });\n\n\t\t\tawait processResponsesStream(openaiStream, output, stream, model, {\n\t\t\t\tserviceTier: options?.serviceTier,\n\t\t\t\tgrammarToolInputProperties,\n\t\t\t\tapplyServiceTierPricing: (usage, serviceTier) => applyServiceTierPricing(usage, serviceTier, model),\n\t\t\t});\n\n\t\t\tif (options?.signal?.aborted) {\n\t\t\t\tthrow new Error(\"Request was aborted\");\n\t\t\t}\n\n\t\t\tif (output.stopReason === \"pending\") {\n\t\t\t\tthrow new Error(\"OpenAI Responses stream ended without a stop reason\");\n\t\t\t}\n\t\t\tif (output.stopReason === \"aborted\" || output.stopReason === \"error\") {\n\t\t\t\tthrow new Error(output.errorMessage || \"An unknown error occurred\");\n\t\t\t}\n\n\t\t\tstream.push({ type: \"done\", reason: output.stopReason, message: output });\n\t\t\tstream.end();\n\t\t} catch (error) {\n\t\t\tfor (const block of output.content) {\n\t\t\t\tdelete (block                      ).index;\n\t\t\t\t// Streaming scratch buffers are only used during parsing; never persist them.\n\t\t\t\tdelete (block                            ).partialJson;\n\t\t\t\tdelete (block                             ).customInput;\n\t\t\t}\n\t\t\toutput.stopReason = options?.signal?.aborted ? \"aborted\" : \"error\";\n\t\t\toutput.errorMessage = formatProviderError(\n\t\t\t\tnormalizeProviderError(error),\n\t\t\t\t`${model.provider === \"openai\" ? \"OpenAI\" : model.provider} API error`,\n\t\t\t);\n\t\t\tstream.push({ type: \"error\", reason: output.stopReason, error: output });\n\t\t\tstream.end();\n\t\t}",
+    "results": [
+      {
+        "mode": 0,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:done:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:done:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none",
+        "error": null,
+        "unhandled": null
+      },
+      {
+        "mode": 1,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "emit:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,65,80,73,32,101,114,114,111,114,32,40,52,48,48,41,58,32,111,114,105,103,105,110,97,108",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,65,80,73,32,101,114,114,111,114,32,40,52,48,48,41,58,32,111,114,105,103,105,110,97,108"
+        ],
+        "final": "final:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,65,80,73,32,101,114,114,111,114,32,40,52,48,48,41,58,32,111,114,105,103,105,110,97,108",
+        "error": "OpenAI API error (400): original",
+        "unhandled": null
+      },
+      {
+        "mode": 2,
+        "trace": [
+          "payload:7:model",
+          "emit:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:112,97,121,108,111,97,100",
+          "close"
+        ],
+        "sent": [],
+        "retained": [
+          "retained:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:112,97,121,108,111,97,100"
+        ],
+        "final": "final:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:112,97,121,108,111,97,100",
+        "error": "payload",
+        "unhandled": null
+      },
+      {
+        "mode": 3,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:114,101,115,112,111,110,115,101",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:114,101,115,112,111,110,115,101"
+        ],
+        "final": "final:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:114,101,115,112,111,110,115,101",
+        "error": "response",
+        "unhandled": null
+      },
+      {
+        "mode": 8,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:error:output:104,233,128578;:resp-final:aborted:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:82,101,113,117,101,115,116,32,119,97,115,32,97,98,111,114,116,101,100",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-final:aborted:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:82,101,113,117,101,115,116,32,119,97,115,32,97,98,111,114,116,101,100"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:aborted:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:82,101,113,117,101,115,116,32,119,97,115,32,97,98,111,114,116,101,100",
+        "error": "Request was aborted",
+        "unhandled": null
+      },
+      {
+        "mode": 9,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:error:output:104,233,128578;:resp-test:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,82,101,115,112,111,110,115,101,115,32,115,116,114,101,97,109,32,101,110,100,101,100,32,98,101,102,111,114,101,32,97,32,116,101,114,109,105,110,97,108,32,114,101,115,112,111,110,115,101,32,101,118,101,110,116",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-test:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,82,101,115,112,111,110,115,101,115,32,115,116,114,101,97,109,32,101,110,100,101,100,32,98,101,102,111,114,101,32,97,32,116,101,114,109,105,110,97,108,32,114,101,115,112,111,110,115,101,32,101,118,101,110,116"
+        ],
+        "final": "final:output:104,233,128578;:resp-test:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,82,101,115,112,111,110,115,101,115,32,115,116,114,101,97,109,32,101,110,100,101,100,32,98,101,102,111,114,101,32,97,32,116,101,114,109,105,110,97,108,32,114,101,115,112,111,110,115,101,32,101,118,101,110,116",
+        "error": "OpenAI Responses stream ended before a terminal response event",
+        "unhandled": null
+      },
+      {
+        "mode": 10,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "diagnostic",
+          "abort-hook",
+          "emit:error:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:106,115,111,110",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:106,115,111,110"
+        ],
+        "final": "final:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:106,115,111,110",
+        "error": "json",
+        "unhandled": null
+      },
+      {
+        "mode": 11,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "abort-hook",
+          "emit:error:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:102,97,105,108,101,100,58,32,102,97,105,108,101,100",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:102,97,105,108,101,100,58,32,102,97,105,108,101,100"
+        ],
+        "final": "final:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:102,97,105,108,101,100,58,32,102,97,105,108,101,100",
+        "error": "failed: failed",
+        "unhandled": null
+      },
+      {
+        "mode": 12,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:error:output:104,233,128578;:resp-final:error:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:99,108,101,97,110,117,112",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-final:error:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:99,108,101,97,110,117,112"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:error:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:99,108,101,97,110,117,112",
+        "error": "cleanup",
+        "unhandled": null
+      },
+      {
+        "mode": 13,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "random",
+          "sleep 1082081280:0",
+          "request:7",
+          "random",
+          "sleep 1083129856:0",
+          "request:7",
+          "emit:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,65,80,73,32,101,114,114,111,114,32,40,52,50,57,41,58,32,111,114,105,103,105,110,97,108",
+          "close"
+        ],
+        "sent": [
+          "7",
+          "7",
+          "7"
+        ],
+        "retained": [
+          "retained:error:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,65,80,73,32,101,114,114,111,114,32,40,52,50,57,41,58,32,111,114,105,103,105,110,97,108"
+        ],
+        "final": "final:output::none:error:0,0:0,0:0,0:0,0:0,0:0,0:error:79,112,101,110,65,73,32,65,80,73,32,101,114,114,111,114,32,40,52,50,57,41,58,32,111,114,105,103,105,110,97,108",
+        "error": "OpenAI API error (429): original",
+        "unhandled": null
+      },
+      {
+        "mode": 14,
+        "trace": [
+          "payload:7:model",
+          "request:9",
+          "random",
+          "sleep 1082081280:0",
+          "request:9",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:done:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none",
+          "close"
+        ],
+        "sent": [
+          "9",
+          "9"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:done:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none",
+        "error": null,
+        "unhandled": null
+      },
+      {
+        "mode": 15,
+        "trace": [
+          "payload:7:model",
+          "request:null",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:done:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none",
+          "close"
+        ],
+        "sent": [
+          "null"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:done:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:stop:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:none",
+        "error": null,
+        "unhandled": null
+      },
+      {
+        "mode": 16,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "abort-hook",
+          "emit:error:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:102,97,105,108,101,100,58,32,102,97,105,108,101,100",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:102,97,105,108,101,100,58,32,102,97,105,108,101,100"
+        ],
+        "final": "final:output:104,233,128578;:resp-test:aborted:0,0:0,0:0,0:0,0:0,0:0,0:error:102,97,105,108,101,100,58,32,102,97,105,108,101,100",
+        "error": "failed: failed",
+        "unhandled": null
+      },
+      {
+        "mode": 17,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:error:output:104,233,128578;:resp-final:error:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:79,112,101,110,65,73,32,82,101,115,112,111,110,115,101,115,32,115,116,114,101,97,109,32,101,110,100,101,100,32,119,105,116,104,111,117,116,32,97,32,115,116,111,112,32,114,101,97,115,111,110",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_end:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:error:output:104,233,128578;:resp-final:error:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:79,112,101,110,65,73,32,82,101,115,112,111,110,115,101,115,32,115,116,114,101,97,109,32,101,110,100,101,100,32,119,105,116,104,111,117,116,32,97,32,115,116,111,112,32,114,101,97,115,111,110"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:error:1076756480,0:1075052544,0:1074266112,0:1073741824,0:1077477376,0:1078263808,0:error:79,112,101,110,65,73,32,82,101,115,112,111,110,115,101,115,32,115,116,114,101,97,109,32,101,110,100,101,100,32,119,105,116,104,111,117,116,32,97,32,115,116,111,112,32,114,101,97,115,111,110",
+        "error": "OpenAI Responses stream ended without a stop reason",
+        "unhandled": null
+      },
+      {
+        "mode": 18,
+        "trace": [
+          "payload:7:model",
+          "request:7",
+          "response:model:1080623104:0:ok",
+          "emit:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "emit:done:output:104,233,128578;:resp-final:length:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "close"
+        ],
+        "sent": [
+          "7"
+        ],
+        "retained": [
+          "retained:start:output::none:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_start:output:;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:text_delta:output:104,233,128578;:resp-test:pending:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+          "retained:done:output:104,233,128578;:resp-final:length:0,0:0,0:0,0:0,0:0,0:0,0:error:none"
+        ],
+        "final": "final:output:104,233,128578;:resp-final:length:0,0:0,0:0,0:0,0:0,0:0,0:error:none",
+        "error": null,
+        "unhandled": null
+      }
+    ]
+  },
+  "validated_checkout": {
+    "base_commit": "ef6993d9abf6fb45840eeaaaafd81b5cd03c282e",
+    "changed_files": [
+      "packages/ai/src/api/openai-responses-session.bend",
+      "tests/openai-provider-session.bend"
+    ],
+    "pending_form_drafts_included": false
+  },
+  "runs": [
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 0,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 1,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 2,
+      "peers": [],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 3,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Retire unread acquired response when the response hook fails."
+      ]
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 8,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 9,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 10,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 11,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 12,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 13,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 14,
+      "peers": [
+        {
+          "payload": "9",
+          "closure": "eof"
+        },
+        {
+          "payload": "9",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 15,
+      "peers": [
+        {
+          "payload": "null",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 16,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 17,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": false,
+      "mode": 18,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 0,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 1,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 2,
+      "peers": [],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 3,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Retire unread acquired response when the response hook fails."
+      ]
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 8,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 9,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 10,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 11,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 12,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 13,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 14,
+      "peers": [
+        {
+          "payload": "9",
+          "closure": "eof"
+        },
+        {
+          "payload": "9",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 15,
+      "peers": [
+        {
+          "payload": "null",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 16,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 17,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "mode": 18,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 0,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 1,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 2,
+      "peers": [],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 3,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Retire unread acquired response when the response hook fails."
+      ]
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 8,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 9,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 10,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 11,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 12,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 13,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 14,
+      "peers": [
+        {
+          "payload": "9",
+          "closure": "eof"
+        },
+        {
+          "payload": "9",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 15,
+      "peers": [
+        {
+          "payload": "null",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 16,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 17,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "mode": 18,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 0,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 1,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 2,
+      "peers": [],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 3,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Retire unread acquired response when the response hook fails."
+      ]
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 8,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 9,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 10,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 11,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 12,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 13,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 14,
+      "peers": [
+        {
+          "payload": "9",
+          "closure": "eof"
+        },
+        {
+          "payload": "9",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 15,
+      "peers": [
+        {
+          "payload": "null",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 16,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 17,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "mode": 18,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 0,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 1,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 2,
+      "peers": [],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 3,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Retire unread acquired response when the response hook fails."
+      ]
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 8,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 9,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 10,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 11,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 12,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 13,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 14,
+      "peers": [
+        {
+          "payload": "9",
+          "closure": "eof"
+        },
+        {
+          "payload": "9",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 15,
+      "peers": [
+        {
+          "payload": "null",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 16,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 17,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "mode": 18,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 0,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 1,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 2,
+      "peers": [],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 3,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Retire unread acquired response when the response hook fails."
+      ]
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 8,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 9,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 10,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 11,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 12,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": [
+        "Inject cleanup failure after actual retirement; retain it separately from the primary cause."
+      ]
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 13,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        },
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 14,
+      "peers": [
+        {
+          "payload": "9",
+          "closure": "eof"
+        },
+        {
+          "payload": "9",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 15,
+      "peers": [
+        {
+          "payload": "null",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 16,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "reset"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 17,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "mode": 18,
+      "peers": [
+        {
+          "payload": "7",
+          "closure": "eof"
+        }
+      ],
+      "passed": true,
+      "adaptations": []
+    }
+  ],
+  "source_sha256": {
+    "packages/ai/src/api/constrained-sampling.bend": "a9fafa7a0cca26e66e4b891a97428be9fb57ba7d577bb5f562a4829d677aab26",
+    "packages/ai/src/api/openai-body-responses-reader.bend": "eb80152b0c3cd1d8b3976ee979b2763b2fcb26bac6b245c7c88d53fedde8df3a",
+    "packages/ai/src/api/openai-http-errors.bend": "15ff2365632d694bb0033d3e2885a3401d812f5ec44011200ad297dcc59783c9",
+    "packages/ai/src/api/openai-http-responses-reader.bend": "d397eb4eef65a2a270059e0f8421216f99a752e9f615ff14d863fd186278adba",
+    "packages/ai/src/api/openai-responses-driver.bend": "db624a7b45a5333742804e8118e757dd5bad89ff88ba1c091e89cb815612381b",
+    "packages/ai/src/api/openai-responses-lifecycle.bend": "f3cfabe03e1a83a98e9ec9cbd8968ff185956c48038818b51d64f07ad5d8180e",
+    "packages/ai/src/api/openai-responses-reader.bend": "607402d9c4a217a7db82d9afe2f3bebe7e129c52cf540f6d5bde2aea48342607",
+    "packages/ai/src/api/openai-responses-session.bend": "ee858dcef1b66de0da5736d3612dc2e02caddd1e9b2ed285c99b3d928b109ffd",
+    "packages/ai/src/api/openai-responses-stream-content.bend": "c951d75deeb42febc26d2758d8ceb4246e070626526fc56be4f1b6a340644817",
+    "packages/ai/src/api/openai-responses-stream-pricing.bend": "02554486bcb7a51a9acc2b73731df16081e73c747188335a94c27ec976de8ff9",
+    "packages/ai/src/api/openai-responses-stream-state.bend": "739ff83776ae04d1b95fc449b4e6e634df77eacefb77396342c0d26e45082a11",
+    "packages/ai/src/api/openai-responses-stream.bend": "ee56d34a44b3b4aee8e25458e83b4e8c2485655877a743be88113e5b37dcfef8",
+    "packages/ai/src/api/openai-responses-terminal.bend": "97c5be14f4862bfc8f003a22b45c059eaf1fea02aa1b83ee118a4934bb86005a",
+    "packages/ai/src/api/openai-responses-wire-items.bend": "f0f919688b13f5f81434eb9c7c571bd9fa9ec64a56288b8ba044dfcbf4b68eac",
+    "packages/ai/src/api/openai-responses-wire-terminal.bend": "3c16c0761c759bbc2d3e7a10bf6ba022ce6edc82dd1c5f24da8279ea18b2aeb1",
+    "packages/ai/src/api/openai-responses-wire.bend": "1f8f4407f5d9ff3b94f14b50d5c8ccb32e8de262c337e513f50da83235eb3143",
+    "packages/ai/src/api/openai-sse-json.bend": "8187a7557f6e5907274774eacd4a85cc4f6fc38d300207649bc40f2212eced5e",
+    "packages/ai/src/api/openai-sse-reader.bend": "f2dbd4cf2a8a8d16e0c5d6e56ce1fd271a8f5a9084996afe86eb03523ab22c3a",
+    "packages/ai/src/api/openai-text-signature.bend": "0a489deb12eb7b29aea145e564d0ca3de943bec6be76e529138ca4b44c1cefae",
+    "packages/ai/src/api/strict-json-schema.bend": "781f111646e16b764c5bfb8e0c4488ddb4854a854f9cae0b3f67a2dbdbd24c5d",
+    "packages/ai/src/api/transform-messages.bend": "e06716820c57ea2c2070b4e1c4b10e26dce3e2df4ccdc16232ccb152c9293e69",
+    "packages/ai/src/api/transform-tool-results.bend": "7a8e1d827939f176ab87b6eef0df62092706466fcc0396e5b80dfdf843d24327",
+    "packages/ai/src/types.bend": "bc6deda8d2420b596a6ef01f6b795d9d886abcbde3c8c59262ba4da978a975aa",
+    "packages/ai/src/utils/cost.bend": "45072ce71b65f0f04db8f5c5fdd491d7b8c597c30ca09239d030884b5f2a7fac",
+    "packages/ai/src/utils/diagnostics.bend": "a3aa280272a74b6f1b89454e240a8d20e44f961f6404b408c6bd5e81edb1401c",
+    "packages/ai/src/utils/error-body.bend": "d6eea78140ce7a2c8314cd4df15a82bbf17a50b6d00cf848466d7914d8c571d7",
+    "packages/ai/src/utils/event-stream.bend": "84c8268ed244989dc5806f2ebf42579fda7309e38b5f8fb8e92e934b3bbcddf2",
+    "packages/ai/src/utils/headers.bend": "e702b09c9c8a8518526a075240468356160e3d58f7009a8bb30f0563458e55e0",
+    "packages/ai/src/utils/json-parse.bend": "d709a70a9de85211ce0be67fce64fdf440de63daa7c5de7c556084989eedab2c",
+    "packages/ai/src/utils/json.bend": "97a543c0ba39d84d871078b66d02c9c915165b0e4e957367296f16882fd02123",
+    "packages/ai/src/utils/model-api.bend": "6bb1bb25801b6bef3f059a37cdd1c90fd3e17687fdd283f6f9e12809ed40693b",
+    "packages/ai/src/utils/provider-http-response.bend": "d23e99385ab202daeac94f2ee73d58553e92034385dcf40f42df462929689345",
+    "packages/ai/src/utils/provider-request.bend": "b456c731ce3882db0fe5277d9e1791a174f5c7069807915864f1ec09036cb3ed",
+    "packages/ai/src/utils/provider-response-view.bend": "772c21470051828aa8dd1759cb1adcab13a7412548b3fa0dce7888590c460c47",
+    "packages/ai/src/utils/provider-retry-error.bend": "a362742a67be4ee56ccd9b03706ab8298a719c96aa114c78a2f82314c71305c7",
+    "packages/ai/src/utils/provider-retry-policy.bend": "147cb7293c4c1aeeaa8cd3a52f9ec26bd9fa875e6278d9aa7b3653ce6166c898",
+    "packages/ai/src/utils/provider-retry.bend": "74d0777516ac1cb202585bdf03021dec048c25ed9888b590bb216c8d5f3e49e6",
+    "packages/ai/src/utils/schema-json.bend": "b62984e33e4293cf315b7abe90f1a5c94d032c58f5113f5a700c242f81e66148",
+    "packages/ai/test/provider-retry.bend": "deed6e89ad25245966f6e7cb71537bb425b89faf61798b334ea03e3a6bd53545",
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-socket.bend": "bf97fe0ea84725a5400dace593ab7748df9c1c5982eefec10dff44ab71c7dce5",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/bounded-bytes.bend": "ca3fc3b391a2eabb4de79ef5e6ee71a3b3a216acb82d9140fdc9548f8f4421e9",
+    "packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "packages/runtime/src/date.bend": "d86681a2e71f1b22a277ebf0459ae973d7745759a26f9ca51b7b0402280090ca",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/f64-decimal.bend": "ca92981fee2ac39cadb8f3be014f101ccdaf54a1e212036d82d5b1b25f7f83d9",
+    "packages/runtime/src/f64-ratio.bend": "ac20c44b90946b88148bd6f01fcc2c664fb818aa1e4dbd35b44d556443459f06",
+    "packages/runtime/src/f64-round.bend": "fafb1a2ab203ca48e1c290ed024871240fb42328ed15efe7b24f0fce2d68761f",
+    "packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "packages/runtime/src/fifo.bend": "8f811a6bd64ada414cb2b0145a3d9b778b2b6162e800dafcf2289ea216290992",
+    "packages/runtime/src/headers.bend": "9978dc8b32df82059c8c09345003077db13ee4127f7c8944a9888f8c8a0d6602",
+    "packages/runtime/src/http-abort-classification.bend": "704ba2f4ba289eb348c8a960e1738e897467b5822ed98d2fe747d2cbc6ed1871",
+    "packages/runtime/src/http-body-buffer.bend": "2eef5a96bf5cf6312a535ead2ce2241ce24bc566ff7e57c8d40557d7e49609ba",
+    "packages/runtime/src/http-body-consume.bend": "147bddd07c305213f0c30c1fd5c991c4b3211f9c0d96c404a4d0b536e4f72482",
+    "packages/runtime/src/http-body-source.bend": "982d5867dc93e90256e16a4ebba1874fac0decf3cb0d3217bf87ba6ab038b1f9",
+    "packages/runtime/src/http-body.bend": "7388c006dedb8d5f10966ebdeceae913ac631de005348f891745ce1bcebcf52f",
+    "packages/runtime/src/http-buffered-body.bend": "eefb0045831b4a8785ba8e7f921eadffa8838f1a501468b56b18cc75bffbc562",
+    "packages/runtime/src/http-buffered-framing.bend": "d7af5d68f07845d478ebdf8fb9676db218a1655a997094190c9c1f592abf08dc",
+    "packages/runtime/src/http-buffered-request.bend": "5bdff0dce96d495682d9cf227ac4a495257816b17158608cf0dc41ee9676c449",
+    "packages/runtime/src/http-chunk-size.bend": "6a9562c2bf1d4acbf621173dbc1f177735c16eb8e63801bc34c2a6f347ed0dbe",
+    "packages/runtime/src/http-chunked-body.bend": "eafa17ba24b7feef64c6194734200a9f65abf1b4214061124954aedf3ba75918",
+    "packages/runtime/src/http-chunked-upload.bend": "5385a078a1096f602dc5211ddaea5d47c19f3a3b9815fdf65c42d828d0497598",
+    "packages/runtime/src/http-content-length.bend": "c5fbb68c029b3f203cc6721ffdf5eb77be38e69c3922dba1f3a8a970b8b37ae3",
+    "packages/runtime/src/http-exchange-response.bend": "ff191397f0ee0aa89233b98369fe846256ec4266f5a880704a615e8d9c34c31e",
+    "packages/runtime/src/http-field.bend": "7a2b9e89f6760294f6e40fe5135e1bde32a9e897ed99a2ac8101a0abdefabcf2",
+    "packages/runtime/src/http-fixed-body.bend": "fed0fed0522429e5beee2da28827e5ac41781a6222733b9381847954f19adaa6",
+    "packages/runtime/src/http-framing-fields.bend": "ea95cd26537356a9aa45ba7734e024c80f85209e68fd5b136aca3c3bf46adea3",
+    "packages/runtime/src/http-head.bend": "e8d8d955c879224dedb8831171f77bc26ddb4581137713f1fa95dd0f52f7e59f",
+    "packages/runtime/src/http-header.bend": "5e9a18dd5c72942bf11013344eafb5d94d7a7156cd50f632e7b307488ab58b3e",
+    "packages/runtime/src/http-line.bend": "f1165cfec3c4b32f3d5d83ddd60f1fed30d4c058a02272bed826d4eef5a34f66",
+    "packages/runtime/src/http-request-head.bend": "017d911d05f8d9ef26cf70697381491eeaccbd1514f3cca1fdee27f1dc609575",
+    "packages/runtime/src/http-request-method.bend": "03821f93b39ffd656279817c22cb3b02961b17c2c521b77ac1dfb0388ee8261e",
+    "packages/runtime/src/http-response-metadata.bend": "fb6e92273c328abb777646913cadc35343e97e4edcd954b42dca7c1734c3df64",
+    "packages/runtime/src/http-response-policy.bend": "ab878b0ac93379f9cd86117adb46c5649ef979cf5febd2af13d09f49a86f09cd",
+    "packages/runtime/src/http-response-progress.bend": "0df44f82f8cbc2d08d1c19975465a74eb989f154a6f7380d867744fb1f250547",
+    "packages/runtime/src/http-response-reader.bend": "39da1f6ed88ea562131f611a12db9c10fbaa210b642ee91867ccb815162c1324",
+    "packages/runtime/src/http-response-stream.bend": "005f900a423cd03555fe954e4f161e8fb31e688f5db502be2574da2f8ec7c53f",
+    "packages/runtime/src/http-response-termination.bend": "ffa0780a05554dbd5b00c1bcd755412a425c8aa54e2a3a80f7f35d48480a09cd",
+    "packages/runtime/src/http-response.bend": "fec2e80358f3a498147862e9472d9b0cf2e28547b679dc80bdd526d339eba92b",
+    "packages/runtime/src/http-socket-exchange.bend": "f56e79179378c9930a1e81e356558a49f388d53e82506b451dd716e31b1a1f4f",
+    "packages/runtime/src/http-socket-source.bend": "b0e15d9a99a2b1237544f90e2c71ffb59fe3dcfc9fa0b2b1fafdcbb5bebfee9a",
+    "packages/runtime/src/http-status.bend": "43170e7135a2b96b1d7bfbd48bfde2357404ece662292c8c30ff86d432022960",
+    "packages/runtime/src/http-transport-callbacks.bend": "07b8bde39e4379c91119a9b5c999382c2266544a178ea3312af96147a90e2929",
+    "packages/runtime/src/http-url.bend": "e24a5384a3fabbc95ee235e55125869125be73731c1fc925b996cf349b9ca087",
+    "packages/runtime/src/json-decode.bend": "2f8b3617406c163bfaff0450f1fc52e513660578411d270cf561142eb07971f3",
+    "packages/runtime/src/json-parse.bend": "4cbb8bbbe782652eab46842cc842388ca25ad448a12936a109b27f7ca694f5c6",
+    "packages/runtime/src/json-string.bend": "93f65f1397f5866062c196d1a7964edbe29612543e702134da86211bfcd8b17c",
+    "packages/runtime/src/line-decoder.bend": "c6a2a29dd95f10fd9f5e850d0c1584dc9b2806fe2818e47f131d167ccf9798c9",
+    "packages/runtime/src/number-string.bend": "35c4aee2b8c5ff65f99cdfd6e3b57051e422b6117826415a5abba2b188ab5705",
+    "packages/runtime/src/parse-float.bend": "99364e06ff85ec69154df8570dace2af522caa80ef9f7165303c626c200255ba",
+    "packages/runtime/src/partial-json.bend": "3ee4ed2829f0631225e15422a475e30d62fa3bc42d05b3c66f25fd0be83654d1",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/schema-value.bend": "0829df30e23dc6011a1b0a1d29b7fc222241acba258aa692af1b740b6cacc8a9",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/socket-interrupt.bend": "00c9c2a7ec68ffb37ddebe90ecc88f31df2b9bfac21bc046ddea51ff9b33eb6c",
+    "packages/runtime/src/socket-upload.bend": "638c4290639a7b1e0694ab1a64aa92d149ee1df2b23c76ef6b44a861f79af016",
+    "packages/runtime/src/socket-writer.bend": "99c4b697f1e081199c06bee500f2d9f6137f157b92d1afec00bc95b6ea43cb6e",
+    "packages/runtime/src/sse-chunks.bend": "308f75d50380961133124357f38dc2666a87c1b25855a0240305309cf6681d09",
+    "packages/runtime/src/sse-decoder.bend": "edad73cf2db7bed6c67b3f5e724ff4567ba1b2a571f7aaafa496630c1b141c39",
+    "packages/runtime/src/sse-reader.bend": "26aa691647b6664af32aa67b6a16db09016492ed9d44d89fe4fb615438a18000",
+    "packages/runtime/src/sse-stream.bend": "ec083830a8334aad03028a4918da815b9f8afa674f472ed14440da8cbed63f9d",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/text-space.bend": "58db43cb9289c3e0de14bb641a10f9eed1f323f4ab28eb25f999578892c2b8e9",
+    "packages/runtime/src/text-unit-budget.bend": "4a628bb160865017a53d57cd533196be283324ffa9ba518bbad4c9d9c6e88321",
+    "packages/runtime/src/timer-delay.bend": "7f0892b67b7fb1fb3254ee00d455980817dce58515abc87cd9d216b15a617ea9",
+    "packages/runtime/src/timer-milliseconds.bend": "2dc34a22f25ffc8e917fcd359e947225b09aa02105e823ea86c0fc8d218a6bca",
+    "packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-form.bend": "a2087e2fc18d39429d14d29541fe3e7030bba799acf53fdbc91a996e66be8404",
+    "packages/runtime/src/url-host.bend": "fb94caba20dc366bf4a01613991184063779f3a9e58e407c37f77c300cca7c61",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/url-percent.bend": "b66017f8d5d079ef3ed1d170fe798d22464b22bcc2e2ed5e9ec05e502e0a28e4",
+    "packages/runtime/src/url-record.bend": "482752bbfdaceafd4c5a22800cc71aaa337a17650c40601a7cbb9e56cac053bb",
+    "packages/runtime/src/url-scheme.bend": "988f2be33c24df6db98d499b82f0f4c2fadbb9ac106bce9c962ca3f48a632629",
+    "packages/runtime/src/url-search-params.bend": "e11ea0ad351d2e1a83cd8133e089304f3535f1e46d2cff12f898611d7c3c7ed1",
+    "packages/runtime/src/url-serialize.bend": "92ea7768af456b3df76db45517d7e4bbe983b54d24da253d5173310f98ed4b66",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8-strict.bend": "2e0aafa95b71aa44b3642c1c234656037ea8f8136a91cd589535c2764bada840",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/http-body-consume.bend": "37d6725b5f44a7fcff5a20d891c3d5cca7290dc3b29c5be968b63040fc817cc0",
+    "packages/runtime/test/http-response.bend": "81d417bcc221ccb0f83cff56692228be43d9a692378f57cc9528375173abd4e3",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/http-body-consume-native.bend": "5601b6e9ecf73a3b6e200193cbffdcf9514c79d4585d691d4b69a11ffa658987",
+    "tests/openai-http-process.bend": "dff2018aceaf1063058063b549deb64728dee891d5d853afcd966a7c2fcacc70",
+    "tests/openai-provider-driver.bend": "6385be87e6d4e264b7ba9c4930e08f2368897936790e3e04c9d265f12a3653ad",
+    "tests/openai-provider-session.bend": "f0da45e74272f19dd27fbb8fd69e973878651bc7a27984506dbcae8546afddcc",
+    "tests/provider-request.bend": "c987644aaa98820b8c3c2c8e4b7502eee0d0f61cc8531c95ec31a3d8ed679840"
+  },
+  "harness_sha256": {
+    "tests/openai_provider_session_check.py": "ddcb7df885ef471ad6ee39d79eb11fdf3519eaec4c076ef85b29b24811d24f6d",
+    "tests/channel_audit.py": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1",
+    "tests/openai_provider_driver_reference.mts": "0f8156241d1dd364871a7f5ee10886599c251d8cc33f588047a9757515042ca1",
+    "tests/responses_stream_reference.mts": "0a2fd19f903dc997d2146cf25df0ce61345f748272ad657286d67f4359b0dca0"
+  },
+  "program_sha256": {
+    "": "0b7a3fb93807f6996dbd8a5ba9341bfc15c0d41a07c9f2ad69bbfaae715e24c4",
+    ".c": "0e5015c4715c30d7bcebfe7078f4d81b9d64e96b978faad82682667555ef4cb4",
+    ".js": "f3b9564ca552367fff4b68a198bb07846d0fd22ac6ed021afc8dbde7ed22dac4",
+    "-audit": "0d6f1a2b68b73f371795e0c1ad4f7b81df0374a7911f28c798ea07dfb2538ca8",
+    "-audit.c": "453cae996039910f0173100b9883d944b00109d1ba705882b7f0d273a427c7fd",
+    "-audit.js": "3eca565d36bbbddb97a599940badde7afccd1aa01322222e4a6af06b0857dbb1"
+  },
+  "compiler_command": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "c": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/openai-provider-session.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/openai-provider-session-cleanup.c"
+      ],
+      "elapsed_seconds": 344.46440721396357,
+      "peak_sampled_group_rss_kib": 19920688,
+      "limit_gib": 32.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "js": {
+      "command": [
+        "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/openai-provider-session.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/openai-provider-session-cleanup.js"
+      ],
+      "elapsed_seconds": 28.8964477609843,
+      "peak_sampled_group_rss_kib": 12829524,
+      "limit_gib": 32.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  }
+}

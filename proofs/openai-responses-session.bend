@@ -25,3 +25,5 @@ def Laws.callbacks_retire_before_run_result(A, G, E, sink, finish, result): {==}
 def Laws.finished_disposal_preserves_result(A, G, E, stream, result): {==}
 
 def Laws.running_disposal_joins_before_stream_retirement(A, G, E, stream, task): {==}
+
+def Laws.dependency_cleanup_precedes_unchanged_result(A, G, E, result, cleanup): {==}

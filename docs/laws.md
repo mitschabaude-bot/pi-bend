@@ -213,3 +213,7 @@ The [full gate](proof-validation/2026-09-21-configured-acquire.json) checks 424 
 ### Scoped Responses body ownership (2026-09-21)
 
 The [full gate](proof-validation/2026-09-21-scoped-responses.json) checks 429 public laws and 67 supporting lemmas and rejects 231 typed mutations, open obligations and a missing proof. Five new laws quantify disposal causes, final messages and error embeddings: reader-only, body-only and simultaneous disposal failures retain their causes, while lifecycle conversion preserves successful output and simultaneous primary/cleanup failures. These are value-preservation guarantees; live resource retirement remains an IO integration test. The existing SSE reader loop is newly reachable from the root: twenty unchanged unsafe source declarations produce twenty-two concrete checker annotations. No unsafe definition was added.
+
+### Producer-owned session cleanup (2026-09-21)
+
+The [full gate](proof-validation/2026-09-21-session-cleanup.json) checks 430 public laws and 67 supporting lemmas and rejects 232 typed mutations. The new law quantifies every lifecycle result and dependency cleanup program, requiring cleanup before returning that unchanged result. [The ownership design and IO evidence](session-owned-cleanup.md) cover the producer wiring, gated retirement, repeated joins and existing provider-session regressions. The unsafe source declaration set is unchanged.

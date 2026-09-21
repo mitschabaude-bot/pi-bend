@@ -15,13 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--worktree', type=Path, default=ROOT)
 parser.add_argument('--no-build', action='store_true')
+parser.add_argument('--prefix', type=Path, default=Path('build/openai-provider-session'))
 parser.add_argument('--backends', nargs='+', choices=['native-1','native-4','bun'], default=['native-1','native-4','bun'])
 args = parser.parse_args()
 WORK = args.worktree.resolve()
 BEND = Path(os.environ.get('BEND', ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts')).resolve()
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'tests/openai-provider-session.bend'
-prefix = WORK / 'build/openai-provider-session'
+prefix = WORK / args.prefix
 if not args.no_build:
     for backend in ['c', 'js']:
         with Path(f'{prefix}-{backend}-build.log').open('w') as log:
@@ -148,4 +149,4 @@ record={
  'compiler_sha256':{name:hashlib.sha256((BEND.parent/name).read_bytes()).hexdigest() for name in ['main.ts','bend.ts','comp.ts','base.bend']},
  'builds':{backend:json.loads(Path(f'{prefix}-{backend}-build.json').read_text()) for backend in ['c','js'] if (backend=='js' and 'bun' in args.backends) or (backend=='c' and any(b.startswith('native') for b in args.backends))},
 }
-(ROOT/'build/openai-provider-session-results.json').write_text(json.dumps(record,indent=2)+'\n')
+Path(str(prefix)+'-results.json').write_text(json.dumps(record,indent=2)+'\n')
