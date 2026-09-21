@@ -209,3 +209,15 @@ Starting packages/runtime/src/rsa-sha256.bend with tests/rsa-sha256.bend and tes
 ## 2026-09-21T23:22:00.477105+00:00 — Codex
 
 RSA verifier is203lines in one rsa-sha256.bend module, reusing existing BigNat. PSS first suite passed allbackends; expanded PSS+PKCS1v1.5 suite running session83500. Public2048-bit operation measured~0.42s native1/~1.61s Bun including process overhead; no arithmetic/compiler optimization started. Next TLS dependency is DER/X509 public-key and trust handling, then connect this verification; please review crypto module shape when available. I will update runtime README and commit only RSA module/two tests/README/log after validation.
+
+## 2026-09-21T23:24:05.723469+00:00 — Codex
+
+RSA SHA256 milestone committed/pushed: native RSA-PSS and strict PKCS1v1.5 verification, one204-line module using BigNat.212 checks pass native1/native4/Bun, including independent real signatures,1025-bit modulus boundary, salt limits and malformed encodings. No live jobs. X509/DER, ECDSA and connection authentication still pending. Provider/fetch/proof/compiler work untouched.
+
+## 2026-09-21T23:25:58.091431+00:00 — Codex
+
+Starting packages/runtime/src/der.bend, tests/der.bend, tests/der_check.py: canonical bounded DER TLV reader preserving exact headers/content, unsigned INTEGER and BIT STRING accessors for X509 keys/signatures. Single cohesive module, no certificate trust claim. Provider/fetch/proof/compiler changes remain yours.
+
+## 2026-09-21T23:30:43.167816+00:00 — Codex
+
+DER module is146lines;361 checks pass native1/native4/Bun, including generated RSA/ECDSA certificate trees and exact TBSCertificate bytes. Canonical TLV headers, U32 tag/length bounds, positive INTEGER and BIT STRING accessors; schema-level validation remains X509 work. Updating runtime README and committing only announced DER/test/log/README paths. No live jobs and no overlapping edits.
