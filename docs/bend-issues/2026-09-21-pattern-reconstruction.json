@@ -1,0 +1,120 @@
+{
+  "status": "Diagnosis only; no pattern optimization installed.",
+  "scope": "Two valid programs distinguish reconstruction cost. Constant fallback changes program behavior and is only a diagnostic control; production and original regression remain unchanged.",
+  "compiler_hashes": {
+    "bend.ts": "9225fd5a1ace50c1042b7e3e7a232bd37f3009d01037e0e46030132db6343611",
+    "comp.ts": "85d7a28f339e759539d641c5cc48dd45b90fdc333206b4f15a6cfa18a91490e4"
+  },
+  "measurements": [
+    {
+      "command": [
+        "bun",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-original.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-original-0.c"
+      ],
+      "elapsed_seconds": 4.2239267798140645,
+      "peak_sampled_group_rss_kib": 880280,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "mode": "original",
+      "round": 0,
+      "c_bytes": 3338586
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-constant.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-constant-0.c"
+      ],
+      "elapsed_seconds": 2.636094988323748,
+      "peak_sampled_group_rss_kib": 221976,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "mode": "constant",
+      "round": 0,
+      "c_bytes": 1110904
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-constant.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-constant-1.c"
+      ],
+      "elapsed_seconds": 2.643599013797939,
+      "peak_sampled_group_rss_kib": 195796,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "mode": "constant",
+      "round": 1,
+      "c_bytes": 1110904
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-original.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-original-1.c"
+      ],
+      "elapsed_seconds": 4.22537184599787,
+      "peak_sampled_group_rss_kib": 882496,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "mode": "original",
+      "round": 1,
+      "c_bytes": 3338586
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-original.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-original-2.c"
+      ],
+      "elapsed_seconds": 4.225035343319178,
+      "peak_sampled_group_rss_kib": 871736,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "mode": "original",
+      "round": 2,
+      "c_bytes": 3338586
+    },
+    {
+      "command": [
+        "bun",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-constant.bend",
+        "-o",
+        "/home/agent/code/pi-bend/build/compiler-memory-reading/pattern-fallback-constant-2.c"
+      ],
+      "elapsed_seconds": 2.6503957947716117,
+      "peak_sampled_group_rss_kib": 191888,
+      "limit_gib": 4.0,
+      "stopped": false,
+      "child_exit_code": 0,
+      "mode": "constant",
+      "round": 2,
+      "c_bytes": 1110904
+    }
+  ],
+  "source": "import Base\n\n# Ordinary string cases with a fallback that returns the original value.\n# This retains the pattern reconstruction needed by provider error messages.\ndef classify(value: String) -> String:\n  match value:\n    case \"completed\": \"1\"\n    case \"incomplete\": \"2\"\n    case \"failed\": \"3\"\n    case \"cancelled\": \"4\"\n    case \"in_progress\": \"5\"\n    case \"queued\": \"6\"\n    case other: other\n\ndef all(arguments: List<String>) -> IO(Unit):\n  match arguments:\n    case Nil{}: IO.pure(Unit, Unit{})\n    case head <> rest:\n      do IO<Unit>:\n        IO.print(classify(head))\n        all(rest)\n\ndef main() -> IO(Unit):\n  do IO<Unit>:\n    arguments : List<String> <- IO.args()\n    all(arguments)\n",
+  "control_change": "case other: other -> case other: \"unknown\"",
+  "source_findings": [
+    "bend.ts match_flatten substitutes consumed constructor reconstructions into every selected body, including variable fallbacks, through body_sub and patt_term.",
+    "comp.ts emit_match decomposes U32/F32 into individual bits and emits the resulting constructor-match branches.",
+    "The comparison supports reconstruction as a major cost in this reduced fixture; it does not quantify its share of full-provider peak memory."
+  ],
+  "next": "Find a semantics-preserving way to retain/reuse the matched value or collapse equivalent failure continuations; preserve affine ownership, dependent checks and both backend behavior."
+}
