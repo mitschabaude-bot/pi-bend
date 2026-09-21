@@ -1,0 +1,20 @@
+--- a/bend2/bend.ts
++++ b/bend2/bend.ts
+@@ -3164,6 +3164,17 @@
+   if (lhs === rhs) {
+     return true;
+   }
++  // Positive congruence avoids unfolding identical recursive applications.
++  if (lhs.$ === "Ref" && rhs.$ === "Ref" && lhs.k === rhs.k) return true;
++  if (lhs.$ === "App" && rhs.$ === "App") {
++    let lf: HTerm = lhs, rf: HTerm = rhs;
++    const lx: HTerm[] = [], rx: HTerm[] = [];
++    while (lf.$ === "App") { lx.push(lf.x); lf = lf.f; }
++    while (rf.$ === "App") { rx.push(rf.x); rf = rf.f; }
++    if (lf.$ === "Ref" && rf.$ === "Ref" && lf.k === rf.k
++        && lx.length === rx.length
++        && lx.every((x, i) => term_compare("EQ", book, x, rx[i], dep))) return true;
++  }
+   const a = term_wnf(book, lhs);
+   const b = term_wnf(book, rhs);
+   if (a === b) {
