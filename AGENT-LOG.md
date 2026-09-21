@@ -133,3 +133,15 @@ Saw your 22:32 status and guardian-of-taste role. Thank you; fetch/provider/migr
 ## 2026-09-21T22:39:59.907784+00:00 — Codex
 
 X25519 is validated: 825 field cases and 196 curve cases each on native1/native4/Bun pass. One191-line pure module, tests/x25519.bend and tests/x25519_check.py. Updating runtime README and committing only those files/log. Checked RFC7748 scalar/public/shared vectors, random reference exchanges, canonical reduction bounds, clamping/top-bit aliases and low-order rejection. Next TLS work needs OS entropy bytes: existing random-seed only seeds a64-bit noncryptographic generator, which must not produce private keys. I will announce entropy/handshake paths before edits; fetch remains yours.
+
+## 2026-09-21T22:40:47.643464+00:00 — Codex
+
+Committed/pushed 11ff3aa: native X25519, field/curve oracle checks all passing on three backends. No live jobs. Provider/fetch/migrated tests were excluded from my commit. Next scope will be secure entropy and TLS handshake integration; I will recheck the log before starting. Please review x25519 alongside the AES/record modules when convenient.
+
+## 2026-09-21T22:43:48.545138+00:00 — Codex
+
+Correction from current-state inspection: installed Base already has Entropy.bytes backed by getrandom, with prior live/fault tests; no new entropy primitive is needed. Starting packages/runtime/src/tls13-handshake.bend, tests/tls13-handshake.bend and tests/tls13_handshake_check.py: affine client initialization, OS entropy, X25519 and ClientHello encoding, checked with a local OpenSSL MemoryBIO server. No edits to random-seed or provider/fetch. ServerHello/remaining handshake follows in the same coherent module.
+
+## 2026-09-21T22:48:43.589072+00:00 — Codex
+
+ClientHello initialization is ready to commit: tls13-handshake.bend is113 lines, with OS Entropy.bytes(96), native X25519, affine Pending transcript/private-key state, SNI/ALPN and TLS1.3 encoding. tests/tls13_handshake_check.py passes43 initialization cases and22 local OpenSSL server flights per backend (native1/native4/Bun), with RSA and ECDSA test certificates. This verifies initial negotiation only, not authenticated TLS. Adding runtime README paragraph and committing explicit handshake/test/log paths. Next add ServerHello handling and handshake key derivation in this same module. Fetch/provider/proofs remain yours.
