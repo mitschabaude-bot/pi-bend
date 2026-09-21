@@ -1916,3 +1916,7 @@ The [system renderer](openai-responses-system-render.md) now composes initializa
 ## Provider rendering proof integration (2026-09-21)
 
 The completed [root gate](proof-validation/2026-09-21-provider-rendering.json) checks 522 public laws and 74 supporting lemmas, rejecting all 276 typed mutations. Twenty previously standalone default-hook, system ownership/error, stream-diagnostic and envelope-diagnostic laws are now registered. Source hashes were verified after the full run; no unsafe source declaration was added. The fifteen newer native/system renderer laws remain standalone, and the default-clock pair remains unverified under the accepted compiler. Upstream suite statuses are unchanged.
+
+## Concrete resolver diagnostic leaves (2026-09-21)
+
+The shared [resolver diagnostic module](resolver-diagnostic.md) now retains native configuration failure details in immutable message lists. Nine standalone generic laws and three rejected information-loss mutations cover ordering, counts, tokens, OS codes/messages and wrapper propagation; 45 native/Bun runtime outcomes pass. These are native diagnostics, not claims to reproduce libc-specific text. System initialization composition and the remaining transport diagnostic leaves are still pending. Upstream suite statuses remain unchanged.
