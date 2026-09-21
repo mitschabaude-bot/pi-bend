@@ -97,6 +97,21 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('session-drops-published-event', 'packages/ai/src/api/openai-responses-session.bend',
+         'Events.push(T.AssistantMessageEvent<A, G>, T.AssistantMessage<A, G>, stream, event)',
+         'IO.pure(Unit, Unit{})', 'laws/openai-responses-session.publication_preserves_event'),
+        ('session-end-omits-final-result', 'packages/ai/src/api/openai-responses-session.bend',
+         'Events.end(T.AssistantMessageEvent<A, G>, T.AssistantMessage<A, G>, stream, Some{output})',
+         'Events.end(T.AssistantMessageEvent<A, G>, T.AssistantMessage<A, G>, stream, None{})', 'laws/openai-responses-session.end_supplies_final_snapshot'),
+        ('session-leaks-publication-callback', 'packages/ai/src/api/openai-responses-session.bend',
+         'C.dispose(T.AssistantMessageEvent<A, G>, Result<&2, &2, E, Unit>, sink)',
+         'IO.pure(Unit, Unit{})', 'laws/openai-responses-session.callbacks_retire_before_run_result'),
+        ('session-leaks-event-stream', 'packages/ai/src/api/openai-responses-session.bend',
+         'Events.disposeAssistantMessageEventStream(A, G, stream)',
+         'IO.pure(Unit, Unit{})', 'laws/openai-responses-session.finished_disposal_preserves_result'),
+        ('session-completed-wait-mutates-stream', 'packages/ai/src/api/openai-responses-session.bend',
+         'case Finished{stream, result}: IO.pure(Run<A, G, E> & Life.RunResult<A, G, E>, completed(A, G, E, stream, result))',
+         'case Finished{+stream, result}: IO.bind(Unit, Run<A, G, E> & Life.RunResult<A, G, E>, Events.end(T.AssistantMessageEvent<A, G>, T.AssistantMessage<A, G>, stream, None{}), ignored => IO.pure(Run<A, G, E> & Life.RunResult<A, G, E>, completed(A, G, E, stream, result)))', 'laws/openai-responses-session.finished_wait_has_no_effects'),
         ('lifecycle-ignores-cancellation', 'packages/ai/src/api/openai-responses-lifecycle.bend',
          'case True{} _: Fail{RequestAborted{}}', 'case True{} _: Fail{MissingStopReason{}}', 'laws/openai-responses-lifecycle.cancellation_precedes_stop_reason'),
         ('lifecycle-drops-partial-content', 'packages/ai/src/api/openai-responses-lifecycle.bend',

@@ -177,3 +177,7 @@ Eight `provider-request` laws quantify over arbitrary payload/model/error and af
 ### Outer Responses lifecycle
 
 Fifteen `openai-responses-lifecycle` laws quantify over message fields, argument/diagnostic/error types, failure causes and callback handles. They preserve terminal events and unrelated message fields, enforce cancellation/stop-reason and primary/cleanup precedence, establish last-write failure updates and require stream closure before returning the run result. The [gate](proof-validation/2026-09-21-openai-responses-lifecycle.json) checks 283 public laws and 59 supporting lemmas and rejects 163 typed mutations. Its unsafe audit is unchanged. [Native HTTP, processor and concurrent event-stream checks](openai-responses-driver.md) remain separate finite evidence.
+
+### Asynchronous Responses session ownership
+
+Ten `openai-responses-session` laws preserve canonical publication, final snapshots and borrowed task/stream/result state. They establish effect-free completed waits, publication-callback retirement before returning, and joining before stream disposal for arbitrary typed run outcomes and handles. The [gate](proof-validation/2026-09-21-openai-responses-session.json) checks 293 public laws and 59 supporting lemmas and rejects 168 typed mutations with the existing unsafe audit unchanged. [Gated ownership and HTTP integration](openai-responses-session.md) supply separate finite concurrency/resource evidence.
