@@ -1935,3 +1935,8 @@ The completed [trusted-compiler root check](proof-validation/2026-09-21-diagnost
 ## Standard system initialization presentation (2026-09-21)
 
 The system renderer now exposes `format` with the concrete initialization handler installed, while preserving `render` for callers supplying custom presentation. The [553-law proof root](proof-validation/2026-09-21-system-format-root.json) includes its generic initialization contract. All [36 native/Bun runtime outcomes](runtime-validation/2026-09-21-system-format.json) pass, including the default handler through 96 nested processing wrappers. Concrete transport leaves and final public-provider installation remain unfinished. No upstream suite is promoted.
+
+
+### Default factory native validation completed (2026-09-21)
+
+All 72 [native default-provider checks](runtime-validation/2026-09-21-system-defaults-native.json) pass on one/four threads, plain and resource-audited, under the isolated previous-pass-lifetime compiler candidate. Source hashes still match the earlier 36-case Bun record. The earlier pending-native status is superseded; the candidate remains unadopted and the 40.5 GiB emission peak unresolved. This validates the cleartext factory, not HTTPS, authentication lifecycle or the complete public provider. The original clock law remains outside the accepted proof gate; no upstream suite status changes.
