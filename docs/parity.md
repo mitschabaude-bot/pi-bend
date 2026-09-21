@@ -1892,3 +1892,8 @@ The [typed streaming-error renderer](openai-responses-stream-error.md) preserves
 ## System-owned Responses provider sessions (2026-09-21)
 
 The [system-owned provider](openai-responses-system-provider.md) connects actual preparation, hook adapters, lazy native acquisition, body processing and asynchronous session finalization. A provider error domain preserves initialization, acquisition, recursive stream and cleanup causes. All 108 plain/audited sessions pass across native one/four threads and Bun, including grammar metadata after payload replacement, early configuration avoidance, callback lifetimes and malformed SSE. Four standalone composition/cause-transfer laws pass; root counts and upstream suite statuses remain unchanged. The native default clock/SSE factory has separate pending native validation; complete error rendering, custom fetch, TLS, authentication lifecycle and the full pi port remain unfinished.
+
+
+## Responses envelope diagnostics (2026-09-21)
+
+The [envelope-error renderer](openai-responses-envelope-error.md) now covers typed URL/query, timeout, header, authentication and payload-construction failures. Three standalone generic propagation laws pass, and two well-typed cause-erasure mutations are rejected. Native one/four threads and Bun check 66 outcomes, comparing timeout/authentication text with the actual SDK and recording native strict-validation diagnostics separately. The full provider renderer, root law registration and unchanged upstream suite gaps remain pending.
