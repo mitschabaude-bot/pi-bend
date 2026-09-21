@@ -1,5 +1,5 @@
 {
-  "scope": "GC timing candidate completed but remains uninstalled; layout-cache candidate passes backend regressions and is being benchmarked. Installed compiler remains the 13.4 GiB constructor-field version.",
+  "scope": "Combined layout caching and intermediate-output release adopted. Excessive compiler memory remains open.",
   "gc_after_release": {
     "patch": "patches/experimental/bend-gc-after-release.patch",
     "measurement": {
@@ -829,6 +829,208 @@
         "bun"
       ]
     },
-    "combined_full_status": "Running: layout-release-defaults.{log,json,c}; not installed."
+    "combined_full_status": "Completed and adopted in ordinary/default native compilers."
+  },
+  "combined_adoption": {
+    "measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/layout-cache-release-profile/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/layout-release-defaults.c"
+      ],
+      "elapsed_seconds": 321.66839533206075,
+      "peak_sampled_group_rss_kib": 10743584,
+      "limit_gib": 20.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "baseline": {
+      "command": [
+        "bun",
+        "build/bend-profiles/constructor-tail-values-profile/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/tail-values-defaults.c"
+      ],
+      "elapsed_seconds": 523.7512281090021,
+      "peak_sampled_group_rss_kib": 14030264,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "identical_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "small_pairs": [
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 1.3433951903134584,
+        "peak_kib": 215048,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 1.0419471682980657,
+        "peak_kib": 210840,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 1.0293564954772592,
+        "peak_kib": 212144,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 1.3321226155385375,
+        "peak_kib": 227616,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 1.322295089252293,
+        "peak_kib": 217916,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 1.0384377464652061,
+        "peak_kib": 210572,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.1560683147981763,
+        "peak_kib": 84528,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.16861204989254475,
+        "peak_kib": 88380,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.16229123808443546,
+        "peak_kib": 85500,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.16327791195362806,
+        "peak_kib": 87544,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.16001325473189354,
+        "peak_kib": 84188,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.1658182954415679,
+        "peak_kib": 82988,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.34049970749765635,
+        "peak_kib": 111548,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.3299520220607519,
+        "peak_kib": 112008,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.3460476864129305,
+        "peak_kib": 120164,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.3320964043959975,
+        "peak_kib": 119640,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.332318595610559,
+        "peak_kib": 115868,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.3229182967916131,
+        "peak_kib": 117264,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      }
+    ],
+    "installation": {
+      "before": "f3d65a1b06b927a3c4a86200c919e8d7210bd3841eb948fdd4bbdd5ec96bff03",
+      "after": "ef87d335b645d98c9b006b6e543813fc8aa76c034b0c8a13ae4240eafd10f0fa",
+      "bend_ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "installed_directory": "/home/agent/.bend/app/2.0.7/A4kk1m/bend2"
+    },
+    "default_native_smoke": [
+      "",
+      "0",
+      "0000000000000000000000000000000",
+      "00000000000000000000000000000000",
+      "000000000000000000000000000000000",
+      "",
+      "1",
+      "1000000000000000000000000000000",
+      "10000000000000000000000000000000",
+      "100000000000000000000000000000000"
+    ],
+    "combined_patch_replay_identical": true,
+    "limitations": "Full comparison on a shared host; short reduced/compiler regression jobs overlapped part of the combined full run. Final small pairs ran after the full job. Tiny typed-do median is about 6 ms slower; no universal performance guarantee.",
+    "full_input_closure": {
+      "files": 544,
+      "bytes": 3672130,
+      "lines": 82598
+    }
   }
 }
