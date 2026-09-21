@@ -75,7 +75,7 @@ def ended(next: Response.Next<String, State>) -> IO(Unit):
 def advance(action: Char, body: Response.Body<State>) -> IO(Response.Next<String, State>):
   match action:
     case 'c': Response.closeWith(String, State, close, body)
-    case _: Response.nextWith(String, State, read, close, body)
+    case _: Response.nextWith(~String, ~State, ~read, ~close, body)
 
 def actions(todo: String, next: Response.Next<String, State>) -> IO(Unit):
   match todo next:
@@ -108,7 +108,7 @@ def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
     case fails <> todo <> values:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<String>, Response.Response<State>> <- Response.startWith(String, State, read, close, State{values, String.eq(fails, "1")})
+        value : Result<&2, &1, Progress.Error<String>, Response.Response<State>> <- Response.startWith(~String, ~State, ~read, ~close, State{values, String.eq(fails, "1")})
         started(todo, value)
     case _: IO.die(Unit, 1, "bad response fixture")
 

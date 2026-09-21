@@ -30,7 +30,7 @@ def accepted(provider: String, value: Result<&2, &1, Provider.Failure<Exchange.R
     case Done{Response.Response{metadata, body}}:
       do IO<Unit>:
         IO.print("accepted:" ++ U32.show(Metadata.status(metadata)))
-        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(String, 1000n, body)
+        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(~String, 1000n, body)
         IO.print(Show.shownText(result))
 
 def headed(provider: String, limit: Nat, value: Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Unit):
@@ -38,7 +38,7 @@ def headed(provider: String, limit: Nat, value: Result<&2, &1, Progress.Error<Ex
     case Fail{_}: IO.die(Unit, 1, "head failed")
     case Done{response}:
       do IO<Unit>:
-        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(Exchange.ReadError<String>, Exchange.Exchange<String>, HTTP.read(String), Exchange.close(String), limit, response)
+        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.close(String)), limit, response)
         accepted(provider, result)
 
 def started(provider: String, limit: Nat, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Unit):
@@ -46,7 +46,7 @@ def started(provider: String, limit: Nat, value: Result<&2, &1, Exchange.StartEr
     case Fail{_}: IO.die(Unit, 1, "start failed")
     case Done{owner}:
       do IO<Unit>:
-        result : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(String, owner)
+        result : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(~String, owner)
         headed(provider, limit, result)
 
 def prepared(port: U32, provider: String, limit: Nat, value: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):

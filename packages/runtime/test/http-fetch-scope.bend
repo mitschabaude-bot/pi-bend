@@ -103,7 +103,7 @@ def consume(+mode: String, parent: Abort.AbortController<String>, result: Result
         IO.print("headers")
         IO.sleep(Bool.pick(U32, String.eq(mode, "normal"), 1100, 0))
         abortParent(mode, parent)
-        next : Response.Next<String, Fetch.State<String, Transport>> <- Response.nextWith(String, Fetch.State<String, Transport>, value => Fetch.read(String, String, Transport, read, value), value => Fetch.close(String, String, Transport, close, value), body)
+        next : Response.Next<String, Fetch.State<String, Transport>> <- Response.nextWith(~String, ~(Fetch.State<String, Transport>), ~(value => Fetch.read(String, String, Transport, read, value)), ~(value => Fetch.close(String, String, Transport, close, value)), body)
         finished(next)
 
 def pre(mode: String, parent: Abort.AbortController<String>) -> IO(Unit):

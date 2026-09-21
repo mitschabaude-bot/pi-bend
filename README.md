@@ -37,3 +37,5 @@ Current implementation: native print-mode agent loop with OpenAI Codex OAuth, st
 Native [Responses request preparation](docs/openai-responses-preparation.md) now composes credential/cache policy, transcript and tool conversion, headers and payload construction with complete typed provider options. Final transport/session/authentication assembly and the full port remain underway.
 
 Native [OpenAI request headers](docs/openai-request-headers.md) now preserve layered overrides and explicit removals through authentication validation, with typed timeout/header failures and SDK differential coverage.
+
+Native [Responses request attempts](docs/openai-responses-attempt.md) now connect fetch results, HTTP diagnostics and the provider retry interface, using [reusable Bend transport callbacks](docs/http-transport-callbacks.md) to preserve affine ownership. Native transport-error classification and final provider/session/TLS assembly remain unfinished.

@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/http-transport-callbacks.bend as Ops
 import ./provider-retry.bend as Retry
 import ../../../runtime/src/http-response.bend as Response
 import ../../../runtime/src/http-response-stream.bend as Stream
@@ -17,18 +18,18 @@ type Failure<-E: Data> is Data:
 def rejected(-E: Data, -State: Type, metadata: Metadata.Metadata, body: Result<&2, &2, Consume.TextError<E>, String>) -> Result<&2, &1, Failure<E>, Response.Response<State>>:
   Fail{StatusFailure{metadata, body}}
 
-def select(-E: Data, -State: Type, read: State -> IO(State & Result<&2, &2, E, Maybe<&2, Stream.Event>>), close: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, metadata: Metadata.Metadata, body: Response.Body<State>, successful: Bool) -> IO(Result<&2, &1, Failure<E>, Response.Response<State>>):
+def select(-E: Data, -State: Type, read: Ops.Read(E, State), close: Ops.Close(E, State), limit: Nat, metadata: Metadata.Metadata, body: Response.Body<State>, successful: Bool) -> IO(Result<&2, &1, Failure<E>, Response.Response<State>>):
   match successful:
     case True{}: IO.pure(Result<&2, &1, Failure<E>, Response.Response<State>>, Done{Response.Response{metadata, body}})
     case False{}:
       do IO<Result<&2, &1, Failure<E>, Response.Response<State>>>:
-        diagnostic : Result<&2, &2, Consume.TextError<E>, String> <- Consume.textWith(E, State, read, close, limit, body)
+        diagnostic : Result<&2, &2, Consume.TextError<E>, String> <- Consume.textUsing(E, State, read, close, limit, body)
         return rejected(E, State, metadata, diagnostic)
 
 # Like a request with SDK retries disabled: return a successful response before
 # reading its body; otherwise consume/close the error body before any retry.
 # Streaming body-presence checks belong to the consumer, after this boundary.
-def acceptWith(-E: Data, -State: Type, read: State -> IO(State & Result<&2, &2, E, Maybe<&2, Stream.Event>>), close: State -> IO(Result<&2, &2, E, Unit>), diagnosticLimit: Nat, response: Response.Response<State>) -> IO(Result<&2, &1, Failure<E>, Response.Response<State>>):
+def accept(-E: Data, -State: Type, read: Ops.Read(E, State), close: Ops.Close(E, State), diagnosticLimit: Nat, response: Response.Response<State>) -> IO(Result<&2, &1, Failure<E>, Response.Response<State>>):
   match response:
     case Response.Response{+metadata, body}: select(E, State, read, close, diagnosticLimit, metadata, body, Metadata.ok(metadata))
 
@@ -44,3 +45,6 @@ def retryFields(-E: Data, original: E, message: String, status: U32, headers: He
 # errors or decide whether a diagnostic-body failure should be retryable.
 def retryFailure(-E: Data, original: E, message: String, +metadata: Metadata.Metadata) -> Retry.RequestFailure<E>:
   retryFields(E, original, message, Metadata.status(metadata), Metadata.headers(metadata))
+
+def acceptWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, Stream.Event>>), ~close: State -> IO(Result<&2, &2, E, Unit>), diagnosticLimit: Nat, response: Response.Response<State>) -> IO(Result<&2, &1, Failure<E>, Response.Response<State>>):
+  Ops.with(~E, ~State, ~Result<&2, &1, Failure<E>, Response.Response<State>>, ~read, ~close, reader => closer => accept(E, State, reader, closer, diagnosticLimit, response))

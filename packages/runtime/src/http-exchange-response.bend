@@ -17,11 +17,11 @@ def read(-Reason: Data, exchange: Exchange.Exchange<Reason>) -> IO(Exchange.Exch
     result : Exchange.Next<Reason> <- Exchange.next(Reason, exchange)
     return unpack(Reason, result)
 
-def start(-Reason: Data, exchange: Exchange.Exchange<Reason>) -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Reason>>, Response.Response<Exchange.Exchange<Reason>>>):
-  Response.startWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), exchange)
+def start(~Reason: Data, exchange: Exchange.Exchange<Reason>) -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Reason>>, Response.Response<Exchange.Exchange<Reason>>>):
+  Response.startWith(~(Exchange.ReadError<Reason>), ~(Exchange.Exchange<Reason>), ~(read(Reason)), ~(Exchange.close(Reason)), exchange)
 
-def next(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Response.Next<Exchange.ReadError<Reason>, Exchange.Exchange<Reason>>):
-  Response.nextWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), body)
+def next(~Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Response.Next<Exchange.ReadError<Reason>, Exchange.Exchange<Reason>>):
+  Response.nextWith(~(Exchange.ReadError<Reason>), ~(Exchange.Exchange<Reason>), ~(read(Reason)), ~(Exchange.close(Reason)), body)
 
 def close(-Reason: Data, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Response.Next<Exchange.ReadError<Reason>, Exchange.Exchange<Reason>>):
   Response.closeWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, Exchange.close(Reason), body)
@@ -30,11 +30,11 @@ def source(~Reason: Data, ~E: Data, ~map: Progress.Error<Exchange.ReadError<Reas
   Source.create(~Exchange.ReadError<Reason>, ~Exchange.Exchange<Reason>, ~E, ~map, ~(read(Reason)), ~(Exchange.close(Reason)), body)
 
 # Consume and retire the owned body under an explicit caller byte budget.
-def bytes(-Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Buffer.Error<Exchange.ReadError<Reason>>, List<&2, U32>>):
-  Consume.bytesWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), limit, body)
+def bytes(~Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Buffer.Error<Exchange.ReadError<Reason>>, List<&2, U32>>):
+  Consume.bytesWith(~(Exchange.ReadError<Reason>), ~(Exchange.Exchange<Reason>), ~(read(Reason)), ~(Exchange.close(Reason)), limit, body)
 
-def text(-Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Consume.TextError<Exchange.ReadError<Reason>>, String>):
-  Consume.textWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), limit, body)
+def text(~Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Consume.TextError<Exchange.ReadError<Reason>>, String>):
+  Consume.textWith(~(Exchange.ReadError<Reason>), ~(Exchange.Exchange<Reason>), ~(read(Reason)), ~(Exchange.close(Reason)), limit, body)
 
-def json(-Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Consume.JSONError<Exchange.ReadError<Reason>>, Value.Value>):
-  Consume.jsonWith(Exchange.ReadError<Reason>, Exchange.Exchange<Reason>, read(Reason), Exchange.close(Reason), limit, body)
+def json(~Reason: Data, limit: Nat, body: Response.Body<Exchange.Exchange<Reason>>) -> IO(Result<&2, &2, Consume.JSONError<Exchange.ReadError<Reason>>, Value.Value>):
+  Consume.jsonWith(~(Exchange.ReadError<Reason>), ~(Exchange.Exchange<Reason>), ~(read(Reason)), ~(Exchange.close(Reason)), limit, body)

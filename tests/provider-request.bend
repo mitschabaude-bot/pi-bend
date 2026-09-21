@@ -75,7 +75,7 @@ def headed(value: Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Own
     case Fail{_}: IO.pure(Result<&2, &1, Retry.RequestFailure<String>, Owner()>, Fail{Retry.Other{"head"}})
     case Done{owner}:
       do IO<Result<&2, &1, Retry.RequestFailure<String>, Owner()>>:
-        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Owner()> <- Provider.acceptWith(Exchange.ReadError<String>, Exchange.Exchange<String>, HTTP.read(String), Exchange.close(String), 1000n, owner)
+        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Owner()> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.close(String)), 1000n, owner)
         return accepted(result)
 
 def started(value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Result<&2, &1, Retry.RequestFailure<String>, Owner()>):
@@ -83,7 +83,7 @@ def started(value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange
     case Fail{_}: IO.pure(Result<&2, &1, Retry.RequestFailure<String>, Owner()>, Fail{Retry.Other{"start"}})
     case Done{owner}:
       do IO<Result<&2, &1, Retry.RequestFailure<String>, Owner()>>:
-        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Owner()> <- HTTP.start(String, owner)
+        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Owner()> <- HTTP.start(~String, owner)
         headed(value)
 
 type Environment is Data:
@@ -118,7 +118,7 @@ def finished(value: Result<&2, &1, Driver.Error<String>, Owner()>) -> IO(Unit):
     case Done{Response.Response{_, body}}:
       do IO<Unit>:
         IO.print("accepted")
-        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(String, 1000n, body)
+        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(~String, 1000n, body)
         IO.print(Show.shownText(result))
 
 def run(port: U32, +mode: U32) -> IO(Unit):

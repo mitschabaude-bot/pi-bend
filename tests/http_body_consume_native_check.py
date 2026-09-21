@@ -121,7 +121,7 @@ while pending:
     visited.add(path)
     pending += [path.parent / name for name in re.findall(r'^import (\.[^\s]+)', path.read_text(), re.MULTILINE)]
 base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=WORK, text=True).strip()
-new_files = {'packages/runtime/src/http-response.bend', 'packages/runtime/src/http-response-progress.bend',
+new_files = {'packages/runtime/src/http-transport-callbacks.bend', 'packages/runtime/src/http-body-consume.bend', 'packages/runtime/src/http-response.bend', 'packages/runtime/src/http-response-progress.bend',
              'packages/runtime/src/http-response-metadata.bend', 'packages/runtime/src/http-exchange-response.bend',
              'packages/runtime/src/http-body-source.bend', 'packages/runtime/src/http-abort-classification.bend',
              'packages/runtime/src/bounded-bytes.bend', 'packages/runtime/src/http-body-buffer.bend',

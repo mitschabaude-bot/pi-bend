@@ -50,15 +50,15 @@ def consume(mode: U32, limit: Nat, body: Response.Body<Exchange.Exchange<String>
   match mode:
     case 1:
       do IO<Unit>:
-        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(String, limit, body)
+        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(~String, limit, body)
         IO.print(shownText(result))
     case 2:
       do IO<Unit>:
-        result : Result<&2, &2, Consume.JSONError<Exchange.ReadError<String>>, V.Value> <- HTTP.json(String, limit, body)
+        result : Result<&2, &2, Consume.JSONError<Exchange.ReadError<String>>, V.Value> <- HTTP.json(~String, limit, body)
         IO.print(shownJSON(result))
     case _:
       do IO<Unit>:
-        result : Result<&2, &2, Buffer.Error<Exchange.ReadError<String>>, List<&2, U32>> <- HTTP.bytes(String, limit, body)
+        result : Result<&2, &2, Buffer.Error<Exchange.ReadError<String>>, List<&2, U32>> <- HTTP.bytes(~String, limit, body)
         IO.print(shownBytes(result))
 
 def response(mode: U32, limit: Nat, value: Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Unit):
@@ -71,7 +71,7 @@ def exchange(mode: U32, limit: Nat, value: Result<&2, &1, Exchange.StartError<St
     case Fail{_}: IO.die(Unit, 1, "exchange start failed")
     case Done{owner}:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(String, owner)
+        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(~String, owner)
         response(mode, limit, value)
 
 def prepared(mode: U32, limit: Nat, +controller: Abort.AbortController<String>, socket: Socket, value: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):

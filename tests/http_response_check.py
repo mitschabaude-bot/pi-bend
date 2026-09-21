@@ -10,16 +10,21 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from channel_audit import instrument
 
 ROOT = Path(__file__).resolve().parents[1]
 BEND = os.environ.get('BEND', str(ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts'))
 BUN = str(Path.home() / '.bun/bin/bun')
-SOURCE = 'packages/runtime/test/http-response.bend'
+CALLBACKS = '--callbacks' in sys.argv
+STEM = 'http-response-callbacks' if CALLBACKS else 'http-response'
+SOURCE = f'packages/runtime/test/{STEM}.bend'
 arguments, expected = [], []
 
 def add(fails, actions, events, trace):
     arguments.append(';'.join([str(int(fails)), actions, *events]))
     expected.extend(['case', *trace])
+    if CALLBACKS:
+        expected.append(f'callbacks:{sum(line.startswith("read:") for line in trace)}:{trace.count("close")}')
 
 for fails in [False, True]:
     cleanup = 'error:cleanup' if fails else 'end'
@@ -54,30 +59,43 @@ for fails in [False, True]:
 
 if '--no-build' not in sys.argv:
     for backend in ['c', 'js']:
-        with (ROOT / f'build/http-response-{backend}-build.log').open('w') as log:
+        with (ROOT / f'build/{STEM}-{backend}-build.log').open('w') as log:
             subprocess.run([sys.executable, 'scripts/run-rss-guarded.py', '--limit-gib', '8',
-                            '--stats', f'build/http-response-{backend}-build.json', '--',
-                            BEND, SOURCE, '-o', f'build/http-response.{backend}'],
+                            '--stats', f'build/{STEM}-{backend}-build.json', '--',
+                            BEND, SOURCE, '-o', f'build/{STEM}.{backend}'],
                            cwd=ROOT, check=True, stdout=log, stderr=subprocess.STDOUT)
     subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
-                    'build/http-response.c', '-lpthread', '-lm', '-o', 'build/http-response'], cwd=ROOT, check=True)
+                    f'build/{STEM}.c', '-lpthread', '-lm', '-o', f'build/{STEM}'], cwd=ROOT, check=True)
 
+c = ROOT / f'build/{STEM}.c'
+audit_c = ROOT / f'build/{STEM}-audit.c'
+audit_c.write_text(c.read_text() + r"""
+static void __attribute__((destructor)) callback_audit(void) {
+  unsigned channels=0;
+  for(u32 i=0;i<chan_len;i++) channels+=chan_rows[i].live;
+  fprintf(stderr,"AUDIT %u %u 0\n",channels,io_park.head!=NULL);
+}
+""")
+(ROOT / f'build/{STEM}-audit.js').write_text(instrument((ROOT / f'build/{STEM}.js').read_text()))
+subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',str(audit_c),'-lpthread','-lm','-o',str(ROOT/f'build/{STEM}-audit')],check=True)
 runs = []
-for label, command in [
-    ('native-1', [str(ROOT / 'build/http-response'), '--threads', '1']),
-    ('native-4', [str(ROOT / 'build/http-response'), '--threads', '4']),
-    ('bun', [BUN, str(ROOT / 'build/http-response.js')]),
-]:
-    run = subprocess.run(command + arguments, cwd=ROOT, text=True, capture_output=True, timeout=60, check=True)
-    actual = run.stdout.splitlines()
-    if actual != expected:
-        for i, (observed, wanted) in enumerate(zip(actual, expected)):
-            if observed != wanted:
-                raise AssertionError((label, i, actual[max(0, i-8):i+8], expected[max(0, i-8):i+8]))
-        raise AssertionError((label, len(actual), len(expected)))
-    assert not run.stderr, run.stderr
-    runs.append({'backend': label, 'cases': len(arguments), 'trace_lines': len(expected), 'passed': True})
-    print(label, len(arguments), 'response ownership traces PASS', flush=True)
+for audited in [False, True]:
+    suffix = '-audit' if audited else ''
+    for label, command in [
+        ('native-1', [str(ROOT / f'build/{STEM}{suffix}'), '--threads', '1']),
+        ('native-4', [str(ROOT / f'build/{STEM}{suffix}'), '--threads', '4']),
+        ('bun', [BUN, str(ROOT / f'build/{STEM}{suffix}.js')]),
+    ]:
+        run = subprocess.run(command + arguments, cwd=ROOT, text=True, capture_output=True, timeout=60, check=True)
+        actual = run.stdout.splitlines()
+        if actual != expected:
+            for i, (observed, wanted) in enumerate(zip(actual, expected)):
+                if observed != wanted:
+                    raise AssertionError((label, i, actual[max(0, i-8):i+8], expected[max(0, i-8):i+8]))
+            raise AssertionError((label, len(actual), len(expected)))
+        assert run.stderr == ("AUDIT 0 0 0\n" if audited else ""), run.stderr
+        runs.append({'backend': label, 'audited': audited, 'cases': len(arguments), 'trace_lines': len(expected), 'passed': True})
+        print(label, len(arguments), 'response ownership traces PASS', flush=True)
 
 pending, visited = [ROOT / SOURCE], set()
 while pending:
@@ -89,11 +107,11 @@ while pending:
 visited.add(Path(__file__).resolve())
 compiler = Path(BEND).resolve().parent
 record = {
-    'scope': 'Injected affine event source with real IO traces; validates handoff, exact read/close calls, error preservation and closed-cursor behavior. Does not exercise native sockets or prove scheduler/resource retirement.',
+    'scope': 'Injected affine event source with real IO traces; validates handoff, exact read/close calls, error preservation and closed-cursor behavior. Native audits require zero live channels and parked IO; Bun audits channels, live IO and waiters. Does not exercise native sockets or prove scheduler liveness.',
     'runs': runs,
     'source_sha256': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(visited)},
     'compiler_command': BEND,
     'compiler_sha256': {name: hashlib.sha256((compiler / name).read_bytes()).hexdigest() for name in ['main.ts', 'bend.ts', 'comp.ts', 'base.bend']},
-    'builds': {backend: json.loads((ROOT / f'build/http-response-{backend}-build.json').read_text()) for backend in ['c', 'js']},
+    'builds': {backend: json.loads((ROOT / f'build/{STEM}-{backend}-build.json').read_text()) for backend in ['c', 'js']},
 }
-(ROOT / 'build/http-response-results.json').write_text(json.dumps(record, indent=2) + '\n')
+(ROOT / f'build/{STEM}-results.json').write_text(json.dumps(record, indent=2) + '\n')

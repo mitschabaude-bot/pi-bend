@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/http-transport-callbacks.bend as Ops
 import ../packages/ai/src/utils/provider-http-response.bend as Provider
 import ../packages/ai/src/utils/provider-retry.bend as Retry
 import ../packages/runtime/src/http-response.bend as Response
@@ -18,26 +19,26 @@ import ../packages/runtime/src/f64.bend as F
 law accepted_owner_has_no_body_io:
   for -E: Data
   for -State: Type
-  for read: State -> IO(State & Result<&2, &2, E, Maybe<&2, Stream.Event>>)
-  for close: State -> IO(Result<&2, &2, E, Unit>)
+  for read: Ops.Read(E, State)
+  for close: Ops.Close(E, State)
   for limit: Nat
   for metadata: Metadata.Metadata
   for body: Response.Body<State>
   for accepted: {Metadata.ok(metadata) == True{} : Bool}
-  {Provider.acceptWith(E, State, read, close, limit, Response.Response{metadata, body}) == IO.pure(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>, Done{Response.Response{metadata, body}}) : IO(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>)}
+  {Provider.accept(E, State, read, close, limit, Response.Response{metadata, body}) == IO.pure(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>, Done{Response.Response{metadata, body}}) : IO(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>)}
 
 # A failed status runs the owned consumer before producing its typed failure.
 # This is sequencing of IO programs, not a termination claim about the source.
 law rejected_owner_runs_diagnostic_first:
   for -E: Data
   for -State: Type
-  for read: State -> IO(State & Result<&2, &2, E, Maybe<&2, Stream.Event>>)
-  for close: State -> IO(Result<&2, &2, E, Unit>)
+  for read: Ops.Read(E, State)
+  for close: Ops.Close(E, State)
   for limit: Nat
   for metadata: Metadata.Metadata
   for body: Response.Body<State>
   for rejected: {Metadata.ok(metadata) == False{} : Bool}
-  {Provider.acceptWith(E, State, read, close, limit, Response.Response{metadata, body}) == IO.bind(Result<&2, &2, Consume.TextError<E>, String>, Result<&2, &1, Provider.Failure<E>, Response.Response<State>>, Consume.textWith(E, State, read, close, limit, body), diagnostic => IO.pure(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>, Fail{Provider.StatusFailure{metadata, diagnostic}})) : IO(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>)}
+  {Provider.accept(E, State, read, close, limit, Response.Response{metadata, body}) == IO.bind(Result<&2, &2, Consume.TextError<E>, String>, Result<&2, &1, Provider.Failure<E>, Response.Response<State>>, Consume.textUsing(E, State, read, close, limit, body), diagnostic => IO.pure(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>, Fail{Provider.StatusFailure{metadata, diagnostic}})) : IO(Result<&2, &1, Provider.Failure<E>, Response.Response<State>>)}
 
 law rejected_diagnostic_is_preserved:
   for -E: Data

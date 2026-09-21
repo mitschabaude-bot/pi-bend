@@ -33,7 +33,7 @@ def loop(fuel: Nat, value: Response.Next<Exchange.ReadError<String>, Exchange.Ex
     case Succ{rest} Response.Next{body, Done{Some{bytes}}}:
       do IO<Unit>:
         IO.print("bytes:" ++ String.join(Text.showNumbers(bytes), ","))
-        next : Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>> <- HTTP.next(String, body)
+        next : Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>> <- HTTP.next(~String, body)
         loop(rest, next)
     case _ Response.Next{body, outcome}:
       do IO<Unit>:
@@ -49,14 +49,14 @@ def consume(mode: U32, controller: Abort.AbortController<String>, body: Response
         closed(ended)
     case 2:
       do IO<Unit>:
-        task : Chan(Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>) <- IO.fork(Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>, HTTP.next(String, body))
+        task : Chan(Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>) <- IO.fork(Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>, HTTP.next(~String, body))
         IO.sleep(10)
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
         next : Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>> <- IO.join(Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>, task)
         loop(128n, next)
     case _:
       do IO<Unit>:
-        next : Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>> <- HTTP.next(String, body)
+        next : Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>> <- HTTP.next(~String, body)
         loop(128n, next)
 
 def response(mode: U32, controller: Abort.AbortController<String>, value: Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Unit):
@@ -72,7 +72,7 @@ def exchange(mode: U32, controller: Abort.AbortController<String>, value: Result
     case Fail{_}: IO.die(Unit, 1, "exchange start failed")
     case Done{owner}:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(String, owner)
+        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(~String, owner)
         response(mode, controller, value)
 
 def prepared(mode: U32, +controller: Abort.AbortController<String>, socket: Socket, value: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):

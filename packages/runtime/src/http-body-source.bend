@@ -30,9 +30,9 @@ def closed(-T: Data, -State: Type, -E: Data, map: Progress.Error<T> -> E, value:
   match value:
     case Response.Next{body, result}: (body, closeResult(T, E, map, result))
 
-def pull(-T: Data, -State: Type, -E: Data, map: Progress.Error<T> -> E, read: State -> IO(State & Result<&2, &2, T, Maybe<&2, Stream.Event>>), close: State -> IO(Result<&2, &2, T, Unit>), body: Response.Body<State>) -> IO(Response.Body<State> & Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
+def pull(~T: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, Stream.Event>>), ~close: State -> IO(Result<&2, &2, T, Unit>), -E: Data, map: Progress.Error<T> -> E, body: Response.Body<State>) -> IO(Response.Body<State> & Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
   do IO<Response.Body<State> & Result<&2, &2, E, Maybe<&2, SSE.Chunk>>>:
-    value : Response.Next<T, State> <- Response.nextWith(T, State, read, close, body)
+    value : Response.Next<T, State> <- Response.nextWith(~T, ~State, ~read, ~close, body)
     return pulled(T, State, E, map, value)
 
 def closeBody(-T: Data, -State: Type, -E: Data, map: Progress.Error<T> -> E, close: State -> IO(Result<&2, &2, T, Unit>), body: Response.Body<State>) -> IO(Response.Body<State> & Result<&2, &2, E, Unit>):
@@ -41,7 +41,7 @@ def closeBody(-T: Data, -State: Type, -E: Data, map: Progress.Error<T> -> E, clo
     return closed(T, State, E, map, value)
 
 def nextCallback(~T: Data, ~State: Type, ~E: Data, ~map: Progress.Error<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, Stream.Event>>), ~close: State -> IO(Result<&2, &2, T, Unit>), handle: Serial.Handle<Response.Body<State>>, unused: Unit) -> IO(Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
-  Serial.run(Response.Body<State>, Result<&2, &2, E, Maybe<&2, SSE.Chunk>>, handle, body => pull(T, State, E, map, read, close, body))
+  Serial.run(Response.Body<State>, Result<&2, &2, E, Maybe<&2, SSE.Chunk>>, handle, body => pull(~T, ~State, ~read, ~close, E, map, body))
 
 def closeCallback(~T: Data, ~State: Type, ~E: Data, ~map: Progress.Error<T> -> E, ~close: State -> IO(Result<&2, &2, T, Unit>), handle: Serial.Handle<Response.Body<State>>, unused: Unit) -> IO(Result<&2, &2, E, Unit>):
   Serial.run(Response.Body<State>, Result<&2, &2, E, Unit>, handle, body => closeBody(T, State, E, map, close, body))

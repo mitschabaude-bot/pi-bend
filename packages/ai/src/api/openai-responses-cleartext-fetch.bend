@@ -34,14 +34,14 @@ def headed(-Reason: Data, -SourceError: Data, resolution: Connect.Resolution(Dea
     case Fail{cause}: Fail{HeaderFailure{resolution, attempts, cause}}
     case Done{response}: Done{response}
 
-def resolved(-Reason: Data, -SourceError: Data, report: HTTP.Report<Deadline.Cause<Reason>, SourceError>) -> IO(Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>):
+def resolved(-Reason: Data, -SourceError: Data, acquireHeaders: Exchange.Exchange<Deadline.Cause<Reason>> -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>), report: HTTP.Report<Deadline.Cause<Reason>, SourceError>) -> IO(Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>):
   match report:
     case HTTP.Rejected{cause}: IO.pure(Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Rejected{cause}})
     case HTTP.Unresolved{resolution}: IO.pure(Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Unresolved{resolution}})
     case HTTP.Attempted{resolution, attempts, Fail{cause}}: IO.pure(Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{ExchangeFailure{resolution, attempts, cause}})
     case HTTP.Attempted{resolution, attempts, Done{exchange}}:
       do IO<Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>>:
-        result : Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>> <- Reader.start(Deadline.Cause<Reason>, exchange)
+        result : Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>> <- acquireHeaders(exchange)
         return headed(Reason, SourceError, resolution, attempts, result)
 
 def prepared(~Reason: Data, ~SourceError: Data, context: Context<SourceError>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>):
@@ -50,7 +50,7 @@ def prepared(~Reason: Data, ~SourceError: Data, context: Context<SourceError>, s
     case Context{resolver, hosts, options} Done{request}:
       do IO<Result<&2, &1, Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>>:
         report : HTTP.Report<Deadline.Cause<Reason>, SourceError> <- HTTP.start(~Deadline.Cause<Reason>, ~SourceError, resolver, signal, hosts, options, request)
-        resolved(Reason, SourceError, report)
+        resolved(Reason, SourceError, exchange => Reader.start(~Deadline.Cause<Reason>, exchange), report)
 
 # Acquire through final headers, leaving the body unread. Header acquisition
 # failure already closes the exchange before the enclosing fetch scope retires.

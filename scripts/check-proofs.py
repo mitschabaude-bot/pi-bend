@@ -112,6 +112,8 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('responses-attempt-retries-configuration', 'packages/ai/src/api/openai-responses-attempt.bend', 'case NonRetryable{}: Retry.Other{original}\n    case other:', 'case NonRetryable{}: connection(E, original, "configuration")\n    case other:', 'laws/openai-responses-attempt.configuration_failure_is_terminal'),
+        ('responses-attempt-drops-http-message', 'packages/ai/src/api/openai-responses-attempt.bend', 'HTTPFailure{HTTPError.APIError{metadata, value, message}}, message, metadata)', 'HTTPFailure{HTTPError.APIError{metadata, value, message}}, "", metadata)', 'laws/openai-responses-attempt.http_failure_retains_diagnostic_and_policy'),
         ('native-fetch-drops-header-attempts', 'packages/ai/src/api/openai-responses-cleartext-fetch.bend', 'Fail{HeaderFailure{resolution, attempts, cause}}', 'Fail{HeaderFailure{resolution, Nil{}, cause}}', 'laws/openai-responses-cleartext-fetch.header_failure_retains_trace_and_cause'),
         ('native-fetch-replaces-unresolved-cause', 'packages/ai/src/api/openai-responses-cleartext-fetch.bend', 'Fail{Unresolved{resolution}}', 'Fail{Rejected{Plan.TLSRequired{}}}', 'laws/openai-responses-cleartext-fetch.unresolved_request_preserves_resolution'),
         ('timer-conversion-skips-roundtrip', 'packages/runtime/src/timer-milliseconds.bend', 'checked(value, word, F.compare(value, F.fromU32(word)))', 'checked(value, word, Some{EQ{}})', 'laws/timer-milliseconds.accepted_durations_round_trip'),
@@ -323,7 +325,7 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         ('provider-http-discards-success', 'packages/ai/src/utils/provider-http-response.bend',
          'Done{Response.Response{metadata, body}})', 'Fail{StatusFailure{metadata, Done{""}}})', 'laws/provider-http-response.accepted_owner_has_no_body_io'),
         ('provider-http-skips-diagnostic-consumption', 'packages/ai/src/utils/provider-http-response.bend',
-         'Consume.textWith(E, State, read, close, limit, body)',
+         'Consume.textUsing(E, State, read, close, limit, body)',
          'IO.pure(Result<&2, &2, Consume.TextError<E>, String>, Done{""})', 'laws/provider-http-response.rejected_owner_runs_diagnostic_first'),
         ('provider-http-erases-status', 'packages/ai/src/utils/provider-http-response.bend',
          'Some{F.fromU32(status)}', 'Some{F.fromU32(0)}', 'laws/provider-http-response.retry_metadata_projection'),

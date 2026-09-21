@@ -51,7 +51,7 @@ def headed(limit: Nat, value: Result<&2, &1, Progress.Error<Exchange.ReadError<S
     case Fail{cause}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Fail{Retry.Other{HeadFailure{cause}}})
     case Done{response}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(Exchange.ReadError<String>, Exchange.Exchange<String>, HTTP.read(String), Exchange.close(String), limit, response)
+        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.close(String)), limit, response)
         accepted(result)
 
 def started(limit: Nat, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
@@ -59,7 +59,7 @@ def started(limit: Nat, value: Result<&2, &1, Exchange.StartError<String>, Excha
     case Fail{cause}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Fail{Retry.Other{StartFailure{cause}}})
     case Done{owner}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        result : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(String, owner)
+        result : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(~String, owner)
         headed(limit, result)
 
 def requestBody(environment: Environment, unused: Unit) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
@@ -80,7 +80,7 @@ def finished(value: Result<&2, &1, Retry.RetryFailure<Failure>, Response.Respons
     case Done{Response.Response{metadata, body}}:
       do IO<Unit>:
         IO.print("accepted:" ++ U32.show(Metadata.status(metadata)))
-        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(String, 1000n, body)
+        result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(~String, 1000n, body)
         IO.print(Show.shownText(result))
 
 def run(port: U32, retries: Nat, limit: Nat, prepared: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):

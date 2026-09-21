@@ -84,7 +84,7 @@ def body(flow: U32, parent: Abort.AbortController<String>, content: Response.Bod
     case _:
       do IO<Unit>:
         cancelled(flow, parent)
-        result : Result<&2, &2, Consume.TextError<ReadError()>, String> <- Consume.textWith(ReadError(), State(), read, close, 65536n, content)
+        result : Result<&2, &2, Consume.TextError<ReadError()>, String> <- Consume.textWith(~(ReadError()), ~(State()), ~read, ~close, 65536n, content)
         consumed(result)
 
 def received(flow: U32, parent: Abort.AbortController<String>, result: FetchResult()) -> IO(Unit):

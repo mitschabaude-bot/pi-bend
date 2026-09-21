@@ -28,19 +28,22 @@ law header_failure_retains_trace_and_cause:
 law rejected_plan_has_no_header_effects:
   for -Reason: Data
   for -SourceError: Data
+  for acquireHeaders: Exchange.Exchange<Deadline.Cause<Reason>> -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)
   for cause: Plan.Error
-  {Native.resolved(Reason, SourceError, HTTP.Rejected{cause}) == IO.pure(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Native.Rejected{cause}}) : IO(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)}
+  {Native.resolved(Reason, SourceError, acquireHeaders, HTTP.Rejected{cause}) == IO.pure(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Native.Rejected{cause}}) : IO(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)}
 
 law unresolved_request_preserves_resolution:
   for -Reason: Data
   for -SourceError: Data
+  for acquireHeaders: Exchange.Exchange<Deadline.Cause<Reason>> -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)
   for resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError)
-  {Native.resolved(Reason, SourceError, HTTP.Unresolved{resolution}) == IO.pure(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Native.Unresolved{resolution}}) : IO(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)}
+  {Native.resolved(Reason, SourceError, acquireHeaders, HTTP.Unresolved{resolution}) == IO.pure(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Native.Unresolved{resolution}}) : IO(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)}
 
 law exchange_failure_precedes_header_read:
   for -Reason: Data
   for -SourceError: Data
+  for acquireHeaders: Exchange.Exchange<Deadline.Cause<Reason>> -> IO(Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)
   for resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError)
   for attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>
   for cause: HTTP.Error<Deadline.Cause<Reason>>
-  {Native.resolved(Reason, SourceError, HTTP.Attempted{resolution, attempts, Fail{cause}}) == IO.pure(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Native.ExchangeFailure{resolution, attempts, cause}}) : IO(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)}
+  {Native.resolved(Reason, SourceError, acquireHeaders, HTTP.Attempted{resolution, attempts, Fail{cause}}) == IO.pure(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>, Fail{Native.ExchangeFailure{resolution, attempts, cause}}) : IO(Result<&2, &1, Native.Error<Reason, SourceError>, Response.Response<Exchange.Exchange<Deadline.Cause<Reason>>>>)}

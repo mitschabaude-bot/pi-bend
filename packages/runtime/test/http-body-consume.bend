@@ -78,15 +78,15 @@ def consume(mode: String, limit: Nat, body: Response.Body<Input.State>) -> IO(Un
   match mode:
     case "text":
       do IO<Unit>:
-        result : Result<&2, &2, Consume.TextError<String>, String> <- Consume.textWith(String, Input.State, Input.read, Input.close, limit, body)
+        result : Result<&2, &2, Consume.TextError<String>, String> <- Consume.textWith(~String, ~Input.State, ~Input.read, ~Input.close, limit, body)
         IO.print(shownText(result))
     case "json":
       do IO<Unit>:
-        result : Result<&2, &2, Consume.JSONError<String>, V.Value> <- Consume.jsonWith(String, Input.State, Input.read, Input.close, limit, body)
+        result : Result<&2, &2, Consume.JSONError<String>, V.Value> <- Consume.jsonWith(~String, ~Input.State, ~Input.read, ~Input.close, limit, body)
         IO.print(shownJSON(result))
     case _:
       do IO<Unit>:
-        result : Result<&2, &2, Buffer.Error<String>, List<&2, U32>> <- Consume.bytesWith(String, Input.State, Input.read, Input.close, limit, body)
+        result : Result<&2, &2, Buffer.Error<String>, List<&2, U32>> <- Consume.bytesWith(~String, ~Input.State, ~Input.read, ~Input.close, limit, body)
         IO.print(shownBytes(result))
 
 def started(mode: String, limit: Nat, value: Result<&2, &1, Progress.Error<String>, Response.Response<Input.State>>) -> IO(Unit):
@@ -98,7 +98,7 @@ def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
     case fails <> mode <> limit <> events:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<String>, Response.Response<Input.State>> <- Response.startWith(String, Input.State, Input.read, Input.close, Input.State{events, String.eq(fails, "1")})
+        value : Result<&2, &1, Progress.Error<String>, Response.Response<Input.State>> <- Response.startWith(~String, ~Input.State, ~Input.read, ~Input.close, Input.State{events, String.eq(fails, "1")})
         started(mode, U32.to_nat(Text.decimal(limit, 0)), value)
     case _: IO.die(Unit, 1, "expected cleanup mode budget events")
 
