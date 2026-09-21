@@ -1,0 +1,50 @@
+{
+  "classification": "Documented language restriction: template arguments must be closed; a universally quantified law parameter is a local caller variable. Not classified as a compiler defect.",
+  "guide": "Installed guide/GUIDE.md, Templates: a ~ argument may mention top-level defs but no local variable of the caller.",
+  "runs": [
+    {
+      "compiler": "installed",
+      "variant": "parameter",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Error:\n- expected : a template applied to closed ~ arguments (a def parameter is not comptime)\n- observed : identityTemplate\nContext:\n- A     : Data\n- value : A\nLocation: generic_template_identity\n7 |   for value: A\n8>|   {identityTemplate(~A, value) == value : A}\n9 | \n"
+    },
+    {
+      "compiler": "installed",
+      "variant": "closed",
+      "exit_code": 0,
+      "stdout": "All terms check.\n",
+      "stderr": ""
+    },
+    {
+      "compiler": "candidate",
+      "variant": "parameter",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":65929216,\"heapTotal\":11529216,\"heapUsed\":3984143,\"external\":1841007,\"arrayBuffers\":100}\nError:\n- expected : a template applied to closed ~ arguments (a def parameter is not comptime)\n- observed : identityTemplate\nContext:\n- A     : Data\n- value : A\nLocation: generic_template_identity\n7 |   for value: A\n8>|   {identityTemplate(~A, value) == value : A}\n9 | \n"
+    },
+    {
+      "compiler": "candidate",
+      "variant": "closed",
+      "exit_code": 0,
+      "stdout": "All terms check.\n",
+      "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":64487424,\"heapTotal\":11545600,\"heapUsed\":3964305,\"external\":1804833,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":79110144,\"heapTotal\":18427904,\"heapUsed\":11085244,\"external\":2624908,\"arrayBuffers\":100}\n"
+    }
+  ],
+  "source_sha256": {
+    "tests/compiler-template-law-parameter.bend": "d8b6203983227df1d31187c55988f11d92ed6d7d1f5dc56d0fe398ccc11ca68b",
+    "tests/compiler-template-law-closed.bend": "a363d1bdf539749f4092071eeb2c3b84572e6100611341e5360b93aa269eb060"
+  },
+  "compiler_sha256": {
+    "installed": {
+      "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+      "comp.ts": "fe91a265c2924666ab1654af5663ff4b2a923769e97d744f21c1b1116a0d650f",
+      "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35"
+    },
+    "candidate": {
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+      "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35"
+    }
+  }
+}

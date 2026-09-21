@@ -591,3 +591,17 @@ A previous native build was intentionally stopped after the Bun integration expo
 ### BEND-001/BEND-016 observation: owned asynchronous provider session
 
 The complete session/HTTP/SSE fixture emits C on the unchanged isolated candidate in 336.39 seconds at 19,859,324 KiB sampled peak process-group RSS. JS emission takes 32.14 seconds at 12,610,052 KiB. The [record](bend-issues/2026-09-21-openai-provider-session-compiler.json) retains source/compiler identities, phase profiles, generated sizes and slowest emissions. It also records the smaller gated-ownership fixture: C generation takes 3.74 seconds at 677,424 KiB, and JS generation takes 1.06 seconds at 291,436 KiB. These are differently composed programs, not a controlled performance comparison or a new leak attribution. The broad HTTP composition remains costly; no compiler patch was changed or installed.
+
+### Template laws require closed specialization arguments (2026-09-21)
+
+A law cannot pass its universally quantified type/function parameters as template arguments: the checker reports that a def parameter is not compile-time. The [reduced parameterized case](../tests/compiler-template-law-parameter.bend) fails on both installed and isolated compilers, while the [closed-type control](../tests/compiler-template-law-closed.bend) proves identity for every natural-number value. The [record](bend-issues/2026-09-21-template-law-parameters.json) retains diagnostics and source/compiler hashes. The installed guide explicitly requires closed template arguments, so this is a documented language restriction, not a compiler defect. The preparation rejection laws accordingly specialize the wire/diagnostic types and quantify over all runtime inputs; they do not claim uniformity across template instantiations. No compiler change was made.
+
+### BEND-017 recurrence: preparation-stage matches
+
+Matching a later result parameter before an earlier configuration parameter produced the known consumed-binder diagnostic. Aligning match order with parameter order checks. A nested match of a copied result field also required passing the field through a projection helper, as in earlier BEND-017 cases. This is the existing pattern-lowering restriction; no new defect classification or compiler patch is claimed.
+
+### BEND-001/BEND-016 observation: request preparation
+
+The unchanged isolated compiler emits the complete preparation/reference-comparison fixture in 103.42 seconds at 15,249,800 KiB sampled peak process-group RSS. JS emission takes 20.84 seconds at 8,980,164 KiB; Clang takes 71.67 seconds at 967,388 KiB. The [record](bend-issues/2026-09-21-openai-responses-preparation-compiler.json) retains the exact source/compiler hashes, generated sizes and phase profiles. These are observational costs for another composition, not a controlled improvement/regression comparison or evidence of a new leak. The compiler experiment remains isolated and unchanged.
+
+The expanded proof root also made unrelated mutation checks repeatedly load the preparation/conversion stack. The harness now includes transitive proof dependencies and validates every selected proof environment unmodified before requiring its named contract to reject the mutant; modules depending on global laws retain the full root. Full-root acceptance and open/missing-obligation checks remain mandatory. This removes unnecessary checker work without changing the compiler or the required mutation rejections. No controlled timing comparison is claimed.

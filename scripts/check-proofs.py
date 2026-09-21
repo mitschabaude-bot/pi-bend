@@ -39,12 +39,14 @@ def check(directory, source):
 
 def accepted(result):
     # The full root includes the previous four concrete annotations plus the
-    # two response loops and SSE loop. The body-source module alone reports
+    # two response loops and SSE loop. Preparation also imports strict schema
+    # traversal and Responses processing; its concrete specializations bring
+    # the root summary to twelve. The body-source module alone reports
     # three. The provider HTTP adapter also imports the buffered-body loop.
     # None supplies proof evidence; exact declarations are audited below.
     summaries = {'All terms check.', 'All terms check, with 1 unsafe annotation.',
                  'All terms check, with 2 unsafe annotations.', 'All terms check, with 3 unsafe annotations.', 'All terms check, with 4 unsafe annotations.',
-                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.'}
+                 'All terms check, with 6 unsafe annotations.', 'All terms check, with 7 unsafe annotations.', 'All terms check, with 8 unsafe annotations.', 'All terms check, with 12 unsafe annotations.'}
     assert result['exit_code'] == 0 and any(line in summaries for line in result['stdout'].splitlines()), result
 
 def rejected(result, diagnostic):
@@ -58,6 +60,9 @@ unsafe_declarations = {
     for match in re.finditer(r'^@unsafe\s+def ([^\s(]+)', (ROOT / name).read_text(), re.MULTILINE)
 }
 assert unsafe_declarations == {
+    ('packages/ai/src/api/strict-json-schema.bend', 'run'),
+    ('packages/ai/src/api/strict-json-schema.bend', 'nullAllowed'),
+    ('packages/ai/src/api/openai-responses-stream.bend', 'loop'),
     ('packages/runtime/src/callback.bend', 'factory'),
     ('packages/runtime/src/http-response.bend', 'seek'),
     ('packages/runtime/src/http-body-consume.bend', 'drive'),
@@ -69,6 +74,8 @@ assert unsafe_declarations == {
     ('packages/ai/src/utils/json.bend', 'encode'),
     ('packages/ai/src/utils/schema-json.bend', 'convert'),
 }, unsafe_declarations
+
+source_hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in FILES + ['scripts/check-proofs.py']}
 
 results = {'proof': check(ROOT, 'PROOF.bend'), 'open_laws': check(ROOT, 'LAWS.bend'), 'mutations': []}
 accepted(results['proof'])
@@ -97,6 +104,16 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof})
     module.write_text(original)
     extra_mutations = [
+        ('responses-params-omits-explicit-null', 'packages/ai/src/api/openai-responses-params.bend', 'case Some{T.NullValue{}}: R.set(T.JsonValue, fields, key, T.JsonNull{})', 'case Some{T.NullValue{}}: fields', 'laws/openai-responses-prepare.explicit_null_replaces_field'),
+        ('responses-preparation-rejects-valid-api', 'packages/ai/src/api/openai-responses-prepare.bend', 'case T.OpenAIResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, Policy.getCompat(provider, baseUrl, compat)}}', 'case T.OpenAIResponsesApi{}: Fail{UnsupportedApi{T.OpenAIResponsesApi{}}}', 'laws/openai-responses-prepare.responses_model_preserves_configuration'),
+        ('responses-preparation-accepts-wrong-api', 'packages/ai/src/api/openai-responses-prepare.bend', 'case other: Fail{UnsupportedApi{other}}', 'case other: Done{ModelSettings{provider, baseUrl, headers, Policy.getCompat(provider, baseUrl, None{})}}', 'laws/openai-responses-prepare.custom_api_is_rejected'),
+        ('responses-extension-drops-fetch', 'packages/ai/src/api/openai-responses-options.bend', '}: OpenAIResponsesOptions{signal, telemetryContext, apiKey, fetch, env', '}: OpenAIResponsesOptions{signal, telemetryContext, apiKey, None{}, env', 'laws/openai-responses-options.extension_preserves_base'),
+        ('responses-extension-drops-summary', 'packages/ai/src/api/openai-responses-options.bend', 'metadata, reasoningEffort, reasoningSummary, serviceTier, toolChoice}\n', 'metadata, reasoningEffort, None{}, serviceTier, toolChoice}\n', 'laws/openai-responses-options.extension_preserves_provider_settings'),
+        ('responses-projection-drops-telemetry', 'packages/ai/src/api/openai-responses-options.bend', '}: T.StreamOptions{signal, telemetryContext, apiKey', '}: T.StreamOptions{signal, None{}, apiKey', 'laws/openai-responses-options.extension_preserves_base'),
+        ('responses-preparation-discards-payload-cause', 'packages/ai/src/api/openai-responses-prepare.bend', 'case Fail{cause}: Fail{PayloadFailure{cause}}', 'case Fail{cause}: Fail{UnsupportedApi{T.OpenAIResponsesApi{}}}', 'laws/openai-responses-prepare.failed_payload_preserves_cause'),
+        ('responses-preparation-drops-headers', 'packages/ai/src/api/openai-responses-prepare.bend', 'Done{Prepared{apiKey, baseUrl, headers, value, compat, grammarResult, retention}}', 'Done{Prepared{apiKey, baseUrl, R.new(T.Nullable<String>), value, compat, grammarResult, retention}}', 'laws/openai-responses-prepare.successful_preparation_preserves_all_fields'),
+        ('responses-credential-failure-performs-effects', 'packages/ai/src/api/openai-responses-prepare.bend', 'case _ Fail{cause}: IO.pure(Result<&2, &2, Error, Prepared>, Fail{CredentialFailure{cause}})', 'case _ Fail{cause}: IO.bind(Unit, Result<&2, &2, Error, Prepared>, IO.print("unexpected preparation effect"), ignored => IO.pure(Result<&2, &2, Error, Prepared>, Fail{CredentialFailure{cause}}))', 'laws/openai-responses-prepare.credential_failure_has_no_effects'),
+        ('responses-grammar-failure-performs-effects', 'packages/ai/src/api/openai-responses-prepare.bend', 'case _ Fail{cause}: IO.pure(Result<&2, &2, Error, Prepared>, Fail{GrammarFailure{cause}})', 'case _ Fail{cause}: IO.bind(Unit, Result<&2, &2, Error, Prepared>, IO.print("unexpected preparation effect"), ignored => IO.pure(Result<&2, &2, Error, Prepared>, Fail{GrammarFailure{cause}}))', 'laws/openai-responses-prepare.grammar_failure_has_no_effects'),
         ('session-drops-published-event', 'packages/ai/src/api/openai-responses-session.bend',
          'Events.push(T.AssistantMessageEvent<A, G>, T.AssistantMessage<A, G>, stream, event)',
          'IO.pure(Unit, Unit{})', 'laws/openai-responses-session.publication_preserves_event'),
@@ -493,8 +510,53 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
          '(Queues{remaining, other}, messages)',
          '(Queues{remaining, Q.clear(M, other)}, messages)', 'proofs/agent-queues.delivered_isolated'),
     ]
+    # Validate each affected proof module before mutating it, then require the
+    # same named contract to reject the mutant. This avoids recompiling the
+    # entire provider stack for unrelated queue/decoder mutations. The full
+    # root, open obligations and missing-proof checks remain mandatory.
+    results['mutation_baselines'] = {}
+    def mutation_entry(diagnostic):
+        module = diagnostic.split('.', 1)[0]
+        if module.startswith('laws/'):
+            module = 'proofs/' + module[len('laws/'):]
+        module += '.bend'
+        assert (directory / module).exists(), module
+        pending = [module]
+        visited = set()
+        while pending:
+            relative = pending.pop()
+            if relative in visited:
+                continue
+            visited.add(relative)
+            path = directory / relative
+            # A law module may import another module's specifications without
+            # importing its proofs. Include those proofs transitively too.
+            if relative.startswith('laws/'):
+                companion = 'proofs/' + relative[len('laws/'):]
+                assert (directory / companion).exists(), companion
+                pending.append(companion)
+            for imported in re.findall(r'^import (\.[^\s]+)', path.read_text(), re.MULTILINE):
+                pending.append(str((path.parent / imported).resolve().relative_to(directory)))
+        # FIFO/pending-queue proofs import the global laws. Their complete
+        # proof environment is still required to discharge every obligation.
+        if 'LAWS.bend' in visited:
+            return 'PROOF.bend'
+        entry = 'mutation-proof-' + Path(module).stem + '.bend'
+        if entry not in results['mutation_baselines']:
+            dependencies = sorted(name for name in visited if name.startswith('proofs/'))
+            (directory / entry).write_text(''.join(f'import ./{name} as Contract{index}\n' for index, name in enumerate(dependencies)))
+            baseline = check(directory, entry)
+            accepted(baseline)
+            results['mutation_baselines'][entry] = baseline
+        return entry
+
+    # Preflight every proof environment before changing any implementation.
+    for _, _, _, _, diagnostic in extra_mutations:
+        mutation_entry(diagnostic)
+
     for label, name, before, after, diagnostic in extra_mutations:
         target = directory / name
+        entry = mutation_entry(diagnostic)
         original_extra = target.read_text()
         assert original_extra.count(before) == 1, label
         target.write_text(original_extra.replace(before, after))
@@ -504,7 +566,7 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
         typed = check(directory, 'mutation-module.bend')
         typed['module'] = name
         accepted(typed)
-        proof_result = check(directory, 'PROOF.bend')
+        proof_result = check(directory, entry)
         rejected(proof_result, diagnostic)
         results['mutations'].append({'name': label, 'module_check': typed, 'proof_check': proof_result})
         target.write_text(original_extra)
@@ -515,6 +577,7 @@ with tempfile.TemporaryDirectory(prefix='proof-gate-', dir=ROOT / 'build') as te
     proof.write_text(text[:start] + text[end:])
     results['missing_proof'] = check(directory, 'PROOF.bend')
     rejected(results['missing_proof'], 'unfilled law')
-results['sha256'] = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in FILES + ['scripts/check-proofs.py']}
+assert source_hashes == {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in source_hashes}, 'proof sources changed during validation'
+results['sha256'] = source_hashes
 (ROOT / 'build/proof-check.json').write_text(json.dumps(results, indent=2) + '\n')
 print(f"PASS generic laws; open obligations, missing proof and {len(results['mutations'])} well-typed mutations rejected")

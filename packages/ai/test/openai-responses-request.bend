@@ -36,7 +36,7 @@ def context(+mode: U32) -> T.TranscriptContext<V.Value, R.Record<V.Value>, Unit,
   T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"initial"}, None{}, tools, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"hello"}, F.fromU32(1)}} <> later(mode)}
 
 def settings() -> Params.RequestOptions<T.JsonValue>:
-  Params.RequestOptions{Some{F.fromU32(1)}, Some{F.fromU32(0)}, Some{"priority"}, Some{T.JsonString{"required"}}, Some{T.High{}}, Some{T.PresentValue{"concise"}}, Some{"session"}, None{}}
+  Params.RequestOptions{Some{F.fromU32(1)}, Some{F.fromU32(0)}, Some{T.PresentValue{"priority"}}, Some{T.JsonString{"required"}}, Some{T.High{}}, Some{T.PresentValue{"concise"}}, Some{"session"}, None{}}
 
 def identity(value: T.JsonValue) -> T.JsonValue: value
 

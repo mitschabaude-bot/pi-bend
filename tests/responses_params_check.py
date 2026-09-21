@@ -31,6 +31,8 @@ for retention,longCache,explicit,session in itertools.product(['none','short','l
     add(compat={'supportsLongCacheRetention':longCache,'supportsExplicitPromptCacheMode':explicit},options=options)
 for choice,sampling in itertools.product(['auto','none','required',{'type':'function','name':'tool'},{'type':'custom','name':'grammar'}],[{}, {'model':'override','input':None,'stream':False,'store':True,'max_output_tokens':2,'temperature':None,'service_tier':'custom','prompt_cache_key':None,'prompt_cache_retention':None,'prompt_cache_options':None,'tools':None,'tool_choice':'none','reasoning':None,'include':[],'custom':{'nested':[1,True]}}]):
     add(options={'toolChoice':choice,'reasoningEffort':'high','sessionId':'session','cacheRetention':'long','samplingParams':sampling},input=[{'role':'user','content':'hello'}],tools=[{'type':'function','name':'tool','parameters':{'type':'object'}}])
+for sampling in [None, {'service_tier':'priority'}, {'service_tier':None}]:
+    add(options={'serviceTier':None, **({'samplingParams':sampling} if sampling is not None else {})})
 results=json.loads(subprocess.check_output(['node','tests/responses_params_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
 def flags(value):
     return '.'.join('-' if name not in (value or {}) else str(int(value[name])) for name in fields)

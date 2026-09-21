@@ -63,7 +63,7 @@ def sampling(value: Maybe<&2, V.Value>) -> Maybe<&2, R.Record<T.JsonValue>>:
     case _: None{}
 
 def options(+value: V.Value) -> Params.RequestOptions<T.JsonValue>:
-  Params.RequestOptions{scalar(field(value, "maxTokens")), scalar(field(value, "temperature")), stringValue(field(value, "serviceTier")), choice(field(value, "toolChoice")), effort(field(value, "reasoningEffort")), nullableString(field(value, "reasoningSummary")), stringValue(field(value, "sessionId")), sampling(field(value, "samplingParams"))}
+  Params.RequestOptions{scalar(field(value, "maxTokens")), scalar(field(value, "temperature")), nullableString(field(value, "serviceTier")), choice(field(value, "toolChoice")), effort(field(value, "reasoningEffort")), nullableString(field(value, "reasoningSummary")), stringValue(field(value, "sessionId")), sampling(field(value, "samplingParams"))}
 
 def jsonItems(values: List<&2, V.Value>) -> List<&2, T.JsonValue>:
   match values:

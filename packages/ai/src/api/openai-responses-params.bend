@@ -11,7 +11,7 @@ import ../../../runtime/src/u64.bend as Word
 # Transport, callbacks and retry options stay in the provider wrapper. A native
 # SDK tool-choice type is supplied by the caller, with its wire encoder.
 type RequestOptions<-Choice: Data> is Data:
-  RequestOptions{maxTokens: Maybe<&2, F.F64>, temperature: Maybe<&2, F.F64>, serviceTier: Maybe<&2, String>, toolChoice: Maybe<&2, Choice>, reasoningEffort: Maybe<&2, T.ThinkingLevel>, reasoningSummary: Maybe<&2, T.Nullable<String>>, sessionId: Maybe<&2, String>, samplingParams: Maybe<&2, R.Record<T.JsonValue>>}
+  RequestOptions{maxTokens: Maybe<&2, F.F64>, temperature: Maybe<&2, F.F64>, serviceTier: Maybe<&2, T.Nullable<String>>, toolChoice: Maybe<&2, Choice>, reasoningEffort: Maybe<&2, T.ThinkingLevel>, reasoningSummary: Maybe<&2, T.Nullable<String>>, sessionId: Maybe<&2, String>, samplingParams: Maybe<&2, R.Record<T.JsonValue>>}
 
 type RequestModel is Data:
   RequestModel{id: String, provider: String, reasoning: Bool, thinkingLevelMap: Maybe<&2, T.ThinkingLevelMap>}
@@ -26,6 +26,12 @@ def optionalString(fields: R.Record<T.JsonValue>, key: String, value: Maybe<&2, 
   match value:
     case None{}: fields
     case Some{text}: R.set(T.JsonValue, fields, key, T.JsonString{text})
+
+def optionalNullableString(fields: R.Record<T.JsonValue>, key: String, value: Maybe<&2, T.Nullable<String>>) -> R.Record<T.JsonValue>:
+  match value:
+    case None{}: fields
+    case Some{T.NullValue{}}: R.set(T.JsonValue, fields, key, T.JsonNull{})
+    case Some{T.PresentValue{text}}: R.set(T.JsonValue, fields, key, T.JsonString{text})
 
 def optionalNumber(fields: R.Record<T.JsonValue>, key: String, value: Maybe<&2, F.F64>) -> R.Record<T.JsonValue>:
   match value:
@@ -141,6 +147,6 @@ def buildConvertedParams(~Choice: Data, ~encodeChoice: Choice -> T.JsonValue, +m
     case RequestOptions{maxTokens, temperature, tier, choice, effort, summary, session, sampling}:
       fields = baseFields(modelId(model), input, compat, retention, session)
       budgeted = optionalNumber(fields, "max_output_tokens", outputTokens(maxOutputSupport(compat), maxTokens))
-      configured = optionalString(optionalNumber(budgeted, "temperature", temperature), "service_tier", tier)
+      configured = optionalNullableString(optionalNumber(budgeted, "temperature", temperature), "service_tier", tier)
       toolFields = addChoice(~Choice, ~encodeChoice, addTools(configured, tools), choice)
       T.JsonObject{samplingFields(addReasoning(toolFields, model, effort, summary), sampling)}

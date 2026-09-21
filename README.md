@@ -14,7 +14,7 @@ Upstream test parity is tracked in [tests/UPSTREAM.md](tests/UPSTREAM.md) and a 
 
 ## Laws and proofs
 
-Generic behavioral contracts live in [LAWS.bend](LAWS.bend), with machine-checked implementations in [PROOF.bend](PROOF.bend). Run `bend PROOF.bend` as the proof gate, or `python3 scripts/check-proofs.py` to also check rejection of open obligations and well-typed broken implementations. The current gate checks 293 public laws and 59 supporting lemmas, with 168 typed mutations rejected. [Proof coverage](docs/laws.md) distinguishes these guarantees from remaining agent, IO and runtime work. Differential, integration and performance tests remain complementary.
+Generic behavioral contracts live in [LAWS.bend](LAWS.bend), with machine-checked implementations in [PROOF.bend](PROOF.bend). Run `scripts/check-proofs.py` with the [documented compiler configuration](docs/laws.md#current-compiler-requirement) to check the full proof root and rejection of open obligations and well-typed broken implementations. The current gate checks 305 public laws and 59 supporting lemmas, with 178 typed mutations rejected. [Proof coverage](docs/laws.md) distinguishes these guarantees from remaining agent, IO and runtime work. Differential, integration and performance tests remain complementary.
 
 ## Build and test
 
@@ -33,3 +33,5 @@ python3 tests/agent_fixture.py
 ```
 
 Current implementation: native print-mode agent loop with OpenAI Codex OAuth, streaming responses, bounded retries, read/write/exact-edit/bash tools, and persisted sessions that can be resumed with `--session <file>`. Native sessions use a separate `~/.pi-bend` directory while upstream session compatibility is developed. Interactive terminal parity, additional providers, and Bend extensions are still in progress. The initial tool implementations are tested but do not yet match every upstream edge case.
+
+Native [Responses request preparation](docs/openai-responses-preparation.md) now composes credential/cache policy, transcript and tool conversion, headers and payload construction with complete typed provider options. Final transport/session/authentication assembly and the full port remain underway.
