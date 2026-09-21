@@ -19,6 +19,9 @@ type Error is Data:
   HelloRetryRequest{}
   Derivation{cause: KDF.Error}
   InvalidKeyMaterial{}
+  MalformedHandshake{}
+  RejectedExtension{kind: U32}
+  DuplicateExtension{kind: U32}
 
 type Pending is Type:
   Pending{serverName: Maybe<&2, String>, privateKey: List<&2, U32>, sessionId: List<&2, U32>, clientHello: List<&2, U32>}
@@ -294,3 +297,106 @@ def orderedBatch(result: Result<&2, &2, FramingError, Batch>) -> Result<&2, &2, 
 
 def feed(limit: U32, buffer: Buffer, bytes: List<&2, U32>) -> Result<&2, &2, FramingError, Batch>:
   orderedBatch(feedBytes(bytes, limit, Done{Batch{buffer, Nil{}}}))
+
+# Complete handshake messages arrive from feed. Extension parsing is shared
+# by server parameters and, later, certificate entries; placement is checked
+# separately against the extensions actually offered by this client.
+type ServerExtension is Data:
+  ServerExtension{kind: U32, bytes: List<&2, U32>}
+
+def require(valid: Bool) -> Result<&2, &2, Error, Unit>:
+  match valid:
+    case True{}: Done{Unit{}}
+    case False{}: Fail{MalformedHandshake{}}
+
+def messageBody(expected: U32, wire: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match wire:
+    case kind <> +a <> +b <> +c <> +body:
+      Result.bind(&2, &2, Error, Unit, List<&2, U32>, require(U32.is_eq(kind, expected) && X.valid(body) && U32.is_le(a, 255) && U32.is_le(b, 255) && U32.is_le(c, 255) && Nat.is_eq(Record.length(body, 0n), U32.to_nat((a * 65536 + b * 256 + c : U32)))), unused => Done{body})
+    case _: Fail{MalformedHandshake{}}
+
+def extensionBytes(count: Nat, bytes: List<&2, U32>, reversed: List<&2, U32>) -> List<&2, U32>:
+  match count bytes:
+    case 1n+count head <> tail: extensionBytes(count, tail, head <> reversed)
+    case _ _: List.reverse(&2, U32, reversed)
+
+def parseExtensions(fuel: Nat, bytes: List<&2, U32>, reversed: List<&2, ServerExtension>) -> Result<&2, &2, Error, List<&2, ServerExtension>>:
+  match fuel bytes:
+    case _ Nil{}: Done{List.reverse(&2, ServerExtension, reversed)}
+    case 1n+fuel a <> b <> c <> d <> +rest:
+      +size = U32.to_nat((c * 256 + d : U32))
+      +data = extensionBytes(size, rest, Nil{})
+      Result.bind(&2, &2, Error, Unit, List<&2, ServerExtension>, require(Nat.is_eq(size, Record.length(data, 0n))), unused =>
+        parseExtensions(fuel, List.drop(&2, U32, rest, size), ServerExtension{(a * 256 + b : U32), data} <> reversed))
+    case _ _: Fail{MalformedHandshake{}}
+
+def extensionVector(bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, ServerExtension>>:
+  match bytes:
+    case a <> b <> +rest:
+      +size = Record.length(rest, 0n)
+      Result.bind(&2, &2, Error, Unit, List<&2, ServerExtension>, require(Nat.is_eq(size, U32.to_nat((a * 256 + b : U32)))), unused => parseExtensions(size, rest, Nil{}))
+    case _: Fail{MalformedHandshake{}}
+
+type Parameters is Data:
+  Parameters{serverNameAcknowledged: Bool, applicationProtocol: Maybe<&2, String>}
+
+def validGroups(bytes: List<&2, U32>) -> Bool:
+  match bytes:
+    case a <> b <> +rest:
+      +size = (a * 256 + b : U32)
+      U32.is_ge(size, 2) && U32.is_eq(U32.and(size, 1), 0) && Nat.is_eq(Record.length(rest, 0n), U32.to_nat(size))
+    case _: False{}
+
+def selectExtension(offeredName: Bool, extension: ServerExtension, parameters: Parameters) -> Result<&2, &2, Error, Parameters>:
+  match extension parameters:
+    case ServerExtension{0, Nil{}} Parameters{_, protocol}:
+      Bool.pick(Result<&2, &2, Error, Parameters>, offeredName, Done{Parameters{True{}, protocol}}, Fail{RejectedExtension{0}})
+    case ServerExtension{16, 0 <> 9 <> 8 <> 104 <> 116 <> 116 <> 112 <> 47 <> 49 <> 46 <> 49 <> Nil{}} Parameters{acknowledged, _}:
+      Done{Parameters{acknowledged, Some{"http/1.1"}}}
+    case ServerExtension{10, bytes} parameters:
+      Result.bind(&2, &2, Error, Unit, Parameters, require(validGroups(bytes)), unused => Done{parameters})
+    case ServerExtension{kind, _} _: Fail{RejectedExtension{kind}}
+
+def containsKind(kinds: List<&2, U32>, +kind: U32) -> Bool:
+  match kinds:
+    case Nil{}: False{}
+    case head <> rest: U32.is_eq(head, kind) || containsKind(rest, kind)
+
+def selectExtensions(extensions: List<&2, ServerExtension>, +offeredName: Bool, +seen: List<&2, U32>, parameters: Parameters) -> Result<&2, &2, Error, Parameters>:
+  match extensions:
+    case Nil{}: Done{parameters}
+    case ServerExtension{+kind, bytes} <> rest:
+      unique = Bool.pick(Result<&2, &2, Error, Unit>, containsKind(seen, kind), Fail{DuplicateExtension{kind}}, Done{Unit{}})
+      Result.bind(&2, &2, Error, Unit, Parameters, unique, unused =>
+        Result.bind(&2, &2, Error, Parameters, Parameters, selectExtension(offeredName, ServerExtension{kind, bytes}, parameters), chosen =>
+          selectExtensions(rest, offeredName, kind <> seen, chosen)))
+
+def encryptedExtensions(offeredName: Bool, wire: List<&2, U32>) -> Result<&2, &2, Error, Parameters>:
+  Result.bind(&2, &2, Error, List<&2, U32>, Parameters, messageBody(8, wire), body =>
+    Result.bind(&2, &2, Error, List<&2, ServerExtension>, Parameters, extensionVector(body), parsed =>
+      selectExtensions(parsed, offeredName, Nil{}, Parameters{False{}, None{}})))
+
+type ServerParameters is Type:
+  ServerParameters{handshake: Handshake, parameters: Parameters}
+
+def offeredServerName(name: Maybe<&2, String>) -> Bool:
+  match name:
+    case None{}: False{}
+    case Some{_}: True{}
+
+def updatedParameters(state: ServerParameters, result: Result<&2, &2, Error, SHA.State>) -> Result<&2, &1, Error, ServerParameters>:
+  match state result:
+    case _ Fail{cause}: Fail{cause}
+    case ServerParameters{Handshake{name, _, secret, client, server, write, read}, parameters} Done{transcript}:
+      Done{ServerParameters{Handshake{name, transcript, secret, client, server, write, read}, parameters}}
+
+def parameterState(handshake: Handshake, wire: List<&2, U32>, result: Result<&2, &2, Error, Parameters>) -> Result<&2, &1, Error, ServerParameters>:
+  match handshake result:
+    case _ Fail{cause}: Fail{cause}
+    case Handshake{name, +transcript, secret, client, server, write, read} Done{parameters}:
+      updatedParameters(ServerParameters{Handshake{name, transcript, secret, client, server, write, read}, parameters}, hashResult(SHA.State, SHA.update(wire, transcript)))
+
+def acceptEncryptedExtensions(handshake: Handshake, +wire: List<&2, U32>) -> Result<&2, &1, Error, ServerParameters>:
+  match handshake:
+    case Handshake{+name, transcript, secret, client, server, write, read}:
+      parameterState(Handshake{name, transcript, secret, client, server, write, read}, wire, encryptedExtensions(offeredServerName(name), wire))

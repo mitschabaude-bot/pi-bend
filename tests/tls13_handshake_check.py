@@ -1,11 +1,12 @@
-"""ClientHello wire checks and local OpenSSL server interoperability.
+"""TLS handshake framing, negotiation and local OpenSSL interoperability.
 
 Build tests/tls13-handshake.bend to build/tls13-handshake and .js first.
-This checks the initial client flight, not authenticated TLS completion.
+This checks negotiation and handshake keys, not authenticated TLS completion.
 """
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import random
+import itertools
 import hashlib
 import hmac
 import ssl
@@ -183,6 +184,7 @@ def verify_keys(line, seed, client_hello, flight):
     assert received == str(inner[-1]) + ':' + encode(inner[:-1])
     sent = octets(sent)
     assert AESGCM(expand(client, b'key', b'', 16)).decrypt(expand(client, b'iv', b'', 12), sent[5:], sent[:5]) == b'\x14\x00\x00\x00\x16'
+    return inner[:-1]
 
 
 def malformed(hello):
@@ -287,6 +289,57 @@ def check_framing(command):
     return len(cases)
 
 
+def check_extensions(command):
+    def ext(kind, data):
+        return kind.to_bytes(2, 'big') + len(data).to_bytes(2, 'big') + data
+
+    def message(items):
+        data = b''.join(items)
+        body = len(data).to_bytes(2, 'big') + data
+        return b'\x08' + len(body).to_bytes(3, 'big') + body
+
+    sni = ext(0, b'')
+    alpn = ext(16, b'\x00\x09\x08http/1.1')
+    groups = ext(10, b'\x00\x04\x00\x17\x00\x1d')
+    cases = []
+    for size in range(4):
+        for items in itertools.permutations([sni, alpn, groups], size):
+            value = ('sni' if sni in items else 'none') + ':' + ('http/1.1' if alpn in items else 'none')
+            cases.append(('yes', message(items), value))
+            cases.append(('no', message(items), 'extension:0' if sni in items else value))
+    for item in [sni, alpn, groups]:
+        cases.append(('yes', message([item, item]), 'duplicate:' + str(int.from_bytes(item[:2], 'big'))))
+    for kind in [1, 13, 42, 43, 51, 65535]:
+        cases.append(('yes', message([ext(kind, b'')]), 'extension:' + str(kind)))
+    for data in [b'', b'\x00\x00', b'\x00\x03\x02h2', b'\x00\x0a\x08http/1.1', b'\x00\x09\x08http/1.0']:
+        cases.append(('yes', message([ext(16, data)]), 'extension:16'))
+    cases.append(('yes', message([ext(0, b'\x00')]), 'extension:0'))
+    for data in [b'', b'\x00', b'\x00\x00', b'\x00\x01\x1d', b'\x00\x04\x00\x1d']:
+        cases.append(('yes', message([ext(10, data)]), 'handshake'))
+    good = message([sni, alpn, groups])
+    for cut in range(len(good)):
+        cases.append(('yes', good[:cut], 'handshake'))
+    for index in [0, 1, 2, 3, 4, 5, 8, 9]:
+        changed = bytearray(good)
+        changed[index] ^= 1
+        cases.append(('yes', changed, 'handshake'))
+    for index in [0, 1, 5, 6, len(good)-1]:
+        changed = list(good)
+        changed[index] = 256
+        cases.append(('yes', changed, 'handshake'))
+    group_data = b''.join(i.to_bytes(2, 'big') for i in range(10000))
+    cases.append(('yes', message([ext(10, len(group_data).to_bytes(2, 'big') + group_data)]), 'none:none'))
+    cases.append(('yes', message([sni] * 5000), 'duplicate:0'))
+    args = ['ee:' + offered + ':' + encode(wire) for offered, wire, _ in cases]
+    run = subprocess.run(command + args, cwd=ROOT, capture_output=True, text=True, timeout=90)
+    assert run.returncode == 0, run.stderr[-2000:]
+    lines = run.stdout.splitlines()
+    assert len(lines) == len(cases)
+    for actual, (_, wire, expected) in zip(lines, cases):
+        assert actual == expected, (list(wire), actual, expected)
+    return len(cases)
+
+
 with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
     contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa']]
     for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
@@ -320,11 +373,20 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             assert output.returncode == 0, (name, output.stderr[-2000:])
             results = output.stdout.splitlines()
             assert len(results) == len(args)
-            verify_keys(results[0], seed, wire, flight)
+            content = verify_keys(results[0], seed, wire, flight)
+            size = 4 + int.from_bytes(content[1:4], 'big')
+            ee = content[:size]
+            assert ee[0] == 8
+            selected = extensions(ee[6:])
+            assert selected[0] == b'' and selected[16] == b'\x00\x09\x08http/1.1'
+            transition = subprocess.run(command + ['ep:localhost:' + encode(seed) + ':' + encode(hello) + ':' + encode(ee)], cwd=ROOT, capture_output=True, text=True, timeout=90)
+            assert transition.returncode == 0, transition.stderr
+            assert transition.stdout.strip() == 'sni:http/1.1|' + encode(hashlib.sha256(wire[5:] + hello + ee).digest())
             # Reordering changes the transcript and thus the traffic keys: the old
             # encrypted flight must fail even though the new parameters are legal.
             assert results[1].endswith('|receive-error'), (name, results[1])
             for actual, (_, expected) in zip(results[2:], bad):
                 assert actual == expected, (name, actual, expected)
+        extension_count = check_extensions(command)
         count = check_framing(command)
-        print(f'{name}: {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)
+        print(f'{name}: {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)

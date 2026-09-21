@@ -22,6 +22,9 @@ def error(cause: TLS.Error) -> String:
     case TLS.HelloRetryRequest{}: "retry"
     case TLS.Derivation{_}: "derivation"
     case TLS.InvalidKeyMaterial{}: "material"
+    case TLS.MalformedHandshake{}: "handshake"
+    case TLS.RejectedExtension{kind}: "extension:" ++ U32.show(kind)
+    case TLS.DuplicateExtension{kind}: "duplicate:" ++ U32.show(kind)
 
 def render(result: Result<&2, &1, TLS.Error, TLS.Started>) -> String:
   match result:
@@ -70,8 +73,37 @@ def chunks(parts: List<&2, String>, +limit: U32, result: Result<&2, &2, TLS.Fram
     case part <> rest Done{TLS.Batch{buffer, messages}}:
       chunks(rest, limit, TLS.feed(limit, buffer, Bytes.bytes(part)), saved ++ showMessages(messages))
 
+def parameters(result: Result<&2, &2, TLS.Error, TLS.Parameters>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{TLS.Parameters{ack, None{}}}: Bool.pick(String, ack, "sni", "none") ++ ":none"
+    case Done{TLS.Parameters{ack, Some{protocol}}}: Bool.pick(String, ack, "sni", "none") ++ ":" ++ protocol
+
+def transcriptDigest(result: Result<&2, &2, SHA.Error, SHA.Digest>) -> String:
+  match result:
+    case Fail{_}: "hash-error"
+    case Done{value}: Bytes.show(SHA.toBytes(value))
+
+def parameterResult(result: Result<&2, &1, TLS.Error, TLS.ServerParameters>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{TLS.ServerParameters{TLS.Handshake{_, transcript, _, _, _, _, _}, values}}:
+      parameters(Done{values}) ++ "|" ++ transcriptDigest(SHA.finish(transcript))
+
+def acceptParameters(wire: List<&2, U32>, result: Result<&2, &1, TLS.Error, TLS.Handshake>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{state}: parameterResult(TLS.acceptEncryptedExtensions(state, wire))
+
+def startParameters(hello: List<&2, U32>, wire: List<&2, U32>, result: Result<&2, &1, TLS.Error, TLS.Started>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{TLS.Started{pending, _}}: acceptParameters(wire, TLS.acceptServerHello(pending, hello))
+
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
+    case "ep" <> host <> seed <> hello <> wire <> Nil{}: IO.print(startParameters(Bytes.bytes(hello), Bytes.bytes(wire), TLS.initialize(name(host), Bytes.bytes(seed))))
+    case "ee" <> offered <> wire <> Nil{}: IO.print(parameters(TLS.encryptedExtensions(String.eq(offered, "yes"), Bytes.bytes(wire))))
     case "f" <> limit <> input <> Nil{}: IO.print(chunks(Split.split(input, '/'), Decimal.decimal(limit, 0), Done{TLS.Batch{TLS.emptyBuffer(), Nil{}}}, ""))
     case "n" <> host <> seed <> hello <> encrypted <> Nil{}: IO.print(accept(Bytes.bytes(hello), Bytes.bytes(encrypted), TLS.initialize(name(host), Bytes.bytes(seed))))
     case "d" <> host <> seed <> Nil{}: IO.print(render(TLS.initialize(name(host), Bytes.bytes(seed))))

@@ -173,3 +173,15 @@ Starting handshake message reassembly in existing packages/runtime/src/tls13-han
 ## 2026-09-21T23:01:49.290353+00:00 — Codex
 
 Handshake framing now passes279 differential chunking cases on native1/native4/Bun, including20KB bodies crossing records, every split/prefix, multiple messages and early oversized-header rejection. Still in the same handshake module; no extra wrappers/files. Existing handshake integration rerun is on Bun after native1/native4 passed (session80168). Updating runtime README and will commit explicit owned paths once it finishes. Authentication and encrypted-message semantics remain next, no authenticated-connection claim.
+
+## 2026-09-21T23:02:14.716592+00:00 — Codex
+
+Committed/pushed handshake framing milestone. All existing initialization/OpenSSL/key tests pass on native1/native4/Bun;279 framing cases also pass on all three (three20KB cases were added and run separately after the full harness began). No live jobs. Provider/fetch/proof/compiler edits remain untouched. Next: encrypted server-message sequencing, extensions, certificate evidence and Finished authentication; no authenticated TLS connection yet.
+
+## 2026-09-21T23:03:57.714746+00:00 — Codex
+
+Continuing existing handshake module/runner/checker with EncryptedExtensions validation against our actual offer (SNI, HTTP/1.1 ALPN, supported groups), duplicate/placement/length checks and a typed transition retaining the transcript. No new module; compiler/provider/fetch/proofs remain yours.
+
+## 2026-09-21T23:08:57.951020+00:00 — Codex
+
+EncryptedExtensions is implemented in the existing handshake module: validates offered/allowed extensions, duplicates, vector lengths, SNI acknowledgement and HTTP/1.1 ALPN; typed transition updates exact transcript. Native1/native4 integration passes102 extension cases plus previous checks, including real OpenSSL EE and independent transcript hashes. Bun is running, session43820. Adding runtime README paragraph; will commit only owned handshake/test/README/log paths after completion. No overlap with your changes.
