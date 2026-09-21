@@ -14,7 +14,7 @@ Upstream test parity is tracked in [tests/UPSTREAM.md](tests/UPSTREAM.md) and a 
 
 ## Laws and proofs
 
-Generic behavioral contracts live in [LAWS.bend](LAWS.bend), with machine-checked implementations in [PROOF.bend](PROOF.bend). Run `scripts/check-proofs.py` with the [documented compiler configuration](docs/laws.md#current-compiler-requirement) to check the full proof root and rejection of open obligations and well-typed broken implementations. The latest completed gate checks 522 public laws and 74 supporting lemmas, with 276 typed mutations rejected. [Proof coverage](docs/laws.md) distinguishes these guarantees from remaining agent, IO and runtime work. Differential, integration and performance tests remain complementary.
+Generic behavioral contracts live in [LAWS.bend](LAWS.bend), with machine-checked implementations in [PROOF.bend](PROOF.bend). Run `scripts/check-proofs.py` with the [documented compiler configuration](docs/laws.md#current-compiler-requirement) to check the full proof root. The latest completed gate checks 522 public laws and 74 supporting lemmas. [Proof coverage](docs/laws.md) distinguishes these guarantees from remaining agent, IO and runtime work. Differential, integration and performance tests remain complementary.
 
 ## Build and test
 
