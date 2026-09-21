@@ -91,3 +91,8 @@ import ./proofs/openai-responses-cleartext-default-runtime.bend as OpenAIRespons
 import ./proofs/openai-responses-cleartext-system-runtime.bend as OpenAIResponsesCleartextSystemRuntime
 import ./proofs/provider-owned-acquire.bend as ProviderOwnedAcquire
 import ./proofs/openai-responses-payload-plan.bend as OpenAIResponsesPayloadPlan
+import ./proofs/openai-sse-default-hooks.bend as OpenAISSEDefaultHooks
+import ./proofs/openai-responses-system-error.bend as OpenAIResponsesSystemError
+import ./proofs/openai-responses-system-provider.bend as OpenAIResponsesSystemProvider
+import ./proofs/openai-responses-stream-error.bend as OpenAIResponsesStreamError
+import ./proofs/openai-responses-envelope-error.bend as OpenAIResponsesEnvelopeError

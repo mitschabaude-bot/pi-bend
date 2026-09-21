@@ -90,3 +90,8 @@ import ./laws/openai-responses-cleartext-default-runtime.bend as OpenAIResponses
 import ./laws/openai-responses-cleartext-system-runtime.bend as OpenAIResponsesCleartextSystemRuntime
 import ./laws/provider-owned-acquire.bend as ProviderOwnedAcquire
 import ./laws/openai-responses-payload-plan.bend as OpenAIResponsesPayloadPlan
+import ./laws/openai-sse-default-hooks.bend as OpenAISSEDefaultHooks
+import ./laws/openai-responses-system-error.bend as OpenAIResponsesSystemError
+import ./laws/openai-responses-system-provider.bend as OpenAIResponsesSystemProvider
+import ./laws/openai-responses-stream-error.bend as OpenAIResponsesStreamError
+import ./laws/openai-responses-envelope-error.bend as OpenAIResponsesEnvelopeError

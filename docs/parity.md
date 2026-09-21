@@ -1911,3 +1911,8 @@ The [native renderer](openai-responses-native-render.md) preserves primary diagn
 ## System-owned diagnostic composition (2026-09-21)
 
 The [system renderer](openai-responses-system-render.md) now composes initialization and native request error domains through recursive processing failures. Seven standalone generic laws and two rejected cause-erasure mutations establish the composition contracts; 30 runtime outcomes pass on native one/four threads and Bun. Concrete initialization/transport diagnostic leaves and installation at the final public provider boundary remain pending. No upstream suite status changes.
+
+
+## Provider rendering proof integration (2026-09-21)
+
+The completed [root gate](proof-validation/2026-09-21-provider-rendering.json) checks 522 public laws and 74 supporting lemmas, rejecting all 276 typed mutations. Twenty previously standalone default-hook, system ownership/error, stream-diagnostic and envelope-diagnostic laws are now registered. Source hashes were verified after the full run; no unsafe source declaration was added. The fifteen newer native/system renderer laws remain standalone, and the default-clock pair remains unverified under the accepted compiler. Upstream suite statuses are unchanged.
