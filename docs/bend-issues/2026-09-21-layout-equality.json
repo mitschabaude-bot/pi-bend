@@ -1,0 +1,448 @@
+{
+  "status": "installed in ordinary and project compiler",
+  "change": "Compare compiler layouts structurally instead of repeatedly serializing complete trees. No cache or GC policy change.",
+  "incremental_patch": "--- a/bend2/comp.ts\n+++ b/bend2/comp.ts\n@@ -1009,7 +1009,23 @@\n }\n \n function lay_eq(a: Lay, b: Lay): boolean {\n-  return a === b || JSON.stringify(a) === JSON.stringify(b);\n+  if (a === b) return true;\n+  if (a.ks.length !== b.ks.length) return false;\n+  for (let i = 0; i < a.ks.length; i++) {\n+    if (a.ks[i] !== b.ks[i]) return false;\n+  }\n+  if (a.arms === b.arms) return true;\n+  if (a.arms === null || b.arms === null\n+    || a.arms.length !== b.arms.length) return false;\n+  for (let i = 0; i < a.arms.length; i++) {\n+    const x = a.arms[i], y = b.arms[i];\n+    if (x.k !== y.k || x.fs.length !== y.fs.length) return false;\n+    for (let j = 0; j < x.fs.length; j++) {\n+      if (x.fs[j].at !== y.fs[j].at\n+        || !lay_eq(x.fs[j].lay, y.fs[j].lay)) return false;\n+    }\n+  }\n+  return true;\n }\n \n function lay_c(k: Kind): string {\n",
+  "cpu_profile": {
+    "host": "Bun 1.4.0",
+    "summary": {
+      "samples": 19329,
+      "interval_microseconds": 10000,
+      "self_samples": [
+        {
+          "function": "stringify",
+          "file": "",
+          "line": 0,
+          "samples": 6708
+        },
+        {
+          "function": "map",
+          "file": "",
+          "line": 1,
+          "samples": 1065
+        },
+        {
+          "function": "memo",
+          "file": "comp.ts",
+          "line": 672,
+          "samples": 1047
+        },
+        {
+          "function": "term_higher",
+          "file": "bend.ts",
+          "line": 728,
+          "samples": 1008
+        },
+        {
+          "function": "gc",
+          "file": "",
+          "line": 0,
+          "samples": 856
+        },
+        {
+          "function": "term_wnf",
+          "file": "bend.ts",
+          "line": 2916,
+          "samples": 840
+        },
+        {
+          "function": "ty_adt",
+          "file": "comp.ts",
+          "line": 911,
+          "samples": 433
+        },
+        {
+          "function": "u32_from_term",
+          "file": "bend.ts",
+          "line": 1217,
+          "samples": 322
+        },
+        {
+          "function": "name_clean",
+          "file": "comp.ts",
+          "line": 628,
+          "samples": 297
+        },
+        {
+          "function": "name_local",
+          "file": "comp.ts",
+          "line": 632,
+          "samples": 268
+        },
+        {
+          "function": "Ctr",
+          "file": "bend.ts",
+          "line": 407,
+          "samples": 211
+        },
+        {
+          "function": "",
+          "file": "comp.ts",
+          "line": 2924,
+          "samples": 192
+        },
+        {
+          "function": "term_const",
+          "file": "comp.ts",
+          "line": 806,
+          "samples": 177
+        },
+        {
+          "function": "",
+          "file": "bend.ts",
+          "line": 3656,
+          "samples": 173
+        },
+        {
+          "function": "ctr_flds",
+          "file": "comp.ts",
+          "line": 1080,
+          "samples": 165
+        },
+        {
+          "function": "get",
+          "file": "comp.ts",
+          "line": 1067,
+          "samples": 165
+        },
+        {
+          "function": "",
+          "file": "comp.ts",
+          "line": 1862,
+          "samples": 158
+        },
+        {
+          "function": "",
+          "file": "comp.ts",
+          "line": 2127,
+          "samples": 152
+        },
+        {
+          "function": "term_check",
+          "file": "bend.ts",
+          "line": 3502,
+          "samples": 144
+        },
+        {
+          "function": "ty_peel",
+          "file": "comp.ts",
+          "line": 901,
+          "samples": 143
+        },
+        {
+          "function": "forEach",
+          "file": "",
+          "line": 1,
+          "samples": 142
+        },
+        {
+          "function": "emit_body",
+          "file": "comp.ts",
+          "line": 2467,
+          "samples": 141
+        },
+        {
+          "function": "",
+          "file": "comp.ts",
+          "line": 827,
+          "samples": 138
+        },
+        {
+          "function": "ctr_adt",
+          "file": "comp.ts",
+          "line": 1036,
+          "samples": 128
+        },
+        {
+          "function": "tele_open",
+          "file": "bend.ts",
+          "line": 1111,
+          "samples": 120
+        }
+      ],
+      "stringify_parents": [
+        {
+          "function": "lay_eq",
+          "file": "comp.ts",
+          "line": 1011,
+          "samples": 6667
+        },
+        {
+          "function": "map",
+          "file": "",
+          "line": 1,
+          "samples": 40
+        },
+        {
+          "function": "compile_book",
+          "file": "comp.ts",
+          "line": 2884,
+          "samples": 1
+        }
+      ]
+    },
+    "run": {
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-interval=10000",
+        "--cpu-prof-dir=build/compiler-memory-reading/bun-cpu-10ms",
+        "--cpu-prof-name=full.cpuprofile",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "build/compiler-memory-reading/provider-baseline-62ef5b3/tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/bun-cpu-10ms/full.c"
+      ],
+      "elapsed_seconds": 208.50730755738914,
+      "peak_sampled_group_rss_kib": 12315064,
+      "limit_gib": 16.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "limitation": "Sampling attribution, not exact function timing. Profiling adds time and memory overhead; do not use its RSS as the normal build peak.",
+    "one_ms_run": {
+      "command": [
+        "bun",
+        "--cpu-prof",
+        "--cpu-prof-dir=build/compiler-memory-reading/bun-cpu",
+        "--cpu-prof-name=full.cpuprofile",
+        "build/bend-native-toolchain/bend2/main.ts",
+        "build/compiler-memory-reading/provider-baseline-62ef5b3/tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/bun-cpu/full.c"
+      ],
+      "elapsed_seconds": 97.1688200449571,
+      "peak_sampled_group_rss_kib": 12777952,
+      "limit_gib": 12.0,
+      "stopped": true,
+      "child_exit_code": -15
+    }
+  },
+  "full_fixture": {
+    "revision": "62ef5b3",
+    "entry": "tests/openai-system-defaults.bend",
+    "archived_under": "build/compiler-memory-reading/provider-baseline-62ef5b3",
+    "import_closure_files": 544,
+    "baseline_seconds": 190.61011940892786,
+    "baseline_peak_rss_bytes": 8017899520,
+    "baseline_report": "2026-09-21-unused-match-types.json",
+    "candidate": {
+      "command": [
+        "bun",
+        "build/bend-profiles/layout-equality/bend2/main.ts",
+        "build/compiler-memory-reading/provider-baseline-62ef5b3/tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/layout-equality-full.c"
+      ],
+      "elapsed_seconds": 123.96167140640318,
+      "peak_sampled_group_rss_kib": 7640728,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "same_c_as_baseline": true
+  },
+  "small_three_pairs": {
+    "compiler-string-pattern-return": {
+      "baseline": {
+        "runs": 3,
+        "median_seconds": 3.71300289966166,
+        "min_seconds": 3.5016091596335173,
+        "max_seconds": 3.850720861926675,
+        "median_peak_rss_kib": 743844,
+        "c_sha256": [
+          "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        ]
+      },
+      "candidate": {
+        "runs": 3,
+        "median_seconds": 3.5335324741899967,
+        "min_seconds": 3.502673491835594,
+        "max_seconds": 3.624343260191381,
+        "median_peak_rss_kib": 746324,
+        "c_sha256": [
+          "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+        ]
+      }
+    },
+    "typed-do-shadow": {
+      "baseline": {
+        "runs": 3,
+        "median_seconds": 0.1562488516792655,
+        "min_seconds": 0.1487465836107731,
+        "max_seconds": 0.15833666175603867,
+        "median_peak_rss_kib": 83052,
+        "c_sha256": [
+          "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        ]
+      },
+      "candidate": {
+        "runs": 3,
+        "median_seconds": 0.1614416092634201,
+        "min_seconds": 0.16090762615203857,
+        "max_seconds": 0.16525685787200928,
+        "median_peak_rss_kib": 88080,
+        "c_sha256": [
+          "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        ]
+      }
+    },
+    "aes128": {
+      "baseline": {
+        "runs": 3,
+        "median_seconds": 0.30562643986195326,
+        "min_seconds": 0.30072880536317825,
+        "max_seconds": 0.3340063029900193,
+        "median_peak_rss_kib": 104272,
+        "c_sha256": [
+          "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        ]
+      },
+      "candidate": {
+        "runs": 3,
+        "median_seconds": 0.30626647267490625,
+        "min_seconds": 0.3060625223442912,
+        "max_seconds": 0.31779572181403637,
+        "median_peak_rss_kib": 103432,
+        "c_sha256": [
+          "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        ]
+      }
+    }
+  },
+  "small_ten_pairs": {
+    "typed-do-shadow": {
+      "baseline": {
+        "runs": 10,
+        "median_seconds": 0.15473224967718124,
+        "min_seconds": 0.1501224422827363,
+        "max_seconds": 0.1584436148405075,
+        "median_peak_rss_kib": 83122.0,
+        "c_sha256": [
+          "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        ]
+      },
+      "candidate": {
+        "runs": 10,
+        "median_seconds": 0.15306470170617104,
+        "min_seconds": 0.14750496856868267,
+        "max_seconds": 0.16234017442911863,
+        "median_peak_rss_kib": 83124.0,
+        "c_sha256": [
+          "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+        ]
+      }
+    },
+    "aes128": {
+      "baseline": {
+        "runs": 10,
+        "median_seconds": 0.302487391512841,
+        "min_seconds": 0.2867616843432188,
+        "max_seconds": 0.3127296594902873,
+        "median_peak_rss_kib": 103030.0,
+        "c_sha256": [
+          "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        ]
+      },
+      "candidate": {
+        "runs": 10,
+        "median_seconds": 0.2964897006750107,
+        "min_seconds": 0.28677582554519176,
+        "max_seconds": 0.3128836201503873,
+        "median_peak_rss_kib": 103848.0,
+        "c_sha256": [
+          "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+        ]
+      }
+    }
+  },
+  "validation": {
+    "layout_differential": {
+      "comparisons": 65536,
+      "result": "PASS",
+      "scope": "Valid finite layouts and deep clones, comparing candidate against old serialized equality; not compiler mutation or negative law testing.",
+      "driver_source": "type Kind = \"w32\" | \"w64\" | \"box\";\ntype Lay = { ks: Kind[]; arms: Arm[] | null };\ntype Arm = { k: string; fs: { at: number; lay: Lay }[] };\nfunction lay_eq(a: Lay, b: Lay): boolean {\n  if (a === b) return true;\n  if (a.ks.length !== b.ks.length) return false;\n  for (let i = 0; i < a.ks.length; i++) {\n    if (a.ks[i] !== b.ks[i]) return false;\n  }\n  if (a.arms === b.arms) return true;\n  if (a.arms === null || b.arms === null\n    || a.arms.length !== b.arms.length) return false;\n  for (let i = 0; i < a.arms.length; i++) {\n    const x = a.arms[i], y = b.arms[i];\n    if (x.k !== y.k || x.fs.length !== y.fs.length) return false;\n    for (let j = 0; j < x.fs.length; j++) {\n      if (x.fs[j].at !== y.fs[j].at\n        || !lay_eq(x.fs[j].lay, y.fs[j].lay)) return false;\n    }\n  }\n  return true;\n}\n\nlet seed = 27439;\nfunction next(n: number): number { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; }\nconst leaves: Lay[] = [\"w32\", \"w64\", \"box\"].map(k => ({ks: [k as Kind], arms: null}));\nfunction tree(depth: number): Lay {\n  if (depth === 0 || next(4) === 0) return leaves[next(leaves.length)];\n  const count = next(3), tag = count > 1 ? 1 : 0;\n  const ks: Kind[] = tag ? [\"w32\"] : [];\n  const arms: Arm[] = [];\n  for (let i = 0; i < count; i++) {\n    let at = tag; const fs = [];\n    for (let j = 0, n = next(4); j < n; j++) {\n      const lay = tree(depth - 1); fs.push({at, lay});\n      for (const k of lay.ks) {\n        const old = ks[at] ?? \"w32\";\n        ks[at++] = old === \"box\" || k === \"box\" ? \"box\" : old === \"w64\" || k === \"w64\" ? \"w64\" : \"w32\";\n      }\n    }\n    arms.push({k: \"C\" + next(5), fs});\n  }\n  return {ks, arms};\n}\nconst layouts = [...leaves, ...Array.from({length: 125}, () => tree(4))];\nlayouts.push(...layouts.map(x => JSON.parse(JSON.stringify(x))));\nlet comparisons = 0;\nfor (const a of layouts) for (const b of layouts) {\n  const expected = a === b || JSON.stringify(a) === JSON.stringify(b);\n  if (lay_eq(a,b) !== expected) throw Error(\"Layout comparison mismatch\");\n  comparisons++;\n}\nconsole.log(`${comparisons} valid-layout comparisons agree with the previous implementation`);\n"
+    },
+    "compiler_field_cache": {
+      "compiler-string-pattern-return": {
+        "artifacts": {
+          "baseline": {
+            ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+            ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+          },
+          "candidate": {
+            ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+            ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+          }
+        },
+        "cases_per_backend": 109,
+        "source_sha256": "ec4585980bc2e8a5715ca91d8697eef2dc9b33d8531c073ebcdd0a6563285662"
+      },
+      "compiler-word-field-cache": {
+        "artifacts": {
+          "baseline": {
+            ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+            ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+          },
+          "candidate": {
+            ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+            ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+          }
+        },
+        "cases_per_backend": 10,
+        "source_sha256": "a8635a010af66691b952d2f08fbe091ceb8991ec9ca22ec1bfb9c6f216bc3428"
+      },
+      "compiler-nat-match-table": {
+        "artifacts": {
+          "baseline": {
+            ".c": "27f460eb941786d78112dd61816175eea3c6fddce0836187218857463343deb6",
+            ".js": "54229d6f3d9958c60a3a2f54e50b18e01e5cb2642ba5d3e943bc9a751617e9a6"
+          },
+          "candidate": {
+            ".c": "27f460eb941786d78112dd61816175eea3c6fddce0836187218857463343deb6",
+            ".js": "54229d6f3d9958c60a3a2f54e50b18e01e5cb2642ba5d3e943bc9a751617e9a6"
+          }
+        },
+        "cases_per_backend": 4,
+        "source_sha256": "4b34ceaa679f4ba06767cc5eb0bb5a952c017d4caae3043ada91fa0610769a3c"
+      },
+      "compilers": {
+        "baseline": {
+          "bend.ts": "f0450de3f4c3023f517db3552d67560a410a45664e0f744bdd34d8dda2b7878a",
+          "comp.ts": "68e521ea856e8ee08e38f9722dbbb7009ffbda9349d52f89e488ea292f76178f",
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "candidate": {
+          "bend.ts": "f0450de3f4c3023f517db3552d67560a410a45664e0f744bdd34d8dda2b7878a",
+          "comp.ts": "2da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9",
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        }
+      }
+    },
+    "generic_proofs": "PASS on archived LAWS/PROOF and source, with candidate BEND override",
+    "word_literals": "PASS literal/generic/reconstructed/runtime words on native1/4 and Bun; C/JS byte identical",
+    "string_literals": "PASS generic storage/captured values on native1/4 and Bun; C/JS byte identical",
+    "aggregate_patch": "replays byte-exactly from installed-before-literal-sharing originals with patch -p1",
+    "default_build_path": "callback captured/concurrent invocation passes native1/4 after installation"
+  },
+  "installed_hashes": {
+    "ordinary": {
+      "bend.ts": "f0450de3f4c3023f517db3552d67560a410a45664e0f744bdd34d8dda2b7878a",
+      "comp.ts": "2da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9",
+      "base.bend": "308941c82d194daea4b1f314068c355a66aad303b5dd834694032a39fc4824c1",
+      "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+    },
+    "project": {
+      "bend.ts": "f0450de3f4c3023f517db3552d67560a410a45664e0f744bdd34d8dda2b7878a",
+      "comp.ts": "2da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963",
+      "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc"
+    }
+  },
+  "limitations": [
+    "Shared-host measurements, one unprofiled full run per version and alternating small pairs; no universal performance guarantee.",
+    "Full pi port remains incomplete."
+  ]
+}

@@ -51,3 +51,15 @@ Gregor clarified that this machine has enough memory and compile speed now matte
 ## 2026-09-21T21:40:34+00:00 — Codex (compiler investigation)
 
 Field-filter full run completed: 188.17 seconds / 7.56 GiB, identical C. No material speed improvement over installed190.61sec /7.47GiB; candidate not adopted. Now profiling CPU time under the installed Bun compiler on the archived fixture, session13967, outputs build/compiler-memory-reading/bun-cpu/. Updating existing compiler report and AGENTS speed-priority clarification only.
+
+## 2026-09-21T21:40:52+00:00 — Codex (compiler investigation)
+
+Committed f1a070f: speed-priority clarification and measured rejection of field-copy candidate. Installed compiler unchanged. Bun full CPU profile remains running (session13967); provider/runtime work remains yours.
+
+## 2026-09-21T21:48:00+00:00 — Codex (compiler investigation)
+
+Bun CPU profiling completed at10ms sampling (1ms exceeded the profiling RSS guard). Of19329 samples,6667 are JSON.stringify directly under lay_eq:34.5% of all samples. Installed comp.ts:1011 serializes complete layout trees for equality. Isolated candidate build/bend-profiles/layout-equality replaces that with exact comparison of kinds, arm names, field offsets and nested layouts, with identity short-circuits and no cache. Existing compiler_field_cache tests pass byte-identical C/JS and native1/4/Bun runtimes. Also65536 valid-layout differential comparisons agree with the old implementation. Full benchmark is running against archived62ef5b3 fixture, session6044, stats layout-equality-full.json. No installed changes.
+
+## 2026-09-21T21:52:24+00:00 — Codex (compiler investigation)
+
+Layout equality candidate full build:123.96sec /7.29GiB, byte-identical C vs installed190.61sec /7.47GiB (~35% faster). Generic proof gate on archived fixture, compiler regressions and word/string/capture runtime checks pass. Ten extra alternating tiny-fixture pairs resolve earlier noise: typed-do median154.7->153.1ms, AES302.5->296.5ms. I am updating patches/bend-compiler-literal-memory.patch, its README, compiler issue report and AGENTS installed measurement; then installing this minimal comp.ts change in ordinary/project compiler paths. No provider/runtime edits.

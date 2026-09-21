@@ -222,7 +222,32 @@
  }
  
  function lay_fields(book: Bend.Book, As: (HTerm | null)[]): Field[] {
-@@ -1032,10 +1047,30 @@
+@@ -994,7 +1009,23 @@
+ }
+ 
+ function lay_eq(a: Lay, b: Lay): boolean {
+-  return a === b || JSON.stringify(a) === JSON.stringify(b);
++  if (a === b) return true;
++  if (a.ks.length !== b.ks.length) return false;
++  for (let i = 0; i < a.ks.length; i++) {
++    if (a.ks[i] !== b.ks[i]) return false;
++  }
++  if (a.arms === b.arms) return true;
++  if (a.arms === null || b.arms === null
++    || a.arms.length !== b.arms.length) return false;
++  for (let i = 0; i < a.arms.length; i++) {
++    const x = a.arms[i], y = b.arms[i];
++    if (x.k !== y.k || x.fs.length !== y.fs.length) return false;
++    for (let j = 0; j < x.fs.length; j++) {
++      if (x.fs[j].at !== y.fs[j].at
++        || !lay_eq(x.fs[j].lay, y.fs[j].lay)) return false;
++    }
++  }
++  return true;
+ }
+ 
+ function lay_c(k: Kind): string {
+@@ -1032,10 +1063,30 @@
  
  // A constructor's fields: the last n domains of its type, over the
  // datatype's arguments `xs` when given.
@@ -256,7 +281,7 @@
  }
  
  function ctr_doms(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): HTerm[] {
-@@ -1502,14 +1537,16 @@
+@@ -1502,14 +1553,16 @@
  // ====
  
  function file_new(cb: Carb, decl: string): File {
@@ -275,7 +300,7 @@
  }
  
  // Block
-@@ -2161,14 +2198,14 @@
+@@ -2161,14 +2214,14 @@
    seg.fid = name;
    const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
    emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
@@ -292,7 +317,7 @@
    Object.assign(fl, outer);
    return name;
  }
-@@ -2655,14 +2692,13 @@
+@@ -2655,14 +2708,13 @@
      `((${bits} >> ${i}) & 1)`), lay) : val_to(fl, args[0], lay), "s");
    const total = Bend.book_adt(fl.book, adt, Bend.Emp()).c.length;
    const { arms, end } = mat_arms(x);
@@ -309,7 +334,7 @@
    }
    const lv: Level[] = ls !== null
      ? ls.map(([h, n], i): Level => [`${sw} == ${i}`, h, () =>
-@@ -2853,6 +2889,7 @@
+@@ -2853,6 +2905,7 @@
    const pass = (defs: [Bend.Name, Def][]): File => {
      [cb.lend, BRWS].forEach((m) => m.clear());
      const fl = file_new(cb, "Term");
@@ -317,7 +342,7 @@
      for (const k of SRCS.keys()) {
        for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
          fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
-@@ -2860,6 +2897,12 @@
+@@ -2860,6 +2913,12 @@
      }
      for (const [k, tld] of defs) {
        compile_def(fl, k, tld);
@@ -330,7 +355,7 @@
      }
      compile_reqs(fl);
      facts_lend(cb);
-@@ -2867,12 +2910,15 @@
+@@ -2867,12 +2926,15 @@
    };
    // Emitted callees first until a pass changes nothing (own, hot and poly
    // only grow): that pass is kept.
@@ -350,7 +375,7 @@
    const reach = (from: string[], set = new Set<string>()): Set<string> => {
      const grab = (fid: string) => set.has(fid) || (set.add(fid)
        && (fl.segs.find((s) => s.fid === fid)?.refs
-@@ -3066,7 +3112,7 @@
+@@ -3066,7 +3128,7 @@
        });
      }
      const ls = adt.k === "Nat" ? emit_nat(x) : null;
