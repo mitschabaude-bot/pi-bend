@@ -1,0 +1,612 @@
+{
+  "scope": "GC timing candidate completed but remains uninstalled; layout-cache candidate passes backend regressions and is being benchmarked. Installed compiler remains the 13.4 GiB constructor-field version.",
+  "gc_after_release": {
+    "patch": "patches/experimental/bend-gc-after-release.patch",
+    "measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/gc-after-release-profile/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/gc-after-release-defaults.c"
+      ],
+      "elapsed_seconds": 525.1398627208546,
+      "peak_sampled_group_rss_kib": 12422088,
+      "limit_gib": 20.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "baseline": {
+      "command": [
+        "bun",
+        "build/bend-profiles/constructor-tail-values-profile/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/tail-values-defaults.c"
+      ],
+      "elapsed_seconds": 523.7512281090021,
+      "peak_sampled_group_rss_kib": 14030264,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "identical_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "small_pairs": [
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 1.3459520135074854,
+        "peak_kib": 217220,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 1.4385002609342337,
+        "peak_kib": 201212,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 1.312033250927925,
+        "peak_kib": 198676,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 1.3188870633020997,
+        "peak_kib": 228956,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 1.3496903255581856,
+        "peak_kib": 218736,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 1.4068882511928678,
+        "peak_kib": 206340,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.1525410721078515,
+        "peak_kib": 84192,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.16455865651369095,
+        "peak_kib": 81200,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.16510527953505516,
+        "peak_kib": 82220,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.16933498717844486,
+        "peak_kib": 84132,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.15518404822796583,
+        "peak_kib": 86084,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.15443478431552649,
+        "peak_kib": 82824,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.3299434194341302,
+        "peak_kib": 106728,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.32454105466604233,
+        "peak_kib": 116892,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.3316572802141309,
+        "peak_kib": 111536,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.336677610874176,
+        "peak_kib": 111116,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.3497820133343339,
+        "peak_kib": 115056,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.3398499498143792,
+        "peak_kib": 114896,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      }
+    ],
+    "word_regression_log": "native-1 literal, generic, reconstructed and runtime words PASS\nnative-4 literal, generic, reconstructed and runtime words PASS\nbun literal, generic, reconstructed and runtime words PASS\n",
+    "decision": "Do not install on current evidence: although the full peak is lower and full wall times nearly equal, small string and typed-do fixtures show slower medians. A useful lifetime observation, not an accepted performance-neutral fix.",
+    "phases": [
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 1,
+        "rss": 6740238336,
+        "heapUsed": 2118771090
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 2,
+        "rss": 8867299328,
+        "heapUsed": 2222031283
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 3,
+        "rss": 9156751360,
+        "heapUsed": 2238254792
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 4,
+        "rss": 8931209216,
+        "heapUsed": 2251900803
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 5,
+        "rss": 9166999552,
+        "heapUsed": 2269500693
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 6,
+        "rss": 9500446720,
+        "heapUsed": 2945488085
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 7,
+        "rss": 10860441600,
+        "heapUsed": 2302818503
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 8,
+        "rss": 10304585728,
+        "heapUsed": 2316527624
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 9,
+        "rss": 10290302976,
+        "heapUsed": 2330167835
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 10,
+        "rss": 10011443200,
+        "heapUsed": 2352775767
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 11,
+        "rss": 9903468544,
+        "heapUsed": 2366416138
+      },
+      {
+        "phase": "pass-after-release-gc",
+        "pass": 12,
+        "rss": 10179629056,
+        "heapUsed": 2380128678
+      }
+    ],
+    "limitations": "Shared-host measurements. Full run overlapped short diagnostic and regression jobs; small pairs overlapped the full run. No universal performance claim."
+  },
+  "layout_allocation": {
+    "diagnostic_patch": "--- profile-base/comp.ts\n+++ layout-diagnostic/comp.ts\n@@ -590,6 +590,8 @@\n const USES: Map<HTerm, UMap> = new Map();\n \n const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();\n+let LAY_CALLS = 0;\n+const LAY_KEYS = new Set<HTerm | null>();\n const TAILS = new Map<Bend.Ctr, Map<HTerm | number, Dom[]>>();\n \n const SRCS: Map<Bend.Name, Src> = new Map();\n@@ -677,6 +679,7 @@\n }\n \n function memo_gc(): void {\n+  LAY_CALLS = 0; LAY_KEYS.clear();\n   [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS].forEach((m) => m.clear());\n }\n \n@@ -933,6 +936,7 @@\n // An Array is a block, and an IO.OP holds the foreign requests beyond its\n // constructors: boxes.\n function lay_of(book: Bend.Book, A: HTerm | null): Lay {\n+  LAY_CALLS++; LAY_KEYS.add(A);\n   const t = ty_adt(book, A);\n   if (t === null) {\n     return BOX;\n@@ -6364,6 +6368,6 @@\n function profileMark(phase: string, extra: object = {}): void {\n   console.error(\"PROFILE\", JSON.stringify({phase, pass:profilePass,\n     time:Date.now(), ...process.memoryUsage(), probes:PROBES.length,\n-    teles:TELES.size, opens:OPENS.size, uses:USES.size, folds:FOLDS.size,\n+    teles:TELES.size, layoutCalls:LAY_CALLS, layoutKeys:LAY_KEYS.size, opens:OPENS.size, uses:USES.size, folds:FOLDS.size,\n     spines:SPINES.size, consts:CONSTS.size, ...extra}));\n }\n",
+    "baseline_compiler": {
+      "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "comp.ts": "65a4710eb49739ebe2c6416ae9f32d39c27bf5da0c2db19761cf76674a53853a",
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    },
+    "counters": [
+      {
+        "phase": "def-end",
+        "pass": 1,
+        "time": 1790012208522,
+        "rss": 867999744,
+        "heapTotal": 699480064,
+        "heapUsed": 279469730,
+        "external": 5367058,
+        "arrayBuffers": 100,
+        "probes": 20523,
+        "teles": 40,
+        "layoutCalls": 1334787,
+        "layoutKeys": 81391,
+        "opens": 4621,
+        "uses": 149410,
+        "folds": 0,
+        "spines": 1579,
+        "consts": 74573,
+        "name": "classify",
+        "ms": 2047,
+        "segments": 1
+      },
+      {
+        "phase": "def-end",
+        "pass": 2,
+        "time": 1790012212549,
+        "rss": 895655936,
+        "heapTotal": 721291264,
+        "heapUsed": 287845016,
+        "external": 9642736,
+        "arrayBuffers": 100,
+        "probes": 29788,
+        "teles": 40,
+        "layoutCalls": 1334722,
+        "layoutKeys": 81390,
+        "opens": 4621,
+        "uses": 149410,
+        "folds": 0,
+        "spines": 1579,
+        "consts": 74573,
+        "name": "classify",
+        "ms": 2010,
+        "segments": 1
+      }
+    ],
+    "inspection": "lay_of repeats calculation for the same HTerm identity; lay_fields builds fresh Field records and lay_pack mutates only those fresh records before publishing a Lay. No subsequent layout mutation found in comp.ts. Bend term_wnf memoizes evaluation cells without changing their denotation; code generation does not assign variable values. Cache lifetime follows existing per-definition memo_gc.",
+    "candidate_patch": "patches/experimental/bend-layout-cache.patch",
+    "regressions": {
+      "compiler-string-pattern-return": {
+        "artifacts": {
+          "baseline": {
+            ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+            ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+          },
+          "candidate": {
+            ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+            ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+          }
+        },
+        "cases_per_backend": 109,
+        "source_sha256": "ec4585980bc2e8a5715ca91d8697eef2dc9b33d8531c073ebcdd0a6563285662"
+      },
+      "compiler-word-field-cache": {
+        "artifacts": {
+          "baseline": {
+            ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+            ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+          },
+          "candidate": {
+            ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+            ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+          }
+        },
+        "cases_per_backend": 10,
+        "source_sha256": "a8635a010af66691b952d2f08fbe091ceb8991ec9ca22ec1bfb9c6f216bc3428"
+      },
+      "compilers": {
+        "baseline": {
+          "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+          "comp.ts": "f3d65a1b06b927a3c4a86200c919e8d7210bd3841eb948fdd4bbdd5ec96bff03",
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "candidate": {
+          "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+          "comp.ts": "227269b15c93e6871eb4487062f5d5c0f7f07fd9a589060db11c753e62561c6c",
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        }
+      }
+    },
+    "word_regression": {
+      "baseline": {
+        "compiler": {
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+          "comp.ts": "f3d65a1b06b927a3c4a86200c919e8d7210bd3841eb948fdd4bbdd5ec96bff03",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "programs": {
+          ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+          ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+        }
+      },
+      "candidate": {
+        "compiler": {
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+          "comp.ts": "227269b15c93e6871eb4487062f5d5c0f7f07fd9a589060db11c753e62561c6c",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "programs": {
+          ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+          ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+        }
+      },
+      "source_sha256": "d2962519d26b72a9fd9623d3e0914c8691db4694c196d6539fc404d4b85e5b69",
+      "harness_sha256": "d62a0998058333c6bdf7ffadc6a6bf69ecd8216021dbfea11e9bc996b07f903a",
+      "expected": [
+        "0:0:0",
+        "1:1:1",
+        "2147483648:2147483648:1",
+        "4294967295:4294967295:1",
+        "0",
+        "2147483648",
+        "1065353216",
+        "1036831949",
+        "8388608",
+        "1",
+        "2139095039",
+        "0:0:0",
+        "1:1:1",
+        "2:2:1",
+        "255:255:1",
+        "65535:65535:1",
+        "2147483648:2147483648:1",
+        "4294967295:4294967295:1"
+      ],
+      "backends": [
+        "native-1",
+        "native-4",
+        "bun"
+      ]
+    },
+    "static_layout_log": "PASS converted literal layout\nPASS converted literal layout\nPASS converted literal layout\n",
+    "static_sum_log": "PASS static and dynamic sum layout conversion\nPASS static and dynamic sum layout conversion\nPASS static and dynamic sum layout conversion\n",
+    "first_observation": "BENCH 6.00 1003256\n",
+    "first_c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+    "status": "Paired measurements and backend regressions complete; full-size validation starting. Candidate remains uninstalled.",
+    "paired_measurements": [
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 9.758070747368038,
+        "peak_kib": 960888,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 6.0398360984399915,
+        "peak_kib": 1177596,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 6.023900295607746,
+        "peak_kib": 1021204,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 10.064746106043458,
+        "peak_kib": 1022408,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 9.764595480635762,
+        "peak_kib": 989960,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 5.955902704037726,
+        "peak_kib": 984476,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 1.3320295503363013,
+        "peak_kib": 228624,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 1.0024401554837823,
+        "peak_kib": 211452,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 1.0823788745328784,
+        "peak_kib": 213648,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 1.3311058143153787,
+        "peak_kib": 216428,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 1.3488516919314861,
+        "peak_kib": 210740,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 1.019330627284944,
+        "peak_kib": 210068,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.16423772368580103,
+        "peak_kib": 84116,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.17525484133511782,
+        "peak_kib": 82264,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.16509758867323399,
+        "peak_kib": 84280,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.15783646516501904,
+        "peak_kib": 85260,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.1601947182789445,
+        "peak_kib": 82588,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.16073477268218994,
+        "peak_kib": 86520,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.3437139708548784,
+        "peak_kib": 114756,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.3318193480372429,
+        "peak_kib": 115872,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.33252990152686834,
+        "peak_kib": 114072,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.333308725617826,
+        "peak_kib": 113548,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.3279293039813638,
+        "peak_kib": 113908,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.33102171309292316,
+        "peak_kib": 125332,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      }
+    ],
+    "paired_measurement_scope": "Three alternating fresh-process pairs per fixture, no concurrent compiler job from this task during the pairs. Shared host remains uncontrolled."
+  }
+}

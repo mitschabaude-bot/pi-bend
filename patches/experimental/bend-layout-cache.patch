@@ -1,0 +1,44 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -591,6 +591,7 @@
+
+ const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();
+ const TAILS = new Map<Bend.Ctr, Map<HTerm | number, Dom[]>>();
++const LAYS = new Map<HTerm | null, Lay>();
+
+ const SRCS: Map<Bend.Name, Src> = new Map();
+
+@@ -677,7 +678,7 @@
+ }
+
+ function memo_gc(): void {
+-  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS].forEach((m) => m.clear());
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS].forEach((m) => m.clear());
+ }
+
+ // Probe
+@@ -933,14 +934,16 @@
+ // An Array is a block, and an IO.OP holds the foreign requests beyond its
+ // constructors: boxes.
+ function lay_of(book: Bend.Book, A: HTerm | null): Lay {
+-  const t = ty_adt(book, A);
+-  if (t === null) {
+-    return BOX;
+-  }
+-  const tld = book.tlds[t.k];
+-  return WORDS[t.k] ?? (t.k === "Array" || t.k === "IO.OP" || tld?.$ !== "ADT"
+-    || lay_cyclic(book, t.k) ? BOX : lay_pack(tld.c.map((c): Arm =>
+-    ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) }))));
++  return memo(LAYS, A, () => {
++    const t = ty_adt(book, A);
++    if (t === null) {
++      return BOX;
++    }
++    const tld = book.tlds[t.k];
++    return WORDS[t.k] ?? (t.k === "Array" || t.k === "IO.OP" || tld?.$ !== "ADT"
++      || lay_cyclic(book, t.k) ? BOX : lay_pack(tld.c.map((c): Arm =>
++      ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) }))));
++  });
+ }
+
+ function lay_fields(book: Bend.Book, As: (HTerm | null)[]): Field[] {
