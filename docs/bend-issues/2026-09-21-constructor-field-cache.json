@@ -1,5 +1,5 @@
 {
-  "scope": "Compiler-only progress. Empty-application guard adopted; constructor-field cache awaits full-size validation. Memory remains unresolved.",
+  "scope": "Compiler-only progress. Empty-application guard and constructor-field cache adopted; excessive memory remains unresolved.",
   "empty_spine": {
     "full_measurement": {
       "command": [
@@ -517,5 +517,63 @@
       "bun"
     ]
   },
-  "full_candidate_status": "Running: build/compiler-memory-reading/tail-values-defaults.{log,json,c}. No final result claimed."
+  "full_candidate_status": "Completed and adopted in both installed compiler locations.",
+  "full_candidate": {
+    "measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/constructor-tail-values-profile/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/tail-values-defaults.c"
+      ],
+      "elapsed_seconds": 523.7512281090021,
+      "peak_sampled_group_rss_kib": 14030264,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "baseline": {
+      "command": [
+        "bun",
+        "build/bend-profiles/interned-indent-empty-spine/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/empty-spine-defaults.c"
+      ],
+      "elapsed_seconds": 646.0748766735196,
+      "peak_sampled_group_rss_kib": 19084088,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "identical_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "installed": {
+      "before": "ac1daa93a9660abebf17df651104784e0980b354e90738851c11b4174af56dce",
+      "after": "f3d65a1b06b927a3c4a86200c919e8d7210bd3841eb948fdd4bbdd5ec96bff03",
+      "bend_ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "installed_directory": "/home/agent/.bend/app/2.0.7/A4kk1m/bend2",
+      "tested_clean_source": "/home/agent/code/pi-bend/build/bend-profiles/constructor-tail-values-combined-clean/bend2"
+    },
+    "default_native_smoke": [
+      "",
+      "0",
+      "0000000000000000000000000000000",
+      "00000000000000000000000000000000",
+      "000000000000000000000000000000000",
+      "",
+      "1",
+      "1000000000000000000000000000000",
+      "10000000000000000000000000000000",
+      "100000000000000000000000000000000"
+    ],
+    "combined_patch_replay_identical": true,
+    "profiled_compiler": {
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "comp.ts": "65a4710eb49739ebe2c6416ae9f32d39c27bf5da0c2db19761cf76674a53853a",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    },
+    "limitations": "Full runs on a shared host. Candidate run overlapped small classifier diagnostics and Clang/native/JS regression jobs. These are observed improvements, not a universal performance guarantee."
+  }
 }

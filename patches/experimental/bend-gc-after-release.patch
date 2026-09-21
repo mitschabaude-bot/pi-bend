@@ -1,0 +1,12 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -2895,8 +2895,8 @@
+   do {
+     was = facts();
+     fl = undefined;
++    Bun.gc(true);
+     fl = pass(done_defs(cb).reverse());
+-    Bun.gc(true);
+   } while (was !== facts());
+   const reach = (from: string[], set = new Set<string>()): Set<string> => {
+     const grab = (fid: string) => set.has(fid) || (set.add(fid)
