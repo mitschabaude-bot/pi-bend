@@ -1,0 +1,33 @@
+{
+  "runs": {
+    "native-1": {
+      "cases": 180,
+      "outputs_sha256": "730ae3f1eec2d861427dada28602f2481cd6958bc8fc121623a682cf687972c6"
+    },
+    "native-4": {
+      "cases": 180,
+      "outputs_sha256": "730ae3f1eec2d861427dada28602f2481cd6958bc8fc121623a682cf687972c6"
+    },
+    "bun": {
+      "cases": 180,
+      "outputs_sha256": "730ae3f1eec2d861427dada28602f2481cd6958bc8fc121623a682cf687972c6"
+    }
+  },
+  "sources": {
+    "packages/runtime/src/hkdf-sha256.bend": "0f5937b8d92e4f1e3e8d4f91ec699392860ab4614c6e3a803f5372f855d8efbe",
+    "packages/runtime/src/hmac-sha256.bend": "a036f44af9eb01798793fc28a499211323a09eec70f529e08e992a3a0a6879a7",
+    "packages/runtime/src/sha256.bend": "b632343011f6519c1efbf00fc940e7e7fd90c718f14adbdc2fbdea4f69e80311",
+    "tests/hkdf-sha256.bend": "dd52b11bee28bf4dfe94718c1dccde7d61a5a161c3ea61d743fa4f4010886cdf",
+    "tests/hkdf_sha256_check.py": "e1f0e1dd29aeeb37bcd427cc3f056aa5e6debd853676db13642fbf64615e826e"
+  },
+  "programs": {
+    "build/hkdf-sha256": "f169a549ec69a888a1beeb6696e013bffe7241ea9e83c238997e524a95e3c6ed",
+    "build/hkdf-sha256.c": "0d42967f22b9c70fd37834b7550aaf7fc17af6e7ca0c412fe18763d197e1ec73",
+    "build/hkdf-sha256.js": "7bc142485fe3905d641a6daa790c3c99fefdbab3a09dcabf6bacfdc9a93739b0"
+  },
+  "compiler": {
+    "build/bend-profiles/dns-transport-teles/bend2/main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "build/bend-profiles/dns-transport-teles/bend2/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "build/bend-profiles/dns-transport-teles/bend2/comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091"
+  }
+}
