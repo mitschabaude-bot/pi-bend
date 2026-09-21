@@ -76,3 +76,6 @@ import ./proofs/list-reverse.bend as ListReverse
 import ./proofs/line-decoder.bend as LineDecoder
 import ./proofs/sse-decoder.bend as SSEDecoder
 import ./proofs/openai-responses-service-tier.bend as OpenAIResponsesServiceTier
+import ./proofs/openai-responses-stream-defaults.bend as OpenAIResponsesStreamDefaults
+import ./proofs/openai-responses-default-session.bend as OpenAIResponsesDefaultSession
+import ./proofs/provider-hook-map.bend as ProviderHookMap

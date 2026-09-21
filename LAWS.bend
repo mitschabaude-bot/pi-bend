@@ -75,3 +75,6 @@ import ./laws/string-set.bend as StringSet
 import ./laws/agent-queues.bend as AgentQueues
 import ./laws/pending-queue.bend as Pending
 import ./laws/openai-responses-service-tier.bend as OpenAIResponsesServiceTier
+import ./laws/openai-responses-stream-defaults.bend as OpenAIResponsesStreamDefaults
+import ./laws/openai-responses-default-session.bend as OpenAIResponsesDefaultSession
+import ./laws/provider-hook-map.bend as ProviderHookMap

@@ -1,0 +1,64 @@
+{
+  "fixture": "tests/provider-hook-map.bend",
+  "scope": "Four hook-presence combinations and five outcomes, two calls per mapped hook, disposal followed by successful calls to both original hooks. Payload/model/status/header forwarding, absent replacement versus explicit null, typed error embedding and exact call counts. Six backend/audit combinations; finite ownership evidence, not a universal IO proof.",
+  "sources": {
+    "packages/ai/src/types.bend": "bc6deda8d2420b596a6ef01f6b795d9d886abcbde3c8c59262ba4da978a975aa",
+    "packages/ai/src/utils/diagnostics.bend": "a3aa280272a74b6f1b89454e240a8d20e44f961f6404b408c6bd5e81edb1401c",
+    "packages/ai/src/utils/provider-hook-map.bend": "2889419009ab1d1849a8f85721687d7f43b27d008d9132e57e9f820bf1f71c22",
+    "packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "packages/runtime/src/f64.bend": "4c8d1e6eb6b53dfbe724421a8700f3b5807ee3300d8a27755d2114fdde504180",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/u128.bend": "d15488cf0e21266b262c8b5b04f8550fe45bbe6e425bce4b0e6ba88747154286",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "tests/provider-hook-map.bend": "eae40a4f5d715b6023514ceeb32f7eaba864e390e37e0b58dcb0e52bcc2f76dd"
+  },
+  "harness_sha256": "06a67713a5b62cc2c30235cbc7cff79a61c1c7533d511d0f81b1602f0c875c23",
+  "audit_helper_sha256": "8a43ae95e82dd18f646116b1ba8650257e951ace5351aa458e416468abc553e1",
+  "programs": {
+    "/home/agent/code/pi-bend/build/provider-hook-map": "dbb35134e3a1fb9adf14512c3c2a5cac60c44843443ed5cfc1e792c8f9a4bbf7",
+    "/home/agent/code/pi-bend/build/provider-hook-map.c": "d83f4ab3f37abe84fab9b9a85ee5f0f2353d02401874e02627cb983ed6142bff",
+    "/home/agent/code/pi-bend/build/provider-hook-map.js": "03e2619c27c3c841d140998ed00eac27ff75e396a23502978ba64913fdaf2c6b",
+    "/home/agent/code/pi-bend/build/provider-hook-map-audit": "7755c784be27f9533efbfa592b5f3d4ab26403409ec0a89145dcbc1023a5e723",
+    "/home/agent/code/pi-bend/build/provider-hook-map-audit.c": "d68b5b6bad5cf123dc748c2e085fb31ed3746fd5eea7c6419550c1f561096e68",
+    "/home/agent/code/pi-bend/build/provider-hook-map-audit.js": "67569d82aea1616cf54675dba1485abb1a7d76bdf130252eec8616d09c8d40ee"
+  },
+  "runs": [
+    {
+      "backend": "native-1",
+      "audited": false,
+      "cases": 20,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": false,
+      "cases": 20,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": false,
+      "cases": 20,
+      "passed": true
+    },
+    {
+      "backend": "native-1",
+      "audited": true,
+      "cases": 20,
+      "passed": true
+    },
+    {
+      "backend": "native-4",
+      "audited": true,
+      "cases": 20,
+      "passed": true
+    },
+    {
+      "backend": "bun",
+      "audited": true,
+      "cases": 20,
+      "passed": true
+    }
+  ]
+}

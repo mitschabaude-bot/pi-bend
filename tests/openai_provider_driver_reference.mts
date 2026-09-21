@@ -16,6 +16,9 @@ const scalars=s=>Array.from(s,c=>c.codePointAt(0)).join(',');
 function bits(n,sep=','){const b=Buffer.alloc(8);b.writeDoubleBE(n);return b.readUInt32BE(0)+sep+b.readUInt32BE(4);}
 function shownMessage(m){const u=m.usage;return 'output:'+m.content.map(c=>c.type==='text'?scalars(c.text)+';':'other;').join('')+':'+(m.responseId??'none')+':'+m.stopReason+':'+[u.input,u.output,u.cacheRead,u.cacheWrite,u.totalTokens,u.cost.total].map(n=>bits(n)).join(':')+':error:'+(m.errorMessage===undefined?'none':scalars(m.errorMessage));}
 const input=JSON.parse(fs.readFileSync(0,'utf8'));const results=[];
+const pricingOffset=source.indexOf('function getServiceTierCostMultiplier(');
+if(pricingOffset<0)throw Error('service tier source not found');
+const defaultPricing=new Function(stripTypeScriptTypes(source.slice(pricingOffset))+'\nreturn applyServiceTierPricing;')();
 let StatusError;
 if(input.some(c=>c.sdkStatusError)){
  const path='/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/openai';
@@ -26,8 +29,8 @@ if(input.some(c=>c.sdkStatusError)){
 for(const c of input){
  const trace=[],retained=[],sent=[];let attempt=0;
  const output={role:'assistant',content:[],api:'openai-responses',provider:'openai',model:'test',timestamp:123,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'pending'};
- const signal={aborted:c.preaborted??false}; const model={provider:'openai',cost:{input:1000000,output:2000000,cacheRead:3000000,cacheWrite:4000000}};
- const options={maxRetries:2,signal,
+ const signal={aborted:c.preaborted??false}; const model={id:c.modelId??'test',provider:'openai',cost:{input:1000000,output:2000000,cacheRead:3000000,cacheWrite:4000000}};
+ const options={maxRetries:2,signal,serviceTier:c.serviceTier,
   onPayload:async p=>{trace.push('payload:'+String(p)+':model');if(c.mode===2)throw Error('payload');return c.mode===14?9:c.mode===15?null:undefined;},
   onResponse:async r=>{trace.push('response:model:'+bits(r.status,':')+':'+r.headers['x-response']);if(c.mode===3)throw Error('response');}
  };
@@ -47,7 +50,7 @@ for(const c of input){
   if((c.mode===4&&e.type==='start')||(c.mode===5&&e.type==='text_delta')||(c.mode===6&&e.type==='done')||(c.mode===7&&e.type==='error'))throw Error('sink');
   retained.push(structuredClone(e));},end(){trace.push('close');}};
  async function processor(...args){await processStream(...args);if(c.mode===8)signal.aborted=true;if(c.mode===17)output.stopReason='pending';if(c.mode===12)throw Error('cleanup');}
- let unhandled=null;try{await run(7,model,options,client,retry,headersToRecord,stream,output,processor,{},x=>x,normalizeProviderError,formatProviderError);}catch(e){unhandled=e.message;}
+ let unhandled=null;try{await run(7,model,options,client,retry,headersToRecord,stream,output,processor,{},c.defaultPricing?defaultPricing:x=>x,normalizeProviderError,formatProviderError);}catch(e){unhandled=e.message;}
  if(attempt!==c.statuses.length)throw Error('unused scripted response');
  results.push({mode:c.mode,trace,sent,retained:retained.map(e=>'retained:'+e.type+':'+shownMessage(e.partial??e.message??e.error)),final:'final:'+shownMessage(output),error:output.errorMessage??null,unhandled});
 }

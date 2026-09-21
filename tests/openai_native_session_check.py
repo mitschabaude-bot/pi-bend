@@ -6,6 +6,8 @@ ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--prefix',type=Path,default=ROOT/'build/openai-native-session')
 parser.add_argument('--backends',nargs='+',choices=['native-1','native-4','bun'],default=['native-1','native-4','bun'])
+parser.add_argument('--source',type=Path,default=Path('tests/openai-native-session.bend'))
+parser.add_argument('--default-pricing',action='store_true')
 parser.add_argument('--audit',action='store_true')
 parser.add_argument('--prepare-audit',action='store_true')
 args=parser.parse_args();prefix=args.prefix.resolve()
@@ -28,7 +30,13 @@ for supplied in [False,True]:
     for mode,events,statuses in [(0,normal,[200]),(2,normal,[]),(3,normal,[200]),(9,partial,[200]),(10,partial,[200]),(16,partial+[failed],[200]),(18,partial+[incomplete],[200]),(20,normal,[503,200]),(21,normal,[503,503,503]),(22,normal,[]),(23,normal,[] if supplied else [200])]:
         cases.append(dict(mode=mode,events=events,statuses=statuses,supplied=supplied,slow=False))
     cases.append(dict(mode=0,events=normal,statuses=[200],supplied=supplied,slow=True))
-oracle=[dict(c, mode=2 if c['mode']==22 else c['mode'], sdkStatusError=True, abortCallerOnIteratorClose=False, preaborted=c['mode']==23 and c['supplied']) for c in cases]
+if args.default_pricing:
+    for supplied in [False,True]:
+        for mode,tier,response_tier,model_id in [(24,'flex',None,'test'),(25,'priority',None,'test'),(26,'priority',None,'gpt-5.5'),(27,'flex','priority','test'),(28,'priority','flex','test')]:
+            terminal=json.loads(json.dumps(completed))
+            if response_tier is not None:terminal['response']['service_tier']=response_tier
+            cases.append(dict(mode=mode,events=normal[:-1]+[terminal],statuses=[200],supplied=supplied,slow=False,serviceTier=tier,modelId=model_id))
+oracle=[dict(c, mode=2 if c['mode']==22 else c['mode'], defaultPricing=args.default_pricing, sdkStatusError=True, abortCallerOnIteratorClose=False, preaborted=c['mode']==23 and c['supplied']) for c in cases]
 reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
 assert reference_commit.startswith('46c9de402')
 reference=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/openai_provider_driver_reference.mts'],cwd=ROOT,input=json.dumps(oracle),text=True))
@@ -89,7 +97,7 @@ for backend,command in [('native-1',[str(program),'--threads','1']),('native-4',
         assert actual==wanted,(backend,case['mode'],case['supplied'],actual,wanted)
         runs.append(dict(backend=backend,audited=args.audit,case=case,trace=actual,requests=requests,peers=peers))
     print(backend,len(cases),'composed native session cases PASS',flush=True)
-pending=[ROOT/'tests/openai-native-session.bend'];seen=set()
+pending=[ROOT/args.source];seen=set()
 while pending:
     path=pending.pop().resolve()
     if path in seen:continue
@@ -102,5 +110,5 @@ for dependency in ['openai','partial-json']:
     seen.add(deps/dependency/'package.json')
     seen.update((deps/dependency).rglob('*.js'))
 programs=[Path(str(program)+suffix) for suffix in ['', '.c', '.js'] if Path(str(program)+suffix).exists()]
-record=dict(program_sha256={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in programs},scope='Composed cleartext native session: actual envelope/hooks/retry/request/body/session. Supplied and owned parents, retained snapshots, final result, peer closure. Native channel/parked-IO/socket (fd 0..4095), Bun channel/live-IO/waiting-IO and both timer/waiter audits when enabled. Finite cases, not a universal resource proof.',reference_commit=reference_commit,sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(seen)},runs=runs)
+record=dict(default_pricing=args.default_pricing,fixture=str(args.source),program_sha256={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in programs},scope='Composed cleartext native session: actual envelope/hooks/retry/request/body/session. Supplied and owned parents, retained snapshots, final result, peer closure. Native channel/parked-IO/socket (fd 0..4095), Bun channel/live-IO/waiting-IO and both timer/waiter audits when enabled. Finite cases, not a universal resource proof.',reference_commit=reference_commit,sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(seen)},runs=runs)
 Path(str(program)+'-'+','.join(args.backends)+'-results.json').write_text(json.dumps(record,indent=2)+'\n')

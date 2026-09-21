@@ -1,0 +1,71 @@
+{
+  "scope": "Three intended-equivalent reduced pattern programs: inline literal/fallback, factored fallback and explicit string equality. Shared-host observations, not controlled throughput or compiler regression measurements. RSS guards sample and may overshoot; no compiler patch.",
+  "compiler": "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "harness_sha256": "2376482bc7ab52263b4a208345c5bc66cf23b54ec2d1126268ec8aa4b61d7751",
+  "guard_sha256": "5c26a150bbdb7e6afe3a44f76cc3f915d4455e63973c49b9f03d2ad58bcdb405",
+  "runs": [
+    {
+      "source": "tests/compiler-nested-string-pattern.bend",
+      "source_sha256": "1698c668f50b0b68d69b5b91f0cca9995703e6687eac9fe384d9d5784354a1de",
+      "returncode": 137,
+      "checked": false,
+      "load_completed": false,
+      "stats": {
+        "command": [
+          "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+          "/home/agent/code/pi-bend/tests/compiler-nested-string-pattern.bend"
+        ],
+        "elapsed_seconds": 2.8830955820158124,
+        "peak_sampled_group_rss_kib": 2182240,
+        "limit_gib": 2.0,
+        "stopped": true,
+        "child_exit_code": -15
+      },
+      "log": "PROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nRSS guard stopped build at 2182240 KiB (limit 2 GiB)\n"
+    },
+    {
+      "source": "tests/compiler-nested-string-pattern-shared.bend",
+      "source_sha256": "4cbf84a4c431666086f0f83bb28cab551b0bb59d30f34f0b887adf66c6a7c6b2",
+      "returncode": 0,
+      "checked": true,
+      "load_completed": true,
+      "stats": {
+        "command": [
+          "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+          "/home/agent/code/pi-bend/tests/compiler-nested-string-pattern-shared.bend"
+        ],
+        "elapsed_seconds": 5.838291752152145,
+        "peak_sampled_group_rss_kib": 1256632,
+        "limit_gib": 2.0,
+        "stopped": false,
+        "child_exit_code": 0
+      },
+      "log": "PROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":383696896,\"heapTotal\":315712512,\"heapUsed\":162799692,\"external\":2628252,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":1286791168,\"heapTotal\":1194059776,\"heapUsed\":514322870,\"external\":3588150,\"arrayBuffers\":100}\nAll terms check.\n"
+    },
+    {
+      "source": "tests/compiler-nested-string-pattern-equality.bend",
+      "source_sha256": "8456d17243234b7bf4b24dd58006ad2a3fc21301fb9878bec17539a096fc1159",
+      "returncode": 0,
+      "checked": true,
+      "load_completed": true,
+      "stats": {
+        "command": [
+          "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts",
+          "/home/agent/code/pi-bend/tests/compiler-nested-string-pattern-equality.bend"
+        ],
+        "elapsed_seconds": 1.585049389861524,
+        "peak_sampled_group_rss_kib": 737868,
+        "limit_gib": 2.0,
+        "stopped": false,
+        "child_exit_code": 0
+      },
+      "log": "PROFILE {\"phase\":\"load-start\",\"rss\":29753344,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":242778112,\"heapTotal\":184378368,\"heapUsed\":85105076,\"external\":2071028,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"validate-end\",\"rss\":852418560,\"heapTotal\":775628800,\"heapUsed\":397098432,\"external\":3066336,\"arrayBuffers\":100}\nAll terms check.\n"
+    }
+  ]
+}
