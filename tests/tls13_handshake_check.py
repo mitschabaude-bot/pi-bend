@@ -6,6 +6,8 @@ This checks the initial client flight, not authenticated TLS completion.
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import random
+import hashlib
+import hmac
 import ssl
 import subprocess
 import tempfile
@@ -14,6 +16,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa, x25519
 from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 ROOT = Path(__file__).resolve().parents[1]
 rng = random.Random(8446)
@@ -137,7 +140,8 @@ def accepted(context, seen, wire, session, host):
     assert seen.pop() == host
     records = Cursor(outgoing.read())
     assert records.take(3) == b'\x16\x03\x03'
-    response = Cursor(records.vector(2))
+    server_hello = records.vector(2)
+    response = Cursor(server_hello)
     assert response.take(1) == b'\x02'
     hello = Cursor(response.vector(3))
     response.end()
@@ -150,6 +154,63 @@ def accepted(context, seen, wire, session, host):
     assert selected[43] == b'\x03\x04'
     assert selected[51][:4] == b'\x00\x1d\x00\x20' and len(selected[51]) == 36
     assert server.selected_alpn_protocol() == 'http/1.1'
+    while records.offset < len(records.data):
+        header = records.take(3)
+        body = records.vector(2)
+        if header[0] == 23:
+            return server_hello, header + len(body).to_bytes(2, 'big') + body, selected[51][4:]
+        assert header[0] == 20 and body == b'\x01'
+    raise AssertionError('server sent no protected handshake record')
+
+
+def expand(secret, label, context, size):
+    label = b'tls13 ' + label
+    info = size.to_bytes(2, 'big') + bytes([len(label)]) + label + bytes([len(context)]) + context
+    return hmac.digest(secret, info + b'\x01', 'sha256')[:size]
+
+
+def verify_keys(line, seed, client_hello, flight):
+    server_hello, encrypted, point = flight
+    shared = x25519.X25519PrivateKey.from_private_bytes(seed[32:64]).exchange(x25519.X25519PublicKey.from_public_bytes(point))
+    early = hmac.digest(bytes(32), bytes(32), 'sha256')
+    secret = hmac.digest(expand(early, b'derived', hashlib.sha256(b'').digest(), 32), shared, 'sha256')
+    transcript = hashlib.sha256(client_hello[5:] + server_hello).digest()
+    client = expand(secret, b'c hs traffic', transcript, 32)
+    server = expand(secret, b's hs traffic', transcript, 32)
+    actual_secret, actual_client, actual_server, sent, received = line.split('|')
+    assert list(map(octets, [actual_secret, actual_client, actual_server])) == [secret, client, server]
+    inner = AESGCM(expand(server, b'key', b'', 16)).decrypt(expand(server, b'iv', b'', 12), encrypted[5:], encrypted[:5]).rstrip(b'\x00')
+    assert received == str(inner[-1]) + ':' + encode(inner[:-1])
+    sent = octets(sent)
+    assert AESGCM(expand(client, b'key', b'', 16)).decrypt(expand(client, b'iv', b'', 12), sent[5:], sent[:5]) == b'\x14\x00\x00\x00\x16'
+
+
+def malformed(hello):
+    cases = [(hello[:n], 'malformed') for n in [0, 1, 3, 4, 37, 40, len(hello) - 1]]
+    for index, error in [(0, 'malformed'), (3, 'malformed'), (4, 'parameters'), (38, 'parameters'),
+                         (39, 'parameters'), (71, 'parameters'), (73, 'parameters'), (75, 'parameters'), (77, 'parameters')]:
+        changed = bytearray(hello)
+        changed[index] ^= 1
+        cases.append((changed, error))
+    changed = bytearray(hello)
+    changed[6:38] = bytes.fromhex('cf21ad74e59a6111be1d8c021e65b891c2a211167abb8c5e079e09e2c8a8339c')
+    cases.append((changed, 'retry'))
+    changed = list(hello)
+    changed[-1] = 256
+    cases.append((changed, 'malformed'))
+    # Rewrite extension vectors while preserving framing; these must fail negotiation.
+    raw_ext = hello[76:]
+    ext = extensions(raw_ext)
+    key_ext = b'\x003' + len(ext[51]).to_bytes(2, 'big') + ext[51]
+    version_ext = b'\x00+' + len(ext[43]).to_bytes(2, 'big') + ext[43]
+    for replacement in [key_ext, version_ext, version_ext * 2 + key_ext,
+                        version_ext + key_ext + b'\x00\x00\x00\x00']:
+        body = hello[4:74] + len(replacement).to_bytes(2, 'big') + replacement
+        cases.append((b'\x02' + len(body).to_bytes(3, 'big') + body, 'parameters'))
+    replacement = version_ext + key_ext[:8] + bytes(32)
+    body = hello[4:74] + len(replacement).to_bytes(2, 'big') + replacement
+    cases.append((b'\x02' + len(body).to_bytes(3, 'big') + body, 'key'))
+    return cases
 
 
 valid_hosts = [None, 'localhost', 'example.com', 'EXAMPLE.com', 'a', 'xn--bcher-kva.example',
@@ -179,10 +240,33 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
         assert run.returncode == 0, (name, run.stderr[-2000:])
         lines = run.stdout.splitlines()
         assert len(lines) == len(commands), (name, len(lines), len(commands))
+        flights = []
         for line, (_, host, seed) in zip(lines, valid_cases):
             wire, session = inspect(line, host, seed)
             for context, seen in contexts:
-                accepted(context, seen, wire, session, host)
+                flight = accepted(context, seen, wire, session, host)
+                if host == 'localhost' and seed is not None:
+                    flights.append((seed, wire, flight))
         for line, (_, expected) in zip(lines[len(valid_cases):], invalid_cases):
             assert line == expected, (name, line, expected)
-        print(f'{name}: {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL server flights PASS', flush=True)
+        for seed, wire, flight in flights:
+            hello, encrypted, _ = flight
+            prefix = 'n:localhost:' + encode(seed) + ':'
+            probes = [hello]
+            # Accept either legal ordering of the two ServerHello extensions.
+            reverse = hello[:76] + hello[82:] + hello[76:82]
+            probes.append(reverse)
+            bad = malformed(hello)
+            args = [prefix + encode(h) + ':' + encode(encrypted) for h in probes]
+            args += [prefix + encode(h) + ':' for h, _ in bad]
+            output = subprocess.run(command + args, cwd=ROOT, capture_output=True, text=True, timeout=90)
+            assert output.returncode == 0, (name, output.stderr[-2000:])
+            results = output.stdout.splitlines()
+            assert len(results) == len(args)
+            verify_keys(results[0], seed, wire, flight)
+            # Reordering changes the transcript and thus the traffic keys: the old
+            # encrypted flight must fail even though the new parameters are legal.
+            assert results[1].endswith('|receive-error'), (name, results[1])
+            for actual, (_, expected) in zip(results[2:], bad):
+                assert actual == expected, (name, actual, expected)
+        print(f'{name}: {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)

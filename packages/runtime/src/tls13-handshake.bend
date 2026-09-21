@@ -1,6 +1,11 @@
 import Base
 import ./x25519.bend as X
 import ./tls13-record.bend as Record
+import ./sha256.bend as SHA
+import ./hkdf-sha256.bend as HKDF
+import ./tls13-kdf.bend as KDF
+import ./aes128.bend as AES
+import ./aes128-gcm.bend as GCM
 
 # Initial TLS 1.3 client flight. The affine Pending state retains the private
 # key and exact transcript bytes; it is not an authenticated connection.
@@ -9,6 +14,11 @@ type Error is Data:
   InvalidRandomness{}
   InvalidServerName{}
   KeyExchange{cause: X.Error}
+  MalformedServerHello{}
+  RejectedParameters{}
+  HelloRetryRequest{}
+  Derivation{cause: KDF.Error}
+  InvalidKeyMaterial{}
 
 type Pending is Type:
   Pending{serverName: Maybe<&2, String>, privateKey: List<&2, U32>, sessionId: List<&2, U32>, clientHello: List<&2, U32>}
@@ -111,3 +121,118 @@ def startValid(valid: Bool, name: Maybe<&2, String>) -> IO(Result<&2, &1, Error,
 
 def start(+name: Maybe<&2, String>) -> IO(Result<&2, &1, Error, Started>):
   startValid(validName(name), name)
+
+# Only the two cryptographic extensions we offered may occur in ServerHello.
+# Both orders are accepted; extra, duplicate and truncated extensions fail.
+def equal(a: List<&2, U32>, b: List<&2, U32>) -> Bool:
+  match a b:
+    case Nil{} Nil{}: True{}
+    case x <> xs y <> ys: U32.is_eq(x, y) && equal(xs, ys)
+    case _ _: False{}
+
+def selected(valid: Bool, key: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match valid:
+    case False{}: Fail{RejectedParameters{}}
+    case True{}: Done{key}
+
+def serverExtensions(bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match bytes:
+    case 0 <> 43 <> 0 <> 2 <> 3 <> 4 <> 0 <> 51 <> 0 <> 36 <> 0 <> 29 <> 0 <> 32 <> +key:
+      selected(Nat.is_eq(Record.length(key, 0n), 32n), key)
+    case 0 <> 51 <> 0 <> 36 <> 0 <> 29 <> 0 <> 32 <> +rest:
+      selected(equal(List.drop(&2, U32, rest, 32n), 0 <> 43 <> 0 <> 2 <> 3 <> 4 <> Nil{}), List.take(&2, U32, rest, 32n))
+    case _: Fail{RejectedParameters{}}
+
+def serverParameters(bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match bytes:
+    case 19 <> 1 <> 0 <> high <> low <> +rest:
+      Result.bind(&2, &2, Error, List<&2, U32>, List<&2, U32>, selected(U32.is_eq((high * 256 + low : U32), U32.from_nat(Record.length(rest, 0n))), rest), serverExtensions)
+    case _: Fail{RejectedParameters{}}
+
+def serverSession(session: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match bytes:
+    case +size <> +rest:
+      Result.bind(&2, &2, Error, List<&2, U32>, List<&2, U32>, selected(U32.is_le(size, 32) && equal(session, List.take(&2, U32, rest, U32.to_nat(size))), List.drop(&2, U32, rest, U32.to_nat(size))), serverParameters)
+    case _: Fail{MalformedServerHello{}}
+
+def serverRandom(retry: Bool, session: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match retry:
+    case True{}: Fail{HelloRetryRequest{}}
+    case False{}: serverSession(session, bytes)
+
+def serverBody(session: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match bytes:
+    case 3 <> 3 <> +rest:
+      retryRandom = {207 <> 33 <> 173 <> 116 <> 229 <> 154 <> 97 <> 17 <> 190 <> 29 <> 140 <> 2 <> 30 <> 101 <> 184 <> 145 <> 194 <> 162 <> 17 <> 22 <> 122 <> 187 <> 140 <> 94 <> 7 <> 158 <> 9 <> 226 <> 200 <> 168 <> 51 <> 156 <> Nil{} : List<&2, U32>}
+      serverRandom(equal(List.take(&2, U32, rest, 32n), retryRandom), session, List.drop(&2, U32, rest, 32n))
+    case _: Fail{RejectedParameters{}}
+
+def serverMessage(session: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match bytes:
+    case 2 <> high <> middle <> low <> +body:
+      checked = Bool.pick(Result<&2, &2, Error, Unit>, U32.is_eq((high * 65536 + middle * 256 + low : U32), U32.from_nat(Record.length(body, 0n))) && Nat.is_ge(Record.length(body, 0n), 38n), Done{Unit{}}, Fail{MalformedServerHello{}})
+      Result.bind(&2, &2, Error, Unit, List<&2, U32>, checked, unused => serverBody(session, body))
+    case _: Fail{MalformedServerHello{}}
+
+def parseServerHello(session: List<&2, U32>, +bytes: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  checked = Bool.pick(Result<&2, &2, Error, Unit>, X.valid(bytes), Done{Unit{}}, Fail{MalformedServerHello{}})
+  Result.bind(&2, &2, Error, Unit, List<&2, U32>, checked, unused => serverMessage(session, bytes))
+
+# A handshake state permits protected handshake records, not application IO.
+# Server authentication must still verify CertificateVerify and Finished.
+type Handshake is Type:
+  Handshake{serverName: Maybe<&2, String>, transcript: SHA.State, secret: SHA.Digest, clientSecret: List<&2, U32>, serverSecret: List<&2, U32>, write: Record.Traffic, read: Record.Traffic}
+
+type TrafficKey is Data:
+  TrafficKey{key: AES.Block, iv: GCM.Nonce}
+
+def trafficKey(key: Maybe<&2, AES.Block>, iv: List<&2, U32>) -> Result<&2, &2, Error, TrafficKey>:
+  match key iv:
+    case Some{key} a <> b <> c <> d <> e <> f <> g <> h <> i <> j <> k <> l <> Nil{}:
+      Done{TrafficKey{key, GCM.Nonce{AES.pack(a, b, c, d), AES.pack(e, f, g, h), AES.pack(i, j, k, l)}}}
+    case _ _: Fail{InvalidKeyMaterial{}}
+
+def derivation(-A: Data, result: Result<&2, &2, KDF.Error, A>) -> Result<&2, &2, Error, A>:
+  match result:
+    case Fail{cause}: Fail{Derivation{cause}}
+    case Done{value}: Done{value}
+
+def hashResult(-A: Data, result: Result<&2, &2, SHA.Error, A>) -> Result<&2, &2, Error, A>:
+  derivation(A, KDF.kdfResult(A, HKDF.hashResult(A, result)))
+
+def deriveKey(+secret: List<&2, U32>) -> Result<&2, &2, Error, TrafficKey>:
+  Result.bind(&2, &2, Error, List<&2, U32>, TrafficKey, derivation(List<&2, U32>, KDF.expandLabel(secret, "key", Nil{}, 16)), key =>
+    Result.bind(&2, &2, Error, List<&2, U32>, TrafficKey, derivation(List<&2, U32>, KDF.expandLabel(secret, "iv", Nil{}, 12)), iv => trafficKey(AES.fromBytes(key), iv)))
+
+type Secrets is Data:
+  Secrets{transcript: SHA.State, secret: SHA.Digest, client: List<&2, U32>, server: List<&2, U32>, write: TrafficKey, read: TrafficKey}
+
+def secrets(shared: List<&2, U32>, hello: List<&2, U32>, serverHello: List<&2, U32>) -> Result<&2, &2, Error, Secrets>:
+  Result.bind(&2, &2, Error, SHA.State, Secrets, hashResult(SHA.State, SHA.update(Record.append(hello, serverHello), SHA.create())), +transcript =>
+    Result.bind(&2, &2, Error, SHA.Digest, Secrets, hashResult(SHA.Digest, SHA.finish(transcript)), +hash =>
+      Result.bind(&2, &2, Error, SHA.Digest, Secrets, derivation(SHA.Digest, KDF.kdfResult(SHA.Digest, HKDF.extract(Nil{}, X.small(0)))), early =>
+        Result.bind(&2, &2, Error, SHA.Digest, Secrets, derivation(SHA.Digest, KDF.advance(SHA.toBytes(early), shared)), +secret =>
+          Result.bind(&2, &2, Error, List<&2, U32>, Secrets, derivation(List<&2, U32>, KDF.deriveSecret(SHA.toBytes(secret), "c hs traffic", hash)), +client =>
+            Result.bind(&2, &2, Error, List<&2, U32>, Secrets, derivation(List<&2, U32>, KDF.deriveSecret(SHA.toBytes(secret), "s hs traffic", hash)), +server =>
+              Result.bind(&2, &2, Error, TrafficKey, Secrets, deriveKey(client), write =>
+                Result.bind(&2, &2, Error, TrafficKey, Secrets, deriveKey(server), read =>
+                  Done{Secrets{transcript, secret, client, server, write, read}}))))))))
+
+def exchanged(result: Result<&2, &2, X.Error, List<&2, U32>>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match result:
+    case Fail{cause}: Fail{KeyExchange{cause}}
+    case Done{shared}: Done{shared}
+
+def negotiated(name: Maybe<&2, String>, result: Result<&2, &2, Error, Secrets>) -> Result<&2, &1, Error, Handshake>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{Secrets{transcript, secret, client, server, TrafficKey{wk, wi}, TrafficKey{rk, ri}}}:
+      Done{Handshake{name, transcript, secret, client, server, Record.create(wk, wi), Record.create(rk, ri)}}
+
+def acceptServerHello(pending: Pending, +serverHello: List<&2, U32>) -> Result<&2, &1, Error, Handshake>:
+  match pending:
+    case Pending{name, privateKey, session, hello}:
+      negotiated(name,
+        Result.bind(&2, &2, Error, List<&2, U32>, Secrets, parseServerHello(session, serverHello), point =>
+          Result.bind(&2, &2, Error, List<&2, U32>, Secrets, exchanged(X.sharedSecret(privateKey, point)), shared =>
+            secrets(shared, hello, serverHello))))
