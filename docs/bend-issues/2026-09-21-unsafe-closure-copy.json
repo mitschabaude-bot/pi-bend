@@ -1,0 +1,37 @@
+{
+  "scope": "A runtime failure in our HTTP adapters caused by illegal copying of affine closures inside @unsafe functions. Native rejects; Bun executes. This is an application ownership bug; unsafe skipping kind checks is recorded as a toolchain diagnostic hazard, not a request to permit closure copies.",
+  "safe_check": {
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "PROFILE {\"phase\":\"load-start\",\"rss\":30015488,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nPROFILE {\"phase\":\"load-end\",\"rss\":68288512,\"heapTotal\":11643904,\"heapUsed\":3973013,\"external\":1828565,\"arrayBuffers\":100}\nError:\n- expected : Data\n- observed : Type\nLocation: twice\n2 | \n3>| def twice(+f: U32 -> U32, +x: U32) -> U32:\n4 |   (f(x) + f(x) : U32)\n"
+  },
+  "native_trace": "error-code=6\nbuild/openai-responses-attempt-debug(+0xb608)[0x5f32b87bb608]\nbuild/openai-responses-attempt-debug(+0x8f5c)[0x5f32b87b8f5c]\nbuild/openai-responses-attempt-debug(+0x9d23e)[0x5f32b884d23e]\nbuild/openai-responses-attempt-debug(+0x9145)[0x5f32b87b9145]\nbuild/openai-responses-attempt-debug(+0x88b9)[0x5f32b87b88b9]\nbuild/openai-responses-attempt-debug(main+0x5f9)[0x5f32b87bb519]\n/lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x798b7c62a1ca]\n/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x798b7c62a28b]\nbuild/openai-responses-attempt-debug(_start+0x25)[0x5f32b87b95b5]\nfetch:0\nbend: runtime fail-stop\n",
+  "sources": {
+    "/home/agent/code/pi-bend/tests/compiler-unsafe-closure-copy.bend": "cddd2f811796d2325ab0265ed8f20ef95b5a32e9a2c85e86e91d3128b6ac3371",
+    "/home/agent/code/pi-bend/tests/compiler-u32-multiple-pattern-dup.bend": "569ec6c01d379161e04212b23031dd71f42c2e885f280327a3b00165679fb8e3",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "/home/agent/code/pi-bend/build/bend-profiles/dns-transport-teles/bend2/base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "reduced_runs": [
+    {
+      "backend": "native-1",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "bend: runtime fail-stop\n"
+    },
+    {
+      "backend": "native-4",
+      "returncode": 1,
+      "stdout": "",
+      "stderr": "bend: runtime fail-stop\n"
+    },
+    {
+      "backend": "bun",
+      "returncode": 0,
+      "stdout": "4\n",
+      "stderr": ""
+    }
+  ]
+}
