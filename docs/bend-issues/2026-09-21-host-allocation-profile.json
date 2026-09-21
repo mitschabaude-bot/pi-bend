@@ -1,0 +1,412 @@
+{
+  "status": "diagnostic; installed compiler unchanged",
+  "host": {
+    "bun": "1.4.0",
+    "node": "v24.18.0"
+  },
+  "allocation_sampling": {
+    "fixture": "tests/compiler-string-pattern-return.bend",
+    "engine": "Node/V8",
+    "interval_bytes": 65536,
+    "includes_collected_objects": true,
+    "limitations": [
+      "V8 allocation estimates do not establish Bun allocation sizes or retained bytes.",
+      "Call frames identify functions, not object types; JIT inlining affects attribution.",
+      "Reduced fixture; not attribution of the full provider peak."
+    ],
+    "bun_inspector_result": "HeapProfiler.startSampling and stopSampling rejected with inspector error -32601 (method not found)",
+    "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+    "matches_previous_bun_output": true,
+    "phases": {
+      "load": {
+        "estimated_allocated_bytes": 1277341024,
+        "top_sites": [
+          {
+            "function": "term_higher",
+            "file": "bend.ts",
+            "line": 728,
+            "column": 28,
+            "estimated_bytes": 862057472
+          },
+          {
+            "function": "term_lower",
+            "file": "bend.ts",
+            "line": 821,
+            "column": 27,
+            "estimated_bytes": 177863264
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 2856,
+            "column": 26,
+            "estimated_bytes": 102252280
+          },
+          {
+            "function": "Ctr",
+            "file": "bend.ts",
+            "line": 407,
+            "column": 23,
+            "estimated_bytes": 61565424
+          },
+          {
+            "function": "Var",
+            "file": "bend.ts",
+            "line": 357,
+            "column": 23,
+            "estimated_bytes": 12202432
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 749,
+            "column": 11,
+            "estimated_bytes": 11871688
+          },
+          {
+            "function": "patt_term",
+            "file": "bend.ts",
+            "line": 2850,
+            "column": 26,
+            "estimated_bytes": 8524888
+          },
+          {
+            "function": "match_flatten",
+            "file": "bend.ts",
+            "line": 2767,
+            "column": 30,
+            "estimated_bytes": 7277904
+          },
+          {
+            "function": "map",
+            "file": "",
+            "line": 0,
+            "column": 0,
+            "estimated_bytes": 7276792
+          },
+          {
+            "function": "body_sub",
+            "file": "bend.ts",
+            "line": 2741,
+            "column": 25,
+            "estimated_bytes": 3606624
+          },
+          {
+            "function": "list_set",
+            "file": "bend.ts",
+            "line": 588,
+            "column": 28,
+            "estimated_bytes": 3605856
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 2816,
+            "column": 32,
+            "estimated_bytes": 2951560
+          },
+          {
+            "function": "slice",
+            "file": "",
+            "line": 0,
+            "column": 0,
+            "estimated_bytes": 2687760
+          },
+          {
+            "function": "Lam",
+            "file": "bend.ts",
+            "line": 393,
+            "column": 23,
+            "estimated_bytes": 2164352
+          },
+          {
+            "function": "next",
+            "file": "",
+            "line": 0,
+            "column": 0,
+            "estimated_bytes": 1311160
+          }
+        ]
+      },
+      "check": {
+        "estimated_allocated_bytes": 2195058408,
+        "top_sites": [
+          {
+            "function": "term_wnf",
+            "file": "bend.ts",
+            "line": 2916,
+            "column": 25,
+            "estimated_bytes": 569654664
+          },
+          {
+            "function": "term_higher",
+            "file": "bend.ts",
+            "line": 728,
+            "column": 28,
+            "estimated_bytes": 474052656
+          },
+          {
+            "function": "term_check",
+            "file": "bend.ts",
+            "line": 3502,
+            "column": 27,
+            "estimated_bytes": 369320056
+          },
+          {
+            "function": "tele_check",
+            "file": "bend.ts",
+            "line": 1134,
+            "column": 27,
+            "estimated_bytes": 216355968
+          },
+          {
+            "function": "push",
+            "file": "",
+            "line": 0,
+            "column": 0,
+            "estimated_bytes": 91275416
+          },
+          {
+            "function": "ADT",
+            "file": "bend.ts",
+            "line": 401,
+            "column": 23,
+            "estimated_bytes": 87072736
+          },
+          {
+            "function": "All",
+            "file": "bend.ts",
+            "line": 389,
+            "column": 23,
+            "estimated_bytes": 80004240
+          },
+          {
+            "function": "Ref",
+            "file": "bend.ts",
+            "line": 361,
+            "column": 23,
+            "estimated_bytes": 58090816
+          },
+          {
+            "function": "Var",
+            "file": "bend.ts",
+            "line": 357,
+            "column": 23,
+            "estimated_bytes": 37049728
+          },
+          {
+            "function": "Ctr",
+            "file": "bend.ts",
+            "line": 407,
+            "column": 23,
+            "estimated_bytes": 36391416
+          },
+          {
+            "function": "App",
+            "file": "bend.ts",
+            "line": 397,
+            "column": 23,
+            "estimated_bytes": 28848528
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 658,
+            "column": 24,
+            "estimated_bytes": 28023424
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 773,
+            "column": 28,
+            "estimated_bytes": 24519792
+          },
+          {
+            "function": "tele_fill",
+            "file": "bend.ts",
+            "line": 1124,
+            "column": 26,
+            "estimated_bytes": 23077408
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 3656,
+            "column": 60,
+            "estimated_bytes": 18034952
+          }
+        ]
+      },
+      "compile": {
+        "estimated_allocated_bytes": 2355482440,
+        "top_sites": [
+          {
+            "function": "ctr_flds",
+            "file": "comp.ts",
+            "line": 1080,
+            "column": 18,
+            "estimated_bytes": 352968088
+          },
+          {
+            "function": "emit_ctr",
+            "file": "comp.ts",
+            "line": 2271,
+            "column": 18,
+            "estimated_bytes": 205173680
+          },
+          {
+            "function": "term_higher",
+            "file": "bend.ts",
+            "line": 728,
+            "column": 28,
+            "estimated_bytes": 166592712
+          },
+          {
+            "function": "lay_of",
+            "file": "comp.ts",
+            "line": 940,
+            "column": 16,
+            "estimated_bytes": 134539096
+          },
+          {
+            "function": "set",
+            "file": "",
+            "line": 0,
+            "column": 0,
+            "estimated_bytes": 113399184
+          },
+          {
+            "function": "term_wnf",
+            "file": "bend.ts",
+            "line": 2916,
+            "column": 25,
+            "estimated_bytes": 95864256
+          },
+          {
+            "function": "go",
+            "file": "comp.ts",
+            "line": 1332,
+            "column": 14,
+            "estimated_bytes": 87199728
+          },
+          {
+            "function": "",
+            "file": "bend.ts",
+            "line": 3656,
+            "column": 60,
+            "estimated_bytes": 86045864
+          },
+          {
+            "function": "",
+            "file": "comp.ts",
+            "line": 731,
+            "column": 27,
+            "estimated_bytes": 78548288
+          },
+          {
+            "function": "",
+            "file": "comp.ts",
+            "line": 818,
+            "column": 25,
+            "estimated_bytes": 64217008
+          },
+          {
+            "function": "slice",
+            "file": "",
+            "line": 0,
+            "column": 0,
+            "estimated_bytes": 54490544
+          },
+          {
+            "function": "term_const",
+            "file": "comp.ts",
+            "line": 806,
+            "column": 20,
+            "estimated_bytes": 49108728
+          },
+          {
+            "function": "",
+            "file": "comp.ts",
+            "line": 1460,
+            "column": 34,
+            "estimated_bytes": 49060944
+          },
+          {
+            "function": "term_kids",
+            "file": "comp.ts",
+            "line": 771,
+            "column": 19,
+            "estimated_bytes": 48649256
+          },
+          {
+            "function": "term_uses",
+            "file": "comp.ts",
+            "line": 817,
+            "column": 19,
+            "estimated_bytes": 48345272
+          }
+        ]
+      }
+    },
+    "driver_source": "import {Session} from 'node:inspector/promises';\nimport * as fs from 'node:fs';\nimport * as path from 'node:path';\nimport * as Bend from '../bend-native-toolchain/bend2/bend.ts';\nimport * as Comp from '../bend-native-toolchain/bend2/comp.ts';\n\n// Diagnostic host adapter only. Compiler sources are unchanged.\nObject.assign(globalThis, {Bun: {gc: () => globalThis.gc!()}});\nconst [source, output] = process.argv.slice(2);\nfs.mkdirSync(output, {recursive: true});\nconst session = new Session();\nsession.connect();\nasync function stage<T>(name: string, run: () => T | Promise<T>): Promise<T> {\n  await session.post('HeapProfiler.startSampling', {\n    samplingInterval: 65536,\n    includeObjectsCollectedByMajorGC: true,\n    includeObjectsCollectedByMinorGC: true,\n  });\n  const value = await run();\n  const {profile} = await session.post('HeapProfiler.stopSampling');\n  fs.writeFileSync(path.join(output, name + '.heapprofile'), JSON.stringify(profile));\n  console.log(name, process.memoryUsage());\n  return value;\n}\nconst book = Bend.book_nil();\nawait stage('load', () => Bend.book_load(book, path.resolve(source), '', new Map()));\nawait stage('check', () => Bend.book_valid(book));\nif (book.hols + book.open !== 0) throw new Error('Unfilled definitions');\nconst c = await stage('compile', () => Comp.compile_book(book));\nfs.writeFileSync(path.join(output, 'output.c'), c);\nsession.disconnect();\n",
+    "command": [
+      "node",
+      "--expose-gc",
+      "--max-old-space-size=4096",
+      "build/compiler-memory-reading/profile-v8-allocations.mts",
+      "tests/compiler-string-pattern-return.bend",
+      "build/compiler-memory-reading/v8-pattern-allocations"
+    ]
+  },
+  "compiler_hashes": {
+    "bend.ts": "f0450de3f4c3023f517db3552d67560a410a45664e0f744bdd34d8dda2b7878a",
+    "comp.ts": "68e521ea856e8ee08e38f9722dbbb7009ffbda9349d52f89e488ea292f76178f",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "host_comparison": {
+    "status": "completed; Node supports full native C generation with a larger stack, not adopted",
+    "fixture": "tests/openai-system-defaults.bend",
+    "driver_source": "import * as fs from 'node:fs';\nimport * as path from 'node:path';\nimport * as Bend from '../bend-native-toolchain/bend2/bend.ts';\nimport * as Comp from '../bend-native-toolchain/bend2/comp.ts';\n// Diagnostic host adapter; the compiler source is unchanged.\nif (!(globalThis as any).Bun) Object.assign(globalThis, {Bun: {gc: () => (globalThis as any).gc()}});\nconst [source, output] = process.argv.slice(2);\nconst book = Bend.book_nil();\nawait Bend.book_load(book, path.resolve(source), '', new Map());\nBend.book_valid(book);\nif (book.hols + book.open !== 0) throw new Error('Unfilled definitions');\nfs.writeFileSync(output, Comp.compile_book(book));\n",
+    "default_stack": {
+      "command": [
+        "node",
+        "--expose-gc",
+        "--max-old-space-size=10240",
+        "build/compiler-memory-reading/compare-hosts.mts",
+        "tests/openai-system-defaults.bend",
+        "build/compiler-memory-reading/node-full-host.c"
+      ],
+      "elapsed_seconds": 332.7873067893088,
+      "peak_sampled_group_rss_kib": 3544600,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 1
+    },
+    "default_stack_failure": "RangeError: Maximum call stack size exceeded in lay_of / emit_match / emit_body",
+    "larger_stack": {
+      "command": [
+        "node",
+        "--expose-gc",
+        "--stack-size=4096",
+        "--max-old-space-size=10240",
+        "build/compiler-memory-reading/compare-hosts.mts",
+        "tests/openai-system-defaults.bend",
+        "build/compiler-memory-reading/node-full-host-large-stack.c"
+      ],
+      "elapsed_seconds": 601.5165309002623,
+      "peak_sampled_group_rss_kib": 4657760,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "matches_installed_bun_output": true,
+    "timing_limitations": "Correctness checks and small compiler pairs overlapped approximately the last two minutes; this is not a controlled speed comparison.",
+    "installed_bun_reference": {
+      "seconds": 190.61011940892786,
+      "sampled_peak_rss_bytes": 8017899520,
+      "source": "2026-09-21-unused-match-types.json"
+    }
+  }
+}
