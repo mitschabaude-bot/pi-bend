@@ -1,11 +1,12 @@
 --- a/bend2/bend.ts
 +++ b/bend2/bend.ts
-@@ -705,6 +705,14 @@
+@@ -705,6 +705,15 @@
    return t;
  }
-
+ 
 +// Literal word trees are closed and immutable in either term representation.
 +const WORD_TREES = new WeakSet<object>();
++const STRING_TREES = new WeakSet<object>();
 +const WORD_LITERALS = new WeakMap<Span, Map<number, LTerm>>();
 +
 +export function word_is_literal(tm: HTerm): boolean {
@@ -15,25 +16,25 @@
  export function term_higher(tm: LTerm, env: Env = null): HTerm {
    switch (tm.$) {
      case "Var": {
-@@ -771,6 +779,7 @@
+@@ -771,6 +780,7 @@
        return ADT(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s, tm.r);
      }
      case "Ctr": {
-+      if (WORD_TREES.has(tm)) return tm as HTerm;
++      if (WORD_TREES.has(tm) || STRING_TREES.has(tm)) return tm as HTerm;
        return Ctr(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s);
      }
      case "Mat": {
-@@ -839,6 +848,7 @@
+@@ -839,6 +849,7 @@
        return ADT(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s, tm.r);
      }
      case "Ctr": {
-+      if (WORD_TREES.has(tm)) return tm as LTerm;
++      if (WORD_TREES.has(tm) || STRING_TREES.has(tm)) return tm as LTerm;
        return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);
      }
      case "Mat": {
-@@ -1135,9 +1145,19 @@
+@@ -1135,9 +1146,19 @@
  // ====
-
+ 
  export function word_to_term(n: U32, s?: Span): LTerm {
 +  const words = s === undefined ? undefined : WORD_LITERALS.get(s);
 +  const cached = words?.get(n);
@@ -52,11 +53,30 @@
    }
    return out;
  }
-@@ -3553,7 +3573,12 @@
+@@ -1984,9 +2005,11 @@
+         cs.push(parse_char(p));
+       }
+       const spn = parse_span(p, beg);
+-      return cs.reduceRight<LTerm>((out, c) =>
+-        Ctr("SCon", [Ctr("Chr", [u32_to_term(c, spn)], spn), out], spn),
++      const out = cs.reduceRight<LTerm>((tail, c) =>
++        Ctr("SCon", [Ctr("Chr", [u32_to_term(c, spn)], spn), tail], spn),
+         Ctr("SNil", [], spn));
++      STRING_TREES.add(out);
++      return out;
+     }
+     case "?": {
+       parse_bump(p);
+@@ -3553,7 +3576,17 @@
        }
        const tel = tele_fill(book, ctr.T, t_wnf.x, ctx, lhs.def, tm.s);
        const { xs, us } = tele_check(book, lhs, tel, tm.x, qt, ctx, d, tm.s);
 -      return Check(Ctr(tm.k, xs, tm.s), ty, us);
++      // Parsed strings contain only closed, parameter-free String/Char/U32 values.
++      // Keep their source tree after all constructor/field validation above.
++      if (t_wnf.k === "String" && STRING_TREES.has(tm)) {
++        return Check(tm as LTerm, ty, us);
++      }
 +      // A checked literal word is emitted atomically; its bit tree needs no
 +      // per-bit type annotations. Validation above still checks every field.
 +      const word = (t_wnf.k === "U32" || t_wnf.k === "F32")
@@ -70,7 +90,7 @@
 +++ b/bend2/comp.ts
 @@ -71,6 +71,7 @@
  };
-
+ 
  type File = Carb & {
 +  emit: boolean;
    spares: { words: number; name: string; z: boolean }[];
@@ -78,23 +98,23 @@
    uses: Map<Probe, Bind>;
 @@ -590,6 +591,9 @@
  const USES: Map<HTerm, UMap> = new Map();
-
+ 
  const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();
 +const TAILS = new Map<Bend.Ctr, Map<HTerm | number, Dom[]>>();
 +const LAYS = new Map<HTerm | null, Lay>();
 +const CLOSED_LAYS = new Map<Bend.ADT, Map<number, Lay>>();
-
+ 
  const SRCS: Map<Bend.Name, Src> = new Map();
-
+ 
 @@ -676,7 +680,8 @@
  }
-
+ 
  function memo_gc(): void {
 -  [OPENS, USES, FOLDS, SPINES, CONSTS].forEach((m) => m.clear());
 +  PROBES.length = 1; // Keep DUMMY; opened binders belong to this definition.
 +  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS].forEach((m) => m.clear());
  }
-
+ 
  // Probe
 @@ -737,7 +742,7 @@
      apps.reverse();
@@ -106,14 +126,14 @@
      const all = apps.map((a) => a.x);
      const args = all.filter((_, i) => live[i]);
 @@ -800,7 +805,8 @@
-
+ 
  function term_const(t: HTerm): boolean {
    const s = Bend.term_strip(t);
 -  return s.$ === "Ctr" && memo(CONSTS, s, () => s.x.every(term_const));
 +  return s.$ === "Ctr" && (Bend.word_is_literal(s)
 +    || memo(CONSTS, s, () => s.x.every(term_const)));
  }
-
+ 
  function term_use(u: UMap, p: Probe): number {
 @@ -932,14 +938,23 @@
  // An Array is a block, and an IO.OP holds the foreign requests beyond its
@@ -145,10 +165,10 @@
 +      ? memo(memo(CLOSED_LAYS, tld, () => new Map()), key, get) : get();
 +  });
  }
-
+ 
  function lay_fields(book: Bend.Book, As: (HTerm | null)[]): Field[] {
 @@ -1032,10 +1047,30 @@
-
+ 
  // A constructor's fields: the last n domains of its type, over the
  // datatype's arguments `xs` when given.
 +// A literal word length has the same field types regardless of its syntax.
@@ -179,11 +199,11 @@
 +  return xs?.length === 1
 +    ? memo(memo(TAILS, ctr, () => new Map()), ctr_index(ctr, xs[0]), get) : get();
  }
-
+ 
  function ctr_doms(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): HTerm[] {
 @@ -1502,14 +1537,16 @@
  // ====
-
+ 
  function file_new(cb: Carb, decl: string): File {
 -  return { ...cb, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
 +  return { ...cb, emit: true, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
@@ -191,14 +211,14 @@
      img: [], lits: new Map(), reqs: "", fuel: 0, fresh: new Map(), spares: [],
      uses: new Map(), brwl: new Map(), rest: [], def: "" };
  }
-
+ 
 +const FILE_INDENT = "  ".repeat(16);
 +
  function file_push(fl: File, line: string): void {
 -  fl.seg.lines.push("  ".repeat(fl.tab) + line);
 +  if (fl.emit) fl.seg.lines.push(FILE_INDENT.slice(0, fl.tab * 2) + line);
  }
-
+ 
  // Block
 @@ -2161,14 +2198,14 @@
    seg.fid = name;
