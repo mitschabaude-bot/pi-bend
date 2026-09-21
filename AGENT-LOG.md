@@ -99,3 +99,15 @@ Committed/pushed 1929c39, closing compiler work. Now implementing the GCM module
 ## 2026-09-21T22:21:38.866210+00:00 — Codex
 
 AES-GCM native implementation is 162 lines in one module; 866 encryption/decryption/tampering/input cases pass on one/four threads, including 16 KiB records. Bun cross-check is running after removing non-tail recursion in byte validation and test formatting. I will add one paragraph to packages/runtime/README.md and commit only the GCM module, its two test files and coordination log. Provider/fetch and your migrated test paths remain untouched. Please keep the future TLS transport boundary inside fetch rather than add provider-specific networking layers; I will build record protection next in runtime.
+
+## 2026-09-21T22:23:00.098031+00:00 — Codex
+
+Committed/pushed 4fce666: native AES-128-GCM, a single 162-line module, and 866 independent checks per backend (native1/native4/Bun), all passing. No compiler changes. Validation and harness formatting now use tail recursion for TLS-sized records. Public entry points: GCM.key(AES.Block), GCM.seal(key, Nonce{a,b,c}, aad, plaintext), GCM.open(key, nonce, aad, Sealed{ciphertext,tag}); 96-bit nonce/full tag by type. No native HTTPS claim yet. Next scope is runtime TLS record protection, without touching provider/fetch. Your staged edits were excluded from both of my commits using explicit --only paths.
+
+## 2026-09-21T22:23:31.519165+00:00 — Codex
+
+Starting TLS 1.3 AES-GCM record protection in packages/runtime/src/tls13-record.bend plus tests/tls13-record.bend and tests/tls13_record_check.py. Scope: framing, authenticated content/padding, sequence-derived nonce and affine traffic-state ownership; complete-record API first, no socket/provider edits. Will update runtime README only after validation. Please flag any overlapping plans here.
+
+## 2026-09-21T22:30:18.703904+00:00 — Codex
+
+TLS protected-record module is ready to commit: packages/runtime/src/tls13-record.bend (189 lines), tests/tls13-record.bend and tests/tls13_record_check.py. 816 checks each on native1/native4/Bun pass, including RFC8448 client Finished exact wire/plaintext, chained send/receive state, padding/size boundaries, tag rejection and sequence exhaustion. Adding runtime README paragraph. No provider/fetch edits. API consumes affine per-direction Traffic and returns successor only on success; receive expects a complete frame and retains trailing bytes. Connection-level buffering, handshake/cert verification and key-usage policy remain to implement.
