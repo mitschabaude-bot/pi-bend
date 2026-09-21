@@ -17,6 +17,7 @@ def error(cause: X509.Error) -> String:
     case X509.InvalidTime{}: "time"
     case X509.NotYetValid{}: "early"
     case X509.Expired{}: "expired"
+    case X509.DuplicateExtension{_}: "duplicate"
 
 def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
   match result:
@@ -58,8 +59,32 @@ def at(high: String, low: String, certificate: List<&2, U32>) -> Result<&2, &2, 
   Result.bind(&2, &2, X509.Error, X509.Certificate, Unit, X509.parse(certificate), parsedCertificate =>
     Result.bind(&2, &2, X509.Error, X509.Validity, Unit, X509.validity(parsedCertificate), value => X509.validAt(W.U64{Decimal.decimal(high,0),Decimal.decimal(low,0)},value)))
 
+def extensionList(values: List<&2, X509.Extension>, reverse: String) -> String:
+  match values:
+    case Nil{}: String.reverse(reverse)
+    case X509.Extension{oid,critical,value} <> rest:
+      text = "|" ++ Bytes.show(oid) ++ ":" ++ Bool.pick(String,critical,"1","0") ++ ":" ++ Bytes.show(value)
+      extensionList(rest,String.reverse(text) ++ reverse)
+
+def extensionResult(result: Result<&2, &2, X509.Error, List<&2, X509.Extension>>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{values}: "extensions" ++ extensionList(values,"")
+
+def pathLength(value: Maybe<&2, Big.BigNat>) -> String:
+  match value:
+    case None{}: "none"
+    case Some{value}: Big.toDecimal(value)
+
+def basic(result: Result<&2, &2, X509.Error, X509.BasicConstraints>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{X509.BasicConstraints{ca,path}}: Bool.pick(String,ca,"ca:","leaf:") ++ pathLength(path)
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "ex" <> bytes <> Nil{}: extensionResult(Result.bind(&2, &2, X509.Error, X509.Certificate, List<&2, X509.Extension>, X509.parse(Bytes.bytes(bytes)), X509.extensions))
+    case "basic" <> bytes <> Nil{}: basic(X509.basicConstraints(X509.Extension{85 <> 29 <> 19 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "t" <> bytes <> Nil{}: instant(Result.bind(&2, &2, X509.Error, DER.Node, W.U64, X509.decoded(DER.Node, DER.one(Bytes.bytes(bytes))), X509.time))
     case "range" <> bytes <> Nil{}:
       period(Result.bind(&2, &2, X509.Error, DER.Node, X509.Validity, X509.decoded(DER.Node, DER.one(Bytes.bytes(bytes))), root =>

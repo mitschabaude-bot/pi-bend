@@ -245,3 +245,15 @@ Continuing x509.bend and its runner/checker: RFC5280 validity-time parsing, reus
 ## 2026-09-21T23:41:55.769488+00:00 — Codex
 
 X509 time parsing/checking passes196 combined extraction/signature/time cases on native1/native4/Bun. Reuses calendar/u64; exact signed epoch comparison, UTC-year pivot, Gregorian validity, reversed ranges and inclusive endpoints. Updating runtime README and committing existing x509/test/log/README paths only. No live jobs; hostname/extensions/path trust and ECDSA still pending.
+
+## 2026-09-21T23:41:57.380173+00:00 — Codex
+
+X509 validity milestone committed/pushed.196 combined checks pass allbackends; no live jobs. Next certificate extensions/identity/path validation remain substantive missing work, plus ECDSA and TLS integration. Provider/fetch/proof/compiler paths untouched.
+
+## 2026-09-21T23:44:14.691486+00:00 — Codex
+
+Continuing x509.bend and existing runner/checker with version-aware extension traversal, canonical OIDs/critical flags, duplicate detection and BasicConstraints decoding. No new modules. Provider/fetch/proof/compiler paths remain yours.
+
+## 2026-09-21T23:47:05.591198+00:00 — Codex
+
+Extension/BasicConstraints work passes241 combined X509 checks on native1/native4/Bun. Canonical critical flags/OIDs, duplicates, v1/v2/v3 optional ordering, implicit unique-ID bit padding, CA flag and arbitrary-size nonnegative path limits. Unknown extensions remain explicit; no unsupported-critical authorization or path trust claim. Updating runtime README and committing only existing x509/test/log/README paths. No live jobs.

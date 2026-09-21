@@ -45,6 +45,7 @@ def make_certificate(name, public_key, issuer, signing_key, serial):
     return (x509.CertificateBuilder().subject_name(name).issuer_name(issuer).public_key(public_key)
             .serial_number(serial).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=1))
             .add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]), False)
+            .add_extension(x509.BasicConstraints(ca=(name == issuer), path_length=2 if name == issuer else None), True)
             .sign(signing_key, hashes.SHA256()))
 
 
@@ -179,6 +180,79 @@ cases.append(('range:' + encode(tlv(48,time_wire(value)*2)), words(milliseconds(
 for content in [b'', time_wire(value), time_wire(value)*3]:
     cases.append(('range:' + encode(tlv(48,content)), 'time'))
 
+def integer_node(value):
+    raw = value.to_bytes(max(1,(value.bit_length()+7)//8),'big')
+    return tlv(2,(b'\x00' if raw[0] >= 128 else b'') + raw)
+
+
+def extension(oid, value, critical=None):
+    flag = b'' if critical is None else tlv(1,critical)
+    return tlv(48,tlv(6,oid)+flag+tlv(4,value))
+
+
+def with_optional(optional, version=2):
+    first = [] if version == 0 else [tlv(160,integer_node(version))]
+    return tlv(48,tlv(48,b''.join(first + fields[1:7]) + optional) + algorithm + signature)
+
+
+bc_oid = bytes([85,29,19])
+san_oid = bytes([85,29,17])
+leaf = tlv(48,b'')
+ca = tlv(48,b'\x01\x01\xff')
+for data, expected in [(leaf,'leaf:none'),(ca,'ca:none')]:
+    cases.append(('basic:' + encode(data),expected))
+for value in [0,1,2,255,256,2**256]:
+    data = tlv(48,b'\x01\x01\xff' + integer_node(value))
+    cases.append(('basic:' + encode(data),'ca:' + str(value)))
+for content, expected in [(b'\x01\x01\x00','certificate'),(b'\x01\x01\x01','certificate'),
+                          (integer_node(0),'certificate'),(b'\x01\x01\xff\x02\x01\xff','encoding'),
+                          (b'\x01\x01\xff\x02\x02\x00\x01','encoding'),
+                          (b'\x01\x01\xff' + integer_node(0)*2,'certificate')]:
+    cases.append(('basic:' + encode(tlv(48,content)),expected))
+
+for certificate in certs:
+    wire = certificate.public_bytes(serialization.Encoding.DER)
+    extensions_field = children(children(wire)[0])[-1]
+    _, sequence_bytes, _ = split(extensions_field)
+    expected = 'extensions'
+    for item in children(sequence_bytes):
+        items = children(item)
+        _, oid, _ = split(items[0])
+        critical = len(items) == 3
+        _, value, _ = split(items[-1])
+        expected += '|' + encode(oid) + ':' + str(int(critical)) + ':' + encode(value)
+    cases.append(('ex:' + encode(wire),expected))
+
+unknown_oid = bytes([42,3,4])
+for critical in [None,b'\xff']:
+    ex = extension(unknown_oid,b'opaque',critical)
+    wire = with_optional(tlv(163,tlv(48,ex)))
+    cases.append(('ex:' + encode(wire),'extensions|' + encode(unknown_oid) + ':' + str(int(critical is not None)) + ':' + encode(b'opaque')))
+
+valid = extension(bc_oid,ca,b'\xff')
+for contents, expected in [(b'','certificate'),(valid+valid,'duplicate'),
+                           (valid+extension(bc_oid,leaf),'duplicate'),
+                           (extension(bc_oid,ca,b'\x00'),'certificate'),
+                           (extension(bc_oid,ca,b'\x01'),'certificate'),
+                           (extension(b'',leaf),'certificate'),
+                           (extension(b'\x80\x2a',leaf),'certificate'),
+                           (extension(b'\x2a\x80\x01',leaf),'certificate'),
+                           (extension(b'\x2a\x81',leaf),'certificate'),
+                           (tlv(48,tlv(6,bc_oid)+tlv(4,leaf)+tlv(5,b'')),'certificate')]:
+    cases.append(('ex:' + encode(with_optional(tlv(163,tlv(48,contents)))),expected))
+
+ext_field = tlv(163,tlv(48,valid))
+uid1, uid2 = tlv(129,b'\x00\x80'), tlv(130,b'\x07\x80')
+for version in [0,1,2]:
+    cases.append(('ex:' + encode(with_optional(b'',version)),'extensions'))
+    cases.append(('ex:' + encode(with_optional(ext_field,version)), 'extensions|85,29,19:1:' + encode(ca) if version == 2 else 'certificate'))
+    cases.append(('ex:' + encode(with_optional(uid1+uid2,version)), 'certificate' if version == 0 else 'extensions'))
+for optional, expected in [(uid2+uid1,'certificate'),(uid1+uid1,'certificate'),
+                           (tlv(161,b'\x00'),'certificate'),(tlv(129,b'\x01\x01'),'encoding'),
+                           (ext_field+uid1,'certificate'),(ext_field+ext_field,'certificate'),
+                           (tlv(163,tlv(48,valid)+tlv(5,b'')),'encoding')]:
+    cases.append(('ex:' + encode(with_optional(optional)),expected))
+
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),
                       ('bun', ['bun', 'build/x509.js'])]:
@@ -188,4 +262,4 @@ for name, command in [('native-1', ['build/x509', '--threads', '1']),
     assert len(lines) == len(cases), (name, len(lines), len(cases))
     for i, (actual, (_, expected)) in enumerate(zip(lines, cases)):
         assert actual == expected, (name, i, actual[:100], expected[:100])
-    print(f'{name}: {len(cases)} X509 extraction/signature/time checks PASS', flush=True)
+    print(f'{name}: {len(cases)} X509 checks PASS', flush=True)
