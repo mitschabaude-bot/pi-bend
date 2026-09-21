@@ -1,0 +1,32 @@
+{
+  "runs": {
+    "native-1": {
+      "cases": 343,
+      "outputs_sha256": "fadc9cf2a08a40d91c807be09115597f553c5418f0a43a4c64b6cf8f8c520c14"
+    },
+    "native-4": {
+      "cases": 343,
+      "outputs_sha256": "fadc9cf2a08a40d91c807be09115597f553c5418f0a43a4c64b6cf8f8c520c14"
+    },
+    "bun": {
+      "cases": 343,
+      "outputs_sha256": "fadc9cf2a08a40d91c807be09115597f553c5418f0a43a4c64b6cf8f8c520c14"
+    }
+  },
+  "sources": {
+    "packages/runtime/src/hmac-sha256.bend": "a036f44af9eb01798793fc28a499211323a09eec70f529e08e992a3a0a6879a7",
+    "packages/runtime/src/sha256.bend": "b632343011f6519c1efbf00fc940e7e7fd90c718f14adbdc2fbdea4f69e80311",
+    "tests/hmac-sha256.bend": "748230c0c43e774f7f8f84544f9c231e67f33427bd141fe8669598c18aa61596",
+    "tests/hmac_sha256_check.py": "c5e60104da66400faedd0dba0068c2df8d9ac60dd59cc2ce82c9c82063eb2983"
+  },
+  "programs": {
+    "build/hmac-sha256": "e0105f43b8eeb55199af472f1258341b68459191628c8a726d345db48d09d300",
+    "build/hmac-sha256.c": "15ebce5fc1e7da81d1397f769596574e2526d2dff0aa623fb7ea8e4440e622b3",
+    "build/hmac-sha256.js": "3472b78bb207b486544ba321ed5fb6a9c010634f57d524c2ab8dc77ea924706e"
+  },
+  "compiler": {
+    "build/bend-profiles/dns-transport-teles/bend2/main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "build/bend-profiles/dns-transport-teles/bend2/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "build/bend-profiles/dns-transport-teles/bend2/comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091"
+  }
+}
