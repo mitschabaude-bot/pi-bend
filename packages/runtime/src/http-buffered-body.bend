@@ -4,13 +4,15 @@ import ./http-header.bend as H
 import ./headers.bend as Headers
 import ./utf8.bend as UTF8
 import ./big-nat.bend as N
+import ./url-search-params.bend as Params
 
-# Buffered request inputs. Streaming uploads, form data and blob ownership
+# Buffered request inputs. Streaming uploads, multipart forms and blob ownership
 # have different lifetimes and are not represented by this value type.
 type Input is Data:
   Absent{}
   Text{text: String}
   Bytes{bytes: List<&2, U32>}
+  SearchParams{params: Params.URLSearchParams}
 
 type Content is Data:
   Content{bytes: List<&2, U32>, length: N.BigNat}
@@ -48,17 +50,18 @@ def textHeaders(method: String, headers: Result<&2, &2, H.HeaderError, Headers.H
     case Fail{error}: Fail{HeaderError{error}}
     case Done{fields}: buffered(method, fields, UTF8.encode(text))
 
-def textType(method: String, headers: Headers.Headers, text: String, existing: Result<&2, &2, H.HeaderError, Bool>) -> Result<&2, &2, BodyError, Prepared>:
+def textType(method: String, headers: Headers.Headers, text: String, contentType: String, existing: Result<&2, &2, H.HeaderError, Bool>) -> Result<&2, &2, BodyError, Prepared>:
   match existing:
     case Fail{error}: Fail{HeaderError{error}}
     case Done{True{}}: buffered(method, headers, UTF8.encode(text))
-    case Done{False{}}: textHeaders(method, Headers.set(headers, "content-type", "text/plain;charset=UTF-8"), text)
+    case Done{False{}}: textHeaders(method, Headers.set(headers, "content-type", contentType), text)
 
 def body(method: String, +headers: Headers.Headers, input: Input) -> Result<&2, &2, BodyError, Prepared>:
   match input:
     case Absent{}: Done{Prepared{method, headers, None{}}}
     case Bytes{bytes}: buffered(method, headers, bytes)
-    case Text{text}: textType(method, headers, text, Headers.has(headers, "content-type"))
+    case SearchParams{params}: textType(method, headers, Params.toString(params), "application/x-www-form-urlencoded;charset=UTF-8", Headers.has(headers, "content-type"))
+    case Text{text}: textType(method, headers, text, "text/plain;charset=UTF-8", Headers.has(headers, "content-type"))
 
 def permitted(method: String, headers: Headers.Headers, input: Input, disallowed: Bool) -> Result<&2, &2, BodyError, Prepared>:
   match input disallowed:

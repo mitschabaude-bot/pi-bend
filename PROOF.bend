@@ -1,3 +1,4 @@
+import ./proofs/url-search-params.bend as URLSearchParams
 import ./proofs/provider-header-state.bend as ProviderHeaderState
 import ./proofs/openai-request-headers.bend as OpenAIRequestHeaders
 import ./proofs/openai-responses-options.bend as OpenAIOptions

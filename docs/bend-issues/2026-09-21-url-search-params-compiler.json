@@ -1,0 +1,144 @@
+{
+  "scope": "Unchanged isolated candidate. Observational build costs, not a controlled performance comparison or leak attribution.",
+  "source_sha256": {
+    "packages/runtime/src/abort.bend": "9db8781db572b59a86abf86a1a94af5703b096a954ce963bd366cb08cce4d149",
+    "packages/runtime/src/abortable-socket.bend": "bf97fe0ea84725a5400dace593ab7748df9c1c5982eefec10dff44ab71c7dce5",
+    "packages/runtime/src/big-nat.bend": "b61973e2057e70eac7783ca74c7183ce56eef4d1dd7c2ae4bee00df461073bef",
+    "packages/runtime/src/callback.bend": "6e460406a9c90bb618092c75fa06899e8e60bb59ce3a870ddb68281c967ced7e",
+    "packages/runtime/src/deferred.bend": "a5d2711e95e0063ae777d3ac7232a26bbc427dab7789d5036665eb558de2afed",
+    "packages/runtime/src/headers.bend": "9978dc8b32df82059c8c09345003077db13ee4127f7c8944a9888f8c8a0d6602",
+    "packages/runtime/src/http-body.bend": "7388c006dedb8d5f10966ebdeceae913ac631de005348f891745ce1bcebcf52f",
+    "packages/runtime/src/http-buffered-body.bend": "eefb0045831b4a8785ba8e7f921eadffa8838f1a501468b56b18cc75bffbc562",
+    "packages/runtime/src/http-buffered-framing.bend": "d7af5d68f07845d478ebdf8fb9676db218a1655a997094190c9c1f592abf08dc",
+    "packages/runtime/src/http-buffered-request.bend": "5bdff0dce96d495682d9cf227ac4a495257816b17158608cf0dc41ee9676c449",
+    "packages/runtime/src/http-chunk-size.bend": "6a9562c2bf1d4acbf621173dbc1f177735c16eb8e63801bc34c2a6f347ed0dbe",
+    "packages/runtime/src/http-chunked-body.bend": "eafa17ba24b7feef64c6194734200a9f65abf1b4214061124954aedf3ba75918",
+    "packages/runtime/src/http-chunked-upload.bend": "5385a078a1096f602dc5211ddaea5d47c19f3a3b9815fdf65c42d828d0497598",
+    "packages/runtime/src/http-content-length.bend": "c5fbb68c029b3f203cc6721ffdf5eb77be38e69c3922dba1f3a8a970b8b37ae3",
+    "packages/runtime/src/http-field.bend": "7a2b9e89f6760294f6e40fe5135e1bde32a9e897ed99a2ac8101a0abdefabcf2",
+    "packages/runtime/src/http-fixed-body.bend": "fed0fed0522429e5beee2da28827e5ac41781a6222733b9381847954f19adaa6",
+    "packages/runtime/src/http-framing-fields.bend": "ea95cd26537356a9aa45ba7734e024c80f85209e68fd5b136aca3c3bf46adea3",
+    "packages/runtime/src/http-head.bend": "e8d8d955c879224dedb8831171f77bc26ddb4581137713f1fa95dd0f52f7e59f",
+    "packages/runtime/src/http-header.bend": "5e9a18dd5c72942bf11013344eafb5d94d7a7156cd50f632e7b307488ab58b3e",
+    "packages/runtime/src/http-line.bend": "f1165cfec3c4b32f3d5d83ddd60f1fed30d4c058a02272bed826d4eef5a34f66",
+    "packages/runtime/src/http-request-head.bend": "017d911d05f8d9ef26cf70697381491eeaccbd1514f3cca1fdee27f1dc609575",
+    "packages/runtime/src/http-request-method.bend": "03821f93b39ffd656279817c22cb3b02961b17c2c521b77ac1dfb0388ee8261e",
+    "packages/runtime/src/http-response-policy.bend": "ab878b0ac93379f9cd86117adb46c5649ef979cf5febd2af13d09f49a86f09cd",
+    "packages/runtime/src/http-response-reader.bend": "39da1f6ed88ea562131f611a12db9c10fbaa210b642ee91867ccb815162c1324",
+    "packages/runtime/src/http-response-stream.bend": "005f900a423cd03555fe954e4f161e8fb31e688f5db502be2574da2f8ec7c53f",
+    "packages/runtime/src/http-response-termination.bend": "ffa0780a05554dbd5b00c1bcd755412a425c8aa54e2a3a80f7f35d48480a09cd",
+    "packages/runtime/src/http-socket-exchange.bend": "f56e79179378c9930a1e81e356558a49f388d53e82506b451dd716e31b1a1f4f",
+    "packages/runtime/src/http-socket-source.bend": "b0e15d9a99a2b1237544f90e2c71ffb59fe3dcfc9fa0b2b1fafdcbb5bebfee9a",
+    "packages/runtime/src/http-status.bend": "43170e7135a2b96b1d7bfbd48bfde2357404ece662292c8c30ff86d432022960",
+    "packages/runtime/src/http-url.bend": "e24a5384a3fabbc95ee235e55125869125be73731c1fc925b996cf349b9ca087",
+    "packages/runtime/src/record.bend": "dcc3583d0e8825d7c4630199d1c929a606b6e98919f82f6b122c6ea5f5ec3106",
+    "packages/runtime/src/ref.bend": "037b5b99e3174682fc786839e0b8153ba0be6e9e04ded3fc9363f761a4b56b23",
+    "packages/runtime/src/serial-resource.bend": "e733ea8c0274495623570f2c5968b75856b30e137dc178db909e43f5fe217bd4",
+    "packages/runtime/src/socket-interrupt.bend": "00c9c2a7ec68ffb37ddebe90ecc88f31df2b9bfac21bc046ddea51ff9b33eb6c",
+    "packages/runtime/src/socket-upload.bend": "638c4290639a7b1e0694ab1a64aa92d149ee1df2b23c76ef6b44a861f79af016",
+    "packages/runtime/src/socket-writer.bend": "99c4b697f1e081199c06bee500f2d9f6137f157b92d1afec00bc95b6ea43cb6e",
+    "packages/runtime/src/string-split.bend": "1d8f253dc7163a4dc8b8bce91164320f3c932ae2d011825e405e588e5b9bf560",
+    "packages/runtime/src/u64.bend": "fb00cfd7d1b2413ae6fac6f16ba2a865fc1bd2fd2803a98da2468050e2755bf2",
+    "packages/runtime/src/uri-component.bend": "84124b23f86dbfc63bf9899d9437deff42db40b6c657c5f4b7d02c1c0024fd4c",
+    "packages/runtime/src/url-form.bend": "a2087e2fc18d39429d14d29541fe3e7030bba799acf53fdbc91a996e66be8404",
+    "packages/runtime/src/url-host.bend": "fb94caba20dc366bf4a01613991184063779f3a9e58e407c37f77c300cca7c61",
+    "packages/runtime/src/url-ipv4.bend": "0e575c59f1bd04fd47f567e3a788e38ab19e6f570dd3833fadc50b6c1a0c49bd",
+    "packages/runtime/src/url-ipv6.bend": "1a3e9c0da68f07a4222d5a64ce5b54a78dda98f853d498a023816c8746b8ab00",
+    "packages/runtime/src/url-percent.bend": "b66017f8d5d079ef3ed1d170fe798d22464b22bcc2e2ed5e9ec05e502e0a28e4",
+    "packages/runtime/src/url-record.bend": "482752bbfdaceafd4c5a22800cc71aaa337a17650c40601a7cbb9e56cac053bb",
+    "packages/runtime/src/url-scheme.bend": "988f2be33c24df6db98d499b82f0f4c2fadbb9ac106bce9c962ca3f48a632629",
+    "packages/runtime/src/url-search-params.bend": "e11ea0ad351d2e1a83cd8133e089304f3535f1e46d2cff12f898611d7c3c7ed1",
+    "packages/runtime/src/url-serialize.bend": "92ea7768af456b3df76db45517d7e4bbe983b54d24da253d5173310f98ed4b66",
+    "packages/runtime/src/utf16.bend": "6d7b561368c90237f14e5983e126c4aa39e89d8f4fb8812538c277858cbfe3fc",
+    "packages/runtime/src/utf8.bend": "07024484084c137aa812f5467e171480f997bbec649846c365f5bc2ab21a7fde",
+    "packages/runtime/test/http-buffered-body.bend": "c0d9b47930a865bd9aa7cfa4b5441b7bfe667c3f7f72cc513f8d6256f3f615d1",
+    "packages/runtime/test/url-search-params.bend": "f3f1be33cfeede8c508a524995734f192e9ff6be13a474d7b30f9b03386a8b34",
+    "packages/runtime/test/utf8-runner.bend": "45279314fe55059cfe7e642eb59db3131aae0409819801e8f1b563b3ab82c1c6",
+    "tests/http-request-exchange.bend": "dce47405e6c705686ecb1b69e9baae1520c5907bcee677b9466e7e71720216d2",
+    "tests/tcp-bytes-probe.bend": "8fa1175b5f2c55b598368dbdf0d2fa8fca3a5b2af199994e7c919b7d329772cc",
+    "tests/url_search_params_check.py": "d13d0f2dd30ef022887f5957296e4a43b792bf99770fe157d75d943ad33985ec",
+    "tests/url_search_params_node_reproducer.mjs": "fb58646357819486797cc02e7ed5ee46016e16a317c6a717b3b70562456fae72",
+    "tests/http_buffered_body_check.py": "98ebaa8ec8ce9fd4145496418fe7dafe9c604c240cd4a1f579b96f548f136203",
+    "tests/http_request_exchange_check.py": "8cd0615f4e38ce224294e5254dbe503e625673bae374280d7056757146820106"
+  },
+  "compiler_sha256": {
+    "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091",
+    "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+  },
+  "builds": {
+    "url-search-params-c-build": {
+      "command": [
+        "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "packages/runtime/test/url-search-params.bend",
+        "-o",
+        "build/url-search-params.c"
+      ],
+      "elapsed_seconds": 6.901607861742377,
+      "peak_sampled_group_rss_kib": 1582868,
+      "limit_gib": 6.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "url-search-params-js-build": {
+      "command": [
+        "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "packages/runtime/test/url-search-params.bend",
+        "-o",
+        "build/url-search-params.js"
+      ],
+      "elapsed_seconds": 3.172289473004639,
+      "peak_sampled_group_rss_kib": 1172824,
+      "limit_gib": 6.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "form-body-build": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "packages/runtime/test/http-buffered-body.bend",
+        "build/http-buffered-body"
+      ],
+      "elapsed_seconds": 21.434803656302392,
+      "peak_sampled_group_rss_kib": 889812,
+      "limit_gib": 6.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "form-exchange-build": {
+      "command": [
+        "sh",
+        "scripts/build-pure.sh",
+        "tests/http-request-exchange.bend",
+        "build/http-request-exchange"
+      ],
+      "elapsed_seconds": 69.67646561283618,
+      "peak_sampled_group_rss_kib": 3511496,
+      "limit_gib": 12.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "form-exchange-js-build": {
+      "command": [
+        "build/bend-profiles/dns-transport-teles/bend2/main.ts",
+        "tests/http-request-exchange.bend",
+        "-o",
+        "build/http-request-exchange.js"
+      ],
+      "elapsed_seconds": 4.7790904035791755,
+      "peak_sampled_group_rss_kib": 2056148,
+      "limit_gib": 8.0,
+      "stopped": false,
+      "child_exit_code": 0
+    }
+  },
+  "generated_bytes": {
+    "build/url-search-params.c": 937550,
+    "build/url-search-params.js": 554856,
+    "build/http-buffered-body.c": 7001394,
+    "build/http-request-exchange.c": 26146583,
+    "build/http-request-exchange.js": 13264003
+  }
+}

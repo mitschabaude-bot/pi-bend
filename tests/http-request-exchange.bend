@@ -1,4 +1,6 @@
 import Base
+import ../packages/runtime/src/url-search-params.bend as Params
+import ../packages/runtime/src/url-form.bend as Form
 import ../packages/runtime/src/http-buffered-request.bend as Request
 import ../packages/runtime/src/http-buffered-body.bend as Body
 import ../packages/runtime/src/http-header.bend as H
@@ -62,27 +64,32 @@ def prepared(socket: Socket, signal: A.AbortSignal<String>, request: Result<&2, 
         next : Exchange.Next<String> <- Exchange.next(String, exchange)
         loop(128n, next, Nil{})
 
-def requestHeaders(port: U32, chunked: Bool) -> Headers.Headers:
-  host = Headers.appendField(Headers.new(), H.Header{"host", "127.0.0.1:" ++ U32.show(port)})
-  json = Headers.appendField(host, H.Header{"content-type", "application/json"})
+def requestHeaders(port: U32, chunked: Bool, form: Bool) -> Headers.Headers:
+  +host = Headers.appendField(Headers.new(), H.Header{"host", "127.0.0.1:" ++ U32.show(port)})
+  json = Bool.pick(Headers.Headers, form, host, Headers.appendField(host, H.Header{"content-type", "application/json"}))
   +fields = Headers.appendField(json, H.Header{"x-byte", "\u{ff}"})
   Bool.pick(Headers.Headers, chunked, Headers.appendField(fields, H.Header{"content-length", "0"}), fields)
 
-def request(socket: Socket, signal: A.AbortSignal<String>, port: U32, +chunked: Bool) -> IO(Unit):
-  prepared(socket, signal, Request.prepare(Bool.pick(String, chunked, "delete", "post"), "/v1/responses?x=%C3%A9", requestHeaders(port, chunked), Body.Text{"{\"text\":\"hé🙂\"}"}))
+def input(form: Bool) -> Body.Input:
+  match form:
+    case False{}: Body.Text{"{\"text\":\"hé🙂\"}"}
+    case True{}: Body.SearchParams{Params.fromEntries(Form.Entry{"scope", "openid email"} <> Form.Entry{"scope", "offline_access"} <> Form.Entry{"state", "hé🙂+&=%"} <> Form.Entry{"", ""} <> Nil{})}
 
-def cases(count: Nat, +port: U32, +chunked: Bool) -> IO(Unit):
+def request(socket: Socket, signal: A.AbortSignal<String>, port: U32, +chunked: Bool, +form: Bool) -> IO(Unit):
+  prepared(socket, signal, Request.prepare(Bool.pick(String, chunked, "delete", "post"), "/v1/responses?x=%C3%A9", requestHeaders(port, chunked, form), input(form)))
+
+def cases(count: Nat, +port: U32, +chunked: Bool, +form: Bool) -> IO(Unit):
   match count:
     case Zero{}: IO.print("PASS request exchange")
     case Succ{rest}:
       do IO<Unit>:
         +controller : A.AbortController<String> <- A.new(String)
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-        request(socket, A.signal(String, controller), port, chunked)
+        request(socket, A.signal(String, controller), port, chunked, form)
         A.dispose(String, controller)
-        cases(rest, port, Bool.not(chunked))
+        cases(rest, port, Bool.not(chunked), Bool.pick(Bool, chunked, Bool.not(form), form))
 
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
-    cases(12n, Probe.port(args), False{})
+    cases(24n, Probe.port(args), False{}, False{})

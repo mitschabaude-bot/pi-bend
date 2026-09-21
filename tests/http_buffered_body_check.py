@@ -9,6 +9,8 @@ methods = ['GET', 'get', 'HEAD', 'head', 'POST', 'put', 'delete', 'OPTIONS', 'pA
 inputs = [('absent', []), ('text', []), ('bytes', []), ('bytes', list(range(256))), ('bytes', [0, 255, 128])]
 for scalars in [[97], [0, 13, 10], [0xE9, 0x1F642], [0xD83D, 0xDE42], [0xD800], [0xDC00], [0xD800, 97, 0xDC00], [0xFEFF, 97], [0x10FFFF], [0xFFFF]]:
     inputs.append(('text', scalars))
+for text in ['', '?', 'a=b+c&a=%2B', 'code=%E9&state=%EF%BB%BF', '=&&x&x=', 'emoji=🙂', 'x=\ud800', 'x=%25%2g']:
+    inputs.append(('form', list(map(ord, text))))
 rows = [dict(method=method, kind=kind, data=data, contentType=content_type)
         for method in methods for kind, data in inputs for content_type in [None, '', 'application/json', 'text/custom']]
 for size in [65535, 65536, 65537]:
@@ -20,6 +22,7 @@ for(const row of rows){
  try{
   const options={method:row.method,headers:row.contentType===null?{}:{'Content-Type':row.contentType}};
   if(row.kind==='text')options.body=row.data.map(n=>String.fromCodePoint(n)).join('');
+  else if(row.kind==='form')options.body=new URLSearchParams(row.data.map(n=>String.fromCodePoint(n)).join(''));
   else if(row.kind==='bytes')options.body=Uint8Array.from(row.data);
   const request=new Request('http://example.test/',options);
   const absent=request.body===null;

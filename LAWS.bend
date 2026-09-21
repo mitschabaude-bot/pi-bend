@@ -1,3 +1,4 @@
+import ./laws/url-search-params.bend as URLSearchParams
 import ./laws/provider-header-state.bend as ProviderHeaderState
 import ./laws/openai-request-headers.bend as OpenAIRequestHeaders
 import ./laws/openai-responses-options.bend as OpenAIOptions
