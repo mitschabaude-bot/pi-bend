@@ -1,0 +1,53 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -590,6 +590,7 @@
+ const USES: Map<HTerm, UMap> = new Map();
+
+ const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();
++const TAILS = new Map<Bend.Ctr, Map<HTerm | number, Dom[]>>();
+
+ const SRCS: Map<Bend.Name, Src> = new Map();
+
+@@ -676,7 +677,7 @@
+ }
+
+ function memo_gc(): void {
+-  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES].forEach((m) => m.clear());
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS].forEach((m) => m.clear());
+ }
+
+ // Probe
+@@ -1032,10 +1033,30 @@
+
+ // A constructor's fields: the last n domains of its type, over the
+ // datatype's arguments `xs` when given.
++// A literal word length has the same field types regardless of its syntax.
++// Keep arbitrary/dependent arguments keyed by identity; bound the inspection.
++function ctr_index(ctr: Bend.Ctr, x: HTerm): HTerm | number {
++  if (ctr.k === "WCon") {
++    let t = x;
++    for (let n = 0; n < 32; n++) {
++      const v = Bend.term_strip(t);
++      if (v.$ !== "Ctr") break;
++      if (v.k === "Zero" && v.x.length === 0) return n;
++      if (v.k !== "Succ" || v.x.length !== 1) break;
++      t = v.x[0];
++    }
++  }
++  return x;
++}
++
+ function ctr_tail(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): Dom[] {
+-  const doms = tele_unbind(book, xs === undefined ? ctr.T
+-    : Bend.tele_fill(book, ctr.T, xs, Bend.ctx_nil())).doms;
+-  return doms.slice(doms.length - ctr.n);
++  const get = (): Dom[] => {
++    const doms = tele_unbind(book, xs === undefined ? ctr.T
++      : Bend.tele_fill(book, ctr.T, xs, Bend.ctx_nil())).doms;
++    return doms.slice(doms.length - ctr.n);
++  };
++  return xs?.length === 1
++    ? memo(memo(TAILS, ctr, () => new Map()), ctr_index(ctr, xs[0]), get) : get();
+ }
+
+ function ctr_doms(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): HTerm[] {

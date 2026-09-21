@@ -1,0 +1,521 @@
+{
+  "scope": "Compiler-only progress. Empty-application guard adopted; constructor-field cache awaits full-size validation. Memory remains unresolved.",
+  "empty_spine": {
+    "full_measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/interned-indent-empty-spine/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/empty-spine-defaults.c"
+      ],
+      "elapsed_seconds": 646.0748766735196,
+      "peak_sampled_group_rss_kib": 19084088,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "baseline_measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/interned-bounded-indent/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/interned-indent-defaults.c"
+      ],
+      "elapsed_seconds": 649.2145025571808,
+      "peak_sampled_group_rss_kib": 21757064,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "identical_c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "installation": {
+      "before": "8ad772bd6de599adda6e70496e53ff3a807deb645f7343e61fe027544967f396",
+      "after": "ac1daa93a9660abebf17df651104784e0980b354e90738851c11b4174af56dce",
+      "bend_ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "installed_directory": "/home/agent/.bend/app/2.0.7/A4kk1m/bend2"
+    },
+    "default_native_smoke": "0:0:0\n1:1:1\n2147483648:2147483648:1\n4294967295:4294967295:1\n0\n2147483648\n1065353216\n1036831949\n8388608\n1\n2139095039\n42:42:1\n",
+    "small_pairs_reference": "2026-09-21-compiler-retained-roots.json:skip_empty_spine",
+    "combined_patch_replay_identical": true
+  },
+  "unchanged_full_inputs": {
+    "reference": "2026-09-21-literal-sharing.json:full_provider.source_hashes",
+    "rechecked": 544
+  },
+  "cause": {
+    "baseline_per_definition": [
+      {
+        "phase": "def-end",
+        "pass": 1,
+        "time": 1790010612464,
+        "rss": 1542230016,
+        "heapTotal": 1308096512,
+        "heapUsed": 763854602,
+        "external": 5542970,
+        "arrayBuffers": 100,
+        "probes": 20523,
+        "teles": 620305,
+        "telescopeOrigins": {
+          "fields:Chr": {
+            "calls": 19497,
+            "misses": 1
+          },
+          "fields:U32": {
+            "calls": 4573,
+            "misses": 1
+          },
+          "fields:WCon": {
+            "calls": 696261,
+            "misses": 620298
+          },
+          "fields:False": {
+            "calls": 666973,
+            "misses": 1
+          },
+          "fields:True": {
+            "calls": 654158,
+            "misses": 1
+          },
+          "fields:WNil": {
+            "calls": 29943,
+            "misses": 1
+          },
+          "fields:SCon": {
+            "calls": 24597,
+            "misses": 1
+          },
+          "fields:SNil": {
+            "calls": 6,
+            "misses": 1
+          }
+        },
+        "wconArgumentIdentities": 97420,
+        "opens": 4621,
+        "uses": 149410,
+        "folds": 0,
+        "spines": 1579,
+        "consts": 74573,
+        "name": "classify",
+        "ms": 3504,
+        "segments": 1
+      },
+      {
+        "phase": "def-end",
+        "pass": 2,
+        "time": 1790010618667,
+        "rss": 1553473536,
+        "heapTotal": 1317652480,
+        "heapUsed": 736928134,
+        "external": 5041526,
+        "arrayBuffers": 100,
+        "probes": 29788,
+        "teles": 620273,
+        "telescopeOrigins": {
+          "fields:Chr": {
+            "calls": 19497,
+            "misses": 1
+          },
+          "fields:WCon": {
+            "calls": 696228,
+            "misses": 620266
+          },
+          "fields:False": {
+            "calls": 666940,
+            "misses": 1
+          },
+          "fields:True": {
+            "calls": 654125,
+            "misses": 1
+          },
+          "fields:WNil": {
+            "calls": 29941,
+            "misses": 1
+          },
+          "fields:SCon": {
+            "calls": 24597,
+            "misses": 1
+          },
+          "fields:SNil": {
+            "calls": 6,
+            "misses": 1
+          },
+          "fields:U32": {
+            "calls": 4572,
+            "misses": 1
+          }
+        },
+        "wconArgumentIdentities": 97388,
+        "opens": 4621,
+        "uses": 149410,
+        "folds": 0,
+        "spines": 1579,
+        "consts": 74573,
+        "name": "classify",
+        "ms": 3120,
+        "segments": 1
+      }
+    ],
+    "candidate_per_definition": [
+      {
+        "phase": "def-end",
+        "pass": 1,
+        "time": 1790011229893,
+        "rss": 1199419392,
+        "heapTotal": 986726400,
+        "heapUsed": 388678856,
+        "external": 5459624,
+        "arrayBuffers": 100,
+        "probes": 20523,
+        "teles": 40,
+        "opens": 4621,
+        "uses": 149410,
+        "folds": 0,
+        "spines": 1579,
+        "consts": 74573,
+        "name": "classify",
+        "ms": 2007,
+        "segments": 1
+      },
+      {
+        "phase": "def-end",
+        "pass": 2,
+        "time": 1790011233572,
+        "rss": 1141436416,
+        "heapTotal": 739726336,
+        "heapUsed": 273693369,
+        "external": 9504905,
+        "arrayBuffers": 100,
+        "probes": 29788,
+        "teles": 40,
+        "opens": 4621,
+        "uses": 149410,
+        "folds": 0,
+        "spines": 1579,
+        "consts": 74573,
+        "name": "classify",
+        "ms": 1818,
+        "segments": 1
+      }
+    ],
+    "diagnostic_patch": "--- profile-base/comp.ts\n+++ diagnostic/comp.ts\n@@ -590,6 +590,8 @@\n const USES: Map<HTerm, UMap> = new Map();\n \n const TELES: Map<HTerm, ReturnType<typeof Bend.tele_unbind>> = new Map();\n+const WCON_ARGS = new Set<HTerm>();\n+const TELE_ORIGINS = new Map<string, {calls:number, misses:number}>();\n \n const SRCS: Map<Bend.Name, Src> = new Map();\n \n@@ -676,6 +678,7 @@\n }\n \n function memo_gc(): void {\n+  TELE_ORIGINS.clear(); WCON_ARGS.clear();\n   [OPENS, USES, FOLDS, SPINES, CONSTS, TELES].forEach((m) => m.clear());\n }\n \n@@ -737,7 +740,7 @@\n     apps.reverse();\n     const tld = c.$ === \"Ref\" ? def_body(cf, c.k) : undefined;\n     const T = tld?.$ === \"Def\" ? tld.T : ty_ann(h);\n-    const qs = T === null || apps.length === 0 ? [] : tele_unbind(cf.book, T).doms;\n+    const qs = T === null || apps.length === 0 ? [] : tele_unbind(cf.book, T, \"spine\").doms;\n     const live = apps.map((_, i) => i >= qs.length || quant_live(qs[i][0]));\n     const all = apps.map((a) => a.x);\n     const args = all.filter((_, i) => live[i]);\n@@ -872,7 +875,9 @@\n // ====\n \n function tele_unbind(book: Bend.Book,\n-  T: HTerm): ReturnType<typeof Bend.tele_unbind> {\n+  T: HTerm, origin = \"other\"): ReturnType<typeof Bend.tele_unbind> {\n+  const count = TELE_ORIGINS.get(origin) ?? {calls:0, misses:0};\n+  count.calls++; if (!TELES.has(T)) count.misses++; TELE_ORIGINS.set(origin,count);\n   return memo(TELES, T, () => Bend.tele_unbind(book, T));\n }\n \n@@ -1033,8 +1038,9 @@\n // A constructor's fields: the last n domains of its type, over the\n // datatype's arguments `xs` when given.\n function ctr_tail(book: Bend.Book, ctr: Bend.Ctr, xs?: HTerm[]): Dom[] {\n+  if (ctr.k === \"WCon\" && xs?.length === 1) WCON_ARGS.add(xs[0]);\n   const doms = tele_unbind(book, xs === undefined ? ctr.T\n-    : Bend.tele_fill(book, ctr.T, xs, Bend.ctx_nil())).doms;\n+    : Bend.tele_fill(book, ctr.T, xs, Bend.ctx_nil()), \"fields:\" + ctr.k).doms;\n   return doms.slice(doms.length - ctr.n);\n }\n \n@@ -6343,6 +6349,6 @@\n function profileMark(phase: string, extra: object = {}): void {\n   console.error(\"PROFILE\", JSON.stringify({phase, pass:profilePass,\n     time:Date.now(), ...process.memoryUsage(), probes:PROBES.length,\n-    teles:TELES.size, opens:OPENS.size, uses:USES.size, folds:FOLDS.size,\n+    teles:TELES.size, telescopeOrigins:Object.fromEntries(TELE_ORIGINS), wconArgumentIdentities:WCON_ARGS.size, opens:OPENS.size, uses:USES.size, folds:FOLDS.size,\n     spines:SPINES.size, consts:CONSTS.size, ...extra}));\n }\n",
+    "diagnostic_compiler_base": {
+      "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "comp.ts": "707b99b1f69036bf167e2d2c730815d5be4e089d7701f705ff9e314cb090b1aa",
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    },
+    "explanation": "ctr_tail specializes ctr.T with tele_fill before TELES looks it up. Equivalent indexed arguments yield distinct specialized HTerm identities and therefore miss the cache. Memoizing before specialization and keying closed literal WCon indices 0..31 by value avoids this repeated allocation. Other single arguments use identity; multi-argument constructors use the original path. TAILS clears with existing per-definition caches."
+  },
+  "candidate_patch": "patches/experimental/bend-constructor-tail-values.patch",
+  "benchmark": {
+    "pairs": [
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 13.96997953671962,
+        "peak_kib": 2348300,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 10.561948355287313,
+        "peak_kib": 950816,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 10.501103389076889,
+        "peak_kib": 943788,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 14.325872271321714,
+        "peak_kib": 1708256,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 15.013933824375272,
+        "peak_kib": 3032424,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-pattern-return.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 10.786444577388465,
+        "peak_kib": 964452,
+        "c_sha256": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 1.6337222456932068,
+        "peak_kib": 298384,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 1.3677319651469588,
+        "peak_kib": 219412,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 1.4241904048249125,
+        "peak_kib": 221820,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 1.661598633043468,
+        "peak_kib": 303084,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 1.6490852339193225,
+        "peak_kib": 283372,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 1.41484306845814,
+        "peak_kib": 232820,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.16472152806818485,
+        "peak_kib": 91968,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.15868820436298847,
+        "peak_kib": 82184,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.16057814843952656,
+        "peak_kib": 83772,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.15907956659793854,
+        "peak_kib": 83624,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.15918650664389133,
+        "peak_kib": 81196,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.15851310268044472,
+        "peak_kib": 83340,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "baseline",
+        "wall_seconds": 0.3389095747843385,
+        "peak_kib": 112944,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 0,
+        "variant": "candidate",
+        "wall_seconds": 0.343719020485878,
+        "peak_kib": 112732,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "candidate",
+        "wall_seconds": 0.3351588174700737,
+        "peak_kib": 113324,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 1,
+        "variant": "baseline",
+        "wall_seconds": 0.322374121285975,
+        "peak_kib": 113960,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "baseline",
+        "wall_seconds": 0.33269269950687885,
+        "peak_kib": 113932,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "round": 2,
+        "variant": "candidate",
+        "wall_seconds": 0.3285336270928383,
+        "peak_kib": 109584,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      }
+    ],
+    "compilers": {
+      "baseline": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "8ad772bd6de599adda6e70496e53ff3a807deb645f7343e61fe027544967f396",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "candidate": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "1ec198926a7a6c66cf4d9cec396ccddc7ed7aee0a13a21440318a6377de454fb",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      }
+    },
+    "limitations": "Paired fresh processes on a shared host. Return/string runs overlapped the preceding empty-spine full build. These compare field caching against the preceding 20.7 GiB version, with neither side using the empty-spine guard. The new full run adds caching to the now-installed guard."
+  },
+  "regressions": {
+    "compiler-string-pattern-return": {
+      "artifacts": {
+        "baseline": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        },
+        "candidate": {
+          ".c": "09d746943c5f842a61a1fa7a43a8abf1dcaeefc7cbd3ad6656c73a88bb1456ce",
+          ".js": "6af043fc21a300979b3427548405356952bd1c552f1b129c5d66e3afad396059"
+        }
+      },
+      "cases_per_backend": 109,
+      "source_sha256": "ec4585980bc2e8a5715ca91d8697eef2dc9b33d8531c073ebcdd0a6563285662"
+    },
+    "compiler-word-field-cache": {
+      "artifacts": {
+        "baseline": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        },
+        "candidate": {
+          ".c": "14832a89b4af4aaa5c087e920e846bf01abfc4d1e3796e63776f16cc8e968591",
+          ".js": "50f5cf19b1415a2208d561fee59fc845f09d115817af87a8adb0ad04da00a9d4"
+        }
+      },
+      "cases_per_backend": 10,
+      "source_sha256": "a8635a010af66691b952d2f08fbe091ceb8991ec9ca22ec1bfb9c6f216bc3428"
+    },
+    "compilers": {
+      "baseline": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "ac1daa93a9660abebf17df651104784e0980b354e90738851c11b4174af56dce",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "candidate": {
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "f3d65a1b06b927a3c4a86200c919e8d7210bd3841eb948fdd4bbdd5ec96bff03",
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      }
+    }
+  },
+  "word_regression": {
+    "baseline": {
+      "compiler": {
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "8ad772bd6de599adda6e70496e53ff3a807deb645f7343e61fe027544967f396",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "programs": {
+        ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+        ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+      }
+    },
+    "candidate": {
+      "compiler": {
+        "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+        "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+        "comp.ts": "1ec198926a7a6c66cf4d9cec396ccddc7ed7aee0a13a21440318a6377de454fb",
+        "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+      },
+      "programs": {
+        ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+        ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+      }
+    },
+    "source_sha256": "d2962519d26b72a9fd9623d3e0914c8691db4694c196d6539fc404d4b85e5b69",
+    "harness_sha256": "d62a0998058333c6bdf7ffadc6a6bf69ecd8216021dbfea11e9bc996b07f903a",
+    "expected": [
+      "0:0:0",
+      "1:1:1",
+      "2147483648:2147483648:1",
+      "4294967295:4294967295:1",
+      "0",
+      "2147483648",
+      "1065353216",
+      "1036831949",
+      "8388608",
+      "1",
+      "2139095039",
+      "0:0:0",
+      "1:1:1",
+      "2:2:1",
+      "255:255:1",
+      "65535:65535:1",
+      "2147483648:2147483648:1",
+      "4294967295:4294967295:1"
+    ],
+    "backends": [
+      "native-1",
+      "native-4",
+      "bun"
+    ]
+  },
+  "full_candidate_status": "Running: build/compiler-memory-reading/tail-values-defaults.{log,json,c}. No final result claimed."
+}

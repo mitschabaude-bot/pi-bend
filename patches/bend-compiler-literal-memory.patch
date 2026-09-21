@@ -73,6 +73,15 @@
  }
 
  // Probe
+@@ -737,7 +737,7 @@
+     apps.reverse();
+     const tld = c.$ === "Ref" ? def_body(cf, c.k) : undefined;
+     const T = tld?.$ === "Def" ? tld.T : ty_ann(h);
+-    const qs = T === null ? [] : tele_unbind(cf.book, T).doms;
++    const qs = T === null || apps.length === 0 ? [] : tele_unbind(cf.book, T).doms;
+     const live = apps.map((_, i) => i >= qs.length || quant_live(qs[i][0]));
+     const all = apps.map((a) => a.x);
+     const args = all.filter((_, i) => live[i]);
 @@ -1508,8 +1508,10 @@
      uses: new Map(), brwl: new Map(), rest: [], def: "" };
  }
