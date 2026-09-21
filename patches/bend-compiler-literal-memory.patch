@@ -51,7 +51,31 @@
        return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);
      }
      case "Mat": {
-@@ -1135,9 +1157,19 @@
+@@ -1107,7 +1129,9 @@
+   return out;
+ }
+ 
+-export function tele_check(book: Book, lhs: LHS, tel: HTerm, xs: HTerm[], qt: Quant, ctx: Ctx, d: number, s?: Span): { xs: LTerm[]; us: Uses; tel: HTerm } {
++export function tele_check(book: Book, lhs: LHS, tel: HTerm, xs: HTerm[], qt: Quant, ctx: Ctx, d: number, s: Span | undefined, need_tip: false): { xs: LTerm[]; us: Uses };
++export function tele_check(book: Book, lhs: LHS, tel: HTerm, xs: HTerm[], qt: Quant, ctx: Ctx, d: number, s?: Span, need_tip?: true): { xs: LTerm[]; us: Uses; tel: HTerm };
++export function tele_check(book: Book, lhs: LHS, tel: HTerm, xs: HTerm[], qt: Quant, ctx: Ctx, d: number, s?: Span, need_tip = true): { xs: LTerm[]; us: Uses; tel?: HTerm } {
+   const out: LTerm[] = [];
+   let us = uses_nil();
+   for (const x of xs) {
+@@ -1116,9 +1140,9 @@
+     const x_chk = term_check(book, lhs, x, t_dem, t_all.A, ctx, d);
+     out.push(x_chk.tm);
+     us  = uses_add(us, x_chk.us);
+-    tel = t_all.B(x);
+-  }
+-  return { xs: out, us, tel };
++    if (need_tip || out.length < xs.length) tel = t_all.B(x);
++  }
++  return need_tip ? { xs: out, us, tel } : { xs: out, us };
+ }
+ 
+ export function tele_unbind(book: Book, T: HTerm): { doms: Array<[Quant, Name, HTerm]>; ret: HTerm } {
+@@ -1135,9 +1159,19 @@
  // ====
  
  export function word_to_term(n: U32, s?: Span): LTerm {
@@ -72,7 +96,7 @@
    }
    return out;
  }
-@@ -1984,9 +2016,11 @@
+@@ -1984,9 +2018,11 @@
          cs.push(parse_char(p));
        }
        const spn = parse_span(p, beg);
@@ -86,11 +110,13 @@
      }
      case "?": {
        parse_bump(p);
-@@ -3553,7 +3587,17 @@
+@@ -3552,8 +3588,18 @@
+         throw Err(book, ctx, tm.k + " with " + String(ctr.n) + (ctr.n === 1 ? " field" : " fields"), tm, tm.s, lhs.def);
        }
        const tel = tele_fill(book, ctr.T, t_wnf.x, ctx, lhs.def, tm.s);
-       const { xs, us } = tele_check(book, lhs, tel, tm.x, qt, ctx, d, tm.s);
+-      const { xs, us } = tele_check(book, lhs, tel, tm.x, qt, ctx, d, tm.s);
 -      return Check(Ctr(tm.k, xs, tm.s), ty, us);
++      const { xs, us } = tele_check(book, lhs, tel, tm.x, qt, ctx, d, tm.s, false);
 +      // Parsed strings contain only closed, parameter-free String/Char/U32 values.
 +      // Keep their source tree after all constructor/field validation above.
 +      if (t_wnf.k === "String" && STRING_TREES.has(tm)) {
@@ -105,6 +131,16 @@
      }
      // T == @q s:D<p..> -> P
      // D.c[k] = @r1 x1:F1 -> .. -> D<p..>
+@@ -3608,7 +3654,8 @@
+               const c_all = tele_head(book, cur, ctx, lhs.def, b.s);
+               const c_dem = c_all.q.$ === "None" ? None() : c_all.q.$ === "Lone" ? t_all.q : quant_add(t_all.q, t_all.q);
+               return All(c_dem, c_all.k, c_all.i, c_all.A, (x: HTerm) => {
+-                return term_check_mat_goal(c_all.B(x), n - 1, xs.concat([x]));
++                // At n=0 the telescope is unused; t_all.B determines the result.
++                return term_check_mat_goal(n === 1 ? cur : c_all.B(x), n - 1, xs.concat([x]));
+               }, b.s);
+             }
+           }
 --- a/bend2/comp.ts
 +++ b/bend2/comp.ts
 @@ -71,6 +71,7 @@
@@ -256,7 +292,24 @@
    Object.assign(fl, outer);
    return name;
  }
-@@ -2853,6 +2890,7 @@
+@@ -2655,14 +2692,13 @@
+     `((${bits} >> ${i}) & 1)`), lay) : val_to(fl, args[0], lay), "s");
+   const total = Bend.book_adt(fl.book, adt, Bend.Emp()).c.length;
+   const { arms, end } = mat_arms(x);
+-  const ret = lay_of(fl.book, all.B(DUMMY));
+   const sw = s.ws[0];
+   const ls = adt.k === "Nat" ? emit_nat(x) : null;
+-  const id = emit_tab(fl, ls, all.B(DUMMY));
++  const id = ls === null ? null : emit_tab(fl, ls, all.B(DUMMY));
+   if (id !== null) {
+     bind_dead(fl, []);
+     return emit_put(fl, dst, val_new(
+-      [`TAB_AT(TAB_${id}, ${sw}, ${ls!.length - 1})`], ret));
++      [`TAB_AT(TAB_${id}, ${sw}, ${ls!.length - 1})`], lay_of(fl.book, all.B(DUMMY))));
+   }
+   const lv: Level[] = ls !== null
+     ? ls.map(([h, n], i): Level => [`${sw} == ${i}`, h, () =>
+@@ -2853,6 +2889,7 @@
    const pass = (defs: [Bend.Name, Def][]): File => {
      [cb.lend, BRWS].forEach((m) => m.clear());
      const fl = file_new(cb, "Term");
@@ -264,7 +317,7 @@
      for (const k of SRCS.keys()) {
        for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
          fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
-@@ -2860,6 +2898,12 @@
+@@ -2860,6 +2897,12 @@
      }
      for (const [k, tld] of defs) {
        compile_def(fl, k, tld);
@@ -277,7 +330,7 @@
      }
      compile_reqs(fl);
      facts_lend(cb);
-@@ -2867,12 +2911,15 @@
+@@ -2867,12 +2910,15 @@
    };
    // Emitted callees first until a pass changes nothing (own, hot and poly
    // only grow): that pass is kept.
@@ -297,3 +350,12 @@
    const reach = (from: string[], set = new Set<string>()): Set<string> => {
      const grab = (fid: string) => set.has(fid) || (set.add(fid)
        && (fl.segs.find((s) => s.fid === fid)?.refs
+@@ -3066,7 +3112,7 @@
+       });
+     }
+     const ls = adt.k === "Nat" ? emit_nat(x) : null;
+-    const id = emit_tab(fl, ls, all.B(DUMMY));
++    const id = ls === null ? null : emit_tab(fl, ls, all.B(DUMMY));
+     if (id !== null) {
+       return file_push(fl, `return TAB_${id}[Math.min(Number(${s}), ${
+         ls!.length - 1})];`);

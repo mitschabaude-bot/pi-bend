@@ -14,7 +14,7 @@ args = p.parse_args()
 out = ROOT / 'build/compiler-field-cache'
 out.mkdir(exist_ok=True)
 records = {}
-for fixture in ['compiler-string-pattern-return', 'compiler-word-field-cache']:
+for fixture in ['compiler-string-pattern-return', 'compiler-word-field-cache', 'compiler-nat-match-table']:
     source = ROOT / 'tests' / (fixture + '.bend')
     if fixture == 'compiler-string-pattern-return':
         names = re.findall(r'case "([^"]+)":', source.read_text())
@@ -23,10 +23,13 @@ for fixture in ['compiler-string-pattern-return', 'compiler-word-field-cache']:
             + [word + 'x' for word in names]
             + [word[:i] + 'X' + word[i + 1:] for word in names for i in range(len(word))]))
         expected = [str(names.index(word) + 1) if word in names else word for word in inputs]
-    else:
+    elif fixture == 'compiler-word-field-cache':
         inputs = ['0', '1']
         expected = ['' if n == 0 else bit + '0' * (n - 1)
             for bit in inputs for n in [0, 1, 31, 32, 33]]
+    else:
+        inputs = []
+        expected = ['91', '7', '44', '5']
     artifacts = {}
     for variant, compiler in [('baseline', args.baseline.resolve()), ('candidate', args.candidate.resolve())]:
         folder = out / fixture / variant
