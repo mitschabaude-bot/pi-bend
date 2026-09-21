@@ -1,0 +1,750 @@
+{
+  "scope": "Compiler-only investigation. Literal interning and bounded indentation adopted as a partial improvement. Empty-spine guard remains experimental; excessive memory remains the active blocker.",
+  "source_identity": {
+    "reference": "2026-09-21-literal-sharing.json:full_provider.source_hashes",
+    "all_hashes_rechecked": true,
+    "count": 544
+  },
+  "interned_full_provider": {
+    "measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/interned-word-literals/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/interned-word-defaults.c"
+      ],
+      "elapsed_seconds": 661.9123496934772,
+      "peak_sampled_group_rss_kib": 22216980,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "identical_c_sha256": "e1b7dbdb4fec2dfcdcb0e99b9f9722c252e72ec4739a8547185fad4a5f6e1ad9",
+    "compiler_hashes": {
+      "main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+      "bend.ts": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad",
+      "comp.ts": "f8b4f1951121c4f230181d548cd0c4fa6540edb91064406be7840801f3221005",
+      "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+    },
+    "clean_small_pairs": [
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 1.81,
+        "peak_kib": 298860,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 0,
+        "compiler": "interned",
+        "seconds": 1.67,
+        "peak_kib": 285912,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 1,
+        "compiler": "interned",
+        "seconds": 1.67,
+        "peak_kib": 317400,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 1.66,
+        "peak_kib": 287560,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 1.63,
+        "peak_kib": 286352,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 2,
+        "compiler": "interned",
+        "seconds": 1.74,
+        "peak_kib": 291764,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 0.15,
+        "peak_kib": 87112,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 0,
+        "compiler": "interned",
+        "seconds": 0.15,
+        "peak_kib": 86228,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 1,
+        "compiler": "interned",
+        "seconds": 0.16,
+        "peak_kib": 82876,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 0.16,
+        "peak_kib": 92464,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 0.15,
+        "peak_kib": 86692,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 2,
+        "compiler": "interned",
+        "seconds": 0.16,
+        "peak_kib": 85876,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 0.34,
+        "peak_kib": 115804,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 0,
+        "compiler": "interned",
+        "seconds": 0.34,
+        "peak_kib": 115076,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 1,
+        "compiler": "interned",
+        "seconds": 0.35,
+        "peak_kib": 117492,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 0.32,
+        "peak_kib": 114252,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 0.35,
+        "peak_kib": 113812,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 2,
+        "compiler": "interned",
+        "seconds": 0.33,
+        "peak_kib": 110508,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      }
+    ],
+    "full_proof_gate_log": "PASS generic laws\nBENCH 13.37 2716164\n"
+  },
+  "root_retention": {
+    "method": "Normal validation and first emission pass, then full GC after each sequential root release. Exit before further codegen; no final C artifact. Differences depend on release order and are not independently attributable dominator sizes.",
+    "measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/compiler-root-retention/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/no-retention-output.c"
+      ],
+      "elapsed_seconds": 90.87784807663411,
+      "peak_sampled_group_rss_kib": 14861164,
+      "limit_gib": 20.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "phases": [
+      {
+        "phase": "complete-pass",
+        "rss": 12770430976,
+        "heapTotal": 7580937216,
+        "heapUsed": 3343918177,
+        "external": 271965649,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "without-file",
+        "rss": 12334862336,
+        "heapTotal": 6488801280,
+        "heapUsed": 2275601723,
+        "external": 13254315,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "without-compiler-caches",
+        "rss": 11543011328,
+        "heapTotal": 6244433920,
+        "heapUsed": 2143429783,
+        "external": 13251047,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "without-codegen-bodies",
+        "rss": 11276279808,
+        "heapTotal": 6220546048,
+        "heapUsed": 2104257300,
+        "external": 13088932,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "without-checked-bodies",
+        "rss": 11191574528,
+        "heapTotal": 1132396544,
+        "heapUsed": 689687946,
+        "external": 12778394,
+        "arrayBuffers": 100
+      },
+      {
+        "phase": "without-source-bodies",
+        "rss": 10918617088,
+        "heapTotal": 309035008,
+        "heapUsed": 30329186,
+        "external": 12464962,
+        "arrayBuffers": 100
+      }
+    ],
+    "diagnostic_patch": "--- interned/comp.ts\n+++ root-retention/comp.ts\n@@ -2880,6 +2880,33 @@\n     fl = pass(done_defs(cb).reverse());\n     profileMark(\"pass-end\", {segments:fl.segs.length, own:cb.own.size, hot:cb.hot.size, stat:cb.stat.size});\n     Bun.gc(true); profileMark(\"pass-after-gc\");\n+    if (profilePass === 1) {\n+      const measure = (phase: string) => {\n+        Bun.gc(true);\n+        console.error(\"ROOT_RETENTION\", JSON.stringify({phase, ...process.memoryUsage()}));\n+      };\n+      const releaseBodies = (field: \"h\" | \"e\" | \"v\") => {\n+        for (const b of [book, cb.book]) {\n+          for (const def of Object.values(b.tlds)) {\n+            if (def.$ === \"Def\") delete (def as any)[field];\n+          }\n+        }\n+      };\n+      measure(\"complete-pass\");\n+      fl = undefined;\n+      measure(\"without-file\");\n+      memo_gc();\n+      [SRCS, LOCAL, FLATS, SIGS, BRWS, NODES, CYCLES].forEach(m => m.clear());\n+      PROBES.length = 0;\n+      measure(\"without-compiler-caches\");\n+      releaseBodies(\"h\");\n+      measure(\"without-codegen-bodies\");\n+      releaseBodies(\"e\");\n+      measure(\"without-checked-bodies\");\n+      releaseBodies(\"v\");\n+      measure(\"without-source-bodies\");\n+      process.exit(0); // Retention diagnostic only; no subsequent emission or validation.\n+    }\n   } while (was !== facts());\n   const reach = (from: string[], set = new Set<string>()): Set<string> => {\n     const grab = (fid: string) => set.has(fid) || (set.add(fid)\n"
+  },
+  "generated_c": {
+    "bytes": 203201506,
+    "lines": 2572893,
+    "leading_whitespace_bytes": 138428994,
+    "maximum_indentation_bytes": 1132
+  },
+  "large_telescope_cache": [
+    {
+      "pass": 1,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2524
+    },
+    {
+      "pass": 2,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 3061
+    },
+    {
+      "pass": 3,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2791
+    },
+    {
+      "pass": 4,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2748
+    },
+    {
+      "pass": 5,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2974
+    },
+    {
+      "pass": 6,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 3441
+    },
+    {
+      "pass": 7,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2797
+    },
+    {
+      "pass": 8,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2828
+    },
+    {
+      "pass": 9,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2851
+    },
+    {
+      "pass": 10,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 3033
+    },
+    {
+      "pass": 11,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2992
+    },
+    {
+      "pass": 12,
+      "name": "../packages/ai/src/api/openai-responses-terminal.mapStopReason",
+      "teles": 632968,
+      "ms": 2901
+    }
+  ],
+  "skip_empty_spine": {
+    "patch": "patches/experimental/bend-skip-empty-spine.patch",
+    "small_pairs": [
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 1.68,
+        "peak_kib": 290740,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 0,
+        "compiler": "skip-empty",
+        "seconds": 1.64,
+        "peak_kib": 286936,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 1,
+        "compiler": "skip-empty",
+        "seconds": 1.57,
+        "peak_kib": 282620,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 1.79,
+        "peak_kib": 314000,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 1.72,
+        "peak_kib": 301772,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 2,
+        "compiler": "skip-empty",
+        "seconds": 1.59,
+        "peak_kib": 287812,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 0.16,
+        "peak_kib": 87456,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 0,
+        "compiler": "skip-empty",
+        "seconds": 0.16,
+        "peak_kib": 86508,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 1,
+        "compiler": "skip-empty",
+        "seconds": 0.15,
+        "peak_kib": 85276,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 0.21,
+        "peak_kib": 86888,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 0.2,
+        "peak_kib": 96140,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 2,
+        "compiler": "skip-empty",
+        "seconds": 0.17,
+        "peak_kib": 85124,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 0.33,
+        "peak_kib": 113196,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 0,
+        "compiler": "skip-empty",
+        "seconds": 0.35,
+        "peak_kib": 113188,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 1,
+        "compiler": "skip-empty",
+        "seconds": 0.33,
+        "peak_kib": 114592,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 0.34,
+        "peak_kib": 135812,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 0.32,
+        "peak_kib": 116484,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 2,
+        "compiler": "skip-empty",
+        "seconds": 0.34,
+        "peak_kib": 118756,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      }
+    ],
+    "word_regression": {
+      "baseline": {
+        "compiler": {
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "bend.ts": "701c016160a975380e64950e47b44f77bbe6779e4b82c8ca65e0ee4b0400232b",
+          "comp.ts": "0dedd96c5ae6944ca592a972634190c88e4b672f2dcb419972a58ef94177eeff",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "programs": {
+          ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+          ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+        }
+      },
+      "candidate": {
+        "compiler": {
+          "main.ts": "221053a1116a23e75bb80ae0df1da90c6fb41818d215bef2fec6fdd54bb2b8cc",
+          "bend.ts": "701c016160a975380e64950e47b44f77bbe6779e4b82c8ca65e0ee4b0400232b",
+          "comp.ts": "234feaed9438e8a87c85ac27a18721d207610f314adb978b47654c52cb43ca5f",
+          "base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963"
+        },
+        "programs": {
+          ".c": "3266fb05a4bd4afc9b34bdd6c49ee4d6c7e9bc37c3da90a31e919d1890cbcdf6",
+          ".js": "cbedbf2048660f50ab198728ca6f85855745c4d16b37ef9776b1abf0bfdb2a33"
+        }
+      },
+      "source_sha256": "d2962519d26b72a9fd9623d3e0914c8691db4694c196d6539fc404d4b85e5b69",
+      "harness_sha256": "d62a0998058333c6bdf7ffadc6a6bf69ecd8216021dbfea11e9bc996b07f903a",
+      "expected": [
+        "0:0:0",
+        "1:1:1",
+        "2147483648:2147483648:1",
+        "4294967295:4294967295:1",
+        "0",
+        "2147483648",
+        "1065353216",
+        "1036831949",
+        "8388608",
+        "1",
+        "2139095039",
+        "0:0:0",
+        "1:1:1",
+        "2:2:1",
+        "255:255:1",
+        "65535:65535:1",
+        "2147483648:2147483648:1",
+        "4294967295:4294967295:1"
+      ],
+      "backends": [
+        "native-1",
+        "native-4",
+        "bun"
+      ]
+    },
+    "regression_log": "native-1 literal, generic, reconstructed and runtime words PASS\nnative-4 literal, generic, reconstructed and runtime words PASS\nbun literal, generic, reconstructed and runtime words PASS\n"
+  },
+  "limitations": [
+    "Installed/default compiler now uses the validated interning and indentation combination, measured at 20.7 GiB. It is still excessive.",
+    "Full interning timing overlaps small correctness jobs and a root-retention diagnostic; small paired timings overlap a full indentation experiment. Shared-host timings are exploratory, not a performance guarantee.",
+    "Root release leaves 30 MB live JS heap but 10.9 GB RSS. This distinguishes retained syntax from process residency; it does not identify the allocator retaining every byte.",
+    "The empty-spine guard skips unused telescope expansion by source inspection; no measurement yet attributes the large fixture improvement or its 632968 cache entries to that guard.",
+    "Full indentation run completed. Fresh combined small pairs ran after it; tiny timing differences are mixed, not a universal performance guarantee."
+  ],
+  "bounded_indentation_runtime": {
+    "artifacts": {
+      "baseline": {
+        "": "665dcc5f5b009491acde636ebe423e2517bd97b28a3f9bcd26e08fd4bcfb670b",
+        ".c": "2f94858c7283d4880b38c52b521ed53367c66cf08cb447a7a30465c170d43237",
+        ".js": "a067a8db7ea933d4a9081bac6e83f92cb9eaf599b9997c640a9d106fe1e46dfe",
+        "normalized_native": "5ca33f50c88c9baada00b8d196739b856b7d0eb908f38af5d207ffe3d09ee300"
+      },
+      "bounded": {
+        "": "040d75df60413bf546742afc6636ccf85b80896bb6562e5f39347b693f10d699",
+        ".c": "a411a2ef1615704bec8c01f8757c15e0b44f8b85b194a172dde37c1a00a05974",
+        ".js": "4611bfae857d59ab459b00c403f56129ab6005ab98139ca50c257a144f8fc0fe",
+        "normalized_native": "5ca33f50c88c9baada00b8d196739b856b7d0eb908f38af5d207ffe3d09ee300"
+      }
+    },
+    "cases_per_backend": 637,
+    "native_threads": [
+      1,
+      4
+    ],
+    "javascript": "Bun",
+    "identical_native_binaries_after_removing_file_symbols_and_build_id": true,
+    "only_leading_indentation_changed": true,
+    "harness_correction": "The initial whole-binary assertion failed because the C basenames differed. ELF differences were confined to source-file symbols and the derived GNU build ID. Removing these metadata fields produces identical files. All runtime cases had already passed; generated C and JS differ only in leading indentation."
+  },
+  "bounded_indentation_full": {
+    "measurement": {
+      "command": [
+        "bun",
+        "build/bend-profiles/interned-bounded-indent/bend2/main.ts",
+        "tests/openai-system-defaults.bend",
+        "-o",
+        "build/compiler-memory-reading/interned-indent-defaults.c"
+      ],
+      "elapsed_seconds": 649.2145025571808,
+      "peak_sampled_group_rss_kib": 21757064,
+      "limit_gib": 24.0,
+      "stopped": false,
+      "child_exit_code": 0
+    },
+    "bytes": 111369000,
+    "c_sha256": "31d8e297f0a7fcfc9cb6118a4b83998a03c3d3def6a8dc7d8e0bf19af4dc27c6",
+    "normalized_sha256": "58f732bd5bf049317e55ad6f4bed8c741b743a108b8da5780bd3193f0c20bb1b",
+    "lines": 2572893,
+    "changed_indentation_lines": 398883,
+    "all_non_indentation_bytes_identical": true,
+    "combined_small_pairs": [
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 1.62,
+        "peak_kib": 289840,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 0,
+        "compiler": "bounded",
+        "seconds": 1.66,
+        "peak_kib": 290812,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 1,
+        "compiler": "bounded",
+        "seconds": 1.59,
+        "peak_kib": 292132,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 1.66,
+        "peak_kib": 287648,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 1.64,
+        "peak_kib": 302040,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/compiler-string-match.bend",
+        "run": 2,
+        "compiler": "bounded",
+        "seconds": 1.63,
+        "peak_kib": 301264,
+        "c_sha256": "367938633332b0f3eac9e8e7e8ea80ec76cf417735074319483da8cd23979418"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 0.16,
+        "peak_kib": 89860,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 0,
+        "compiler": "bounded",
+        "seconds": 0.16,
+        "peak_kib": 86016,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 1,
+        "compiler": "bounded",
+        "seconds": 0.16,
+        "peak_kib": 82768,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 0.15,
+        "peak_kib": 86092,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 0.15,
+        "peak_kib": 86560,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/typed-do-shadow.bend",
+        "run": 2,
+        "compiler": "bounded",
+        "seconds": 0.15,
+        "peak_kib": 82880,
+        "c_sha256": "6ae8b2f6c3e1a3b0092499d15a5d4e18dcfdcf2eb6d8c81cbec22cafc89b7d38"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 0,
+        "compiler": "baseline",
+        "seconds": 0.32,
+        "peak_kib": 113296,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 0,
+        "compiler": "bounded",
+        "seconds": 0.34,
+        "peak_kib": 114084,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 1,
+        "compiler": "bounded",
+        "seconds": 0.32,
+        "peak_kib": 113240,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 1,
+        "compiler": "baseline",
+        "seconds": 0.33,
+        "peak_kib": 123072,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 2,
+        "compiler": "baseline",
+        "seconds": 0.35,
+        "peak_kib": 113964,
+        "c_sha256": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf"
+      },
+      {
+        "source": "tests/aes128.bend",
+        "run": 2,
+        "compiler": "bounded",
+        "seconds": 0.38,
+        "peak_kib": 116208,
+        "c_sha256": "2906121aa4e0e9e419d511939d0d3a3a0b382476fe7801e7b848a700971ad8e5"
+      }
+    ],
+    "small_pair_comparison": "All non-indentation bytes identical. The initial unmodified interning harness expected raw identical bytes and stopped at its final assertion; comparison corrected for the intended formatting change using all retained outputs."
+  },
+  "installation": {
+    "installed_directory": "/home/agent/.bend/app/2.0.7/A4kk1m/bend2",
+    "native_directory": "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2",
+    "files": {
+      "bend.ts": {
+        "before": "701c016160a975380e64950e47b44f77bbe6779e4b82c8ca65e0ee4b0400232b",
+        "after": "9457d35879c2d783a0fc16b029d78492a607e073247a0d5968ec8dea2a2f0dad"
+      },
+      "comp.ts": {
+        "before": "0dedd96c5ae6944ca592a972634190c88e4b672f2dcb419972a58ef94177eeff",
+        "after": "8ad772bd6de599adda6e70496e53ff3a807deb645f7343e61fe027544967f396"
+      }
+    }
+  },
+  "default_path_validation": {
+    "proof_gate": "PASS generic laws\n",
+    "native_smoke": "0:0:0\n1:1:1\n2147483648:2147483648:1\n4294967295:4294967295:1\n0\n2147483648\n1065353216\n1036831949\n8388608\n1\n2139095039\n42:42:1\n",
+    "BEND_override": false,
+    "combined_patch_replayed_against_original_backup": true
+  }
+}
