@@ -1,0 +1,31 @@
+{
+  "runs": {
+    "native-1": {
+      "cases": 532,
+      "outputs_sha256": "7c0dd066a878696e5450995c64cb7cb592443d34ea0e0df33d0ec5b5c8268507"
+    },
+    "native-4": {
+      "cases": 532,
+      "outputs_sha256": "7c0dd066a878696e5450995c64cb7cb592443d34ea0e0df33d0ec5b5c8268507"
+    },
+    "bun": {
+      "cases": 532,
+      "outputs_sha256": "7c0dd066a878696e5450995c64cb7cb592443d34ea0e0df33d0ec5b5c8268507"
+    }
+  },
+  "sources": {
+    "packages/runtime/src/aes128.bend": "e5298eb7a448713436de1ed7126423d0a315d615dd37aee95168d36d62cef73c",
+    "tests/aes128.bend": "ce59fa7285e7de4979e7eac745f19505b839b53d3a7d09ecc24bfc63a0c0ec02",
+    "tests/aes128_check.py": "7f37c6f0dcdbd03322c4f3ea1d9aef0ebbdef4bf4d3361985ec364078b3d231c"
+  },
+  "programs": {
+    "build/aes128": "be8139a1106bb16062e9cdf41437ae68684915c619fdb9304fd440f0a9310287",
+    "build/aes128.c": "22d5f12ce859ea41ab40420e100dd2fd37c3cf7bf21b53f73872fc6b8ab442cf",
+    "build/aes128.js": "5a931ce95a59aa520f4844658c447cdd11dad2a953543d1f15dd9a9dc80afe4c"
+  },
+  "compiler": {
+    "build/bend-profiles/dns-transport-teles/bend2/main.ts": "38a864996929d6743d3439f27b8d599f1acd2317866e7db747bc12f11450c715",
+    "build/bend-profiles/dns-transport-teles/bend2/bend.ts": "587b529bf9b736041253e2e0e0e0fce5002b58585475ada11b76f96693b17f35",
+    "build/bend-profiles/dns-transport-teles/bend2/comp.ts": "b016752017cd8b74196e59ba289fa8be5cfebf84f3f17ff80ea99e8f01fc8091"
+  }
+}
