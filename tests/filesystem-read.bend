@@ -1,6 +1,7 @@
 import Base
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/file-fold.bend as Fold
+import ../packages/coding-agent/src/utils/mime.bend as Mime
 
 def digit(+value: U32) -> Char:
   Chr{Bool.pick(U32,U32.is_lt(value,10),(value + 48 : U32),(value + 87 : U32))}
@@ -49,15 +50,34 @@ def fold(path: String, stop: Bool) -> IO(Unit):
     value : Fold.Outcome<State> <- Fold.read(~State,~consume,path,7,State{0n,stop,250 <> Nil{}})
     IO.print(folded(value))
 
+def prefix(path: String, maximum: U32) -> IO(Unit):
+  do IO<Unit>:
+    value : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readPrefix(path,maximum)
+    IO.print(report(value))
+
+def mime(value: Result<&2,&2,FS.Error,Maybe<&2,String>>) -> String:
+  match value:
+    case Done{None{}}: "null"
+    case Done{Some{mime}}: mime
+    case Fail{FS.System{code,_}}: "error:" ++ U32.show(code)
+    case Fail{FS.ReadAndClose{read,_,close,_}}: "read-close:" ++ U32.show(read) ++ ":" ++ U32.show(close)
+    case Fail{_}: "unexpected-error"
+
 def operation(mode: String, path: String) -> IO(Unit):
   match mode:
     case "read":
       do IO<Unit>:
         value : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
         IO.print(report(value))
+    case "prefix": prefix(path,7)
+    case "zero": prefix(path,0)
+    case "mime":
+      do IO<Unit>:
+        value : Result<&2,&2,FS.Error,Maybe<&2,String>> <- Mime.detectSupportedImageMimeTypeFromFile(path)
+        IO.print(mime(value))
     case "fold": fold(path,False{})
     case "stop": fold(path,True{})
-    case _: IO.die(Unit,1,"expected read/fold/stop")
+    case _: IO.die(Unit,1,"expected read/prefix/zero/mime/fold/stop")
 
 def run(args: List<String>) -> IO(Unit):
   match args:

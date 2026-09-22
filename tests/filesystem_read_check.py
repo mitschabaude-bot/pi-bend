@@ -1,10 +1,13 @@
-"""Raw filesystem reads and checked fold retirement under real OS failures.
+"""Full/prefix file reads, MIME file inspection, and checked retirement.
 
 Test-only hooks target temporary paths, close the real descriptor before
 reporting close failure, and audit exactly-once close with no live handles.
+MIME results are compared with the pinned public file-IO function.
 """
 import argparse
 import errno
+import json
+import struct
 import os
 from pathlib import Path
 import resource
@@ -61,7 +64,7 @@ let closes=0;
 const open=fs.openSync, close=fs.closeSync;
 fs.openSync=function(path,...args) {
   const fd=open.call(this,path,...args);
-  if(String(path)===process.env.BEND_READ_PATH) { opened.add(fd);retired.delete(fd);reads.set(fd,0); }
+  if(fs.realpathSync(path)===process.env.BEND_READ_PATH) { opened.add(fd);retired.delete(fd);reads.set(fd,0); }
   return fd;
 };
 fs.closeSync=function(fd) {
@@ -98,6 +101,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bend', type=Path)
     parser.add_argument('--no-build', action='store_true')
+    parser.add_argument('--reference', type=Path, default=ROOT.parent/'pi-mono')
     args = parser.parse_args()
     prefix = ROOT / 'build/filesystem-read'
     compiler = args.bend or Path(os.environ.get('BEND', str(ROOT / 'build/bend-native-toolchain/bend2/main.ts')))
@@ -114,7 +118,7 @@ def main():
                                  ('native-1', [str(prefix), '--threads', '1']),
                                  ('native-4', [str(prefix), '--threads', '4'])]:
             def run(path, mode='read', cap=0, read_fail=0, close_error=0, repeat=1):
-                env = dict(os.environ, BEND_READ_PATH=str(path), BEND_READ_CAP=str(cap),
+                env = dict(os.environ, BEND_READ_PATH=str(path.resolve()), BEND_READ_CAP=str(cap),
                            BEND_READ_FAIL=str(read_fail), BEND_CLOSE_ERROR=str(close_error))
                 cmd = command.copy()
                 if backend == 'bun':
@@ -126,7 +130,7 @@ def main():
                     resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
                 result = subprocess.run(cmd, env=env, preexec_fn=setup, capture_output=True, text=True, timeout=30)
                 assert result.returncode == 0, (backend, mode, result.returncode, result.stdout[:200], result.stderr)
-                count = repeat if path.exists() else 0
+                count = repeat if path.exists() and mode != 'zero' else 0
                 assert result.stderr == f'audit:{count}:0\n', (backend, mode, result.stderr)
                 return result.stdout.splitlines()
 
@@ -135,12 +139,26 @@ def main():
                 path = root/f'{backend}-{length}'
                 path.write_bytes(data)
                 assert run(path) == ['ok:'+data.hex()]
+                assert run(path, 'prefix') == ['ok:'+data[:7].hex()]
             assert run(root/'missing') == ['error:'+str(errno.ENOENT)]
             assert run(root) == ['error:'+str(errno.EISDIR)]
+            assert run(root/'missing', 'prefix') == ['error:'+str(errno.ENOENT)]
+            assert run(root, 'prefix') == ['error:'+str(errno.EISDIR)]
+            for zero_path in [root, root/'missing']:
+                assert run(zero_path, 'zero', read_fail=1, close_error=errno.EIO) == ['error:'+str(errno.EINVAL)]
             data = bytes(range(19))
             path = root/f'{backend}-fault'
             path.write_bytes(data)
             assert run(path, cap=2) == ['ok:'+data.hex()]
+            assert run(path, 'zero', read_fail=1, close_error=errno.EIO) == ['error:'+str(errno.EINVAL)]
+            # A second OS read would fail: prefix must return the first short
+            # chunk immediately instead of filling its requested maximum.
+            assert run(path, 'prefix', cap=2, read_fail=2) == ['ok:'+data[:2].hex()]
+            for close_error in [0, errno.EIO, errno.EINTR]:
+                expected = 'error:5' if not close_error else f'read-close:5:{close_error}'
+                assert run(path, 'prefix', read_fail=1, close_error=close_error, repeat=128) == [expected]*128
+            for close_error in [errno.EIO, errno.EINTR]:
+                assert run(path, 'prefix', cap=2, read_fail=2, close_error=close_error, repeat=128) == [f'error:{close_error}']*128
             # Failure after two nonempty short reads must still retire the file.
             for close_error in [0, errno.EIO, errno.EINTR]:
                 read_status = 'error:5' if not close_error else f'read-close:5:{close_error}'
@@ -170,7 +188,63 @@ def main():
             thread.join(5)
             assert not thread.is_alive() and not errors, (backend, errors)
             assert got == ['ok:'+(b'\x00\xffabc'+bytes(range(64))).hex()]
-            print(f'{backend}: exact bytes/EOF/boundaries/pipe, retained fold state, read+close errors and 640 failure retirements PASS', flush=True)
+            for mode in ['prefix', 'mime']:
+                short_fifo = root/f'{backend}-{mode}-live-pipe'
+                os.mkfifo(short_fifo)
+                release, written = threading.Event(), threading.Event()
+                pipe_errors = []
+                def held_writer():
+                    try:
+                        with short_fifo.open('wb', buffering=0) as stream:
+                            stream.write(b'xy')
+                            written.set()
+                            release.wait(35)
+                    except BaseException as error:
+                        pipe_errors.append(repr(error))
+                writer_thread = threading.Thread(target=held_writer, daemon=True)
+                writer_thread.start()
+                try:
+                    answer = run(short_fifo, mode)
+                    assert written.is_set() and not release.is_set()
+                    assert answer == (['ok:7879'] if mode == 'prefix' else ['null'])
+                finally:
+                    release.set()
+                    writer_thread.join(5)
+                assert not writer_thread.is_alive() and not pipe_errors, (backend, mode, pipe_errors)
+
+            def chunk(kind, payload=b''):
+                return struct.pack('>I', len(payload))+kind+payload+b'\0'*4
+            png = b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR', b'\0'*13)
+            samples = [b'', b'GIF', b'\xff\xd8\xff', b'\xff\xd8\xff\xf7',
+                       b'RIFF1234WEBP'+b'x'*9000, b'plain text'*1000, png]
+            # acTL is recognized only when all eight header bytes fit in the
+            # single 4100-byte read. Marker payload/CRC are not required.
+            for offset in [4088, 4091, 4092, 4093, 4096, 4100, 4104, 8192]:
+                samples.append(png+chunk(b'tEXt', b'x'*(offset-len(png)-12))+chunk(b'acTL'))
+            paths = []
+            for index, sample in enumerate(samples):
+                image = root/f'{backend}-image-{index}'
+                image.write_bytes(sample)
+                paths.append(image)
+            symlink = root/f'{backend}-image-link'
+            symlink.symlink_to(paths[1])
+            paths.extend([symlink, root/'missing-image', root])
+            oracle = root/'mime-file-oracle.ts'
+            oracle.write_text('import {detectSupportedImageMimeTypeFromFile as detect} from '+
+                              json.dumps(str((args.reference/'packages/coding-agent/src/utils/mime.ts').resolve()))+
+                              ';\nfor (const path of process.argv.slice(2)) { try { console.log(await detect(path) ?? "null"); } '+
+                              'catch(e) { console.log("error:"+(-e.errno)); } }\n')
+            expected = subprocess.check_output(['bun', str(oracle), *map(str, paths)], text=True).splitlines()
+            # The target of a symlink is the OS descriptor path. Run the same
+            # public input while configuring the audit against that real path.
+            for image, want in zip(paths, expected):
+                assert run(image, 'mime') == [want], (backend, image, want)
+            image = paths[1]
+            assert run(image, 'mime', cap=2, read_fail=2) == ['null']
+            for close_error in [errno.EIO, errno.EINTR]:
+                assert run(image, 'mime', close_error=close_error) == [f'error:{close_error}']
+                assert run(image, 'mime', read_fail=1, close_error=close_error) == [f'read-close:5:{close_error}']
+            print(f'{backend}: full/prefix bytes, one short read, zero rejection, {len(paths)} pinned MIME file comparisons, state and 1280 failure retirements PASS', flush=True)
 
 
 if __name__ == '__main__':
