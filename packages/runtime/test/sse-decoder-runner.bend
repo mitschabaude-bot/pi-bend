@@ -20,12 +20,12 @@ def showEvent(event: Maybe<&2, SSE.ServerSentEvent>) -> String:
 def execute(lines: List<&2, String>, result: SSE.DecoderDecoded) -> List<&2, String>:
   match lines result:
     case Nil{} SSE.DecoderDecoded{_, event}: showEvent(event) <> Nil{}
-    case line <> rest SSE.DecoderDecoded{decoder, event}: showEvent(event) <> execute(rest, SSE.decodeDecoder(decoder, H.fromScalars(H.parseNumbers(line))))
+    case line <> rest SSE.DecoderDecoded{decoder, event}: showEvent(event) <> execute(rest, SSE.decoderStep(decoder, H.fromScalars(H.parseNumbers(line))))
 
 def start(lines: List<&2, String>) -> String:
   match lines:
     case Nil{}: ""
-    case line <> rest: String.join(execute(rest, SSE.decodeDecoder(SSE.createDecoder(), H.fromScalars(H.parseNumbers(line)))), "|")
+    case line <> rest: String.join(execute(rest, SSE.decoderStep(SSE.createDecoder(), H.fromScalars(H.parseNumbers(line)))), "|")
 
 def all(arguments: List<String>) -> IO(Unit):
   match arguments:

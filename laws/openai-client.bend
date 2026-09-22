@@ -85,7 +85,7 @@ law construction_retains_diagnostic:
   for metadata: Metadata.Metadata
   for diagnostic: Client.Diagnostic
   for text: String
-  {Client.constructed(E, metadata, diagnostic, Some{text}) == Done{Client.APIError{metadata, diagnostic, Client.statusMessage(Metadata.statusResponseMetadata(metadata), text)}} : Result<&2, &2, Client.ConstructionError<E>, Client.APIError>}
+  {Client.constructed(E, metadata, diagnostic, Some{text}) == Done{Client.APIError{metadata, diagnostic, Client.statusMessage(Metadata.metadataStatus(metadata), text)}} : Result<&2, &2, Client.ConstructionError<E>, Client.APIError>}
 
 law encoding_failure_retains_diagnostic:
   for -E: Data
@@ -112,13 +112,13 @@ law text_normalization_preserves_rendered_message:
   for metadata: Metadata.Metadata
   for text: String
   for message: String
-  {Client.providerFailure(Client.APIError{metadata, Client.TextDiagnostic{text}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.statusResponseMetadata(metadata))}, message, Nil{}} : Body.ProviderFailure}
+  {Client.providerFailure(Client.APIError{metadata, Client.TextDiagnostic{text}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.metadataStatus(metadata))}, message, Nil{}} : Body.ProviderFailure}
 
 law json_normalization_retains_input:
   for metadata: Metadata.Metadata
   for value: T.JsonValue
   for message: String
-  {Client.providerFailure(Client.APIError{metadata, Client.JSONDiagnostic{value}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.statusResponseMetadata(metadata))}, message, Body.ParsedBody{value} <> Nil{}} : Body.ProviderFailure}
+  {Client.providerFailure(Client.APIError{metadata, Client.JSONDiagnostic{value}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.metadataStatus(metadata))}, message, Body.ParsedBody{value} <> Nil{}} : Body.ProviderFailure}
 
 # Retry classification of an attempt: only connection failures and deadline
 # expiry become retryable provider errors; every original failure survives.

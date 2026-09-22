@@ -47,7 +47,7 @@ def argument(parts: List<&2, String>) -> IO(Unit):
     case text <> dots <> absolute <> ndots <> defnames <> search <> notld <> suffixes <> script <> Nil{}:
       do IO<Unit>:
         +source : Ref.Ref<Source> <- Ref.new(Source, Source{Split.split(script, ','), 0})
-        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearchRun(~Ref.Ref<Source>, ~String, ~String, ~request, source, Search.start(SearchTest.parsed(Presentation.parsePresentation(text)), Scalar.decimal(dots, 0), String.eq(absolute, "1"), SearchTest.domainInput(suffixes), Search.Policy{Scalar.decimal(ndots, 0), String.eq(defnames, "1"), String.eq(search, "1"), String.eq(notld, "1")}))
+        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearch(~Ref.Ref<Source>, ~String, ~String, ~request, source, Search.start(SearchTest.parsed(Presentation.parsePresentation(text)), Scalar.decimal(dots, 0), String.eq(absolute, "1"), SearchTest.domainInput(suffixes), Search.Policy{Scalar.decimal(ndots, 0), String.eq(defnames, "1"), String.eq(search, "1"), String.eq(notld, "1")}))
         report(result)
         state : Source <- Ref.dispose(Source, source)
         retired(state)

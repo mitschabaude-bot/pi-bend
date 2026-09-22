@@ -38,7 +38,7 @@ def scenario(+all: Bool) -> IO(Unit):
     run : L.ActiveRun <- winner(first, second, Bool.pick(String, all, "prompt:s,s:1", "prompt:s:1"))
     current : Fixture.Owned() <- R.snapshotRuntime(Unit, Unit, String, String, runtime)
     Test.assertion(String.eq(Fixture.key(current), Bool.pick(String, all, "base|sa|1|-||all:|one:", "base|sa|1|-||one:s|one:")), "losing continuation preserves remaining queue and active state")
-    won : Bool <- R.finishRunRuntime(Unit, Unit, String, String, runtime, run)
+    won : Bool <- R.finishRuntimeRun(Unit, Unit, String, String, runtime, run)
     Test.assertion(won, "winner alone owns finishing the run")
     final : Fixture.Owned() <- R.disposeRuntime(Unit, Unit, String, String, runtime)
     Test.assertion(String.eq(Fixture.key(final), Bool.pick(String, all, "base|sa|0|-||all:|one:", "base|sa|0|-||one:s|one:")), "finishing does not discard remaining steering")

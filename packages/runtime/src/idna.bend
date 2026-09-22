@@ -145,7 +145,7 @@ def character(code: U32, joining: Data.JoiningType, virama: Bool, beforeVirama: 
 
 # Feed properties of one scalar in logical label order. Join-control properties
 # are fixed by Unicode; their identity takes precedence over supplied properties.
-def pushContextj(state: ContextjState, code: U32, joining: Data.JoiningType, combiningClass: U32) -> ContextjState:
+def pushContextJ(state: ContextjState, code: U32, joining: Data.JoiningType, combiningClass: U32) -> ContextjState:
   match state:
     case ContextjInvalid{}: ContextjInvalid{}
     case Active{beforeVirama, leftJoining, awaitingRight}:
@@ -238,7 +238,7 @@ def advanceLabelContext(properties: Maybe<&2, Data.Properties>, code: U32, state
   match properties state:
     case None{} _: Fail{code}
     case Some{Data.Properties{direction, joining, combiningClass, isMark}} LabelContextState{first, leadingMark, bidi, joiners}:
-      Done{LabelContextState{False{}, mark(first, leadingMark, isMark), push(bidi, direction), pushContextj(joiners, code, joining, combiningClass)}}
+      Done{LabelContextState{False{}, mark(first, leadingMark, isMark), push(bidi, direction), pushContextJ(joiners, code, joining, combiningClass)}}
 
 def finishLabelContext(state: LabelContextState) -> LabelContextAnalysis:
   match state:
@@ -298,7 +298,7 @@ def prefixFailure(reserved: Bool) -> Maybe<&2, LabelRulesError>:
     case True{}: Some{ReservedPrefix{}}
     case False{}: None{}
 
-def hyphensLabelRules(enabled: Bool, +text: String) -> Maybe<&2, LabelRulesError>:
+def hyphenRule(enabled: Bool, +text: String) -> Maybe<&2, LabelRulesError>:
   match enabled:
     case True{}: hyphenFailure(hyphenPositions(text), hyphenEdge(text))
     case False{}: prefixFailure(reservedPrefix(text))
@@ -327,7 +327,7 @@ def syntaxScan(text: String, +std3: Bool, failure: Maybe<&2, LabelRulesError>) -
 # Input is an already mapped or ACE-decoded label. Empty labels are left to
 # domain/DNS length policy. This function neither maps nor normalizes text.
 def syntax(+text: String, checkHyphens: Bool, std3: Bool) -> Maybe<&2, LabelRulesError>:
-  syntaxScan(text, std3, hyphensLabelRules(checkHyphens, text))
+  syntaxScan(text, std3, hyphenRule(checkHyphens, text))
 
 def statusAllowed(mode: Mode, value: Maybe<&2, Data.Status>) -> Bool:
   match mode value:

@@ -64,7 +64,7 @@ def response(mode: U32, controller: Abort.AbortController<String>, value: Result
     case Fail{_}: IO.print("start-error")
     case Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("head:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
+        IO.print("head:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
         consume(mode, controller, body)
 
 def exchange(mode: U32, controller: Abort.AbortController<String>, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Unit):

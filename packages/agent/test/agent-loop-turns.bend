@@ -148,7 +148,7 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     events : List<&2, String> <- collect(iterator, Nil{}, None{})
     checkEvents(stopMode, events)
-    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+    outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
     checkOutcome(stopMode, outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
     W.disposeStreamRun(Unit, String, String, String, run)

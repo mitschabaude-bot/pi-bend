@@ -241,7 +241,7 @@ def collect(tuples: List<&2, Form.Entry>, fields: R.Record<String>) -> R.Record<
 def encoded(properties: List<&2, R.Property<String>>) -> List<&2, String>:
   match properties:
     case Nil{}: Nil{}
-    case R.Property{name, value} <> rest: (Encode.encodeQueryEncode(name) ++ "=" ++ Encode.encodeQueryEncode(value)) <> encoded(rest)
+    case R.Property{name, value} <> rest: (Encode.encodeQuery(name) ++ "=" ++ Encode.encodeQuery(value)) <> encoded(rest)
 
 def serializeQuery(fields: R.Record<String>) -> String:
   String.join(encoded(R.entries(String, fields)), "&")
@@ -358,7 +358,7 @@ def retryFields(-E: Data, original: E, message: String, status: U32, headers: He
       Retry.Provider{Retry.ProviderError{original, message, Some{F.fromU32(status)}, Headers.joined("x-should-retry", R.get(List<&2, String>, fields, "x-should-retry")), Headers.joined("retry-after-ms", R.get(List<&2, String>, fields, "retry-after-ms")), Headers.joined("retry-after", R.get(List<&2, String>, fields, "retry-after"))}}
 
 def retryFailure(-E: Data, original: E, message: String, +metadata: Metadata.Metadata) -> Retry.RequestFailure<E>:
-  retryFields(E, original, message, Metadata.statusResponseMetadata(metadata), Metadata.headers(metadata))
+  retryFields(E, original, message, Metadata.metadataStatus(metadata), Metadata.headers(metadata))
 
 # APIError
 # --------
@@ -399,11 +399,11 @@ def statusKind(status: U32) -> ErrorKind:
 
 def kind(value: APIError) -> ErrorKind:
   match value:
-    case APIError{metadata, _, _}: statusKind(Metadata.statusResponseMetadata(metadata))
+    case APIError{metadata, _, _}: statusKind(Metadata.metadataStatus(metadata))
 
 def status(value: APIError) -> U32:
   match value:
-    case APIError{metadata, _, _}: Metadata.statusResponseMetadata(metadata)
+    case APIError{metadata, _, _}: Metadata.metadataStatus(metadata)
 
 def header(+name: String, headers: Headers.Headers) -> Maybe<&2, String>:
   match headers:
@@ -468,7 +468,7 @@ def statusMessage(status: U32, text: String) -> String:
 def constructed(-E: Data, +metadata: Metadata.Metadata, diagnostic: Diagnostic, text: Maybe<&2, String>) -> Result<&2, &2, ConstructionError<E>, APIError>:
   match text:
     case None{}: Fail{DiagnosticEncodingFailure{metadata, diagnostic}}
-    case Some{text}: Done{APIError{metadata, diagnostic, statusMessage(Metadata.statusResponseMetadata(metadata), text)}}
+    case Some{text}: Done{APIError{metadata, diagnostic, statusMessage(Metadata.metadataStatus(metadata), text)}}
 
 def create(-E: Data, metadata: Metadata.Metadata, +diagnostic: Diagnostic) -> Result<&2, &2, ConstructionError<E>, APIError>:
   constructed(E, metadata, diagnostic, detail(diagnostic))
@@ -487,7 +487,7 @@ def bodies(value: Diagnostic) -> List<&2, Body.Body>:
 
 def providerFailure(value: APIError) -> Body.ProviderFailure:
   match value:
-    case APIError{metadata, diagnostic, message}: Body.ProviderFailure{Some{F.fromU32(Metadata.statusResponseMetadata(metadata))}, message, bodies(diagnostic)}
+    case APIError{metadata, diagnostic, message}: Body.ProviderFailure{Some{F.fromU32(Metadata.metadataStatus(metadata))}, message, bodies(diagnostic)}
 
 def normalize(value: APIError) -> Result<&2, &2, Body.NormalizationError, Body.NormalizedProviderError>:
   Body.normalizeProviderError(providerFailure(value))

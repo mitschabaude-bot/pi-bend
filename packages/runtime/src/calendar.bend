@@ -104,25 +104,25 @@ type Error is Data:
 def epochOffset() -> W.U64: W.multiply(W.fromU32(719528), W.fromU32(86400000))
 def extent() -> W.U64: W.multiply(W.fromU32(yearStart(10000)), W.fromU32(86400000))
 
-def yearInverse(fuel: Nat, +day: U32, +low: U32, +high: U32) -> U32:
+def inverseYear(fuel: Nat, +day: U32, +low: U32, +high: U32) -> U32:
   match fuel:
     case Zero{}: low
     case Succ{rest}:
       +middle = ((low + high + 1) / 2 : U32)
       +fits = U32.is_le(yearStart(middle), day)
-      yearInverse(rest, day, Bool.pick(U32, fits, middle, low), Bool.pick(U32, fits, high, (middle - 1 : U32)))
+      inverseYear(rest, day, Bool.pick(U32, fits, middle, low), Bool.pick(U32, fits, high, (middle - 1 : U32)))
 
-def monthInverse(fuel: Nat, +day: U32, +yearInverse: U32, +candidate: U32) -> U32:
+def inverseMonth(fuel: Nat, +day: U32, +year: U32, +candidate: U32) -> U32:
   match fuel:
     case Zero{}: 1
     case Succ{rest}:
-      Bool.pick(U32, U32.is_ge(day, dayIndex(yearInverse, candidate, 1)), candidate, monthInverse(rest, day, yearInverse, (candidate - 1 : U32)))
+      Bool.pick(U32, U32.is_ge(day, dayIndex(year, candidate, 1)), candidate, inverseMonth(rest, day, year, (candidate - 1 : U32)))
 
-def civil(+day: U32, +millis: U32, +yearInverse: U32, +monthInverse: U32) -> CivilTime:
-  CivilTime{yearInverse, monthInverse, (day - dayIndex(yearInverse, monthInverse, 1) + 1 : U32), (millis / 3600000 : U32), ((millis / 60000) % 60 : U32), ((millis / 1000) % 60 : U32), (millis % 1000 : U32)}
+def civil(+day: U32, +millis: U32, +year: U32, +month: U32) -> CivilTime:
+  CivilTime{year, month, (day - dayIndex(year, month, 1) + 1 : U32), (millis / 3600000 : U32), ((millis / 60000) % 60 : U32), ((millis / 1000) % 60 : U32), (millis % 1000 : U32)}
 
 def inYear(+day: U32, millis: U32, +selected: U32) -> CivilTime:
-  civil(day, millis, selected, monthInverse(12n, day, selected, 12))
+  civil(day, millis, selected, inverseMonth(12n, day, selected, 12))
 
 def same(epoch: W.U64, result: Result<&2, &2, CalendarError, W.U64>) -> Bool:
   match result:
@@ -142,7 +142,7 @@ def checked(epoch: W.U64, +value: CivilTime) -> Result<&2, &2, Error, CivilTime>
 def narrowed(epoch: W.U64, +day: U32, millis: U32, valid: Bool) -> Result<&2, &2, Error, CivilTime>:
   match valid:
     case False{}: Fail{ReconstructionMismatch{}}
-    case True{}: Done{inYear(day, millis, yearInverse(14n, day, 0, 9999))}
+    case True{}: Done{inYear(day, millis, inverseYear(14n, day, 0, 9999))}
 
 def words(epoch: W.U64, day: W.U64, millis: W.U64) -> Result<&2, &2, Error, CivilTime>:
   match day millis:

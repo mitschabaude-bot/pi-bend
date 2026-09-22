@@ -32,7 +32,7 @@ def args(values: List<String>) -> IO(Unit):
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         QueryTest.prepare(String.eq(mode, "pre"), False{}, parent)
-        result : Lookup.Report<String> <- Lookup.lookupAddressLookup(String, Test.endpoint(family), Scalar.decimal(port, 0), Bool.pick(U32, String.eq(mode, "deadline"), 1000, 5000), Abort.signal(String, parent), 42, Scalar.decimal(kind, 0), Name.Name{(97 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
+        result : Lookup.Report<String> <- Lookup.lookupAddress(String, Test.endpoint(family), Scalar.decimal(port, 0), Bool.pick(U32, String.eq(mode, "deadline"), 1000, 5000), Abort.signal(String, parent), 42, Scalar.decimal(kind, 0), Name.Name{(97 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
         report(result)
         Abort.dispose(String, parent)
         IO.print("PASS DNS address lookup")

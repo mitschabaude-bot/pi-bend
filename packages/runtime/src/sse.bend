@@ -16,23 +16,23 @@ type Decoded is Data:
 
 def create() -> LineDecoder: LineDecoder{Reading{Nil{}}}
 
-def lineDecoder(reversed: List<&2, U32>) -> String:
+def lineText(reversed: List<&2, U32>) -> String:
   Utf8.decodeBytes(List.reverse(&2, U32, reversed))
 
 def afterNewline(before: List<&2, U32>, after: List<&2, U32>) -> Decoded:
   match after:
-    case Nil{}: Decoded{create(), lineDecoder(before) <> Nil{}}
-    case head <> tail: Decoded{create(), lineDecoder(before) <> lineDecoder(head <> tail) <> Nil{}}
+    case Nil{}: Decoded{create(), lineText(before) <> Nil{}}
+    case head <> tail: Decoded{create(), lineText(before) <> lineText(head <> tail) <> Nil{}}
 
 # A CR stays pending until the next newline, even if ordinary bytes arrive.
 # This preserves the SDK's emission timing for CR, CRLF and CR-text-LF.
 def consume(decoder: LineDecoder, byte: U32) -> Decoded:
   match decoder byte:
-    case LineDecoder{Reading{reversed}} 10: Decoded{create(), lineDecoder(reversed) <> Nil{}}
+    case LineDecoder{Reading{reversed}} 10: Decoded{create(), lineText(reversed) <> Nil{}}
     case LineDecoder{Reading{reversed}} 13: Decoded{LineDecoder{AfterCarriageReturn{reversed, Nil{}}}, Nil{}}
     case LineDecoder{Reading{reversed}} byte: Decoded{LineDecoder{Reading{byte <> reversed}}, Nil{}}
     case LineDecoder{AfterCarriageReturn{before, after}} 10: afterNewline(before, after)
-    case LineDecoder{AfterCarriageReturn{before, after}} 13: Decoded{LineDecoder{AfterCarriageReturn{after, Nil{}}}, lineDecoder(before) <> Nil{}}
+    case LineDecoder{AfterCarriageReturn{before, after}} 13: Decoded{LineDecoder{AfterCarriageReturn{after, Nil{}}}, lineText(before) <> Nil{}}
     case LineDecoder{AfterCarriageReturn{before, after}} byte: Decoded{LineDecoder{AfterCarriageReturn{before, byte <> after}}, Nil{}}
 
 def prepend(lines: List<&2, String>, reversed: List<&2, String>) -> List<&2, String>:
@@ -153,7 +153,7 @@ def decodeLine(line: String, state: SSEDecoder) -> DecoderDecoded:
     case SNil{}: blank(state)
     case +line: parsed(partition(line, ""), state, line)
 
-def decodeDecoder(state: SSEDecoder, line: String) -> DecoderDecoded:
+def decoderStep(state: SSEDecoder, line: String) -> DecoderDecoded:
   decodeLine(dropCarriage(String.reverse(line)), state)
 
 # Framing used by openai 6.40.0 iterSSEChunks (licenses/openai-sdk.txt).
@@ -227,7 +227,7 @@ def prependStream(event: Maybe<&2, ServerSentEvent>, reversed: List<&2, ServerSe
 def consumeLines(lines: List<&2, String>, result: DecoderDecoded, reversed: List<&2, ServerSentEvent>) -> Fields:
   match lines result:
     case Nil{} DecoderDecoded{decoder, event}: Fields{decoder, prependStream(event, reversed)}
-    case head <> tail DecoderDecoded{decoder, event}: consumeLines(tail, decodeDecoder(decoder, head), prependStream(event, reversed))
+    case head <> tail DecoderDecoded{decoder, event}: consumeLines(tail, decoderStep(decoder, head), prependStream(event, reversed))
 
 def withLines(lines: LineDecoder, result: Fields) -> Stage:
   match result:

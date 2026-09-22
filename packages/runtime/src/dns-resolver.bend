@@ -396,7 +396,7 @@ def lookupWithAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<
 
 # Preserve the deterministic entry point. Dedicated connections isolate delayed
 # replies even when a caller reuses the same ID across alias follow-ups.
-def lookupAddressLookup(-Reason: Data, address: Connect.Address, port: U32, milliseconds: U32, parent: Abort.AbortSignal<Reason>, id: U32, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+def lookupAddress(-Reason: Data, address: Connect.Address, port: U32, milliseconds: U32, parent: Abort.AbortSignal<Reason>, id: U32, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   lookupWithAddressLookup(~U32, ~Id.fixed, Reason, id, address, port, milliseconds, parent, kind, name, maximum)
 
 # OS entropy is the normal resolver source. Each draw is independent; random
@@ -431,7 +431,7 @@ def responseCode(code: U32) -> Id.Cause:
 
 # Pure answer classification. The effectful completion adapter below handles
 # platform socket codes; all remaining typed failures pass through intact.
-def outcomeAddressSearch(-Reason: Data, result: Result<&2, &2, AddressLookupError<Reason>, Selection>) -> Id.Outcome<AddressLookupError<Reason>, Selection>:
+def addressSearchOutcome(-Reason: Data, result: Result<&2, &2, AddressLookupError<Reason>, Selection>) -> Id.Outcome<AddressLookupError<Reason>, Selection>:
   match result:
     case Done{Selection{_, Nil{}}}: Id.SearchRunFailed{Id.EmptyAnswer{}}
     case Done{selection}: Id.Answer{selection}
@@ -488,10 +488,10 @@ def completedAddressSearch(-Reason: Data, result: Result<&2, &2, AddressLookupEr
     case Fail{Transport{Source.Datagram{Source.UdpServersFailed{+report}}}}: datagramCompleted(Reason, Transport{Source.Datagram{Source.UdpServersFailed{report}}}, report)
     case Fail{Transport{Source.Stream{Source.Failed{+report}}}}: streamCompleted(Reason, Transport{Source.Stream{Source.Failed{report}}}, report)
     case Fail{Exchange{+error}}: exchangeFailure(Reason, Exchange{error}, error)
-    case other: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, outcomeAddressSearch(Reason, other))
+    case other: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, addressSearchOutcome(Reason, other))
 
-def requestAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: Context<Environment, Reason>, requestAddressSearch: Id.SearchRunRequest) -> IO(Id.Outcome<AddressLookupError<Reason>, Selection>):
-  match context requestAddressSearch:
+def addressSearchRequest(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: Context<Environment, Reason>, request: Id.SearchRunRequest) -> IO(Id.Outcome<AddressLookupError<Reason>, Selection>):
+  match context request:
     case Context{environment, source, signal, queryOptions, kind, maximum} Id.SearchRunRequest{_, name}:
       do IO<Id.Outcome<AddressLookupError<Reason>, Selection>>:
         result : Result<&2, &2, AddressLookupError<Reason>, Selection> <- exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, source, signal, queryOptions, kind, name, maximum)
@@ -501,7 +501,7 @@ def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id
   match pair:
     case (scope, signal):
       do IO<AddressSearchReport<Reason>>:
-        result : Result<&2, &2, Id.SearchRunError<AddressLookupError<Reason>>, Selection> <- Id.runSearchRun(~Context<Environment, Reason>, ~AddressLookupError<Reason>, ~Selection, ~requestAddressSearch(~Environment, ~draw, ~Reason), Context{environment, source, signal, queryOptions, kind, maximum}, cursor)
+        result : Result<&2, &2, Id.SearchRunError<AddressLookupError<Reason>>, Selection> <- Id.runSearch(~Context<Environment, Reason>, ~AddressLookupError<Reason>, ~Selection, ~addressSearchRequest(~Environment, ~draw, ~Reason), Context{environment, source, signal, queryOptions, kind, maximum}, cursor)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return AddressSearchReport{result, reason}
 
@@ -592,7 +592,7 @@ def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
       configured(~Environment, ~draw, environment, Configuration.Config{Configuration.TransportPrepared{queryOptions, servers}, domains, milliseconds, maximum}, servers, Configuration.enabled(Configuration.Rotate{}, queryOptions))
 
 def create(config: Configuration.Config<Endpoint.Endpoint>) -> IO(Result<&2, &1, Index.Error, Owner>):
-  createWith(~Unit, ~Index.wordIndex, Unit{}, config)
+  createWith(~Unit, ~Index.randomWord, Unit{}, config)
 
 def borrowed(+config: Configuration.Config<Endpoint.Endpoint>, pair: Source.Owner<Configuration.Attempt<Endpoint.Endpoint>> & Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>) -> Owner & Resolver:
   match pair:
@@ -624,7 +624,7 @@ def replaceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Inde
     replaced(previous, next)
 
 def replace(previous: Owner, config: Configuration.Config<Endpoint.Endpoint>) -> IO(Replacement):
-  replaceWith(~Unit, ~Index.wordIndex, Unit{}, previous, config)
+  replaceWith(~Unit, ~Index.randomWord, Unit{}, previous, config)
 
 # Rotation survives across calls; each search owns one deadline spanning all
 # its candidate, alias and server attempts. The supplied parent stays borrowed.
@@ -713,7 +713,7 @@ def prepareWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.I
 type Reports<-Reason: Data> is Data:
   Reports{ipv4: Result<&2, &2, AddressLookupError<Reason>, Selection>, ipv6: Result<&2, &2, AddressLookupError<Reason>, Selection>}
 
-def reportsAddressPair(-Reason: Data, pair: Result<&2, &2, AddressLookupError<Reason>, Selection> & Result<&2, &2, AddressLookupError<Reason>, Selection>) -> Reports<Reason>:
+def addressPairReports(-Reason: Data, pair: Result<&2, &2, AddressLookupError<Reason>, Selection> & Result<&2, &2, AddressLookupError<Reason>, Selection>) -> Reports<Reason>:
   match pair:
     case (ipv4, ipv6): Reports{ipv4, ipv6}
 
@@ -723,7 +723,7 @@ def execute(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdErr
     case Done{Prepared{Id.Queries{ipv4, ipv6}, +source}}:
       do IO<Result<&2, &2, PairSetupError<Reason>, Reports<Reason>>>:
         pair : Result<&2, &2, AddressLookupError<Reason>, Selection> & Result<&2, &2, AddressLookupError<Reason>, Selection> <- Parallel.both(Result<&2, &2, AddressLookupError<Reason>, Selection>, Result<&2, &2, AddressLookupError<Reason>, Selection>, exchangeRequestWith(~Environment, ~draw, Reason, environment, source, signal, ipv4, maximum), exchangeRequestWith(~Environment, ~draw, Reason, environment, source, signal, ipv6, maximum))
-        return Done{reportsAddressPair(Reason, pair)}
+        return Done{addressPairReports(Reason, pair)}
 
 # One candidate, one selected server order and one borrowed total deadline.
 # Separate native exchanges isolate the two transactions. Each owns its retry,
@@ -864,7 +864,7 @@ def createWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2
       configuredTcpResolver(~Environment, ~draw, environment, Config{servers, domains, policy, request, milliseconds, maximum, rotate}, servers, rotate)
 
 def createTcpResolver(config: Config) -> IO(Result<&2, &1, Index.Error, TcpResolverOwner>):
-  createWithTcpResolver(~Unit, ~Index.wordIndex, Unit{}, config)
+  createWithTcpResolver(~Unit, ~Index.randomWord, Unit{}, config)
 
 def borrowedTcpResolver(config: Config, pair: Source.Owner<Source.Server> & Source.ServerSource<Source.Server>) -> TcpResolverOwner & TcpResolver:
   match config pair:
@@ -898,7 +898,7 @@ def replaceWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&
     replacedTcpResolver(previous, next)
 
 def replaceTcpResolver(previous: TcpResolverOwner, config: Config) -> IO(TcpResolverReplacement):
-  replaceWithTcpResolver(~Unit, ~Index.wordIndex, Unit{}, previous, config)
+  replaceWithTcpResolver(~Unit, ~Index.randomWord, Unit{}, previous, config)
 
 # Rotation survives across calls; each search owns one deadline spanning all
 # its candidate, alias and server attempts. The supplied parent stays borrowed.
@@ -980,8 +980,8 @@ def completedPairSearch(~Reason: Data, priority: Priority, result: Result<&2, &2
         b : Classified<Result<&2, &2, AddressLookupError<Reason>, Selection>> <- classify(~Reason, ipv6)
         return merged(Reason, merge(Result<&2, &2, AddressLookupError<Reason>, Selection>, priority, a, b))
 
-def requestPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: PairSearchContext<Environment, Reason>, requestPairSearch: Id.SearchRunRequest) -> IO(Id.Outcome<Failure<Reason>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>):
-  match context requestPairSearch:
+def pairSearchRequest(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: PairSearchContext<Environment, Reason>, request: Id.SearchRunRequest) -> IO(Id.Outcome<Failure<Reason>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>):
+  match context request:
     case PairSearchContext{environment, source, signal, queryOptions, priority, maximum} Id.SearchRunRequest{_, name}:
       do IO<Id.Outcome<Failure<Reason>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>>:
         result : Result<&2, &2, PairSetupError<Reason>, Reports<Reason>> <- exchangeWithAddressPair(~Environment, ~draw, Reason, environment, source, signal, queryOptions, name, maximum)
@@ -991,7 +991,7 @@ def scopedPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2,
   match pair:
     case (scope, signal):
       do IO<PairSearchReport<Reason>>:
-        result : Result<&2, &2, Id.SearchRunError<Failure<Reason>>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>> <- Id.runSearchRun(~PairSearchContext<Environment, Reason>, ~Failure<Reason>, ~PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>, ~requestPairSearch(~Environment, ~draw, ~Reason), PairSearchContext{environment, source, signal, queryOptions, priority, maximum}, cursor)
+        result : Result<&2, &2, Id.SearchRunError<Failure<Reason>>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>> <- Id.runSearch(~PairSearchContext<Environment, Reason>, ~Failure<Reason>, ~PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>, ~pairSearchRequest(~Environment, ~draw, ~Reason), PairSearchContext{environment, source, signal, queryOptions, priority, maximum}, cursor)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return PairSearchReport{result, reason}
 
@@ -1028,7 +1028,7 @@ type PairHostsResolverDNS<-Reason: Data> is Data:
   PairHostsResolverInvalidName{error: Id.PresentationError}
   PairHostsResolverCompleted{report: PairSearchReport<Reason>}
 
-def networkPairHostsResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, resolver: Resolver, parent: Abort.AbortSignal<Reason>, priority: Priority, input: Result<&2, &2, Id.PresentationError, Id.Input>) -> IO(PairHostsResolverDNS<Reason>):
+def networkPairLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, resolver: Resolver, parent: Abort.AbortSignal<Reason>, priority: Priority, input: Result<&2, &2, Id.PresentationError, Id.Input>) -> IO(PairHostsResolverDNS<Reason>):
   match input:
     case Fail{error}: IO.pure(PairHostsResolverDNS<Reason>, PairHostsResolverInvalidName{error})
     case Done{Id.Input{name, dots, absolute}}:
@@ -1041,7 +1041,7 @@ type PairHostsResolverContext<-Environment: Data, -Reason: Data> is Data:
 
 def requested(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: PairHostsResolverContext<Environment, Reason>, family: Hosts.Family, text: String) -> IO(PairHostsResolverDNS<Reason>):
   match context:
-    case PairHostsResolverContext{environment, resolver, parent, priority}: networkPairHostsResolver(~Environment, ~draw, ~Reason, environment, resolver, parent, priority, Id.prepare(text))
+    case PairHostsResolverContext{environment, resolver, parent, priority}: networkPairLookup(~Environment, ~draw, ~Reason, environment, resolver, parent, priority, Id.prepare(text))
 
 # Any local family satisfies files-first lookup. Preserve source order and
 # duplicates; do not query DNS to fill in an absent family. Only a complete
@@ -1059,15 +1059,15 @@ type Issue<-LookupError: Data> is Data:
   Issue{position: Nat, error: IPv6Scope.Error<LookupError>}
 
 type ServersReport<-LookupError: Data> is Data:
-  ServersReport{servers: List<&2, Source.Server>, issuesServers: List<&2, Issue<LookupError>>}
+  ServersReport{servers: List<&2, Source.Server>, issues: List<&2, Issue<LookupError>>}
 
 type Configuration<-LookupError: Data> is Data:
   Configuration{settings: Configuration.Settings, endpoints: ServersReport<LookupError>}
 
 type State<-LookupError: Data> is Data:
-  State{position: Nat, servers: List<&2, Source.Server>, issuesServers: List<&2, Issue<LookupError>>}
+  State{position: Nat, servers: List<&2, Source.Server>, issues: List<&2, Issue<LookupError>>}
 
-def issuesServers(-LookupError: Data, position: Nat, failure: Maybe<&2, IPv6Scope.Error<LookupError>>, previous: List<&2, Issue<LookupError>>) -> List<&2, Issue<LookupError>>:
+def serverIssues(-LookupError: Data, position: Nat, failure: Maybe<&2, IPv6Scope.Error<LookupError>>, previous: List<&2, Issue<LookupError>>) -> List<&2, Issue<LookupError>>:
   match failure:
     case None{}: previous
     case Some{error}: Issue{position, error} <> previous
@@ -1075,28 +1075,28 @@ def issuesServers(-LookupError: Data, position: Nat, failure: Maybe<&2, IPv6Scop
 def added(-LookupError: Data, state: State<LookupError>, report: Configuration.ScopeReport<LookupError>) -> State<LookupError>:
   match state report:
     case State{+position, servers, previous} Configuration.ScopeReport{address, failure}:
-      State{(position + 1n : Nat), Source.Server{address, 53} <> servers, issuesServers(LookupError, position, failure, previous)}
+      State{(position + 1n : Nat), Source.Server{address, 53} <> servers, serverIssues(LookupError, position, failure, previous)}
 
 # Resolve in configuration order. Duplicates remain distinct entries, and an
 # invalid scope retains its server with scope zero plus a positional diagnostic.
-def collectWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), +context: Context, addresses: List<&2, Configuration.Address>, state: State<LookupError>) -> IO(ServersReport<LookupError>):
+def collectWith(~LookupError: Data, ~Context: Data, ~lookupAddress: Context -> String -> IO(Result<&2, &2, LookupError, U32>), +context: Context, addresses: List<&2, Configuration.Address>, state: State<LookupError>) -> IO(ServersReport<LookupError>):
   match addresses state:
     case Nil{} State{_, servers, failures}: IO.pure(ServersReport<LookupError>, ServersReport{List.reverse(&2, Source.Server, servers), List.reverse(&2, Issue<LookupError>, failures)})
     case address <> rest previous:
       do IO<ServersReport<LookupError>>:
-        report : Configuration.ScopeReport<LookupError> <- Configuration.resolveWithScope(~LookupError, ~Context, ~lookup, context, address)
-        collectWith(~LookupError, ~Context, ~lookup, context, rest, added(LookupError, previous, report))
+        report : Configuration.ScopeReport<LookupError> <- Configuration.resolveWithScope(~LookupError, ~Context, ~lookupAddress, context, address)
+        collectWith(~LookupError, ~Context, ~lookupAddress, context, rest, added(LookupError, previous, report))
 
-def resolveWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, addresses: List<&2, Configuration.Address>) -> IO(ServersReport<LookupError>):
-  collectWith(~LookupError, ~Context, ~lookup, context, addresses, State{0n, Nil{}, Nil{}})
+def resolveWith(~LookupError: Data, ~Context: Data, ~lookupAddress: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, addresses: List<&2, Configuration.Address>) -> IO(ServersReport<LookupError>):
+  collectWith(~LookupError, ~Context, ~lookupAddress, context, addresses, State{0n, Nil{}, Nil{}})
 
 # Preserve all source settings for the subsequent search/options/reload policy.
 # This phase resolves addresses only; it never applies partial option values.
-def prepareWithServers(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, settings: Configuration.Settings) -> IO(Configuration<LookupError>):
+def prepareWithServers(~LookupError: Data, ~Context: Data, ~lookupAddress: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, settings: Configuration.Settings) -> IO(Configuration<LookupError>):
   match settings:
     case Configuration.Settings{+servers, search, queryOptions, sortlist, diagnostics}:
       do IO<Configuration<LookupError>>:
-        endpoints : ServersReport<LookupError> <- resolveWith(~LookupError, ~Context, ~lookup, context, servers)
+        endpoints : ServersReport<LookupError> <- resolveWith(~LookupError, ~Context, ~lookupAddress, context, servers)
         return Configuration{Configuration.Settings{servers, search, queryOptions, sortlist, diagnostics}, endpoints}
 
 # Keep the OS effect separate from the injectable pure scope policy.
@@ -1143,10 +1143,10 @@ def endpoint(server: Source.Server) -> Endpoint.Endpoint:
     case Source.Server{Connect.V4{ip}, port}: Endpoint.EndpointV4{ip, port}
     case Source.Server{Connect.V6{ip, scope}, port}: Endpoint.EndpointV6{ip, port, scope}
 
-def endpointsSystemConfig(servers: List<&2, Source.Server>) -> List<&2, Endpoint.Endpoint>:
+def systemEndpoints(servers: List<&2, Source.Server>) -> List<&2, Endpoint.Endpoint>:
   match servers:
     case Nil{}: Nil{}
-    case first <> rest: endpoint(first) <> endpointsSystemConfig(rest)
+    case first <> rest: endpoint(first) <> systemEndpoints(rest)
 
 def configuredSystemConfig(-DecodeError: Data, source: SystemServersReport, search: Configuration.Configuration, result: Result<&2, &2, Configuration.Error, Configuration.Config<Endpoint.Endpoint>>) -> Result<&2, &2, SystemConfigError<DecodeError>, SystemConfigPrepared>:
   match result:
@@ -1156,7 +1156,7 @@ def configuredSystemConfig(-DecodeError: Data, source: SystemServersReport, sear
 def checkedSystemConfig(-DecodeError: Data, source: SystemServersReport, servers: List<&2, Source.Server>, milliseconds: U32, maximum: U32, result: Result<&2, &2, List<&2, Configuration.Diagnostic>, Configuration.Configuration>) -> Result<&2, &2, SystemConfigError<DecodeError>, SystemConfigPrepared>:
   match result:
     case Fail{diagnostics}: Fail{InvalidOptions{source, diagnostics}}
-    case Done{+search}: configuredSystemConfig(DecodeError, source, search, Configuration.prepareConfiguration(Endpoint.Endpoint, endpointsSystemConfig(servers), milliseconds, maximum, search))
+    case Done{+search}: configuredSystemConfig(DecodeError, source, search, Configuration.prepareConfiguration(Endpoint.Endpoint, systemEndpoints(servers), milliseconds, maximum, search))
 
 # Strict option and transport-plan acceptance precede owner creation. Other
 # diagnostics remain explicit in the complete source report on either outcome.

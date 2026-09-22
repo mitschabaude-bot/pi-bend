@@ -68,7 +68,7 @@ def finish(+runtime: Runtime(), active: Maybe<&2, L.ActiveRun>) -> IO(Step):
     case None{}: IO.pure(Step, Step{None{}, "idle"})
     case Some{run}:
       do IO<Step>:
-        won : Bool <- R.finishRunRuntime(Unit, Unit, String, String, runtime, run)
+        won : Bool <- R.finishRuntimeRun(Unit, Unit, String, String, runtime, run)
         Test.assertion(won, "fixture must finish its current run")
         R.waitForIdleRuntime(Unit, Unit, String, String, runtime)
         return Step{None{}, "finished"}

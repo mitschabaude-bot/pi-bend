@@ -34,9 +34,9 @@ law continuation_output:
 def pendingLines(pending: Line.Pending) -> List<&2, String>:
   match pending:
     case Line.Reading{Nil{}}: Nil{}
-    case Line.Reading{head <> tail}: Line.lineDecoder(head <> tail) <> Nil{}
-    case Line.AfterCarriageReturn{before, Nil{}}: Line.lineDecoder(before) <> Nil{}
-    case Line.AfterCarriageReturn{before, head <> tail}: Line.lineDecoder(before) <> Line.lineDecoder(head <> tail) <> Nil{}
+    case Line.Reading{head <> tail}: Line.lineText(head <> tail) <> Nil{}
+    case Line.AfterCarriageReturn{before, Nil{}}: Line.lineText(before) <> Nil{}
+    case Line.AfterCarriageReturn{before, head <> tail}: Line.lineText(before) <> Line.lineText(head <> tail) <> Nil{}
 
 law flush_result:
   for +pending: Line.Pending

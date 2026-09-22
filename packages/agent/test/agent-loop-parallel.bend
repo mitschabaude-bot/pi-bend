@@ -203,7 +203,7 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     trace : List<&2, String> <- consume(gates, iterator, Nil{}, None{})
     Test.assertion(String.eq(String.join(trace, "|"), Bool.pick(String, sequential(mode), "end:tool-1|message:tool-1|end:tool-2|message:tool-2|turn:tool-1,tool-2", "end:tool-2|end:tool-1|message:tool-1|message:tool-2|turn:tool-1,tool-2")), "execution-end completion order; message-end and turn-end source order")
-    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+    outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
     checkOutcome(outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
     W.disposeStreamRun(Unit, String, String, String, run)

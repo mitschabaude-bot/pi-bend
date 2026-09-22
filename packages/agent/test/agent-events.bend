@@ -56,7 +56,7 @@ def requireRun(result: Fixture.Claim()) -> IO(Life.ActiveRun):
 def deliver(+runtime: Fixture.Runtime(), run: Life.ActiveRun, delivery: Emission.Emission<Events.DeliveryError<String>>, reply: Chan(Outcome())) -> IO(Unit):
   do IO<Unit>:
     result : Outcome() <- Emission.wait(Events.DeliveryError<String>, delivery)
-    finished : Bool <- Runtime.finishRunRuntime(Unit, Unit, String, String, runtime, run)
+    finished : Bool <- Runtime.finishRuntimeRun(Unit, Unit, String, String, runtime, run)
     Test.assertion(finished, "run finalizes after awaited delivery, including failure")
     sent : Bool <- Chan.send(Outcome(), reply, result)
     R.requireSent(sent)

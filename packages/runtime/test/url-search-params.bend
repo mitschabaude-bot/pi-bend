@@ -56,7 +56,7 @@ def operation(parts: List<&2, String>, +params: Params.URLSearchParams) -> Param
     case "s" <> name <> value <> Nil{}: updated(params, Params.set(params, text(name), text(value)))
     case "d" <> name <> value <> Nil{}: updated(params, Params.delete(params, text(name), optional(value)))
     case "k" <> Nil{}: (params, values(Params.keys(params)))
-    case "v" <> Nil{}: (params, values(Params.valuesSearchParams(params)))
+    case "v" <> Nil{}: (params, values(Params.searchParamValues(params)))
     case "r" <> Nil{}: updated(params, Params.sort(params))
     case "g" <> name <> Nil{}: (params, found(Params.get(params, text(name))))
     case "l" <> name <> Nil{}: (params, values(Params.getAll(params, text(name))))

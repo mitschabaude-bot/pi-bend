@@ -46,7 +46,7 @@ def closeChecked(value: Reader.CloseResult<Source.SocketSourceError<String>>) ->
 
 def stop(cursor: Reader.Cursor<Source.SocketSourceError<String>>, capture: Capture, terminal: String) -> IO(String):
   do IO<String>:
-    closed : Reader.CloseResult<Source.SocketSourceError<String>> <- Reader.closeResponseReader(Source.SocketSourceError<String>, cursor)
+    closed : Reader.CloseResult<Source.SocketSourceError<String>> <- Reader.closeReader(Source.SocketSourceError<String>, cursor)
     closeChecked(closed)
     return summary(capture, terminal)
 
@@ -60,7 +60,7 @@ def loop(fuel: Nat, next: Reader.ResponseReaderNext<Source.SocketSourceError<Str
         case True{}: stop(cursor, event(capture, value), "early")
         case False{}:
           do IO<String>:
-            next : Reader.ResponseReaderNext<Source.SocketSourceError<String>> <- Reader.nextResponseReader(Source.SocketSourceError<String>, cursor)
+            next : Reader.ResponseReaderNext<Source.SocketSourceError<String>> <- Reader.readerNext(Source.SocketSourceError<String>, cursor)
             loop(rest, next, event(capture, value), False{})
 
 def sourceClosed(result: Result<&2, &2, Source.SocketSourceError<String>, Unit>) -> IO(Unit):
@@ -72,7 +72,7 @@ def stream(pair: Source.Owner<String> & Reader.Source<Source.SocketSourceError<S
   match pair:
     case (owner, source):
       do IO<String>:
-        next : Reader.ResponseReaderNext<Source.SocketSourceError<String>> <- Reader.nextResponseReader(Source.SocketSourceError<String>, Reader.createResponseReader(Source.SocketSourceError<String>, source, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
+        next : Reader.ResponseReaderNext<Source.SocketSourceError<String>> <- Reader.readerNext(Source.SocketSourceError<String>, Reader.createReader(Source.SocketSourceError<String>, source, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
         text : String <- loop(256n, next, Capture{0, Nil{}, False{}}, early)
         result : Result<&2, &2, Source.SocketSourceError<String>, Unit> <- Source.dispose(String, owner)
         sourceClosed(result)

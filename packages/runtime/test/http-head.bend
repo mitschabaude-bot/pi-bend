@@ -21,7 +21,7 @@ def strings(values: List<&2, String>) -> List<&2, String>:
 def shown(+head: Head.ResponseHead, rest: List<&2, U32>) -> String:
   match head:
     case Head.ResponseHead{+status, +raw}:
-      +headers = Head.headersHead(Head.ResponseHead{status, raw})
+      +headers = Head.headHeaders(Head.ResponseHead{status, raw})
       Status.shown(Done{status}) ++ "#" ++ String.join(fields(raw), "|") ++ "#" ++ String.join(fields(Headers.entries(headers)), "|") ++ "#" ++ String.join(strings(Headers.getSetCookie(headers)), "|") ++ "#" ++ numbers(rest)
 
 def error(value: Head.ReadError) -> String:

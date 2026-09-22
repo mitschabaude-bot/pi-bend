@@ -45,7 +45,7 @@ def dispatch(context: Absolute.Context, kind: Char, text: String) -> String:
   match kind:
     case 'f': form(Strict.parseFormStrict(text))
     case 'q': form(Strict.queryFormStrict(text))
-    case 'e': Text.showText(Encode.encodeQueryEncode(text))
+    case 'e': Text.showText(Encode.encodeQuery(text))
     case _: url(Client.responsesURL(context, text))
 
 def run(context: Absolute.Context, arg: String) -> String:

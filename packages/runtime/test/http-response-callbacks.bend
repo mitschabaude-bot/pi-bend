@@ -50,7 +50,7 @@ def started(+reader: Ops.Read(String, Input.State), +closer: Ops.Close(String, I
         Input.ended(final)
     case SCon{action, rest} Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("head:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
+        IO.print("head:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
         next : Response.Next<String, Input.State> <- advance(reader, closer, action, body)
         actions(reader, closer, rest, next)
 

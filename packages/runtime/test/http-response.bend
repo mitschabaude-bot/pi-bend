@@ -100,7 +100,7 @@ def started(todo: String, value: Result<&2, &1, Progress.ResponseProgressError<S
         ended(final)
     case SCon{action, rest} Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("head:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
+        IO.print("head:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
         next : Response.Next<String, State> <- advance(action, body)
         actions(rest, next)
 

@@ -102,8 +102,8 @@ type Test is Data:
   CountMatches{tests: List<&2, Test>, count: B.BigNat, bounds: CountBounds}
   CountNext{matched: Bool, remaining: List<&2, Test>, count: B.BigNat, bounds: CountBounds}
 
-def finite(number: F.Decoded) -> Bool:
-  match number:
+def finite(num: F.Decoded) -> Bool:
+  match num:
     case F.Finite{_, _, _}: True{}
     case _: False{}
 
@@ -111,8 +111,8 @@ def matchesType(kind: JsonType, value: V.Value) -> Bool:
   match kind value:
     case NullType{} V.Null{}: True{}
     case BooleanType{} V.Boolean{_}: True{}
-    case NumberType{} V.Number{number}: finite(F.decode(number))
-    case IntegerType{} V.Number{+number}: finite(F.decode(number)) && F.isInteger(number)
+    case NumberType{} V.Number{num}: finite(F.decode(num))
+    case IntegerType{} V.Number{+num}: finite(F.decode(num)) && F.isInteger(num)
     case StringType{} V.Text{_}: True{}
     case ArrayType{} V.ArrayValue{_}: True{}
     case ObjectType{} V.ObjectValue{_}: True{}
@@ -380,15 +380,15 @@ def extraSummary(keys: List<&2, String>, path: List<&2, String>) -> List<&2, Err
     case Nil{}: Nil{}
     case first <> rest: EmitIssue{Issue{path, AdditionalFields{first <> rest}}} <> Nil{}
 
-def objectTasksErrors(+declared: R.Record<Schema>, required: List<&2, String>, +additional: Schema, +values: R.Record<V.Value>, +path: List<&2, String>) -> List<&2, ErrorsTask>:
+def objectErrorTasks(+declared: R.Record<Schema>, required: List<&2, String>, +additional: Schema, +values: R.Record<V.Value>, +path: List<&2, String>) -> List<&2, ErrorsTask>:
   +extras = extraFields(R.entries(V.Value, values), declared)
   List.append(&2, ErrorsTask, requiredTasks(missing(required, values), path), List.append(&2, ErrorsTask, extraTasks(extras, additional, path), List.append(&2, ErrorsTask, extraSummary(invalidExtras(extras, additional), path), propertyTasks(R.entries(Schema, declared), values, path))))
 
-def arrayTasksErrors(values: List<&2, V.Value>, prefix: List<&2, Schema>, +items: Schema, +path: List<&2, String>, +index: Nat) -> List<&2, ErrorsTask>:
+def arrayErrorTasks(values: List<&2, V.Value>, prefix: List<&2, Schema>, +items: Schema, +path: List<&2, String>, +index: Nat) -> List<&2, ErrorsTask>:
   match values prefix:
     case Nil{} _: Nil{}
-    case head <> tail Nil{}: ErrorsVisit{items, head, child(path, Nat.show(index))} <> arrayTasksErrors(tail, Nil{}, items, path, index + 1n)
-    case head <> tail schema <> rest: ErrorsVisit{schema, head, child(path, Nat.show(index))} <> arrayTasksErrors(tail, rest, items, path, index + 1n)
+    case head <> tail Nil{}: ErrorsVisit{items, head, child(path, Nat.show(index))} <> arrayErrorTasks(tail, Nil{}, items, path, index + 1n)
+    case head <> tail schema <> rest: ErrorsVisit{schema, head, child(path, Nat.show(index))} <> arrayErrorTasks(tail, rest, items, path, index + 1n)
 
 # Upstream reports all tuple-prefix failures but stops at the first invalid
 # additional item. The native node names that validation boundary explicitly.
@@ -422,9 +422,9 @@ def expand(schema: Schema, value: V.Value, +path: List<&2, String>) -> List<&2, 
       unionTasks(B.isZero(matched), True{}, matched, schemas, value, path)
     case Conditional{condition, consequent, alternative} +value: conditionalTasks(check(condition, value), consequent, alternative, value, path)
     case Not{inner} value: emitUnless(Bool.not(check(inner, value)), path, NegatedSchema{})
-    case Minimum{+limit, +inclusive} V.Number{number}: emitUnless(lowerBound(F.compare(number, limit), inclusive), path, NumericMinimum{limit, inclusive})
-    case Maximum{+limit, +inclusive} V.Number{number}: emitUnless(upperBound(F.compare(number, limit), inclusive), path, NumericMaximum{limit, inclusive})
-    case MultipleOf{+divisor} V.Number{number}: emitUnless(multipleOf(number, divisor), path, NumericMultipleOf{divisor})
+    case Minimum{+limit, +inclusive} V.Number{num}: emitUnless(lowerBound(F.compare(num, limit), inclusive), path, NumericMinimum{limit, inclusive})
+    case Maximum{+limit, +inclusive} V.Number{num}: emitUnless(upperBound(F.compare(num, limit), inclusive), path, NumericMaximum{limit, inclusive})
+    case MultipleOf{+divisor} V.Number{num}: emitUnless(multipleOf(num, divisor), path, NumericMultipleOf{divisor})
     case MultipleOf{_} _: Nil{}
     case UniqueItems{} V.ArrayValue{values}: emitUnless(unique(values), path, DuplicateItems{})
     case UniqueItems{} _: Nil{}
@@ -440,8 +440,8 @@ def expand(schema: Schema, value: V.Value, +path: List<&2, String>) -> List<&2, 
     case Contains{inner, +bounds} V.ArrayValue{values}:
       +actual = contained(values, inner)
       emitUnless(inBounds(actual, bounds), path, ContainsCount{actual, bounds})
-    case Object{declared, required, additional} V.ObjectValue{values}: objectTasksErrors(declared, required, additional, values, path)
-    case Array{prefix, items} V.ArrayValue{values}: arrayTasksErrors(values, prefix, items, path, 0n)
+    case Object{declared, required, additional} V.ObjectValue{values}: objectErrorTasks(declared, required, additional, values, path)
+    case Array{prefix, items} V.ArrayValue{values}: arrayErrorTasks(values, prefix, items, path, 0n)
     case AdditionalItems{+offset, items} V.ArrayValue{values}: additionalTasks(dropItems(values, offset), items, path, offset)
     case AdditionalItems{_, _} _: Nil{}
     case Minimum{_, _} _: Nil{}
@@ -501,8 +501,8 @@ def tryBoolean(value: V.Value) -> Maybe<&2, V.Value>:
     case V.Null{}: Some{V.Boolean{False{}}}
     case V.Boolean{value}: Some{V.Boolean{value}}
     case V.Text{text}: booleanText(text)
-    case V.Number{+number}:
-      Bool.pick(Maybe<&2, V.Value>, V.equal(V.Number{number}, V.Number{F.fromU32(0)}), Some{V.Boolean{False{}}}, Bool.pick(Maybe<&2, V.Value>, V.equal(V.Number{number}, V.Number{F.fromU32(1)}), Some{V.Boolean{True{}}}, None{}))
+    case V.Number{+num}:
+      Bool.pick(Maybe<&2, V.Value>, V.equal(V.Number{num}, V.Number{F.fromU32(0)}), Some{V.Boolean{False{}}}, Bool.pick(Maybe<&2, V.Value>, V.equal(V.Number{num}, V.Number{F.fromU32(1)}), Some{V.Boolean{True{}}}, None{}))
     case _: None{}
 
 # TypeBox also accepts decimal bigint-literal strings within the exact integer
@@ -553,7 +553,7 @@ def tryNumber(value: V.Value) -> Maybe<&2, V.Value>:
   match value:
     case V.Null{}: Some{V.Number{F.fromU32(0)}}
     case V.Boolean{flag}: Some{V.Number{F.fromU32(Bool.pick(U32, flag, 1, 0))}}
-    case V.Number{+number}: Bool.pick(Maybe<&2, V.Value>, finite(F.decode(number)), Some{V.Number{number}}, None{})
+    case V.Number{+num}: Bool.pick(Maybe<&2, V.Value>, finite(F.decode(num)), Some{V.Number{num}}, None{})
     case V.Text{+text}:
       +parsed = Number.toNumber(text)
       parsedNumber(finite(F.decode(parsed)), parsed, text)
@@ -563,7 +563,7 @@ def tryNull(value: V.Value) -> Maybe<&2, V.Value>:
   match value:
     case V.Null{}: Some{V.Null{}}
     case V.Boolean{flag}: Bool.pick(Maybe<&2, V.Value>, flag, None{}, Some{V.Null{}})
-    case V.Number{number}: Bool.pick(Maybe<&2, V.Value>, V.equal(V.Number{number}, V.Number{F.fromU32(0)}), Some{V.Null{}}, None{})
+    case V.Number{num}: Bool.pick(Maybe<&2, V.Value>, V.equal(V.Number{num}, V.Number{F.fromU32(0)}), Some{V.Null{}}, None{})
     case V.Text{+text}:
       +lower = String.to_lower(text)
       Bool.pick(Maybe<&2, V.Value>, String.eq(lower, "null") || String.eq(lower, "undefined") || String.eq(text, "") || String.eq(text, "0"), Some{V.Null{}}, None{})
@@ -576,7 +576,7 @@ def convertedOrOriginal(original: V.Value, converted: Maybe<&2, V.Value>) -> Con
 
 def integerResult(value: Maybe<&2, V.Value>) -> Maybe<&2, V.Value>:
   match value:
-    case Some{V.Number{number}}: Some{V.Number{F.truncate(number)}}
+    case Some{V.Number{num}}: Some{V.Number{F.truncate(num)}}
     case other: other
 
 def formattedNumber(text: Maybe<&2, String>) -> Converted():
@@ -588,7 +588,7 @@ def convertString(value: V.Value) -> Converted():
   match value:
     case V.Null{}: Done{V.Text{"null"}}
     case V.Boolean{flag}: Done{V.Text{Bool.pick(String, flag, "true", "false")}}
-    case V.Number{number}: formattedNumber(F.toDecimal(number))
+    case V.Number{num}: formattedNumber(F.toDecimal(num))
     case other: Done{other}
 
 def convertPrimitive(primitive: Primitive, +value: V.Value) -> Converted():
@@ -606,14 +606,14 @@ type LiteralValue is Data:
   NumberLiteral{value: F.F64}
   StringLiteral{value: String}
 
-def literalValue(literal: LiteralValue) -> V.Value:
-  match literal:
+def literalValue(value: LiteralValue) -> V.Value:
+  match value:
     case BooleanLiteral{value}: V.Boolean{value}
     case NumberLiteral{value}: V.Number{value}
     case StringLiteral{value}: V.Text{value}
 
-def literalPrimitive(literal: LiteralValue) -> Primitive:
-  match literal:
+def literalPrimitive(value: LiteralValue) -> Primitive:
+  match value:
     case BooleanLiteral{_}: ToBoolean{}
     case NumberLiteral{_}: ToNumber{}
     case StringLiteral{_}: ToString{}
@@ -652,7 +652,7 @@ def branchSchemas(branches: List<&2, Branch<Policy>>) -> List<&2, Schema>:
     case Nil{}: Nil{}
     case Branch{schema, _} <> rest: schema <> branchSchemas(rest)
 
-def unionConvert(+branches: List<&2, Branch<Policy>>) -> Policy:
+def unionPolicy(+branches: List<&2, Branch<Policy>>) -> Policy:
   Union{branches, Any{branchSchemas(branches)}}
 
 # An already-valid branch preserves the original input. Converted candidates
@@ -732,7 +732,7 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
     case Visit{ObjectFields{fields, additional}, value} <> rest values: run(scheduleObject(fields, additional, value, rest), values)
     case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
     case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
-    case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convertPrimitive(literalPrimitive(literal), original))} <> rest, values)
+    case Visit{Literal{+expected}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(expected), original, convertPrimitive(literalPrimitive(expected), original))} <> rest, values)
     case Visit{Union{branches, accepted}, original} <> rest values: run(scheduleUnion(branches, accepted, original, rest), values)
     case TryAlternative{_, Nil{}, original} <> rest values: run(rest, original <> values)
     case TryAlternative{+schema, Branch{_, policy} <> remaining, +original} <> rest values: run(Visit{policy, original} <> SelectAlternative{schema, remaining, original} <> rest, values)
@@ -794,7 +794,7 @@ def arrayAt(values: List<&2, V.Value>, +key: String, +index: Nat) -> Maybe<&2, V
       Bool.pick(Unit -> Maybe<&2, V.Value>, String.eq(key, Nat.show(index)),
         _ => Some{head}, _ => arrayAt(rest, key, index + 1n))(Unit{})
 
-def fieldPointer(value: V.Value, key: String) -> Maybe<&2, V.Value>:
+def pointerField(value: V.Value, key: String) -> Maybe<&2, V.Value>:
   match value:
     case V.ObjectValue{fields}: R.get(V.Value, fields, key)
     case V.ArrayValue{values}: arrayAt(values, key, 0n)
@@ -804,7 +804,7 @@ def traverse(path: List<&2, String>, value: Maybe<&2, V.Value>) -> Maybe<&2, V.V
   match path value:
     case _ None{}: None{}
     case Nil{} value: value
-    case key <> rest Some{value}: traverse(rest, fieldPointer(value, key))
+    case key <> rest Some{value}: traverse(rest, pointerField(value, key))
 
 def get(value: V.Value, pointer: Pointer) -> Maybe<&2, V.Value>:
   match pointer:
@@ -848,7 +848,7 @@ type Constructor is Data:
   Negation{}
   LoadConditional{}
   Properties{keys: List<&2, String>}
-  Additional{propertiesLoad: R.Record<Schema>}
+  Additional{properties: R.Record<Schema>}
   LoadTupleItems{}
   AllItems{}
   ExtraItems{prefix: List<&2, Schema>}
@@ -888,7 +888,7 @@ def conditional(value: V.Value, +whole: R.Record<V.Value>, +path: List<&2, Strin
   alternative = Maybe.default(&2, V.Value, R.get(V.Value, whole, "else"), V.Boolean{True{}})
   Done{Read{value, path} <> Read{consequent, sibling(path, "then")} <> Read{alternative, sibling(path, "else")} <> Build{LoadConditional{}, 3n} <> Nil{}}
 
-def kindLoad(+name: String) -> Maybe<&2, JsonType>:
+def jsonType(+name: String) -> Maybe<&2, JsonType>:
   Bool.pick(Maybe<&2, JsonType>, String.eq(name, "null"), Some{NullType{}}, Bool.pick(Maybe<&2, JsonType>, String.eq(name, "boolean"), Some{BooleanType{}}, Bool.pick(Maybe<&2, JsonType>, String.eq(name, "number"), Some{NumberType{}}, Bool.pick(Maybe<&2, JsonType>, String.eq(name, "integer"), Some{IntegerType{}}, Bool.pick(Maybe<&2, JsonType>, String.eq(name, "string"), Some{StringType{}}, Bool.pick(Maybe<&2, JsonType>, String.eq(name, "array"), Some{ArrayType{}}, Bool.pick(Maybe<&2, JsonType>, String.eq(name, "object"), Some{ObjectType{}}, None{})))))))
 
 def typeNode(value: Maybe<&2, JsonType>, path: List<&2, String>) -> Loaded():
@@ -898,7 +898,7 @@ def typeNode(value: Maybe<&2, JsonType>, path: List<&2, String>) -> Loaded():
 
 def atomicType(value: V.Value, path: List<&2, String>) -> Loaded():
   match value:
-    case V.Text{name}: typeNode(kindLoad(name), path)
+    case V.Text{name}: typeNode(jsonType(name), path)
     case _: invalid(Schema, path, "a JSON type name")
 
 def typeMembers(values: List<&2, V.Value>, +path: List<&2, String>) -> List<&2, LoadTask>:
@@ -913,7 +913,7 @@ def pushed(value: Loaded()) -> Scheduled():
 
 def typed(value: V.Value, +path: List<&2, String>) -> Scheduled():
   match value:
-    case V.Text{name}: pushed(typeNode(kindLoad(name), path))
+    case V.Text{name}: pushed(typeNode(jsonType(name), path))
     case V.ArrayValue{+values}: Done{List.append(&2, LoadTask, typeMembers(values, path), Build{TypeAlternatives{}, List.length(&2, V.Value, values)} <> Nil{})}
     case _: invalid(List<&2, LoadTask>, path, "a type name or array of type names")
 
@@ -937,7 +937,7 @@ def fieldReads(fields: List<&2, R.Property<V.Value>>, +path: List<&2, String>) -
     case Nil{}: Nil{}
     case R.Property{key, value} <> tail: Read{value, child(path, key)} <> fieldReads(tail, path)
 
-def propertiesLoad(value: V.Value, path: List<&2, String>) -> Scheduled():
+def loadProperties(value: V.Value, path: List<&2, String>) -> Scheduled():
   match value:
     case V.ObjectValue{R.Record{+fields}}: Done{List.append(&2, LoadTask, fieldReads(fields, path), Build{Properties{fieldKeys(fields)}, List.length(&2, R.Property<V.Value>, fields)} <> Nil{})}
     case _: invalid(List<&2, LoadTask>, path, "a dictionary of schemas")
@@ -988,7 +988,7 @@ def additionalItems(prefix: Maybe<&2, List<&2, Schema>>, value: V.Value, path: L
     case None{}: Done{Push{Accept{}} <> Nil{}}
     case Some{schemas}: Done{Read{value, path} <> Build{ExtraItems{schemas}, 1n} <> Nil{}}
 
-def itemsLoad(value: V.Value, path: List<&2, String>) -> Scheduled():
+def loadItems(value: V.Value, path: List<&2, String>) -> Scheduled():
   match value:
     case V.ArrayValue{+values}: group(LoadTupleItems{}, V.ArrayValue{values}, path)
     case other: Done{Read{other, path} <> Build{AllItems{}, 1n} <> Nil{}}
@@ -1024,7 +1024,7 @@ def acceptedCount(valid: Bool, value: F.F64, path: List<&2, String>) -> Result<&
 
 def readCount(value: V.Value, path: List<&2, String>) -> Result<&2, &2, LoadError, B.BigNat>:
   match value:
-    case V.Number{+number}: acceptedCount(finite(F.decode(number)) && F.isInteger(number) && lowerBound(F.compare(number, F.fromU32(0)), True{}), number, path)
+    case V.Number{+num}: acceptedCount(finite(F.decode(num)) && F.isInteger(num) && lowerBound(F.compare(num, F.fromU32(0)), True{}), num, path)
     case _: invalid(B.BigNat, path, "a nonnegative finite integer")
 
 def boundedCount(lower: Bool, +value: B.BigNat) -> CountBounds:
@@ -1139,10 +1139,10 @@ def dispatch(selected: KeywordKind, key: String, value: V.Value, whole: R.Record
     case ThenKeyword{}: Done{Push{Accept{}} <> Nil{}}
     case ElseKeyword{}: Done{Push{Accept{}} <> Nil{}}
     case NotKeyword{}: Done{Read{value, path} <> Build{Negation{}, 1n} <> Nil{}}
-    case PropertiesKeyword{}: propertiesLoad(value, path)
+    case PropertiesKeyword{}: loadProperties(value, path)
     case RequiredKeyword{}: requiredLoad(value, path)
     case AdditionalPropertiesKeyword{}: Done{Read{value, path} <> Build{Additional{declaredFields(R.get(V.Value, whole, "properties"))}, 1n} <> Nil{}}
-    case ItemsKeyword{}: itemsLoad(value, path)
+    case ItemsKeyword{}: loadItems(value, path)
     case AdditionalItemsKeyword{}: additionalItems(tuplePrefix(R.get(V.Value, whole, "items")), value, path)
     case MultipleOfKeyword{}: multiple(value, path)
     case MinimumKeyword{}: numeric(True{}, True{}, value, path)
@@ -1350,9 +1350,9 @@ def compile(+schema: V.Value) -> Loaded():
 # A declaration carries its wire schema, executable constraint and conversion
 # policy explicitly. Builders keep these projections together as immutable data.
 type Declaration is Data:
-  Declaration{schemaBuilder: V.Value, constraint: Schema, conversion: Policy}
+  Declaration{schema: V.Value, constraint: Schema, conversion: Policy}
 
-def schemaBuilder(declaration: Declaration) -> V.Value:
+def schemaValue(declaration: Declaration) -> V.Value:
   match declaration:
     case Declaration{raw, _, _}: raw
 
@@ -1364,21 +1364,21 @@ def conversion(declaration: Declaration) -> Policy:
   match declaration:
     case Declaration{_, _, policy}: policy
 
-def primitiveBuilder(name: String, kind: JsonType, policy: Primitive) -> Declaration:
+def primitiveDeclaration(name: String, kind: JsonType, policy: Primitive) -> Declaration:
   Declaration{V.ObjectValue{R.Record{R.Property{"type", V.Text{name}} <> Nil{}}}, JsonKind{kind}, Scalar{policy}}
 
-def boolean() -> Declaration: primitiveBuilder("boolean", BooleanType{}, ToBoolean{})
-def numberBuilder() -> Declaration: primitiveBuilder("number", NumberType{}, ToNumber{})
-def integer() -> Declaration: primitiveBuilder("integer", IntegerType{}, ToInteger{})
-def string() -> Declaration: primitiveBuilder("string", StringType{}, ToString{})
-def null() -> Declaration: primitiveBuilder("null", NullType{}, ToNull{})
+def boolean() -> Declaration: primitiveDeclaration("boolean", BooleanType{}, ToBoolean{})
+def number() -> Declaration: primitiveDeclaration("number", NumberType{}, ToNumber{})
+def integer() -> Declaration: primitiveDeclaration("integer", IntegerType{}, ToInteger{})
+def string() -> Declaration: primitiveDeclaration("string", StringType{}, ToString{})
+def null() -> Declaration: primitiveDeclaration("null", NullType{}, ToNull{})
 def unknown() -> Declaration: Declaration{V.ObjectValue{R.new(V.Value)}, Accept{}, Preserve{}}
 def never() -> Declaration: Declaration{V.ObjectValue{R.Record{R.Property{"not", V.ObjectValue{R.new(V.Value)}} <> Nil{}}}, Not{Accept{}}, Preserve{}}
 
 def literalDeclaration(name: String, kind: JsonType, +value: V.Value, policy: LiteralValue) -> Declaration:
   Declaration{V.ObjectValue{R.Record{R.Property{"type", V.Text{name}} <> R.Property{"const", value} <> Nil{}}}, All{JsonKind{kind} <> Constant{value} <> Nil{}}, Literal{policy}}
 
-def literalBuilder(value: LiteralValue) -> Declaration:
+def literal(value: LiteralValue) -> Declaration:
   match value:
     case BooleanLiteral{+value}: literalDeclaration("boolean", BooleanType{}, V.Boolean{value}, BooleanLiteral{value})
     case NumberLiteral{+value}: literalDeclaration("number", NumberType{}, V.Number{value}, NumberLiteral{value})
@@ -1389,10 +1389,10 @@ def array(item: Declaration) -> Declaration:
     case Declaration{raw, checker, policy}:
       Declaration{V.ObjectValue{R.Record{R.Property{"type", V.Text{"array"}} <> R.Property{"items", raw} <> Nil{}}}, All{JsonKind{ArrayType{}} <> Array{Nil{}, checker} <> Nil{}}, ArrayItems{policy}}
 
-def schemasBuilder(items: List<&2, Declaration>) -> List<&2, V.Value>:
+def schemaValues(items: List<&2, Declaration>) -> List<&2, V.Value>:
   match items:
     case Nil{}: Nil{}
-    case head <> tail: schemaBuilder(head) <> schemasBuilder(tail)
+    case head <> tail: schemaValue(head) <> schemaValues(tail)
 
 def constraints(items: List<&2, Declaration>) -> List<&2, Schema>:
   match items:
@@ -1404,27 +1404,27 @@ def conversions(items: List<&2, Declaration>) -> List<&2, Policy>:
     case Nil{}: Nil{}
     case head <> tail: conversion(head) <> conversions(tail)
 
-def countBuilder(items: List<&2, Declaration>) -> B.BigNat:
+def declarationCount(items: List<&2, Declaration>) -> B.BigNat:
   match items:
     case Nil{}: B.zero()
-    case _ <> tail: B.add(countBuilder(tail), B.fromU32(1))
+    case _ <> tail: B.add(declarationCount(tail), B.fromU32(1))
 
 def tuple(+items: List<&2, Declaration>) -> Declaration:
-  +size = countBuilder(items)
+  +size = declarationCount(items)
   Declaration{
-    V.ObjectValue{R.Record{R.Property{"type", V.Text{"array"}} <> R.Property{"additionalItems", V.Boolean{False{}}} <> R.Property{"items", V.ArrayValue{schemasBuilder(items)}} <> R.Property{"minItems", V.Number{Number.toNumber(B.toDecimal(size))}} <> Nil{}}},
+    V.ObjectValue{R.Record{R.Property{"type", V.Text{"array"}} <> R.Property{"additionalItems", V.Boolean{False{}}} <> R.Property{"items", V.ArrayValue{schemaValues(items)}} <> R.Property{"minItems", V.Number{Number.toNumber(B.toDecimal(size))}} <> Nil{}}},
     All{JsonKind{ArrayType{}} <> AdditionalItems{List.length(&2, Declaration, items), Reject{}} <> Array{constraints(items), Accept{}} <> ItemCount{CountBounds{size, None{}}} <> Nil{}},
     TupleItems{conversions(items)}}
 
-def branchesBuilder(items: List<&2, Declaration>) -> List<&2, Branch<Policy>>:
+def declaredBranches(items: List<&2, Declaration>) -> List<&2, Branch<Policy>>:
   match items:
     case Nil{}: Nil{}
-    case Declaration{_, checker, policy} <> tail: Branch{checker, policy} <> branchesBuilder(tail)
+    case Declaration{_, checker, policy} <> tail: Branch{checker, policy} <> declaredBranches(tail)
 
 def union(+items: List<&2, Declaration>) -> Declaration:
-  Declaration{V.ObjectValue{R.Record{R.Property{"anyOf", V.ArrayValue{schemasBuilder(items)}} <> Nil{}}}, Any{constraints(items)}, unionConvert(branchesBuilder(items))}
+  Declaration{V.ObjectValue{R.Record{R.Property{"anyOf", V.ArrayValue{schemaValues(items)}} <> Nil{}}}, Any{constraints(items)}, unionPolicy(declaredBranches(items))}
 
-def checkBuilder(declaration: Declaration, value: V.Value) -> Bool:
+def checkDeclared(declaration: Declaration, value: V.Value) -> Bool:
   check(constraint(declaration), value)
 
 def convert(declaration: Declaration, value: V.Value) -> Converted():
@@ -1436,7 +1436,7 @@ type Field is Data:
   Required{declaration: Declaration}
   Optional{declaration: Declaration}
 
-def requiredBuilder(declaration: Declaration) -> Field: Required{declaration}
+def requiredField(declaration: Declaration) -> Field: Required{declaration}
 def optional(declaration: Declaration) -> Field: Optional{declaration}
 
 def fieldDeclaration(field: Field) -> Declaration:
@@ -1453,7 +1453,7 @@ def requiredKeys(fields: List<&2, R.Property<Field>>) -> List<&2, String>:
 def fieldSchemas(fields: List<&2, R.Property<Field>>) -> List<&2, R.Property<V.Value>>:
   match fields:
     case Nil{}: Nil{}
-    case R.Property{key, field} <> rest: R.Property{key, schemaBuilder(fieldDeclaration(field))} <> fieldSchemas(rest)
+    case R.Property{key, field} <> rest: R.Property{key, schemaValue(fieldDeclaration(field))} <> fieldSchemas(rest)
 
 def fieldConstraints(fields: List<&2, R.Property<Field>>) -> List<&2, R.Property<Schema>>:
   match fields:

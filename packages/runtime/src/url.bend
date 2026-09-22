@@ -43,7 +43,7 @@ def digits(text: String, +radix: U32, state: Result<&2, &2, NumberError, U32>) -
     case SNil{} result: result
     case SCon{Chr{code}, rest} result: digits(rest, radix, addDigit(Uri.hex(code), radix, result))
 
-def numberIpv4(text: String) -> Result<&2, &2, NumberError, U32>:
+def ipv4Number(text: String) -> Result<&2, &2, NumberError, U32>:
   match text:
     case SNil{}: Fail{InvalidNumber{}}
     case SCon{'0', SCon{'x', rest}}: digits(rest, 16, Done{0})
@@ -78,7 +78,7 @@ def numeric(result: Result<&2, &2, NumberError, U32>) -> Bool:
 def lastIsNumber(parts: List<&2, String>) -> Bool:
   match parts:
     case Nil{}: False{}
-    case +last <> _: decimal(last) || numeric(numberIpv4(last))
+    case +last <> _: decimal(last) || numeric(ipv4Number(last))
 
 # Input is the already-normalized ASCII domain, before host classification.
 def endsInNumber(text: String) -> Bool: lastIsNumber(reversedParts(text))
@@ -104,7 +104,7 @@ def prefixPart(fits: Bool, count: U32, prefix: U32, value: U32) -> Result<&2, &2
     case False{}: Fail{OutOfRange{}}
     case True{}: Done{Ipv4Prefix{(count + 1 : U32), (prefix * 256 + value : U32)}}
 
-def partIpv4(last: Bool, count: U32, prefix: U32, result: Result<&2, &2, NumberError, U32>) -> Result<&2, &2, AddressError, State>:
+def ipv4Part(last: Bool, count: U32, prefix: U32, result: Result<&2, &2, NumberError, U32>) -> Result<&2, &2, AddressError, State>:
   match last result:
     case _ Fail{InvalidNumber{}}: Fail{InvalidPart{}}
     case _ Fail{NumberOverflow{}}: Fail{OutOfRange{}}
@@ -117,7 +117,7 @@ def scanIpv4(parts: List<&2, String>, state: Result<&2, &2, AddressError, State>
     case Nil{} Done{Complete{address}}: Done{address}
     case Nil{} _: Fail{InvalidPart{}}
     case _ Done{Ipv4Prefix{4, _}}: Fail{TooManyParts{}}
-    case value <> +rest Done{Ipv4Prefix{count, prefix}}: scanIpv4(rest, partIpv4(List.is_empty(&2, String, rest), count, prefix, numberIpv4(value)))
+    case value <> +rest Done{Ipv4Prefix{count, prefix}}: scanIpv4(rest, ipv4Part(List.is_empty(&2, String, rest), count, prefix, ipv4Number(value)))
     case _ _: Fail{TooManyParts{}}
 
 def parseIpv4(text: String) -> Result<&2, &2, AddressError, Address>:
@@ -138,32 +138,32 @@ type Ipv6AddressError is Data:
   InvalidEmbeddedIPv4{}
   WrongPieceCount{}
 
-def words(addressIpv6: Ipv6Address) -> List<&2, U32>:
-  match addressIpv6:
+def words(address: Ipv6Address) -> List<&2, U32>:
+  match address:
     case Ipv6Address{+a, +b, +c, +d}: (a / 65536 : U32) <> (a % 65536 : U32) <> (b / 65536 : U32) <> (b % 65536 : U32) <> (c / 65536 : U32) <> (c % 65536 : U32) <> (d / 65536 : U32) <> (d % 65536 : U32) <> Nil{}
 
-def addressIpv6(parts: List<&2, U32>) -> Result<&2, &2, Ipv6AddressError, Ipv6Address>:
+def ipv6Address(parts: List<&2, U32>) -> Result<&2, &2, Ipv6AddressError, Ipv6Address>:
   match parts:
     case a <> b <> c <> d <> e <> f <> g <> h <> Nil{}: Done{Ipv6Address{(a * 65536 + b : U32), (c * 65536 + d : U32), (e * 65536 + f : U32), (g * 65536 + h : U32)}}
     case _: Fail{WrongPieceCount{}}
 
 # Bounded digit accumulation is shared by hex pieces and decimal IPv4 octets.
-def digitValueIpv6(digit: Maybe<&2, U32>, +radix: U32, value: U32) -> Maybe<&2, U32>:
+def ipv6DigitValue(digit: Maybe<&2, U32>, +radix: U32, value: U32) -> Maybe<&2, U32>:
   match digit:
     case None{}: None{}
     case Some{+digit}: Bool.pick(Maybe<&2, U32>, U32.is_lt(digit, radix), Some{(value * radix + digit : U32)}, None{})
 
-def digitsIpv6(text: String, +radix: U32, left: U32, value: Maybe<&2, U32>) -> Maybe<&2, U32>:
+def ipv6Digits(text: String, +radix: U32, left: U32, value: Maybe<&2, U32>) -> Maybe<&2, U32>:
   match text left value:
     case _ _ None{}: None{}
     case SNil{} _ result: result
     case _ 0 _: None{}
-    case SCon{Chr{code}, rest} remaining Some{value}: digitsIpv6(rest, radix, (remaining - 1 : U32), digitValueIpv6(Uri.hex(code), radix, value))
+    case SCon{Chr{code}, rest} remaining Some{value}: ipv6Digits(rest, radix, (remaining - 1 : U32), ipv6DigitValue(Uri.hex(code), radix, value))
 
 def hexPiece(text: String) -> Maybe<&2, U32>:
   match text:
     case SNil{}: None{}
-    case other: digitsIpv6(other, 16, 4, Some{0})
+    case other: ipv6Digits(other, 16, 4, Some{0})
 
 def octetValue(value: Maybe<&2, U32>) -> Maybe<&2, U32>:
   match value:
@@ -175,7 +175,7 @@ def octet(text: String) -> Maybe<&2, U32>:
     case SNil{}: None{}
     case SCon{'0', SNil{}}: Some{0}
     case SCon{'0', _}: None{}
-    case other: octetValue(digitsIpv6(other, 10, 3, Some{0}))
+    case other: octetValue(ipv6Digits(other, 10, 3, Some{0}))
 
 def embeddedValues(a: Maybe<&2, U32>, b: Maybe<&2, U32>, c: Maybe<&2, U32>, d: Maybe<&2, U32>) -> Result<&2, &2, Ipv6AddressError, List<&2, U32>>:
   match a b c d:
@@ -250,9 +250,9 @@ def expand(parts: List<&2, U32>, index: U32, count: U32) -> List<&2, U32>:
 
 def finishIpv6(state: Ipv6State) -> Result<&2, &2, Ipv6AddressError, Ipv6Address>:
   match state:
-    case Ipv6State{8, reversed, None{}}: addressIpv6(List.reverse(&2, U32, reversed))
+    case Ipv6State{8, reversed, None{}}: ipv6Address(List.reverse(&2, U32, reversed))
     case Ipv6State{8, _, Some{_}}: Fail{InvalidCompression{}}
-    case Ipv6State{count, reversed, Some{index}}: addressIpv6(expand(List.reverse(&2, U32, reversed), index, (8 - count : U32)))
+    case Ipv6State{count, reversed, Some{index}}: ipv6Address(expand(List.reverse(&2, U32, reversed), index, (8 - count : U32)))
     case _: Fail{WrongPieceCount{}}
 
 def scanIpv6(parts: List<&2, String>, state: Result<&2, &2, Ipv6AddressError, Ipv6State>) -> Result<&2, &2, Ipv6AddressError, Ipv6Address>:
@@ -315,8 +315,8 @@ def compressed(parts: List<&2, U32>, best: Run) -> String:
   match best:
     case Run{start, length}: render(parts, 0, start, length)
 
-def serializeIpv6(addressIpv6: Ipv6Address) -> String:
-  +parts = words(addressIpv6)
+def serializeIpv6(address: Ipv6Address) -> String:
+  +parts = words(address)
   compressed(parts, longest(parts, 0, 0, 0, Run{0, 1}))
 
 
@@ -350,13 +350,13 @@ def includes(set: EncodeSet, +byte: U32) -> Bool:
     case Component{}: control(byte) || queryExtra(byte) || pathExtra(byte) || userExtra(byte) || componentExtra(byte)
     case Form{}: control(byte) || queryExtra(byte) || pathExtra(byte) || userExtra(byte) || componentExtra(byte) || formExtra(byte)
 
-def hexDigitPercent(+nibble: U32) -> Char:
+def percentHexDigit(+nibble: U32) -> Char:
   Chr{Bool.pick(U32, U32.is_lt(nibble, 10), (48 + nibble : U32), (55 + nibble : U32))}
 
 def emit(plus: Bool, escape: Bool, +byte: U32, reversed: String) -> String:
   match plus escape:
     case True{} _: SCon{'+', reversed}
-    case False{} True{}: SCon{hexDigitPercent((byte % 16 : U32)), SCon{hexDigitPercent((byte / 16 : U32)), SCon{'%', reversed}}}
+    case False{} True{}: SCon{percentHexDigit((byte % 16 : U32)), SCon{percentHexDigit((byte / 16 : U32)), SCon{'%', reversed}}}
     case False{} False{}: SCon{Chr{byte}, reversed}
 
 def encodeBytes(bytes: List<&2, U32>, +set: EncodeSet, +spaceAsPlus: Bool, reversed: String) -> String:
@@ -429,11 +429,11 @@ def addDigitPort(valid: Bool, +digit: U32, state: Result<&2, &2, PortError, U32>
     case True{} Fail{error}: Fail{error}
     case True{} Done{+value}: boundedPort(U32.is_le((value * 10 + digit : U32), 65535), (value * 10 + digit : U32))
 
-def digitsPort(text: String, state: Result<&2, &2, PortError, U32>) -> Result<&2, &2, PortError, U32>:
+def portDigits(text: String, state: Result<&2, &2, PortError, U32>) -> Result<&2, &2, PortError, U32>:
   match text state:
     case _ Fail{InvalidDigit{}}: Fail{InvalidDigit{}}
     case SNil{} result: result
-    case SCon{Chr{+code}, rest} result: digitsPort(rest, addDigitPort(U32.is_ge(code, 48) && U32.is_le(code, 57), (code - 48 : U32), result))
+    case SCon{Chr{+code}, rest} result: portDigits(rest, addDigitPort(U32.is_ge(code, 48) && U32.is_le(code, 57), (code - 48 : U32), result))
 
 def retainedPort(isDefault: Bool, value: U32) -> Maybe<&2, U32>:
   match isDefault:
@@ -449,7 +449,7 @@ def normalizePort(default: Maybe<&2, U32>, result: Result<&2, &2, PortError, U32
 def parsePort(default: Maybe<&2, U32>, text: String) -> Result<&2, &2, PortError, Maybe<&2, U32>>:
   match text:
     case SNil{}: Done{None{}}
-    case other: normalizePort(default, digitsPort(other, Done{0}))
+    case other: normalizePort(default, portDigits(other, Done{0}))
 
 
 # Scheme tokens exclude the colon. Input preprocessing and relative-URL fallback
@@ -530,23 +530,23 @@ type Credentials is Data:
   Credentials{username: String, password: String}
 
 type Tokens is Data:
-  Tokens{credentialsAuthority: Maybe<&2, Credentials>, host: String, port: Maybe<&2, String>}
+  Tokens{authorityCredentials: Maybe<&2, Credentials>, host: String, port: Maybe<&2, String>}
 
 type UserHost is Data:
-  UserHost{credentialsAuthority: Maybe<&2, Credentials>, hostPort: String}
+  UserHost{authorityCredentials: Maybe<&2, Credentials>, hostPort: String}
 
-def credentialsAuthority(text: String, reversedUsername: String) -> Credentials:
+def authorityCredentials(text: String, reversedUsername: String) -> Credentials:
   match text:
     case SNil{}: Credentials{encode(UserInfo{}, String.reverse(reversedUsername)), ""}
     case SCon{':', password}: Credentials{encode(UserInfo{}, String.reverse(reversedUsername)), encode(UserInfo{}, password)}
-    case SCon{char, rest}: credentialsAuthority(rest, SCon{char, reversedUsername})
+    case SCon{char, rest}: authorityCredentials(rest, SCon{char, reversedUsername})
 
 # The final '@' separates userinfo from host. Earlier '@' characters belong to
 # userinfo and are percent encoded there, including across the password split.
 def userHost(reversed: String, hostPort: String) -> UserHost:
   match reversed:
     case SNil{}: UserHost{None{}, hostPort}
-    case SCon{'@', userinfo}: UserHost{Some{credentialsAuthority(String.reverse(userinfo), "")}, hostPort}
+    case SCon{'@', userinfo}: UserHost{Some{authorityCredentials(String.reverse(userinfo), "")}, hostPort}
     case SCon{char, rest}: userHost(rest, SCon{char, hostPort})
 
 def hostPort(text: String, insideBrackets: Bool, reversedHost: String, user: Maybe<&2, Credentials>) -> Tokens:
@@ -904,7 +904,7 @@ def selected(found: Maybe<&2, Found>, original: String) -> InputPrefix:
 
 # Input is already preprocessed. Absolute denotes a syntactically present
 # scheme, not a successfully parsed URL; scheme-relative/base rules follow.
-def prefixInput(+input: String) -> InputPrefix: selected(find(input), input)
+def inputPrefix(+input: String) -> InputPrefix: selected(find(input), input)
 
 
 # Entry after '?'. Presence is represented by this result even when value is
@@ -937,7 +937,7 @@ def bytes(input: List<&2, U32>, reversed: String) -> String:
     case Nil{}: String.reverse(reversed)
     case +byte <> rest: bytes(rest, emit(False{}, Bool.not(unreserved(byte)), byte, reversed))
 
-def encodeQueryEncode(text: String) -> String: bytes(Utf8.encode(text), "")
+def encodeQuery(text: String) -> String: bytes(Utf8.encode(text), "")
 
 
 type Parsed is Data:
@@ -1168,7 +1168,7 @@ def contents(tuples: List<&2, Entry>) -> List<&2, String>:
     case Entry{_, value} <> rest: value <> contents(rest)
 
 def keys(params: URLSearchParams) -> List<&2, String>: names(entries(params))
-def valuesSearchParams(params: URLSearchParams) -> List<&2, String>: contents(entries(params))
+def searchParamValues(params: URLSearchParams) -> List<&2, String>: contents(entries(params))
 
 def size(params: URLSearchParams) -> Nat:
   List.length(&2, Entry, entries(params))
@@ -1297,53 +1297,53 @@ def appendSerialize(text: String, reversed: String) -> String:
     case SNil{}: reversed
     case SCon{char, rest}: appendSerialize(rest, SCon{char, reversed})
 
-def segmentsSerialize(parts: List<&2, String>, reversed: String) -> String:
+def serializeSegments(parts: List<&2, String>, reversed: String) -> String:
   match parts:
     case Nil{}: reversed
-    case head <> rest: segmentsSerialize(rest, appendSerialize(head, SCon{'/', reversed}))
+    case head <> rest: serializeSegments(rest, appendSerialize(head, SCon{'/', reversed}))
 
-def pathOutput(pathSerialize: RecordPath, reversed: String) -> String:
-  match pathSerialize:
-    case Hierarchical{parts}: segmentsSerialize(parts, reversed)
+def pathOutput(recordPath: RecordPath, reversed: String) -> String:
+  match recordPath:
+    case Hierarchical{parts}: serializeSegments(parts, reversed)
     case RecordOpaque{value}: appendSerialize(value, reversed)
 
-def pathSerialize(pathSerialize: RecordPath) -> String:
-  String.reverse(pathOutput(pathSerialize, ""))
+def serializePath(recordPath: RecordPath) -> String:
+  String.reverse(pathOutput(recordPath, ""))
 
 # Prevent a hostless path beginning '//' from reparsing as an authority.
-def hostless(pathSerialize: RecordPath, reversed: String) -> String:
-  match pathSerialize:
-    case Hierarchical{SNil{} <> next <> rest}: segmentsSerialize("" <> next <> rest, appendSerialize("/.", reversed))
+def hostless(recordPath: RecordPath, reversed: String) -> String:
+  match recordPath:
+    case Hierarchical{SNil{} <> next <> rest}: serializeSegments("" <> next <> rest, appendSerialize("/.", reversed))
     case other: pathOutput(other, reversed)
 
-def credentialsSerialize(username: String, password: String, reversed: String) -> String:
+def serializeCredentials(username: String, password: String, reversed: String) -> String:
   match username password:
     case SNil{} SNil{}: reversed
     case user SNil{}: SCon{'@', appendSerialize(user, reversed)}
     case user pass: SCon{'@', appendSerialize(pass, SCon{':', appendSerialize(user, reversed)})}
 
-def portSerialize(value: Maybe<&2, U32>, reversed: String) -> String:
+def serializePort(value: Maybe<&2, U32>, reversed: String) -> String:
   match value:
     case None{}: reversed
     case Some{number}: appendSerialize(U32.show(number), SCon{':', reversed})
 
-def body(host: Maybe<&2, Host>, pathSerialize: RecordPath, username: String, password: String, number: Maybe<&2, U32>, reversed: String) -> String:
+def body(host: Maybe<&2, Host>, recordPath: RecordPath, username: String, password: String, number: Maybe<&2, U32>, reversed: String) -> String:
   match host:
-    case None{}: hostless(pathSerialize, reversed)
-    case Some{value}: pathOutput(pathSerialize, portSerialize(number, appendSerialize(serializeHost(value), credentialsSerialize(username, password, appendSerialize("//", reversed)))))
+    case None{}: hostless(recordPath, reversed)
+    case Some{value}: pathOutput(recordPath, serializePort(number, appendSerialize(serializeHost(value), serializeCredentials(username, password, appendSerialize("//", reversed)))))
 
 def component(value: Maybe<&2, String>, delimiter: Char, reversed: String) -> String:
   match value:
     case None{}: reversed
     case Some{value}: appendSerialize(value, SCon{delimiter, reversed})
 
-def fragmentSerialize(exclude: Bool, value: Maybe<&2, String>, reversed: String) -> String:
+def serializeFragment(exclude: Bool, value: Maybe<&2, String>, reversed: String) -> String:
   match exclude:
     case True{}: reversed
     case False{}: component(value, '#', reversed)
 
 def suffix(reversed: String, query: Maybe<&2, String>, hash: Maybe<&2, String>, excludeFragment: Bool) -> String:
-  String.reverse(fragmentSerialize(excludeFragment, hash, component(query, '?', reversed)))
+  String.reverse(serializeFragment(excludeFragment, hash, component(query, '?', reversed)))
 
 def serialize(value: URL, excludeFragment: Bool) -> String:
   match value:
@@ -1389,32 +1389,32 @@ type Error is Data:
   InvalidOpaqueHost{reason: HostError}
   InvalidPort{reason: PortError}
 
-def hierarchical(schemeAbsolute: Scheme, username: String, password: String, hostAbsolute: Maybe<&2, Host>, port: Maybe<&2, U32>, parsed: PathParsed) -> URL:
+def hierarchical(scheme: Scheme, username: String, password: String, host: Maybe<&2, Host>, port: Maybe<&2, U32>, parsed: PathParsed) -> URL:
   match parsed:
-    case PathParsed{segments, query, fragment}: URL{schemeAbsolute, username, password, hostAbsolute, port, Hierarchical{segments}, query, fragment}
+    case PathParsed{segments, query, fragment}: URL{scheme, username, password, host, port, Hierarchical{segments}, query, fragment}
 
-def opaque(schemeAbsolute: Scheme, parsed: Parsed) -> URL:
+def opaque(scheme: Scheme, parsed: Parsed) -> URL:
   match parsed:
-    case Parsed{value, query, fragment}: URL{schemeAbsolute, "", "", None{}, None{}, RecordOpaque{value}, query, fragment}
+    case Parsed{value, query, fragment}: URL{scheme, "", "", None{}, None{}, RecordOpaque{value}, query, fragment}
 
 def credentials(value: Maybe<&2, Credentials>) -> Credentials:
   match value:
     case None{}: Credentials{"", ""}
     case Some{result}: result
 
-def authorityURL(+schemeAbsolute: Scheme, user: Credentials, hostAbsolute: Host, port: Maybe<&2, U32>, remainder: String) -> URL:
+def authorityURL(+scheme: Scheme, user: Credentials, host: Host, port: Maybe<&2, U32>, remainder: String) -> URL:
   match user:
-    case Credentials{username, password}: hierarchical(schemeAbsolute, username, password, Some{hostAbsolute}, port, startPath(remainder, schemeAbsolute, Nil{}))
+    case Credentials{username, password}: hierarchical(scheme, username, password, Some{host}, port, startPath(remainder, scheme, Nil{}))
 
-def portResult(result: Result<&2, &2, PortError, Maybe<&2, U32>>, schemeAbsolute: Scheme, user: Credentials, hostAbsolute: Host, remainder: String) -> Result<&2, &2, Error, URL>:
+def portResult(result: Result<&2, &2, PortError, Maybe<&2, U32>>, scheme: Scheme, user: Credentials, host: Host, remainder: String) -> Result<&2, &2, Error, URL>:
   match result:
     case Fail{reason}: Fail{InvalidPort{reason}}
-    case Done{value}: Done{authorityURL(schemeAbsolute, user, hostAbsolute, value, remainder)}
+    case Done{value}: Done{authorityURL(scheme, user, host, value, remainder)}
 
-def parsedPort(value: Maybe<&2, String>, schemeAbsolute: Scheme) -> Result<&2, &2, PortError, Maybe<&2, U32>>:
+def parsedPort(value: Maybe<&2, String>, scheme: Scheme) -> Result<&2, &2, PortError, Maybe<&2, U32>>:
   match value:
     case None{}: Done{None{}}
-    case Some{text}: parsePort(defaultPort(schemeAbsolute), text)
+    case Some{text}: parsePort(defaultPort(scheme), text)
 
 def specialResult(result: Result<&2, &2, SpecialHostError, Host>) -> Result<&2, &2, Error, Host>:
   match result:
@@ -1426,30 +1426,30 @@ def opaqueResult(result: Result<&2, &2, HostError, Host>) -> Result<&2, &2, Erro
     case Fail{reason}: Fail{InvalidOpaqueHost{reason}}
     case Done{value}: Done{value}
 
-def hostAbsolute(special: Bool, context: Context, input: String) -> Result<&2, &2, Error, Host>:
+def absoluteHost(special: Bool, context: Context, input: String) -> Result<&2, &2, Error, Host>:
   match special context:
     case True{} Context{unicode, options}: specialResult(parseSpecialHost(unicode, options, input))
     case False{} _: opaqueResult(parseOpaque(input))
 
-def hostResult(result: Result<&2, &2, Error, Host>, +schemeAbsolute: Scheme, user: Maybe<&2, Credentials>, port: Maybe<&2, String>, remainder: String) -> Result<&2, &2, Error, URL>:
+def hostResult(result: Result<&2, &2, Error, Host>, +scheme: Scheme, user: Maybe<&2, Credentials>, port: Maybe<&2, String>, remainder: String) -> Result<&2, &2, Error, URL>:
   match result:
     case Fail{reason}: Fail{reason}
-    case Done{value}: portResult(parsedPort(port, schemeAbsolute), schemeAbsolute, credentials(user), value, remainder)
+    case Done{value}: portResult(parsedPort(port, scheme), scheme, credentials(user), value, remainder)
 
-def checkedAuthority(missing: Bool, context: Context, +schemeAbsolute: Scheme, text: String, user: Maybe<&2, Credentials>, port: Maybe<&2, String>, remainder: String) -> Result<&2, &2, Error, URL>:
+def checkedAuthority(missing: Bool, context: Context, +scheme: Scheme, text: String, user: Maybe<&2, Credentials>, port: Maybe<&2, String>, remainder: String) -> Result<&2, &2, Error, URL>:
   match missing:
     case True{}: Fail{MissingHost{}}
-    case False{}: hostResult(hostAbsolute(isSpecialScheme(schemeAbsolute), context, text), schemeAbsolute, user, port, remainder)
+    case False{}: hostResult(absoluteHost(isSpecialScheme(scheme), context, text), scheme, user, port, remainder)
 
-def authorityAbsolute(context: Context, +schemeAbsolute: Scheme, prefix: Prefix) -> Result<&2, &2, Error, URL>:
+def absoluteAuthority(context: Context, +scheme: Scheme, prefix: Prefix) -> Result<&2, &2, Error, URL>:
   match prefix:
-    case Prefix{Tokens{+user, +text, +port}, remainder}: checkedAuthority(String.is_empty(text) && (isSpecialScheme(schemeAbsolute) || Maybe.is_some(&2, Credentials, user) || Maybe.is_some(&2, String, port)), context, schemeAbsolute, text, user, port, remainder)
+    case Prefix{Tokens{+user, +text, +port}, remainder}: checkedAuthority(String.is_empty(text) && (isSpecialScheme(scheme) || Maybe.is_some(&2, Credentials, user) || Maybe.is_some(&2, String, port)), context, scheme, text, user, port, remainder)
 
 def slashes(text: String) -> String:
   match text:
     case SCon{'/', rest}: slashes(rest)
     case SCon{'\\', rest}: slashes(rest)
-    case otherAbsolute: otherAbsolute
+    case other: other
 
 def localHost(local: Bool, value: Host) -> Host:
   match local:
@@ -1459,7 +1459,7 @@ def localHost(local: Bool, value: Host) -> Host:
 def fileHost(value: Host) -> Host:
   match value:
     case Domain{+name}: localHost(String.eq(name, "localhost"), Domain{name})
-    case otherAbsolute: otherAbsolute
+    case other: other
 
 def fileResult(result: Result<&2, &2, Error, Host>, remainder: String) -> Result<&2, &2, Error, URL>:
   match result:
@@ -1469,7 +1469,7 @@ def fileResult(result: Result<&2, &2, Error, Host>, remainder: String) -> Result
 def fileDomain(context: Context, text: String) -> Result<&2, &2, Error, Host>:
   match text:
     case SNil{}: Done{Empty{}}
-    case otherAbsolute: hostAbsolute(True{}, context, otherAbsolute)
+    case other: absoluteHost(True{}, context, other)
 
 def fileAuthorityDrive(drive: Bool, context: Context, text: String, remainder: String) -> Result<&2, &2, Error, URL>:
   match drive:
@@ -1486,31 +1486,31 @@ def fileSlash(context: Context, text: String) -> Result<&2, &2, Error, URL>:
   match text:
     case SCon{'/', rest}: fileAuthority(context, rawAuthority(rest, True{}))
     case SCon{'\\', rest}: fileAuthority(context, rawAuthority(rest, True{}))
-    case otherAbsolute: Done{hierarchical(File{}, "", "", Some{Empty{}}, None{}, parsePath(otherAbsolute, File{}, Nil{}))}
+    case other: Done{hierarchical(File{}, "", "", Some{Empty{}}, None{}, parsePath(other, File{}, Nil{}))}
 
 def file(context: Context, text: String) -> Result<&2, &2, Error, URL>:
   match text:
     case SCon{'/', rest}: fileSlash(context, rest)
     case SCon{'\\', rest}: fileSlash(context, rest)
-    case otherAbsolute: Done{hierarchical(File{}, "", "", Some{Empty{}}, None{}, parsePath(otherAbsolute, File{}, Nil{}))}
+    case other: Done{hierarchical(File{}, "", "", Some{Empty{}}, None{}, parsePath(other, File{}, Nil{}))}
 
 # Non-special schemes only recognize forward slashes as authority delimiters.
-def otherSlash(context: Context, +schemeAbsolute: Scheme, text: String) -> Result<&2, &2, Error, URL>:
+def otherSlash(context: Context, +scheme: Scheme, text: String) -> Result<&2, &2, Error, URL>:
   match text:
-    case SCon{'/', rest}: authorityAbsolute(context, schemeAbsolute, read(rest, False{}))
-    case otherAbsolute: Done{hierarchical(schemeAbsolute, "", "", None{}, None{}, parsePath(otherAbsolute, schemeAbsolute, Nil{}))}
+    case SCon{'/', rest}: absoluteAuthority(context, scheme, read(rest, False{}))
+    case other: Done{hierarchical(scheme, "", "", None{}, None{}, parsePath(other, scheme, Nil{}))}
 
-def otherAbsolute(context: Context, +schemeAbsolute: Scheme, text: String) -> Result<&2, &2, Error, URL>:
+def absoluteOther(context: Context, +scheme: Scheme, text: String) -> Result<&2, &2, Error, URL>:
   match text:
-    case SCon{'/', rest}: otherSlash(context, schemeAbsolute, rest)
-    case remainder: Done{opaque(schemeAbsolute, parseOpaquePath(remainder))}
+    case SCon{'/', rest}: otherSlash(context, scheme, rest)
+    case remainder: Done{opaque(scheme, parseOpaquePath(remainder))}
 
-def nonFile(special: Bool, context: Context, schemeAbsolute: Scheme, text: String) -> Result<&2, &2, Error, URL>:
+def nonFile(special: Bool, context: Context, scheme: Scheme, text: String) -> Result<&2, &2, Error, URL>:
   match special:
-    case True{}: authorityAbsolute(context, schemeAbsolute, read(slashes(text), True{}))
-    case False{}: otherAbsolute(context, schemeAbsolute, text)
+    case True{}: absoluteAuthority(context, scheme, read(slashes(text), True{}))
+    case False{}: absoluteOther(context, scheme, text)
 
-def schemeAbsolute(context: Context, value: Scheme, text: String) -> Result<&2, &2, Error, URL>:
+def absoluteScheme(context: Context, value: Scheme, text: String) -> Result<&2, &2, Error, URL>:
   match value:
     case File{}: file(context, text)
     case +otherScheme: nonFile(isSpecialScheme(otherScheme), context, otherScheme, text)
@@ -1518,12 +1518,12 @@ def schemeAbsolute(context: Context, value: Scheme, text: String) -> Result<&2, 
 def prefixed(context: Context, prefix: InputPrefix) -> Result<&2, &2, Error, URL>:
   match prefix:
     case Relative{_}: Fail{MissingScheme{}}
-    case Absolute{value, remainder}: schemeAbsolute(context, value, remainder)
+    case Absolute{value, remainder}: absoluteScheme(context, value, remainder)
 
 # Absolute parsing has no base URL. Relative resolution is a separate entry
 # that will share these states. Domain policy remains explicit in Context.
 def parse(context: Context, input: String) -> Result<&2, &2, Error, URL>:
-  prefixed(context, prefixInput(prepareInput(input)))
+  prefixed(context, inputPrefix(prepareInput(input)))
 
 
 type ResolveError is Data:
@@ -1537,23 +1537,23 @@ def absoluteResult(result: Result<&2, &2, Error, URL>) -> Result<&2, &2, Resolve
 
 # Inheritance copies immutable normalized components. Every reference replaces
 # the fragment, including an empty reference (which removes it).
-def fragmentResolve(base: URL, value: Maybe<&2, String>) -> URL:
+def resolveFragment(base: URL, value: Maybe<&2, String>) -> URL:
   match base:
-    case URL{schemeResolve, user, password, host, port, urlPath, queryResolve, _}: URL{schemeResolve, user, password, host, port, urlPath, queryResolve, value}
+    case URL{scheme, user, password, host, port, urlPath, queryResolve, _}: URL{scheme, user, password, host, port, urlPath, queryResolve, value}
 
 def queryResolve(base: URL, parsed: QueryParsed) -> URL:
   match base parsed:
-    case URL{schemeResolve, user, password, host, port, urlPath, _, _} QueryParsed{value, hash}: URL{schemeResolve, user, password, host, port, urlPath, Some{value}, hash}
+    case URL{scheme, user, password, host, port, urlPath, _, _} QueryParsed{value, hash}: URL{scheme, user, password, host, port, urlPath, Some{value}, hash}
 
 def path(base: URL, parsed: PathParsed) -> URL:
   match base:
-    case URL{schemeResolve, user, password, host, port, _, _, _}: hierarchical(schemeResolve, user, password, host, port, parsed)
+    case URL{scheme, user, password, host, port, _, _, _}: hierarchical(scheme, user, password, host, port, parsed)
 
-def schemeResolve(base: URL) -> Scheme:
+def baseScheme(base: URL) -> Scheme:
   match base:
     case URL{value, _, _, _, _, _, _, _}: value
 
-def segmentsResolve(base: URL) -> List<&2, String>:
+def baseSegments(base: URL) -> List<&2, String>:
   match base:
     case URL{_, _, _, _, _, Hierarchical{values}, _, _}: values
     case _: Nil{}
@@ -1576,19 +1576,19 @@ def baseDrive(values: List<&2, String>) -> List<&2, String>:
 
 def rootSegments(file: Bool, newDrive: Bool, base: URL) -> List<&2, String>:
   match file newDrive:
-    case True{} False{}: baseDrive(segmentsResolve(base))
+    case True{} False{}: baseDrive(baseSegments(base))
     case _ _: Nil{}
 
 def root(+base: URL, +input: String) -> URL:
-  path(base, parsePath(input, schemeResolve(base), rootSegments(isFilePath(schemeResolve(base)), startsDrive(input), base)))
+  path(base, parsePath(input, baseScheme(base), rootSegments(isFilePath(baseScheme(base)), startsDrive(input), base)))
 
 def relativeSegments(newDrive: Bool, file: Bool, base: URL) -> List<&2, String>:
   match newDrive file:
     case True{} True{}: Nil{}
-    case _ isFile: List.reverse(&2, String, shorten(List.reverse(&2, String, segmentsResolve(base)), isFile))
+    case _ isFile: List.reverse(&2, String, shorten(List.reverse(&2, String, baseSegments(base)), isFile))
 
 def relativePath(+base: URL, +input: String) -> URL:
-  path(base, parsePath(input, schemeResolve(base), relativeSegments(startsDrive(input), isFilePath(schemeResolve(base)), base)))
+  path(base, parsePath(input, baseScheme(base), relativeSegments(startsDrive(input), isFilePath(baseScheme(base)), base)))
 
 def network(context: Context, value: Scheme, input: String) -> Result<&2, &2, ResolveError, URL>:
   match value:
@@ -1599,40 +1599,40 @@ def network(context: Context, value: Scheme, input: String) -> Result<&2, &2, Re
 # backslash as a slash; custom schemes preserve it as a path character.
 def slash(context: Context, +base: URL, input: String, special: Bool) -> Result<&2, &2, ResolveError, URL>:
   match input special:
-    case SCon{'/', rest} _: network(context, schemeResolve(base), rest)
-    case SCon{'\\', rest} True{}: network(context, schemeResolve(base), rest)
+    case SCon{'/', rest} _: network(context, baseScheme(base), rest)
+    case SCon{'\\', rest} True{}: network(context, baseScheme(base), rest)
     case rest _: Done{root(base, rest)}
 
 def hierarchicalResolve(context: Context, +base: URL, input: String, special: Bool) -> Result<&2, &2, ResolveError, URL>:
   match input special:
-    case SNil{} _: Done{fragmentResolve(base, None{})}
+    case SNil{} _: Done{resolveFragment(base, None{})}
     case SCon{'?', rest} isSpecial: Done{queryResolve(base, parseQuery(rest, isSpecial))}
-    case SCon{'#', rest} _: Done{fragmentResolve(base, Some{encode(Fragment{}, rest)})}
+    case SCon{'#', rest} _: Done{resolveFragment(base, Some{encode(Fragment{}, rest)})}
     case SCon{'/', rest} isSpecial: slash(context, base, rest, isSpecial)
     case SCon{'\\', rest} True{}: slash(context, base, rest, True{})
     case rest _: Done{relativePath(base, rest)}
 
 def opaqueResolve(base: URL, input: String) -> Result<&2, &2, ResolveError, URL>:
   match input:
-    case SCon{'#', rest}: Done{fragmentResolve(base, Some{encode(Fragment{}, rest)})}
+    case SCon{'#', rest}: Done{resolveFragment(base, Some{encode(Fragment{}, rest)})}
     case _: Fail{OpaqueBase{}}
 
 def relative(context: Context, +base: URL, input: String) -> Result<&2, &2, ResolveError, URL>:
   match base:
     case URL{_, _, _, _, _, RecordOpaque{_}, _, _}: opaqueResolve(base, input)
-    case _: hierarchicalResolve(context, base, input, isSpecialScheme(schemeResolve(base)))
+    case _: hierarchicalResolve(context, base, input, isSpecialScheme(baseScheme(base)))
 
 def absoluteOrRelative(sameSpecial: Bool, context: Context, base: URL, value: Scheme, input: String) -> Result<&2, &2, ResolveError, URL>:
   match sameSpecial:
     case True{}: relative(context, base, input)
-    case False{}: absoluteResult(schemeAbsolute(context, value, input))
+    case False{}: absoluteResult(absoluteScheme(context, value, input))
 
 def prefixedResolve(context: Context, +base: URL, prefix: InputPrefix) -> Result<&2, &2, ResolveError, URL>:
   match prefix:
     case Relative{input}: relative(context, base, input)
-    case Absolute{+value, input}: absoluteOrRelative(isSpecialScheme(value) && String.eq(serializeScheme(value), serializeScheme(schemeResolve(base))), context, base, value, input)
+    case Absolute{+value, input}: absoluteOrRelative(isSpecialScheme(value) && String.eq(serializeScheme(value), serializeScheme(baseScheme(base))), context, base, value, input)
 
 # Constructor resolution against an already parsed base. Domain policy remains
 # explicit in the same Context as absolute parsing; no host-language URL code.
 def parseResolve(context: Context, base: URL, input: String) -> Result<&2, &2, ResolveError, URL>:
-  prefixedResolve(context, base, prefixInput(prepareInput(input)))
+  prefixedResolve(context, base, inputPrefix(prepareInput(input)))

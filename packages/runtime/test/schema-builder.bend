@@ -27,10 +27,10 @@ def loaded(result: L.Loaded(), checker: S.Schema, +input: V.Value, +expected: Bo
 
 def check(+declaration: D.Declaration, +input: V.Value, raw: V.Value, converted: V.Value, +expected: Bool, +label: String) -> IO(Unit):
   do IO<Unit>:
-    T.assertion(V.equal(D.schemaBuilder(declaration), raw), "builder schema projection: " ++ label)
-    +valid : Bool = D.checkBuilder(declaration, input)
+    T.assertion(V.equal(D.schemaValue(declaration), raw), "builder schema projection: " ++ label)
+    +valid : Bool = D.checkDeclared(declaration, input)
     T.assertion((valid && expected) || (Bool.not(valid) && Bool.not(expected)), "builder typed validation: " ++ label)
-    loaded(L.compile(D.schemaBuilder(declaration)), D.constraint(declaration), input, expected, label)
+    loaded(L.compile(D.schemaValue(declaration)), D.constraint(declaration), input, expected, label)
     C.converted(D.convert(declaration, input), converted, "builder conversion: " ++ label)
 
 def configured(result: D.Configured(), input: V.Value, raw: V.Value, converted: V.Value, expected: Bool, label: String) -> IO(Unit):
@@ -43,22 +43,22 @@ def normalized(result: Normalize.Outcome(), +declaration: D.Declaration, expecte
     case Fail{_}: T.assertion(False{}, "builder optional-null normalization failed")
     case Done{+value}:
       do IO<Unit>:
-        T.assertion(D.checkBuilder(declaration, value), "normalized builder arguments satisfy declaration")
+        T.assertion(D.checkDeclared(declaration, value), "normalized builder arguments satisfy declaration")
         C.converted(D.convert(declaration, value), expected, "builder preserves normalized optional and nullable fields")
 
 def optionalNulls() -> IO(Unit):
   +declaration = D.object(R.Record{
-    R.Property{"path", D.requiredBuilder(D.string())} <>
-    R.Property{"offset", D.optional(D.numberBuilder())} <>
+    R.Property{"path", D.requiredField(D.string())} <>
+    R.Property{"offset", D.optional(D.number())} <>
     R.Property{"nullable", D.optional(D.union(D.string() <> D.null() <> Nil{}))} <>
-    R.Property{"metadata", D.requiredBuilder(D.object(R.Record{R.Property{"enabled", D.optional(D.boolean())} <> Nil{}}))} <> Nil{}})
+    R.Property{"metadata", D.requiredField(D.object(R.Record{R.Property{"enabled", D.optional(D.boolean())} <> Nil{}}))} <> Nil{}})
   input = {V.ObjectValue{R.Record{R.Property{"path", V.Text{"file.txt"}} <> R.Property{"offset", V.Null{}} <> R.Property{"nullable", V.Null{}} <> R.Property{"metadata", V.ObjectValue{R.Record{R.Property{"enabled", V.Null{}} <> Nil{}}}} <> Nil{}}} : V.Value}
   expected = {V.ObjectValue{R.Record{R.Property{"path", V.Text{"file.txt"}} <> R.Property{"nullable", V.Null{}} <> R.Property{"metadata", V.ObjectValue{R.new(V.Value)}} <> Nil{}}} : V.Value}
-  normalized(Normalize.normalizeOptionalNulls(input, D.schemaBuilder(declaration)), declaration, expected)
+  normalized(Normalize.normalizeOptionalNulls(input, D.schemaValue(declaration)), declaration, expected)
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +nullable : D.Declaration = D.union(D.numberBuilder() <> D.null() <> Nil{})
+    +nullable : D.Declaration = D.union(D.number() <> D.null() <> Nil{})
     C.converted(D.convert(nullable, V.Null{}), V.Null{}, "nullable union preserves null")
     C.converted(D.convert(nullable, V.Text{"42"}), V.Number{F.fromU32(42)}, "nullable union still converts numeric text")
     optionalNulls()

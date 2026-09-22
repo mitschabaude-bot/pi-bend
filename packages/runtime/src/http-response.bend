@@ -96,10 +96,10 @@ def field(name: String, value: String, state: Connection) -> Connection:
     case "connection": tokens(String.split(value, ','), state)
     case _: state
 
-def fieldsResponseTermination(values: List<&2, Head.Header>, state: Connection) -> Connection:
+def terminationFields(values: List<&2, Head.Header>, state: Connection) -> Connection:
   match values:
     case Nil{}: state
-    case Head.Header{name, value} <> rest: fieldsResponseTermination(rest, field(Head.lowercase(name), value, state))
+    case Head.Header{name, value} <> rest: terminationFields(rest, field(Head.lowercase(name), value, state))
 
 def persistent(modern: Bool, state: Connection) -> Bool:
   match state:
@@ -111,7 +111,7 @@ def allowsReset(framing: Head.Framing, head: Head.ResponseHead) -> Bool:
   match framing head:
     case Head.UntilClose{} _: True{}
     case _ Head.ResponseHead{Head.StatusLine{major, minor, _, _}, values}:
-      Bool.not(persistent(U32.is_gt(major, 0) && U32.is_gt(minor, 0), fieldsResponseTermination(values, Connection{False{}, False{}})))
+      Bool.not(persistent(U32.is_gt(major, 0) && U32.is_gt(minor, 0), terminationFields(values, Connection{False{}, False{}})))
 
 type Limits is Data:
   Limits{headLineBytes: Nat, headBytes: Nat, headFields: Nat, informationalHeads: Nat, body: Head.Limits}
@@ -280,7 +280,7 @@ def bodyPresent(value: Metadata) -> Bool:
   match value:
     case Metadata{_, _, expose}: expose
 
-def statusResponseMetadata(value: Metadata) -> U32:
+def metadataStatus(value: Metadata) -> U32:
   match value:
     case Metadata{Head.ResponseHead{Head.StatusLine{_, _, code, _}, _}, _, _}: code
 
@@ -292,7 +292,7 @@ def successful(+code: U32) -> Bool:
   U32.is_ge(code, 200) && U32.is_lt(code, 300)
 
 def ok(value: Metadata) -> Bool:
-  successful(statusResponseMetadata(value))
+  successful(metadataStatus(value))
 
 type ResponseProgressPrimaryError<-E: Data> is Data:
   TransportFailure{error: E}
@@ -316,7 +316,7 @@ type BodyDecision<-E: Data> is Data:
   Complete{trailers: List<&2, Head.Header>}
   ResponseProgressBodyFailure{error: ResponseProgressPrimaryError<E>}
 
-def headResponseProgress(-E: Data, result: Result<&2, &2, E, Maybe<&2, StreamEvent>>) -> HeadDecision<E>:
+def headDecision(-E: Data, result: Result<&2, &2, E, Maybe<&2, StreamEvent>>) -> HeadDecision<E>:
   match result:
     case Fail{error}: HeadFailure{TransportFailure{error}}
     case Done{None{}}: HeadFailure{MissingHead{}}
@@ -324,7 +324,7 @@ def headResponseProgress(-E: Data, result: Result<&2, &2, E, Maybe<&2, StreamEve
     case Done{Some{FinalHead{value, expose}}}: Ready{fromHead(value, expose)}
     case Done{Some{event}}: HeadFailure{UnexpectedEvent{event}}
 
-def bodyResponseProgress(-E: Data, expose: Bool, result: Result<&2, &2, E, Maybe<&2, StreamEvent>>) -> BodyDecision<E>:
+def bodyDecision(-E: Data, expose: Bool, result: Result<&2, &2, E, Maybe<&2, StreamEvent>>) -> BodyDecision<E>:
   match expose result:
     case _ Fail{error}: ResponseProgressBodyFailure{TransportFailure{error}}
     case _ Done{None{}}: ResponseProgressBodyFailure{MissingCompletion{}}
@@ -334,7 +334,7 @@ def bodyResponseProgress(-E: Data, expose: Bool, result: Result<&2, &2, E, Maybe
     case _ Done{Some{event}}: ResponseProgressBodyFailure{UnexpectedEvent{event}}
 
 # Cleanup always runs, and cannot overwrite the original read/protocol error.
-def outcomeResponseProgress(-E: Data, primary: Maybe<&2, ResponseProgressPrimaryError<E>>, cleanup: Result<&2, &2, E, Unit>) -> Result<&2, &2, ResponseProgressError<E>, Unit>:
+def progressOutcome(-E: Data, primary: Maybe<&2, ResponseProgressPrimaryError<E>>, cleanup: Result<&2, &2, E, Unit>) -> Result<&2, &2, ResponseProgressError<E>, Unit>:
   match primary cleanup:
     case None{} Done{_}: Done{Unit{}}
     case Some{error} Done{_}: Fail{ResponseProgressPrimaryFailure{error}}
@@ -361,11 +361,11 @@ def failedStart(-E: Data, -State: Type, primary: ResponseProgressPrimaryError<E>
 
 def headRead(-E: Data, -State: Type, pair: State & Result<&2, &2, E, Maybe<&2, StreamEvent>>) -> State & HeadDecision<E>:
   match pair:
-    case (state, result): (state, headResponseProgress(E, result))
+    case (state, result): (state, headDecision(E, result))
 
 def bodyRead(-E: Data, -State: Type, expose: Bool, pair: State & Result<&2, &2, E, Maybe<&2, StreamEvent>>) -> State & BodyDecision<E>:
   match pair:
-    case (state, result): (state, bodyResponseProgress(E, expose, result))
+    case (state, result): (state, bodyDecision(E, expose, result))
 
 # An effectful source controls progress. The HTTP parser bounds informational
 # heads; this generic adapter does not impose a second, unrelated budget.
@@ -397,11 +397,11 @@ def finished(-E: Data, -State: Type, trailers: Maybe<&2, List<&2, Head.Header>>,
     case (state, Complete{fields}):
       do IO<Next<E, State>>:
         cleanup : Result<&2, &2, E, Unit> <- closeTransportCallbacks(E, State, close, state)
-        return finished(E, State, Some{fields}, outcomeResponseProgress(E, None{}, cleanup))
+        return finished(E, State, Some{fields}, progressOutcome(E, None{}, cleanup))
     case (state, ResponseProgressBodyFailure{error}):
       do IO<Next<E, State>>:
         cleanup : Result<&2, &2, E, Unit> <- closeTransportCallbacks(E, State, close, state)
-        return finished(E, State, None{}, outcomeResponseProgress(E, Some{error}, cleanup))
+        return finished(E, State, None{}, progressOutcome(E, Some{error}, cleanup))
     case (state, ReadMore{}):
       do IO<Next<E, State>>:
         pair : State & Result<&2, &2, E, Maybe<&2, StreamEvent>> <- readTransportCallbacks(E, State, read, state)
@@ -419,14 +419,14 @@ def closeWith(-E: Data, -State: Type, close: State -> IO(Result<&2, &2, E, Unit>
     case Open{state, _}:
       do IO<Next<E, State>>:
         cleanup : Result<&2, &2, E, Unit> <- close(state)
-        return finished(E, State, None{}, outcomeResponseProgress(E, None{}, cleanup))
+        return finished(E, State, None{}, progressOutcome(E, None{}, cleanup))
 
 # Compile-time operations are lifted into owned factories for this call.
-def startWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, E, Unit>), state: State) -> IO(Result<&2, &1, ResponseProgressError<E>, Response<State>>):
-  with(~E, ~State, ~Result<&2, &1, ResponseProgressError<E>, Response<State>>, ~read, ~close, reader => closer => start(E, State, reader, closer, state))
+def startWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, E, Unit>), state: State) -> IO(Result<&2, &1, ResponseProgressError<E>, Response<State>>):
+  with(~E, ~State, ~Result<&2, &1, ResponseProgressError<E>, Response<State>>, ~read, ~closeReader, reader => closer => start(E, State, reader, closer, state))
 
-def nextWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, E, Unit>), body: Body<State>) -> IO(Next<E, State>):
-  with(~E, ~State, ~Next<E, State>, ~read, ~close, reader => closer => nextResponse(E, State, reader, closer, body))
+def nextWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, E, Unit>), body: Body<State>) -> IO(Next<E, State>):
+  with(~E, ~State, ~Next<E, State>, ~read, ~closeReader, reader => closer => nextResponse(E, State, reader, closer, body))
 
 # An acquired byte-source lease. The cursor owns its release obligation, while
 # callback handles remain borrowed from their external owner. The source owner
@@ -452,8 +452,8 @@ type ReadResult<-E: Data> is Data:
   Reset{error: E}
 
 type Source<-E: Data> is Data:
-  Source{nextResponseReader: C.Callback<Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>>, release: C.Callback<Release, Result<&2, &2, E, Unit>>}
-  TransportSource{nextResponseReader: C.Callback<Unit, ReadResult<E>>, release: C.Callback<Release, Result<&2, &2, E, Unit>>}
+  Source{next: C.Callback<Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>>, release: C.Callback<Release, Result<&2, &2, E, Unit>>}
+  TransportSource{next: C.Callback<Unit, ReadResult<E>>, release: C.Callback<Release, Result<&2, &2, E, Unit>>}
 
 type ResponseReaderPrimaryError<-E: Data> is Data:
   SourceError{error: E}
@@ -466,7 +466,7 @@ type ReadError<-E: Data> is Data:
 
 type Position<-E: Data> is Data:
   Live{reader: Reader, pending: List<&2, StreamEvent>, head: Maybe<&2, Head.ResponseHead>}
-  Drained{pending: List<&2, StreamEvent>, outcomeResponseReader: Result<&2, &2, ReadError<E>, Unit>}
+  Drained{pending: List<&2, StreamEvent>, readerOutcome: Result<&2, &2, ReadError<E>, Unit>}
   ResponseReaderClosed{}
 
 type Cursor<-E: Data> is Type:
@@ -483,11 +483,11 @@ type ResponseReaderDecision<-E: Data> is Data:
   Pull{reader: Reader, head: Maybe<&2, Head.ResponseHead>}
   ReleaseSource{request: Release, pending: List<&2, StreamEvent>, primary: Maybe<&2, ResponseReaderPrimaryError<E>>}
 
-def createResponseReader(-E: Data, source: Source<E>, method: String, limits: Limits) -> Cursor<E>:
+def createReader(-E: Data, source: Source<E>, method: String, limits: Limits) -> Cursor<E>:
   Cursor{source, Live{new(method, limits), Nil{}, None{}}}
 
-def ended(-E: Data, outcomeResponseReader: Result<&2, &2, ReadError<E>, Unit>) -> ResponseReaderDecision<E>:
-  match outcomeResponseReader:
+def ended(-E: Data, readerOutcome: Result<&2, &2, ReadError<E>, Unit>) -> ResponseReaderDecision<E>:
+  match readerOutcome:
     case Done{_}: Available{ResponseReaderClosed{}, Done{None{}}}
     case Fail{error}: Available{ResponseReaderClosed{}, Fail{error}}
 
@@ -495,8 +495,8 @@ def decide(-E: Data, position: Position<E>) -> ResponseReaderDecision<E>:
   match position:
     case Live{reader, Nil{}, head}: Pull{reader, head}
     case Live{reader, first <> rest, head}: Available{Live{reader, rest, head}, Done{Some{first}}}
-    case Drained{Nil{}, outcomeResponseReader}: ended(E, outcomeResponseReader)
-    case Drained{first <> rest, outcomeResponseReader}: Available{Drained{rest, outcomeResponseReader}, Done{Some{first}}}
+    case Drained{Nil{}, readerOutcome}: ended(E, readerOutcome)
+    case Drained{first <> rest, readerOutcome}: Available{Drained{rest, readerOutcome}, Done{Some{first}}}
     case ResponseReaderClosed{}: Available{ResponseReaderClosed{}, Done{None{}}}
 
 def finalHead(events: List<&2, StreamEvent>, previous: Maybe<&2, Head.ResponseHead>) -> Maybe<&2, Head.ResponseHead>:
@@ -534,14 +534,14 @@ def received(-E: Data, +reader: Reader, head: Maybe<&2, Head.ResponseHead>, resu
     case End{}: decoded(E, finish(reader), head, Some{CleanEOF{}})
     case Bytes{bytes}: decoded(E, readResponseStream(reader, bytes), head, None{})
 
-def outcomeResponseReader(-E: Data, primary: Maybe<&2, ResponseReaderPrimaryError<E>>, released: Result<&2, &2, E, Unit>) -> Result<&2, &2, ReadError<E>, Unit>:
+def readerOutcome(-E: Data, primary: Maybe<&2, ResponseReaderPrimaryError<E>>, released: Result<&2, &2, E, Unit>) -> Result<&2, &2, ReadError<E>, Unit>:
   match primary released:
     case None{} Done{_}: Done{Unit{}}
     case None{} Fail{error}: Fail{ReleaseFailure{error}}
     case Some{error} Done{_}: Fail{ResponseReaderPrimaryFailure{error}}
     case Some{primary} Fail{error}: Fail{FailureWithRelease{primary, error}}
 
-def settledResponseReader(-E: Data, pending: List<&2, StreamEvent>, result: Result<&2, &2, ReadError<E>, Unit>) -> ResponseReaderDecision<E>:
+def settledReader(-E: Data, pending: List<&2, StreamEvent>, result: Result<&2, &2, ReadError<E>, Unit>) -> ResponseReaderDecision<E>:
   match result:
     case Done{_}: decide(E, Drained{pending, Done{Unit{}}})
     case Fail{error}: decide(E, Drained{withoutCompletion(pending), Fail{error}})
@@ -554,11 +554,11 @@ def fromResult(-E: Data, result: Result<&2, &2, E, Maybe<&2, List<&2, U32>>>) ->
 
 def readSource(-E: Data, source: Source<E>) -> IO(ReadResult<E>):
   match source:
-    case Source{nextResponseReader, _}:
+    case Source{next, _}:
       do IO<ReadResult<E>>:
-        result : Result<&2, &2, E, Maybe<&2, List<&2, U32>>> <- C.call(Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>, nextResponseReader, Unit{})
+        result : Result<&2, &2, E, Maybe<&2, List<&2, U32>>> <- C.call(Unit, Result<&2, &2, E, Maybe<&2, List<&2, U32>>>, next, Unit{})
         return fromResult(E, result)
-    case TransportSource{nextResponseReader, _}: C.call(Unit, ReadResult<E>, nextResponseReader, Unit{})
+    case TransportSource{next, _}: C.call(Unit, ReadResult<E>, next, Unit{})
 
 def releaseSource(-E: Data, source: Source<E>, request: Release) -> IO(Result<&2, &2, E, Unit>):
   match source:
@@ -576,23 +576,23 @@ def releaseSource(-E: Data, source: Source<E>, request: Release) -> IO(Result<&2
     case ReleaseSource{request, pending, primary}:
       do IO<ResponseReaderNext<E>>:
         result : Result<&2, &2, E, Unit> <- releaseSource(E, source, request)
-        driveResponseReader(E, source, settledResponseReader(E, pending, outcomeResponseReader(E, primary, result)))
+        driveResponseReader(E, source, settledReader(E, pending, readerOutcome(E, primary, result)))
 
-def nextResponseReader(-E: Data, cursor: Cursor<E>) -> IO(ResponseReaderNext<E>):
+def readerNext(-E: Data, cursor: Cursor<E>) -> IO(ResponseReaderNext<E>):
   match cursor:
     case Cursor{source, position}: driveResponseReader(E, source, decide(E, position))
 
-def closedResponseReader(-E: Data, source: Source<E>, result: Result<&2, &2, E, Unit>) -> CloseResult<E>:
-  CloseResult{Cursor{source, ResponseReaderClosed{}}, outcomeResponseReader(E, None{}, result)}
+def closedReader(-E: Data, source: Source<E>, result: Result<&2, &2, E, Unit>) -> CloseResult<E>:
+  CloseResult{Cursor{source, ResponseReaderClosed{}}, readerOutcome(E, None{}, result)}
 
 # Release callbacks must relinquish the lease even when they report an error.
 # A failed release is not retried against a potentially retired/reused resource.
-def closeResponseReader(-E: Data, cursor: Cursor<E>) -> IO(CloseResult<E>):
+def closeReader(-E: Data, cursor: Cursor<E>) -> IO(CloseResult<E>):
   match cursor:
     case Cursor{+source, Live{_, _, head}}:
       do IO<CloseResult<E>>:
         result : Result<&2, &2, E, Unit> <- releaseSource(E, source, Release{EarlyClose{}, head})
-        return closedResponseReader(E, source, result)
+        return closedReader(E, source, result)
     case Cursor{source, Drained{_, result}}: IO.pure(CloseResult<E>, CloseResult{Cursor{source, ResponseReaderClosed{}}, result})
     case Cursor{source, ResponseReaderClosed{}}: IO.pure(CloseResult<E>, CloseResult{Cursor{source, ResponseReaderClosed{}}, Done{Unit{}}})
 
@@ -712,14 +712,14 @@ def jsonUsing(-E: Data, -State: Type, read: Read(E, State), close: Close(E, Stat
     text : Result<&2, &2, TextError<E>, String> <- textUsing(E, State, read, close, limit, body)
     return decodeJSON(E, text)
 
-def bytesWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, Error<E>, List<&2, U32>>):
-  with(~E, ~State, ~Result<&2, &2, Error<E>, List<&2, U32>>, ~read, ~close, reader => closer => bytesUsing(E, State, reader, closer, limit, body))
+def bytesWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, Error<E>, List<&2, U32>>):
+  with(~E, ~State, ~Result<&2, &2, Error<E>, List<&2, U32>>, ~read, ~closeReader, reader => closer => bytesUsing(E, State, reader, closer, limit, body))
 
-def textWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, TextError<E>, String>):
-  with(~E, ~State, ~Result<&2, &2, TextError<E>, String>, ~read, ~close, reader => closer => textUsing(E, State, reader, closer, limit, body))
+def textWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, TextError<E>, String>):
+  with(~E, ~State, ~Result<&2, &2, TextError<E>, String>, ~read, ~closeReader, reader => closer => textUsing(E, State, reader, closer, limit, body))
 
-def jsonWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, JSONError<E>, Value.Value>):
-  with(~E, ~State, ~Result<&2, &2, JSONError<E>, Value.Value>, ~read, ~close, reader => closer => jsonUsing(E, State, reader, closer, limit, body))
+def jsonWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, E, Unit>), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, JSONError<E>, Value.Value>):
+  with(~E, ~State, ~Result<&2, &2, JSONError<E>, Value.Value>, ~read, ~closeReader, reader => closer => jsonUsing(E, State, reader, closer, limit, body))
 
 # One acquired byte source. Borrowed callbacks serialize access to the affine
 # body; the caller retires all aliases/calls before disposing this owner.
@@ -745,9 +745,9 @@ def closed(-T: Data, -State: Type, -E: Data, map: ResponseProgressError<T> -> E,
   match value:
     case Next{body, result}: (body, closeResult(T, E, map, result))
 
-def pull(~T: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, T, Unit>), -E: Data, map: ResponseProgressError<T> -> E, body: Body<State>) -> IO(Body<State> & Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
+def pull(~T: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, T, Unit>), -E: Data, map: ResponseProgressError<T> -> E, body: Body<State>) -> IO(Body<State> & Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
   do IO<Body<State> & Result<&2, &2, E, Maybe<&2, SSE.Chunk>>>:
-    value : Next<T, State> <- nextWith(~T, ~State, ~read, ~close, body)
+    value : Next<T, State> <- nextWith(~T, ~State, ~read, ~closeReader, body)
     return pulled(T, State, E, map, value)
 
 def closeBody(-T: Data, -State: Type, -E: Data, map: ResponseProgressError<T> -> E, close: State -> IO(Result<&2, &2, T, Unit>), body: Body<State>) -> IO(Body<State> & Result<&2, &2, E, Unit>):
@@ -755,11 +755,11 @@ def closeBody(-T: Data, -State: Type, -E: Data, map: ResponseProgressError<T> ->
     value : Next<T, State> <- closeWith(T, State, close, body)
     return closed(T, State, E, map, value)
 
-def nextCallback(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, T, Unit>), handle: Serial.Handle<Body<State>>, unused: Unit) -> IO(Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
-  Serial.run(Body<State>, Result<&2, &2, E, Maybe<&2, SSE.Chunk>>, handle, body => pull(~T, ~State, ~read, ~close, E, map, body))
+def nextCallback(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, T, Unit>), handle: Serial.Handle<Body<State>>, unused: Unit) -> IO(Result<&2, &2, E, Maybe<&2, SSE.Chunk>>):
+  Serial.run(Body<State>, Result<&2, &2, E, Maybe<&2, SSE.Chunk>>, handle, body => pull(~T, ~State, ~read, ~closeReader, E, map, body))
 
-def closeCallback(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~close: State -> IO(Result<&2, &2, T, Unit>), handle: Serial.Handle<Body<State>>, unused: Unit) -> IO(Result<&2, &2, E, Unit>):
-  Serial.run(Body<State>, Result<&2, &2, E, Unit>, handle, body => closeBody(T, State, E, map, close, body))
+def closeCallback(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~closeReader: State -> IO(Result<&2, &2, T, Unit>), handle: Serial.Handle<Body<State>>, unused: Unit) -> IO(Result<&2, &2, E, Unit>):
+  Serial.run(Body<State>, Result<&2, &2, E, Unit>, handle, body => closeBody(T, State, E, map, closeReader, body))
 
 def releasedBodySource(-T: Data, -State: Type, -E: Data, map: ResponseProgressError<T> -> E, value: Next<T, State>) -> Result<&2, &2, E, Unit>:
   match value:
@@ -770,18 +770,18 @@ def releaseBody(-T: Data, -State: Type, -E: Data, map: ResponseProgressError<T> 
     value : Next<T, State> <- closeWith(T, State, close, body)
     return releasedBodySource(T, State, E, map, value)
 
-def acquired(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, T, Unit>), resource: Serial.Owner<Body<State>>) -> IO(Owner<State, E>):
+def acquired(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, T, Unit>), resource: Serial.Owner<Body<State>>) -> IO(Owner<State, E>):
   match resource:
     case Serial.Owner{+handle}:
       do IO<Owner<State, E>>:
-        next : C.Callback<Unit, Result<&2, &2, E, Maybe<&2, SSE.Chunk>>> <- C.create(~Serial.Handle<Body<State>>, ~Unit, ~Result<&2, &2, E, Maybe<&2, SSE.Chunk>>, ~(nextCallback(~T, ~State, ~E, ~map, ~read, ~close)), handle)
-        closeSource : C.Callback<Unit, Result<&2, &2, E, Unit>> <- C.create(~Serial.Handle<Body<State>>, ~Unit, ~Result<&2, &2, E, Unit>, ~(closeCallback(~T, ~State, ~E, ~map, ~close)), handle)
-        return Owner{Serial.Owner{handle}, SSE.Source{next, closeSource}, body => releaseBody(T, State, E, map, close, body)}
+        next : C.Callback<Unit, Result<&2, &2, E, Maybe<&2, SSE.Chunk>>> <- C.create(~Serial.Handle<Body<State>>, ~Unit, ~Result<&2, &2, E, Maybe<&2, SSE.Chunk>>, ~(nextCallback(~T, ~State, ~E, ~map, ~read, ~closeReader)), handle)
+        closeSource : C.Callback<Unit, Result<&2, &2, E, Unit>> <- C.create(~Serial.Handle<Body<State>>, ~Unit, ~Result<&2, &2, E, Unit>, ~(closeCallback(~T, ~State, ~E, ~map, ~closeReader)), handle)
+        return Owner{Serial.Owner{handle}, SSE.Source{next, closeSource}, body => releaseBody(T, State, E, map, closeReader, body)}
 
-def create(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~close: State -> IO(Result<&2, &2, T, Unit>), body: Body<State>) -> IO(Owner<State, E>):
+def create(~T: Data, ~State: Type, ~E: Data, ~map: ResponseProgressError<T> -> E, ~read: State -> IO(State & Result<&2, &2, T, Maybe<&2, StreamEvent>>), ~closeReader: State -> IO(Result<&2, &2, T, Unit>), body: Body<State>) -> IO(Owner<State, E>):
   do IO<Owner<State, E>>:
     resource : Serial.Owner<Body<State>> <- Serial.create(Body<State>, body)
-    acquired(~T, ~State, ~E, ~map, ~read, ~close, resource)
+    acquired(~T, ~State, ~E, ~map, ~read, ~closeReader, resource)
 
 def borrow(-State: Type, -E: Data, owner: Owner<State, E>) -> Owner<State, E> & SSE.Source<E>:
   match owner:

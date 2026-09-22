@@ -28,16 +28,16 @@ def endpoint(family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32)
   match family:
     case 4: Done{EndpointV4{IPv4.Address{a}, port}}
     case 6: Done{EndpointV6{IPv6.Ipv6Address{a, b, c, d}, port, scope}}
-    case valueEndpoint: Fail{InvalidFamily{valueEndpoint}}
+    case value: Fail{InvalidFamily{value}}
 
-def valueEndpoint(result: Result<&1, &1, U32 & String, U32 & U32 & U32 & U32 & U32 & U32 & U32>) -> Result<&2, &2, EndpointError, Endpoint>:
+def endpointValue(result: Result<&1, &1, U32 & String, U32 & U32 & U32 & U32 & U32 & U32 & U32>) -> Result<&2, &2, EndpointError, Endpoint>:
   match result:
     case Fail{(code, message)}: Fail{EndpointSocketError{code, message}}
     case Done{(family, a, b, c, d, port, scope)}: endpoint(family, a, b, c, d, port, scope)
 
 def convertedEndpoint(pair: Socket & Result<&1, &1, U32 & String, U32 & U32 & U32 & U32 & U32 & U32 & U32>) -> Socket & Result<&2, &2, EndpointError, Endpoint>:
   match pair:
-    case (socket, result): (socket, valueEndpoint(result))
+    case (socket, result): (socket, endpointValue(result))
 
 # Observe numeric endpoint metadata without consuming, duplicating or changing
 # the connection. The same affine socket is returned on success and failure.
@@ -79,7 +79,7 @@ def borrow(owner: InterruptOwner) -> InterruptOwner & Handle:
   match owner:
     case InterruptOwner{resource}: borrowed(Resource.borrow(Maybe<&1, Socket>, resource))
 
-def resultInterrupt(value: Result<&1, &1, U32 & String, Unit>) -> Result<&2, &2, InterruptError, Bool>:
+def interruptResult(value: Result<&1, &1, U32 & String, Unit>) -> Result<&2, &2, InterruptError, Bool>:
   match value:
     case Done{_}: Done{True{}}
     case Fail{(code, message)}: Fail{InterruptError{code, message}}
@@ -89,7 +89,7 @@ def shutdown(pair: Socket & Result<&1, &1, U32 & String, Unit>) -> IO(Maybe<&1, 
     case (socket, outcome):
       do IO<Maybe<&1, Socket> & Result<&2, &2, InterruptError, Bool>>:
         Socket.close(socket)
-        return (None{}, resultInterrupt(outcome))
+        return (None{}, interruptResult(outcome))
 
 def cancelOwned(value: Maybe<&1, Socket>) -> IO(Maybe<&1, Socket> & Result<&2, &2, InterruptError, Bool>):
   match value:
@@ -187,7 +187,7 @@ def create(-Reason: Data, socket: Socket, +signal: A.AbortSignal<Reason>) -> IO(
     reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
     checkedSocket(Reason, socket, signal, reason)
 
-def outcomeSocket(-Reason: Data, -Value: Data, value: Result<&1, &1, U32 & String, Value>, reason: Maybe<&2, A.AbortReason<Reason>>) -> Result<&2, &2, Error<Reason>, Value>:
+def socketOutcome(-Reason: Data, -Value: Data, value: Result<&1, &1, U32 & String, Value>, reason: Maybe<&2, A.AbortReason<Reason>>) -> Result<&2, &2, Error<Reason>, Value>:
   match value reason:
     case _ Some{why}: Fail{Aborted{why}}
     case Fail{(code, message)} None{}: Fail{SocketError{code, message}}
@@ -198,7 +198,7 @@ def received(-Reason: Data, -Value: Data, lifetime: Lifetime<Reason>, signal: A.
     case (socket, value):
       do IO<Owner<Reason> & Result<&2, &2, Error<Reason>, Value>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
-        return (Owner{socket, lifetime}, outcomeSocket(Reason, Value, value, reason))
+        return (Owner{socket, lifetime}, socketOutcome(Reason, Value, value, reason))
 
 def perform(-Reason: Data, -Value: Data, socket: Socket, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, operation: Socket -> IO(Socket & Result<&1, &1, U32 & String, Value>), reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Owner<Reason> & Result<&2, &2, Error<Reason>, Value>):
   match reason:
@@ -397,7 +397,7 @@ def selected(-Reason: Data, -Value: Data, choice: Outcome.Outcome<Reason, Datagr
     case Outcome.Completed{result}: result
     case Outcome.Cancelled{}: Fail{CancelledWithoutReason{}}
 
-def outcomeDatagram(-Reason: Data, datagramValue: Maybe<&1, Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>>, abortState: Maybe<&2, A.AbortReason<Reason>>) -> Result<&2, &2, DatagramError<Reason>, Packet>:
+def datagramOutcome(-Reason: Data, datagramValue: Maybe<&1, Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>>, abortState: Maybe<&2, A.AbortReason<Reason>>) -> Result<&2, &2, DatagramError<Reason>, Packet>:
   selected(Reason, Packet, Outcome.choose(Reason, DatagramError<Reason>, Packet, abortState, converted(Reason, datagramValue)))
 
 def cancelForReason(-Reason: Data, handle: UDPReadCancel, abortState: Maybe<&2, A.AbortReason<Reason>>) -> IO(Unit):
@@ -418,7 +418,7 @@ def settledDatagram(-Reason: Data, signal: A.AbortSignal<Reason>, pair: Socket &
     case (socket, datagramValue):
       do IO<Socket & Result<&2, &2, DatagramError<Reason>, Packet>>:
         abortState : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
-        return (socket, outcomeDatagram(Reason, datagramValue, abortState))
+        return (socket, datagramOutcome(Reason, datagramValue, abortState))
 
 def observing(-Reason: Data, signal: A.AbortSignal<Reason>, pair: UDPRead & UDPReadCancel, observation: D.Observation<A.AbortReason<Reason>>) -> IO(Socket & Result<&2, &2, DatagramError<Reason>, Packet>):
   match pair observation:
@@ -538,7 +538,7 @@ def sent(-Reason: Data, +signal: A.AbortSignal<Reason>, pair: Socket & Result<&1
     case (socket, result):
       do IO<Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
-        return (Writer{socket, signal}, outcomeSocket(Reason, Unit, result, reason))
+        return (Writer{socket, signal}, socketOutcome(Reason, Unit, result, reason))
 
 def allowed(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, bytes: List<&2, U32>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>):
   match reason:
@@ -655,7 +655,7 @@ def stopping(-Reason: Data, state: State<Reason>) -> State<Reason> & Bool:
     case Active{}: (Stopped{}, True{})
     case previous: (previous, False{})
 
-def outcomeUpload(-Reason: Data, state: State<Reason>, cleanup: Result<&2, &2, InterruptError, Unit>) -> Result<&2, &2, UploadError<Reason>, Unit>:
+def uploadOutcome(-Reason: Data, state: State<Reason>, cleanup: Result<&2, &2, InterruptError, Unit>) -> Result<&2, &2, UploadError<Reason>, Unit>:
   match state cleanup:
     case Settled{Fail{error}, False{}} Done{_}: Fail{WriteFailure{error, None{}}}
     case Settled{Fail{error}, False{}} Fail{cleanup}: Fail{WriteFailure{error, Some{cleanup}}}
@@ -677,4 +677,4 @@ def stop(-Reason: Data, owner: UploadOwner<Reason>) -> IO(Result<&2, &2, UploadE
         stopped : Result<&2, &2, InterruptError, Unit> <- wake(interrupt, needed)
         joined : Result<&2, &2, InterruptError, Unit> <- IO.join(Result<&2, &2, InterruptError, Unit>, task)
         value : State<Reason> <- R.dispose(State<Reason>, state)
-        return outcomeUpload(Reason, value, combined(stopped, joined))
+        return uploadOutcome(Reason, value, combined(stopped, joined))

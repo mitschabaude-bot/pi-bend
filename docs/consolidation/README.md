@@ -11,3 +11,5 @@ Each file maps `old-module.name` to the name the definition received when its mo
 | `renames-small.json` | dfcef5f | schema, f64, json, random, utf8, text, string, calendar, bounded, timer, abort |
 
 The first merges also suffixed binders that collided with same-module definitions with `Local`; those names were replaced by hand afterwards (see the parity record for 2026-09-22), so the tables describe definitions only.
+
+On 2026-09-22 the noun-first and doubled suffix names (149 definitions) received curated names; the tables were updated in place, so each entry still maps the original `module.name` to the current definition.

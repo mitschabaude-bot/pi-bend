@@ -4,16 +4,16 @@ import ../src/unicode.bend as Joining
 
 def step(code: U32, state: Rule.ContextjState) -> Rule.ContextjState:
   match code:
-    case 97: Rule.pushContextj(state, 97, Joining.NonJoining{}, 0)
-    case 98: Rule.pushContextj(state, 97, Joining.LeftJoining{}, 0)
-    case 99: Rule.pushContextj(state, 97, Joining.RightJoining{}, 0)
-    case 100: Rule.pushContextj(state, 97, Joining.DualJoining{}, 0)
-    case 101: Rule.pushContextj(state, 97, Joining.JoinCausing{}, 0)
-    case 102: Rule.pushContextj(state, 97, Joining.Transparent{}, 230)
-    case 103: Rule.pushContextj(state, 97, Joining.Transparent{}, 9)
-    case 104: Rule.pushContextj(state, 97, Joining.NonJoining{}, 9)
-    case 105: Rule.pushContextj(state, 8204, Joining.NonJoining{}, 0)
-    case _: Rule.pushContextj(state, 8205, Joining.JoinCausing{}, 0)
+    case 97: Rule.pushContextJ(state, 97, Joining.NonJoining{}, 0)
+    case 98: Rule.pushContextJ(state, 97, Joining.LeftJoining{}, 0)
+    case 99: Rule.pushContextJ(state, 97, Joining.RightJoining{}, 0)
+    case 100: Rule.pushContextJ(state, 97, Joining.DualJoining{}, 0)
+    case 101: Rule.pushContextJ(state, 97, Joining.JoinCausing{}, 0)
+    case 102: Rule.pushContextJ(state, 97, Joining.Transparent{}, 230)
+    case 103: Rule.pushContextJ(state, 97, Joining.Transparent{}, 9)
+    case 104: Rule.pushContextJ(state, 97, Joining.NonJoining{}, 9)
+    case 105: Rule.pushContextJ(state, 8204, Joining.NonJoining{}, 0)
+    case _: Rule.pushContextJ(state, 8205, Joining.JoinCausing{}, 0)
 
 def run(text: String, state: Rule.ContextjState) -> Bool:
   match text:

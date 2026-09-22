@@ -34,7 +34,7 @@ def finishRun(started: Result<&2, &2, String, Parallel.ParallelRun<Unit, String,
     case Fail{error}: IO.pure(S.Outcome(), Fail{error})
     case Done{+run}:
       do IO<S.Outcome()>:
-        result : S.Outcome() <- Parallel.resultParallel(Unit, String, String, String, run)
+        result : S.Outcome() <- Parallel.parallelResult(Unit, String, String, String, run)
         Parallel.disposeParallel(Unit, String, String, String, run)
         return result
 

@@ -104,14 +104,14 @@ def finish(failure: Bool, +run: Run(), gates: Gates) -> IO(S.Outcome()):
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         release(first)
-        Execution.resultExecution(Unit, String, String, String, run)
+        Execution.executionResult(Unit, String, String, String, run)
     case True{} Gates{_, end, first, second, third}:
       do IO<S.Outcome()>:
         release(second)
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         # First and third remain blocked until the failed batch result arrives.
-        result : S.Outcome() <- Execution.resultExecution(Unit, String, String, String, run)
+        result : S.Outcome() <- Execution.executionResult(Unit, String, String, String, run)
         release(third)
         release(first)
         return result

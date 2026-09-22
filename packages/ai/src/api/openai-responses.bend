@@ -927,7 +927,7 @@ def payloadHook(-E: Data, +original: T.JsonValue, model: T.Model<T.JsonValue>, h
         return Result.map(&2, &2, E, Maybe<&2, T.JsonValue>, T.JsonValue, replacement => Maybe.default(&2, T.JsonValue, replacement, original), result)
 
 def providerResponse(+metadata: Metadata.Metadata) -> T.ProviderResponse:
-  T.ProviderResponse{F.fromU32(Metadata.statusResponseMetadata(metadata)), ProviderHeaders.headersToRecord(Metadata.headers(metadata))}
+  T.ProviderResponse{F.fromU32(Metadata.metadataStatus(metadata)), ProviderHeaders.headersToRecord(Metadata.headers(metadata))}
 
 def responseHook(-Reason: Data, -E: Data, model: T.Model<T.JsonValue>, hook: Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, E)>, response: Response.Response<Client.State(Reason)>) -> IO(Response.Response<Client.State(Reason)> & Result<&2, &2, E, Unit>):
   match hook response:

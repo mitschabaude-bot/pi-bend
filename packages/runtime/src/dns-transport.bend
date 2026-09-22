@@ -63,7 +63,7 @@ def messageEndpoint(value: Endpoint.Endpoint) -> Message.Endpoint:
     case Endpoint.EndpointV4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
     case Endpoint.EndpointV6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
 
-def transactionUdpQuery(route: Peer.Route, request: Message.Request) -> Message.Transaction:
+def udpTransaction(route: Peer.Route, request: Message.Request) -> Message.Transaction:
   match route request:
     case Peer.Route{local, remote} Message.Request{id, flags, question, _}: Message.Transaction{messageEndpoint(local), messageEndpoint(remote), id, (flags / 2048 % 16 : U32), question}
 
@@ -111,7 +111,7 @@ def ownedUdpQuery(-Reason: Data, +signal: Abort.AbortSignal<Reason>, request: Me
     case Peer.Owner{socket, Peer.Route{+local, +remote}}:
       do IO<Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>>:
         result : Socket & Result<&2, &2, Datagram.DatagramError<Reason>, Unit> <- Datagram.send(Reason, socket, remote, bytes, signal)
-        sentUdpQuery(Reason, signal, transactionUdpQuery(Peer.Route{local, remote}, request), local, result)
+        sentUdpQuery(Reason, signal, udpTransaction(Peer.Route{local, remote}, request), local, result)
 
 def opened(-Reason: Data, signal: Abort.AbortSignal<Reason>, request: Message.Request, bytes: List<&2, U32>, result: Result<&2, &1, Peer.Error, Peer.Owner>) -> IO(Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>):
   match result:
@@ -159,7 +159,7 @@ type UdpPolicyDecision is Data:
   UseTCP{}
   Retry{reason: UdpPolicyRejection}
 
-def statusUdpPolicy(code: U32) -> Status:
+def udpStatus(code: U32) -> Status:
   match code:
     case 0: Success{}
     case 2: FailureCode{}
@@ -177,8 +177,8 @@ def success(unhelpful: Bool, truncated: Bool, ignoreTruncation: Bool) -> UdpPoli
     case True{}: Retry{UnhelpfulEmpty{}}
     case False{}: transport(truncated, ignoreTruncation)
 
-def decide(statusUdpPolicy: Status, unhelpful: Bool, truncated: Bool, ignoreTruncation: Bool) -> UdpPolicyDecision:
-  match statusUdpPolicy:
+def decide(status: Status, unhelpful: Bool, truncated: Bool, ignoreTruncation: Bool) -> UdpPolicyDecision:
+  match status:
     case FailureCode{}: Retry{ServerFailure{}}
     case NotImplementedCode{}: Retry{NotImplemented{}}
     case RefusedCode{}: Retry{Refused{}}
@@ -190,7 +190,7 @@ def decide(statusUdpPolicy: Status, unhelpful: Bool, truncated: Bool, ignoreTrun
 def headerCode(code: U32, value: Message.Header, ignoreTruncation: Bool) -> UdpPolicyDecision:
   match value:
     case Message.Header{_, +flags, _, answers, _, additional}:
-      decide(statusUdpPolicy(code), U32.is_eq(answers, 0) && U32.is_eq(U32.and(flags, 1152), 0) && U32.is_eq(additional, 0), U32.is_ne(U32.and(flags, 512), 0), ignoreTruncation)
+      decide(udpStatus(code), U32.is_eq(answers, 0) && U32.is_eq(U32.and(flags, 1152), 0) && U32.is_eq(additional, 0), U32.is_ne(U32.and(flags, 512), 0), ignoreTruncation)
 
 # Only a validated truncated header is available on the incomplete-message
 # path. Complete responses instead enter message() to validate the OPT record.
@@ -206,7 +206,7 @@ def messageHeader(value: Message.Message) -> Message.Header:
   match value:
     case Message.Message{_, fields, _, _, _, _}: fields
 
-def messageUdpPolicy(+value: Message.Message, ignoreTruncation: Bool) -> Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>:
+def udpMessagePolicy(+value: Message.Message, ignoreTruncation: Bool) -> Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>:
   inspectedUdpPolicy(messageHeader(value), ignoreTruncation, Message.inspect(value))
 
 type UdpServersFailure<-Reason: Data> is Data:
@@ -274,7 +274,7 @@ def responseHeader(reply: UdpQueryReply) -> Message.Header:
 
 def disposition(reply: UdpQueryReply) -> Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>:
   match reply:
-    case UdpQueryAnswer{message}: messageUdpPolicy(message, False{})
+    case UdpQueryAnswer{message}: udpMessagePolicy(message, False{})
     case UdpQueryTruncated{header}: Done{headerPolicy(header, False{})}
 
 def assessed(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reply: UdpQueryReply, end: End<Reason>, result: Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>) -> UdpServersDecision<Reason>:
@@ -737,7 +737,7 @@ def dispatched(-Reason: Data, -Token: Data, route: Route, connection: Connection
   match value:
     case Received{pending, delivery}: TcpSessionStep{Session{route, connection, pending, None{}}, Response{delivery}}
 
-def packetTcpSession(-Reason: Data, -Token: Data, route: Route, connection: Connection<Reason>, pending: Pending<Token>, wire: List<&2, U32>) -> TcpSessionStep<Reason, Token>:
+def tcpSessionPacket(-Reason: Data, -Token: Data, route: Route, connection: Connection<Reason>, pending: Pending<Token>, wire: List<&2, U32>) -> TcpSessionStep<Reason, Token>:
   match route:
     case Route{+local, +remote}: dispatched(Reason, Token, Route{local, remote}, connection, receive(Token, pending, remote, local, wire))
 
@@ -745,7 +745,7 @@ def receivedTcpSession(-Reason: Data, -Token: Data, route: Route, pending: Pendi
   match next:
     case Next{connection, Fail{error}}: failedTcpSession(Reason, Token, route, connection, pending, TcpSessionTransport{error})
     case Next{connection, Done{None{}}}: failedTcpSession(Reason, Token, route, connection, pending, EndOfStream{})
-    case Next{connection, Done{Some{wire}}}: packetTcpSession(Reason, Token, route, connection, pending, wire)
+    case Next{connection, Done{Some{wire}}}: tcpSessionPacket(Reason, Token, route, connection, pending, wire)
 
 def readTcpSession(-Reason: Data, -Token: Data, session: Session<Reason, Token>, maximum: U32) -> IO(TcpSessionStep<Reason, Token>):
   match session:
@@ -858,7 +858,7 @@ def connected(-Reason: Data, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, 
         result : Result<&2, &1, TcpPeerError<Deadline.Cause<Reason>>, Peer<Deadline.Cause<Reason>>> <- createTcpPeer(Deadline.Cause<Reason>, socket, signal)
         adoptedTcpQuery(Reason, request, maximum, result)
 
-def reportTcpQuery(-Reason: Data, completed: Completed<Reason>, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> Report<Reason>:
+def tcpQueryReport(-Reason: Data, completed: Completed<Reason>, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> Report<Reason>:
   match completed:
     case Completed{result, cleanup}: Report{result, cleanup, reason}
 
@@ -878,7 +878,7 @@ def scoped(-Reason: Data, address: Connect.Address, port: U32, request: Message.
       do IO<Report<Reason>>:
         completed : Completed<Reason> <- exchangeRequestTcpQuery(Reason, address, port, signal, request, maximum)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
-        return reportTcpQuery(Reason, completed, reason)
+        return tcpQueryReport(Reason, completed, reason)
 
 # One exchange on a dedicated numeric TCP connection. The deadline spans
 # connect, adoption, send and receive; teardown closes the session before its
@@ -914,14 +914,14 @@ def finishTcpRecover(-Reason: Data, retry: Bool, report: Completed<Reason>, addr
 # A closed failed exchange may be retried once against the same server. The
 # second result is returned unchanged, so another reset cannot loop. Preserve
 # query bytes/ID and borrow the same deadline across both connections.
-def exchangeRequestTcpRecover(-Reason: Data, +address: Connect.Address, +port: U32, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Message.Request, +maximum: U32) -> IO(Completed<Reason>):
+def recoverTcpExchange(-Reason: Data, +address: Connect.Address, +port: U32, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Message.Request, +maximum: U32) -> IO(Completed<Reason>):
   do IO<Completed<Reason>>:
     +report : Completed<Reason> <- exchangeRequestTcpQuery(Reason, address, port, signal, request, maximum)
     retry : Bool <- reset(Reason, report)
     finishTcpRecover(Reason, retry, report, address, port, signal, request, maximum)
 
 def exchangeTcpRecover(-Reason: Data, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, id: U32, flags: U32, question: Message.Question, maximum: U32) -> IO(Completed<Reason>):
-  exchangeRequestTcpRecover(Reason, address, port, signal, Message.plainQuery(id, flags, question), maximum)
+  recoverTcpExchange(Reason, address, port, signal, Message.plainQuery(id, flags, question), maximum)
 
 type Server is Data:
   Server{address: Connect.Address, port: U32}
@@ -968,7 +968,7 @@ def driveTcpServers(-Reason: Data, servers: List<&2, Server>, +signal: Abort.Abo
     case Nil{} TcpServersNext{report}: IO.pure(Result<&2, &2, TcpServersError<Reason>, Reply>, Fail{Failed{report}})
     case Server{address, port} <> rest TcpServersNext{_}:
       do IO<Result<&2, &2, TcpServersError<Reason>, Reply>>:
-        report : Completed<Reason> <- exchangeRequestTcpRecover(Reason, address, port, signal, request, maximum)
+        report : Completed<Reason> <- recoverTcpExchange(Reason, address, port, signal, request, maximum)
         driveTcpServers(Reason, rest, signal, request, maximum, completedTcpServers(Reason, report))
 
 def exchangeRequestTcpServers(-Reason: Data, servers: List<&2, Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Message.Request, +maximum: U32) -> IO(Result<&2, &2, TcpServersError<Reason>, Reply>):
@@ -976,7 +976,7 @@ def exchangeRequestTcpServers(-Reason: Data, servers: List<&2, Server>, +signal:
     case Nil{}: IO.pure(Result<&2, &2, TcpServersError<Reason>, Reply>, Fail{NoServers{}})
     case Server{address, port} <> rest:
       do IO<Result<&2, &2, TcpServersError<Reason>, Reply>>:
-        report : Completed<Reason> <- exchangeRequestTcpRecover(Reason, address, port, signal, request, maximum)
+        report : Completed<Reason> <- recoverTcpExchange(Reason, address, port, signal, request, maximum)
         driveTcpServers(Reason, rest, signal, request, maximum, completedTcpServers(Reason, report))
 
 def exchangeTcpServers(-Reason: Data, servers: List<&2, Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, id: U32, flags: U32, question: Message.Question, maximum: U32) -> IO(Result<&2, &2, TcpServersError<Reason>, Reply>):
@@ -1029,14 +1029,14 @@ def server(value: Endpoint.Endpoint) -> Server:
     case Endpoint.EndpointV4{ip, port}: Server{Connect.V4{ip}, port}
     case Endpoint.EndpointV6{ip, port, scope}: Server{Connect.V6{ip, scope}, port}
 
-def entryTransport(value: Plan.Attempt<Endpoint.Endpoint>) -> Server:
+def attemptServer(value: Plan.Attempt<Endpoint.Endpoint>) -> Server:
   match value:
     case Plan.Attempt{endpoint, _, _}: server(endpoint)
 
 def entries(values: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> List<&2, Server>:
   match values:
     case Nil{}: Nil{}
-    case first <> rest: entryTransport(first) <> entries(rest)
+    case first <> rest: attemptServer(first) <> entries(rest)
 
 def exhausted(-Reason: Data, result: Result<&2, &2, UdpServersError<Reason>, UdpServersReply>) -> Result<&2, &2, Error<Reason>, Reply>:
   match result:
@@ -1220,7 +1220,7 @@ def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
 # Empty and singleton lists need no entropy. Larger lists receive a uniformly
 # selected initial position, while disabled choices retain configured order.
 def random(-Server: Data, servers: List<&2, Server>) -> IO(Result<&2, &1, Index.Error, Owner<Server>>):
-  createWith(~Unit, ~Index.wordIndex, Server, Unit{}, servers)
+  createWith(~Unit, ~Index.randomWord, Server, Unit{}, servers)
 
 # Both sources borrow an existing rotation owner. Selection happens inside
 # exchange, after the lookup has drawn an ID and rechecked cancellation.
