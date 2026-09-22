@@ -1,0 +1,175 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3032,3 +3032,19 @@
+ def UDP.connect_peer(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32) -> IO(Socket & Result<&1, &1, U32 & String, Unit>):
+   import "./effs/udp_connect_peer.c"
+   import "./effs/udp_connect_peer.js"
++
++
++# One directory only. Existing directories (including symlinks) succeed;
++# other existing entries and missing parents return an OS error.
++def Directory.ensure(path: String) -> IO(Result<&1, &1, U32 & String, Unit>):
++  import "./effs/directory_ensure.c"
++  import "./effs/directory_ensure.js"
++
++# Preserve raw filesystem bytes; callers choose their text-decoding policy.
++def File.realpath_bytes(path: String) -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
++  import "./effs/file_realpath_bytes.c"
++  import "./effs/file_realpath_bytes.js"
++
++def Directory.current_bytes() -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
++  import "./effs/directory_current_bytes.c"
++  import "./effs/directory_current_bytes.js"
+--- /dev/null
++++ b/bend2/effs/directory_ensure.c
+@@ -0,0 +1,32 @@
++#include <sys/stat.h>
++
++static void directory_ensure_call(IoWork* w) {
++  if (mkdir(w->data, 0777) == 0) {
++    w->code = 0;
++  } else if (errno != EEXIST) {
++    w->code = errno;
++  } else {
++    struct stat info;
++    w->code = stat(w->data, &info) < 0 ? errno
++      : S_ISDIR(info.st_mode) ? 0 : EEXIST;
++  }
++}
++
++static Term directory_ensure_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(CID_UNIT, 0));
++}
++
++Term directory_ensure_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e, f[0], &w->size);
++  if (io_nul(w->data, w->size)) {
++    w->code = EILSEQ;
++    return directory_ensure_pack(e, w);
++  }
++  return io_work(w, directory_ensure_call, directory_ensure_pack);
++}
++
++static void __attribute__((constructor)) directory_ensure_use(void) {
++  io_eff(CID_DIRECTORY_ENSURE, directory_ensure_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/directory_ensure.js
+@@ -0,0 +1,17 @@
++function directory_ensure(path) {
++  const name = io_bytes(path);
++  if (name.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  const fs = require("fs");
++  const target = name.length ? Buffer.from(name) : "";
++  try {
++    fs.mkdirSync(target, {mode: 0o777});
++    return io_done({$: "Unit"});
++  } catch (e) {
++    if (e.code !== "EEXIST") return io_fail(-e.errno);
++    try {
++      return fs.statSync(target).isDirectory() ? io_done({$: "Unit"}) : io_fail(17);
++    } catch (cause) {
++      return io_fail(-cause.errno);
++    }
++  }
++}
+--- /dev/null
++++ b/bend2/effs/file_realpath_bytes.c
+@@ -0,0 +1,34 @@
++static void file_realpath_bytes_call(IoWork* w) {
++  w->text = realpath(w->data, NULL);
++  w->code = w->text ? 0 : errno;
++}
++
++static Term file_realpath_bytes_pack(Env e, IoWork* w) {
++  Term result;
++  if (w->code) {
++    result = io_fail(e, w->code, NULL);
++  } else {
++    Term bytes = term_pak(CID_NIL, 0);
++    for (u64 i = strlen(w->text); i > 0; i -= 1) {
++      bytes = io_node(e, CID_CON, (uint8_t)w->text[i - 1], bytes, IO_HOTS & 16);
++    }
++    result = io_done(e, bytes);
++  }
++  free(w->text);
++  free(w->data);
++  return result;
++}
++
++Term file_realpath_bytes_run(Env e, Term* f, IoWork* w) {
++  w->text = NULL;
++  w->data = io_cstr(e, f[0], &w->size);
++  if (io_nul(w->data, w->size)) {
++    w->code = EILSEQ;
++    return file_realpath_bytes_pack(e, w);
++  }
++  return io_work(w, file_realpath_bytes_call, file_realpath_bytes_pack);
++}
++
++static void __attribute__((constructor)) file_realpath_bytes_use(void) {
++  io_eff(CID_FILE_REALPATH_BYTES, file_realpath_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_realpath_bytes.js
+@@ -0,0 +1,13 @@
++function file_realpath_bytes(path) {
++  const name = io_bytes(path);
++  if (name.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  const target = name.length ? Buffer.from(name) : "";
++  try {
++    const bytes = require("fs").realpathSync.native(target, {encoding: "buffer"});
++    let xs = {$: "Nil"};
++    for (let i = bytes.length; i > 0; i -= 1) xs = {$: "Con", head: bytes[i - 1], tail: xs};
++    return io_done(xs);
++  } catch (e) {
++    return io_fail(-e.errno);
++  }
++}
+--- /dev/null
++++ b/bend2/effs/directory_current_bytes.c
+@@ -0,0 +1,28 @@
++static void directory_current_bytes_call(IoWork* w) {
++  w->text = getcwd(NULL, 0);
++  w->code = w->text ? 0 : errno;
++}
++
++static Term directory_current_bytes_pack(Env e, IoWork* w) {
++  Term result;
++  if (w->code) {
++    result = io_fail(e, w->code, NULL);
++  } else {
++    Term bytes = term_pak(CID_NIL, 0);
++    for (u64 i = strlen(w->text); i > 0; i -= 1) {
++      bytes = io_node(e, CID_CON, (uint8_t)w->text[i - 1], bytes, IO_HOTS & 16);
++    }
++    result = io_done(e, bytes);
++  }
++  free(w->text);
++  return result;
++}
++
++Term directory_current_bytes_run(Env e, Term* f, IoWork* w) {
++  w->text = NULL;
++  return io_work(w, directory_current_bytes_call, directory_current_bytes_pack);
++}
++
++static void __attribute__((constructor)) directory_current_bytes_use(void) {
++  io_eff(CID_DIRECTORY_CURRENT_BYTES, directory_current_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/directory_current_bytes.js
+@@ -0,0 +1,11 @@
++function directory_current_bytes() {
++  const target = ".";
++  try {
++    const bytes = require("fs").realpathSync.native(target, {encoding: "buffer"});
++    let xs = {$: "Nil"};
++    for (let i = bytes.length; i > 0; i -= 1) xs = {$: "Con", head: bytes[i - 1], tail: xs};
++    return io_done(xs);
++  } catch (e) {
++    return io_fail(-e.errno);
++  }
++}
