@@ -1,5 +1,7 @@
 import Base
 import ../../runtime/src/string.bend as Strings
+import ../../runtime/src/grapheme.bend as Grapheme
+import ../../runtime/src/unicode-17-display.bend as Display
 
 # Complete terminal controls are distinct from visible text. Offsets count
 # Unicode scalars, matching Bend strings rather than UTF-16 code units.
@@ -254,3 +256,79 @@ def activeOsc8Close(state: AnsiCodeTracker) -> String:
     case AnsiCodeTracker{_,_,_,link}: Maybe.default(&2,String,Maybe.map(&2,ActiveHyperlink,String,hyperlinkClose,link),"")
 
 def getActiveOsc8Close(text: String) -> String: activeOsc8Close(updateTrackerFromText(text,emptyTracker()))
+
+# Terminal cell widths follow pinned Pi's display policy, rather than treating
+# all graphemes as one cell. Unicode properties and RGI membership are exact.
+def terminalSpacingMark(+point: U32,flags: U32) -> Bool:
+  (enabled(flags,2) && Bool.not(U32.is_eq(point,5940) || U32.is_eq(point,12334) || U32.is_eq(point,12335))) || U32.is_eq(point,1631) || U32.is_eq(point,3967) || range(point,4139,4140) || U32.is_eq(point,4145) || range(point,4147,4149) || U32.is_eq(point,4152) || range(point,4154,4158)
+def spacingRun(text: String,+count: Nat) -> Maybe<&2,Nat>:
+  match text:
+    case SNil{}: Bool.pick(Maybe<&2,Nat>,Nat.is_gt(count,0n),Some{count},None{})
+    case SCon{char,rest}:
+      +point = Char.to_u32(char)
+      Bool.pick(Unit -> Maybe<&2,Nat>,terminalSpacingMark(point,Display.properties(point)),_ => spacingRun(rest,count + 1n),_ => None{})(Unit{})
+def zeroWidthRun(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{char,rest}: Bool.pick(Unit -> Bool,U32.is_ne(U32.and(Display.properties(Char.to_u32(char)),21),0),_ => zeroWidthRun(rest),_ => False{})(Unit{})
+def eastAsianWidth(point: U32) -> Nat: Bool.pick(Nat,enabled(Display.properties(point),32),2n,1n)
+def trailingWidth(text: String,+followsMark: Bool,+width: Nat) -> Nat:
+  match text:
+    case SNil{}: width
+    case SCon{char,+rest}:
+      +point = Char.to_u32(char)
+      +flags = Display.properties(point)
+      Bool.pick(Unit -> Nat,terminalSpacingMark(point,flags),
+        _ => trailingWidth(rest,False{},width + 1n),
+        _ => Bool.pick(Unit -> Nat,enabled(flags,1),
+          _ => trailingWidth(rest,True{},width),
+          _ => Bool.pick(Unit -> Nat,U32.is_ne(U32.and(flags,29),0),
+            _ => trailingWidth(rest,followsMark,width),
+            _ => trailingWidth(rest,False{},width + Bool.pick(Nat,followsMark || range(point,65280,65519),eastAsianWidth(point),Bool.pick(Nat,U32.is_eq(point,3635) || U32.is_eq(point,3763),1n,0n))))(Unit{}))(Unit{}))(Unit{})
+def baseWidth(text: String) -> Nat:
+  match text:
+    case SNil{}: 0n
+    case SCon{char,+rest}:
+      +point = Char.to_u32(char)
+      Bool.pick(Unit -> Nat,U32.is_ne(U32.and(Display.properties(point),29),0),_ => baseWidth(rest),
+        _ => Bool.pick(Unit -> Nat,range(point,127462,127487),_ => 2n,_ => trailingWidth(rest,False{},eastAsianWidth(point)))(Unit{}))(Unit{})
+def nonSpacingWidth(+text: String) -> Nat:
+  Bool.pick(Unit -> Nat,zeroWidthRun(text),_ => 0n,_ => Bool.pick(Unit -> Nat,Display.isRgiEmoji(text),_ => 2n,_ => baseWidth(text))(Unit{}))(Unit{})
+def selectedWidth(value: Maybe<&2,Nat>,text: String) -> Nat:
+  match value:
+    case Some{width}: width
+    case None{}: nonSpacingWidth(text)
+def graphemeWidth(+text: String) -> Nat:
+  Bool.pick(Unit -> Nat,Strings.equal(text,"\t"),_ => 3n,_ => selectedWidth(spacingRun(text,0n),text))(Unit{})
+def asciiWidth(text: String,width: Nat) -> Maybe<&2,Nat>:
+  match text:
+    case SNil{}: Some{width}
+    case SCon{char,rest}: Bool.pick(Unit -> Maybe<&2,Nat>,range(Char.to_u32(char),32,126),_ => asciiWidth(rest,width + 1n),_ => None{})(Unit{})
+# Grapheme.next always consumes a nonempty cluster; the state machine returns
+# an affine pair so no list of every cluster is needed just to measure width.
+@unsafe def measuredClusters(value: Maybe<&1,String & String>,width: Nat) -> Nat:
+  match value:
+    case None{}: width
+    case Some{(cluster,rest)}: measuredClusters(Grapheme.next(rest),width + graphemeWidth(cluster))
+def measuredText(value: Maybe<&2,Nat>,text: String) -> Nat:
+  match value:
+    case Some{width}: width
+    case None{}: measuredClusters(Grapheme.next(text),0n)
+def visibleClean(+text: String) -> Nat: measuredText(asciiWidth(text,0n),text)
+# Tabs must become spaces before segmentation: a following spacing-mark cluster
+# then has a visible base, which affects Pi's terminal-spacing mark accounting.
+def expandedTabs(text: String,reversed: String) -> String:
+  match text:
+    case SNil{}: reversed
+    case SCon{'\t',rest}: expandedTabs(rest,prependReversed("   ",reversed))
+    case SCon{char,rest}: expandedTabs(rest,SCon{char,reversed})
+def widthText(items: List<&2,Token>,reversed: String) -> String:
+  match items:
+    case Nil{}: reverseInto(reversed,"")
+    case Token{text,False{}} <> rest: widthText(rest,expandedTabs(text,reversed))
+    case _ <> rest: widthText(rest,reversed)
+def visibleMeasured(value: Maybe<&2,Nat>,text: String) -> Nat:
+  match value:
+    case Some{width}: width
+    case None{}: visibleClean(widthText(tokens(text),""))
+def visibleWidth(+text: String) -> Nat: visibleMeasured(asciiWidth(text,0n),text)
