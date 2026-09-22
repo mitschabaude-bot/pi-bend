@@ -2009,15 +2009,27 @@
     },
     {
       "source": "packages/coding-agent/test/keybindings-migration.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e83d8d2f8ab68d0b775feb3b818ee1748d36ba4bb8834a45a536acede00868ac"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/keybindings.bend",
+        "tests/app-keybindings.bend",
+        "tests/app-keybindings_reference.ts",
+        "tests/app-keybindings_check.py"
+      ],
+      "sha256": "e83d8d2f8ab68d0b775feb3b818ee1748d36ba4bb8834a45a536acede00868ac",
+      "notes": "All five Windows/default tests and the migration file-loading test are covered on Bun/native one/four. The first two migration tests only have their pure transformations covered: startup migration file-rewrite orchestration remains pending. 516 actual-source cases, 13 real-file cases and four reload cases cover explicit platform/WSL defaults, canonical-name precedence, unknown actions, typed malformed-input failure and retained immutable state. See tests/app-keybindings.md; interactive UI integration is separate."
     },
     {
       "source": "packages/coding-agent/test/keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d1098c41c0cbee8518a433542d68c837ab66e2f53415480602dfee59cd2a20b0"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/keybindings.bend",
+        "tests/app-keybindings.bend",
+        "tests/app-keybindings_reference.ts",
+        "tests/app-keybindings_check.py"
+      ],
+      "sha256": "d1098c41c0cbee8518a433542d68c837ab66e2f53415480602dfee59cd2a20b0",
+      "notes": "All five Windows/default tests and the migration file-loading test are covered on Bun/native one/four. The first two migration tests only have their pure transformations covered: startup migration file-rewrite orchestration remains pending. 516 actual-source cases, 13 real-file cases and four reload cases cover explicit platform/WSL defaults, canonical-name precedence, unknown actions, typed malformed-input failure and retained immutable state. See tests/app-keybindings.md; interactive UI integration is separate."
     },
     {
       "source": "packages/coding-agent/test/llama-extension.test.ts",
