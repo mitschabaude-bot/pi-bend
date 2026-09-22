@@ -522,13 +522,15 @@ def breakCells(items: List<&2,Token>,+limit: Nat,state: WrapState) -> WrapState:
         case WrapState{+line,+width,+tracker,+lines}:
           +size = Bool.pick(Nat,control,0n,visibleWidth(text))
           +overflow = Bool.not(control) && Nat.is_gt(width + size,limit)
-          continuation = prependReversed(getActiveCodes(tracker),"")
-          nextLine = prependReversed(text,Bool.pick(String,overflow,continuation,line))
-          nextWidth = Bool.pick(Nat,overflow,0n,width) + size
-          nextTracker = Bool.pick(AnsiCodeTracker,control,process(tracker,text),tracker)
-          completedLine = reverseInto(line,"") ++ getLineEndReset(tracker)
-          completedLines = Bool.pick(List<&2,String>,overflow,completedLine <> lines,lines)
-          breakCells(rest,limit,WrapState{nextLine,nextWidth,nextTracker,completedLines})
+          +nextTracker = Bool.pick(Unit -> AnsiCodeTracker,control,
+            _ => process(tracker,text),_ => tracker)(Unit{})
+          nextState = Bool.pick(Unit -> WrapState,overflow,
+            _ => WrapState{
+              prependReversed(text,prependReversed(getActiveCodes(tracker),"")),
+              size,nextTracker,
+              (reverseInto(line,"") ++ getLineEndReset(tracker)) <> lines},
+            _ => WrapState{prependReversed(text,line),width + size,nextTracker,lines})(Unit{})
+          breakCells(rest,limit,nextState)
 def longWordState(state: WrapState) -> WrapState:
   match state:
     case WrapState{+line,_,+tracker,+lines}:
@@ -541,14 +543,13 @@ def wordState(state: WrapState,+token: String,+size: Nat,+limit: Nat) -> WrapSta
     case WrapState{+line,+width,+tracker,+lines}:
       +overflow = Nat.is_gt(width + size,limit) && Nat.is_gt(width,0n)
       +whitespaceToken = allWhitespace(token)
-      continuation = getActiveCodes(tracker) ++ Bool.pick(String,whitespaceToken,"",token)
-      nextLine = Bool.pick(String,overflow,prependReversed(continuation,""),prependReversed(token,line))
-      continuationWidth = Bool.pick(Nat,whitespaceToken,0n,size)
-      nextWidth = Bool.pick(Nat,overflow,continuationWidth,width + size)
-      completedLine = trimEnd(reverseInto(line,"")) ++ getLineEndReset(tracker)
-      completedLines = Bool.pick(List<&2,String>,overflow,completedLine <> lines,lines)
-      nextTracker = updateTrackerFromText(token,tracker)
-      WrapState{nextLine,nextWidth,nextTracker,completedLines}
+      +nextTracker = updateTrackerFromText(token,tracker)
+      Bool.pick(Unit -> WrapState,overflow,
+        _ => WrapState{
+          prependReversed(getActiveCodes(tracker) ++ Bool.pick(String,whitespaceToken,"",token),""),
+          Bool.pick(Nat,whitespaceToken,0n,size),nextTracker,
+          (trimEnd(reverseInto(line,"")) ++ getLineEndReset(tracker)) <> lines},
+        _ => WrapState{prependReversed(token,line),width + size,nextTracker,lines})(Unit{})
 def wrapTokens(items: List<&2,String>,+limit: Nat,+state: WrapState) -> WrapState:
   match items:
     case Nil{}: state

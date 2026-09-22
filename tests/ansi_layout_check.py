@@ -52,9 +52,9 @@ if __name__=='__main__':
  for c,w,g in zip(cases,expected,actual):assert w==g,(c,w,g)
  print(f'{len(cases)} ANSI/Unicode wrapping, truncation and slicing comparisons passed',flush=True)
 
- long=[dict(method='wrapTextWithAnsi',text='a'+'\u0301'*20000+' word'*40,width=20),dict(method='wrapTextWithAnsi',text='x',repeat=100000,width=80),dict(method='wrapTextWithAnsi',text='word ',repeat=10000,width=80),dict(method='sliceWithWidth',text='界x',repeat=100000,start=299990,length=10,strict=True),dict(method='extractSegments',text='x',repeat=200000,before=10,after=199990,length=10,strict=True)]
+ long=[dict(method='wrapTextWithAnsi',text='x',repeat=20000,width=10000),dict(method='wrapTextWithAnsi',text='x ',repeat=10000,width=10000),dict(method='wrapTextWithAnsi',text='a'+'\u0301'*20000+' word'*40,width=20),dict(method='wrapTextWithAnsi',text='x',repeat=100000,width=80),dict(method='wrapTextWithAnsi',text='word ',repeat=10000,width=80),dict(method='sliceWithWidth',text='界x',repeat=100000,start=299990,length=10,strict=True),dict(method='extractSegments',text='x',repeat=200000,before=10,after=199990,length=10,strict=True)]
  assert batch(command,long)==batch(oracle,long)
- print('Five long combining/unbroken-word/wrapping/slicing/overlay scans passed',flush=True)
+ print('Seven wide-line/long combining/unbroken-word/wrapping/slicing/overlay scans passed',flush=True)
  corrected=[
   (dict(method='wrapTextWithAnsi',text=E+'[?25lab',width=1),[E+'[?25la','b']),
   (dict(method='truncateToWidth',text=E+'[?25labc',width=2,ellipsis='',pad=False),E+'[?25lab'+E+'[0m'),
