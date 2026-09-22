@@ -1,5 +1,5 @@
 import Base
-import ../laws/timer-milliseconds.bend as Laws
+import ../laws/timer.bend as Laws
 import ../packages/runtime/src/timer.bend as T
 import ../packages/runtime/src/f64.bend as F
 

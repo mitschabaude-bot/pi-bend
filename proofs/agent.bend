@@ -9,8 +9,8 @@ import ../packages/agent/src/agent.bend as Queue
 import ./fifo.bend as FifoProof
 import ../laws/fifo.bend as FifoLaws
 import ../packages/runtime/src/fifo.bend as Fifo
-import ./string-set.bend as SetProof
-import ../laws/string-set.bend as SetLaws
+import ./string.bend as SetProof
+import ../laws/string.bend as SetLaws
 
 # Agent owner
 

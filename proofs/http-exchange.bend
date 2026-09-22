@@ -1,5 +1,5 @@
 import Base
-import ../laws/http-host-route.bend as Laws
+import ../laws/http-exchange.bend as Laws
 
 def Laws.ipv4_bypasses_lookup(address): {==}
 def Laws.ipv6_bypasses_lookup(address): {==}

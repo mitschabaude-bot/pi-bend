@@ -1,5 +1,5 @@
 import Base
-import ../laws/resolver-diagnostic.bend as Laws
+import ../laws/dns-resolver.bend as Laws
 import ../packages/runtime/src/dns-resolver.bend as D
 import ../packages/runtime/src/resolver-config.bend as Options
 

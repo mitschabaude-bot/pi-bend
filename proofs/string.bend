@@ -1,7 +1,7 @@
 import Base
 import ./record.bend as RecordProof
 import ../laws/record.bend as RecordLaws
-import ../laws/string-set.bend as Laws
+import ../laws/string.bend as Laws
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/string.bend as Set
 

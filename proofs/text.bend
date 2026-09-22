@@ -1,5 +1,5 @@
 import Base
-import ../laws/text-unit-budget.bend as Laws
+import ../laws/text.bend as Laws
 import ../packages/runtime/src/text.bend as Budget
 
 def Laws.chunk_composition(first, second, state):

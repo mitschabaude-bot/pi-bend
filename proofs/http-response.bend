@@ -1,7 +1,7 @@
 import Base
 import ../laws/http-response.bend as Laws
-import ../laws/bounded-bytes.bend as BoundedLaws
-import ./bounded-bytes.bend as Bounded
+import ../laws/bounded.bend as BoundedLaws
+import ./bounded.bend as Bounded
 import ../packages/runtime/src/http-response.bend as Buffer
 import ../packages/runtime/src/bounded.bend as Bytes
 import ../packages/runtime/src/http-message.bend as Head

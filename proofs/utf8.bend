@@ -1,5 +1,5 @@
 import Base
-import ../laws/utf8-strict.bend as Laws
+import ../laws/utf8.bend as Laws
 import ../packages/runtime/src/utf8.bend as UTF8
 
 def Laws.failure_retained(bytes, error):

@@ -1,5 +1,5 @@
 import Base
-import ../laws/calendar-inverse.bend as Laws
+import ../laws/calendar.bend as Laws
 import ../packages/runtime/src/calendar.bend as I
 import ../packages/runtime/src/calendar.bend as C
 import ../packages/runtime/src/u64.bend as W
