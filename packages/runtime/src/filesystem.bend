@@ -164,12 +164,17 @@ def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
     result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
     return fileSize(result)
 
+# The signed 64-bit seconds of an exact time as a double (two's complement).
+def signedSeconds(+high: U32, low: U32) -> F64:
+  +unsigned = F.fromU64(Word.U64{high,low})
+  Bool.pick(F64,U32.is_ge(high,2147483648),F64.sub(unsigned,F64.mul(F.fromU64(Word.U64{2147483648,0}),U32.to_f64(2))),unsigned)
+
 # Node's Stats.mtime.getTime(): the exact modification time (signed seconds
 # high/low, nanoseconds) as milliseconds, rounded to the nearest integer.
 def modifiedMilliseconds(value: U32 & U32 & U32) -> F64:
   match value:
     case (high,(low,nanos)):
-      +raw = F64.add(F64.mul(F.fromU64(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
+      +raw = F64.add(F64.mul(signedSeconds(high,low),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
       F64.floor(F64.add(raw,F64.div(U32.to_f64(1),U32.to_f64(2))))
 
 def modifiedResult(result: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Result<&2,&2,Error,F64>:

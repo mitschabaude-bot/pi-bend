@@ -141,6 +141,16 @@ def scenario_file_operations(temp):
     (by_cwd / 'b.jsonl').write_text(header_line('b', project_b) + '\n'); os.utime(by_cwd / 'b.jsonl', (1700000010, 1700000010))
     add({'op': 'findMostRecent', 'dir': str(by_cwd), 'cwd': project_a}, lambda r: r['path'] == str(by_cwd / 'a.jsonl'))  # filters most recent session by cwd
     add({'op': 'findMostRecent', 'dir': str(by_cwd), 'cwd': project_b}, lambda r: r['path'] == str(by_cwd / 'b.jsonl'))
+    # native additions: sub-millisecond and pre-epoch modification times order as Node's mtime.getTime() does
+    fine = d / 'recent-fine'; fine.mkdir()
+    (fine / 'a.jsonl').write_text(header_line('a', '/tmp') + '\n'); os.utime(fine / 'a.jsonl', ns=(1700000000_999_400_000, 1700000000_999_400_000))
+    (fine / 'b.jsonl').write_text(header_line('b', '/tmp') + '\n'); os.utime(fine / 'b.jsonl', ns=(1700000000_999_600_000, 1700000000_999_600_000))
+    add({'op': 'findMostRecent', 'dir': str(fine)}, lambda r: r['path'] == str(fine / 'b.jsonl'))
+    ancient = d / 'recent-ancient'; ancient.mkdir()
+    (ancient / 'old.jsonl').write_text(header_line('old', '/tmp') + '\n'); os.utime(ancient / 'old.jsonl', ns=(-86400_000_000_000, -86400_000_000_000))
+    (ancient / 'new.jsonl').write_text(header_line('new', '/tmp') + '\n'); os.utime(ancient / 'new.jsonl', ns=(1_000_000_000, 1_000_000_000))
+    add({'op': 'findMostRecent', 'dir': str(ancient)}, lambda r: r['path'] == str(ancient / 'new.jsonl'))
+    add({'op': 'list', 'cwd': '/tmp', 'sessionDir': str(ancient)}, lambda r: sorted(s['path'] for s in r['sessions']) == sorted([str(ancient / 'new.jsonl'), str(ancient / 'old.jsonl')]))
     # SessionManager.setSessionFile with corrupted files
     corrupt = d / 'corrupt'; corrupt.mkdir()
     (corrupt / 'empty.jsonl').write_text('')
