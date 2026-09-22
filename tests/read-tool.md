@@ -1,0 +1,24 @@
+# Native read tool
+
+`core/tools/read.bend` now exposes local `ReadOperations`, injectable access/read/optional MIME callbacks, and the public `createReadTool` AgentTool factory. Local operations use `File.access(R_OK)`, full raw-byte reads and the single-read 4,100-byte MIME inspector. Path resolution preserves the original-path, macOS AM/PM spacing, NFD, curly-apostrophe and combined fallback order. Existing pure text selection/truncation remains shared.
+
+The factory owns its execution callback and any default operations it creates. Injected operation and image-processing callbacks are borrowed; the caller disposes them after invocations finish. `disposeTool` does not dispose borrowed callbacks. `invokeWithContext` accepts the extension boundary's cwd override and optional model image capability. The canonical AgentTool execution input has no ExtensionContext, so the AgentTool wrapper supplies an absent context. Extension ToolDefinition/renderers and prompt-contribution registration remain separate integration work.
+
+Image processing is an explicit typed callback receiving the exact bytes, detected MIME and auto-resize flag. It can return processed base64 data/MIME/hints, a supported non-throwing failure message, or a typed operational failure. The read result preserves the upstream text/image ordering, conversion/resizing hints and non-vision note. A non-vision model does not remove the image from the tool result; later request construction owns that policy. Default native image processing is deliberately unavailable until the codecs are connected: recognized images without a supplied processor return `ImageProcessingUnavailable`. The default text path is implemented; this milestone does not claim a complete default image path.
+
+Native adaptations match the existing project policy: offset/limit are exactly representable nonnegative natural counts (negative, fractional, nonnumeric and oversized values fail); invalid UTF-8 text fails instead of silently replacing malformed bytes; filesystem and callback errors are typed, retaining OS causes rather than emulating JavaScript exception objects. Zero offset still means the first line, and zero limit remains valid. UTF-8 BOMs are preserved. Cancellation returns `Aborted` only after in-flight callbacks settle, with cancellation taking precedence over their eventual result; no file operation is detached from its callback owner. The earlier shell-quoting improvement for long-line advice remains in place.
+
+Focused fixtures:
+
+```sh
+sh scripts/build-pure.sh tests/read-public.bend build/read-public
+sh scripts/build-pure.sh tests/read-operations.bend build/read-operations
+build/bend-native-toolchain/bend2/main.ts tests/read-public.bend -o build/read-public.js
+build/bend-native-toolchain/bend2/main.ts tests/read-operations.bend -o build/read-operations.js
+python3 tests/read_public_check.py
+python3 tests/read_operations_check.py
+```
+
+`read_public_check.py` calls the actual AgentTool, checks local files/path variants/invalid inputs/truncation and every injected image-processing outcome, and compares text/image execution results with the unmodified execute body extracted from pinned `read.ts`. Only its test image processor and schema/renderer boundaries are supplied by the oracle harness. `read_operations_check.py` checks access→MIME→read→processor ordering, omitted/empty MIME, every operation failure, pre-abort and in-flight cancellation, dynamic cwd/model context, borrowed callback survival, and a channel-gated read that has settled before cancellation returns. Existing `read_text_check.py` independently compares 450 cases with the pinned text implementation; all three backends pass.
+
+The final exact public/operations fixtures are also tested with isolated `PI_BEND_OPT=-O0` native builds on one and four threads; this is a correctness check, not a change to the project's default `-O1` or a performance claim. Earlier `-O1` snapshot results are recorded separately in the coordination log. No upstream tools/image suite is marked fully ported by this milestone.
