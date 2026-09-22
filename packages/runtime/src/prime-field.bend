@@ -57,7 +57,7 @@ def choose256(negative: Bool, candidate: Field, original: Field) -> Field:
     case True{}: original
     case False{}: candidate
 
-def canonical256(+value: Field) -> Field:
+def canonical256(+value: Field, carry: U32) -> Field:
   match value:
     case Field{+x0, +x1, +x2, +x3, +x4, +x5, +x6, +x7, +x8, +x9, +x10, +x11, +x12, +x13, +x14, +x15, _, _, _, _, _, _, _, _}:
       +t0 = (x0 - 65535 : U32)
@@ -76,7 +76,7 @@ def canonical256(+value: Field) -> Field:
       +t13 = (x13 - 0 - U32.shrn(t12,31n) : U32)
       +t14 = (x14 - 65535 - U32.shrn(t13,31n) : U32)
       +t15 = (x15 - 65535 - U32.shrn(t14,31n) : U32)
-      choose256(U32.is_ne(U32.shrn(t15,31n),0),Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0},value)
+      choose256(U32.is_gt(U32.shrn(t15,31n),carry),Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0},value)
 
 def fold256(state: Carried) -> Carried:
   match state:
@@ -101,7 +101,7 @@ def fold256(state: Carried) -> Carried:
 
 def finish256(state: Carried) -> Field:
   match state:
-    case Carried{value,_}: canonical256(value)
+    case Carried{value,carry}: canonical256(value,carry)
 
 def add256(+a: Field, b: Field) -> Field:
   match a b:
@@ -122,7 +122,7 @@ def add256(+a: Field, b: Field) -> Field:
       +t13 = (a13  + b13 + U32.shrn(t12,16n) : U32)
       +t14 = (a14  + b14 + U32.shrn(t13,16n) : U32)
       +t15 = (a15  + b15 + U32.shrn(t14,16n) : U32)
-      finish256(fold256(fold256(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0}, (U32.shrn(t15,16n) : U32)})))
+      finish256(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0}, (U32.shrn(t15,16n) : U32)})
 
 def sub256(+a: Field, b: Field) -> Field:
   match a b:
@@ -143,7 +143,7 @@ def sub256(+a: Field, b: Field) -> Field:
       +t13 = (a13 + 0 - b13 + U32.shrn(t12,16n) - U32.shln(U32.shrn(t12,31n),16n) : U32)
       +t14 = (a14 + 65535 - b14 + U32.shrn(t13,16n) - U32.shln(U32.shrn(t13,31n),16n) : U32)
       +t15 = (a15 + 65535 - b15 + U32.shrn(t14,16n) - U32.shln(U32.shrn(t14,31n),16n) : U32)
-      finish256(fold256(fold256(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0}, (U32.shrn(t15,16n) - U32.shln(U32.shrn(t15,31n),16n) : U32)})))
+      finish256(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0}, (U32.shrn(t15,16n) - U32.shln(U32.shrn(t15,31n),16n) : U32)})
 
 def scale256(+a: Field, k: U32) -> Field:
   match a:
@@ -215,7 +215,7 @@ def choose384(negative: Bool, candidate: Field, original: Field) -> Field:
     case True{}: original
     case False{}: candidate
 
-def canonical384(+value: Field) -> Field:
+def canonical384(+value: Field, carry: U32) -> Field:
   match value:
     case Field{+x0, +x1, +x2, +x3, +x4, +x5, +x6, +x7, +x8, +x9, +x10, +x11, +x12, +x13, +x14, +x15, +x16, +x17, +x18, +x19, +x20, +x21, +x22, +x23}:
       +t0 = (x0 - 65535 : U32)
@@ -242,7 +242,7 @@ def canonical384(+value: Field) -> Field:
       +t21 = (x21 - 65535 - U32.shrn(t20,31n) : U32)
       +t22 = (x22 - 65535 - U32.shrn(t21,31n) : U32)
       +t23 = (x23 - 65535 - U32.shrn(t22,31n) : U32)
-      choose384(U32.is_ne(U32.shrn(t23,31n),0),Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)},value)
+      choose384(U32.is_gt(U32.shrn(t23,31n),carry),Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)},value)
 
 def fold384(state: Carried) -> Carried:
   match state:
@@ -275,7 +275,7 @@ def fold384(state: Carried) -> Carried:
 
 def finish384(state: Carried) -> Field:
   match state:
-    case Carried{value,_}: canonical384(value)
+    case Carried{value,carry}: canonical384(value,carry)
 
 def add384(+a: Field, b: Field) -> Field:
   match a b:
@@ -304,7 +304,7 @@ def add384(+a: Field, b: Field) -> Field:
       +t21 = (a21  + b21 + U32.shrn(t20,16n) : U32)
       +t22 = (a22  + b22 + U32.shrn(t21,16n) : U32)
       +t23 = (a23  + b23 + U32.shrn(t22,16n) : U32)
-      finish384(fold384(fold384(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)}, (U32.shrn(t23,16n) : U32)})))
+      finish384(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)}, (U32.shrn(t23,16n) : U32)})
 
 def sub384(+a: Field, b: Field) -> Field:
   match a b:
@@ -333,7 +333,7 @@ def sub384(+a: Field, b: Field) -> Field:
       +t21 = (a21 + 65535 - b21 + U32.shrn(t20,16n) - U32.shln(U32.shrn(t20,31n),16n) : U32)
       +t22 = (a22 + 65535 - b22 + U32.shrn(t21,16n) - U32.shln(U32.shrn(t21,31n),16n) : U32)
       +t23 = (a23 + 65535 - b23 + U32.shrn(t22,16n) - U32.shln(U32.shrn(t22,31n),16n) : U32)
-      finish384(fold384(fold384(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)}, (U32.shrn(t23,16n) - U32.shln(U32.shrn(t23,31n),16n) : U32)})))
+      finish384(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)}, (U32.shrn(t23,16n) - U32.shln(U32.shrn(t23,31n),16n) : U32)})
 
 def scale384(+a: Field, k: U32) -> Field:
   match a:
@@ -441,6 +441,8 @@ def tail(values: List<&2,U32>) -> List<&2,U32>:
     case Nil{}: Nil{}
     case _ <> rest: rest
 
+# Addition/subtraction stay below 2*p: their carry participates directly in
+# conditional subtraction. Products/scales first fold into this same range.
 # Sparse prime identities (b = 2^16):
 # P256: b^16 = b^14 - b^12 - b^6 + 1 (mod p).
 # P384: b^24 = b^8 + b^6 - b^2 + 1 (mod p).
