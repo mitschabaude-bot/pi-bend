@@ -3586,8 +3586,9 @@
     },
     {
       "source": "packages/tui/test/terminal-colors.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/terminal-colors.bend"],
+      "notes": "All four original pure parser tests execute and replay against native Bend. 1,010 source comparisons, six documented strictness corrections and two long-input checks pass Bun/native one/four. The five TUI background-query lifecycle/dispatch tests remain pending. See tests/terminal-colors.md.",
       "sha256": "83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566"
     },
     {
