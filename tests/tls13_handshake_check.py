@@ -505,57 +505,58 @@ def complete_handshake(command, flight, transcript, handshake_secret, client_sec
     assert malformed.stdout.splitlines() == ['handshake']*3
 
 
-with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
-    contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa', 'ecdsa384']]
-    for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
-                          ('native-4', ['build/tls13-handshake', '--threads', '4']),
-                          ('bun', ['bun', 'build/tls13-handshake.js'])]:
-        commands = [arg for arg, _, _ in valid_cases] + [arg for arg, _ in invalid_cases]
-        run = subprocess.run(command + commands, cwd=ROOT, capture_output=True, text=True, timeout=90)
-        assert run.returncode == 0, (name, run.stderr[-2000:])
-        lines = run.stdout.splitlines()
-        assert len(lines) == len(commands), (name, len(lines), len(commands))
-        flights = []
-        for line, (_, host, seed) in zip(lines, valid_cases):
-            wire, session = inspect(line, host, seed)
-            for context, seen in contexts:
-                flight = accepted(context, seen, wire, session, host)
-                if host == 'localhost' and seed is not None:
-                    flights.append((seed, wire, flight))
-        for line, (_, expected) in zip(lines[len(valid_cases):], invalid_cases):
-            assert line == expected, (name, line, expected)
-        authentication_count = 0
-        for seed, wire, flight in flights:
-            hello, encrypted, _, _, _, _, _ = flight
-            prefix = 'n:localhost:' + encode(seed) + ':'
-            probes = [hello]
-            # Accept either legal ordering of the two ServerHello extensions.
-            reverse = hello[:76] + hello[82:] + hello[76:82]
-            probes.append(reverse)
-            bad = malformed(hello)
-            args = [prefix + encode(h) + ':' + encode(encrypted) for h in probes]
-            args += [prefix + encode(h) + ':' for h, _ in bad]
-            output = subprocess.run(command + args, cwd=ROOT, capture_output=True, text=True, timeout=90)
-            assert output.returncode == 0, (name, output.stderr[-2000:])
-            results = output.stdout.splitlines()
-            assert len(results) == len(args)
-            content, handshake_secret, client_secret, server_secret = verify_keys(results[0], seed, wire, flight)
-            authentication_count += verify_server_evidence(command, wire[5:] + hello, content, server_secret)
-            complete_handshake(command,flight,wire[5:]+hello+content,handshake_secret,client_secret)
-            size = 4 + int.from_bytes(content[1:4], 'big')
-            ee = content[:size]
-            assert ee[0] == 8
-            selected = extensions(ee[6:])
-            assert selected[0] == b'' and selected[16] == b'\x00\x09\x08http/1.1'
-            transition = subprocess.run(command + ['ep:localhost:' + encode(seed) + ':' + encode(hello) + ':' + encode(ee)], cwd=ROOT, capture_output=True, text=True, timeout=90)
-            assert transition.returncode == 0, transition.stderr
-            assert transition.stdout.strip() == 'sni:http/1.1|' + encode(hashlib.sha256(wire[5:] + hello + ee).digest())
-            # Reordering changes the transcript and thus the traffic keys: the old
-            # encrypted flight must fail even though the new parameters are legal.
-            assert results[1].endswith('|receive-error'), (name, results[1])
-            for actual, (_, expected) in zip(results[2:], bad):
-                assert actual == expected, (name, actual, expected)
-        certificate_count = check_certificates(command)
-        extension_count = check_extensions(command)
-        count = check_framing(command)
-        print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * len(contexts)} OpenSSL flights; completed OpenSSL handshakes and native bidirectional application records PASS', flush=True)
+if __name__ == "__main__":
+    with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
+        contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa', 'ecdsa384']]
+        for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
+                              ('native-4', ['build/tls13-handshake', '--threads', '4']),
+                              ('bun', ['bun', 'build/tls13-handshake.js'])]:
+            commands = [arg for arg, _, _ in valid_cases] + [arg for arg, _ in invalid_cases]
+            run = subprocess.run(command + commands, cwd=ROOT, capture_output=True, text=True, timeout=90)
+            assert run.returncode == 0, (name, run.stderr[-2000:])
+            lines = run.stdout.splitlines()
+            assert len(lines) == len(commands), (name, len(lines), len(commands))
+            flights = []
+            for line, (_, host, seed) in zip(lines, valid_cases):
+                wire, session = inspect(line, host, seed)
+                for context, seen in contexts:
+                    flight = accepted(context, seen, wire, session, host)
+                    if host == 'localhost' and seed is not None:
+                        flights.append((seed, wire, flight))
+            for line, (_, expected) in zip(lines[len(valid_cases):], invalid_cases):
+                assert line == expected, (name, line, expected)
+            authentication_count = 0
+            for seed, wire, flight in flights:
+                hello, encrypted, _, _, _, _, _ = flight
+                prefix = 'n:localhost:' + encode(seed) + ':'
+                probes = [hello]
+                # Accept either legal ordering of the two ServerHello extensions.
+                reverse = hello[:76] + hello[82:] + hello[76:82]
+                probes.append(reverse)
+                bad = malformed(hello)
+                args = [prefix + encode(h) + ':' + encode(encrypted) for h in probes]
+                args += [prefix + encode(h) + ':' for h, _ in bad]
+                output = subprocess.run(command + args, cwd=ROOT, capture_output=True, text=True, timeout=90)
+                assert output.returncode == 0, (name, output.stderr[-2000:])
+                results = output.stdout.splitlines()
+                assert len(results) == len(args)
+                content, handshake_secret, client_secret, server_secret = verify_keys(results[0], seed, wire, flight)
+                authentication_count += verify_server_evidence(command, wire[5:] + hello, content, server_secret)
+                complete_handshake(command,flight,wire[5:]+hello+content,handshake_secret,client_secret)
+                size = 4 + int.from_bytes(content[1:4], 'big')
+                ee = content[:size]
+                assert ee[0] == 8
+                selected = extensions(ee[6:])
+                assert selected[0] == b'' and selected[16] == b'\x00\x09\x08http/1.1'
+                transition = subprocess.run(command + ['ep:localhost:' + encode(seed) + ':' + encode(hello) + ':' + encode(ee)], cwd=ROOT, capture_output=True, text=True, timeout=90)
+                assert transition.returncode == 0, transition.stderr
+                assert transition.stdout.strip() == 'sni:http/1.1|' + encode(hashlib.sha256(wire[5:] + hello + ee).digest())
+                # Reordering changes the transcript and thus the traffic keys: the old
+                # encrypted flight must fail even though the new parameters are legal.
+                assert results[1].endswith('|receive-error'), (name, results[1])
+                for actual, (_, expected) in zip(results[2:], bad):
+                    assert actual == expected, (name, actual, expected)
+            certificate_count = check_certificates(command)
+            extension_count = check_extensions(command)
+            count = check_framing(command)
+            print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * len(contexts)} OpenSSL flights; completed OpenSSL handshakes and native bidirectional application records PASS', flush=True)
