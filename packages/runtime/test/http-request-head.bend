@@ -8,7 +8,7 @@ def headers(parts: List<&2, String>) -> List<&2, H.Header>:
     case name <> value <> rest: H.Header{Text.fromScalars(Text.parseNumbers(name)), Text.fromScalars(Text.parseNumbers(value))} <> headers(rest)
     case _: Nil{}
 
-def show(result: Result<&2, &2, Request.RequestHeadHeadError, Request.Head>) -> String:
+def show(result: Result<&2, &2, Request.RequestHeadError, Request.Head>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{Request.Head{method, bytes}}: Text.showText(method) ++ ";" ++ String.join(Text.showNumbers(bytes), ",")

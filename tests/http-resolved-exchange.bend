@@ -82,7 +82,7 @@ def assertReason(valid: Bool) -> IO(Unit):
 
 def failed(next: Exchange.Next<String>) -> IO(Unit):
   match next:
-    case Exchange.Next{exchange, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}}}}:
+    case Exchange.Next{exchange, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}}}}:
       do IO<Unit>:
         Consume.close(exchange)
         assertReason(String.eq(reason, "stop"))
@@ -125,7 +125,7 @@ def respond(read: Bool, controller: Abort.AbortController<String>, exchange: Exc
 def consumed(flow: U32, controller: Abort.AbortController<String>, outcome: Result<&2, &1, HTTP.ResolvedExchangeError<String>, Exchange.Exchange<String>>) -> IO(Unit):
   match outcome:
     case Fail{HTTP.ResolvedExchangeConnectionFailure{error}}: IO.print("connection:" ++ Show.finalName(error))
-    case Fail{HTTP.ResolvedExchangeExchangeFailure{Exchange.SocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}: IO.print("handoff:" ++ reason)
+    case Fail{HTTP.ResolvedExchangeFailure{Exchange.SocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}: IO.print("handoff:" ++ reason)
     case Fail{_}: IO.die(Unit, 1, "unexpected exchange start error")
     case Done{exchange}:
       do IO<Unit>:
@@ -191,7 +191,7 @@ def configuredResult(mode: U32, family: Bool, port: U32, flow: U32, result: Resu
         created(mode, family, port, flow, owner)
 
 def configured(mode: U32, family: Bool, port: U32, dnsPort: U32, flow: U32) -> IO(Unit):
-  configuredResult(mode, family, port, flow, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.EndpointV4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
+  configuredResult(mode, family, port, flow, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.EndpointV4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.ResolverOptions{1, 1, 1, Nil{}}, Nil{})))
 
 def arguments(args: List<String>) -> IO(Unit):
   match args:

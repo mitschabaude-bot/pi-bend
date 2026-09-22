@@ -39,7 +39,7 @@ def newHistory() -> History:
   History{Map.new(&2, Bool)}
 
 type Error is Data:
-  InvalidName{error: Id.NameErrorOfMessage}
+  InvalidName{error: Id.DomainNameError}
   InvalidRecord{error: Id.RecordError}
   InvalidExtension{error: Id.EdnsResponseError}
   UnsupportedType{}
@@ -67,7 +67,7 @@ def keyBytes(bytes: List<&2, U32>, reversed: String) -> String:
     case Nil{}: String.reverse(reversed)
     case byte <> rest: keyBytes(rest, SCon{Chr{Id.fold(byte)}, reversed})
 
-def encodedKey(result: Result<&2, &2, Id.NameErrorOfMessage, List<&2, U32>>) -> Result<&2, &2, Error, String>:
+def encodedKey(result: Result<&2, &2, Id.DomainNameError, List<&2, U32>>) -> Result<&2, &2, Error, String>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
     case Done{bytes}: Done{keyBytes(bytes, SNil{})}
@@ -352,13 +352,13 @@ def exchangeRequestWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, 
 def exchangeTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), environment, source, signal, optionsLocal, kind, name, maximum)
 
-def exchangeSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+def exchangeSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, Source.TcpSource{source}, signal, optionsLocal, kind, name, maximum)
 
-def exchangeSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+def exchangeSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   exchangeSourceOptionsWith(~Environment, ~draw, Reason, environment, source, signal, Id.defaults(), kind, name, maximum)
 
-def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
+def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, signal):
       do IO<Report<Reason>>:
@@ -366,7 +366,7 @@ def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdErro
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return Report{result, reason}
 
-def startAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+def startAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   match valid available maximum:
     case False{} _ _: IO.pure(Report<Reason>, Report{Fail{AddressLookupUnsupportedType{}}, None{}})
     case True{} _ 0: IO.pure(Report<Reason>, Report{Fail{InvalidReadSize{}}, None{}})
@@ -380,10 +380,10 @@ def exchangeServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, 
   exchangeSourceWith(~Environment, ~draw, Reason, environment, Source.Fixed{servers}, signal, kind, name, maximum)
 
 # The caller owns the selection source and retains it across lookupAddressLookup calls.
-def lookupSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+def lookupSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   startAddressLookup(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.availableServerSource(Source.Server, source), environment, source, milliseconds, parent, optionsLocal, kind, name, maximum)
 
-def lookupSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+def lookupSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   lookupSourceOptionsWith(~Environment, ~draw, Reason, environment, source, milliseconds, parent, Id.defaults(), kind, name, maximum)
 
 def exchangeWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
@@ -412,7 +412,7 @@ def lookupServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2
 def lookupServersRandom(-Reason: Data, servers: List<&2, Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   lookupServersWith(~Unit, ~Id.random, Reason, Unit{}, servers, milliseconds, parent, kind, name, maximum)
 
-def lookupSourceRandom(-Reason: Data, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+def lookupSourceRandom(-Reason: Data, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   lookupSourceWith(~Unit, ~Id.random, Reason, Unit{}, source, milliseconds, parent, kind, name, maximum)
 
 # The context borrows the ID environment, server selector and deadline signal.
@@ -453,7 +453,7 @@ def socketFailure(-Reason: Data, code: U32) -> IO(Id.Outcome<AddressLookupError<
 def exchangeFailure(-Reason: Data, original: AddressLookupError<Reason>, error: Source.TcpQueryError<Reason>) -> IO(Id.Outcome<AddressLookupError<Reason>, Selection>):
   match error:
     case Source.TcpQueryConnection{Connect.SocketError{code, _}}: socketFailure(Reason, code)
-    case Source.Terminated{Source.TcpSessionTransport{Source.Transport{_, SocketIO.SocketSocketError{code, _}}}}: socketFailure(Reason, code)
+    case Source.Terminated{Source.TcpSessionTransport{Source.Transport{_, SocketIO.SocketError{code, _}}}}: socketFailure(Reason, code)
     case Source.Terminated{Source.EndOfStream{}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
     case Source.Terminated{Source.TcpSessionTransport{Source.Framing{Id.IncompleteFrame{}}}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
     case _: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchHalt{original})
@@ -520,19 +520,19 @@ def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.
 def searchTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
   startOptions(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), environment, source, milliseconds, parent, optionsLocal, kind, maximum, cursor)
 
-def searchSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+def searchSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
   searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, Source.TcpSource{source}, milliseconds, parent, optionsLocal, kind, maximum, cursor)
 
-def scopedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, kind: U32, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(AddressSearchReport<Reason>):
+def scopedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, kind: U32, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(AddressSearchReport<Reason>):
   scopedOptions(~Environment, ~draw, ~Reason, environment, Source.TcpSource{source}, Id.defaults(), kind, maximum, cursor, pair)
 
-def startAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+def startAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
   startOptions(~Environment, ~draw, ~Reason, valid, available, environment, Source.TcpSource{source}, milliseconds, parent, Id.defaults(), kind, maximum, cursor)
 
-def searchSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+def searchSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
   searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, Id.defaults(), kind, maximum, cursor)
 
-def searchSourceRandom(~Reason: Data, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+def searchSourceRandom(~Reason: Data, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
   searchSourceWith(~Unit, ~Id.random, ~Reason, Unit{}, source, milliseconds, parent, kind, maximum, cursor)
 
 # One total deadline spans candidates and all alias follow-ups. As in address
@@ -551,11 +551,11 @@ def searchRandom(~Reason: Data, address: Connect.Address, port: U32, millisecond
 
 # Resolved server ownership and the total deadline remain explicit. This layer
 # consumes search/requestAddressSearch policy, not timeout/attempt scheduling or reload.
-def plannedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
+def plannedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
   match plan:
     case Configuration.Plan{optionsLocal, cursor}: searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, optionsLocal, kind, maximum, cursor)
 
-def searchConfiguredWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSourceSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, configuration: Configuration.Configuration, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
+def searchConfiguredWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, configuration: Configuration.Configuration, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
   plannedAddressSearch(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, kind, maximum, Configuration.plan(configuration, name, dots, absolute))
 
 # Own only rotation state. Immutable validated settings are retained across
@@ -564,7 +564,7 @@ type Owner is Type:
   Owner{config: Configuration.Config<Endpoint.Endpoint>, selector: Source.Owner<Configuration.Attempt<Endpoint.Endpoint>>}
 
 type Resolver is Data:
-  Resolver{config: Configuration.Config<Endpoint.Endpoint>, source: Source.ServerSourceSource<Configuration.Attempt<Endpoint.Endpoint>>}
+  Resolver{config: Configuration.Config<Endpoint.Endpoint>, source: Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>}
 
 type Replacement is Type:
   Updated{owner: Owner}
@@ -594,7 +594,7 @@ def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
 def create(config: Configuration.Config<Endpoint.Endpoint>) -> IO(Result<&2, &1, Index.Error, Owner>):
   createWith(~Unit, ~Index.wordIndex, Unit{}, config)
 
-def borrowed(+config: Configuration.Config<Endpoint.Endpoint>, pair: Source.Owner<Configuration.Attempt<Endpoint.Endpoint>> & Source.ServerSourceSource<Configuration.Attempt<Endpoint.Endpoint>>) -> Owner & Resolver:
+def borrowed(+config: Configuration.Config<Endpoint.Endpoint>, pair: Source.Owner<Configuration.Attempt<Endpoint.Endpoint>> & Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>) -> Owner & Resolver:
   match pair:
     case (selector, source): (Owner{config, selector}, Resolver{config, source})
 
@@ -628,7 +628,7 @@ def replace(previous: Owner, config: Configuration.Config<Endpoint.Endpoint>) ->
 
 # Rotation survives across calls; each search owns one deadline spanning all
 # its candidate, alias and server attempts. The supplied parent stays borrowed.
-def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSourceSource<Configuration.Attempt<Endpoint.Endpoint>>, config: Configuration.Config<Endpoint.Endpoint>, parent: Abort.AbortSignal<Reason>, kind: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
+def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>, config: Configuration.Config<Endpoint.Endpoint>, parent: Abort.AbortSignal<Reason>, kind: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
   match config plan:
     case Configuration.Config{Configuration.TransportPrepared{optionsLocal, _}, _, milliseconds, maximum} Configuration.Plan{request, cursor}: searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, Source.Configured{source, optionsLocal}, milliseconds, parent, request, kind, maximum, cursor)
 
@@ -835,8 +835,8 @@ def fromSearch(servers: List<&2, Source.Server>, milliseconds: U32, maximum: U32
 type TcpResolverOwner is Type:
   TcpResolverOwner{config: Config, selector: Source.Owner<Source.Server>}
 
-type TcpResolverResolver is Data:
-  TcpResolverResolver{source: Source.ServerSourceSource<Source.Server>, domains: List<&2, Id.Domain>, policy: Id.Policy, request: Id.QueryOptions, milliseconds: U32, maximum: U32}
+type TcpResolver is Data:
+  TcpResolver{source: Source.ServerSource<Source.Server>, domains: List<&2, Id.Domain>, policy: Id.Policy, request: Id.QueryOptions, milliseconds: U32, maximum: U32}
 
 type TcpResolverReplacement is Type:
   TcpResolverUpdated{owner: TcpResolverOwner}
@@ -866,12 +866,12 @@ def createWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2
 def createTcpResolver(config: Config) -> IO(Result<&2, &1, Index.Error, TcpResolverOwner>):
   createWithTcpResolver(~Unit, ~Index.wordIndex, Unit{}, config)
 
-def borrowedTcpResolver(config: Config, pair: Source.Owner<Source.Server> & Source.ServerSourceSource<Source.Server>) -> TcpResolverOwner & TcpResolverResolver:
+def borrowedTcpResolver(config: Config, pair: Source.Owner<Source.Server> & Source.ServerSource<Source.Server>) -> TcpResolverOwner & TcpResolver:
   match config pair:
     case Config{servers, +domains, +policy, +request, +milliseconds, +maximum, rotate} Tuple{selector, source}:
-      (TcpResolverOwner{Config{servers, domains, policy, request, milliseconds, maximum, rotate}, selector}, TcpResolverResolver{source, domains, policy, request, milliseconds, maximum})
+      (TcpResolverOwner{Config{servers, domains, policy, request, milliseconds, maximum, rotate}, selector}, TcpResolver{source, domains, policy, request, milliseconds, maximum})
 
-def borrowTcpResolver(owner: TcpResolverOwner) -> TcpResolverOwner & TcpResolverResolver:
+def borrowTcpResolver(owner: TcpResolverOwner) -> TcpResolverOwner & TcpResolver:
   match owner:
     case TcpResolverOwner{Config{servers, domains, policy, request, milliseconds, maximum, +rotate}, selector}:
       borrowedTcpResolver(Config{servers, domains, policy, request, milliseconds, maximum, rotate}, Source.borrow(Source.Server, rotate, selector))
@@ -902,12 +902,12 @@ def replaceTcpResolver(previous: TcpResolverOwner, config: Config) -> IO(TcpReso
 
 # Rotation survives across calls; each search owns one deadline spanning all
 # its candidate, alias and server attempts. The supplied parent stays borrowedTcpResolver.
-def lookupWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, resolver: TcpResolverResolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
+def lookupWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, resolver: TcpResolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
   match resolver:
-    case TcpResolverResolver{source, domains, policy, request, milliseconds, maximum}:
+    case TcpResolver{source, domains, policy, request, milliseconds, maximum}:
       searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, request, kind, maximum, Id.startDomains(name, dots, absolute, domains, policy))
 
-def lookupTcpResolver(~Reason: Data, resolver: TcpResolverResolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
+def lookupTcpResolver(~Reason: Data, resolver: TcpResolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
   lookupWithTcpResolver(~Unit, ~Id.random, ~Reason, Unit{}, resolver, parent, kind, name, dots, absolute)
 
 # This entry point resolves one address family. A combined-family operation
@@ -1010,7 +1010,7 @@ def startPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, 
 def searchWithPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor) -> IO(PairSearchReport<Reason>):
   startPairSearch(~Environment, ~draw, ~Reason, Source.available(source), environment, source, milliseconds, parent, optionsLocal, priority, maximum, cursor)
 
-def plannedPairResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSourceSource<Configuration.Attempt<Endpoint.Endpoint>>, config: Configuration.Config<Endpoint.Endpoint>, parent: Abort.AbortSignal<Reason>, priority: Priority, plan: Configuration.Plan) -> IO(PairSearchReport<Reason>):
+def plannedPairResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>, config: Configuration.Config<Endpoint.Endpoint>, parent: Abort.AbortSignal<Reason>, priority: Priority, plan: Configuration.Plan) -> IO(PairSearchReport<Reason>):
   match config plan:
     case Configuration.Config{Configuration.TransportPrepared{optionsLocal, _}, _, milliseconds, maximum} Configuration.Plan{request, cursor}: searchWithPairSearch(~Environment, ~draw, ~Reason, environment, Source.Configured{source, optionsLocal}, milliseconds, parent, request, priority, maximum, cursor)
 

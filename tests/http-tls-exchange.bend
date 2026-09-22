@@ -29,7 +29,7 @@ def run(port: U32, certificate: List<&2, U32>, mode: U32) -> IO(Unit):
   do IO<Unit>:
     +controller : Abort.AbortController<String> <- Abort.new(String)
     socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-    adoption : Result<&2, &1, Socket.SocketErrorOfSocket<String>, Socket.Owner<String>> <- Socket.create(String, socket, Abort.signal(String, controller))
+    adoption : Result<&2, &1, Socket.Error<String>, Socket.Owner<String>> <- Socket.create(String, socket, Abort.signal(String, controller))
     owner : Socket.Owner<String> <- Check.opened(adoption)
     initial : Result<&2, &1, TLS.Error<String>, TLS.Connection<String>> <- TLS.start(String, owner, Some{"localhost"}, Client.Authorization{chain => Session.pin(certificate, chain)}, TLS.defaults())
     connection : TLS.Connection<String> <- TLSCheck.connected(initial)

@@ -39,7 +39,7 @@ def show(value: Result<&2, &2, Record.RecordError, Record.Value>) -> String:
     case Done{Record.SOA{primary, mailbox, serial, refresh, retry, expire, minimum}}: "SOA:" ++ showName(primary) ++ ":" ++ showName(mailbox) ++ ":" ++ showNumbers(serial <> refresh <> retry <> expire <> minimum <> Nil{})
     case Done{Record.Opaque{Message.Record{owner, kind, class, ttl, start, length}}}: "opaque:" ++ showName(owner) ++ ":" ++ showNumbers(kind <> class <> ttl <> start <> length <> Nil{})
 
-def direct(kind: U32, class: U32, start: U32, length: U32, value: Result<&2, &2, Name.NameErrorOfMessage, Name.Packet>) -> String:
+def direct(kind: U32, class: U32, start: U32, length: U32, value: Result<&2, &2, Name.DomainNameError, Name.Packet>) -> String:
   match value:
     case Fail{_}: "packet-error"
     case Done{packet}: show(Record.decodeRecord(packet, Message.Record{Name.Name{Nil{}}, kind, class, 123, start, length}))

@@ -115,7 +115,7 @@ def features(+mode: String) -> List<&2, Options.Feature>:
 def args(values: List<String>) -> IO(Unit):
   match values:
     case +mode <> +family <> first <> second <> kind <> Nil{}:
-      ready(mode, Scalar.decimal(kind, 0), Settings.prepareConfiguration(Endpoint.Endpoint, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}, Bool.pick(U32, String.eq(mode, "deadline"), 1200, 7000), Bool.pick(U32, String.eq(mode, "size"), 0, 7), Configuration.prepareSearch(Options.OptionsOptions{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 1), features(mode)}, "x" <> "y" <> Nil{})))
+      ready(mode, Scalar.decimal(kind, 0), Settings.prepareConfiguration(Endpoint.Endpoint, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}, Bool.pick(U32, String.eq(mode, "deadline"), 1200, 7000), Bool.pick(U32, String.eq(mode, "size"), 0, 7), Configuration.prepareSearch(Options.ResolverOptions{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 1), features(mode)}, "x" <> "y" <> Nil{})))
     case _: IO.die(Unit, 1, "expected mode family first second kind")
 
 def main() -> IO(Unit):

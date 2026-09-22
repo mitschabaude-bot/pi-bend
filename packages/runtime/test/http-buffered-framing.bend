@@ -16,7 +16,7 @@ def set(headers: Headers.Headers, name: String, value: String) -> Headers.Header
     case SCon{Chr{43}, rest}: Headers.appendField(headers, H.Header{name, H.trimHeader(Text.fromScalars(Text.parseNumbers(rest)))})
     case _: headers
 
-def field(value: Result<&2, &2, H.HeaderHeaderError, Maybe<&2, String>>) -> String:
+def field(value: Result<&2, &2, H.HeaderSyntaxError, Maybe<&2, String>>) -> String:
   match value:
     case Done{Some{text}}: "+" ++ Text.showText(text)
     case _: "-"
@@ -26,7 +26,7 @@ def show(value: Result<&2, &2, Framing.FramingError, Framing.BufferedFramingPrep
     case Fail{_}: "error"
     case Done{Framing.BufferedFramingPrepared{Body.Prepared{_, +headers, content}, encoding}}: field(Headers.get(headers, "content-length")) ++ ";" ++ field(Headers.get(headers, "transfer-encoding")) ++ ";" ++ String.join(Text.showNumbers(Framing.wireContent(content, encoding)), ",")
 
-def prepared(value: Result<&2, &2, Body.BufferedBodyBodyError, Body.Prepared>) -> String:
+def prepared(value: Result<&2, &2, Body.BufferedBodyError, Body.Prepared>) -> String:
   match value:
     case Fail{_}: "error"
     case Done{request}: show(Framing.prepareBufferedFraming(request))

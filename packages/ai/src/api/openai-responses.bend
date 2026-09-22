@@ -597,7 +597,7 @@ def describePreparation(cause: PreparationError) -> String:
     case GrammarFailure{why}: Sampling.errorMessage(why)
     case PayloadFailure{why}: describePayload(why)
 
-def describeHeaderField(error: Header.HeaderHeaderError) -> String:
+def describeHeaderField(error: Header.HeaderSyntaxError) -> String:
   match error:
     case Header.InvalidName{}: "Invalid HTTP header name"
     case Header.InvalidValue{}: "Invalid HTTP header value"

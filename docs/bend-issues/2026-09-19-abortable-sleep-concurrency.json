@@ -2,7 +2,7 @@
   "scope": "Core cases plus eight broadcasts to 128 sleeps each, repeated abort/reason retention, independent signals and 90 deadline/abort races per process. Creation/cancellation timing may vary. Native exit audit includes all channel rows; Bun audits timers only. Instrumented finite checks, not a performance comparison or exhaustive race proof.",
   "sources": {
     "/home/agent/code/pi-bend/packages/runtime/test/abortable-sleep.bend": "498b4f87040ac1007aa80ac578617378796703d729becd64d59bbc27c54b8708",
-    "/home/agent/code/pi-bend/packages/runtime/src/socket.bend": "efd8be97751664525d3a645513caa517f5b64ed914f3644f155fd2483317433f",
+    "/home/agent/code/pi-bend/packages/runtime/src/socket.bend": "5f807931a28691ac2ac07b202acb87a7bf26ab75eb116cc660455d936781eb4e",
     "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963",
     "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/effs/timer.c": "b6985cd3adb6ce750d13837594c2b6f2afe88761e48d42734431f92b5592f51a",
     "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/effs/timer.js": "b299c324486301e5d5bc0fc4bba24c28daf8d711dbc1f6ea9a87c945b532950f"
@@ -11,7 +11,7 @@
     {
       "backend": "native-1",
       "repetition": 0,
-      "seconds": 0.18512619100511074,
+      "seconds": 0.18478871043771505,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -23,7 +23,7 @@
     {
       "backend": "native-1",
       "repetition": 1,
-      "seconds": 0.18596811592578888,
+      "seconds": 0.18661946151405573,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -35,7 +35,7 @@
     {
       "backend": "native-1",
       "repetition": 2,
-      "seconds": 0.18777416832745075,
+      "seconds": 0.18614686839282513,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -47,7 +47,7 @@
     {
       "backend": "native-1",
       "repetition": 3,
-      "seconds": 0.18584652617573738,
+      "seconds": 0.18653042055666447,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -59,7 +59,7 @@
     {
       "backend": "native-1",
       "repetition": 4,
-      "seconds": 0.1856515845283866,
+      "seconds": 0.1849065711721778,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -71,7 +71,7 @@
     {
       "backend": "native-1",
       "repetition": 5,
-      "seconds": 0.18612783774733543,
+      "seconds": 0.1863755602389574,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -83,7 +83,7 @@
     {
       "backend": "native-1",
       "repetition": 6,
-      "seconds": 0.18565936386585236,
+      "seconds": 0.18485429137945175,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -95,7 +95,7 @@
     {
       "backend": "native-1",
       "repetition": 7,
-      "seconds": 0.18599402718245983,
+      "seconds": 0.1845575487241149,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -107,7 +107,7 @@
     {
       "backend": "native-4",
       "repetition": 0,
-      "seconds": 0.18773718923330307,
+      "seconds": 0.18740066699683666,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -119,7 +119,7 @@
     {
       "backend": "native-4",
       "repetition": 1,
-      "seconds": 0.18798811081796885,
+      "seconds": 0.1876552877947688,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -131,7 +131,7 @@
     {
       "backend": "native-4",
       "repetition": 2,
-      "seconds": 0.18805085960775614,
+      "seconds": 0.18920652847737074,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -143,7 +143,7 @@
     {
       "backend": "native-4",
       "repetition": 3,
-      "seconds": 0.1880927812308073,
+      "seconds": 0.18607181776314974,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -155,7 +155,7 @@
     {
       "backend": "native-4",
       "repetition": 4,
-      "seconds": 0.18774013966321945,
+      "seconds": 0.18744179885834455,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -167,7 +167,7 @@
     {
       "backend": "native-4",
       "repetition": 5,
-      "seconds": 0.18763659801334143,
+      "seconds": 0.18771606776863337,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -179,7 +179,7 @@
     {
       "backend": "native-4",
       "repetition": 6,
-      "seconds": 0.1878609387204051,
+      "seconds": 0.18914886750280857,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -191,7 +191,7 @@
     {
       "backend": "native-4",
       "repetition": 7,
-      "seconds": 0.18805135134607553,
+      "seconds": 0.1879975125193596,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -203,7 +203,7 @@
     {
       "backend": "bun",
       "repetition": 0,
-      "seconds": 0.2723660236224532,
+      "seconds": 0.272062411531806,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -215,7 +215,7 @@
     {
       "backend": "bun",
       "repetition": 1,
-      "seconds": 0.2695603044703603,
+      "seconds": 0.2695808866992593,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -227,7 +227,7 @@
     {
       "backend": "bun",
       "repetition": 2,
-      "seconds": 0.2846819097176194,
+      "seconds": 0.28180611319839954,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -239,7 +239,7 @@
     {
       "backend": "bun",
       "repetition": 3,
-      "seconds": 0.2719452604651451,
+      "seconds": 0.2701554708182812,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -251,7 +251,7 @@
     {
       "backend": "bun",
       "repetition": 4,
-      "seconds": 0.2696975162252784,
+      "seconds": 0.2570561356842518,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -263,7 +263,7 @@
     {
       "backend": "bun",
       "repetition": 5,
-      "seconds": 0.26811195351183414,
+      "seconds": 0.2584575414657593,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -275,7 +275,7 @@
     {
       "backend": "bun",
       "repetition": 6,
-      "seconds": 0.27120772656053305,
+      "seconds": 0.28468553349375725,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -287,7 +287,7 @@
     {
       "backend": "bun",
       "repetition": 7,
-      "seconds": 0.2855443460866809,
+      "seconds": 0.27072544395923615,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,

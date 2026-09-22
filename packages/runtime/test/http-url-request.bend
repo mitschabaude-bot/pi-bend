@@ -21,7 +21,7 @@ def show(value: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) ->
     case Fail{_}: "invalid"
     case Done{Request.URLPrepared{Endpoint.Endpoint{_, host, port, _, target}, Request.BufferedRequestPrepared{Head.Head{method, bytes}, Framing.BufferedFramingPrepared{Body.Prepared{_, _, body}, _}}}}: Host.serializeHost(host) ++ "|" ++ U32.show(port) ++ "|" ++ method ++ "|" ++ Scalar.showText(target) ++ "|" ++ String.join(Scalar.showNumbers(bytes), ",") ++ "|" ++ String.join(Scalar.showNumbers(content(body)), ",")
 
-def headers(result: Result<&2, &2, Header.HeaderHeaderError, Headers.Headers>) -> Headers.Headers:
+def headers(result: Result<&2, &2, Header.HeaderSyntaxError, Headers.Headers>) -> Headers.Headers:
   match result:
     case Done{value}: value
     case Fail{_}: Headers.new()

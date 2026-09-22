@@ -30,7 +30,7 @@ def showLabels(values: List<&2, List<&2, U32>>) -> List<&2, String>:
     case Nil{}: Nil{}
     case label <> rest: showBytes(label) <> showLabels(rest)
 
-def error(value: DNS.NameErrorOfMessage) -> String:
+def error(value: DNS.DomainNameError) -> String:
   match value:
     case DNS.NameInvalidByte{}: "InvalidByte"
     case DNS.InvalidLabel{}: "InvalidLabel"
@@ -40,17 +40,17 @@ def error(value: DNS.NameErrorOfMessage) -> String:
     case DNS.ReservedLabel{}: "ReservedLabel"
     case DNS.InvalidPointer{}: "InvalidPointer"
 
-def encoded(value: Result<&2, &2, DNS.NameErrorOfMessage, List<&2, U32>>) -> String:
+def encoded(value: Result<&2, &2, DNS.DomainNameError, List<&2, U32>>) -> String:
   match value:
     case Fail{why}: "error:" ++ error(why)
     case Done{bytes}: "ok:" ++ showBytes(bytes)
 
-def decoded(value: Result<&2, &2, DNS.NameErrorOfMessage, DNS.Decoded>) -> String:
+def decoded(value: Result<&2, &2, DNS.DomainNameError, DNS.Decoded>) -> String:
   match value:
     case Fail{why}: "error:" ++ error(why)
     case Done{DNS.Decoded{DNS.Name{labels}, next}}: "ok:" ++ U32.show(next) ++ ":" ++ String.join(showLabels(labels), "/")
 
-def packet(value: Result<&2, &2, DNS.NameErrorOfMessage, DNS.Packet>, position: U32) -> String:
+def packet(value: Result<&2, &2, DNS.DomainNameError, DNS.Packet>, position: U32) -> String:
   match value:
     case Fail{why}: "error:" ++ error(why)
     case Done{packet}: decoded(DNS.decodeName(packet, position))

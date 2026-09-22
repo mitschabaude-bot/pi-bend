@@ -11,7 +11,7 @@ import ./ref.bend as Ref
 # from authenticating an early response or processing a peer key update.
 type Error<-Reason: Data> is Data:
   Protocol{cause: TLS.Error}
-  Network{cause: Socket.SocketErrorOfSocket<Reason>}
+  Network{cause: Socket.Error<Reason>}
   WriteQueueFull{maximum: U32}
   Closed{}
   ShutdownFailure{cause: Socket.InterruptError}
@@ -98,7 +98,7 @@ def enqueue(-Reason: Data, state: State<Reason>, records: List<&2, List<&2, U32>
       +size = byteCount(records, 0n)
       enqueueAllowed(Reason, Nat.is_le((queued + size : Nat), U32.to_nat(maximum)), State{Done{client}, tail, queued, maximum}, records, size, completion)
 
-def written(-Reason: Data, pair: Socket.Writer<Reason> & Result<&2, &2, Socket.SocketErrorOfSocket<Reason>, Unit>) -> Socket.Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>:
+def written(-Reason: Data, pair: Socket.Writer<Reason> & Result<&2, &2, Socket.Error<Reason>, Unit>) -> Socket.Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>:
   match pair:
     case (writer, Done{_}): (writer, Done{Unit{}})
     case (writer, Fail{cause}): (writer, Fail{Network{cause}})
@@ -109,7 +109,7 @@ def writeRecords(-Reason: Data, records: List<&2, List<&2, U32>>, pair: Socket.W
     case Nil{} Tuple{writer, Done{_}}: IO.pure(Socket.Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>, (writer, Done{Unit{}}))
     case head <> rest Tuple{writer, Done{_}}:
       do IO<Socket.Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>>:
-        result : Socket.Writer<Reason> & Result<&2, &2, Socket.SocketErrorOfSocket<Reason>, Unit> <- Socket.sendWriter(Reason, writer, head)
+        result : Socket.Writer<Reason> & Result<&2, &2, Socket.Error<Reason>, Unit> <- Socket.sendWriter(Reason, writer, head)
         writeRecords(Reason, rest, written(Reason, result))
 
 def interruptFailure(-Reason: Data, interrupt: Socket.Handle, result: Result<&2, &2, Error<Reason>, Unit>) -> IO(Unit):
@@ -275,7 +275,7 @@ def createState(-Reason: Data, client: TLS.Client, records: List<&2, List<&2, U3
         owner : Resource.Owner<State<Reason>> <- Resource.create(State<Reason>, State{Done{client}, head, 0n, maximum})
         launchWriter(Reason, socket, interrupt, writer, head, records, readSize, Resource.borrow(State<Reason>, owner))
 
-def attached(-Reason: Data, step: TLS.Step, options: Options, pair: Socket.Owner<Reason> & Result<&2, &1, Socket.SocketErrorOfSocket<Reason>, Socket.Writer<Reason>>) -> IO(Result<&2, &1, Error<Reason>, Connection<Reason>>):
+def attached(-Reason: Data, step: TLS.Step, options: Options, pair: Socket.Owner<Reason> & Result<&2, &1, Socket.Error<Reason>, Socket.Writer<Reason>>) -> IO(Result<&2, &1, Error<Reason>, Connection<Reason>>):
   match step pair:
     case _ Tuple{socket, Fail{cause}}: failedOpen(Reason, socket, Network{cause})
     case TLS.Step{client, records, _} Tuple{socket, Done{writer}}:
@@ -285,7 +285,7 @@ def attached(-Reason: Data, step: TLS.Step, options: Options, pair: Socket.Owner
 # The caller supplies an already connected, abort-aware socket owner.
 def attach(-Reason: Data, socket: Socket.Owner<Reason>, step: TLS.Step, options: Options) -> IO(Result<&2, &1, Error<Reason>, Connection<Reason>>):
   do IO<Result<&2, &1, Error<Reason>, Connection<Reason>>>:
-    pair : Socket.Owner<Reason> & Result<&2, &1, Socket.SocketErrorOfSocket<Reason>, Socket.Writer<Reason>> <- Socket.createWriter(Reason, socket)
+    pair : Socket.Owner<Reason> & Result<&2, &1, Socket.Error<Reason>, Socket.Writer<Reason>> <- Socket.createWriter(Reason, socket)
     attached(Reason, step, options, pair)
 
 def initialized(-Reason: Data, socket: Socket.Owner<Reason>, options: Options, result: Result<&2, &1, TLS.Error, TLS.Step>) -> IO(Result<&2, &1, Error<Reason>, Connection<Reason>>):
@@ -332,7 +332,7 @@ def packetStatus(-Reason: Data, pair: State<Reason> & Result<&2, &2, Error<Reaso
   match pair:
     case (state, observation): (state, Packet{observation, Nil{}})
 
-def readState(-Reason: Data, state: State<Reason>, result: Result<&2, &2, Socket.SocketErrorOfSocket<Reason>, List<&2, U32>>) -> IO(State<Reason> & Packet<Reason>):
+def readState(-Reason: Data, state: State<Reason>, result: Result<&2, &2, Socket.Error<Reason>, List<&2, U32>>) -> IO(State<Reason> & Packet<Reason>):
   match state result:
     case State{Fail{+cause}, tail, queued, maximum} _:
       IO.pure(State<Reason> & Packet<Reason>, (State{Fail{cause}, tail, queued, maximum}, Packet{Fail{cause}, Nil{}}))
@@ -358,7 +358,7 @@ def bufferPacket(-Reason: Data, connection: Connection<Reason>, packet: Packet<R
         interruptFailure(Reason, interrupt, outcome(Reason, observation))
         return (Connection{socket, owner, shared, interrupt, task, Record.append(pending, flatten(chunks, Nil{})), readSize}, observation)
 
-def received(-Reason: Data, shared: Resource.Handle<State<Reason>>, restore: Socket.Owner<Reason> -> Connection<Reason>, pair: Socket.Owner<Reason> & Result<&2, &2, Socket.SocketErrorOfSocket<Reason>, List<&2, U32>>) -> IO(Connection<Reason> & Result<&2, &2, Error<Reason>, TLS.Status>):
+def received(-Reason: Data, shared: Resource.Handle<State<Reason>>, restore: Socket.Owner<Reason> -> Connection<Reason>, pair: Socket.Owner<Reason> & Result<&2, &2, Socket.Error<Reason>, List<&2, U32>>) -> IO(Connection<Reason> & Result<&2, &2, Error<Reason>, TLS.Status>):
   match pair:
     case (socket, result):
       do IO<Connection<Reason> & Result<&2, &2, Error<Reason>, TLS.Status>>:
@@ -371,7 +371,7 @@ def pump(-Reason: Data, connection: Connection<Reason>) -> IO(Connection<Reason>
   match connection:
     case Connection{socket, owner, +shared, interrupt, task, pending, +readSize}:
       do IO<Connection<Reason> & Result<&2, &2, Error<Reason>, TLS.Status>>:
-        pair : Socket.Owner<Reason> & Result<&2, &2, Socket.SocketErrorOfSocket<Reason>, List<&2, U32>> <- Socket.recvSocket(Reason, socket, readSize)
+        pair : Socket.Owner<Reason> & Result<&2, &2, Socket.Error<Reason>, List<&2, U32>> <- Socket.recvSocket(Reason, socket, readSize)
         received(Reason, shared, next => Connection{next, owner, shared, interrupt, task, pending, readSize}, pair)
 
 def observation(-Reason: Data, connection: Connection<Reason>) -> IO(Connection<Reason> & Result<&2, &2, Error<Reason>, TLS.Status>):

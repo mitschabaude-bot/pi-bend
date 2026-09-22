@@ -18,14 +18,14 @@ def candidate(value: F.Decoded) -> U32:
       low(W.shiftRight(significand, U32.to_nat(U32.min((1075 - exponent : U32), 64))))
     case _: 0
 
-def checkedMilliseconds(value: F.F64, millisecondsMilliseconds: U32, comparison: Maybe<&2, Cmp>) -> Result<&2, &2, MillisecondsError, U32>:
+def checkedMilliseconds(value: F.F64, exactMilliseconds: U32, comparison: Maybe<&2, Cmp>) -> Result<&2, &2, MillisecondsError, U32>:
   match comparison:
-    case Some{EQ{}}: Done{millisecondsMilliseconds}
+    case Some{EQ{}}: Done{exactMilliseconds}
     case _: Fail{Unrepresentable{value}}
 
 # Re-encoding the candidate establishes exactness, including signed-zero
 # equality. This also rejects negative, fractional and non-finite inputs.
-def millisecondsMilliseconds(+value: F.F64) -> Result<&2, &2, MillisecondsError, U32>:
+def exactMilliseconds(+value: F.F64) -> Result<&2, &2, MillisecondsError, U32>:
   +word = candidate(F.decode(value))
   checkedMilliseconds(value, word, F.compare(value, F.fromU32(word)))
 

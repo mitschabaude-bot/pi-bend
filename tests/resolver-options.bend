@@ -10,14 +10,14 @@ def bit(value: Bool) -> String:
 def features() -> List<&2, Options.Feature>:
   Options.Rotate{} <> Options.Edns{} <> Options.SingleRequestReopen{} <> Options.SingleRequest{} <> Options.NoTldQuery{} <> Options.NoReload{} <> Options.UseTcp{} <> Options.TrustAd{} <> Options.NoAAAA{} <> Nil{}
 
-def flags(items: List<&2, Options.Feature>, +options: Options.OptionsOptions, result: String) -> String:
+def flags(items: List<&2, Options.Feature>, +options: Options.ResolverOptions, result: String) -> String:
   match items:
     case Nil{}: result
     case item <> rest: flags(rest, options, result ++ bit(Options.enabled(item, options)))
 
-def numbers(values: Options.OptionsOptions) -> String:
+def numbers(values: Options.ResolverOptions) -> String:
   match values:
-    case Options.OptionsOptions{ndots, timeout, attempts, _}: U32.show(ndots) ++ "," ++ U32.show(timeout) ++ "," ++ U32.show(attempts)
+    case Options.ResolverOptions{ndots, timeout, attempts, _}: U32.show(ndots) ++ "," ++ U32.show(timeout) ++ "," ++ U32.show(attempts)
 
 def diagnostics(values: List<&2, Options.Diagnostic>) -> IO(Unit):
   match values:

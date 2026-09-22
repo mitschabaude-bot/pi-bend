@@ -1,7 +1,7 @@
 """Differential response projection against actual loopback Node Fetch.
 
 Python orchestrates the peer/oracle and compiled Bend; it supplies no production
-behavior. Generic projection/fold invariants live in laws/http-response-metadata.
+behavior. Generic projection/fold invariants live in laws/http-response.bend.
 """
 import hashlib
 import json

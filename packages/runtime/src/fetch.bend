@@ -201,10 +201,10 @@ def resolutionCategory(-Reason: Data, report: Connect.Resolution(Deadline.Cause<
     case Done{Route.Named{HostsResolve.FromNetwork{Named.PairHostsResolverCompleted{report}}}}: dnsReport(Reason, report)
     case _: NonRetryable{}
 
-def socket(-Reason: Data, error: Socket.SocketErrorOfSocket<Deadline.Cause<Reason>>) -> Category:
+def socket(-Reason: Data, error: Socket.Error<Deadline.Cause<Reason>>) -> Category:
   match error:
-    case Socket.SocketAborted{why}: requestAbort(Reason, why)
-    case Socket.SocketSocketError{_, _}: Connection{}
+    case Socket.Aborted{why}: requestAbort(Reason, why)
+    case Socket.SocketError{_, _}: Connection{}
 
 def source(-Reason: Data, error: Source.SocketSourceError<Deadline.Cause<Reason>>) -> Category:
   match error:
@@ -239,10 +239,10 @@ def exchangeCategory(-Reason: Data, error: HTTP.ResolvedExchangeError<Deadline.C
     case HTTP.ResolvedExchangeConnectionFailure{Connection.Exhausted{}}: Connection{}
     case HTTP.ResolvedExchangeConnectionFailure{Connection.ProgressAborted{why}}: requestAbort(Reason, why)
     case HTTP.ResolvedExchangeConnectionFailure{_}: NonRetryable{}
-    case HTTP.ResolvedExchangeExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
-    case HTTP.ResolvedExchangeExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
-    case HTTP.ResolvedExchangeExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
-    case HTTP.ResolvedExchangeExchangeFailure{_}: NonRetryable{}
+    case HTTP.ResolvedExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{_}: NonRetryable{}
 
 def classify(-Reason: Data, error: Error<Reason>) -> Category:
   match error:

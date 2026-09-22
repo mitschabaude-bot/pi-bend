@@ -10,7 +10,7 @@ def show(value: Result<&2, &2, D.MillisecondsError, U32>) -> String:
 
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
-    case hi <> lo <> Nil{}: IO.print(show(D.millisecondsMilliseconds(F.fromBits(H.decimal(hi, 0), H.decimal(lo, 0)))))
+    case hi <> lo <> Nil{}: IO.print(show(D.exactMilliseconds(F.fromBits(H.decimal(hi, 0), H.decimal(lo, 0)))))
     case _: IO.die(Unit, 1, "expected binary64 words")
 
 def cases(values: List<String>) -> IO(Unit):

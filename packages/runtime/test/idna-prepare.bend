@@ -22,7 +22,7 @@ def cases(args: List<String>, +context: Prepare.PrepareContext) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case head <> rest:
       do IO<Unit>:
-        IO.print(show(Prepare.preparePrepare(context, Mapping.Nontransitional{}, text(Split.split(head, ','), ""))))
+        IO.print(show(Prepare.prepareInput(context, Mapping.Nontransitional{}, text(Split.split(head, ','), ""))))
         cases(rest, context)
 
 def main() -> IO(Unit):

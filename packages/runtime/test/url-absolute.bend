@@ -20,7 +20,7 @@ def text(parts: List<&2, String>, reversed: String) -> String:
 def show(value: Result<&2, &2, URL.Error, Record.URL>) -> String:
   match value:
     case Fail{_}: "invalid"
-    case Done{result}: "+" ++ Text.showText(Serialize.serializeSerialize(result, False{}))
+    case Done{result}: "+" ++ Text.showText(Serialize.serialize(result, False{}))
 
 def cases(args: List<String>, +context: URL.Context) -> IO(Unit):
   match args:

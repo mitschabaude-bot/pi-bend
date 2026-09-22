@@ -23,7 +23,7 @@ def failure(value: Session.Failure<String>) -> String:
   match value:
     case Session.EndOfStream{}: "eof"
     case Session.TcpSessionTransport{TCP.Framing{Frame.IncompleteFrame{}}}: "framing"
-    case Session.TcpSessionTransport{TCP.Transport{_, SocketIO.SocketAborted{Abort.Supplied{"stop"}}}}: "abort"
+    case Session.TcpSessionTransport{TCP.Transport{_, SocketIO.Aborted{Abort.Supplied{"stop"}}}}: "abort"
     case _: "unexpected"
 
 def describe(value: Session.Outcome<String, U32>) -> String:

@@ -11,7 +11,7 @@ def fields(values: List<&2, H.Header>) -> List<&2, String>:
     case Nil{}: Nil{}
     case H.Header{name, value} <> rest: (Text.showText(name) ++ ":" ++ Text.showText(value)) <> fields(rest)
 
-def error(value: Body.ChunkedBodyBodyError) -> String:
+def error(value: Body.ChunkedBodyError) -> String:
   match value:
     case Body.ChunkedBodyInvalidByte{_}: "byte"
     case Body.LineError{Line.LineTooLong{}}: "line-limit"
@@ -23,7 +23,7 @@ def error(value: Body.ChunkedBodyBodyError) -> String:
     case Body.TooManyTrailers{}: "trailer-count"
     case Body.IncompleteBody{}: "incomplete"
 
-def finished(result: Result<&2, &2, Body.ChunkedBodyBodyError, Unit>) -> String:
+def finished(result: Result<&2, &2, Body.ChunkedBodyError, Unit>) -> String:
   match result:
     case Done{_}: "end"
     case Fail{value}: error(value)

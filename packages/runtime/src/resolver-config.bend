@@ -183,13 +183,13 @@ type Diagnostic is Data:
   Malformed{token: String}
   OptionsUnknown{token: String}
 
-type OptionsOptions is Data:
-  OptionsOptions{ndots: U32, timeoutSeconds: U32, attempts: U32, features: List<&2, Feature>}
+type ResolverOptions is Data:
+  ResolverOptions{ndots: U32, timeoutSeconds: U32, attempts: U32, features: List<&2, Feature>}
 
 type OptionsReport is Data:
-  OptionsReport{values: OptionsOptions, diagnostics: List<&2, Diagnostic>}
+  OptionsReport{values: ResolverOptions, diagnostics: List<&2, Diagnostic>}
 
-def defaults() -> OptionsOptions: OptionsOptions{1, 5, 2, Nil{}}
+def defaults() -> ResolverOptions: ResolverOptions{1, 5, 2, Nil{}}
 
 def featureKey(feature: Feature) -> U32:
   match feature:
@@ -209,9 +209,9 @@ def contains(+key: U32, values: List<&2, Feature>, found: Bool) -> Bool:
     case Nil{} False{}: False{}
     case item <> rest False{}: contains(key, rest, U32.is_eq(key, featureKey(item)))
 
-def enabled(feature: Feature, options: OptionsOptions) -> Bool:
+def enabled(feature: Feature, options: ResolverOptions) -> Bool:
   match options:
-    case OptionsOptions{_, _, _, features}: contains(featureKey(feature), features, False{})
+    case ResolverOptions{_, _, _, features}: contains(featureKey(feature), features, False{})
 
 def inserted(present: Bool, feature: Feature, values: List<&2, Feature>) -> List<&2, Feature>:
   match present:
@@ -221,12 +221,12 @@ def inserted(present: Bool, feature: Feature, values: List<&2, Feature>) -> List
 def enable(+feature: Feature, +values: List<&2, Feature>) -> List<&2, Feature>:
   inserted(contains(featureKey(feature), values, False{}), feature, values)
 
-def apply(option: Option, values: OptionsOptions) -> OptionsOptions:
+def apply(option: Option, values: ResolverOptions) -> ResolverOptions:
   match option values:
-    case Number{Ndots{}, value} OptionsOptions{_, timeout, attempts, features}: OptionsOptions{value, timeout, attempts, features}
-    case Number{Timeout{}, value} OptionsOptions{ndots, _, attempts, features}: OptionsOptions{ndots, value, attempts, features}
-    case Number{Attempts{}, value} OptionsOptions{ndots, timeout, _, features}: OptionsOptions{ndots, timeout, value, features}
-    case Enable{feature} OptionsOptions{ndots, timeout, attempts, features}: OptionsOptions{ndots, timeout, attempts, enable(feature, features)}
+    case Number{Ndots{}, value} ResolverOptions{_, timeout, attempts, features}: ResolverOptions{value, timeout, attempts, features}
+    case Number{Timeout{}, value} ResolverOptions{ndots, _, attempts, features}: ResolverOptions{ndots, value, attempts, features}
+    case Number{Attempts{}, value} ResolverOptions{ndots, timeout, _, features}: ResolverOptions{ndots, timeout, value, features}
+    case Enable{feature} ResolverOptions{ndots, timeout, attempts, features}: ResolverOptions{ndots, timeout, attempts, enable(feature, features)}
 
 # Prefix matching is only for numeric key delimiters, never flag names.
 def strip(text: String, prefix: String, equal: Bool) -> Maybe<&2, String>:
@@ -295,7 +295,7 @@ def scan(tokens: List<&2, String>, report: OptionsReport) -> OptionsReport:
 
 # Reports with diagnostics are unresolved configuration. No resolver consumes
 # the partial values until its diagnostic policy has been selected explicitly.
-def interpretStrict(tokens: List<&2, String>, initial: OptionsOptions) -> OptionsReport:
+def interpretStrict(tokens: List<&2, String>, initial: ResolverOptions) -> OptionsReport:
   scan(tokens, OptionsReport{initial, Nil{}})
 
 type ScopeReport<-LookupError: Data> is Data:
@@ -409,7 +409,7 @@ def suffix(text: String) -> Result<&2, &2, Search.PresentationError, Search.Pres
     case SCon{'.', _}: Fail{Search.EmptyLabel{}}
     case other: Search.parsePresentation(other)
 
-def wireError(error: Search.PresentationError) -> Search.NameErrorOfMessage:
+def wireError(error: Search.PresentationError) -> Search.DomainNameError:
   match error:
     case Search.PresentationInvalidByte{}: Search.NameInvalidByte{}
     case Search.RawNul{}: Search.NameInvalidByte{}
@@ -609,14 +609,14 @@ def loadWithLoad(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, De
 # Request policy is only one projection of resolver settings. Keep all values
 # for the later transport, retry, rotation, response and reload layers.
 type Prepared is Data:
-  Prepared{resolver: OptionsOptions, request: Search.QueryOptions}
+  Prepared{resolver: ResolverOptions, request: Search.QueryOptions}
 
 # glibc 2.39 uses 1200 for ordinary resolver EDNS advertisement. Trust-AD
 # controls the header AD bit, not DNSSEC OK; edns0 alone does not enable DO.
 def selected(edns: Bool, trustAd: Bool) -> Search.QueryOptions:
   Search.QueryOptions{Bool.pick(U32, trustAd, 288, 256), Bool.pick(Maybe<&2, Search.Query>, edns, Some{Search.Query{1200, False{}, Nil{}}}, None{})}
 
-def prepareRequest(+options: OptionsOptions) -> Prepared:
+def prepareRequest(+options: ResolverOptions) -> Prepared:
   Prepared{options, selected(enabled(Edns{}, options), enabled(TrustAd{}, options))}
 
 # Any diagnostic rejects the entire selection; no partially interpreted
@@ -633,17 +633,17 @@ def prepareStrict(tokens: List<&2, String>) -> Result<&2, &2, List<&2, Diagnosti
 # Search consumes ndotsSearch/no-TLD only. Keep the complete selected options for
 # transport, response, retry and reload layers rather than discarding flags.
 type Configuration is Data:
-  Configuration{options: OptionsOptions, domains: Report}
+  Configuration{options: ResolverOptions, domains: Report}
 
-def ndotsSearch(options: OptionsOptions) -> U32:
+def ndotsSearch(options: ResolverOptions) -> U32:
   match options:
-    case OptionsOptions{value, _, _, _}: value
+    case ResolverOptions{value, _, _, _}: value
 
-def policy(+options: OptionsOptions) -> Search.Policy:
+def policy(+options: ResolverOptions) -> Search.Policy:
   Search.Policy{ndotsSearch(options), True{}, True{}, enabled(NoTldQuery{}, options)}
 
 # Callers supplying explicit option values have already selected their policy.
-def prepareSearch(options: OptionsOptions, domains: List<&2, String>) -> Configuration:
+def prepareSearch(options: ResolverOptions, domains: List<&2, String>) -> Configuration:
   Configuration{options, prepareDomains(domains)}
 
 def checkedSearch(report: OptionsReport, domains: List<&2, String>) -> Result<&2, &2, List<&2, Diagnostic>, Configuration>:
@@ -881,16 +881,16 @@ def prepare(-Server: Data, timeout: U32, servers: List<&2, Server>) -> Result<&2
 # Preserve all parsed options alongside entries timedTransport in configuration order.
 # Rotation must operate on these entries, never recompute their positions.
 type TransportPrepared<-Server: Data> is Data:
-  TransportPrepared{options: OptionsOptions, servers: List<&2, Attempt<Server>>}
+  TransportPrepared{options: ResolverOptions, servers: List<&2, Attempt<Server>>}
 
-def timedTransport(-Server: Data, options: OptionsOptions, result: Result<&2, &2, Error, List<&2, Attempt<Server>>>) -> Result<&2, &2, Error, TransportPrepared<Server>>:
+def timedTransport(-Server: Data, options: ResolverOptions, result: Result<&2, &2, Error, List<&2, Attempt<Server>>>) -> Result<&2, &2, Error, TransportPrepared<Server>>:
   match result:
     case Fail{error}: Fail{error}
     case Done{servers}: Done{TransportPrepared{options, servers}}
 
-def prepareTransport(-Server: Data, options: OptionsOptions, servers: List<&2, Server>) -> Result<&2, &2, Error, TransportPrepared<Server>>:
+def prepareTransport(-Server: Data, options: ResolverOptions, servers: List<&2, Server>) -> Result<&2, &2, Error, TransportPrepared<Server>>:
   match options:
-    case OptionsOptions{ndots, +timeout, attempts, features}: timedTransport(Server, OptionsOptions{ndots, timeout, attempts, features}, prepare(Server, timeout, servers))
+    case ResolverOptions{ndots, +timeout, attempts, features}: timedTransport(Server, ResolverOptions{ndots, timeout, attempts, features}, prepare(Server, timeout, servers))
 
 # A complete immutable configuration. Options have one canonical home in
 # transport; request/searchLocal projections use those same retained settings.

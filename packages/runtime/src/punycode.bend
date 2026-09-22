@@ -203,7 +203,7 @@ def preparedEncode(+text: String, result: Result<&2, &2, Error, Basics>) -> Resu
     case Done{Basics{+count, +total, +reversed}}:
       loopEncode(text, text, count, total, Done{initial(U32.is_eq(count, total), count, Bool.pick(String, U32.is_eq(count, 0), reversed, SCon{'-', reversed}))})
 
-def encodeEncode(+text: String) -> Result<&2, &2, Error, String>:
+def encode(+text: String) -> Result<&2, &2, Error, String>:
   preparedEncode(text, basicsEncode(text, Done{Basics{0, 0, ""}}))
 
 
@@ -284,11 +284,9 @@ def prepared(input: Input) -> Result<&2, &2, Error, String>:
   match input:
     case Input{basic, +encoded}: loop(encoded, basics(basic, Nil{}, 0, encoded, True{}))
 
-def decodeDecode(input: String) -> Result<&2, &2, Error, String>:
+def decode(input: String) -> Result<&2, &2, Error, String>:
   prepared(divide(String.reverse(input), ""))
 
 
 # Unicode-scalar Punycode, without the xn-- prefix. IDNA mapping, NFC, label
 # validity, case folding and DNS length policy belong to the hostname layer.
-def encode(text: String) -> Result<&2, &2, Error, String>: encodeEncode(text)
-def decode(text: String) -> Result<&2, &2, Error, String>: decodeDecode(text)

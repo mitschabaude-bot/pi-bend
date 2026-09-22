@@ -60,7 +60,7 @@ def draw(value: DrawSource) -> IO(Result<&2, &2, Id.IdError, U32>):
         abortChild(String.eq(mode, "abort-child"), child)
         return result
 
-def run(+mode: String, ids: IDs.Source, +options: Options.OptionsOptions, kind: U32, pair: Selector.Owner<Plan.Attempt<Endpoint.Endpoint>> & Selector.ServerSourceSource<Plan.Attempt<Endpoint.Endpoint>>, scopePair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Unit):
+def run(+mode: String, ids: IDs.Source, +options: Options.ResolverOptions, kind: U32, pair: Selector.Owner<Plan.Attempt<Endpoint.Endpoint>> & Selector.ServerSource<Plan.Attempt<Endpoint.Endpoint>>, scopePair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Unit):
   match pair, scopePair:
     case (owner, +source), (Deadline.Scope{+child, lifetime}, signal):
       do IO<Unit>:
@@ -96,7 +96,7 @@ def features(+mode: String) -> List<&2, Options.Feature>:
 def args(values: List<String>) -> IO(Unit):
   match values:
     case +mode <> +family <> first <> second <> kind <> Nil{}:
-      ready(mode, Scalar.decimal(kind, 0), Prepare.prepareTransport(Endpoint.Endpoint, Options.OptionsOptions{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 2), features(mode)}, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}))
+      ready(mode, Scalar.decimal(kind, 0), Prepare.prepareTransport(Endpoint.Endpoint, Options.ResolverOptions{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 2), features(mode)}, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}))
     case _: IO.die(Unit, 1, "expected mode family first second kind")
 
 def main() -> IO(Unit):

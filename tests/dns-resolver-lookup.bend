@@ -14,7 +14,7 @@ import ./dns-tcp-servers.bend as ServersTest
 import ./dns-address-search.bend as Output
 import ./dns-resolver-owner.bend as OwnerTest
 
-def run(+mode: String, +kind: U32, +environment: IDs.Source, +parent: Abort.AbortSignal<String>, pair: Resolver.TcpResolverOwner & Resolver.TcpResolverResolver) -> IO(Unit):
+def run(+mode: String, +kind: U32, +environment: IDs.Source, +parent: Abort.AbortSignal<String>, pair: Resolver.TcpResolverOwner & Resolver.TcpResolver) -> IO(Unit):
   match pair:
     case (owner, +resolver):
       do IO<Unit>:

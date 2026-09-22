@@ -64,7 +64,7 @@ def opened(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>)
 
 def rejected(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
-    case Fail{Peer.Adoption{SocketIO.SocketAborted{Abort.Supplied{"stop"}}}}: IO.pure(Unit, Unit{})
+    case Fail{Peer.Adoption{SocketIO.Aborted{Abort.Supplied{"stop"}}}}: IO.pure(Unit, Unit{})
     case Done{Peer.Peer{_, connection}}:
       do IO<Unit>:
         Test.close(connection)

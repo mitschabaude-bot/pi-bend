@@ -3,7 +3,7 @@ import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-server-rotation.bend as RotationTest
 
-def launch(count: Nat, +source: Source.ServerSourceSource<U32>, reversed: List<&2, Chan(List<&2, U32>)>) -> IO(List<&2, Chan(List<&2, U32>)>):
+def launch(count: Nat, +source: Source.ServerSource<U32>, reversed: List<&2, Chan(List<&2, U32>)>) -> IO(List<&2, Chan(List<&2, U32>)>):
   match count:
     case 0n: IO.pure(List<&2, Chan(List<&2, U32>)>, List.reverse(&2, Chan(List<&2, U32>), reversed))
     case 1n+rest:
@@ -20,7 +20,7 @@ def joined(tasks: List<&2, Chan(List<&2, U32>)>) -> IO(Unit):
         IO.print(RotationTest.csv(selected, ""))
         joined(rest)
 
-def run(count: Nat, pair: Source.Owner<U32> & Source.ServerSourceSource<U32>) -> IO(Unit):
+def run(count: Nat, pair: Source.Owner<U32> & Source.ServerSource<U32>) -> IO(Unit):
   match pair:
     case (owner, +source):
       do IO<Unit>:

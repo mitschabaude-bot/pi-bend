@@ -20,7 +20,7 @@ def event(capture: Capture, value: Stream.StreamEvent) -> Capture:
 
 def error(value: Source.SocketSourceError<String>) -> String:
   match value:
-    case Source.SocketSourceSocketFailure{Socket.SocketAborted{A.Supplied{reason}}}: "abort:" ++ reason
+    case Source.SocketSourceSocketFailure{Socket.Aborted{A.Supplied{reason}}}: "abort:" ++ reason
     case Source.SocketSourceInvalidReadSize{}: "invalid-size"
     case _: "source-error"
 

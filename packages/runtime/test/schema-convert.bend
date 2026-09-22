@@ -32,7 +32,7 @@ def converted(result: C.Converted(), expected: V.Value, label: String) -> IO(Uni
     case Fail{_}: T.assertion(False{}, "builder conversion failed: " ++ label)
 
 def check(kind: C.Primitive, input: V.Value, expected: V.Value, label: String) -> IO(Unit):
-  converted(C.convertConvert(kind, input), expected, label)
+  converted(C.convertPrimitive(kind, input), expected, label)
 
 def nestedPolicy(depth: Nat) -> C.Policy:
   match depth:
@@ -53,8 +53,8 @@ def main() -> IO(Unit):
     T.assertion(W.equal(F.toBits(F.truncate(special)), F.toBits(special)), "truncate preserves NaN payload bits")
     +infinity : F.F64 = F.infinity(True{})
     T.assertion(W.equal(F.toBits(F.truncate(infinity)), F.toBits(infinity)), "truncate preserves infinity")
-    converted(C.convertConvert(C.ToString{}, V.Number{special}), V.Text{"NaN"}, "builder numeric string conversion")
-    converted(C.convertConvert(C.ToString{}, V.Number{infinity}), V.Text{"-Infinity"}, "builder infinite string conversion")
-    converted(C.convertConvert(C.ToInteger{}, V.Text{"-0n"}), V.Number{F.fromU32(0)}, "decimal integer literal zero has no negative sign")
+    converted(C.convertPrimitive(C.ToString{}, V.Number{special}), V.Text{"NaN"}, "builder numeric string conversion")
+    converted(C.convertPrimitive(C.ToString{}, V.Number{infinity}), V.Text{"-Infinity"}, "builder infinite string conversion")
+    converted(C.convertPrimitive(C.ToInteger{}, V.Text{"-0n"}), V.Number{F.fromU32(0)}, "decimal integer literal zero has no negative sign")
     converted(C.apply(nestedPolicy(256n), V.Text{"42"}), nestedValue(256n), "deeply nested array conversion")
     IO.print("PASS native builder conversion IEEE values, exact integer literals and nested policies")

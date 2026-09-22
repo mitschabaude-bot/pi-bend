@@ -92,7 +92,7 @@ Two laws quantify over arbitrary reason, failure and value types. A retained abo
 
 ## Relationship to pi and existing tests
 
-The FIFO supports `packages/agent/src/pending-message-queue.bend`, corresponding to `PendingMessageQueue` in pinned pi-mono `packages/agent/src/agent.ts:140`. Six pending-queue laws now establish initialization, enqueue order, changing mode without changing messages, clearing without changing mode, mode-dependent delivery, and the equivalence of `hasItems` with a nonempty message sequence. The delivery specification uses list head/tail semantics: All emits everything and empties the queue; OneAtATime emits exactly the oldest message, or nothing for an empty queue. Both preserve the mode.
+The FIFO supports the pending-queue section of `packages/agent/src/agent.bend`, corresponding to `PendingMessageQueue` in pinned pi-mono `packages/agent/src/agent.ts:140`. Six pending-queue laws now establish initialization, enqueue order, changing mode without changing messages, clearing without changing mode, mode-dependent delivery, and the equivalence of `hasItems` with a nonempty message sequence. The delivery specification uses list head/tail semantics: All emits everything and empties the queue; OneAtATime emits exactly the oldest message, or nothing for an empty queue. Both preserve the mode.
 
 Eight paired-queue laws cover enqueue, clear, mode changes and drain. Each operation has a selected-queue contract and an isolation contract: its effect matches the pending-queue operation, and the other queue stays unchanged. These apply to either queue kind and arbitrary initial states. The selected-queue contracts compose with the pending-queue laws; they do not merely assert that an operation equals itself.
 
@@ -281,3 +281,7 @@ The 24 law modules for DNS, resolver configuration, hosts and connection schedul
 ### Runtime HTTP family merged (2026-09-22)
 
 The HTTP, SSE, socket and line-decoder laws keep their statements over the five merged modules; the audited unsafe drivers moved with their code (`http-response.bend`: `seek`, `drive`, `driveBodyConsume`, `driveResponseReader`; `sse.bend`: `drive`).
+
+### Law files grouped by module (2026-09-22)
+
+`laws/` and `proofs/` now carry one file per constrained module rather than one per pre-merge source module: `dns-message`, `resolver-config`, `dns-transport`, `connection-driver`, `hosts`, `http-message`, `http-response`, `url`, `sse` and `agent` absorb the 38 files that constrained them (61 law files become 32; 401 laws unchanged). Statements are verbatim; the only textual changes are four collisions that the merge exposed: the resolver-search law `rejects_diagnostics` is `search_rejects_diagnostics` (the resolver-request law keeps the name), the line-decoder helper `decoderOf` is `lineDecoderOf`, and the helpers `cursor` and `remaining` became `searchCursor` and `remainingQueues` because same-named binders in neighbouring laws shadowed them. The remaining single-module files take their module's name too (`abort`, `bounded`, `calendar`, `dns-resolver`, `http-exchange`, `string`, `text`, `timer`, `utf8`). Earlier sections keep the file names they used at the time.

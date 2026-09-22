@@ -20,7 +20,7 @@ def result(value: Result<&2, &2, Progress.ResponseProgressError<Exchange.ReadErr
   match value:
     case Done{None{}}: "end"
     case Done{Some{bytes}}: "bytes:" ++ String.join(Text.showNumbers(bytes), ",")
-    case Fail{Progress.ResponseProgressPrimaryFailure{Progress.TransportFailure{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}}}}}: "abort:" ++ reason
+    case Fail{Progress.ResponseProgressPrimaryFailure{Progress.TransportFailure{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}}}}}: "abort:" ++ reason
     case Fail{_}: "error"
 
 def closed(value: Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>) -> IO(Unit):

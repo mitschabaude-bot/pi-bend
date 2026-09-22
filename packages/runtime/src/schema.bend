@@ -206,7 +206,7 @@ def multipleRemainder(+remainder: F.F64, +divisor: F.F64) -> Bool:
   nearMultiple(remainder) || nearMultiple(F.subtract(remainder, divisor)) || nearMultiple(F.add(remainder, divisor))
 
 def multipleOf(+value: F.F64, +divisor: F.F64) -> Bool:
-  (F.isInteger(value) && F.isInteger(F.divide(F.fromU32(1), divisor))) || multipleRemainder(F.remainderRemainder(value, divisor), divisor)
+  (F.isInteger(value) && F.isInteger(F.divide(F.fromU32(1), divisor))) || multipleRemainder(F.remainder(value, divisor), divisor)
 
 def containsTests(values: List<&2, V.Value>, +schema: Schema) -> List<&2, Test>:
   match values:
@@ -591,7 +591,7 @@ def convertString(value: V.Value) -> Converted():
     case V.Number{number}: formattedNumber(F.toDecimal(number))
     case other: Done{other}
 
-def convertConvert(primitive: Primitive, +value: V.Value) -> Converted():
+def convertPrimitive(primitive: Primitive, +value: V.Value) -> Converted():
   match primitive:
     case ToBoolean{}: convertedOrOriginal(value, tryBoolean(value))
     case ToNumber{}: convertedOrOriginal(value, tryNumber(value))
@@ -732,7 +732,7 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
     case Visit{ObjectFields{fields, additional}, value} <> rest values: run(scheduleObject(fields, additional, value, rest), values)
     case FinishArray{count} <> rest values: run(rest, finishArray(count, values, Nil{}))
     case Visit{Preserve{}, value} <> rest values: run(rest, value <> values)
-    case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convertConvert(literalPrimitive(literal), original))} <> rest, values)
+    case Visit{Literal{+literal}, +original} <> rest values: run(ConvertedValue{selectLiteral(literalValue(literal), original, convertPrimitive(literalPrimitive(literal), original))} <> rest, values)
     case Visit{Union{branches, accepted}, original} <> rest values: run(scheduleUnion(branches, accepted, original, rest), values)
     case TryAlternative{_, Nil{}, original} <> rest values: run(rest, original <> values)
     case TryAlternative{+schema, Branch{_, policy} <> remaining, +original} <> rest values: run(Visit{policy, original} <> SelectAlternative{schema, remaining, original} <> rest, values)
@@ -741,7 +741,7 @@ def run(tasks: List<&2, Task>, values: List<&2, V.Value>) -> Converted():
         _ => run(rest, candidate <> values),
         _ => run(TryAlternative{schema, remaining, original} <> rest, values))(Unit{})
     case SelectAlternative{_, _, _} <> _ Nil{}: Fail{InvalidConversionState{}}
-    case Visit{Scalar{primitive}, value} <> rest values: run(ConvertedValue{convertConvert(primitive, value)} <> rest, values)
+    case Visit{Scalar{primitive}, value} <> rest values: run(ConvertedValue{convertPrimitive(primitive, value)} <> rest, values)
     case ConvertedValue{Done{converted}} <> rest values: run(rest, converted <> values)
     case ConvertedValue{Fail{error}} <> _ _: Fail{error}
     case Visit{ArrayItems{policy}, value} <> rest values: run(scheduleArray(policy, arrayInput(value), rest), values)

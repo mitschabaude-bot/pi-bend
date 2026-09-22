@@ -15,7 +15,7 @@ import ./url.bend as Params
 type Header is Data:
   Header{name: String, value: String}
 
-type HeaderHeaderError is Data:
+type HeaderSyntaxError is Data:
   InvalidName{}
   InvalidValue{}
   NonByteValue{}
@@ -61,12 +61,12 @@ def lowercase(text: String) -> String:
     case SCon{Chr{+code}, rest}:
       SCon{Chr{Bool.pick(U32, between(code, 65, 90), (code + 32 : U32), code)}, lowercase(rest)}
 
-def checkedName(valid: Bool, name: String) -> Result<&2, &2, HeaderHeaderError, String>:
+def checkedName(valid: Bool, name: String) -> Result<&2, &2, HeaderSyntaxError, String>:
   match valid:
     case True{}: Done{lowercase(name)}
     case False{}: Fail{InvalidName{}}
 
-def normalizeName(+name: String) -> Result<&2, &2, HeaderHeaderError, String>:
+def normalizeName(+name: String) -> Result<&2, &2, HeaderSyntaxError, String>:
   checkedName(validName(name), name)
 
 # HTTP whitespace includes CR/LF at the edges. Vertical tab, form feed and
@@ -99,25 +99,25 @@ def validValueHeader(text: String) -> Bool:
     case SCon{Chr{+code}, rest}:
       Bool.not(U32.is_eq(code, 0) || U32.is_eq(code, 10) || U32.is_eq(code, 13)) && validValueHeader(rest)
 
-def checkedValueHeader(bytes: Bool, valid: Bool, value: String) -> Result<&2, &2, HeaderHeaderError, String>:
+def checkedValueHeader(bytes: Bool, valid: Bool, value: String) -> Result<&2, &2, HeaderSyntaxError, String>:
   match bytes valid:
     case False{} _: Fail{NonByteValue{}}
     case True{} False{}: Fail{InvalidValue{}}
     case True{} True{}: Done{value}
 
-def normalizedValue(+value: String) -> Result<&2, &2, HeaderHeaderError, String>:
+def normalizedValue(+value: String) -> Result<&2, &2, HeaderSyntaxError, String>:
   checkedValueHeader(byteValue(value), validValueHeader(value), value)
 
-def normalizeValue(value: String) -> Result<&2, &2, HeaderHeaderError, String>:
+def normalizeValue(value: String) -> Result<&2, &2, HeaderSyntaxError, String>:
   normalizedValue(trimHeader(value))
 
-def combine(name: Result<&2, &2, HeaderHeaderError, String>, value: Result<&2, &2, HeaderHeaderError, String>) -> Result<&2, &2, HeaderHeaderError, Header>:
+def combine(name: Result<&2, &2, HeaderSyntaxError, String>, value: Result<&2, &2, HeaderSyntaxError, String>) -> Result<&2, &2, HeaderSyntaxError, Header>:
   match name value:
     case Fail{error} _: Fail{error}
     case _ Fail{error}: Fail{error}
     case Done{key} Done{text}: Done{Header{key, text}}
 
-def normalize(name: String, value: String) -> Result<&2, &2, HeaderHeaderError, Header>:
+def normalize(name: String, value: String) -> Result<&2, &2, HeaderSyntaxError, Header>:
   combine(normalizeName(name), normalizeValue(value))
 
 # Persistent server-side HTTP headers. Values retain append order; public
@@ -139,29 +139,29 @@ def appendField(headers: Headers, field: Header) -> Headers:
     case Headers{+fields} Header{+name, value}:
       Headers{R.set(List<&2, String>, fields, name, extended(R.get(List<&2, String>, fields, name), value))}
 
-def appendChecked(headers: Headers, field: Result<&2, &2, HeaderHeaderError, Header>) -> Result<&2, &2, HeaderHeaderError, Headers>:
+def appendChecked(headers: Headers, field: Result<&2, &2, HeaderSyntaxError, Header>) -> Result<&2, &2, HeaderSyntaxError, Headers>:
   match field:
     case Done{value}: Done{appendField(headers, value)}
     case Fail{error}: Fail{error}
 
-def append(headers: Headers, name: String, value: String) -> Result<&2, &2, HeaderHeaderError, Headers>:
+def append(headers: Headers, name: String, value: String) -> Result<&2, &2, HeaderSyntaxError, Headers>:
   appendChecked(headers, normalize(name, value))
 
-def setChecked(headers: Headers, field: Result<&2, &2, HeaderHeaderError, Header>) -> Result<&2, &2, HeaderHeaderError, Headers>:
+def setChecked(headers: Headers, field: Result<&2, &2, HeaderSyntaxError, Header>) -> Result<&2, &2, HeaderSyntaxError, Headers>:
   match headers field:
     case Headers{fields} Done{Header{name, value}}:
       Done{Headers{R.set(List<&2, String>, fields, name, value <> Nil{})}}
     case _ Fail{error}: Fail{error}
 
-def set(headers: Headers, name: String, value: String) -> Result<&2, &2, HeaderHeaderError, Headers>:
+def set(headers: Headers, name: String, value: String) -> Result<&2, &2, HeaderSyntaxError, Headers>:
   setChecked(headers, normalize(name, value))
 
-def deleteChecked(headers: Headers, name: Result<&2, &2, HeaderHeaderError, String>) -> Result<&2, &2, HeaderHeaderError, Headers>:
+def deleteChecked(headers: Headers, name: Result<&2, &2, HeaderSyntaxError, String>) -> Result<&2, &2, HeaderSyntaxError, Headers>:
   match headers name:
     case Headers{fields} Done{key}: Done{Headers{R.remove(List<&2, String>, fields, key)}}
     case _ Fail{error}: Fail{error}
 
-def delete(headers: Headers, name: String) -> Result<&2, &2, HeaderHeaderError, Headers>:
+def delete(headers: Headers, name: String) -> Result<&2, &2, HeaderSyntaxError, Headers>:
   deleteChecked(headers, normalizeName(name))
 
 def separator(name: String) -> String:
@@ -174,21 +174,21 @@ def joined(name: String, values: Maybe<&2, List<&2, String>>) -> Maybe<&2, Strin
     case None{}: None{}
     case Some{items}: Some{String.join(items, separator(name))}
 
-def getChecked(headers: Headers, name: Result<&2, &2, HeaderHeaderError, String>) -> Result<&2, &2, HeaderHeaderError, Maybe<&2, String>>:
+def getChecked(headers: Headers, name: Result<&2, &2, HeaderSyntaxError, String>) -> Result<&2, &2, HeaderSyntaxError, Maybe<&2, String>>:
   match headers name:
     case Headers{fields} Done{+key}: Done{joined(key, R.get(List<&2, String>, fields, key))}
     case _ Fail{error}: Fail{error}
 
-def get(headers: Headers, name: String) -> Result<&2, &2, HeaderHeaderError, Maybe<&2, String>>:
+def get(headers: Headers, name: String) -> Result<&2, &2, HeaderSyntaxError, Maybe<&2, String>>:
   getChecked(headers, normalizeName(name))
 
-def found(result: Result<&2, &2, HeaderHeaderError, Maybe<&2, String>>) -> Result<&2, &2, HeaderHeaderError, Bool>:
+def found(result: Result<&2, &2, HeaderSyntaxError, Maybe<&2, String>>) -> Result<&2, &2, HeaderSyntaxError, Bool>:
   match result:
     case Fail{error}: Fail{error}
     case Done{None{}}: Done{False{}}
     case Done{Some{_}}: Done{True{}}
 
-def has(headers: Headers, name: String) -> Result<&2, &2, HeaderHeaderError, Bool>:
+def has(headers: Headers, name: String) -> Result<&2, &2, HeaderSyntaxError, Bool>:
   found(get(headers, name))
 
 def valuesOrEmpty(values: Maybe<&2, List<&2, String>>) -> List<&2, String>:
@@ -256,7 +256,7 @@ def byteString(bytes: List<&2, U32>) -> String:
 
 # Received fields use Node Fetch's wire behavior: skip leading OWS but retain
 # trailing OWS. Public Headers append/set normalization is a different boundary.
-def named(result: Result<&2, &2, HeaderHeaderError, String>, value: String) -> Result<&2, &2, FieldError, FieldLine>:
+def named(result: Result<&2, &2, HeaderSyntaxError, String>, value: String) -> Result<&2, &2, FieldError, FieldLine>:
   match result:
     case Fail{_}: Fail{InvalidFieldName{}}
     case Done{name}: Done{Field{Header{name, trimLeading(value)}}}
@@ -413,7 +413,7 @@ def parseStatus(+bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine
 
 type StatusReadError is Data:
   StatusFramingError{error: LineReadError}
-  StatusStatusError{error: SyntaxError}
+  StatusSyntaxError{error: SyntaxError}
 
 type StatusReadResult is Data:
   StatusMore{reader: LineReader}
@@ -422,7 +422,7 @@ type StatusReadResult is Data:
 
 def statusParsed(result: Result<&2, &2, SyntaxError, StatusLine>, rest: List<&2, U32>) -> StatusReadResult:
   match result:
-    case Fail{error}: StatusFailed{StatusStatusError{error}}
+    case Fail{error}: StatusFailed{StatusSyntaxError{error}}
     case Done{status}: StatusComplete{status, rest}
 
 def framedStatus(result: LineReadResult) -> StatusReadResult:
@@ -527,12 +527,12 @@ def headersHead(head: ResponseHead) -> Headers:
   match head:
     case ResponseHead{_, fields}: collectHead(fields, new())
 
-type RequestMethodMethodError is Data:
+type RequestMethodError is Data:
   InvalidMethod{}
   ForbiddenMethod{}
 
 # Fetch normalizes six common methods, preserving other token spellings.
-def normalizedRequestMethod(lower: String, original: String) -> Result<&2, &2, RequestMethodMethodError, String>:
+def normalizedRequestMethod(lower: String, original: String) -> Result<&2, &2, RequestMethodError, String>:
   match lower:
     case "connect": Fail{ForbiddenMethod{}}
     case "trace": Fail{ForbiddenMethod{}}
@@ -545,18 +545,18 @@ def normalizedRequestMethod(lower: String, original: String) -> Result<&2, &2, R
     case "put": Done{"PUT"}
     case _: Done{original}
 
-def checkedRequestMethod(valid: Bool, +method: String) -> Result<&2, &2, RequestMethodMethodError, String>:
+def checkedRequestMethod(valid: Bool, +method: String) -> Result<&2, &2, RequestMethodError, String>:
   match valid:
     case False{}: Fail{InvalidMethod{}}
     case True{}: normalizedRequestMethod(lowercase(method), method)
 
-def normalizeRequestMethod(+method: String) -> Result<&2, &2, RequestMethodMethodError, String>:
+def normalizeRequestMethod(+method: String) -> Result<&2, &2, RequestMethodError, String>:
   checkedRequestMethod(validName(method), method)
 
 # Origin-form request heads for ordinary HTTP/1.1 Fetch connections. URL
 # parsing/percent encoding and body framing are separate preparation steps.
-type RequestHeadHeadError is Data:
-  RequestHeadMethodError{error: RequestMethodMethodError}
+type RequestHeadError is Data:
+  RequestHeadMethodError{error: RequestMethodError}
   InvalidTarget{}
   InvalidField{name: String}
 
@@ -584,36 +584,36 @@ def validFieldValue(value: String) -> Bool:
     case SNil{}: True{}
     case SCon{Chr{byte}, rest}: valueByte(byte) && validFieldValue(rest)
 
-def fieldsChecked(valid: Bool, name: String, value: String, tail: Result<&2, &2, RequestHeadHeadError, List<&2, U32>>) -> Result<&2, &2, RequestHeadHeadError, List<&2, U32>>:
+def fieldsChecked(valid: Bool, name: String, value: String, tail: Result<&2, &2, RequestHeadError, List<&2, U32>>) -> Result<&2, &2, RequestHeadError, List<&2, U32>>:
   match valid tail:
     case False{} _: Fail{InvalidField{name}}
     case True{} Fail{error}: Fail{error}
     case True{} Done{bytes}: Done{prepend(name, 58 <> 32 <> prepend(value, 13 <> 10 <> bytes))}
 
-def fieldsRequestHead(values: List<&2, Header>) -> Result<&2, &2, RequestHeadHeadError, List<&2, U32>>:
+def fieldsRequestHead(values: List<&2, Header>) -> Result<&2, &2, RequestHeadError, List<&2, U32>>:
   match values:
     case Nil{}: Done{13 <> 10 <> Nil{}}
     case Header{+name, +value} <> rest:
       fieldsChecked(validName(name) && validFieldValue(value), name, value, fieldsRequestHead(rest))
 
-def headedRequestHead(+method: String, target: String, tail: Result<&2, &2, RequestHeadHeadError, List<&2, U32>>) -> Result<&2, &2, RequestHeadHeadError, Head>:
+def headedRequestHead(+method: String, target: String, tail: Result<&2, &2, RequestHeadError, List<&2, U32>>) -> Result<&2, &2, RequestHeadError, Head>:
   match tail:
     case Fail{error}: Fail{error}
     case Done{bytes}: Done{Head{method, prepend(method, 32 <> prepend(target, prepend(" HTTP/1.1\r\n", bytes)))}}
 
-def targeted(method: String, target: String, headers: List<&2, Header>, valid: Bool) -> Result<&2, &2, RequestHeadHeadError, Head>:
+def targeted(method: String, target: String, headers: List<&2, Header>, valid: Bool) -> Result<&2, &2, RequestHeadError, Head>:
   match valid:
     case False{}: Fail{InvalidTarget{}}
     case True{}: headedRequestHead(method, target, fieldsRequestHead(headers))
 
-def requested(method: Result<&2, &2, RequestMethodMethodError, String>, +target: String, headers: List<&2, Header>) -> Result<&2, &2, RequestHeadHeadError, Head>:
+def requested(method: Result<&2, &2, RequestMethodError, String>, +target: String, headers: List<&2, Header>) -> Result<&2, &2, RequestHeadError, Head>:
   match method:
     case Fail{error}: Fail{RequestHeadMethodError{error}}
     case Done{normalized}: targeted(normalized, target, headers, validTarget(target))
 
 # Serialize validated bytes without adding, sorting or coalescing fieldsRequestHead.
 # The request builder supplies Host and consistent framing headers.
-def encodeRequestHead(method: String, target: String, headers: List<&2, Header>) -> Result<&2, &2, RequestHeadHeadError, Head>:
+def encodeRequestHead(method: String, target: String, headers: List<&2, Header>) -> Result<&2, &2, RequestHeadError, Head>:
   requested(normalizeRequestMethod(method), target, headers)
 
 type LengthError is Data:
@@ -798,14 +798,14 @@ def parse(bytes: List<&2, U32>) -> Result<&2, &2, SizeError, W.U64>:
 type FixedBodyReader is Data:
   FixedBodyReader{remaining: W.U64}
 
-type FixedBodyBodyError is Data:
+type FixedBodyError is Data:
   FixedBodyInvalidByte{value: U32}
   FixedBodyIncompleteBody{remaining: W.U64}
 
 type FixedBodyReadResult is Data:
   FixedBodyMore{reader: FixedBodyReader, bytes: List<&2, U32>}
   FixedBodyComplete{bytes: List<&2, U32>, rest: List<&2, U32>}
-  FixedBodyFailed{error: FixedBodyBodyError}
+  FixedBodyFailed{error: FixedBodyError}
 
 type Buffer is Data:
   Buffer{remaining: W.U64, reversed: List<&2, U32>}
@@ -816,12 +816,12 @@ def isComplete(reader: FixedBodyReader) -> Bool:
   match reader:
     case FixedBodyReader{remaining}: W.equal(remaining, W.zero())
 
-def accepted(valid: Bool, remaining: W.U64, reversed: List<&2, U32>, byte: U32) -> Result<&2, &2, FixedBodyBodyError, Buffer>:
+def accepted(valid: Bool, remaining: W.U64, reversed: List<&2, U32>, byte: U32) -> Result<&2, &2, FixedBodyError, Buffer>:
   match valid:
     case False{}: Fail{FixedBodyInvalidByte{byte}}
     case True{}: Done{Buffer{W.subtract(remaining, W.one()), byte <> reversed}}
 
-def collectFixedBody(bytes: List<&2, U32>, result: Result<&2, &2, FixedBodyBodyError, Buffer>) -> FixedBodyReadResult:
+def collectFixedBody(bytes: List<&2, U32>, result: Result<&2, &2, FixedBodyError, Buffer>) -> FixedBodyReadResult:
   match bytes result:
     case _ Fail{error}: FixedBodyFailed{error}
     case rest Done{Buffer{W.U64{0, 0}, reversed}}: FixedBodyComplete{List.reverse(&2, U32, reversed), rest}
@@ -833,7 +833,7 @@ def readFixedBody(reader: FixedBodyReader, bytes: List<&2, U32>) -> FixedBodyRea
   match reader:
     case FixedBodyReader{remaining}: collectFixedBody(bytes, Done{Buffer{remaining, Nil{}}})
 
-def finishFixedBody(reader: FixedBodyReader) -> Result<&2, &2, FixedBodyBodyError, Unit>:
+def finishFixedBody(reader: FixedBodyReader) -> Result<&2, &2, FixedBodyError, Unit>:
   match reader:
     case FixedBodyReader{W.U64{0, 0}}: Done{Unit{}}
     case FixedBodyReader{remaining}: Fail{FixedBodyIncompleteBody{remaining}}
@@ -852,7 +852,7 @@ type ChunkedBodyPhase is Data:
 type ChunkedBodyReader is Data:
   ChunkedBodyReader{phase: ChunkedBodyPhase, limits: Limits}
 
-type ChunkedBodyBodyError is Data:
+type ChunkedBodyError is Data:
   ChunkedBodyInvalidByte{value: U32}
   LineError{error: LineReadError}
   ChunkedBodySizeError{error: SizeError}
@@ -865,7 +865,7 @@ type ChunkedBodyBodyError is Data:
 type ChunkedBodyReadResult is Data:
   ChunkedBodyMore{reader: ChunkedBodyReader, bytes: List<&2, U32>}
   ChunkedBodyComplete{bytes: List<&2, U32>, trailers: List<&2, Header>, rest: List<&2, U32>}
-  ChunkedBodyFailed{error: ChunkedBodyBodyError, bytes: List<&2, U32>}
+  ChunkedBodyFailed{error: ChunkedBodyError, bytes: List<&2, U32>}
 
 # A single-byte state transition, separate from per-call output accumulation.
 type Emission is Data:
@@ -877,20 +877,20 @@ def sizeReader(limits: Limits) -> LineReader:
 
 def newChunkedBody(+limits: Limits) -> ChunkedBodyReader: ChunkedBodyReader{SizeLine{sizeReader(limits)}, limits}
 
-def silent(phase: ChunkedBodyPhase, limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def silent(phase: ChunkedBodyPhase, limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   Done{Emission{ChunkedBodyReader{phase, limits}, None{}}}
 
-def startTrailers(+limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def startTrailers(+limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match limits:
     case Limits{_, line, bytes, fields}: silent(Trailers{newLine(line), bytes, fields, Nil{}}, limits)
 
-def parsedSize(result: Result<&2, &2, SizeError, W.U64>, limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def parsedSize(result: Result<&2, &2, SizeError, W.U64>, limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match result:
     case Fail{error}: Fail{ChunkedBodySizeError{error}}
     case Done{W.U64{0, 0}}: startTrailers(limits)
     case Done{size}: silent(Payload{size}, limits)
 
-def sizeLine(result: LineReadResult, limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def sizeLine(result: LineReadResult, limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match result:
     case LineFailed{error}: Fail{LineError{error}}
     case LineMore{line}: silent(SizeLine{line}, limits)
@@ -901,7 +901,7 @@ def afterPayload(remaining: W.U64) -> ChunkedBodyPhase:
     case W.U64{0, 0}: PayloadCR{}
     case other: Payload{other}
 
-def delimiter(valid: Bool, next: ChunkedBodyPhase, limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def delimiter(valid: Bool, next: ChunkedBodyPhase, limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match valid:
     case False{}: Fail{InvalidDelimiter{}}
     case True{}: silent(next, limits)
@@ -910,24 +910,24 @@ def trailerReader(limits: Limits) -> LineReader:
   match limits:
     case Limits{_, line, _, _}: newLine(line)
 
-def addTrailer(field: Header, bytes: Nat, fields: Nat, reversed: List<&2, Header>, +limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def addTrailer(field: Header, bytes: Nat, fields: Nat, reversed: List<&2, Header>, +limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match fields:
     case Zero{}: Fail{TooManyTrailers{}}
     case Succ{remaining}: silent(Trailers{trailerReader(limits), bytes, remaining, field <> reversed}, limits)
 
-def parsedTrailer(result: Result<&2, &2, FieldError, FieldLine>, bytes: Nat, fields: Nat, reversed: List<&2, Header>, limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def parsedTrailer(result: Result<&2, &2, FieldError, FieldLine>, bytes: Nat, fields: Nat, reversed: List<&2, Header>, limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match result:
     case Fail{error}: Fail{TrailerError{error}}
     case Done{EndOfHeaders{}}: silent(Ended{List.reverse(&2, Header, reversed)}, limits)
     case Done{Field{field}}: addTrailer(field, bytes, fields, reversed, limits)
 
-def trailerLine(result: LineReadResult, bytes: Nat, fields: Nat, reversed: List<&2, Header>, limits: Limits) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def trailerLine(result: LineReadResult, bytes: Nat, fields: Nat, reversed: List<&2, Header>, limits: Limits) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match result:
     case LineFailed{error}: Fail{LineError{error}}
     case LineMore{line}: silent(Trailers{line, bytes, fields, reversed}, limits)
     case Line{line, _}: parsedTrailer(parseField(line), bytes, fields, reversed, limits)
 
-def stepChunkedBody(reader: ChunkedBodyReader, byte: U32) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def stepChunkedBody(reader: ChunkedBodyReader, byte: U32) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match reader:
     case ChunkedBodyReader{SizeLine{line}, limits}: sizeLine(consumeLine(line, byte), limits)
     case ChunkedBodyReader{Payload{remaining}, limits}:
@@ -938,16 +938,16 @@ def stepChunkedBody(reader: ChunkedBodyReader, byte: U32) -> Result<&2, &2, Chun
     case ChunkedBodyReader{Trailers{line, Succ{bytes}, fields, reversed}, limits}: trailerLine(consumeLine(line, byte), bytes, fields, reversed, limits)
     case ChunkedBodyReader{Ended{trailers}, limits}: silent(Ended{trailers}, limits)
 
-def checked(valid: Bool, reader: ChunkedBodyReader, byte: U32) -> Result<&2, &2, ChunkedBodyBodyError, Emission>:
+def checked(valid: Bool, reader: ChunkedBodyReader, byte: U32) -> Result<&2, &2, ChunkedBodyError, Emission>:
   match valid:
     case False{}: Fail{ChunkedBodyInvalidByte{byte}}
     case True{}: stepChunkedBody(reader, byte)
 
 type ScanState is Data:
   Running{reader: ChunkedBodyReader, reversed: List<&2, U32>}
-  Broken{error: ChunkedBodyBodyError, reversed: List<&2, U32>}
+  Broken{error: ChunkedBodyError, reversed: List<&2, U32>}
 
-def emitted(result: Result<&2, &2, ChunkedBodyBodyError, Emission>, reversed: List<&2, U32>) -> ScanState:
+def emitted(result: Result<&2, &2, ChunkedBodyError, Emission>, reversed: List<&2, U32>) -> ScanState:
   match result:
     case Fail{error}: Broken{error, reversed}
     case Done{Emission{reader, None{}}}: Running{reader, reversed}
@@ -963,7 +963,7 @@ def collect(bytes: List<&2, U32>, state: ScanState) -> ChunkedBodyReadResult:
 def readChunkedBody(reader: ChunkedBodyReader, bytes: List<&2, U32>) -> ChunkedBodyReadResult:
   collect(bytes, Running{reader, Nil{}})
 
-def finishChunkedBody(reader: ChunkedBodyReader) -> Result<&2, &2, ChunkedBodyBodyError, Unit>:
+def finishChunkedBody(reader: ChunkedBodyReader) -> Result<&2, &2, ChunkedBodyError, Unit>:
   match reader:
     case ChunkedBodyReader{Ended{_}, _}: Done{Unit{}}
     case _: Fail{IncompleteBody{}}
@@ -984,8 +984,8 @@ type Reader is Data:
   CloseReader{}
 
 type BodyError is Data:
-  FixedError{error: FixedBodyBodyError}
-  ChunkedError{error: ChunkedBodyBodyError}
+  FixedError{error: FixedBodyError}
+  ChunkedError{error: ChunkedBodyError}
   InvalidByte{value: U32}
 
 type ReadResult is Data:
@@ -1029,12 +1029,12 @@ def read(reader: Reader, +bytes: List<&2, U32>) -> ReadResult:
     case ChunkedReader{state}: chunked(readChunkedBody(state, bytes))
     case CloseReader{}: closeBytes(invalidByte(bytes), bytes)
 
-def fixedEOF(result: Result<&2, &2, FixedBodyBodyError, Unit>) -> Result<&2, &2, BodyError, Unit>:
+def fixedEOF(result: Result<&2, &2, FixedBodyError, Unit>) -> Result<&2, &2, BodyError, Unit>:
   match result:
     case Done{_}: Done{Unit{}}
     case Fail{error}: Fail{FixedError{error}}
 
-def chunkedEOF(result: Result<&2, &2, ChunkedBodyBodyError, Unit>) -> Result<&2, &2, BodyError, Unit>:
+def chunkedEOF(result: Result<&2, &2, ChunkedBodyError, Unit>) -> Result<&2, &2, BodyError, Unit>:
   match result:
     case Done{_}: Done{Unit{}}
     case Fail{error}: Fail{ChunkedError{error}}
@@ -1411,63 +1411,63 @@ type Content is Data:
 type Prepared is Data:
   Prepared{method: String, headers: Headers, content: Maybe<&2, Content>}
 
-type BufferedBodyBodyError is Data:
-  MethodError{error: RequestMethodMethodError}
+type BufferedBodyError is Data:
+  MethodError{error: RequestMethodError}
   BodyNotAllowed{}
   BufferedBodyInvalidByte{value: U32}
-  HeaderError{error: HeaderHeaderError}
+  HeaderError{error: HeaderSyntaxError}
 
-def countedByte(valid: Bool, byte: U32, length: N.BigNat) -> Result<&2, &2, BufferedBodyBodyError, N.BigNat>:
+def countedByte(valid: Bool, byte: U32, length: N.BigNat) -> Result<&2, &2, BufferedBodyError, N.BigNat>:
   match valid:
     case False{}: Fail{BufferedBodyInvalidByte{byte}}
     case True{}: Done{N.add(length, N.one())}
 
-def counted(bytes: List<&2, U32>, result: Result<&2, &2, BufferedBodyBodyError, N.BigNat>) -> Result<&2, &2, BufferedBodyBodyError, N.BigNat>:
+def counted(bytes: List<&2, U32>, result: Result<&2, &2, BufferedBodyError, N.BigNat>) -> Result<&2, &2, BufferedBodyError, N.BigNat>:
   match bytes result:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{length}: Done{length}
     case +byte <> rest Done{length}: counted(rest, countedByte(U32.is_le(byte, 255), byte, length))
 
-def withLength(method: String, headers: Headers, bytes: List<&2, U32>, length: Result<&2, &2, BufferedBodyBodyError, N.BigNat>) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def withLength(method: String, headers: Headers, bytes: List<&2, U32>, length: Result<&2, &2, BufferedBodyError, N.BigNat>) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match length:
     case Fail{error}: Fail{error}
     case Done{size}: Done{Prepared{method, headers, Some{Content{bytes, size}}}}
 
-def buffered(method: String, headers: Headers, +bytes: List<&2, U32>) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def buffered(method: String, headers: Headers, +bytes: List<&2, U32>) -> Result<&2, &2, BufferedBodyError, Prepared>:
   withLength(method, headers, bytes, counted(bytes, Done{N.zero()}))
 
-def textHeaders(method: String, headers: Result<&2, &2, HeaderHeaderError, Headers>, text: String) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def textHeaders(method: String, headers: Result<&2, &2, HeaderSyntaxError, Headers>, text: String) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match headers:
     case Fail{error}: Fail{HeaderError{error}}
     case Done{fields}: buffered(method, fields, Utf8.encode(text))
 
-def textType(method: String, headers: Headers, text: String, contentType: String, existing: Result<&2, &2, HeaderHeaderError, Bool>) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def textType(method: String, headers: Headers, text: String, contentType: String, existing: Result<&2, &2, HeaderSyntaxError, Bool>) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match existing:
     case Fail{error}: Fail{HeaderError{error}}
     case Done{True{}}: buffered(method, headers, Utf8.encode(text))
     case Done{False{}}: textHeaders(method, set(headers, "content-type", contentType), text)
 
-def bodyBufferedBody(method: String, +headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def bodyBufferedBody(method: String, +headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match input:
     case Absent{}: Done{Prepared{method, headers, None{}}}
     case Bytes{bytes}: buffered(method, headers, bytes)
     case SearchParams{params}: textType(method, headers, Params.toString(params), "application/x-www-form-urlencoded;charset=UTF-8", has(headers, "content-type"))
     case Text{text}: textType(method, headers, text, "text/plain;charset=UTF-8", has(headers, "content-type"))
 
-def permitted(method: String, headers: Headers, input: Input, disallowed: Bool) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def permitted(method: String, headers: Headers, input: Input, disallowed: Bool) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match input disallowed:
     case Absent{} _: Done{Prepared{method, headers, None{}}}
     case _ True{}: Fail{BodyNotAllowed{}}
     case value False{}: bodyBufferedBody(method, headers, value)
 
-def normalizedBufferedBody(method: Result<&2, &2, RequestMethodMethodError, String>, headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def normalizedBufferedBody(method: Result<&2, &2, RequestMethodError, String>, headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match method:
     case Fail{error}: Fail{MethodError{error}}
     case Done{+name}: permitted(name, headers, input, String.eq(name, "GET") || String.eq(name, "HEAD"))
 
 # Empty text/bytes are present bodies, so GET/HEAD reject them too. Keep absent
 # content distinct from a zero-length bodyBufferedBody; wire framing is a later step.
-def prepare(method: String, headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyBodyError, Prepared>:
+def prepare(method: String, headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
   normalizedBufferedBody(normalizeRequestMethod(method), headers, input)
 
 # Buffered bodies can use a single chunk. Chunk size counts payload bytes;
@@ -1521,7 +1521,7 @@ type FramingError is Data:
   InvalidLength{}
   LengthMismatch{actual: N.BigNat, declared: N.BigNat}
   UnsupportedTransferEncoding{}
-  BufferedFramingHeaderError{error: HeaderHeaderError}
+  BufferedFramingHeaderError{error: HeaderSyntaxError}
 
 # These method spellings have payload semantics in the installed transport.
 # Common methods were already normalized by buffered-body preparation.
@@ -1540,7 +1540,7 @@ def parsed(value: Maybe<&2, N.BigNat>) -> Result<&2, &2, FramingError, Maybe<&2,
     case None{}: Fail{InvalidLength{}}
     case Some{length}: Done{Some{length}}
 
-def declared(value: Result<&2, &2, HeaderHeaderError, Maybe<&2, String>>) -> Result<&2, &2, FramingError, Maybe<&2, N.BigNat>>:
+def declared(value: Result<&2, &2, HeaderSyntaxError, Maybe<&2, String>>) -> Result<&2, &2, FramingError, Maybe<&2, N.BigNat>>:
   match value:
     case Fail{error}: Fail{BufferedFramingHeaderError{error}}
     case Done{None{}}: Done{None{}}
@@ -1570,12 +1570,12 @@ def selected(method: String, content: Maybe<&2, Content>, supplied: Maybe<&2, N.
     case None{}: Done{zeroLength(expectsPayload(method))}
     case Some{Content{_, length}}: present(method, length, supplied)
 
-def updated(method: String, content: Maybe<&2, Content>, encoding: Encoding, headers: Result<&2, &2, HeaderHeaderError, Headers>) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
+def updated(method: String, content: Maybe<&2, Content>, encoding: Encoding, headers: Result<&2, &2, HeaderSyntaxError, Headers>) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
   match headers:
     case Fail{error}: Fail{BufferedFramingHeaderError{error}}
     case Done{fields}: Done{BufferedFramingPrepared{Prepared{method, fields, content}, encoding}}
 
-def chunkedBufferedFraming(method: String, content: Maybe<&2, Content>, result: Result<&2, &2, HeaderHeaderError, Headers>) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
+def chunkedBufferedFraming(method: String, content: Maybe<&2, Content>, result: Result<&2, &2, HeaderSyntaxError, Headers>) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
   match result:
     case Fail{error}: Fail{BufferedFramingHeaderError{error}}
     case Done{headers}: updated(method, content, Chunked{}, set(headers, "transfer-encoding", "chunked"))
@@ -1592,7 +1592,7 @@ def lengths(request: Prepared, value: Result<&2, &2, FramingError, Maybe<&2, N.B
     case _ Fail{error}: Fail{error}
     case Prepared{+method, headers, +content} Done{supplied}: canonical(method, headers, content, selected(method, content, supplied))
 
-def transfer(request: Prepared, provided: Result<&2, &2, HeaderHeaderError, Bool>) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
+def transfer(request: Prepared, provided: Result<&2, &2, HeaderSyntaxError, Bool>) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
   match request provided:
     case _ Fail{error}: Fail{BufferedFramingHeaderError{error}}
     case _ Done{True{}}: Fail{UnsupportedTransferEncoding{}}
@@ -1623,11 +1623,11 @@ type BufferedRequestPrepared is Data:
   BufferedRequestPrepared{head: Head, body: BufferedFramingPrepared}
 
 type RequestError is Data:
-  BufferedRequestBodyError{error: BufferedBodyBodyError}
+  BufferedRequestBodyError{error: BufferedBodyError}
   BufferedRequestFramingError{error: FramingError}
-  HeadError{error: RequestHeadHeadError}
+  HeadError{error: RequestHeadError}
 
-def headed(body: BufferedFramingPrepared, value: Result<&2, &2, RequestHeadHeadError, Head>) -> Result<&2, &2, RequestError, BufferedRequestPrepared>:
+def headed(body: BufferedFramingPrepared, value: Result<&2, &2, RequestHeadError, Head>) -> Result<&2, &2, RequestError, BufferedRequestPrepared>:
   match value:
     case Fail{error}: Fail{HeadError{error}}
     case Done{head}: Done{BufferedRequestPrepared{head, body}}
@@ -1638,7 +1638,7 @@ def framed(target: String, value: Result<&2, &2, FramingError, BufferedFramingPr
     case Done{BufferedFramingPrepared{Prepared{+method, +headers, +content}, +encoding}}:
       headed(BufferedFramingPrepared{Prepared{method, headers, content}, encoding}, encodeRequestHead(method, target, entries(headers)))
 
-def prepared(target: String, value: Result<&2, &2, BufferedBodyBodyError, Prepared>) -> Result<&2, &2, RequestError, BufferedRequestPrepared>:
+def prepared(target: String, value: Result<&2, &2, BufferedBodyError, Prepared>) -> Result<&2, &2, RequestError, BufferedRequestPrepared>:
   match value:
     case Fail{error}: Fail{BufferedRequestBodyError{error}}
     case Done{body}: framed(target, prepareBufferedFraming(body))
@@ -1656,7 +1656,7 @@ type URLPrepared is Data:
 
 type URLRequestError is Data:
   URLError{error: EndpointError}
-  BufferedRequestHeaderError{error: HeaderHeaderError}
+  BufferedRequestHeaderError{error: HeaderSyntaxError}
   PreparationError{error: RequestError}
 
 def urlPrepared(endpoint: Endpoint, result: Result<&2, &2, RequestError, BufferedRequestPrepared>) -> Result<&2, &2, URLRequestError, URLPrepared>:
@@ -1664,7 +1664,7 @@ def urlPrepared(endpoint: Endpoint, result: Result<&2, &2, RequestError, Buffere
     case Fail{error}: Fail{PreparationError{error}}
     case Done{request}: Done{URLPrepared{endpoint, request}}
 
-def urlHeaders(endpoint: Endpoint, method: String, target: String, body: Input, result: Result<&2, &2, HeaderHeaderError, Headers>) -> Result<&2, &2, URLRequestError, URLPrepared>:
+def urlHeaders(endpoint: Endpoint, method: String, target: String, body: Input, result: Result<&2, &2, HeaderSyntaxError, Headers>) -> Result<&2, &2, URLRequestError, URLPrepared>:
   match result:
     case Fail{error}: Fail{BufferedRequestHeaderError{error}}
     case Done{headers}: urlPrepared(endpoint, prepareBufferedRequest(method, target, headers, body))

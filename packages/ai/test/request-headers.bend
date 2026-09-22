@@ -39,12 +39,12 @@ def showProperties(properties: List<&2, R.Property<T.Nullable<String>>>) -> List
     case R.Property{name, value} <> rest:
       (Text.showText(name) ++ ";" ++ showValue(value)) <> showProperties(rest)
 
-def applyDefaults(defaults: T.ProviderHeaders(), base: Result<&2, &2, Field.HeaderHeaderError, Native.Headers>) -> Result<&2, &2, Field.HeaderHeaderError, Native.Headers>:
+def applyDefaults(defaults: T.ProviderHeaders(), base: Result<&2, &2, Field.HeaderSyntaxError, Native.Headers>) -> Result<&2, &2, Field.HeaderSyntaxError, Native.Headers>:
   match base:
     case Fail{error}: Fail{error}
     case Done{headers}: Provider.apply(headers, Some{defaults})
 
-def showApplied(result: Result<&2, &2, Field.HeaderHeaderError, Native.Headers>) -> String:
+def showApplied(result: Result<&2, &2, Field.HeaderSyntaxError, Native.Headers>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{headers}: "ok:" ++ Output.snapshot(headers)

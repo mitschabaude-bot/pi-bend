@@ -24,7 +24,7 @@ def serverPorts(values: List<&2, Servers.Server>, reversed: List<&2, U32>) -> Li
     case Nil{}: List.reverse(&2, U32, reversed)
     case Servers.Server{_, port} <> rest: serverPorts(rest, port <> reversed)
 
-def run(+mode: String, +parent: Abort.AbortController<String>, counter: Ref.Ref<U32>, kind: U32, cursor: Search.SearchCursor, pair: Selector.Owner<Servers.Server> & Selector.ServerSourceSource<Servers.Server>) -> IO(Unit):
+def run(+mode: String, +parent: Abort.AbortController<String>, counter: Ref.Ref<U32>, kind: U32, cursor: Search.SearchCursor, pair: Selector.Owner<Servers.Server> & Selector.ServerSource<Servers.Server>) -> IO(Unit):
   match pair:
     case (owner, +source):
       do IO<Unit>:

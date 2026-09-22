@@ -2,7 +2,7 @@ import Base
 import ../src/http-message.bend as H
 import ./utf8-runner.bend as T
 
-def shown(result: Result<&2, &2, H.HeaderHeaderError, H.Header>) -> String:
+def shown(result: Result<&2, &2, H.HeaderSyntaxError, H.Header>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{H.Header{name, value}}: "ok:" ++ T.showText(name) ++ ";" ++ T.showText(value)

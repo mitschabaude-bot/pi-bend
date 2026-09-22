@@ -50,7 +50,7 @@ def shown(result: Result<&2, &2, Client.RequestError, Client.Request>) -> V.Valu
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{error(cause)}} <> Nil{}}}
     case Done{Client.Request{url, method, headers, body, timeout}}:
-      V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serializeSerialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
+      V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
 
 def checked(context: Absolute.Context, input: Result<&2, &2, Parse.ParseError, V.Value>, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> IO(Unit):
   match input expected:

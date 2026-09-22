@@ -5,7 +5,7 @@ import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-server-rotation.bend as Test
 import ../packages/runtime/src/string.bend as Split
 
-def selected(pair: Source.Owner<U32> & Source.ServerSourceSource<U32>) -> IO(Source.Owner<U32>):
+def selected(pair: Source.Owner<U32> & Source.ServerSource<U32>) -> IO(Source.Owner<U32>):
   match pair:
     case (owner, source):
       do IO<Source.Owner<U32>>:

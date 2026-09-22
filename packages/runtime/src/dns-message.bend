@@ -9,7 +9,7 @@ import ./io-pair.bend as Pair
 type Name is Data:
   Name{labels: List<&2, List<&2, U32>>}
 
-type NameErrorOfMessage is Data:
+type DomainNameError is Data:
   NameInvalidByte{}
   InvalidLabel{}
   NameTooLong{}
@@ -24,25 +24,25 @@ type Packet is Data:
 def key(+index: U32) -> String:
   SCon{Chr{(index / 256 : U32)}, SCon{Chr{(index % 256 : U32)}, SNil{}}}
 
-def inserted(valid: Bool, +index: U32, byteLocal: U32, bytes: Map<&2, U32>) -> Result<&2, &2, NameErrorOfMessage, Packet>:
+def inserted(valid: Bool, +index: U32, byteLocal: U32, bytes: Map<&2, U32>) -> Result<&2, &2, DomainNameError, Packet>:
   match valid:
     case False{}: Fail{NameInvalidByte{}}
     case True{}: Done{Packet{(index + 1 : U32), Map.set(&2, U32, bytes, key(index), byteLocal)}}
 
-def insert(result: Result<&2, &2, NameErrorOfMessage, Packet>, +byteLocal: U32) -> Result<&2, &2, NameErrorOfMessage, Packet>:
+def insert(result: Result<&2, &2, DomainNameError, Packet>, +byteLocal: U32) -> Result<&2, &2, DomainNameError, Packet>:
   match result:
     case Fail{error}: Fail{error}
     case Done{Packet{65535, _}}: Fail{PacketTooLong{}}
     case Done{Packet{index, bytes}}: inserted(U32.is_le(byteLocal, 255), index, byteLocal, bytes)
 
 # An immutable offset index avoids scanning the packetLocal for each pointer.
-def packetLoop(input: List<&2, U32>, result: Result<&2, &2, NameErrorOfMessage, Packet>) -> Result<&2, &2, NameErrorOfMessage, Packet>:
+def packetLoop(input: List<&2, U32>, result: Result<&2, &2, DomainNameError, Packet>) -> Result<&2, &2, DomainNameError, Packet>:
   match input result:
     case _ Fail{error}: Fail{error}
     case Nil{} result: result
     case value <> rest packetLocal: packetLoop(rest, insert(packetLocal, value))
 
-def packet(input: List<&2, U32>) -> Result<&2, &2, NameErrorOfMessage, Packet>:
+def packet(input: List<&2, U32>) -> Result<&2, &2, DomainNameError, Packet>:
   packetLoop(input, Done{Packet{0, MTip{}}})
 
 def found(value: Map<&2, U32> & U32) -> U32:
@@ -69,7 +69,7 @@ type Mode is Data:
 type State is Data:
   Reading{position: U32, ceiling: U32, nextLocal: Maybe<&2, U32>, length: U32, reversed: List<&2, List<&2, U32>>, mode: Mode}
   Finished{value: Decoded}
-  Failed{error: NameErrorOfMessage}
+  Failed{error: DomainNameError}
 
 def nextOffset(nextLocal: Maybe<&2, U32>, fallback: U32) -> U32:
   match nextLocal:
@@ -118,55 +118,55 @@ def step(packetLocal: Packet, state: State) -> State:
 # Every pointer must refer to an earlier name segment. The ceiling strictly
 # decreases on a jump, rejecting self/forward/cyclic references. Labels count
 # toward the expanded 255-octet limit, including their lengths and root.
-def loop(fuel: Nat, +packetLocal: Packet, state: State) -> Result<&2, &2, NameErrorOfMessage, Decoded>:
+def loop(fuel: Nat, +packetLocal: Packet, state: State) -> Result<&2, &2, DomainNameError, Decoded>:
   match fuel state:
     case _ Finished{value}: Done{value}
     case _ Failed{error}: Fail{error}
     case Zero{} _: Fail{InvalidPointer{}}
     case Succ{rest} reading: loop(rest, packetLocal, step(packetLocal, reading))
 
-def decodeName(packetLocal: Packet, +position: U32) -> Result<&2, &2, NameErrorOfMessage, Decoded>:
+def decodeName(packetLocal: Packet, +position: U32) -> Result<&2, &2, DomainNameError, Decoded>:
   loop(65536n, packetLocal, Reading{position, position, None{}, 1, Nil{}, Head{}})
 
 type EncodedLabel is Data:
   EncodedLabel{length: U32, reversed: List<&2, U32>}
 
-def labelByte(valid: Bool, value: U32, length: U32, reversed: List<&2, U32>) -> Result<&2, &2, NameErrorOfMessage, EncodedLabel>:
+def labelByte(valid: Bool, value: U32, length: U32, reversed: List<&2, U32>) -> Result<&2, &2, DomainNameError, EncodedLabel>:
   match valid:
     case False{}: Fail{NameInvalidByte{}}
     case True{}: Done{EncodedLabel{(length + 1 : U32), value <> reversed}}
 
-def labelStep(result: Result<&2, &2, NameErrorOfMessage, EncodedLabel>, +value: U32) -> Result<&2, &2, NameErrorOfMessage, EncodedLabel>:
+def labelStep(result: Result<&2, &2, DomainNameError, EncodedLabel>, +value: U32) -> Result<&2, &2, DomainNameError, EncodedLabel>:
   match result:
     case Fail{error}: Fail{error}
     case Done{EncodedLabel{63, _}}: Fail{InvalidLabel{}}
     case Done{EncodedLabel{length, reversed}}: labelByte(U32.is_le(value, 255), value, length, reversed)
 
-def labelLoop(input: List<&2, U32>, result: Result<&2, &2, NameErrorOfMessage, EncodedLabel>) -> Result<&2, &2, NameErrorOfMessage, EncodedLabel>:
+def labelLoop(input: List<&2, U32>, result: Result<&2, &2, DomainNameError, EncodedLabel>) -> Result<&2, &2, DomainNameError, EncodedLabel>:
   match input result:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{EncodedLabel{0, _}}: Fail{InvalidLabel{}}
     case Nil{} value: value
     case value <> rest state: labelLoop(rest, labelStep(state, value))
 
-def appended(valid: Bool, length: U32, reversed: List<&2, U32>) -> Result<&2, &2, NameErrorOfMessage, EncodedLabel>:
+def appended(valid: Bool, length: U32, reversed: List<&2, U32>) -> Result<&2, &2, DomainNameError, EncodedLabel>:
   match valid:
     case False{}: Fail{NameTooLong{}}
     case True{}: Done{EncodedLabel{length, reversed}}
 
-def encodedLabel(state: Result<&2, &2, NameErrorOfMessage, EncodedLabel>, value: Result<&2, &2, NameErrorOfMessage, EncodedLabel>) -> Result<&2, &2, NameErrorOfMessage, EncodedLabel>:
+def encodedLabel(state: Result<&2, &2, DomainNameError, EncodedLabel>, value: Result<&2, &2, DomainNameError, EncodedLabel>) -> Result<&2, &2, DomainNameError, EncodedLabel>:
   match state value:
     case Fail{error} _: Fail{error}
     case _ Fail{error}: Fail{error}
     case Done{EncodedLabel{+length, reversed}} Done{EncodedLabel{+sizeLocal, bytes}}: appended(U32.is_le((length + sizeLocal + 1 : U32), 255), (length + sizeLocal + 1 : U32), List.append(&2, U32, bytes, sizeLocal <> reversed))
 
-def encodeLoop(labels: List<&2, List<&2, U32>>, state: Result<&2, &2, NameErrorOfMessage, EncodedLabel>) -> Result<&2, &2, NameErrorOfMessage, List<&2, U32>>:
+def encodeLoop(labels: List<&2, List<&2, U32>>, state: Result<&2, &2, DomainNameError, EncodedLabel>) -> Result<&2, &2, DomainNameError, List<&2, U32>>:
   match labels state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{EncodedLabel{_, reversed}}: Done{List.reverse(&2, U32, 0 <> reversed)}
     case label <> rest value: encodeLoop(rest, encodedLabel(value, labelLoop(label, Done{EncodedLabel{0, Nil{}}})))
 
-def encodeName(name: Name) -> Result<&2, &2, NameErrorOfMessage, List<&2, U32>>:
+def encodeName(name: Name) -> Result<&2, &2, DomainNameError, List<&2, U32>>:
   match name:
     case Name{labels}: encodeLoop(labels, Done{EncodedLabel{1, Nil{}}})
 
@@ -190,7 +190,7 @@ type Parsed<-Item: Data> is Data:
   Parsed{value: Item, nextLocal: U32}
 
 type Error is Data:
-  NameError{error: NameErrorOfMessage}
+  NameError{error: DomainNameError}
   Truncated{}
   TrailingData{}
   InvalidField{}
@@ -219,7 +219,7 @@ def questionFields(valid: Bool, +packetLocal: Packet, name: Name, +position: U32
     case False{}: Fail{Truncated{}}
     case True{}: Done{Parsed{Question{name, word(packetLocal, position), word(packetLocal, (position + 2 : U32))}, (position + 4 : U32)}}
 
-def questionName(+packetLocal: Packet, value: Result<&2, &2, NameErrorOfMessage, Decoded>) -> Result<&2, &2, Error, Parsed<Question>>:
+def questionName(+packetLocal: Packet, value: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, Error, Parsed<Question>>:
   match value:
     case Fail{error}: Fail{NameError{error}}
     case Done{Decoded{name, +nextLocal}}: questionFields(available(packetLocal, nextLocal, 4), packetLocal, name, nextLocal)
@@ -240,7 +240,7 @@ def recordFields(valid: Bool, +packetLocal: Packet, name: Name, +position: U32) 
       +startLocal = (position + 10 : U32)
       recordData(available(packetLocal, startLocal, length), name, word(packetLocal, position), word(packetLocal, (position + 2 : U32)), (word(packetLocal, (position + 4 : U32)) * 65536 + word(packetLocal, (position + 6 : U32)) : U32), startLocal, length)
 
-def recordName(+packetLocal: Packet, value: Result<&2, &2, NameErrorOfMessage, Decoded>) -> Result<&2, &2, Error, Parsed<Record>>:
+def recordName(+packetLocal: Packet, value: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, Error, Parsed<Record>>:
   match value:
     case Fail{error}: Fail{NameError{error}}
     case Done{Decoded{name, +nextLocal}}: recordFields(available(packetLocal, nextLocal, 10), packetLocal, name, nextLocal)
@@ -291,7 +291,7 @@ def withHeader(+packetLocal: Packet, value: Result<&2, &2, Error, Header>) -> Re
     case Fail{error}: Fail{error}
     case Done{Header{id, flags, +qd, +an, +ns, +ar}}: questions(packetLocal, Header{id, flags, qd, an, ns, ar}, an, ns, ar, section(~Question, ~(p => i => questionMessage(p, i)), U32.to_nat(qd), packetLocal, Done{Parsed{Nil{}, 12}}))
 
-def fromPacket(value: Result<&2, &2, NameErrorOfMessage, Packet>) -> Result<&2, &2, Error, Message>:
+def fromPacket(value: Result<&2, &2, DomainNameError, Packet>) -> Result<&2, &2, Error, Message>:
   match value:
     case Fail{error}: Fail{NameError{error}}
     case Done{+packetLocal}: withHeader(packetLocal, header(packetLocal))
@@ -304,7 +304,7 @@ def parse(bytes: List<&2, U32>) -> Result<&2, &2, Error, Message>:
 def u16(+value: U32, tail: List<&2, U32>) -> List<&2, U32>:
   (value / 256 : U32) <> (value % 256 : U32) <> tail
 
-def queryName(id: U32, flags: U32, kind: U32, class: U32, encoded: Result<&2, &2, NameErrorOfMessage, List<&2, U32>>) -> Result<&2, &2, Error, List<&2, U32>>:
+def queryName(id: U32, flags: U32, kind: U32, class: U32, encoded: Result<&2, &2, DomainNameError, List<&2, U32>>) -> Result<&2, &2, Error, List<&2, U32>>:
   match encoded:
     case Fail{error}: Fail{NameError{error}}
     case Done{bytes}: Done{u16(id, u16(flags, 0 <> 1 <> 0 <> 0 <> 0 <> 0 <> 0 <> 0 <> List.append(&2, U32, bytes, u16(kind, u16(class, Nil{})))))}
@@ -447,7 +447,7 @@ type Value is Data:
 type RecordError is Data:
   InvalidSpan{}
   InvalidLength{}
-  InvalidName{error: NameErrorOfMessage}
+  InvalidName{error: DomainNameError}
 
 def integer(+packetLocal: Packet, +startLocal: U32) -> U32:
   (word(packetLocal, startLocal) * 65536 + word(packetLocal, (startLocal + 2 : U32)) : U32)
@@ -473,7 +473,7 @@ def exactName(valid: Bool, kind: U32, target: Name) -> Result<&2, &2, RecordErro
     case False{}: Fail{InvalidLength{}}
     case True{}: Done{named(kind, target)}
 
-def nameResult(kind: U32, end: U32, result: Result<&2, &2, NameErrorOfMessage, Decoded>) -> Result<&2, &2, RecordError, Value>:
+def nameResult(kind: U32, end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
     case Done{Decoded{target, nextLocal}}: exactName(U32.is_eq(nextLocal, end), kind, target)
@@ -483,7 +483,7 @@ def soaFields(valid: Bool, +packetLocal: Packet, primary: Name, mailbox: Name, +
     case False{}: Fail{InvalidLength{}}
     case True{}: Done{SOA{primary, mailbox, integer(packetLocal, startLocal), integer(packetLocal, (startLocal + 4 : U32)), integer(packetLocal, (startLocal + 8 : U32)), integer(packetLocal, (startLocal + 12 : U32)), integer(packetLocal, (startLocal + 16 : U32))}}
 
-def soaMailbox(packetLocal: Packet, primary: Name, end: U32, result: Result<&2, &2, NameErrorOfMessage, Decoded>) -> Result<&2, &2, RecordError, Value>:
+def soaMailbox(packetLocal: Packet, primary: Name, end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
     case Done{Decoded{mailbox, +nextLocal}}: soaFields(U32.is_eq((nextLocal + 20 : U32), end), packetLocal, primary, mailbox, nextLocal)
@@ -493,7 +493,7 @@ def soaMore(valid: Bool, +packetLocal: Packet, primary: Name, end: U32, nextLoca
     case False{}: Fail{InvalidLength{}}
     case True{}: soaMailbox(packetLocal, primary, end, decodeName(packetLocal, nextLocal))
 
-def soaPrimary(packetLocal: Packet, +end: U32, result: Result<&2, &2, NameErrorOfMessage, Decoded>) -> Result<&2, &2, RecordError, Value>:
+def soaPrimary(packetLocal: Packet, +end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
     case Done{Decoded{primary, +nextLocal}}: soaMore(U32.is_lt(nextLocal, end), packetLocal, primary, end, nextLocal)
@@ -637,7 +637,7 @@ def headerResponse(optional: Bool, packetResponse: Packet, id: U32, opcode: U32,
     case Fail{error}: Ignore{Malformed{error}}
     case Done{Header{+actualId, +flags, +qd, an, ns, ar}}: checkedHeader(U32.is_eq(id, actualId), U32.is_ne(U32.and(flags, 32768), 0), U32.is_eq(opcode, (flags / 2048 % 16 : U32)), optional, qd, packetResponse, Header{actualId, flags, qd, an, ns, ar}, flags, expected)
 
-def packetResponse(optional: Bool, id: U32, opcode: U32, expected: Question, value: Result<&2, &2, NameErrorOfMessage, Packet>) -> Decision:
+def packetResponse(optional: Bool, id: U32, opcode: U32, expected: Question, value: Result<&2, &2, DomainNameError, Packet>) -> Decision:
   match value:
     case Fail{error}: Ignore{Malformed{NameError{error}}}
     case Done{+messagePacket}: headerResponse(optional, messagePacket, id, opcode, expected, header(messagePacket))
@@ -1021,21 +1021,21 @@ type Origin is Data:
 # candidate is a typed failure; response policy decides whether to continue.
 type Domain is Data:
   Valid{name: Name}
-  Invalid{error: NameErrorOfMessage}
+  Invalid{error: DomainNameError}
 
 type SearchCursor is Data:
   SearchCursor{base: Name, dotsLocal: U32, noTld: Bool, first: Bool, domains: List<&2, Domain>, index: Nat, triedDirect: Bool, triedRoot: Bool, searched: Bool}
 
 type Step is Data:
   Exhausted{}
-  Candidate{origin: Origin, name: Result<&2, &2, NameErrorOfMessage, Name>, nextLocal: SearchCursor}
+  Candidate{origin: Origin, name: Result<&2, &2, DomainNameError, Name>, nextLocal: SearchCursor}
 
-def checkedSearch(+name: Name, encoded: Result<&2, &2, NameErrorOfMessage, List<&2, U32>>) -> Result<&2, &2, NameErrorOfMessage, Name>:
+def checkedSearch(+name: Name, encoded: Result<&2, &2, DomainNameError, List<&2, U32>>) -> Result<&2, &2, DomainNameError, Name>:
   match encoded:
     case Fail{error}: Fail{error}
     case Done{_}: Done{name}
 
-def valid(+name: Name) -> Result<&2, &2, NameErrorOfMessage, Name>:
+def valid(+name: Name) -> Result<&2, &2, DomainNameError, Name>:
   checkedSearch(name, encodeName(name))
 
 def prependSearch(reversed: List<&2, List<&2, U32>>, suffix: List<&2, List<&2, U32>>) -> List<&2, List<&2, U32>>:
@@ -1087,7 +1087,7 @@ def domainRoot(domain: Domain) -> Bool:
     case Valid{name}: root(name)
     case Invalid{_}: False{}
 
-def domainCandidate(base: Name, domain: Domain) -> Result<&2, &2, NameErrorOfMessage, Name>:
+def domainCandidate(base: Name, domain: Domain) -> Result<&2, &2, DomainNameError, Name>:
   match domain:
     case Valid{name}: valid(joined(base, name))
     case Invalid{error}: Fail{error}
@@ -1198,7 +1198,7 @@ def received(-Failure: Data, -Value: Data, origin: Origin, cursor: SearchCursor,
     case SearchHalt{failure}: SearchRunFinished{Fail{Halted{failure}}}
     case SearchRunFailed{cause}: decided(Failure, Value, failed(origin, cause, cursor, history))
 
-def candidateSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, +origin: Origin, cursor: SearchCursor, history: History, name: Result<&2, &2, NameErrorOfMessage, Name>) -> IO(Progress<Failure, Value>):
+def candidateSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, +origin: Origin, cursor: SearchCursor, history: History, name: Result<&2, &2, DomainNameError, Name>) -> IO(Progress<Failure, Value>):
   match name:
     case Fail{_}: IO.pure(Progress<Failure, Value>, decided(Failure, Value, failed(origin, Unrecoverable{}, cursor, history)))
     case Done{value}:

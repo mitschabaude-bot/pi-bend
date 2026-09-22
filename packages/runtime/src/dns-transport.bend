@@ -363,7 +363,7 @@ def readOperation(reader: Message.Reader) -> Operation:
 
 type TcpConnectionError<-Reason: Data> is Data:
   Framing{error: Message.TcpFrameError}
-  Transport{operation: Operation, error: SocketIO.SocketErrorOfSocket<Reason>}
+  Transport{operation: Operation, error: SocketIO.Error<Reason>}
   InvalidReadSize{}
 
 type Position<-Reason: Data> is Data:
@@ -402,7 +402,7 @@ def eof(-Reason: Data, socket: SocketIO.Owner<Reason>, result: Result<&2, &2, Me
     case Done{_}: endedTcpConnection(Reason, socket, None{})
     case Fail{error}: endedTcpConnection(Reason, socket, Some{Framing{error}})
 
-def received(-Reason: Data, reader: Message.Reader, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, List<&2, U32>>) -> Step<Reason>:
+def received(-Reason: Data, reader: Message.Reader, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, List<&2, U32>>) -> Step<Reason>:
   match pair:
     case (socket, Fail{error}): endedTcpConnection(Reason, socket, Some{Transport{readOperation(reader), error}})
     case (socket, Done{Nil{}}): eof(Reason, socket, Message.finish(reader))
@@ -415,10 +415,10 @@ def received(-Reason: Data, reader: Message.Reader, pair: SocketIO.Owner<Reason>
     case Ready{value}: IO.pure(Next<Reason>, value)
     case Pull{socket, reader}:
       do IO<Next<Reason>>:
-        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, List<&2, U32>> <- SocketIO.recvSocket(Reason, socket, maximum)
+        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, List<&2, U32>> <- SocketIO.recvSocket(Reason, socket, maximum)
         driveTcpConnection(Reason, maximum, received(Reason, reader, result))
 
-def inspected(-Reason: Data, reader: Message.Reader, unread: List<&2, U32>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit>) -> Step<Reason>:
+def inspected(-Reason: Data, reader: Message.Reader, unread: List<&2, U32>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit>) -> Step<Reason>:
   match pair:
     case (socket, Fail{error}): endedTcpConnection(Reason, socket, Some{Transport{readOperation(reader), error}})
     case (socket, Done{_}): decoded(Reason, socket, Message.read(reader, unread))
@@ -427,7 +427,7 @@ def pendingTcpConnection(-Reason: Data, connection: Connection<Reason>) -> IO(St
   match connection:
     case Connection{socket, Reading{reader, unread}}:
       do IO<Step<Reason>>:
-        checked : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit> <- SocketIO.run(Reason, Unit, socket, owned => IO.pure(Socket & Result<&1, &1, U32 & String, Unit>, (owned, Done{Unit{}})))
+        checked : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit> <- SocketIO.run(Reason, Unit, socket, owned => IO.pure(Socket & Result<&1, &1, U32 & String, Unit>, (owned, Done{Unit{}})))
         return inspected(Reason, reader, unread, checked)
     case Connection{socket, Ended{error}}: IO.pure(Step<Reason>, endedTcpConnection(Reason, socket, error))
 
@@ -442,7 +442,7 @@ def receiveTcpConnection(-Reason: Data, connection: Connection<Reason>, maximum:
         step : Step<Reason> <- pendingTcpConnection(Reason, connection)
         driveTcpConnection(Reason, size, step)
 
-def sent(-Reason: Data, position: Position<Reason>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit>) -> Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>:
+def sent(-Reason: Data, position: Position<Reason>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit>) -> Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>:
   match pair:
     case (socket, Done{_}): (Connection{socket, position}, Done{Unit{}})
     case (socket, Fail{error}): (Connection{socket, position}, Fail{Transport{Sending{}, error}})
@@ -452,7 +452,7 @@ def sendFrame(-Reason: Data, connection: Connection<Reason>, result: Result<&2, 
     case owner Fail{error}: IO.pure(Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>, (owner, Fail{Framing{error}}))
     case Connection{socket, position} Done{wire}:
       do IO<Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>>:
-        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit> <- SocketIO.sendSocket(Reason, socket, wire)
+        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit> <- SocketIO.sendSocket(Reason, socket, wire)
         return sent(Reason, position, result)
 
 # Encoding failure leaves the connection untouched. A transport write failure
@@ -476,14 +476,14 @@ type Peer<-Reason: Data> is Type:
 
 type TcpPeerError<-Reason: Data> is Data:
   Inspection{error: Endpoint.EndpointError}
-  Adoption{error: SocketIO.SocketErrorOfSocket<Reason>}
+  Adoption{error: SocketIO.Error<Reason>}
 
 def addressTcpPeer(value: Endpoint.Endpoint) -> Message.Endpoint:
   match value:
     case Endpoint.EndpointV4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
     case Endpoint.EndpointV6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
 
-def adopted(-Reason: Data, route: Route, result: Result<&2, &1, SocketIO.SocketErrorOfSocket<Reason>, SocketIO.Owner<Reason>>) -> Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>:
+def adopted(-Reason: Data, route: Route, result: Result<&2, &1, SocketIO.Error<Reason>, SocketIO.Owner<Reason>>) -> Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>:
   match result:
     case Fail{error}: Fail{Adoption{error}}
     case Done{socket}: Done{Peer{route, adopt(Reason, socket)}}
@@ -496,7 +496,7 @@ def remoteTcpPeer(-Reason: Data, localTcpPeer: Message.Endpoint, signal: Abort.A
         return Fail{Inspection{error}}
     case (socket, Done{at}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
-        result : Result<&2, &1, SocketIO.SocketErrorOfSocket<Reason>, SocketIO.Owner<Reason>> <- SocketIO.create(Reason, socket, signal)
+        result : Result<&2, &1, SocketIO.Error<Reason>, SocketIO.Owner<Reason>> <- SocketIO.create(Reason, socket, signal)
         return adopted(Reason, Route{localTcpPeer, addressTcpPeer(at)}, result)
 
 def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
@@ -908,7 +908,7 @@ def query(-Reason: Data, address: Connect.Address, port: U32, milliseconds: U32,
 # recoverable reset site. Never unwrap failed cleanup or treat abort as errno.
 def reset(-Reason: Data, report: Completed<Reason>) -> IO(Bool):
   match report:
-    case Completed{Fail{Terminated{TcpSessionTransport{Transport{ReadingLength{}, SocketIO.SocketSocketError{code, _}}}}}, Done{_}}: Socket.isConnectionReset(code)
+    case Completed{Fail{Terminated{TcpSessionTransport{Transport{ReadingLength{}, SocketIO.SocketError{code, _}}}}}, Done{_}}: Socket.isConnectionReset(code)
     case _: IO.pure(Bool, False{})
 
 def finishTcpRecover(-Reason: Data, retry: Bool, report: Completed<Reason>, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Message.Request, maximum: U32) -> IO(Completed<Reason>):
@@ -946,7 +946,7 @@ def retryable(-Reason: Data, error: TcpQueryError<Reason>) -> Bool:
   match error:
     case TcpQueryConnection{Connect.SocketError{_, _}}: True{}
     case Terminated{EndOfStream{}}: True{}
-    case Terminated{TcpSessionTransport{Transport{_, SocketIO.SocketSocketError{_, _}}}}: True{}
+    case Terminated{TcpSessionTransport{Transport{_, SocketIO.SocketError{_, _}}}}: True{}
     case Terminated{TcpSessionTransport{Framing{Message.IncompleteFrame{}}}}: True{}
     case _: False{}
 
@@ -1151,7 +1151,7 @@ def choose(-Server: Data, enabled: Bool, state: ServerRotationState<Server>) -> 
 type Owner<-Server: Data> is Type:
   Owner{originalServerSource: List<&2, Server>, state: Ref.Ref<ServerRotationState<Server>>}
 
-type ServerSourceSource<-Server: Data> is Data:
+type ServerSource<-Server: Data> is Data:
   Fixed{servers: List<&2, Server>}
   Rotating{originalServerSource: List<&2, Server>, state: Ref.Ref<ServerRotationState<Server>>, enabled: Bool}
 
@@ -1166,11 +1166,11 @@ def createAt(-Server: Data, offset: Nat, +servers: List<&2, Server>) -> IO(Owner
     return Owner{servers, state}
 
 # Sources are borrowed. All uses must finish before the owner is closed.
-def borrow(-Server: Data, enabled: Bool, owner: Owner<Server>) -> Owner<Server> & ServerSourceSource<Server>:
+def borrow(-Server: Data, enabled: Bool, owner: Owner<Server>) -> Owner<Server> & ServerSource<Server>:
   match owner:
     case Owner{+configured, +state}: (Owner{configured, state}, Rotating{configured, state, enabled})
 
-def originalServerSource(-Server: Data, source: ServerSourceSource<Server>) -> List<&2, Server>:
+def originalServerSource(-Server: Data, source: ServerSource<Server>) -> List<&2, Server>:
   match source:
     case Fixed{servers}: servers
     case Rotating{servers, _, _}: servers
@@ -1180,7 +1180,7 @@ def nonempty(-Server: Data, servers: List<&2, Server>) -> Bool:
     case Nil{}: False{}
     case _ <> _: True{}
 
-def availableServerSource(-Server: Data, source: ServerSourceSource<Server>) -> Bool:
+def availableServerSource(-Server: Data, source: ServerSource<Server>) -> Bool:
   nonempty(Server, originalServerSource(Server, source))
 
 def transition(-Server: Data, choice: Chosen<Server>) -> ServerRotationState<Server> & List<&2, Server>:
@@ -1189,7 +1189,7 @@ def transition(-Server: Data, choice: Chosen<Server>) -> ServerRotationState<Ser
 
 # The callback is pure and the state is exclusively held until its replacement
 # is sent back. Concurrent selections each consume one distinct rotation step.
-def chooseServerSource(-Server: Data, source: ServerSourceSource<Server>) -> IO(List<&2, Server>):
+def chooseServerSource(-Server: Data, source: ServerSource<Server>) -> IO(List<&2, Server>):
   match source:
     case Fixed{servers}: IO.pure(List<&2, Server>, servers)
     case Rotating{_, state, enabled}: Ref.modify(ServerRotationState<Server>, List<&2, Server>, state, saved => transition(Server, choose(Server, enabled, saved)))
@@ -1230,8 +1230,8 @@ def random(-Server: Data, servers: List<&2, Server>) -> IO(Result<&2, &1, Index.
 # Both sources borrow an existing rotation owner. Selection happens inside
 # exchange, after the lookup has drawn an ID and rechecked cancellation.
 type Source is Data:
-  TcpSource{source: ServerSourceSource<Server>}
-  Configured{source: ServerSourceSource<Plan.Attempt<Endpoint.Endpoint>>, options: Plan.OptionsOptions}
+  TcpSource{source: ServerSource<Server>}
+  Configured{source: ServerSource<Plan.Attempt<Endpoint.Endpoint>>, options: Plan.ResolverOptions}
 
 type ExchangeSourceError<-Reason: Data> is Data:
   TcpError{error: TcpServersError<Reason>}
@@ -1252,9 +1252,9 @@ def native(-Reason: Data, value: Result<&2, &2, Error<Reason>, Reply>) -> Result
     case Done{reply}: Done{reply}
     case Fail{error}: Fail{TransportError{error}}
 
-def attempts(options: Plan.OptionsOptions) -> Nat:
+def attempts(options: Plan.ResolverOptions) -> Nat:
   match options:
-    case Plan.OptionsOptions{_, _, count, _}: U32.to_nat(count)
+    case Plan.ResolverOptions{_, _, count, _}: U32.to_nat(count)
 
 def exchangeRequestExchangeSource(-Reason: Data, source: Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Message.Request, maximum: U32) -> IO(Result<&2, &2, ExchangeSourceError<Reason>, Reply>):
   match source:

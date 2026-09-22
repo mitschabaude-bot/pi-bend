@@ -51,7 +51,7 @@ def path(kind: String, value: String) -> Record.RecordPath:
     case _: hierarchical(value)
 
 def render(+value: Record.URL) -> String:
-  Text.showText(Serialize.serializeSerialize(value, False{})) ++ ";" ++ Text.showText(Serialize.serializeSerialize(value, True{}))
+  Text.showText(Serialize.serialize(value, False{})) ++ ";" ++ Text.showText(Serialize.serialize(value, True{}))
 
 def entry(values: List<&2, String>) -> String:
   match values:
