@@ -317,9 +317,13 @@ def scanState(+char: Char,state: ScanState) -> ScanState:
       nextQuote = Bool.pick(Maybe<&2,Char>,Char.is_eq(char,'"') || Char.is_eq(char,'\''),Some{char},None{})
       nextDepth = Bool.pick(Nat,Char.is_eq(char,'[') || Char.is_eq(char,'{'),1n+depth,Bool.pick(Nat,Char.is_eq(char,']') || Char.is_eq(char,'}'),lesser(depth),depth))
       ScanState{nextQuote,False{},nextDepth}
+def blockColonEnds(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{char,_}: whitespace(char)
 def isSeparator(char: Char,state: ScanState,rest: String) -> Bool:
   match state:
-    case ScanState{None{},_,0n}: Char.is_eq(char,':') && colonEnds(rest)
+    case ScanState{None{},_,0n}: Char.is_eq(char,':') && blockColonEnds(rest)
     case _: False{}
 def separator(text: String,+reversed: String,+state: ScanState) -> Maybe<&2,KeyValue>:
   match text:
@@ -334,6 +338,15 @@ def commentless(text: String,+reversed: String,separated: Bool) -> String:
     case SNil{}: trim(String.reverse(reversed))
     case SCon{+char,rest}:
       Bool.pick(Unit -> String,Char.is_eq(char,'#') && separated,_ => trim(String.reverse(reversed)),_ => commentless(rest,SCon{char,reversed},whitespace(char)))(Unit{})
+def mappingColon(value: String) -> Bool:
+  match value:
+    case SNil{}: False{}
+    case SCon{':',SNil{}}: True{}
+    case SCon{':',SCon{+char,+rest}}:
+      Bool.pick(Unit -> Bool,whitespace(char),_ => True{},_ => mappingColon(SCon{char,rest}))(Unit{})
+    case SCon{_,rest}: mappingColon(rest)
+def plainParsed(+value: String,anchors: R.Record<Value>) -> ResultOf(Parsed):
+  Bool.pick(ResultOf(Parsed),mappingColon(value),Fail{Error{1n,1n,"Mapping separator in a plain scalar"}},Done{Parsed{plain(value),anchors}})
 def inline(value: String,anchors: R.Record<Value>) -> ResultOf(Parsed):
   match value:
     case SCon{'[',rest}: parseFlow(SCon{'[',rest},anchors)
@@ -345,7 +358,7 @@ def inline(value: String,anchors: R.Record<Value>) -> ResultOf(Parsed):
     case SCon{'!',_}: Fail{Error{1n,1n,"Explicit YAML tags are not supported"}}
     case SCon{'@',_}: Fail{Error{1n,1n,"Reserved YAML scalar indicator"}}
     case SCon{'`',_}: Fail{Error{1n,1n,"Reserved YAML scalar indicator"}}
-    case other: Done{Parsed{plain(commentless(other,"",True{})),anchors}}
+    case other: plainParsed(commentless(other,"",True{}),anchors)
 
 # Block structure is driven by indentation; source lines retain their physical
 # positions and terminators so block scalar chomping is independent of the body.
@@ -569,6 +582,21 @@ def openNode(kind: Maybe<&2,BlockKind>,line: Line,lines: List<&2,Line>,frames: L
     case None{} Line{number,indent,content,_}: scalarValue(content,lines,number,indent,frames,anchors,root)
 def descend(number: Nat,indent: Nat,+content: String,terminated: Bool,lines: List<&2,Line>,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   openNode(openKind(sequenceItem(content),splitPair(content)),Line{number,indent,content,terminated},lines,frames,anchors,root)
+# A mapping value may be a sequence whose dash shares the mapping indentation.
+# Its frame stays above the pending map, and closes on the next mapping entry.
+def indentlessParent(frames: List<&2,BlockFrame>,indent: Nat) -> Bool:
+  match frames:
+    case BlockFrame{level,BlockMap{_,Some{_}}} <> _: Nat.is_eq(level,indent)
+    case _: False{}
+def sameLevel(+number: Nat,+indent: Nat,content: String,terminated: Bool,+kind: BlockKind,+tail: List<&2,BlockFrame>,lines: List<&2,Line>,anchors: R.Record<Value>,root: Maybe<&2,Value>,item: Maybe<&2,String>) -> Block:
+  match kind item:
+    case BlockMap{_,Some{_}} Some{raw}:
+      sequenceLine(Some{raw},number,indent,Nil{},frame(indent,kind,tail),lines,anchors,root)
+    case BlockSequence{_,_} None{}:
+      Bool.pick(Unit -> Block,indentlessParent(tail,indent),
+        _ => closeBlock(frame(indent,kind,tail),Line{number,indent,content,terminated} <> lines,anchors,root),
+        _ => BlockError{Error{number,1n,"Expected a sequence entry"}})(Unit{})
+    case _ _: ordinaryLine(number,indent,content,kind,tail,lines,anchors,root)
 def positioned(frames: List<&2,BlockFrame>,+number: Nat,+indent: Nat,+content: String,+terminated: Bool,+lines: List<&2,Line>,+anchors: R.Record<Value>,+root: Maybe<&2,Value>) -> Block:
   match frames:
     case Nil{}: descend(number,indent,content,terminated,lines,Nil{},anchors,root)
@@ -578,7 +606,7 @@ def positioned(frames: List<&2,BlockFrame>,+number: Nat,+indent: Nat,+content: S
         _ => closeBlock(all,Line{number,indent,content,terminated} <> lines,anchors,root),
         _ => Bool.pick(Unit -> Block,Nat.is_gt(indent,level),
           _ => Bool.pick(Unit -> Block,pending(kind),_ => descend(number,indent,content,terminated,lines,all,anchors,root),_ => BlockError{Error{number,1n,"Unexpected indentation"}})(Unit{}),
-          _ => ordinaryLine(number,indent,content,kind,tail,lines,anchors,root))(Unit{}))(Unit{})
+          _ => sameLevel(number,indent,content,terminated,kind,tail,lines,anchors,root,sequenceItem(content)))(Unit{}))(Unit{})
 def blockLine(line: Line,+lines: List<&2,Line>,+frames: List<&2,BlockFrame>,+anchors: R.Record<Value>,+root: Maybe<&2,Value>) -> Block:
   match line:
     case Line{number,indent,+content,terminated}:

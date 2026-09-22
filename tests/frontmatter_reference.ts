@@ -21,4 +21,27 @@ const scalars=['text','"quoted"',"'it''s good'",'null','~','true','False','false
 for(const value of scalars) {record('value: '+value);record('[ '+value+', tail ]');}
 for(const source of ['a: [one, {two: [3, true]}, null]','a:\n  b: text\n  c:\n    - one\n    - two','items:\n  - name: first\n    description: desc\n  - name: second\n    x: 2','a: &name [one, two]\nb: *name','a: first\na: second','a: [bad','a: {bad','a: \"bad','a:','- one\n- two','a: |\n  hi\nb: after','a: >\n  hi\nb: after'])record(source);
 for(let i=0;i<50;i++){const value={name:'skill-'+i,description:i%2?'Multiline\nDescription\n':'A skill: uses [brackets] # chars',enabled:i%3===0,meta:{array:[i,'text',null,true],sub:{n:-i}},items:[{x:'one'},{x:'two'}]};record(stringify(value,{lineWidth:0}));}
+// Mapping values may start a sequence at the mapping's own indentation.
+for(const source of [
+ 'tags:\n- one\n- two\nnext: value',
+ 'tags:\n- one', 'tags:\n-\n- two',
+ 'root:\n  tags:\n  - one\n  - two\n  next: value\nafter: end',
+ 'items:\n- name: first\n  tags:\n  - red\n  - blue\n- name: second\n  tags:\n  - green',
+ 'a:\n- x:\n  - one\n  - two\n  y: end\n- z: next\nb: done',
+ 'a:\n- |\n  text\n- >-\n  two\n  lines\nb: after',
+ 'a: # comment\n# gap\n- one\n\n- two\nb:',
+ 'a:\n- one\nb:\n- two\nc: three',
+ 'a:\n-\nb: after',
+ // Structural boundaries must not merge unrelated roots or completed values.
+ '- one\nkey: value', 'a: value\n- unexpected',
+ 'a:\n  - one\n- unexpected', 'a:\n- one\n  bad: value',
+ 'a: text: value', 'a: text:]end', 'a: http://host/path',
+ 'text:]end', 'key:}value', 'key:,value',
+]) record(source);
+for(let depth=1;depth<=8;depth++) {
+ const lines=[];
+ for(let i=0;i<depth;i++) {const pad='  '.repeat(i);lines.push(pad+'key'+i+':',pad+'- item'+i, pad+'-');}
+ for(let i=depth-1;i>=0;i--) lines.push('  '.repeat(i)+'next'+i+': done');
+ record(lines.join('\n'));
+}
 console.log(JSON.stringify({names,cases,yaml}));
