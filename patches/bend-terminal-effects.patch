@@ -1,0 +1,255 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3308,3 +3308,17 @@
+ def File.set_times_milliseconds(path: String, high: U32, low: U32) -> IO(Result<&1,&1,U32 & String,Unit>):
+   import "./effs/file_set_times_milliseconds.c"
+   import "./effs/file_set_times_milliseconds.js"
++
++# Linux terminal lease. Returned pipes own duplicates, never caller descriptors.
++# Exclusive lease owns raw settings and SIGWINCH registration; restore after
++# cancelling/joining and closing all three pipes. Caller fd flags stay unchanged.
++law TerminalLease: Type
++def Terminal.acquire(input: U32, output: U32) -> IO(Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++def Terminal.restore(lease: TerminalLease) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++def Terminal.dimensions(descriptor: U32) -> IO(Result<&1,&1,U32 & String,U32 & U32>):
++  import "./effs/process.c"
++  import "./effs/process.js"
+--- a/bend2/effs/process.c
++++ b/bend2/effs/process.c
+@@ -5,7 +5,7 @@
+ extern char** environ;
+ 
+ typedef struct {
+-  u32 gen, next, live, kind, cancelled;
++  u32 gen, next, live, kind, cancelled, regular;
+   int fd;
+   pid_t pid;
+   IoAct* waiter;
+@@ -31,7 +31,7 @@
+   }
+   ProcessResource* row = process_resources + index;
+   row->gen++; row->live = 1; row->kind = kind; row->fd = value;
+-  row->pid = value; row->cancelled = 0; row->waiter = NULL;
++  row->pid = value; row->cancelled = 0; row->regular = 0; row->waiter = NULL;
+   return io_hand(((u64)row->gen << 24) | index);
+ }
+ static void process_retire(ProcessResource* row) {
+@@ -231,9 +231,39 @@
+ #endif
+ 
+ #if defined(CID_PIPE_READ) || defined(CID_PIPE_WRITE)
++// Ordinary files share their seek position with the borrowed descriptor but
++// execute blocking disk syscalls on existing IO workers. Cancellation is
++// observed when the kernel call returns; ownership cannot retire before then.
++static void pipe_regular_call(IoWork* w) {
++  ssize_t size;
++  do size=w->hand==1 ? write((int)w->word,w->data,(size_t)w->made)
++                    : read((int)w->word,w->data,(size_t)w->made);
++  while (size<0 && errno==EINTR);
++  w->made=(intptr_t)io_sys_end(w,size);
++}
++static Term pipe_regular_pack(Env e, IoWork* w) {
++  ProcessResource* row=process_at((Term)w->size,w->hand);
++  if (!row || row->waiter!=(IoAct*)w) err_fail("invalid regular file completion");
++  row->waiter=NULL;
++  u32 error=row->cancelled ? ECANCELED : w->code;
++  Term result;
++  if (error) result=io_fail(e,error,NULL);
++  else if (w->hand==1) result=io_done(e,(u32)w->made);
++  else {
++    Term bytes=term_pak(CID_NIL,0);
++    for (intptr_t i=w->made;i>0;i--) bytes=io_node(e,CID_CON,(uint8_t)w->data[i-1],bytes,IO_HOTS & 16);
++    result=io_done(e,bytes);
++  }
++  free(w->data);
++  return io_tup(e,(Term)w->size,result);
++}
+ static Term pipe_more(Env e, IoWork* w) {
+   ProcessResource* row=process_at((Term)w->size,w->hand);
+   if (!row) err_fail("invalid pipe completion");
++  if (row->regular) {
++    row->waiter=(IoAct*)w; w->word=(u32)row->fd;
++    return io_work(w,pipe_regular_call,pipe_regular_pack);
++  }
+   ssize_t size;
+   do size=w->hand==1 ? write(row->fd,w->data,(size_t)w->made) : read(row->fd,w->data,(size_t)w->made);
+   while (size<0 && errno==EINTR);
+@@ -299,6 +329,7 @@
+   if (!row || row->cancelled) return term_pak(CID_FALSE,0);
+   row->cancelled=1;
+   IoAct* activation=row->waiter;
++  if (activation && row->regular) return term_pak(CID_TRUE,0);
+   if (activation) {
+     IoAct* previous=NULL; IoAct* current=io_park.head;
+     while (current && current!=activation) { previous=current; current=current->next; }
+@@ -324,3 +355,157 @@
+ }
+ static void __attribute__((constructor)) pipe_close_checked_use(void) { io_eff(CID_PIPE_CLOSE_CHECKED,pipe_close_checked_run,0); }
+ #endif
++
++#if defined(CID_TERMINAL_ACQUIRE) || defined(CID_TERMINAL_RESTORE) || defined(CID_TERMINAL_DIMENSIONS)
++#include <termios.h>
++#include <limits.h>
++#include <sys/ioctl.h>
++#include <sys/stat.h>
++#include <stdatomic.h>
++#endif
++#if defined(CID_TERMINAL_ACQUIRE) || defined(CID_TERMINAL_RESTORE)
++// The handler only observes lock-free atomics and writes to a nonblocking pipe.
++// Retirement closes its gate, restores the prior action, then joins any handler
++// already inside the gate before closing that fd. No reused-fd signal writes.
++_Static_assert(ATOMIC_INT_LOCK_FREE == 2, "terminal signal gate needs lock-free integers");
++static atomic_int terminal_signal_fd = -1;
++static atomic_uint terminal_signal_users;
++static struct {
++  bool live, raw, signal;
++  u32 generation;
++  int settings_fd, signal_write;
++  struct termios saved;
++  struct sigaction previous;
++} terminal_lease = { .settings_fd=-1, .signal_write=-1 };
++static void terminal_winch(int signal, siginfo_t* info, void* context) {
++  int saved_errno=errno;
++  atomic_fetch_add(&terminal_signal_users,1);
++  int fd=atomic_load(&terminal_signal_fd);
++  if (fd>=0) {
++    char byte=1; (void)write(fd,&byte,1);
++    struct sigaction old=terminal_lease.previous;
++    if (old.sa_handler!=SIG_DFL && old.sa_handler!=SIG_IGN) {
++      if (old.sa_flags & SA_SIGINFO) old.sa_sigaction(signal,info,context);
++      else old.sa_handler(signal);
++    }
++  }
++  atomic_fetch_sub(&terminal_signal_users,1);
++  errno=saved_errno;
++}
++static int terminal_owned_fd(int original, bool writing, bool* regular) {
++  struct stat before,after;
++  if (fstat(original,&before)<0) return -1;
++  // Regular files need their shared current position, and nonblocking mode is
++  // irrelevant to them. Reopening a FIFO/tty gives an independent flag set.
++  *regular=S_ISREG(before.st_mode);
++  if (*regular) return fcntl(original,F_DUPFD_CLOEXEC,3);
++  char path[64]; snprintf(path,sizeof(path),"/proc/self/fd/%d",original);
++  int fd=open(path,(writing ? O_WRONLY : O_RDONLY) | O_NONBLOCK | O_CLOEXEC | O_NOCTTY);
++  if (fd<0) return -1;
++  if (fstat(fd,&after)<0 || before.st_dev!=after.st_dev || before.st_ino!=after.st_ino
++      || before.st_rdev!=after.st_rdev || (before.st_mode&S_IFMT)!=(after.st_mode&S_IFMT)) {
++    int error=errno ? errno : ESTALE; close(fd); errno=error; return -1;
++  }
++  return fd;
++}
++static int terminal_restore_settings(void) {
++  int error=0;
++  if (terminal_lease.raw && tcsetattr(terminal_lease.settings_fd,TCSANOW,&terminal_lease.saved)<0) error=errno;
++  if (terminal_lease.settings_fd>=0 && close(terminal_lease.settings_fd)<0 && !error) error=errno;
++  terminal_lease.settings_fd=-1; terminal_lease.raw=false;
++  return error;
++}
++#endif
++#ifdef CID_TERMINAL_ACQUIRE
++Term terminal_acquire_run(Env e, Term* f, IoWork* w) {
++  if (terminal_lease.live) return io_fail(e,EBUSY,NULL);
++  // A failed restore may leave our gated-off handler installed. Repair it
++  // before capturing a new prior action, never chain the handler to itself.
++  if (terminal_lease.signal) {
++    struct sigaction current;
++    if (sigaction(SIGWINCH,NULL,&current)<0) return io_fail(e,errno,NULL);
++    if ((current.sa_flags & SA_SIGINFO) && current.sa_sigaction==terminal_winch
++        && sigaction(SIGWINCH,&terminal_lease.previous,NULL)<0) return io_fail(e,errno,NULL);
++    terminal_lease.signal=false;
++  }
++  if (f[0]>INT_MAX || f[1]>INT_MAX) return io_fail(e,EBADF,NULL);
++  int input=-1,output=-1,notify[2]={-1,-1},error=0;
++  terminal_lease.live=true;
++  bool input_regular=false,output_regular=false;
++  input=terminal_owned_fd((int)f[0],false,&input_regular);
++  if (input<0) { error=errno; goto fail; }
++  output=terminal_owned_fd((int)f[1],true,&output_regular);
++  if (output<0) { error=errno; goto fail; }
++  terminal_lease.settings_fd=fcntl((int)f[0],F_DUPFD_CLOEXEC,3);
++  if (terminal_lease.settings_fd<0) { error=errno; goto fail; }
++  if (tcgetattr(terminal_lease.settings_fd,&terminal_lease.saved)==0) {
++    struct termios raw=terminal_lease.saved;
++    cfmakeraw(&raw);
++    terminal_lease.raw=true;
++    if (tcsetattr(terminal_lease.settings_fd,TCSANOW,&raw)<0) { error=errno; goto fail; }
++  } else if (errno!=ENOTTY) { error=errno; goto fail; }
++  if (pipe2(notify,O_NONBLOCK | O_CLOEXEC)<0) { error=errno; goto fail; }
++  struct sigaction action={0};
++  sigemptyset(&action.sa_mask); action.sa_sigaction=terminal_winch;
++  action.sa_flags=SA_SIGINFO | SA_RESTART;
++  // Publish the prior action before making our handler visible to any thread.
++  if (sigaction(SIGWINCH,NULL,&terminal_lease.previous)<0) { error=errno; goto fail; }
++  atomic_store(&terminal_signal_fd,notify[1]);
++  if (sigaction(SIGWINCH,&action,NULL)<0) { atomic_store(&terminal_signal_fd,-1); error=errno; goto fail; }
++  terminal_lease.signal=true; terminal_lease.signal_write=notify[1];
++  terminal_lease.generation++;
++  Term lease=io_hand(terminal_lease.generation);
++  Term in=process_resource(2,input), out=process_resource(1,output), resize=process_resource(2,notify[0]);
++  process_at(in,2)->regular=input_regular; process_at(out,1)->regular=output_regular;
++  return io_done(e,io_tup(e,lease,io_tup(e,io_tup(e,in,in),io_tup(e,io_tup(e,out,out),io_tup(e,resize,resize)))));
++ fail:
++  if (input>=0) close(input);
++  if (output>=0) close(output);
++  if (notify[0]>=0) close(notify[0]);
++  if (notify[1]>=0) close(notify[1]);
++  int restore=terminal_restore_settings();
++  terminal_lease.live=false;
++  if (restore) {
++    char message[256]; snprintf(message,sizeof(message),"terminal acquisition: %s; restoring settings: %s",strerror(error),strerror(restore));
++    return io_fail(e,error,message);
++  }
++  return io_fail(e,error,NULL);
++}
++static void __attribute__((constructor)) terminal_acquire_use(void) { io_eff(CID_TERMINAL_ACQUIRE,terminal_acquire_run,0); }
++#endif
++#ifdef CID_TERMINAL_RESTORE
++static void terminal_restore_call(IoWork* w) {
++  // Waiting only retires an actual in-flight signal handler, never polls size.
++  while (atomic_load(&terminal_signal_users)) sched_yield();
++  int error=0;
++  if (terminal_lease.signal_write>=0 && close(terminal_lease.signal_write)<0) error=errno;
++  terminal_lease.signal_write=-1;
++  int restore=terminal_restore_settings();
++  w->code=w->code ? w->code : error ? error : restore;
++}
++static Term terminal_restore_pack(Env e, IoWork* w) {
++  terminal_lease.live=false;
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term terminal_restore_run(Env e, Term* f, IoWork* w) {
++  if (!terminal_lease.live || io_hand_v(f[0])!=terminal_lease.generation) err_fail("invalid terminal lease");
++  w->code=0;
++  atomic_store(&terminal_signal_fd,-1);
++  struct sigaction current;
++  if (sigaction(SIGWINCH,NULL,&current)<0) w->code=errno;
++  else if (!(current.sa_flags & SA_SIGINFO) || current.sa_sigaction!=terminal_winch) { terminal_lease.signal=false; w->code=EBUSY; }
++  else if (sigaction(SIGWINCH,&terminal_lease.previous,NULL)<0) w->code=errno;
++  else terminal_lease.signal=false;
++  return io_work(w,terminal_restore_call,terminal_restore_pack);
++}
++static void __attribute__((constructor)) terminal_restore_use(void) { io_eff(CID_TERMINAL_RESTORE,terminal_restore_run,0); }
++#endif
++#ifdef CID_TERMINAL_DIMENSIONS
++Term terminal_dimensions_run(Env e, Term* f, IoWork* w) {
++  struct winsize size;
++  if (f[0]>INT_MAX) return io_fail(e,EBADF,NULL);
++  if (ioctl((int)f[0],TIOCGWINSZ,&size)<0) return io_fail(e,errno,NULL);
++  return io_done(e,io_tup(e,size.ws_col,size.ws_row));
++}
++static void __attribute__((constructor)) terminal_dimensions_use(void) { io_eff(CID_TERMINAL_DIMENSIONS,terminal_dimensions_run,0); }
++#endif
+--- a/bend2/effs/process.js
++++ b/bend2/effs/process.js
+@@ -12,3 +12,6 @@
+   return Object.entries(process.env).reduceRight((tail, [key,value]) =>
+     ({$: 'Con', head: key + '=' + value, tail}), {$: 'Nil'});
+ }
++function terminal_acquire(input, output) { return io_fail(38); }
++function terminal_restore(lease) { throw Error('native Linux Terminal required'); }
++function terminal_dimensions(descriptor) { return io_fail(38); }
