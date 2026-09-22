@@ -104,7 +104,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Tools.response(False{}, index))
-        return Done{stream}
+        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
 
 @unsafe def collect(+iterator: S.Iterator<Validation.EventValue(), H.Outcome()>, reversed: List<&2, String>, step: Maybe<&2, S.Iteration<Validation.EventValue()>>) -> IO(List<&2, String>):
   match step:

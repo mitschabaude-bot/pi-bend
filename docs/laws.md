@@ -4,15 +4,54 @@ Gregor authorized agent-authored general specifications on 2026-09-20. Laws must
 
 `LAWS.bend` is the public specification entry point, importing component contracts from `laws/`; `PROOF.bend` imports their implementations and supporting lemmas from `proofs/`. `PROOF.bend` must check with a compiler supplying its imported runtime primitives (see the current command below). The last completed root gate reports `All terms check, with 36 unsafe annotations.` (the gate accepts any `All terms check` summary; the instantiation count is not evidence). The gate audits 21 exact existing source declarations: callback factory, DNS search/address/transport loops, random-index retry, file-fold driver, event-stream/HTTP/SSE drivers, schema comparison, JSON encoding, schema-to-JSON conversion, strict-schema traversal/nullability (now inside `constrained-sampling.bend`), Responses processing and the SSE cursor. The difference between source declarations and the compiler summary includes template instantiation accounting. Laws and proofs contain no `@unsafe`; this does not establish termination or correctness of those imported routines. The summary and exact declarations are retained in the validation record; unexpected declarations or summaries fail the gate. The laws file alone intentionally fails because its obligations are open. The native regression entry point runs `scripts/check-proofs.py` before its executable suites. The compiler is trusted: mutation tests and deliberately broken/open/missing-proof checks have been removed from the workflow at Gregor’s request. Earlier mutation records below are historical evidence, not ongoing requirements.
 
-## Current compiler requirement
+## Coverage summary
 
-The numeric destination scope laws use the existing connection-address type, whose module imports native connection primitives absent from the installed compiler. The complete proof root therefore currently needs the same isolated compiler candidate as native DNS. Earlier proof records used the installed compiler before this dependency entered the root. Do not install the candidate merely to run the gate: its performance changes remain unapproved.
+Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which type-checks `LAWS.bend` and `PROOF.bend` with the installed native toolchain (`build/bend-native-toolchain/bend2/main.ts`, or `BEND` when set) and audits the exact set of `@unsafe` source declarations the closure reaches. Each law file constrains the module it is named after; a proof file of the same name in `proofs/` supplies the proofs, with shared lemmas in `proofs/string-equality.bend`, `proofs/list-reverse.bend` and `proofs/absurd.bend`.
 
-```sh
-BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" python3 scripts/check-proofs.py
-```
+| Law file | Laws | Constrains |
+| --- | ---: | --- |
+| `laws/abort.bend` | 2 | `packages/runtime/src/abort.bend` |
+| `laws/agent-loop.bend` | 21 | `packages/agent/src/agent-loop.bend` (execution mode, termination, hooks, batches, stream lease) |
+| `laws/agent.bend` | 35 | `packages/agent/src/agent.bend` (state, queues, events, owner, continue planning) |
+| `laws/bounded.bend` | 6 | `packages/runtime/src/bounded.bend` |
+| `laws/calendar.bend` | 1 | `packages/runtime/src/calendar.bend` |
+| `laws/connection-driver.bend` | 28 | `packages/runtime/src/connection-driver.bend` |
+| `laws/dns-message.bend` | 25 | `packages/runtime/src/dns-message.bend` |
+| `laws/dns-resolver.bend` | 9 | `packages/runtime/src/dns-resolver.bend` |
+| `laws/dns-transport.bend` | 13 | `packages/runtime/src/dns-transport.bend` |
+| `laws/fetch.bend` | 9 | `packages/runtime/src/fetch.bend` |
+| `laws/fifo.bend` | 3 | `packages/runtime/src/fifo.bend` |
+| `laws/hosts.bend` | 14 | `packages/runtime/src/hosts.bend` |
+| `laws/http-exchange.bend` | 6 | `packages/runtime/src/http-exchange.bend` |
+| `laws/http-message.bend` | 11 | `packages/runtime/src/http-message.bend` |
+| `laws/http-response.bend` | 35 | `packages/runtime/src/http-response.bend` |
+| `laws/json.bend` | 7 | `packages/ai/src/utils/json.bend` |
+| `laws/list-interleave.bend` | 4 | `packages/runtime/src/list-interleave.bend` |
+| `laws/openai-client.bend` | 41 | `packages/ai/src/api/openai-client.bend` |
+| `laws/openai-responses-stream.bend` | 9 | `packages/ai/src/api/openai-responses-stream.bend` |
+| `laws/openai-responses.bend` | 19 | `packages/ai/src/api/openai-responses.bend` |
+| `laws/openai-sse.bend` | 12 | `packages/ai/src/api/openai-sse.bend` |
+| `laws/ordered-map.bend` | 5 | `packages/runtime/src/ordered-map.bend` |
+| `laws/provider-retry.bend` | 18 | `packages/ai/src/utils/provider-retry.bend` |
+| `laws/record.bend` | 7 | `packages/runtime/src/record.bend` |
+| `laws/resolver-config.bend` | 25 | `packages/runtime/src/resolver-config.bend` |
+| `laws/sha256.bend` | 1 | `packages/runtime/src/sha256.bend` |
+| `laws/simple-options.bend` | 7 | `packages/ai/src/api/simple-options.bend` |
+| `laws/sse.bend` | 7 | `packages/runtime/src/sse.bend` |
+| `laws/string.bend` | 6 | `packages/runtime/src/string.bend` |
+| `laws/text.bend` | 5 | `packages/runtime/src/text.bend` |
+| `laws/thinking-levels.bend` | 7 | `packages/ai/src/utils/thinking-levels.bend` |
+| `laws/timer.bend` | 5 | `packages/runtime/src/timer.bend` |
+| `laws/transcript.bend` | 14 | `packages/ai/src/utils/transcript.bend` |
+| `laws/transform-messages.bend` | 20 | `packages/ai/src/api/transform-messages.bend` |
+| `laws/transform-tool-results.bend` | 11 | `packages/ai/src/api/transform-tool-results.bend` |
+| `laws/url.bend` | 32 | `packages/runtime/src/url.bend` |
+| `laws/utf8.bend` | 6 | `packages/runtime/src/utf8.bend` |
+| `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
+| `laws/x509-trust.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
+| **Total** | **494** | |
 
-The scope milestone records hashes for the candidate's checker, base and emitter alongside the proof evidence. This is a toolchain dependency, not an unsafe proof or a replacement for the shared connection-address type.
+The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.
 
 ## FIFO sequence contracts
 
@@ -289,3 +328,23 @@ The HTTP, SSE, socket and line-decoder laws keep their statements over the five 
 ### Message transformation and replay repair (2026-09-22)
 
 `laws/transform-messages.bend` (20) covers pi's `transformMessages` first pass and `laws/transform-tool-results.bend` (11) its second pass, both previously covered only by example fixtures. Image downgrade: no image survives, text-only content is unchanged, adjacent images share one placeholder, message roles and system/assistant messages are preserved. Replay: same-model text and tool calls replay verbatim; cross-model replay never carries a thinking block; redacted thinking is dropped across models and kept on the same model; signed thinking replays on the same model; blank unsigned thinking is dropped for either model; visible cross-model thinking becomes plain text; cross-model text and tool calls lose their signatures; replay identity holds when API, provider and model id all agree (proved with the string-equality lemmas). Tool-call id mapping: unmapped and empty mappings keep the result id, a nonempty mapping applies, and an identity normalization is not remembered. Repair: errored and aborted assistant turns are not replayed and clear pending calls; a replayable turn tracks exactly its tool calls (hypothesis `replayable(reason) == True`); tool results answer their call; system messages wait while calls are pending and pass otherwise; the effectful boundary with a frozen clock and closed type arguments proves that answered calls are left alone, an unanswered call gets an error-flagged "No result provided" result carrying its id and name, a flush without pending calls only releases held messages, and user and assistant turns release held messages before themselves. Template arguments must be closed, so the effectful laws instantiate the message parameters with `Unit`/`String`. The example fixtures remain for the literal placeholder texts and timestamps.
+
+### Tool-argument coercion (2026-09-22)
+
+`laws/validation.bend` (7) states the documented contract that primitive coercion only rewrites scalars: arrays and objects pass every primitive kind and every declared type list unchanged (the type-list laws rewrite the symbolic `primitiveType(head)` through the per-kind law, since string comparison against a symbolic type name does not reduce). The recursive driver's failures are final for every task shape, and boolean and empty object schemas accept every value unchanged. Example fixtures keep the AJV-compatible scalar rules, which compare concrete strings and numbers.
+
+### Continue planning (2026-09-22)
+
+Six laws in `laws/agent.bend` cover pi's `continue()` as the pure decision `planContinue`: a busy agent cannot continue; a transcript of only system messages cannot continue (for every length, by induction on the system list); a transcript ending in a user message resumes the run whatever precedes it (induction over the prefix with the accumulated "non-system seen" flag); after an assistant tail a queued steering message is prompted first with the initial steering poll skipped, otherwise a queued follow-up is prompted without skipping it, and with both queues empty the continue fails with the assistant-tail error. The queue laws hold for both queue modes, and the drained queues are proved to return to their fresh state. These correspond to the upstream agent tests for continue after streaming, follow-up processing and one-at-a-time steering, whose remaining assertions concern the effectful run.
+
+### Transcript normalization and system-message replay (2026-09-22)
+
+`laws/transcript.bend` (14) generalizes the ported system-message-replay fixtures. Normalization: no prompt and no tools (or a blank prompt and an empty tool list) add nothing; a nonempty prompt or a nonempty tool list becomes exactly one leading system message with the zero timestamp. Replay: supported mid-conversation system messages keep the transcript untouched; after collapse no system message follows the head; a transcript without system messages replays nothing and collapses to itself (three lemmas over the non-system message shapes, rewritten into the replay pipeline); replay keeps the first system timestamp across any later messages. Tools: the declared tool set ignores removals at the message level, an added tool is current, a later removal of the same name empties the current set (string-equality lemma) while the declared set keeps it, and any removal makes the tool history non-additive.
+
+### Reasoning levels and thinking budgets (2026-09-22)
+
+`laws/simple-options.bend` (7): clamped reasoning never exceeds high, clamping is idempotent and keeps every level up to high (the two excluded levels are discharged by eliminating the contradictory hypothesis `False == True` through a type-valued motive, `Truth(_)`, into `Empty.absurd`); explicit thinking budgets are used per level, empty custom budgets equal the defaults, and fitting the budget never changes the response ceiling while a budget below the ceiling is kept verbatim. `laws/thinking-levels.bend` (7): non-reasoning models only offer off; an explicit null mapping disables and an explicit value enables any level; unmapped levels are supported exactly up to high; `closest` takes the first candidate at or above the request, skips lower candidates carrying them as the fallback, and returns the fallback without candidates. These correspond to the upstream token-budget tests ("clamps xhigh and max to the high budget", "sends the configured budget for the requested level") and the thinking-level selection used by the coding agent.
+
+### Tool execution mode, batch termination and the beforeToolCall decision (2026-09-22)
+
+`laws/agent-loop.bend` (21) states the pure decisions of the agent loop that the upstream agent-loop tests exercise through live runs: a configured sequential mode wins; one sequential tool forces sequential execution of the whole batch (hypothesis on the per-tool scan, since tool names compare as symbolic strings); otherwise parallel tools run in parallel; an empty batch terminates, a batch of terminating results terminates, and a single continuing result continues the run; an aborted operation rejects every tool call with "Operation aborted"; without a hook result the call proceeds; a non-blocking hook lets the call proceed; a blocking hook rejects with its reason and its terminate flag, falling back to "Tool execution was blocked" for an absent or empty reason; an empty batch never terminates and a nonempty batch terminates exactly when every call opted in; queued messages continue the run without an agent_end event and a failed queue read fails the turn; only a length stop marks an assistant message truncated; at the stream lease a failed open has nothing to release, an earlier failure survives the release, a release failure fails a consumed response and a clean release keeps the message. The contradictory-hypothesis eliminators now live in `proofs/absurd.bend` (`false_is_not_true`, `true_is_not_false`) for reuse.

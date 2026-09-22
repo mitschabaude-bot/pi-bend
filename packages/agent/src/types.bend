@@ -156,8 +156,19 @@ def toSimpleStreamOptions(-Parameters: Data, -Arguments: Data, -DiagnosticDetail
 type StreamInput<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data> is Data:
   StreamInput{model: Ai.Model<Value>, context: Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>, options: Maybe<&2, Options>}
 
+# A provider lends the loop its event stream together with the action that
+# ends the borrow. Upstream leaves the stream to garbage collection; Bend has
+# no managed shared handles, so the loop runs `release` once, after its last
+# read, and a release failure is reported through the loop's error type.
+type StreamLease<-Arguments: Data, -DiagnosticDetails: Data, -Error: Data> is Type:
+  StreamLease{events: Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails), release: IO(Result<&2, &2, Error, Unit>)}
+
+# A stream whose owner outlives the loop's use of it has nothing to release.
+def borrowedStream(-Arguments: Data, -DiagnosticDetails: Data, -Error: Data, events: Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)) -> StreamLease<Arguments, DiagnosticDetails, Error>:
+  StreamLease{events, IO.pure(Result<&2, &2, Error, Unit>, Done{Unit{}})}
+
 def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Value: Data, -Options: Data, -Error: Data) -> Data:
-  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Options>, Result<&2, &2, Error, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>>
+  Callback.Callback<StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, Options>, Result<&2, &1, Error, StreamLease<Arguments, DiagnosticDetails, Error>>>
 
 # systemPrompt is derived from messages by agent-state.systemPrompt.
 # Runtime ownership and borrowed callbacks remain outside this value snapshot.

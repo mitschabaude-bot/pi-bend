@@ -30,7 +30,7 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider did not receive request options")
 def options(stream: Maybe<&2, Named.StreamFunction()>, session: Maybe<&2, String>) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
   Options.AgentOptions{None{}, None{}, None{}, stream, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, session, None{}, None{}, None{}, None{}}

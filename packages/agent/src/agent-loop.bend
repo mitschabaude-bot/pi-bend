@@ -26,7 +26,7 @@ type State<-Error: Data> is Data:
 type Scope<-Error: Data> is Data:
   Scope{state: R.Ref<State<Error>>, completion: D.Deferred<ScopeOutcome(Error)>, drained: D.Deferred<Unit>}
 # Affine tickets prevent settling an accepted update more than once.
-# Owners must completeScope every accepted ticketScope before disposing the scope.
+# Owners must complete every accepted ticket before disposing the scope.
 type Ticket<-Error: Data> is Type:
   Ticket{scope: Scope<Error>, index: Nat}
 type Notification<-Error: Data> is Data:
@@ -161,7 +161,7 @@ def disposeScope(-Error: Data, scope: Scope<Error>) -> IO(Unit):
 
 
 # Starting delivery and awaiting it are distinct. The emitter performs ordered
-# enqueue/startEmission effects before returning; listeners may finish concurrently.
+# enqueue/start effects before returning; listeners may finish concurrently.
 # EmissionPending delivery owns one receive and cannot be awaited twice.
 type Emission<-Error: Data> is Type:
   EmissionReady{outcome: Result<&2, &2, Error, Unit>}
@@ -789,10 +789,22 @@ def consumeAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDet
 type AssistantRequest<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, -PartialResult: Data, -ExecutionResult: Data> is Data:
   AssistantRequest{context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, config: T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, signal: Maybe<&2, Signal>, emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), streamFunction: T.StreamFn(Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>, ExecutionError)}
 
-def openedAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), opened: Result<&2, &2, ExecutionError, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>) -> IO(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>):
+# The lease is released after the loop's last read. An earlier failure wins
+# over a release failure; a clean release keeps the message.
+def released(-Arguments: Data, -DiagnosticDetails: Data, -ExecutionError: Data, result: Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>, cleanup: Result<&2, &2, ExecutionError, Unit>) -> Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>:
+  match result cleanup:
+    case Fail{error} _: Fail{error}
+    case Done{message} Done{_}: Done{message}
+    case Done{_} Fail{error}: Fail{error}
+
+def openedAssistantResponse(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -PartialResult: Data, -ExecutionResult: Data, context: R.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>, emit: AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), opened: Result<&2, &1, ExecutionError, T.StreamLease<Arguments, DiagnosticDetails, ExecutionError>>) -> IO(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>):
   match opened:
     case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>, Fail{error})
-    case Done{response}: consumeAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, AssistantResponseConsumer{context, emit, response})
+    case Done{T.StreamLease{events, release}}:
+      do IO<Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>>:
+        result : Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>> <- consumeAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, AssistantResponseConsumer{context, emit, events})
+        cleanup : Result<&2, &2, ExecutionError, Unit> <- release
+        return released(Arguments, DiagnosticDetails, ExecutionError, result, cleanup)
 
 def dispatchAssistantRequest(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, -PartialResult: Data, -ExecutionResult: Data, request: AssistantRequest<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, PartialResult, ExecutionResult>, normalized: Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>, resolved: Result<&2, &2, ExecutionError, T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>) -> IO(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>):
   match request resolved:
@@ -800,7 +812,7 @@ def dispatchAssistantRequest(-Parameters: Data, -Arguments: Data, -DiagnosticDet
     case AssistantRequest{context, _, _, emit, streamFunction} Done{+options}:
       do IO<Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>>:
         value : T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch> = options
-        response : Result<&2, &2, ExecutionError, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)> <- C.call(T.StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, Result<&2, &2, ExecutionError, Stream.AssistantMessageEventStream(Arguments, DiagnosticDetails)>, streamFunction, T.StreamInput{selectedRequestModel(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, value), normalized, Some{options}})
+        response : Result<&2, &1, ExecutionError, T.StreamLease<Arguments, DiagnosticDetails, ExecutionError>> <- C.call(T.StreamInput<Parameters, Arguments, DiagnosticDetails, ToolDetails, Value, T.AgentLoopConfig<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch>>, Result<&2, &1, ExecutionError, T.StreamLease<Arguments, DiagnosticDetails, ExecutionError>>, streamFunction, T.StreamInput{selectedRequestModel(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, value), normalized, Some{options}})
         openedAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, context, emit, response)
 
 def afterLlmContext(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ValidatedArguments: Data, -Signal: Data, -ExecutionError: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, -PartialResult: Data, -ExecutionResult: Data, +request: AssistantRequest<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, Value, Telemetry, Fetch, PartialResult, ExecutionResult>, prepared: Result<&2, &2, ExecutionError, Ai.TranscriptContext<Parameters, Arguments, DiagnosticDetails, ToolDetails>>) -> IO(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>):
@@ -1436,7 +1448,7 @@ type ExecutionStep<-Parameters: Data, -Arguments: Data, -Details: Data, -Validat
   Emitted{finalized: FinalizedToolCallOutcome<Arguments, Details>, emitted: Result<&2, &2, Error, Unit>}
 
 # Each transition advances one deferred call. ParallelImmediate entries already emitted
-# end during preparation and must not emit it again or invokeParallel the after hook.
+# end during preparation and must not emit it again or invoke the after hook.
 @unsafe
 def executeParallel(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Validated: Data, ~Signal: Data, ~Error: Data, ~Value: Data, ~Telemetry: Data, ~Fetch: Data, ~renderError: Error -> String, +environment: ExecutionCapture<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>, step: ExecutionStep<Parameters, Arguments, Details, Validated, Signal, Error>) -> IO(Result<&2, &2, Error, FinalizedToolCallOutcome<Arguments, Details>>):
   match environment:
@@ -1470,7 +1482,7 @@ def executeParallel(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Dat
 def invokeParallel(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Validated: Data, ~Signal: Data, ~Error: Data, ~Value: Data, ~Telemetry: Data, ~Fetch: Data, ~renderError: Error -> String, environment: ExecutionCapture<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>, entry: Entry<Parameters, Arguments, Details, Validated, Signal, Error>) -> IO(Result<&2, &2, Error, FinalizedToolCallOutcome<Arguments, Details>>):
   executeParallel(~Parameters, ~Arguments, ~DiagnosticDetails, ~Details, ~Custom, ~Validated, ~Signal, ~Error, ~Value, ~Telemetry, ~Fetch, ~renderError, environment, ParallelBegin{entry})
 
-# Keep worker captures alive after a prompt failure. disposeParallel drains all workers
+# Keep worker captures alive after a prompt failure. dispose drains all workers
 # before retiring the execution callback; the caller still owns sink/update aliases.
 type ParallelRun<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data> is Data:
   ParallelRun{context: T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>, collection: All.Run<Error, FinalizedToolCallOutcome<Arguments, Details>>, worker: C.Callback<Entry<Parameters, Arguments, Details, Validated, Signal, Error>, Result<&2, &2, Error, FinalizedToolCallOutcome<Arguments, Details>>>, sink: C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>}
@@ -1512,8 +1524,8 @@ def collected(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -De
     case Fail{error}: IO.pure(Result<&2, &2, Error, Batch<T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>, Ai.ToolResultMessage<Details>>>, Fail{error})
     case Done{+finalized}: deliverParallel(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, context, finalized, Nil{}, shouldTerminateToolBatch(Arguments, Details, finalized), sink, ParallelReady{})
 
-# One consumer owns resultParallel-message delivery. On failure this may return while
-# sibling execution is still running; disposeParallel is the separate lifetime boundary.
+# One consumer owns result-message delivery. On failure this may return while
+# sibling execution is still running; dispose is the separate lifetime boundary.
 def resultParallel(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, run: ParallelRun<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>) -> IO(Result<&2, &2, Error, Batch<T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>, Ai.ToolResultMessage<Details>>>):
   match run:
     case ParallelRun{context, collection, _, sink}:
@@ -1647,7 +1659,7 @@ def declareToolChanges(-Arguments: Data, -DiagnosticDetails: Data, -Details: Dat
 def ExecutionOutcome(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data) -> Data:
   Result<&2, &2, Error, Batch<T.AgentContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>, Ai.ToolResultMessage<Details>>>
 
-# An execution owns concurrent work independently of resultExecution settlement. Tools
+# An execution owns concurrent work independently of result settlement. Tools
 # and event sinks remain live through worker draining and update-owner cleanup.
 type Execution<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data> is Data:
   Settled{outcome: ExecutionOutcome(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error)}
@@ -1688,15 +1700,15 @@ def executeToolCalls(~Parameters: Data, ~Arguments: Data, ~DiagnosticDetails: Da
     case CallCapture{assistant, config, _, _, _, _, _, _, _}:
       selectedExecution(~Parameters, ~Arguments, ~DiagnosticDetails, ~Details, ~Custom, ~Validated, ~Signal, ~Error, ~Value, ~Telemetry, ~Fetch, ~renderError, capture, context, prepareToolCallBatch(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch, context, assistant, config))
 
-# The caller consumes resultExecution delivery once, then drains before releasing the
-# captured resources. A failed parallel resultExecution does not cancel sibling tools.
+# The caller consumes result delivery once, then drains before releasing the
+# captured resources. A failed parallel result does not cancel sibling tools.
 def resultExecution(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, execution: Execution<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>) -> IO(ExecutionOutcome(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error)):
   match execution:
     case Settled{outcome}: IO.pure(ExecutionOutcome(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error), outcome)
     case Concurrent{run}: resultParallel(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, run)
 
 # This drains batch workers. Retained tool-update scopes remain in Capture.owners;
-# retire their aliases and disposeExecution that owner before releasing event resources.
+# retire their aliases and dispose that owner before releasing event resources.
 def disposeExecution(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, execution: Execution<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>) -> IO(Unit):
   match execution:
     case Settled{_}: IO.pure(Unit, Unit{})
@@ -1813,7 +1825,7 @@ type TurnDeliveryStep<-Message: Data, -Error: Data> is Data:
   TurnStarted{message: Message, emitted: Result<&2, &2, Error, Unit>}
   TurnEnded{message: Message, emitted: Result<&2, &2, Error, Unit>}
 
-# Each TurnNext consumes a declaredTurn message. Commit only after both events settle,
+# Each TurnNext consumes a declared message. Commit only after both events settle,
 # preserving source order and skipping every later event on listener failure.
 @unsafe
 def deliverTurn(-Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, state: RequestState<Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>, remaining: List<&2, T.AgentMessage<Schema.Value, Arguments, DiagnosticDetails, Details, Custom>>, +sink: C.Callback<T.AgentEvent<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, step: TurnDeliveryStep<T.AgentMessage<Schema.Value, Arguments, DiagnosticDetails, Details, Custom>, Error>) -> IO(Result<&2, &2, Error, RequestState<Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>>):
@@ -1873,7 +1885,7 @@ def nextTurn(-Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom
     outcome : Result<&2, &2, Error, PreparedTurnState<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>> <- prepareNextTurn(Schema.Value, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch, context, config, completed)
     afterPreparation(Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch, newMessages, pending, sink, declarationError, outcome)
 
-# The initialTurn turn_start belongs to runAgentLoop/runAgentLoopContinue. The first
+# The initial turn_start belongs to runAgentLoop/runAgentLoopContinue. The first
 # inner iteration declares and delivers already-polled steering without a hook
 # or another turn_start event.
 def initialTurn(-Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, -Telemetry: Data, -Fetch: Data, context: T.AgentContext<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>, config: T.AgentLoopConfig<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>, newMessages: List<&2, T.AgentMessage<Schema.Value, Arguments, DiagnosticDetails, Details, Custom>>, pending: List<&2, T.AgentMessage<Schema.Value, Arguments, DiagnosticDetails, Details, Custom>>, sink: C.Callback<T.AgentEvent<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, declarationError: Declaration.DeclarationError -> Error) -> IO(Result<&2, &2, Error, RequestState<Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>>):
@@ -2120,7 +2132,7 @@ def executeStream(~Arguments: Data, ~DiagnosticDetails: Data, ~Details: Data, ~C
     case Prompt{messages}: runAgentLoop(~Arguments, ~DiagnosticDetails, ~Details, ~Custom, ~Validated, ~Signal, ~Error, ~Value, ~Telemetry, ~Fetch, ~renderError, ~declarationError, ~streamError, messages, context, config, capture)
     case StreamContinue{}: runAgentLoopContinue(~Arguments, ~DiagnosticDetails, ~Details, ~Custom, ~Validated, ~Signal, ~Error, ~Value, ~Telemetry, ~Fetch, ~renderError, ~declarationError, ~streamError, ~entryError, context, config, capture)
 
-# On success agent_end has already settled the resultStream. On failure, end closes
+# On success agent_end has already settled the result. On failure, end closes
 # event iteration and settles a typed error without inventing an agent_end.
 def work(~Arguments: Data, ~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Validated: Data, ~Signal: Data, ~Error: Data, ~Value: Data, ~Telemetry: Data, ~Fetch: Data, ~renderError: Error -> String, ~declarationError: Declaration.DeclarationError -> Error, ~streamError: StreamFn.MissingDefault -> Error, ~entryError: ContinueError -> Error, start: Start<Arguments, DiagnosticDetails, Details, Custom>, context: T.AgentContext<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>, config: T.AgentLoopConfig<Schema.Value, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>, capture: EntryCapture<Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Telemetry, Fetch>, stream: Stream(Arguments, DiagnosticDetails, Details, Custom, Error)) -> IO(Unit):
   do IO<Unit>:
@@ -2164,7 +2176,7 @@ def iterator(-Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom
   match run:
     case StreamRun{stream, _, _, _, _, _}: Stream.iterator(LoopEvent(Arguments, DiagnosticDetails, Details, Custom), StreamOutcome(Arguments, DiagnosticDetails, Details, Custom, Error), stream)
 
-# Single-owner disposal: retire iterators/resultStream observers and retained tool
+# Single-owner disposal: retire iterators/result observers and retained tool
 # update aliases first. Failed results may settle while sibling tools still run.
 def disposeStream(-Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, +stream: Stream(Arguments, DiagnosticDetails, Details, Custom, Error)) -> IO(Unit):
   match stream:

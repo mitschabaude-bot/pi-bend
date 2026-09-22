@@ -516,16 +516,12 @@ def convert(+value: F64) -> Result<&2, &2, Error, Nat>:
 type Bounds is Data:
   Bounds{lower: W.U64, upper: W.U64}
 
-def integerWord(word: W.U64) -> B.BigNat:
-  match word:
-    case W.U64{high, low}: B.add(B.shiftLeft(B.fromU32(high), 32n), B.fromU32(low))
-
 # Positive finite values expressed in units of the least positive subnormal.
 # The upper endpoint is a virtual 2^1024 value, whose encoding is infinity.
 # Its midpoint with the largest finite number is the overflow threshold.
 def decodedUnits(value: Decoded) -> B.BigNat:
   match value:
-    case Finite{_, exponent, significand}: B.shiftLeft(integerWord(significand), U32.to_nat((exponent - 1 : U32)))
+    case Finite{_, exponent, significand}: B.shiftLeft(fromWord(significand), U32.to_nat((exponent - 1 : U32)))
     case Infinity{_}: B.shiftLeft(B.one(), 2098n)
     case NotANumber{}: B.zero()
 

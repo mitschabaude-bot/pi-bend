@@ -102,7 +102,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, response(mode, index))
-        return Done{stream}
+        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
 
 def releaseParallel(mode: U32, release: Chan(Unit)) -> IO(Unit):
   match mode:

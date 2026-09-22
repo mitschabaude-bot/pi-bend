@@ -11,6 +11,7 @@ import ../laws/fifo.bend as FifoLaws
 import ../packages/runtime/src/fifo.bend as Fifo
 import ./string.bend as SetProof
 import ../laws/string.bend as SetLaws
+import ../packages/ai/src/types.bend as Ai
 
 # Agent owner
 
@@ -247,3 +248,64 @@ def Laws.finish_idle(P, A, G, D, C, V, S, E, J, state):
 def Laws.finish_messages(P, A, G, D, C, V, S, E, J, state):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
+
+
+# Continue planning
+
+def Laws.busy_agents_cannot_continue(P, A, G, D, C, messages, queues): {==}
+
+def system_tail(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, systems: List<&2, Ai.SystemMessage<P>>) -> {Runtime.tail(P, A, G, D, C, Laws.systemsOf(P, A, G, D, C, systems), False{}) == Runtime.Empty{} : Runtime.Tail}:
+  match systems:
+    case Nil{}: {==}
+    case system <> rest:
+      match rest:
+        case Nil{}: {==}
+        case next <> more: system_tail(P, A, G, D, C, next <> more)
+
+def Laws.system_only_transcripts_cannot_continue(P, A, G, D, C, systems, queues):
+  %Equal.sym(Runtime.Tail, Runtime.tail(P, A, G, D, C, Laws.systemsOf(P, A, G, D, C, systems), False{}), Runtime.Empty{}, system_tail(P, A, G, D, C, systems)) : {Runtime.planTail(Laws.Agent(P, A, G, D, C), queues, _) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Laws.Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Laws.Agent(P, A, G, D, C)>>}
+  {==}
+
+def or_true_is_other(seen: Bool) -> {Bool.pick(Runtime.Tail, Bool.or(seen, True{}), Runtime.Other{}, Runtime.Empty{}) == Runtime.Other{} : Runtime.Tail}:
+  match seen:
+    case True{}: {==}
+    case False{}: {==}
+
+def user_tail(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, messages: List<&2, Laws.Agent(P, A, G, D, C)>, user: Ai.UserMessage, seen: Bool) -> {Runtime.tail(P, A, G, D, C, List.append(&2, Laws.Agent(P, A, G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), seen) == Runtime.Other{} : Runtime.Tail}:
+  match messages:
+    case Nil{}: or_true_is_other(seen)
+    case message <> rest:
+      match rest:
+        case Nil{}: or_true_is_other(Bool.or(seen, Bool.not(Runtime.isSystem(P, A, G, D, C, message))))
+        case next <> more: user_tail(P, A, G, D, C, next <> more, user, Bool.or(seen, Bool.not(Runtime.isSystem(P, A, G, D, C, message))))
+
+def Laws.continue_after_a_user_message_resumes_the_run(P, A, G, D, C, messages, user, queues):
+  %Equal.sym(Runtime.Tail, Runtime.tail(P, A, G, D, C, List.append(&2, Laws.Agent(P, A, G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), False{}), Runtime.Other{}, user_tail(P, A, G, D, C, messages, user, False{})) : {Runtime.planTail(Laws.Agent(P, A, G, D, C), queues, _) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Laws.Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Laws.Agent(P, A, G, D, C)>>}
+  {==}
+
+def Laws.continue_after_assistant_prefers_steering(M, mode, followUp, message):
+  match mode:
+    case T.All{}: {==}
+    case T.OneAtATime{}: {==}
+
+def Laws.continue_after_assistant_falls_back_to_follow_ups(M, steeringMode, followUpMode, message):
+  match steeringMode:
+    case T.All{}:
+      match followUpMode:
+        case T.All{}: {==}
+        case T.OneAtATime{}: {==}
+    case T.OneAtATime{}:
+      match followUpMode:
+        case T.All{}: {==}
+        case T.OneAtATime{}: {==}
+
+def Laws.continue_after_assistant_with_empty_queues_fails(M, steeringMode, followUpMode):
+  match steeringMode:
+    case T.All{}:
+      match followUpMode:
+        case T.All{}: {==}
+        case T.OneAtATime{}: {==}
+    case T.OneAtATime{}:
+      match followUpMode:
+        case T.All{}: {==}
+        case T.OneAtATime{}: {==}

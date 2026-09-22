@@ -57,7 +57,7 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         IO.spawn(Unit, produce(signal, stream, entered, done))
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def create(capture: Capture) -> IO(Fixture):
   do IO<Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)

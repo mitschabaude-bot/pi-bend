@@ -2,7 +2,7 @@ import Base
 import ./utf8.bend as Utf8
 import ./callback.bend as Callback
 
-# Behavioral port of openai 6.40.0 internal/decoders/lineDecoder.ts.
+# Behavioral port of openai 6.40.0 internal/decoders/line.ts.
 # See licenses/openai-sdk.txt. Storage and transitions are native immutable Bend.
 type Pending is Data:
   Reading{reversed: List<&2, U32>}
@@ -296,7 +296,7 @@ type Position is Data:
   Drained{pending: List<&2, ServerSentEvent>}
   Closed{}
 
-# The cursor is affine: advance/closeReader returns its successor rather than
+# The cursor is affine: advance/close returns its successor rather than
 # sharing a mutable decoder or allowing two calls to race over one cursor.
 type Cursor<-E: Data> is Type:
   Cursor{source: Source<E>, position: Position}
@@ -356,7 +356,7 @@ def closeSource(-E: Data, source: Source<E>) -> IO(Result<&2, &2, E, Unit>):
     case Source{_, closeReader}: Callback.call(Unit, Result<&2, &2, E, Unit>, closeReader, Unit{})
 
 # No underlying return on unopened, exhausted or failed iteration. An early
-# closeReader of an active input calls return once; its error is returned, and the
+# close of an active input calls return once; its error is returned, and the
 # successor cursor is closed even when return failed.
 def closeReader(-E: Data, cursor: Cursor<E>) -> IO(CloseResult<E>):
   match cursor:

@@ -385,7 +385,7 @@ def finalized(overrides: Overrides, state: Collected) -> Settings:
     case Overrides{hostname, local, environmentOptions} Collected{servers, searchLocal, options, sort, Diagnostics{invalid, unknown}}:
       Settings{nameservers(servers), searchList(hostname, local, searchLocal), List.reverse(&2, String, prepend(environmentOptions, options)), List.reverse(&2, String, sort), Diagnostics{List.reverse(&2, String, invalid), List.reverse(&2, String, unknown)}}
 
-# Resolve source precedence only. Option/sort interpretation, serverSettings limits,
+# Resolve source precedence only. Option/sort interpretation, server limits,
 # IPv6 scope resolution and network scheduling are subsequent typed layers.
 def configure(entries: List<&2, Entry>, overrides: Overrides) -> Settings:
   finalized(overrides, collectSettings(entries, Collected{Nil{}, None{}, Nil{}, Nil{}, Diagnostics{Nil{}, Nil{}}}))
@@ -630,7 +630,7 @@ def prepareStrict(tokens: List<&2, String>) -> Result<&2, &2, List<&2, Diagnosti
   checkedRequest(interpretStrict(tokens, defaults()))
 
 # ---- from resolver-searchLocal.bend ----
-# Search consumes ndotsSearch/no-TLD only. Keep the complete selected options for
+# Search consumes ndots/no-TLD only. Keep the complete selected options for
 # transport, response, retry and reload layers rather than discarding flags.
 type Configuration is Data:
   Configuration{options: ResolverOptions, domains: Report}
@@ -696,7 +696,7 @@ def parsedSystem(~DecodeError: Data, ~Context: Data, ~lookup: Context -> IO(Resu
         return Done{configuredSystem(entries, values, hostnameSystem)}
 
 # Hostname fallback is lazy: captureLocal errors and file errors return first, and
-# an environment/file searchLocal list suppresses the hostnameSystem call entirely.
+# an environment/file searchLocal list suppresses the hostname call entirely.
 def capturedWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, path: String, chunkSize: U32, byteLimit: Nat, captureLocal: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemReport>):
   match captureLocal:
     case Fail{error}: IO.pure(Result<&2, &2, LoadError<DecodeError>, SystemReport>, Fail{Environment{error}})
@@ -838,7 +838,7 @@ type Attempt<-Server: Data> is Data:
 
 # Assign once in configuration order, before a rotation owner sees the entries.
 # This checked UDP boundary accepts the supported one-to-three-server layouts.
-# It never silently discards an excess entryUdpPlan or merges duplicate endpoints.
+# It never silently discards an excess entry or merges duplicate endpoints.
 def locate(-Server: Data, servers: List<&2, Server>) -> Result<&2, &2, Error, List<&2, Located<Server>>>:
   match servers:
     case Nil{}: Fail{NoServers{}}
@@ -878,7 +878,7 @@ def located(-Server: Data, timeout: U32, result: Result<&2, &2, Error, List<&2, 
 def prepare(-Server: Data, timeout: U32, servers: List<&2, Server>) -> Result<&2, &2, Error, List<&2, Attempt<Server>>>:
   located(Server, timeout, locate(Server, servers))
 
-# Preserve all parsed options alongside entries timedTransport in configuration order.
+# Preserve all parsed options alongside entries timed in configuration order.
 # Rotation must operate on these entries, never recompute their positions.
 type TransportPrepared<-Server: Data> is Data:
   TransportPrepared{options: ResolverOptions, servers: List<&2, Attempt<Server>>}

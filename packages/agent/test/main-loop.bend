@@ -22,7 +22,7 @@ import ./message-events.bend as Test
 
 def Assistant() -> Data: Ai.AssistantMessage<V.Value, Unit>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
-def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
+def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<V.Value, Unit, String>>
 def ProviderInput() -> Data: T.StreamInput<V.Value, V.Value, Unit, String, Unit, H.Config()>
 def Turn() -> Data: T.ShouldStopAfterTurnContext<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>
 def Update() -> Data: T.AgentLoopTurnUpdate<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit>
@@ -196,7 +196,7 @@ def openProvider(kind: U32, index: U32, streams: R.Ref<List<&2, StreamValue()>>)
         R.modify(List<&2, StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, Ai.Start{assistant(text("partial"), Ai.Pending{})})
         Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Assistant(), stream, finalEvent(response(kind, index)))
-        return Done{stream}
+        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
 
 def provider(environment: Provider, input: ProviderInput()) -> IO(ProviderOutput()):
   match environment input:

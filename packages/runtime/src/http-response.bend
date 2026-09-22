@@ -431,7 +431,7 @@ def nextWith(~E: Data, ~State: Type, ~read: State -> IO(State & Result<&2, &2, E
 # An acquired byte-source lease. The cursor owns its release obligation, while
 # callback handles remain borrowed from their external owner. The source owner
 # must grant this lease to only one cursor, and keep its callbacks alive until
-# the cursor has closedResponseReader. This interface does not itself interrupt blocked reads.
+# the cursor has closed. This interface does not itself interrupt blocked reads.
 type ReleaseReason is Data:
   MessageComplete{rest: List<&2, U32>}
   CleanEOF{}

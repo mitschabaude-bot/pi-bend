@@ -497,7 +497,7 @@ def writeChecked(-Reason: Data, socket: Socket, destination: Endpoint, bytes: Li
         observation : D.Observation<A.AbortReason<Reason>> <- A.observe(Reason, signal)
         writeObserving(Reason, signal, operation, observation)
 
-# Borrow the signal, return the socket on every outcomeDatagram and join the observer.
+# Borrow the signal, return the socket on every outcome and join the observer.
 # A retained abort wins at this boundary even if transmission already completed;
 # callers must not interpret an abort result as proof of non-delivery.
 def send(-Reason: Data, socket: Socket, destination: Endpoint, bytes: List<&2, U32>, +signal: A.AbortSignal<Reason>) -> IO(Socket & Result<&2, &2, DatagramError<Reason>, Unit>):
@@ -506,7 +506,7 @@ def send(-Reason: Data, socket: Socket, destination: Endpoint, bytes: List<&2, U
     writeChecked(Reason, socket, destination, bytes, signal, abortState)
 
 # An affine write descriptor sharing the reader's connection and abort scope.
-# Join and closeWriter every writer before closing the connection owner. Writers
+# Join and close every writer before closing the connection owner. Writers
 # borrow its watcher; they do not register another signal observation.
 type Writer<-Reason: Data> is Type:
   Writer{socket: Socket, signal: A.AbortSignal<Reason>}

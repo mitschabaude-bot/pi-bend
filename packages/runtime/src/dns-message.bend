@@ -299,7 +299,7 @@ def fromPacket(value: Result<&2, &2, DomainNameError, Packet>) -> Result<&2, &2,
 def parse(bytes: List<&2, U32>) -> Result<&2, &2, Error, Message>:
   fromPacket(packet(bytes))
 
-# Uncompressed single-questionMessage query. Caller supplies transaction ID and flags
+# Uncompressed single-question query. Caller supplies transaction ID and flags
 # (e.g. recursion desired); validation/matching policy remains explicit above.
 def u16(+value: U32, tail: List<&2, U32>) -> List<&2, U32>:
   (value / 256 : U32) <> (value % 256 : U32) <> tail
@@ -826,7 +826,7 @@ def counted(+bytes: List<&2, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   bounded(bytes, measured(countTcpFrame(bytes, Done{0})))
 
 # Input is the validated single-question message emitted by query.
-# Replace ARCOUNT, append one OPT recordEdns and enforce the full message bound.
+# Replace ARCOUNT, append one OPT record and enforce the full message bound.
 def attach(remaining: Nat, bytes: List<&2, U32>, reversed: List<&2, U32>, opt: List<&2, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match remaining bytes:
     case Zero{} _ <> _ <> body: counted(prepend(reversed, 0 <> 1 <> prepend(List.reverse(&2, U32, body), opt)))
@@ -1112,7 +1112,7 @@ def stopSearch(cursor: SearchCursor) -> SearchCursor:
   match cursor:
     case SearchCursor{base, dotsLocal, noTld, first, _, index, triedDirect, triedRoot, searched}: SearchCursor{base, dotsLocal, noTld, first, Nil{}, index, triedDirect, triedRoot, searched}
 
-# Resolver errorSearchResponse classes, independent of OS errno and libc integer constants.
+# Resolver error classes, independent of OS errno and libc integer constants.
 type SearchResponseError is Data:
   NotFound{}
   NoData{}

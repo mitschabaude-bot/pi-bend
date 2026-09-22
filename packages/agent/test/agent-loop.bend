@@ -35,7 +35,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant(H.text(reply), Ai.Stop{})})
-        return Done{stream}
+        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
 
 def user() -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
   T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"Hello"}, F.fromU32(0)}}}
@@ -179,7 +179,7 @@ def transcriptProvider(environment: TranscriptFixture, input: H.ProviderInput())
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant(H.text("Response"), Ai.Stop{})})
-        return Done{stream}
+        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
 
 def transcriptOutcome(+mode: U32, outcome: H.Outcome()) -> IO(Unit):
   match outcome:

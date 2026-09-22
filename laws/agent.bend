@@ -436,3 +436,65 @@ law finish_messages:
   for -J: Data
   for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
   {messages(P, A, G, D, C, V, S, E, J, State.finishRunState(P, A, G, D, C, V, S, E, J, state)) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}
+
+
+# Continue planning: pi's continue() as a pure decision over the transcript
+# tail and the two pending queues.
+
+def Agent(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data) -> Data: T.AgentMessage<P, A, G, D, C>
+
+def systemsOf(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, systems: List<&2, Ai.SystemMessage<P>>) -> List<&2, T.AgentMessage<P, A, G, D, C>>:
+  match systems:
+    case Nil{}: Nil{}
+    case system <> rest: T.LlmMessage{Ai.System{system}} <> systemsOf(P, A, G, D, C, rest)
+
+law busy_agents_cannot_continue:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for messages: List<&2, Agent(P, A, G, D, C)>
+  for queues: Runtime.Queues<Agent(P, A, G, D, C)>
+  {Runtime.planContinue(P, A, G, D, C, True{}, messages, queues) == (queues, Fail{Runtime.ContinueBusy{}}) : Runtime.Queues<Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(P, A, G, D, C)>>}
+
+law system_only_transcripts_cannot_continue:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for systems: List<&2, Ai.SystemMessage<P>>
+  for queues: Runtime.Queues<Agent(P, A, G, D, C)>
+  {Runtime.planContinue(P, A, G, D, C, False{}, systemsOf(P, A, G, D, C, systems), queues) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(P, A, G, D, C)>>}
+
+law continue_after_a_user_message_resumes_the_run:
+  for -P: Data
+  for -A: Data
+  for -G: Data
+  for -D: Data
+  for -C: Data
+  for messages: List<&2, Agent(P, A, G, D, C)>
+  for user: Ai.UserMessage
+  for queues: Runtime.Queues<Agent(P, A, G, D, C)>
+  {Runtime.planContinue(P, A, G, D, C, False{}, List.append(&2, Agent(P, A, G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), queues) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(P, A, G, D, C)>>}
+
+law continue_after_assistant_prefers_steering:
+  for -M: Data
+  for mode: T.QueueMode
+  for followUp: Runtime.PendingMessageQueue<M>
+  for message: M
+  {Runtime.planTail(M, Runtime.enqueueQueues(M, Runtime.Queues{Runtime.newPending(M, mode), followUp}, Runtime.QueuesSteering{}, message), Runtime.Assistant{}) == (Runtime.Queues{Runtime.newPending(M, mode), followUp}, Done{Runtime.Prompt{message <> Nil{}, True{}}}) : Runtime.Queues<M> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<M>>}
+
+law continue_after_assistant_falls_back_to_follow_ups:
+  for -M: Data
+  for steeringMode: T.QueueMode
+  for followUpMode: T.QueueMode
+  for message: M
+  {Runtime.planTail(M, Runtime.Queues{Runtime.newPending(M, steeringMode), Runtime.enqueuePending(M, Runtime.newPending(M, followUpMode), message)}, Runtime.Assistant{}) == (Runtime.Queues{Runtime.newPending(M, steeringMode), Runtime.newPending(M, followUpMode)}, Done{Runtime.Prompt{message <> Nil{}, False{}}}) : Runtime.Queues<M> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<M>>}
+
+law continue_after_assistant_with_empty_queues_fails:
+  for -M: Data
+  for steeringMode: T.QueueMode
+  for followUpMode: T.QueueMode
+  {Runtime.planTail(M, Runtime.Queues{Runtime.newPending(M, steeringMode), Runtime.newPending(M, followUpMode)}, Runtime.Assistant{}) == (Runtime.Queues{Runtime.newPending(M, steeringMode), Runtime.newPending(M, followUpMode)}, Fail{Runtime.AssistantTail{}}) : Runtime.Queues<M> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<M>>}

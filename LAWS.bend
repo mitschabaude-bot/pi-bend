@@ -34,3 +34,8 @@ import ./laws/fetch.bend as Fetch
 import ./laws/x509-trust.bend as X509Trust
 import ./laws/transform-messages.bend as TransformMessages
 import ./laws/transform-tool-results.bend as TransformToolResults
+import ./laws/validation.bend as Validation
+import ./laws/transcript.bend as Transcript
+import ./laws/simple-options.bend as SimpleOptions
+import ./laws/thinking-levels.bend as ThinkingLevels
+import ./laws/agent-loop.bend as AgentLoop
