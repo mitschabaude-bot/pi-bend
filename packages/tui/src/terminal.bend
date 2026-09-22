@@ -130,7 +130,7 @@ type State is Data:
   State{protocol: Negotiation, progress: Maybe<&2,Nat>, draining: Bool, active: Bool, lastData: Nat, dimensions: Dimensions, errors: List<&2,Error>, wake: Deferred.Deferred<Unit>, timer: Maybe<&2,TimerCancel>, pending: List<&2,Delivery>}
 type Output is Type: Output{pipe: Pipe, failure: Maybe<&2,Error>, log: Maybe<&2,String>}
 type Handle is Data:
-  Handle{state: Serial.Handle<State>, output: Serial.Handle<Output>, inputCancel: PipeCancel, outputCancel: PipeCancel, resizeCancel: PipeCancel, outputFd: U32}
+  Handle{state: Serial.Handle<State>, output: Serial.Handle<Output>, inputCancel: PipeCancel, outputCancel: PipeCancel, resizeCancel: PipeCancel}
 type Listeners is Data:
   Listeners{handle: Handle, input: Callback.Callback<String,Unit>, resize: Callback.Callback<Unit,Unit>}
 type ProcessTerminal is Type:
@@ -172,7 +172,7 @@ def writeLocked(text: String,output: Output) -> IO(Output & Result<&2,&2,Error,U
     return outputResult(written)
 def writeRaw(handle: Handle,text: String) -> IO(Result<&2,&2,Error,Unit>):
   match handle:
-    case Handle{_,output,_,_,_,_}: Serial.run(Output,Result<&2,&2,Error,Unit>,output,state => writeLocked(text,state))
+    case Handle{_,output,_,_,_}: Serial.run(Output,Result<&2,&2,Error,Unit>,output,state => writeLocked(text,state))
 
 def stateError(cause: Error,state: State) -> IO(State & Unit):
   match state:
@@ -181,7 +181,7 @@ def stateError(cause: Error,state: State) -> IO(State & Unit):
 def remember(handle: Handle,error: Maybe<&2,Error>) -> IO(Unit):
   match handle error:
     case _ None{}: IO.pure(Unit,Unit{})
-    case Handle{state,_,_,_,_,_} Some{cause}: Serial.run(State,Unit,state,current => stateError(cause,current))
+    case Handle{state,_,_,_,_} Some{cause}: Serial.run(State,Unit,state,current => stateError(cause,current))
 def rememberedWrite(handle: Handle,result: Result<&2,&2,Error,Unit>) -> IO(Unit):
   match result:
     case Done{Unit{}}: IO.pure(Unit,Unit{})
@@ -225,7 +225,7 @@ def frameLocked(now: Nat,event: Input.InputEvent,+state: State) -> IO(State & Un
     case _: IO.pure(State & Unit,(state,Unit{}))
 def onFrame(listeners: Listeners,event: Input.InputEvent) -> IO(Unit):
   match listeners:
-    case Listeners{Handle{state,_,_,_,_,_},_,_}:
+    case Listeners{Handle{state,_,_,_,_},_,_}:
       do IO<Unit>:
         now : Nat <- IO.now()
         Serial.run(State,Unit,state,current => frameLocked(now,event,current))
@@ -236,7 +236,7 @@ def byteActivity(now: Nat,state: State) -> IO(State & Unit):
       IO.pure(State & Unit,(State{protocol,progress,draining,active,now,dimensions,errors,wake,timer,pending},Unit{}))
 def markInput(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{state,_,_,_,_,_}:
+    case Handle{state,_,_,_,_}:
       do IO<Unit>:
         now : Nat <- IO.now()
         Serial.run(State,Unit,state,current => byteActivity(now,current))
@@ -360,7 +360,7 @@ def clockStep(listeners: Listeners,step: ClockStep) -> IO(Bool):
 @unsafe def terminalClock(+listeners: Listeners,again: Bool) -> IO(Unit):
   match listeners again:
     case _ False{}: IO.pure(Unit,Unit{})
-    case Listeners{Handle{state,_,_,_,_,_},_,_} True{}:
+    case Listeners{Handle{state,_,_,_,_},_,_} True{}:
       do IO<Unit>:
         step : ClockStep <- Serial.run(State,ClockStep,state,nextClock)
         next : Bool <- clockStep(listeners,step)
@@ -381,13 +381,13 @@ def readDimensions(+state: State) -> IO(State & Dimensions):
     case State{_,_,_,_,_,size,_,_,_,_}: IO.pure(State & Dimensions,(state,size))
 def getDimensions(handle: Handle) -> IO(Dimensions):
   match handle:
-    case Handle{state,_,_,_,_,_}: Serial.run(State,Dimensions,state,value => readDimensions(value))
+    case Handle{state,_,_,_,_}: Serial.run(State,Dimensions,state,value => readDimensions(value))
 def notifyResize(listeners: Listeners) -> IO(Unit):
   match listeners:
-    case Listeners{Handle{+state,_,_,_,_,fd},_,resize}:
+    case Listeners{Handle{+state,_,_,outputCancel,_},_,resize}:
       do IO<Unit>:
         previous : Dimensions <- Serial.run(State,Dimensions,state,value => readDimensions(value))
-        measured : Result<&1,&1,U32 & String,U32 & U32> <- Terminal.dimensions(fd)
+        measured : Result<&1,&1,U32 & String,U32 & U32> <- Terminal.dimensions(outputCancel)
         changed : Bool <- Serial.run(State,Bool,state,value => resizeLocked(dimensionsResult(previous,measured),value))
         Bool.pick(Unit -> IO(Unit),changed,_ => Callback.call(Unit,Unit,resize,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def resizeFailure(listeners: Listeners,error: Error) -> IO(Unit):
@@ -428,7 +428,7 @@ def progressLocked(+active: Bool,now: Nat,state: State) -> IO(State & Unit):
     case state: IO.pure(State & Unit,(state,Unit{}))
 def setProgress(+handle: Handle,+active: Bool) -> IO(Unit):
   match handle:
-    case Handle{state,_,_,_,_,_}:
+    case Handle{state,_,_,_,_}:
       do IO<Unit>:
         now : Nat <- IO.now()
         Serial.run(State,Unit,state,value => progressLocked(active,now,value))
@@ -448,7 +448,7 @@ def stopLocked(+state: State) -> IO(State & String):
         return stoppedState(disableKeyboard(protocol),state)
 def cancel(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{state,_,input,output,resize,_}:
+    case Handle{state,_,input,output,resize}:
       do IO<Unit>:
         ignored : String <- Serial.run(State,String,state,value => stopLocked(value))
         a : Bool <- Pipe.cancel(input)
@@ -483,7 +483,7 @@ def finishStop(lease: TerminalLease,state: State,errors: List<&2,Error>) -> IO(R
 # Raw settings restoration runs even when cleanup output or a close fails.
 def stop(owner: ProcessTerminal) -> IO(Result<&2,&2,Error,Unit>):
   match owner:
-    case ProcessTerminal{lease,state,output,Handle{+resource,outputRef,+inputCancel,outputCancel,+resizeCancel,fd},buffer,observer,reader,resizer,clock}:
+    case ProcessTerminal{lease,state,output,Handle{+resource,outputRef,+inputCancel,outputCancel,+resizeCancel},buffer,observer,reader,resizer,clock}:
       do IO<Result<&2,&2,Error,Unit>>:
         cleanup : String <- Serial.run(State,String,resource,value => stopLocked(value))
         a : Bool <- Pipe.cancel(inputCancel)
@@ -493,7 +493,7 @@ def stop(owner: ProcessTerminal) -> IO(Result<&2,&2,Error,Unit>):
         Input.disposeAsync(buffer)
         joined : Unit <- IO.join(Unit,clock)
         Callback.dispose(Input.InputEvent,Unit,observer)
-        written : Result<&2,&2,Error,Unit> <- writeRaw(Handle{resource,outputRef,inputCancel,outputCancel,resizeCancel,fd},cleanup)
+        written : Result<&2,&2,Error,Unit> <- writeRaw(Handle{resource,outputRef,inputCancel,outputCancel,resizeCancel},cleanup)
         inClosed : Result<&1,&1,U32 & String,Unit> <- Pipe.close_checked(input)
         resizeClosed : Result<&1,&1,U32 & String,Unit> <- Pipe.close_checked(resize)
         outputValue : Output <- Serial.retire(Output,output)
@@ -510,7 +510,7 @@ def readKitty(+state: State) -> IO(State & Bool):
     case State{Negotiation{kitty,_,_,_,_},_,_,_,_,_,_,_,_,_}: IO.pure(State & Bool,(state,kitty))
 def kittyProtocolActive(handle: Handle) -> IO(Bool):
   match handle:
-    case Handle{state,_,_,_,_,_}: Serial.run(State,Bool,state,value => readKitty(value))
+    case Handle{state,_,_,_,_}: Serial.run(State,Bool,state,value => readKitty(value))
 def columnsOf(size: Dimensions) -> U32:
   match size:
     case Dimensions{columns,_}: columns
@@ -562,14 +562,15 @@ def startBuffer(lease: TerminalLease,state: Serial.Owner<State>,output: Serial.O
     startWorkers(lease,state,output,listeners,observer,input,resize,Input.borrowAsync(buffer))
 def startResources(lease: TerminalLease,options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,input: Pipe & PipeCancel,resize: Pipe & PipeCancel,outputCancel: PipeCancel,state: Serial.Owner<State> & Serial.Handle<State>,output: Serial.Owner<Output> & Serial.Handle<Output>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   match options input resize state output:
-    case Options{_,fd,escape,_,_} Tuple{input,inputCancel} Tuple{resize,resizeCancel} Tuple{state,stateHandle} Tuple{output,outputHandle}:
-      startBuffer(lease,state,output,Listeners{Handle{stateHandle,outputHandle,inputCancel,outputCancel,resizeCancel,fd},onInput,onResize},input,resize,escape)
+    case Options{_,_,escape,_,_} Tuple{input,inputCancel} Tuple{resize,resizeCancel} Tuple{state,stateHandle} Tuple{output,outputHandle}:
+      startBuffer(lease,state,output,Listeners{Handle{stateHandle,outputHandle,inputCancel,outputCancel,resizeCancel},onInput,onResize},input,resize,escape)
 def acquired(+options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,result: Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   match options result:
     case _ Fail{(code,message)}: IO.pure(Result<&2,&1,Error,ProcessTerminal>,Fail{System{"acquire terminal",code,message}})
-    case Options{_,fd,_,fallback,log} Done{(lease,input,(output,outputCancel),resize)}:
+    case Options{_,_,_,fallback,log} Done{(lease,input,(output,outputCancel),resize)}:
+      +outputCancel = {outputCancel: PipeCancel}
       do IO<Result<&2,&1,Error,ProcessTerminal>>:
-        measured : Result<&1,&1,U32 & String,U32 & U32> <- Terminal.dimensions(fd)
+        measured : Result<&1,&1,U32 & String,U32 & U32> <- Terminal.dimensions(outputCancel)
         wake : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         now : Nat <- IO.now()
         state : Serial.Owner<State> <- Serial.create(State,State{initialNegotiation(),None{},False{},True{},now,dimensionsResult(fallback,measured),Nil{},wake,None{},Nil{}})
@@ -636,7 +637,7 @@ def draining(+handle: Handle,+state: Serial.Handle<State>,+end: Nat,+idle: Nat,c
 # the caller's maximum deadline. This borrowed operation is joined before stop.
 def drainInput(+handle: Handle,maxMs: U32,idleMs: U32) -> IO(Result<&2,&2,Error,Unit>):
   match handle:
-    case Handle{+state,_,_,_,_,_}:
+    case Handle{+state,_,_,_,_}:
       do IO<Result<&2,&2,Error,Unit>>:
         +now : Nat <- IO.now()
         cleanup : Maybe<&2,String> <- Serial.run(State,Maybe<&2,String>,state,current => beginDrain(now,current))
@@ -711,4 +712,4 @@ def writeLogged(+text: String,output: Output) -> IO(Output & Result<&2,&2,Error,
     logOutput(text,result)
 def write(handle: Handle,text: String) -> IO(Result<&2,&2,Error,Unit>):
   match handle:
-    case Handle{_,output,_,_,_,_}: Serial.run(Output,Result<&2,&2,Error,Unit>,output,state => writeLogged(text,state))
+    case Handle{_,output,_,_,_}: Serial.run(Output,Result<&2,&2,Error,Unit>,output,state => writeLogged(text,state))

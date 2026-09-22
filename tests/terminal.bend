@@ -33,9 +33,20 @@ def collision(result: Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCanc
   match result:
     case Fail{(16,_)}: IO.print_err("busy")
     case _: IO.die(Unit,1,"concurrent terminal acquire was not rejected")
+def rejectedDimensions(result: Result<&1,&1,U32 & String,U32 & U32>) -> IO(Unit):
+  match result:
+    case Fail{(9,_)}: IO.print_err("dimensions:bad-capability")
+    case _: IO.die(Unit,1,"invalid dimension capability was accepted")
+def checkDimensions(handle: T.Handle,closed: Bool) -> IO(Unit):
+  match handle:
+    case T.Handle{_,_,input,output,_}:
+      do IO<Unit>:
+        result : Result<&1,&1,U32 & String,U32 & U32> <- Terminal.dimensions(Bool.pick(PipeCancel,closed,output,input))
+        rejectedDimensions(result)
 def commands(+handle: T.Handle,mode: String) -> IO(Unit):
   match mode:
     case "cycle": IO.pure(Unit,Unit{})
+    case "capability": checkDimensions(handle,False{})
     case "collision":
       do IO<Unit>:
         result : Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)> <- Terminal.acquire(0,1)
@@ -103,14 +114,15 @@ def commands(+handle: T.Handle,mode: String) -> IO(Unit):
         IO.print_err(Bool.pick(String,kitty,"kitty:true","kitty:false"))
         measured : T.Dimensions <- T.getDimensions(handle)
         IO.print_err("size:" ++ size(measured))
-def running(mode: String,pair: T.ProcessTerminal & T.Handle) -> IO(Unit):
+def running(+mode: String,pair: T.ProcessTerminal & T.Handle) -> IO(Unit):
   match pair:
-    case (owner,handle):
+    case (owner,+handle):
       do IO<Unit>:
         IO.print_err("ready")
         commands(handle,mode)
         result : Result<&2,&2,T.Error,Unit> <- T.stop(owner)
         IO.print_err("stopped:" ++ status(result))
+        Bool.pick(Unit -> IO(Unit),String.eq(mode,"capability"),_ => checkDimensions(handle,True{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def started(mode: String,result: Result<&2,&1,T.Error,T.ProcessTerminal>) -> IO(Unit):
   match result:
     case Done{owner}: running(mode,T.borrow(owner))

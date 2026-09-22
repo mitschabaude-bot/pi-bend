@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ESC = b'\x1b'
 
 class Session:
-    def __init__(self, threads, mode='hold', drain_output=True, env=None, output=None):
+    def __init__(self, threads, mode='hold', drain_output=True, env=None, output=None, inherited=()):
         self.master, self.slave = pty.openpty()
         fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
         self.saved = termios.tcgetattr(self.slave)
@@ -29,7 +29,7 @@ class Session:
         self.output = bytearray()
         self.lines = []
         self.queue = queue.Queue()
-        self.process = subprocess.Popen(['build/terminal', '--threads', str(threads), mode], cwd=ROOT, stdin=self.slave, stdout=self.slave if output is None else output, stderr=subprocess.PIPE, text=True, env=env)
+        self.process = subprocess.Popen(['build/terminal', '--threads', str(threads), mode], cwd=ROOT, stdin=self.slave, stdout=self.slave if output is None else output, stderr=subprocess.PIPE, text=True, env=env, pass_fds=inherited)
         def stderr():
             for line in self.process.stderr:
                 self.lines.append(line.rstrip('\n'))
@@ -218,6 +218,25 @@ def main():
     sender=threading.Thread(target=resize_storm);sender.start()
     out,lines=s.finish();sender.join()
     assert lines.count('stopped:ok')==101,lines
+    count+=1
+    replacement_master,replacement_slave=pty.openpty()
+    fcntl.ioctl(replacement_slave,termios.TIOCSWINSZ,struct.pack('HHHH',42,111,0,0))
+    env={**os.environ,'LD_PRELOAD':str(ROOT/'build/terminal-faults.so'),'BEND_TERMINAL_FAULT':'reuse-output','BEND_TERMINAL_REPLACEMENT':str(replacement_slave)}
+    try:
+        s=Session(args.threads,env=env,inherited=(replacement_slave,))
+        fcntl.ioctl(s.slave,termios.TIOCSWINSZ,struct.pack('HHHH',33,99,0,0))
+        os.kill(s.process.pid,signal.SIGWINCH)
+        s.wait('resize')
+        out,lines=s.finish()
+        assert 'size:99:33' in lines,lines
+        assert ESC+b'[?2004l' in out,out
+        assert not select.select([replacement_master],[],[],.01)[0],'owned terminal wrote to reused caller fd'
+    finally:
+        os.close(replacement_master);os.close(replacement_slave)
+    count+=1
+    s=Session(args.threads,'capability')
+    out,lines=s.finish()
+    assert lines.count('dimensions:bad-capability')==2,lines
     count+=1
     s=Session(args.threads,'collision')
     out,lines=s.finish()

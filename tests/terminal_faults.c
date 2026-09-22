@@ -43,6 +43,10 @@ ssize_t write(int fd,const void* bytes,size_t count){
  if(mode("slow-regular")&&count==22&&!memcmp(bytes,"BLOCKING_REGULAR_WRITE",22)){
   struct stat st;if(!fstat(fd,&st)&&S_ISREG(st.st_mode)){real(2,"slow-enter\n",11);usleep(300000);real(2,"slow-exit\n",10);}
  }
+ if(raw&&fd!=2&&isatty(fd)&&!changed&&mode("reuse-output")){
+  changed=1;int replacement_fd=atoi(getenv("BEND_TERMINAL_REPLACEMENT"));
+  if(close(1)<0||dup2(replacement_fd,1)!=1)_exit(91);
+ }
  if(raw&&fd!=2&&isatty(fd)){write_count++;if((mode("write-first")&&write_count==1)||(mode("write-stop")&&write_count==2)){errno=EIO;return -1;}}
  return real(fd,bytes,count);
 }

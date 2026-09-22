@@ -15,7 +15,7 @@
 +def Terminal.restore(lease: TerminalLease) -> IO(Result<&1,&1,U32 & String,Unit>):
 +  import "./effs/process.c"
 +  import "./effs/process.js"
-+def Terminal.dimensions(descriptor: U32) -> IO(Result<&1,&1,U32 & String,U32 & U32>):
++def Terminal.dimensions(output: PipeCancel) -> IO(Result<&1,&1,U32 & String,U32 & U32>):
 +  import "./effs/process.c"
 +  import "./effs/process.js"
 --- a/bend2/effs/process.c
@@ -86,7 +86,7 @@
    if (activation) {
      IoAct* previous=NULL; IoAct* current=io_park.head;
      while (current && current!=activation) { previous=current; current=current->next; }
-@@ -324,3 +355,157 @@
+@@ -324,3 +355,158 @@
  }
  static void __attribute__((constructor)) pipe_close_checked_use(void) { io_eff(CID_PIPE_CLOSE_CHECKED,pipe_close_checked_run,0); }
  #endif
@@ -238,8 +238,9 @@
 +#ifdef CID_TERMINAL_DIMENSIONS
 +Term terminal_dimensions_run(Env e, Term* f, IoWork* w) {
 +  struct winsize size;
-+  if (f[0]>INT_MAX) return io_fail(e,EBADF,NULL);
-+  if (ioctl((int)f[0],TIOCGWINSZ,&size)<0) return io_fail(e,errno,NULL);
++  ProcessResource* output=process_at(f[0],1);
++  if (!output) return io_fail(e,EBADF,NULL);
++  if (ioctl(output->fd,TIOCGWINSZ,&size)<0) return io_fail(e,errno,NULL);
 +  return io_done(e,io_tup(e,size.ws_col,size.ws_row));
 +}
 +static void __attribute__((constructor)) terminal_dimensions_use(void) { io_eff(CID_TERMINAL_DIMENSIONS,terminal_dimensions_run,0); }
@@ -252,4 +253,4 @@
  }
 +function terminal_acquire(input, output) { return io_fail(38); }
 +function terminal_restore(lease) { throw Error('native Linux Terminal required'); }
-+function terminal_dimensions(descriptor) { return io_fail(38); }
++function terminal_dimensions(output) { return io_fail(38); }
