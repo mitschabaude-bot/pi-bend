@@ -5,6 +5,7 @@ import ./utf8.bend as Utf8
 type Error is Data:
   System{code: U32, message: String}
   InvalidPathEncoding{cause: Utf8.Error}
+  WriteAndClose{writeCode: U32, writeMessage: String, closeCode: U32, closeMessage: String}
 
 def system(-A: Data, result: Result<&1,&1,U32 & String,A>) -> Result<&2,&2,Error,A>:
   match result:
@@ -63,12 +64,20 @@ def mkdir(+path: String) -> IO(Result<&2,&2,Error,Unit>):
     result : Result<&1,&1,U32 & String,Unit> <- Directory.ensure(path)
     missingParents(path,system(Unit,result))
 
+# Node's writeFile retains both failures when writing and closing both fail.
+def closed(write: Result<&1,&1,U32 & String,Unit>, close: Result<&1,&1,U32 & String,Unit>) -> Result<&2,&2,Error,Unit>:
+  match write close:
+    case Done{Unit{}} Done{Unit{}}: Done{Unit{}}
+    case Fail{(code,message)} Done{Unit{}}: Fail{System{code,message}}
+    case Done{Unit{}} Fail{(code,message)}: Fail{System{code,message}}
+    case Fail{(wc,wm)} Fail{(cc,cm)}: Fail{WriteAndClose{wc,wm,cc,cm}}
+
 def written(pair: File & Result<&1,&1,U32 & String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (file,result):
       do IO<Result<&2,&2,Error,Unit>>:
-        File.close(file)
-        return system(Unit,result)
+        close : Result<&1,&1,U32 & String,Unit> <- File.close_checked(file)
+        return closed(result,close)
 
 def opened(content: String, result: Result<&1,&1,U32 & String,File>) -> IO(Result<&2,&2,Error,Unit>):
   match result:
@@ -82,5 +91,5 @@ def opened(content: String, result: Result<&1,&1,U32 & String,File>) -> IO(Resul
 # typed write failure; callers retain mutation ownership until this returns.
 def writeFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
-    result : Result<&1,&1,U32 & String,File> <- File.open(path,"w")
+    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"w",438)
     opened(content,result)

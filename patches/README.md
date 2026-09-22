@@ -84,3 +84,17 @@ python3 tests/typed_do_shadow.py
 The reduced fixture verifies effectful and pure typed bindings, copyable bindings, nested lexical shadowing, global calls in initializers and tail actions in both standalone and imported forms. Native one/four-thread and JS checks pass; qualified binding names remain rejected. Before the patch, `tests/typed_do_shadow.py --expect-bug` verified standalone success and imported failure. All seven preceding compiler regressions and canonical library types also pass with the fix.
 
 The additive [owned timer experiment](experimental/timer/README.md) is isolated and **not installed**. It adds Base declarations and two new effect files without modifying compiler/scheduler code or existing effects. Core native/Bun lifetime tests and unchanged-output checks pass; race/scaling coverage and performance acceptance remain pending.
+
+`bend-file-mode-close.patch` adds `File.open_mode(path, mode, permissions)` and `File.close_checked(file)` after `bend-filesystem-paths.patch`. Only Base declarations and four OS effect files change; existing primitives and compiler/runtime core stay unchanged. Creation permissions go through the OS umask and do not change existing files. Checked close consumes its affine handle and attempts close exactly once, including on EINTR. The pure Bend filesystem layer chooses 0666, returns close errors, and retains write plus close errors together, matching Node's `handleFdClose` aggregation order.
+
+Apply to an isolated compiler root containing `bend2/` first:
+
+```sh
+patch --forward -p1 -d "$BEND_ROOT" < patches/bend-file-mode-close.patch
+BEND="$BEND_ROOT/bend2/main.ts" sh scripts/build-pure.sh tests/filesystem-paths.bend build/filesystem-paths
+"$BEND_ROOT/bend2/main.ts" tests/filesystem-paths.bend -o build/filesystem-paths.js
+python3 tests/filesystem_paths_check.py
+python3 tests/filesystem_write_check.py
+```
+
+The candidate passes both suites on Bun and native one/four threads: umask 002/027, explicit 0600, existing permission preservation, read/write/append modes, invalid modes, ordinary OS failures, and 128 repeated close EIO/EINTR or combined write ENOSPC/close EIO failures. Test-only hooks close actual descriptors before reporting failure and audit handle retirement under a 64-descriptor limit. The unchanged AES fixture emits byte-identical C under the baseline and candidate; this is a codegen non-regression check, not a claim about filesystem throughput. No shared toolchain was modified during validation.

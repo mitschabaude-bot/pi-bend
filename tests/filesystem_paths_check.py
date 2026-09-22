@@ -33,6 +33,16 @@ for backend, command in [('bun', ['bun', str(PREFIX) + '.js']),
             return result.stdout.strip()
 
         assert run('cwd') == text(root)
+        private = root / 'private'
+        assert run('open', private, 'w') == 'ok'
+        assert private.stat().st_mode & 0o777 == 0o600
+        private.write_text('keep')
+        assert run('open', private, 'a') == 'ok'
+        assert run('open', private, 'r') == 'ok'
+        assert private.read_text() == 'keep'
+        assert run('open', root / 'no-create', '?') == f'error:{errno.EINVAL}'
+        assert not (root / 'no-create').exists()
+        assert run('open', root / 'missing', 'r') == f'error:{errno.ENOENT}'
         assert run('mkdir', '') == f'error:{errno.ENOENT}'
         assert run('mkdir', '/') == 'ok'
         assert run('mkdir', 'nested/é漢😀/leaf/') == 'ok'

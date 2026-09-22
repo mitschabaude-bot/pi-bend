@@ -6,6 +6,7 @@ def error(value: FS.Error) -> String:
   match value:
     case FS.System{code,_}: "error:" ++ U32.show(code)
     case FS.InvalidPathEncoding{_}: "encoding"
+    case FS.WriteAndClose{wc,_,cc,_}: "write-close:" ++ U32.show(wc) ++ ":" ++ U32.show(cc)
 
 def unit(result: Result<&2,&2,FS.Error,Unit>) -> String:
   match result:
@@ -31,8 +32,25 @@ def repeatWrites(count: Nat, +path: String) -> IO(Unit):
         IO.print(unit(result))
         repeatWrites(rest,path)
 
+def closed(result: Result<&1,&1,U32 & String,Unit>) -> String:
+  match result:
+    case Fail{(code,_)}: "error:" ++ U32.show(code)
+    case Done{Unit{}}: "ok"
+
+def opened(result: Result<&1,&1,U32 & String,File>) -> IO(Unit):
+  match result:
+    case Fail{(code,_)}: IO.print("error:" ++ U32.show(code))
+    case Done{file}:
+      do IO<Unit>:
+        result : Result<&1,&1,U32 & String,Unit> <- File.close_checked(file)
+        IO.print(closed(result))
+
 def run(arguments: List<String>) -> IO(Unit):
   match arguments:
+    case "open" <> path <> mode <> Nil{}:
+      do IO<Unit>:
+        result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,mode,384)
+        opened(result)
     case "mkdir" <> path <> Nil{}:
       do IO<Unit>:
         result : Result<&2,&2,FS.Error,Unit> <- FS.mkdir(path)
