@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/utf8.bend as UTF8
 import ../packages/tui/src/stdin-buffer.bend as B
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/ref.bend as Ref
@@ -55,13 +56,36 @@ def flushed(events: List<&2,B.InputEvent>) -> IO(Unit):
         emit("flush",text)
         flushed(rest)
     case _ <> rest: flushed(rest)
+def byteError(error: UTF8.Error) -> String:
+  match error:
+    case UTF8.InvalidByte{offset,value}: "byte:" ++ Nat.show(offset) ++ ":" ++ U32.show(value)
+    case UTF8.InvalidSequence{offset,value}: "invalid:" ++ Nat.show(offset) ++ ":" ++ U32.show(value)
+    case UTF8.IncompleteSequence{offset}: "incomplete:" ++ Nat.show(offset)
+def byteStatus(result: Result<&2,&2,UTF8.Error,Bool>) -> IO(Unit):
+  match result:
+    case Fail{error}: emit("error",byteError(error))
+    case Done{False{}}: emit("rejected","bytes")
+    case Done{True{}}: IO.pure(Unit,Unit{})
+def numbers(values: List<&2,V.Value>, reversed: List<&2,U32>) -> List<&2,U32>:
+  match values:
+    case Nil{}: List.reverse(&2,U32,reversed)
+    case V.Number{value} <> rest: numbers(rest,F64.to_u32(value) <> reversed)
+    case _ <> rest: numbers(rest,reversed)
 def operation(+handle: B.AsyncHandle, command: V.Value) -> IO(Unit):
   match command:
     case V.ArrayValue{V.Text{"process"} <> V.Text{text} <> Nil{}}:
       do IO<Unit>:
         accepted : Bool <- B.processAsync(handle,text)
-        return Unit{}
+        Bool.pick(Unit -> IO(Unit),accepted,_ => IO.pure(Unit,Unit{}),_ => emit("rejected","text"))(Unit{})
     case V.ArrayValue{V.Text{"sleep"} <> V.Number{milliseconds} <> Nil{}}: sleep(F64.to_u32(milliseconds))
+    case V.ArrayValue{V.Text{"bytes"} <> V.ArrayValue{values} <> Nil{}}:
+      do IO<Unit>:
+        result : Result<&2,&2,UTF8.Error,Bool> <- B.processBytesAsync(handle,numbers(values,Nil{}))
+        byteStatus(result)
+    case V.Text{"eof"}:
+      do IO<Unit>:
+        result : Result<&2,&2,UTF8.Error,Bool> <- B.finishBytesAsync(handle)
+        byteStatus(result)
     case V.Text{"clear"}: B.clearAsync(handle)
     case V.Text{"flush"}:
       do IO<Unit>:
