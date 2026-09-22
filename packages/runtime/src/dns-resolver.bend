@@ -7,7 +7,7 @@ import ./hosts.bend as Hosts
 import ./deadline.bend as Deadline
 import ./socket.bend as Endpoint
 import ./socket.bend as Connect
-import ./random-index.bend as Index
+import ./random.bend as Index
 import ./network-interface.bend as Interface
 import ./url.bend as IPv4
 import ./url.bend as IPv6
@@ -17,8 +17,8 @@ import ./socket.bend as DatagramIO
 import ./datagram-peer.bend as Peer
 import ./ipv6-scope.bend as IPv6Scope
 import ./file-fold.bend as Fold
-import ./utf8-strict.bend as UTF8
-import ./json-string.bend as Quote
+import ./utf8.bend as UTF8
+import ./json.bend as Quote
 
 type Address is Data:
   V4{value: IPv4.Address, ttl: U32}
@@ -592,7 +592,7 @@ def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
       configured(~Environment, ~draw, environment, Configuration.Config{Configuration.TransportPrepared{optionsLocal, servers}, domains, milliseconds, maximum}, servers, Configuration.enabled(Configuration.Rotate{}, optionsLocal))
 
 def create(config: Configuration.Config<Endpoint.Endpoint>) -> IO(Result<&2, &1, Index.Error, Owner>):
-  createWith(~Unit, ~Index.word, Unit{}, config)
+  createWith(~Unit, ~Index.wordIndex, Unit{}, config)
 
 def borrowed(+config: Configuration.Config<Endpoint.Endpoint>, pair: Source.Owner<Configuration.Attempt<Endpoint.Endpoint>> & Source.ServerSourceSource<Configuration.Attempt<Endpoint.Endpoint>>) -> Owner & Resolver:
   match pair:
@@ -624,7 +624,7 @@ def replaceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Inde
     replaced(previous, next)
 
 def replace(previous: Owner, config: Configuration.Config<Endpoint.Endpoint>) -> IO(Replacement):
-  replaceWith(~Unit, ~Index.word, Unit{}, previous, config)
+  replaceWith(~Unit, ~Index.wordIndex, Unit{}, previous, config)
 
 # Rotation survives across calls; each search owns one deadline spanning all
 # its candidate, alias and server attempts. The supplied parent stays borrowed.
@@ -864,7 +864,7 @@ def createWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2
       configuredTcpResolver(~Environment, ~draw, environment, Config{servers, domains, policy, request, milliseconds, maximum, rotate}, servers, rotate)
 
 def createTcpResolver(config: Config) -> IO(Result<&2, &1, Index.Error, TcpResolverOwner>):
-  createWithTcpResolver(~Unit, ~Index.word, Unit{}, config)
+  createWithTcpResolver(~Unit, ~Index.wordIndex, Unit{}, config)
 
 def borrowedTcpResolver(config: Config, pair: Source.Owner<Source.Server> & Source.ServerSourceSource<Source.Server>) -> TcpResolverOwner & TcpResolverResolver:
   match config pair:
@@ -898,7 +898,7 @@ def replaceWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&
     replacedTcpResolver(previous, next)
 
 def replaceTcpResolver(previous: TcpResolverOwner, config: Config) -> IO(TcpResolverReplacement):
-  replaceWithTcpResolver(~Unit, ~Index.word, Unit{}, previous, config)
+  replaceWithTcpResolver(~Unit, ~Index.wordIndex, Unit{}, previous, config)
 
 # Rotation survives across calls; each search owns one deadline spanning all
 # its candidate, alias and server attempts. The supplied parent stays borrowedTcpResolver.

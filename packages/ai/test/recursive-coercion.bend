@@ -1,7 +1,7 @@
 import Base
 import ../src/utils/validation.bend as Validation
 import ../../runtime/src/schema-value.bend as V
-import ../../runtime/src/schema-load.bend as L
+import ../../runtime/src/schema.bend as L
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/schema.bend as T
 
@@ -22,7 +22,7 @@ def pending(result: Validation.Coercion()) -> IO(Unit):
 
 def unsupported(result: Validation.Coercion()) -> IO(Unit):
   match result:
-    case Fail{Validation.UnionSchemaFailure{L.Error{_, L.UnsupportedKeyword{keyword}}}}: T.assertion(String.eq(keyword, "pattern"), "unsupported union constraint")
+    case Fail{Validation.UnionSchemaFailure{L.LoadError{_, L.UnsupportedKeyword{keyword}}}}: T.assertion(String.eq(keyword, "pattern"), "unsupported union constraint")
     case _: T.assertion(False{}, "unsupported union checks must remain explicit")
 
 def main() -> IO(Unit):

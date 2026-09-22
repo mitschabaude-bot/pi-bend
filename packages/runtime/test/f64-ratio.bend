@@ -1,5 +1,5 @@
 import Base
-import ../src/f64-ratio.bend as Ratio
+import ../src/f64.bend as Ratio
 import ../src/f64.bend as F
 import ../src/u64.bend as W
 import ../src/big-nat.bend as B

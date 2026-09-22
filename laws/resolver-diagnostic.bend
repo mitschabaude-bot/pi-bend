@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/json-string.bend as Quote
+import ../packages/runtime/src/json.bend as Quote
 import ../packages/runtime/src/file-fold.bend as Fold
 import ../packages/runtime/src/dns-resolver.bend as D
 import ../packages/runtime/src/resolver-config.bend as Options
@@ -7,7 +7,7 @@ import ../packages/runtime/src/dns-resolver.bend as System
 import ../packages/runtime/src/dns-resolver.bend as Servers
 import ../packages/runtime/src/resolver-config.bend as Load
 import ../packages/runtime/src/resolver-config.bend as Plan
-import ../packages/runtime/src/utf8-strict.bend as UTF8
+import ../packages/runtime/src/utf8.bend as UTF8
 
 law every_invalid_option_has_a_diagnostic:
   for errors: List<&2, Options.Diagnostic>

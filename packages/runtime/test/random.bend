@@ -1,6 +1,6 @@
 import Base
 import ../src/random.bend as R
-import ../src/random-seed.bend as Seed
+import ../src/random.bend as Seed
 import ../src/u64.bend as W
 import ../src/f64.bend as F
 import ../src/callback.bend as C
@@ -54,7 +54,7 @@ def concurrent(high: U32, low: U32, count: Nat) -> IO(Unit):
 def showSeed(result: Result<&2, &2, Seed.SeedError, W.U64>) -> IO(Unit):
   match result:
     case Done{value}: IO.print("seed " ++ bits(value))
-    case Fail{Seed.SourceFailure{code, _}}: IO.print("error " ++ U32.show(code))
+    case Fail{Seed.SeedSourceFailure{code, _}}: IO.print("error " ++ U32.show(code))
     case Fail{Seed.ShortSeed{length}}: IO.print("short " ++ Nat.show(length))
 
 def callbackCheck(result: Result<&2, &2, Seed.SeedError, R.Generator>) -> IO(Unit):

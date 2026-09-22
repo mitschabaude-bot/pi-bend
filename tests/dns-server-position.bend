@@ -3,7 +3,7 @@ import ../packages/runtime/src/dns-transport.bend as Rotation
 import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-server-rotation.bend as Test
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 
 def selected(pair: Source.Owner<U32> & Source.ServerSourceSource<U32>) -> IO(Source.Owner<U32>):
   match pair:

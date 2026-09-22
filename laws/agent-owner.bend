@@ -1,6 +1,6 @@
 import Base
 import ../packages/agent/src/agent.bend as State
-import ../packages/runtime/src/string-set.bend as Set
+import ../packages/runtime/src/string.bend as Set
 import ../packages/agent/src/agent.bend as Runtime
 import ../packages/agent/src/agent.bend as Q
 import ../packages/agent/src/types.bend as T
@@ -54,7 +54,7 @@ law drain_preserves_state:
   {resultingState(P, A, G, D, C, V, S, E, J, List<&2, T.AgentMessage<P, A, G, D, C>>, Runtime.drainState(P, A, G, D, C, V, S, E, J, owned, kind)) == Runtime.stateValue(P, A, G, D, C, V, S, E, J, owned) : T.AgentState<P, A, G, D, C, V, S, E, J>}
 
 type RunState<-P: Data, -A: Data, -G: Data, -D: Data, -C: Data> is Data:
-  RunState{streaming: Bool, current: Maybe<&2, T.AgentMessage<P, A, G, D, C>>, pending: Set.Set, error: Maybe<&2, String>}
+  RunState{streaming: Bool, current: Maybe<&2, T.AgentMessage<P, A, G, D, C>>, pending: Set.StringSet, error: Maybe<&2, String>}
 
 def runState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> RunState<P, A, G, D, C>:
   match state:

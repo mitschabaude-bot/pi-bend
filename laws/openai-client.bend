@@ -20,7 +20,7 @@ import ../packages/runtime/src/http-message.bend as Status
 import ../packages/runtime/src/http-message.bend as Header
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/record.bend as Record
-import ../packages/runtime/src/timer-milliseconds.bend as Duration
+import ../packages/runtime/src/timer.bend as Duration
 
 # Request headers: the SDK's timeout validation and authentication policy.
 
@@ -155,7 +155,7 @@ law cancellation_overrides_the_transport_category:
 
 law invalid_timeouts_are_never_retried:
   for -Reason: Data
-  for cause: Duration.Error
+  for cause: Duration.MillisecondsError
   {Client.fetchFailure(Reason, Client.InvalidTimeout{cause}) == Retry.Other{Client.TransportFailure{Client.InvalidTimeout{cause}}} : Retry.RequestFailure<Client.AttemptError<Reason>>}
 
 # Header layers: layered configuration composes, removal stays explicit until

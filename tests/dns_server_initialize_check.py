@@ -79,6 +79,6 @@ for backend in ['native 1','native 4','Bun']:
         assert actual in [orders([0,1,2],offset)+['draws:0'] for offset in range(3)],(backend,actual)
     checks.append(dict(backend=backend,index_cases=len(cases),decode_cases=len(decode)+1,scripted_initializations=len(scripted),direct_sampler_checks=5,os_initializations=20,native_live_channels=0 if backend!='Bun' else None))
     print(backend+': random index and selector initialization PASS',flush=True)
-paths=['packages/runtime/src/random-index.bend','packages/runtime/src/dns-transport.bend', 'packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns_server_initialize_check.py']+[f'tests/{f}.bend' for f in fixtures]
+paths=['packages/runtime/src/random.bend','packages/runtime/src/dns-transport.bend', 'packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns_server_initialize_check.py']+[f'tests/{f}.bend' for f in fixtures]
 r=dict(scope=__doc__,checks=checks,scripted=scripted[:-1],long_rejection_case=dict(rejections=10002,accepted_word=1,draws=10003),sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},case_sha256=hashlib.sha256(json.dumps(cases).encode()).hexdigest(),builds={f'{f}-{s}':json.loads((ROOT/f'build/{f}-{s}-build.json').read_text()) for f in fixtures for s in ['c','js']},compiler_sha256={p:hashlib.sha256((CANDIDATE/p).read_bytes()).hexdigest() for p in ['main.ts','comp.ts','bend.ts','base.bend']})
 (ROOT/'build/dns-server-initialize-result.json').write_text(json.dumps(r,indent=2)+'\n')

@@ -5,7 +5,7 @@ import ../src/api/constrained-sampling.bend as Sampling
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F
-import ../../runtime/src/json-parse.bend as Parse
+import ../../runtime/src/json.bend as Parse
 import ../../runtime/test/utf8-runner.bend as H
 import ./openai-responses-request.bend as Fixture
 import ./openai-responses-policy-runner.bend as P

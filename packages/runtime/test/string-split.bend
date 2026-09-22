@@ -1,5 +1,5 @@
 import Base
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def grow(count: Nat, text: String) -> String:

@@ -3,7 +3,7 @@ import ../packages/runtime/src/dns-message.bend as Run
 import ../packages/runtime/src/dns-message.bend as Search
 import ../packages/runtime/src/dns-message.bend as Presentation
 import ../packages/runtime/src/ref.bend as Ref
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-search.bend as SearchTest
 import ./dns-search-response.bend as ResponseTest

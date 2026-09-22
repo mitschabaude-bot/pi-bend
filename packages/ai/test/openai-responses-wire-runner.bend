@@ -2,8 +2,8 @@ import Base
 import ../src/api/openai-responses-stream.bend as Stream
 import ../src/api/openai-sse.bend as Sse
 import ../src/types.bend as Ai
-import ../../runtime/src/json-decode.bend as D
-import ../../runtime/src/json-parse.bend as Parse
+import ../../runtime/src/json.bend as D
+import ../../runtime/src/json.bend as Parse
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/f64.bend as F
 import ../../runtime/test/utf8-runner.bend as H
@@ -105,7 +105,7 @@ def error(value: D.Error) -> String:
     case D.WrongType{segments, expected}: "type:" ++ path(segments) ++ ":" ++ expected
     case D.InvalidValue{segments, expected}: "value:" ++ path(segments) ++ ":" ++ expected
 
-def equal(value: V.Value, expected: Result<&2, &2, Parse.Error, V.Value>) -> Bool:
+def equal(value: V.Value, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> Bool:
   match expected:
     case Fail{_}: False{}
     case Done{expected}: V.equal(value, expected)
@@ -115,7 +115,7 @@ def check(result: Result<&2, &2, D.Error, V.Value>, expected: String) -> String:
     case Done{value}: Bool.pick(String, equal(value, Parse.parse(expected)), "pass", "FAIL value")
     case Fail{+cause}: Bool.pick(String, String.eq(error(cause), expected), "pass", "FAIL " ++ error(cause))
 
-def parsed(mode: String, result: Result<&2, &2, Parse.Error, V.Value>, expected: String) -> String:
+def parsed(mode: String, result: Result<&2, &2, Parse.ParseError, V.Value>, expected: String) -> String:
   match result:
     case Fail{_}: "FAIL input JSON"
     case Done{value}: check(decode(mode, value), expected)

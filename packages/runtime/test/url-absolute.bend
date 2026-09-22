@@ -8,7 +8,7 @@ import ../src/idna.bend as Mapping
 import ../src/unicode-17-idna-mapping.bend as MappingData
 import ../src/unicode-17-normalization.bend as NormalizationData
 import ../src/unicode-17-idna-properties.bend as PropertiesData
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def text(parts: List<&2, String>, reversed: String) -> String:

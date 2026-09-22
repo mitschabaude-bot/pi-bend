@@ -1,6 +1,6 @@
 import Base
 import ../src/f64.bend as F
-import ../src/f64-natural.bend as D
+import ../src/f64.bend as D
 import ./utf8-runner.bend as H
 import ../src/u64.bend as W
 

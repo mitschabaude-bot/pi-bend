@@ -1,12 +1,12 @@
 import Base
 import ../src/schema.bend as S
-import ../src/schema-errors.bend as E
+import ../src/schema.bend as E
 import ../src/schema-value.bend as V
 import ../src/record.bend as R
 import ../src/f64.bend as F
 import ../src/big-nat.bend as B
 import ./schema.bend as T
-import ../src/schema-load.bend as Loader
+import ../src/schema.bend as Loader
 import ./schema-load.bend as L
 
 def empty(issues: List<&2, E.Issue>) -> Bool:

@@ -2,7 +2,7 @@ import Base
 import ./list-reverse.bend as Reverse
 import ./list-interleave.bend as NatProof
 import ../laws/bounded-bytes.bend as Laws
-import ../packages/runtime/src/bounded-bytes.bend as Bytes
+import ../packages/runtime/src/bounded.bend as Bytes
 
 def Laws.overflow_sticky(input, retained):
   match input:

@@ -1,6 +1,6 @@
 import Base
 import ./agent-owner.bend as Owner
-import ../packages/runtime/src/string-set.bend as Set
+import ../packages/runtime/src/string.bend as Set
 import ../packages/agent/src/agent.bend as State
 import ../packages/agent/src/types.bend as T
 import ../packages/ai/src/types.bend as Ai
@@ -114,7 +114,7 @@ law agent_end:
   for reported: List<&2, T.AgentMessage<P, A, G, D, C>>
   {messages(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.AgentEnd{reported})) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}
 
-def pending(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Set.Set:
+def pending(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Set.StringSet:
   match state:
     case T.AgentState{_, _, _, _, _, _, tools, _}: tools
 

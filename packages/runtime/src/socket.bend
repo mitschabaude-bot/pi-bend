@@ -4,7 +4,7 @@ import ./deferred.bend as D
 import ./url.bend as IPv4
 import ./url.bend as IPv6
 import ./serial-resource.bend as Resource
-import ./abort-outcome.bend as Outcome
+import ./abort.bend as Outcome
 import ./ref.bend as R
 
 type Side is Data:

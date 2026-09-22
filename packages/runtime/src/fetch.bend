@@ -31,8 +31,8 @@ import ./dns-resolver.bend as Diagnostic
 import ./hosts.bend as HostsFile
 import ./hosts.bend as Hosts
 import ./hosts.bend as File
-import ./utf8-strict.bend as UTF8
-import ./random-index.bend as Index
+import ./utf8.bend as UTF8
+import ./random.bend as Index
 
 # Native replacement for the host platform's `fetch`: a cleartext HTTP/1.1
 # request over the pure DNS resolver and socket exchange. A request acquires
@@ -94,7 +94,7 @@ def create(+files: Files, options: HTTP.Options) -> IO(Result<&2, &1, InitError,
   match files:
     case Files{path, _, chunkSize, byteLimit, milliseconds, maximum}:
       do IO<Result<&2, &1, InitError, Runtime>>:
-        settings : Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared> <- System.loadWith(~UTF8.Error, ~UTF8.decode, path, chunkSize, byteLimit, milliseconds, maximum)
+        settings : Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared> <- System.loadWith(~UTF8.Error, ~UTF8.decodeStrict, path, chunkSize, byteLimit, milliseconds, maximum)
         configured(files, options, settings)
 
 def dispose(runtime: Runtime) -> IO(Unit):

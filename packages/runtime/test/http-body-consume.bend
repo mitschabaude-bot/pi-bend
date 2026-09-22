@@ -3,7 +3,7 @@ import ../src/http-response.bend as Consume
 import ../src/http-response.bend as Buffer
 import ../src/http-response.bend as Response
 import ../src/http-response.bend as Progress
-import ../src/utf8-strict.bend as UTF8
+import ../src/utf8.bend as UTF8
 import ../src/schema-value.bend as V
 import ../src/record.bend as R
 import ../src/f64.bend as F

@@ -3,9 +3,9 @@ import ../types.bend as T
 import ./json.bend as Json
 import ../../../runtime/src/record.bend as Record
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/f64-decimal.bend as Decimal
-import ../../../runtime/src/text-space.bend as Space
-import ../../../runtime/src/text-unit-budget.bend as Budget
+import ../../../runtime/src/f64.bend as Decimal
+import ../../../runtime/src/text.bend as Space
+import ../../../runtime/src/text.bend as Budget
 
 # Provider adapters supply bodies in their documented preference order.
 # Unread streams and transport-private objects are never diagnostic data.

@@ -2,7 +2,7 @@ import Base
 import ../src/idna.bend as Policy
 import ../src/idna.bend as Label
 import ../src/idna.bend as Bidi
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def bit(value: Bool) -> String:

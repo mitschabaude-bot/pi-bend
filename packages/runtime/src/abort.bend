@@ -1,6 +1,7 @@
 import Base
 import ./deferred.bend as D
 
+
 # Cancellation is a one-shot effect. Its reason is an immutable value.
 type AbortReason<-Reason: Data> is Data:
   Supplied{value: Reason}
@@ -60,3 +61,17 @@ def observe(-Reason: Data, value: AbortSignal<Reason>) -> IO(D.Observation<Abort
 def dispose(-Reason: Data, controller: AbortController<Reason>) -> IO(Unit):
   match controller:
     case AbortController{AbortSignal{settlement}}: D.dispose(AbortReason<Reason>, settlement)
+
+
+# Pure arbitration at the final observation boundary. Cancellation without a
+# retained abort is distinct from a successful operation with an empty value.
+type Outcome<-Reason: Data, -Failure: Data, -Value: Data> is Data:
+  Aborted{reason: AbortReason<Reason>}
+  Completed{result: Result<&2, &2, Failure, Value>}
+  Cancelled{}
+
+def choose(-Reason: Data, -Failure: Data, -Value: Data, observed: Maybe<&2, AbortReason<Reason>>, operation: Maybe<&2, Result<&2, &2, Failure, Value>>) -> Outcome<Reason, Failure, Value>:
+  match observed operation:
+    case Some{why} _: Aborted{why}
+    case None{} Some{result}: Completed{result}
+    case None{} None{}: Cancelled{}

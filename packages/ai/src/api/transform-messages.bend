@@ -1,7 +1,7 @@
 import Base
 import ../types.bend as Ai
 import ../utils/model-api.bend as Api
-import ../../../runtime/src/text-space.bend as Space
+import ../../../runtime/src/text.bend as Space
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/f64.bend as F

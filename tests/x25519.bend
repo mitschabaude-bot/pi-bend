@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/x25519.bend as X
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ./aes128-gcm.bend as Bytes
 
 def show(result: Result<&2, &2, X.Error, List<&2, U32>>) -> String:

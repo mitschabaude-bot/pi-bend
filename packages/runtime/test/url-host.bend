@@ -1,6 +1,6 @@
 import Base
 import ../src/url.bend as Host
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def text(parts: List<&2, String>, reversed: String) -> String:

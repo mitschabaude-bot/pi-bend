@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/text-unit-budget.bend as Budget
+import ../packages/runtime/src/text.bend as Budget
 
 law chunk_composition:
   for first: String
@@ -11,7 +11,7 @@ law stopped_prefix_is_stable:
   for chars: String
   for prefix: String
   for omitted: Nat
-  {Budget.prefix(Budget.collect(chars, Budget.Stopped{prefix, omitted})) == prefix : String}
+  {Budget.prefixUnitBudget(Budget.collect(chars, Budget.Stopped{prefix, omitted})) == prefix : String}
 
 law fitting_character_is_preserved:
   for remaining: Nat

@@ -1,6 +1,6 @@
 import Base
 import ../src/stable-sort.bend as Sort
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 type Item is Data:

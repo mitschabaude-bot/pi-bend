@@ -3,7 +3,7 @@ import ../src/utils/provider-retry.bend as Runtime
 import ../src/utils/provider-retry.bend as Retry
 import ./provider-retry.bend as T
 import ../../runtime/src/random.bend as Random
-import ../../runtime/src/random-seed.bend as Seed
+import ../../runtime/src/random.bend as Seed
 import ../../runtime/src/u64.bend as W
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/callback.bend as C

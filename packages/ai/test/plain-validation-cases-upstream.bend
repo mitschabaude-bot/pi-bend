@@ -5,7 +5,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/schema.bend as Schema
-import ../../runtime/src/schema-load.bend as Loader
+import ../../runtime/src/schema.bend as Loader
 import ../../runtime/test/schema-load.bend as L
 import ../../runtime/test/schema.bend as Assert
 

@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/dns-transport.bend as Rotation
 import ../packages/runtime/test/utf8-runner.bend as Scalar
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 
 def csv(values: List<&2, U32>, reversed: String) -> String:
   match values:

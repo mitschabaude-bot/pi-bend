@@ -1,7 +1,7 @@
 import Base
 import ../src/idna.bend as ACE
 import ../src/punycode.bend as Core
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def text(parts: List<&2, String>, reversed: String) -> String:

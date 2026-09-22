@@ -1,5 +1,5 @@
 import Base
-import ../../runtime/src/string-set.bend as Set
+import ../../runtime/src/string.bend as Set
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/f64.bend as Number
@@ -162,4 +162,4 @@ def StreamFn(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Too
 # systemPrompt is derived from messages by agent-state.systemPrompt.
 # Runtime ownership and borrowed callbacks remain outside this value snapshot.
 type AgentState<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data> is Data:
-  AgentState{model: Ai.Model<Value>, thinkingLevel: ThinkingLevel(), tools: List<&2, AgentTool<Parameters, Validated, Details, Arguments, Signal, Error>>, messages: List<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, isStreaming: Bool, streamingMessage: Maybe<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, pendingToolCalls: Set.Set, errorMessage: Maybe<&2, String>}
+  AgentState{model: Ai.Model<Value>, thinkingLevel: ThinkingLevel(), tools: List<&2, AgentTool<Parameters, Validated, Details, Arguments, Signal, Error>>, messages: List<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, isStreaming: Bool, streamingMessage: Maybe<&2, AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, pendingToolCalls: Set.StringSet, errorMessage: Maybe<&2, String>}

@@ -10,8 +10,8 @@ import ../../runtime/src/http-message.bend as Headers
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F
-import ../../runtime/src/json-parse.bend as Parse
-import ../../runtime/src/string-split.bend as Split
+import ../../runtime/src/json.bend as Parse
+import ../../runtime/src/string.bend as Split
 import ../../runtime/test/utf8-runner.bend as Text
 import ../../runtime/src/idna.bend as Domain
 import ../../runtime/src/idna.bend as Label
@@ -52,7 +52,7 @@ def shown(result: Result<&2, &2, Client.RequestError, Client.Request>) -> V.Valu
     case Done{Client.Request{url, method, headers, body, timeout}}:
       V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serializeSerialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
 
-def checked(context: Absolute.Context, input: Result<&2, &2, Parse.Error, V.Value>, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
+def checked(context: Absolute.Context, input: Result<&2, &2, Parse.ParseError, V.Value>, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> IO(Unit):
   match input expected:
     case Done{+value} Done{reference}:
       actual = shown(Client.prepareRequest(context, H.requestDefaults(value), H.textOrEmpty(H.optionField(value, "apiKey")), client(H.headerLayer(H.optionField(value, "client"))), H.textOrEmpty(H.optionField(value, "baseUrl")), H.milliseconds(H.optionField(value, "timeout")), payload(H.textOrEmpty(H.optionField(value, "payloadMode")), H.optionField(value, "payload"))))

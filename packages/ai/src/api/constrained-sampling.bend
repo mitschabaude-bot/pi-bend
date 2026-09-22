@@ -2,9 +2,9 @@ import Base
 import ../types.bend as T
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
-import ../../../runtime/src/json-string.bend as JsonString
+import ../../../runtime/src/json.bend as JsonString
 import ../../../runtime/src/utf16.bend as Utf16
-import ../../../runtime/src/text-space.bend as Space
+import ../../../runtime/src/text.bend as Space
 
 # Strict JSON schemas
 # -------------------

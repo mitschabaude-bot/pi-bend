@@ -67,7 +67,7 @@ assert unsafe_declarations == {
     ('packages/runtime/src/dns-transport.bend', 'driveTcpConnection'),
     ('packages/runtime/src/dns-transport.bend', 'read'),
     ('packages/runtime/src/dns-transport.bend', 'readUdpQuery'),
-    ('packages/runtime/src/random-index.bend', 'retry'),
+    ('packages/runtime/src/random.bend', 'retry'),
     ('packages/ai/src/utils/event-stream.bend', 'drive'),
     ('packages/runtime/src/schema-value.bend', 'compare'),
     ('packages/ai/src/utils/json.bend', 'encode'),
@@ -84,11 +84,12 @@ assert unsafe_declarations == {
     ('packages/agent/src/agent.bend', 'dispatch'),
     ('packages/ai/src/utils/validation-normalize.bend', 'run'),
     ('packages/ai/src/utils/validation.bend', 'coerceTasks'),
-    ('packages/runtime/src/schema-errors.bend', 'collect'),
-    ('packages/runtime/src/schema-load.bend', 'run'),
-    ('packages/runtime/src/schema-string.bend', 'countFrom'),
-    ('packages/runtime/src/schema-string.bend', 'joined'),
+    ('packages/runtime/src/schema.bend', 'collect'),
+    ('packages/runtime/src/schema.bend', 'runLoad'),
+    ('packages/runtime/src/schema.bend', 'countFrom'),
+    ('packages/runtime/src/schema.bend', 'joined'),
     ('packages/runtime/src/schema.bend', 'evaluate'),
+    ('packages/runtime/src/schema.bend', 'run'),
 }, unsafe_declarations
 
 source_hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in FILES + ['scripts/check-proofs.py']}

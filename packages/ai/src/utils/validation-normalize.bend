@@ -2,12 +2,12 @@ import Base
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema.bend as S
-import ../../../runtime/src/schema-load.bend as L
+import ../../../runtime/src/schema.bend as L
 
 # Normalization is a persistent transformation. An unsupported schema needed
 # for a nullability decision is an explicit error, not guessed acceptance.
 type Error is Data:
-  Error{instancePath: List<&2, String>, schemaError: L.Error}
+  Error{instancePath: List<&2, String>, schemaError: L.LoadError}
   PendingBooleanNull{instancePath: List<&2, String>}
 
 def Outcome() -> Data: Result<&2, &2, Error, V.Value>
@@ -94,14 +94,14 @@ def scheduleField(action: Result<&2, &2, Error, FieldAction>, +key: String, valu
     case Fail{error}: Fail{error}
     case Done{Preserve{}}: Done{Fields{tail, schemas, required, path, R.Property{key, value} <> built} <> rest}
     case Done{Omit{}}: Done{Fields{tail, schemas, required, path, built} <> rest}
-    case Done{Descend{schema}}: Done{Visit{value, schema, L.child(path, key)} <> FieldResult{key, tail, schemas, required, path, built} <> rest}
+    case Done{Descend{schema}}: Done{Visit{value, schema, L.childLoad(path, key)} <> FieldResult{key, tail, schemas, required, path, built} <> rest}
 
 def scheduleElement(value: V.Value, tail: List<&2, V.Value>, schemas: Items, +path: List<&2, String>, +index: Nat, built: List<&2, V.Value>, rest: List<&2, Task>) -> List<&2, Task>:
   match schemas:
     case NoItems{}: Elements{tail, NoItems{}, path, index + 1n, value <> built} <> rest
-    case EachItem{+schema}: Visit{value, schema, L.child(path, Nat.show(index))} <> ElementResult{tail, EachItem{schema}, path, index + 1n, built} <> rest
+    case EachItem{+schema}: Visit{value, schema, L.childLoad(path, Nat.show(index))} <> ElementResult{tail, EachItem{schema}, path, index + 1n, built} <> rest
     case TupleItems{Nil{}}: Elements{tail, NoItems{}, path, index + 1n, value <> built} <> rest
-    case TupleItems{schema <> schemas}: Visit{value, schema, L.child(path, Nat.show(index))} <> ElementResult{tail, TupleItems{schemas}, path, index + 1n, built} <> rest
+    case TupleItems{schema <> schemas}: Visit{value, schema, L.childLoad(path, Nat.show(index))} <> ElementResult{tail, TupleItems{schemas}, path, index + 1n, built} <> rest
 
 # Every continuation consumes an instance field/item or descends into a finite
 # instance subtree. Old values remain valid and no caller-owned state changes.
@@ -114,7 +114,7 @@ def run(scheduled: Scheduled(), completed: V.Value) -> Outcome():
     case Done{Visit{value, schema, path} <> rest}: run(Done{schedule(value, schema, path, rest)}, completed)
     case Done{Fields{Nil{}, _, _, _, built} <> rest}: run(Done{rest}, V.ObjectValue{R.Record{List.reverse(&2, R.Property<V.Value>, built)}})
     case Done{Fields{R.Property{+key, +value} <> tail, +schemas, +required, +path, built} <> rest}:
-      run(scheduleField(fieldAction(value, R.get(V.Value, schemas, key), requiredKey(key, required), L.child(path, key)), key, value, tail, schemas, required, path, built, rest), completed)
+      run(scheduleField(fieldAction(value, R.get(V.Value, schemas, key), requiredKey(key, required), L.childLoad(path, key)), key, value, tail, schemas, required, path, built, rest), completed)
     case Done{FieldResult{key, tail, schemas, required, path, built} <> rest}: run(Done{Fields{tail, schemas, required, path, R.Property{key, completed} <> built} <> rest}, V.Null{})
     case Done{Elements{Nil{}, _, _, _, built} <> rest}: run(Done{rest}, V.ArrayValue{List.reverse(&2, V.Value, built)})
     case Done{Elements{value <> tail, schemas, path, index, built} <> rest}: run(Done{scheduleElement(value, tail, schemas, path, index, built, rest)}, completed)

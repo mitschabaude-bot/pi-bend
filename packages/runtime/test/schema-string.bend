@@ -1,7 +1,7 @@
 import Base
-import ../src/schema-string.bend as Text
+import ../src/schema.bend as Text
 import ../src/big-nat.bend as B
-import ../src/schema-load.bend as L
+import ../src/schema.bend as L
 import ../src/schema-value.bend as V
 import ../src/record.bend as R
 import ../src/f64.bend as F
@@ -12,7 +12,7 @@ def check(text: String, expected: U32, label: String) -> IO(Unit):
 
 def malformed(result: L.Loaded(), expected: String) -> Bool:
   match result:
-    case Fail{L.Error{key <> Nil{}, L.InvalidSchema{_}}}: String.eq(key, expected)
+    case Fail{L.LoadError{key <> Nil{}, L.InvalidSchema{_}}}: String.eq(key, expected)
     case _: False{}
 
 def main() -> IO(Unit):

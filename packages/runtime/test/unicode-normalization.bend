@@ -2,7 +2,7 @@ import Base
 import ../src/unicode.bend as Normalization
 import ../src/unicode-17-normalization.bend as Unicode
 import ../src/unicode.bend as Data
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def numbers(parts: List<&2, String>, reversed: String) -> String:

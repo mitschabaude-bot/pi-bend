@@ -3,7 +3,7 @@ import ../src/dns-transport.bend as Pending
 import ../src/dns-message.bend as Response
 import ../src/dns-message.bend as Message
 import ../src/dns-message.bend as Name
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ../src/url.bend as IPv4
 import ./utf8-runner.bend as Scalar
 

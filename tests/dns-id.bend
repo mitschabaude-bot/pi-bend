@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/dns-message.bend as Id
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def bytes(parts: List<&2, String>, reversed: List<&2, U32>) -> List<&2, U32>:

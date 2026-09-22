@@ -2,7 +2,7 @@ import Base
 import ../src/utils/validation.bend as Validation
 import ../src/utils/validation-normalize.bend as N
 import ../../runtime/src/schema-value.bend as V
-import ../../runtime/src/schema-load.bend as L
+import ../../runtime/src/schema.bend as L
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/schema.bend as T
 
@@ -18,7 +18,7 @@ def check(+input: V.Value, schema: V.Value, expected: V.Value, original: V.Value
 
 def unsupported(result: N.Outcome()) -> IO(Unit):
   match result:
-    case Fail{N.Error{path, L.Error{schemaPath, L.UnsupportedKeyword{keyword}}}}:
+    case Fail{N.Error{path, L.LoadError{schemaPath, L.UnsupportedKeyword{keyword}}}}:
       T.assertion(String.eq(String.join(path, "/"), "x") && String.eq(String.join(schemaPath, "/"), "pattern") && String.eq(keyword, "pattern"), "normalization must expose unsupported nullability decision")
     case _: T.assertion(False{}, "unsupported nullability cannot silently pass")
 

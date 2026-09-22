@@ -1,6 +1,7 @@
 import Base
 import ./utf16.bend as Utf16
 
+
 # Byte lists use Base's File.read_bytes convention: each U32 is in 0..255.
 # Decoding follows replacement-mode UTF-8, including restricted first trailing
 # bytes, reprocessing invalid continuations and stripping one leading BOM.
@@ -122,3 +123,61 @@ def encodeLoop(text: String, reversed: List<&2, U32>) -> List<&2, U32>:
 # unmatched surrogates are replaced rather than placed on the wire.
 def encode(text: String) -> List<&2, U32>:
   encodeLoop(Utf16.normalize(text), Nil{})
+
+
+# Offsets count source bytes from zero; EOF errors point one past the input.
+type Error is Data:
+  InvalidByte{offset: Nat, value: U32}
+  InvalidSequence{offset: Nat, value: U32}
+  IncompleteSequence{offset: Nat}
+
+type BOM is Data:
+  Preserve{}
+  StripLeading{}
+
+type State is Data:
+  State{offset: Nat, accumulator: Accumulator}
+
+def initial(mode: BOM) -> State:
+  match mode:
+    case Preserve{}: State{0n, Accumulator{Decoder{Ready{}, True{}}, ""}}
+    case StripLeading{}: State{0n, Accumulator{create(), ""}}
+
+# The shared decoder supplies restricted continuation ranges, preventing
+# overlong encodings, surrogate scalars and values beyond U+10FFFF.
+def valid(pending: Pending, +byte: U32) -> Bool:
+  match pending:
+    case Ready{}: U32.is_le(byte, 127) || (U32.is_ge(byte, 194) && U32.is_le(byte, 244))
+    case Continuation{_, _, lower, upper}: U32.is_ge(byte, lower) && U32.is_le(byte, upper)
+
+def checked(inRange: Bool, allowed: Bool, state: State, byte: U32) -> Result<&2, &2, Error, State>:
+  match inRange allowed state:
+    case False{} _ State{offset, _}: Fail{InvalidByte{offset, byte}}
+    case True{} False{} State{offset, _}: Fail{InvalidSequence{offset, byte}}
+    case True{} True{} State{offset, Accumulator{Decoder{pending, seen}, reversed}}: Done{State{Succ{offset}, advance(consume(pending, byte), seen, reversed)}}
+
+def step(state: State, +byte: U32) -> Result<&2, &2, Error, State>:
+  match state:
+    case State{offset, Accumulator{Decoder{+pending, seen}, reversed}}: checked(U32.is_le(byte, 255), valid(pending, byte), State{offset, Accumulator{Decoder{pending, seen}, reversed}}, byte)
+
+# State retains output internally across chunks. Only finish exposes text;
+# failure drops the accumulator and preserves the first error thereafter.
+def feed(bytes: List<&2, U32>, state: Result<&2, &2, Error, State>) -> Result<&2, &2, Error, State>:
+  match bytes state:
+    case _ Fail{error}: Fail{error}
+    case Nil{} result: result
+    case byte <> rest Done{value}: feed(rest, step(value, byte))
+
+def finishStrict(state: Result<&2, &2, Error, State>) -> Result<&2, &2, Error, String>:
+  match state:
+    case Fail{error}: Fail{error}
+    case Done{State{_, Accumulator{Decoder{Ready{}, _}, reversed}}}: Done{String.reverse(reversed)}
+    case Done{State{offset, Accumulator{Decoder{Continuation{_, _, _, _}, _}, _}}}: Fail{IncompleteSequence{offset}}
+
+def decodeWith(mode: BOM, bytes: List<&2, U32>) -> Result<&2, &2, Error, String>:
+  finishStrict(feed(bytes, Done{initial(mode)}))
+
+# Match the existing text decoder's single leading-BOM treatment, while
+# rejecting malformed encoding. Preserve is explicitly available via decodeWith.
+def decodeStrict(bytes: List<&2, U32>) -> Result<&2, &2, Error, String>:
+  decodeWith(StripLeading{}, bytes)

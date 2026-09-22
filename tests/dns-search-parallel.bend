@@ -5,7 +5,7 @@ import ../packages/runtime/src/dns-message.bend as Search
 import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/dns-message.bend as Response
 import ../packages/runtime/src/ref.bend as Ref
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ./io-pair.bend as Gate
 import ./dns-search-run.bend as Prior
 import ./dns-search.bend as Show

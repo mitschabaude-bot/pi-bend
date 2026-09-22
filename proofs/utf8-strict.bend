@@ -1,6 +1,6 @@
 import Base
 import ../laws/utf8-strict.bend as Laws
-import ../packages/runtime/src/utf8-strict.bend as UTF8
+import ../packages/runtime/src/utf8.bend as UTF8
 
 def Laws.failure_retained(bytes, error):
   match bytes:

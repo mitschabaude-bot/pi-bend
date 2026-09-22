@@ -1,5 +1,5 @@
 import Base
-import ../src/schema-load.bend as L
+import ../src/schema.bend as L
 import ../src/schema.bend as S
 import ../src/schema-value.bend as V
 import ../src/record.bend as R
@@ -10,16 +10,16 @@ import ./schema.bend as T
 def loaded(result: L.Loaded()) -> IO(S.Schema):
   match result:
     case Done{schema}: IO.pure(S.Schema, schema)
-    case Fail{L.Error{path, _}}: IO.die(S.Schema, 1, "unexpected schema load error: " ++ String.join(path, "/"))
+    case Fail{L.LoadError{path, _}}: IO.die(S.Schema, 1, "unexpected schema load error: " ++ String.join(path, "/"))
 
 def unsupported(result: L.Loaded(), expectedPath: String, expectedKey: String) -> IO(Unit):
   match result:
-    case Fail{L.Error{path, L.UnsupportedKeyword{key}}}: T.assertion(String.eq(String.join(path, "/"), expectedPath) && String.eq(key, expectedKey), "unsupported schema path/keyword")
+    case Fail{L.LoadError{path, L.UnsupportedKeyword{key}}}: T.assertion(String.eq(String.join(path, "/"), expectedPath) && String.eq(key, expectedKey), "unsupported schema path/keyword")
     case _: T.assertion(False{}, "unsupported schema must fail explicitly")
 
 def invalid(result: L.Loaded(), expectedPath: String) -> IO(Unit):
   match result:
-    case Fail{L.Error{path, L.InvalidSchema{_}}}: T.assertion(String.eq(String.join(path, "/"), expectedPath), "invalid schema path")
+    case Fail{L.LoadError{path, L.InvalidSchema{_}}}: T.assertion(String.eq(String.join(path, "/"), expectedPath), "invalid schema path")
     case _: T.assertion(False{}, "malformed schema must not become accepting")
 
 def object(key: String, value: V.Value) -> V.Value:
@@ -35,19 +35,19 @@ def ordinaryKey(+key: String) -> IO(Unit):
     T.assertion(Bool.not(S.check(schema, object("extra", V.Number{F.fromU32(1)}))), "additionalProperties applies independently of keyword order")
     T.assertion(V.equal(declaration, V.ObjectValue{R.Record{R.Property{"additionalProperties", V.Boolean{False{}}} <> R.Property{"required", V.ArrayValue{V.Text{key} <> Nil{}}} <> R.Property{"properties", object(key, object("type", V.Text{"integer"}))} <> Nil{}}}), "schema loading preserves input")
 
-def exactCount(result: Result<&2, &2, L.Error, B.BigNat>, expected: String) -> IO(Unit):
+def exactCount(result: Result<&2, &2, L.LoadError, B.BigNat>, expected: String) -> IO(Unit):
   match result:
     case Done{value}: T.assertion(String.eq(B.toDecimal(value), expected), "count conversion must preserve the exact binary64 integer")
     case Fail{_}: T.assertion(False{}, "valid integer count rejected")
 
 def referenceCycle(result: L.Loaded()) -> IO(Unit):
   match result:
-    case Fail{L.Error{_, L.UnsupportedReferenceCycle{_}}}: IO.pure(Unit, Unit{})
+    case Fail{L.LoadError{_, L.UnsupportedReferenceCycle{_}}}: IO.pure(Unit, Unit{})
     case _: T.assertion(False{}, "recursive references must remain explicit unsupported errors")
 
 def externalReference(result: L.Loaded()) -> IO(Unit):
   match result:
-    case Fail{L.Error{_, L.UnsupportedReference{_}}}: IO.pure(Unit, Unit{})
+    case Fail{L.LoadError{_, L.UnsupportedReference{_}}}: IO.pure(Unit, Unit{})
     case _: T.assertion(False{}, "external/anchor references must remain explicit unsupported errors")
 
 def main() -> IO(Unit):
@@ -69,7 +69,7 @@ def main() -> IO(Unit):
     invalid(L.compile(object("maximum", V.Number{F.infinity(False{})})), "maximum")
     unresolved : S.Schema <- loaded(L.compile(object("$ref", V.Text{"#/$defs/x"})))
     T.assertion(Bool.not(S.check(unresolved, V.Null{})), "unresolved local references reject")
-    unsupported(L.compile(object("minLength", V.Number{F.fromU32(1)})), "minLength", "minLength")
+    unsupported(L.compile(object("pattern", V.Text{"x"})), "pattern", "pattern")
     unsupported(L.compile(object("anyOf", V.ArrayValue{V.Boolean{True{}} <> object("pattern", V.Text{"x"}) <> Nil{}})), "anyOf/1/pattern", "pattern")
     unsupported(L.compile(object("properties", object("x", object("format", V.Text{"email"})))), "properties/x/format", "format")
     invalid(L.compile(object("uniqueItems", V.Text{"true"})), "uniqueItems")

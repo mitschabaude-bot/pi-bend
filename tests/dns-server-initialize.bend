@@ -1,9 +1,9 @@
 import Base
 import ../packages/runtime/src/dns-transport.bend as Initialize
 import ../packages/runtime/src/dns-transport.bend as Source
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ../packages/runtime/src/ref.bend as Ref
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-server-rotation.bend as RotationTest
 import ./dns-server-position.bend as PositionTest

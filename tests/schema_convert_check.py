@@ -27,7 +27,7 @@ for exponent in [0,1,1022,1023,1024,1073,1074,1075,2046]:
             cases.append({'kind':2,'value':struct.unpack('>d',bits.to_bytes(8,'big'))[0]})
 expected=json.loads(subprocess.check_output(['node','tests/schema_convert_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
 names=['ToBoolean','ToNumber','ToInteger','ToString','ToNull']
-lines=['import Base','import ../packages/runtime/test/schema-convert.bend as T','import ../packages/runtime/src/schema-convert.bend as C',
+lines=['import Base','import ../packages/runtime/test/schema-convert.bend as T','import ../packages/runtime/src/schema.bend as C',
        'import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(case,result) in enumerate(zip(cases,expected,strict=True)):
     expected_value=('V.Number{F.fromBits('+', '.join(map(str,result['bits']))+')}' if 'bits' in result else value(result['value']))

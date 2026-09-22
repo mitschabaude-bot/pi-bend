@@ -10,11 +10,11 @@ words += [w|1<<63 for w in words]
 cases=[(a,b) for a in words for b in words]
 rng=random.Random(6400854)
 cases += [(rng.getrandbits(64),rng.getrandbits(64)) for _ in range(400)]
-lines=['import Base','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/f64-remainder.bend as Rem','import ../packages/runtime/src/u64.bend as W','import ../packages/runtime/test/schema.bend as T']
+lines=['import Base','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/f64.bend as Rem','import ../packages/runtime/src/u64.bend as W','import ../packages/runtime/test/schema.bend as T']
 for i,(a,b) in enumerate(cases):
     try:expected=math.fmod(number(a),number(b))
     except ValueError:expected=math.nan
-    expression=f'Rem.remainder({literal(a)}, {literal(b)})'
+    expression=f'Rem.remainderRemainder({literal(a)}, {literal(b)})'
     check=f'F.isNaN({expression})' if math.isnan(expected) else f'W.equal(F.toBits({expression}), F.toBits({literal(bits(expected))}))'
     lines += [f'def case{i}() -> IO(Unit):',f'  T.assertion({check}, "remainder {i}")']
 groups=[]

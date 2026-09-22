@@ -1,7 +1,7 @@
 import Base
 import ../src/url.bend as Path
 import ../src/url.bend as Scheme
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def decode(parts: List<&2, String>, reversed: String) -> String:

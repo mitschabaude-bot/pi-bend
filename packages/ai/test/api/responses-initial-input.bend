@@ -6,7 +6,7 @@ import ./responses-stream-contracts.bend as Fixture
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/json-parse.bend as Json
+import ../../../runtime/src/json.bend as Json
 import ../../../runtime/test/schema.bend as Assert
 
 def makeModel() -> T.Model<Unit>:
@@ -61,7 +61,7 @@ def observations(trace: List<&2, V.Value>, state: Observation) -> Observation:
     case Nil{}: state
     case +head <> tail: observations(tail, capture(get(get(Some{head}, "emit"), "type"), get(Some{head}, "emit"), state))
 
-def parsedDelta(value: Result<&2, &2, Json.Error, V.Value>) -> Bool:
+def parsedDelta(value: Result<&2, &2, Json.ParseError, V.Value>) -> Bool:
   match value:
     case Done{arguments}: V.equal(arguments, Fixture.payload("payload", "abc"))
     case Fail{_}: False{}

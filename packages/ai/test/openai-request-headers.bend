@@ -2,7 +2,7 @@ import Base
 import ../src/types.bend as T
 import ../src/api/openai-client.bend as Client
 import ../../runtime/src/schema-value.bend as V
-import ../../runtime/src/json-parse.bend as Parse
+import ../../runtime/src/json.bend as Parse
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/http-message.bend as Headers
 import ../../runtime/src/http-message.bend as H
@@ -76,7 +76,7 @@ def shown(value: Result<&2, &2, Client.HeaderError, Headers.Headers>) -> V.Value
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{errorKind(cause)}} <> Nil{}}}
     case Done{fields}: V.ObjectValue{R.Record{R.Property{"headers", V.ObjectValue{R.Record{wireFields(Headers.entries(fields))}}} <> Nil{}}}
 
-def checked(retries: Nat, input: Result<&2, &2, Parse.Error, V.Value>, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
+def checked(retries: Nat, input: Result<&2, &2, Parse.ParseError, V.Value>, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> IO(Unit):
   match input expected:
     case Done{+value} Done{reference}:
       actual = shown(Client.buildHeaders(requestDefaults(value), textOrEmpty(optionField(value, "apiKey")), retries, milliseconds(optionField(value, "timeout")), headerLayer(optionField(value, "client")), headerLayer(optionField(value, "body")), headerLayer(optionField(value, "request"))))

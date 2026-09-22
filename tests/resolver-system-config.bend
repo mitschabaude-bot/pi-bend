@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/dns-resolver.bend as Owner
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ../packages/runtime/src/dns-resolver.bend as System
 import ../packages/runtime/src/resolver-config.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Transport

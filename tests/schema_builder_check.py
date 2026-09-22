@@ -72,14 +72,14 @@ def declaration(p):
         if isinstance(v,bool): arg='C.BooleanLiteral{'+('True{}' if v else 'False{}')+'}'
         elif isinstance(v,(int,float)): arg='C.NumberLiteral{'+value(v)[len('V.Number{'):-1]+'}'
         else: arg='C.StringLiteral{'+string(v)+'}'
-        return 'D.literal('+arg+')'
+        return 'D.literalBuilder('+arg+')'
     return 'D.unknown()'
 def decoded(v):
     if 'number' in v: return 'V.Number{F.fromBits('+', '.join(map(str,v['number']))+')}'
     if 'array' in v: return 'V.ArrayValue{'+seq(decoded(x) for x in v['array'])+'}'
     if 'object' in v: return 'V.ObjectValue{R.Record{'+seq('R.Property{'+string(k)+', '+decoded(x)+'}' for k,x in v['object'])+'}}'
     return value(v['scalar'])
-lines=['import Base','import ../packages/runtime/test/schema-builder.bend as T','import ../packages/runtime/src/schema-builder.bend as D','import ../packages/runtime/src/schema-convert.bend as C','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+lines=['import Base','import ../packages/runtime/test/schema-builder.bend as T','import ../packages/runtime/src/schema.bend as D','import ../packages/runtime/src/schema.bend as C','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(c,e) in enumerate(zip(cases,expected,strict=True)):
     expression=declaration(c['policy']); method='check'
     if 'options' in c['policy']:

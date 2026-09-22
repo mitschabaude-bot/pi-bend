@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/sha512.bend as SHA
 import ../packages/runtime/src/u64.bend as W
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Bytes
 
 def variant(text: String) -> SHA.Variant:

@@ -5,7 +5,7 @@ import ./ecdsa.bend as EC
 import ./calendar.bend as Calendar
 import ./u64.bend as W
 import ./big-nat.bend as Big
-import ./utf8-strict.bend as UTF8
+import ./utf8.bend as UTF8
 
 # Parsed wire evidence, not an authenticated identity. Trust, validity, names,
 # constraints and extensions must be checked before a TLS connection is usable.

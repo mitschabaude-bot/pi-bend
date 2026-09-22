@@ -1,7 +1,7 @@
 import Base
 import ../src/url.bend as Percent
 import ./utf8-runner.bend as Text
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 
 def numbers(parts: List<&2, String>, reversed: List<&2, U32>) -> List<&2, U32>:
   match parts:

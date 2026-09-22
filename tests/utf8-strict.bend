@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/utf8-strict.bend as UTF8
+import ../packages/runtime/src/utf8.bend as UTF8
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def error(value: UTF8.Error) -> String:
@@ -15,7 +15,7 @@ def output(value: Result<&2, &2, UTF8.Error, String>) -> String:
 
 def chunks(parts: List<&2, String>, state: Result<&2, &2, UTF8.Error, UTF8.State>) -> Result<&2, &2, UTF8.Error, String>:
   match parts:
-    case Nil{}: UTF8.finish(state)
+    case Nil{}: UTF8.finishStrict(state)
     case part <> rest: chunks(rest, UTF8.feed(Scalar.parseNumbers(part), state))
 
 def run(values: List<String>) -> IO(Unit):

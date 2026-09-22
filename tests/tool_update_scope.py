@@ -22,8 +22,8 @@ import ../packages/agent/src/agent-loop.bend as U
 
 def twice(+ticket: U.Ticket<String>) -> IO(Unit):
   do IO<Unit>:
-    U.complete(String, ticket, Done{Unit{}})
-    U.complete(String, ticket, Done{Unit{}})
+    U.completeScope(String, ticket, Done{Unit{}})
+    U.completeScope(String, ticket, Done{Unit{}})
 
 def main() -> IO(Unit):
   IO.print("invalid program must not compile")

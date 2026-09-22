@@ -1,12 +1,12 @@
 import Base
 import ./validation-errors.bend as Errors
-import ../../../runtime/src/schema-errors.bend as NativeErrors
+import ../../../runtime/src/schema.bend as NativeErrors
 import ../types.bend as Ai
 import ./validation-normalize.bend as Normalize
 import ../../../runtime/src/schema.bend as Schema
-import ../../../runtime/src/schema-load.bend as Loader
+import ../../../runtime/src/schema.bend as Loader
 import ../../../runtime/src/number-string.bend as NumberString
-import ../../../runtime/src/f64-decimal.bend as Decimal
+import ../../../runtime/src/f64.bend as Decimal
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/f64.bend as F
@@ -41,7 +41,7 @@ def matchesJsonType(value: V.Value, +kind: String) -> Bool:
 # retain a number or fabricate a string if that dependency cannot format it.
 type CoercionError is Data:
   NumberFormattingFailure{}
-  UnionSchemaFailure{error: Loader.Error}
+  UnionSchemaFailure{error: Loader.LoadError}
   PendingBooleanUnion{}
 
 def Coercion() -> Data: Result<&2, &2, CoercionError, V.Value>
@@ -292,7 +292,7 @@ def coerceWithJsonSchema(value: V.Value, schema: V.Value) -> Coercion():
 # Retain the received value independently for later validation diagnostics.
 type ToolValidationError is Data:
   ToolNotFound{name: String}
-  InvalidToolSchema{toolName: String, error: Loader.Error}
+  InvalidToolSchema{toolName: String, error: Loader.LoadError}
   NormalizationFailed{toolName: String, error: Normalize.Error}
   CoercionFailed{toolName: String, error: CoercionError}
   InvalidToolArguments{toolName: String, schema: V.Value, received: V.Value, converted: V.Value, issues: List<&2, NativeErrors.Issue>}

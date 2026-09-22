@@ -187,10 +187,10 @@ lines = ['import Base', 'import ../packages/runtime/src/schema.bend as S',
          'import ../packages/runtime/src/f64.bend as F',
          'import ../packages/runtime/src/big-nat.bend as B',
          'import ../packages/runtime/test/schema-load.bend as L',
-         'import ../packages/runtime/src/schema-load.bend as Loader',
+         'import ../packages/runtime/src/schema.bend as Loader',
          'import ../packages/agent/test/message-events.bend as T']
 if DIAGNOSTICS:
-    lines += ['import ../packages/runtime/src/schema-errors.bend as Errors',
+    lines += ['import ../packages/runtime/src/schema.bend as Errors',
               'import ../packages/runtime/test/schema-errors.bend as Diagnostics']
 checks = 0
 rejections = 0

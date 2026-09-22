@@ -41,7 +41,7 @@ def policy(p):
         elif isinstance(v,(int,float)): arg='C.NumberLiteral{'+value(v)[len('V.Number{'):-1]+'}'
         else: arg='C.StringLiteral{'+string(v)+'}'
         return 'C.Literal{'+arg+'}'
-    if p['kind']=='union': return 'C.union('+''.join('C.Branch{'+schema(x)+', '+policy(x)+'} <> ' for x in p['items'])+'Nil{})'
+    if p['kind']=='union': return 'C.unionConvert('+''.join('C.Branch{'+schema(x)+', '+policy(x)+'} <> ' for x in p['items'])+'Nil{})'
     if p['kind']=='scalar': return 'C.Scalar{C.'+names[p['index']]+'{}}'
     if p['kind']=='array': return 'C.ArrayItems{'+policy(p['item'])+'}'
     if p['kind']=='tuple': return 'C.TupleItems{'+''.join(policy(x)+' <> ' for x in p['items'])+'Nil{}}'
@@ -65,7 +65,7 @@ def decoded(v):
     if 'array' in v: return 'V.ArrayValue{'+''.join(decoded(x)+' <> ' for x in v['array'])+'Nil{}}'
     if 'object' in v: return 'V.ObjectValue{R.Record{'+''.join('R.Property{'+string(k)+', '+decoded(x)+'} <> ' for k,x in v['object'])+'Nil{}}}'
     return value(v['scalar'])
-lines=['import Base','import ../packages/runtime/test/schema-convert.bend as T','import ../packages/runtime/src/schema-convert.bend as C','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/schema.bend as S','import ../packages/runtime/src/big-nat.bend as B']
+lines=['import Base','import ../packages/runtime/test/schema-convert.bend as T','import ../packages/runtime/src/schema.bend as C','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F','import ../packages/runtime/src/schema.bend as S','import ../packages/runtime/src/big-nat.bend as B']
 for i,(c,e) in enumerate(zip(cases,expected,strict=True)):
     lines += [f'def case{i}() -> IO(Unit):',f'  T.converted(C.apply({policy(c["policy"])}, {value(c["value"])}), {decoded(e)}, "builder container {i}")']
 groups=[]

@@ -2,7 +2,7 @@ import Base
 import ../src/punycode.bend as Punycode
 import ../src/punycode.bend as Core
 import ./utf8-runner.bend as Text
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 
 def numbers(parts: List<&2, String>, reversed: String) -> String:
   match parts:

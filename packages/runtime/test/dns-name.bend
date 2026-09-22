@@ -1,6 +1,6 @@
 import Base
 import ../src/dns-message.bend as DNS
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Scalar
 
 def numbers(parts: List<&2, String>, reversed: List<&2, U32>) -> List<&2, U32>:

@@ -5,7 +5,7 @@ import ../src/url.bend as Scheme
 import ../src/url.bend as Host
 import ../src/url.bend as V4
 import ../src/url.bend as V6
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def decode(parts: List<&2, String>, reversed: String) -> String:

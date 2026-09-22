@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/http-response.bend as Buffer
-import ../packages/runtime/src/bounded-bytes.bend as Bytes
+import ../packages/runtime/src/bounded.bend as Bytes
 import ../packages/runtime/src/http-response.bend as Progress
 
 law successful_body_preserved:

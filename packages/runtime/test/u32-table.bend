@@ -1,6 +1,6 @@
 import Base
 import ../src/u32-table.bend as Table
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def table(kind: String) -> Table.Table<U32>:

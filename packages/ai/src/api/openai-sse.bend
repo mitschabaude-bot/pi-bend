@@ -4,8 +4,8 @@ import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/sse.bend as Bytes
 import ../../../runtime/src/sse.bend as Event
-import ../../../runtime/src/json-parse.bend as Json
-import ../../../runtime/src/json-string.bend as StringJSON
+import ../../../runtime/src/json.bend as Json
+import ../../../runtime/src/json.bend as StringJSON
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as Record
 import ../../../runtime/src/f64.bend as F
@@ -41,7 +41,7 @@ type DiagnosticTarget is Data:
   ConsoleLogger{}
 
 type DispatchError is Data:
-  InvalidJson{cause: Json.Error, data: String, raw: List<&2, String>, target: DiagnosticTarget}
+  InvalidJson{cause: Json.ParseError, data: String, raw: List<&2, String>, target: DiagnosticTarget}
   ApiErrorPayload{error: V.Value}
 
 type Step is Data:
@@ -90,7 +90,7 @@ def checkedError(error: Maybe<&2, V.Value>, synthesize: Bool, event: Maybe<&2, S
     case None{}: deliverMessage(synthesize, event, data)
     case Some{+value}: errorOrMessage(activeError(value), value, synthesize, event, data)
 
-def parsed(thread: Bool, synthesize: Bool, event: Maybe<&2, String>, data: String, raw: List<&2, String>, result: Result<&2, &2, Json.Error, V.Value>) -> Step:
+def parsed(thread: Bool, synthesize: Bool, event: Maybe<&2, String>, data: String, raw: List<&2, String>, result: Result<&2, &2, Json.ParseError, V.Value>) -> Step:
   match thread result:
     case True{} Fail{cause}: Reject{InvalidJson{cause, data, raw, ConsoleLogger{}}}
     case False{} Fail{cause}: Reject{InvalidJson{cause, data, raw, ClientLogger{}}}

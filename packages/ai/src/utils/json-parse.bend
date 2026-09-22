@@ -1,9 +1,9 @@
 import Base
 import ../../../runtime/src/partial-json.bend as Partial
-import ../../../runtime/src/text-space.bend as Space
+import ../../../runtime/src/text.bend as Space
 import ../../../runtime/src/record.bend as R
-import ../../../runtime/src/json-parse.bend as Json
-import ../../../runtime/src/json-string.bend as StringJson
+import ../../../runtime/src/json.bend as Json
+import ../../../runtime/src/json.bend as StringJson
 import ../../../runtime/src/schema-value.bend as V
 
 # Repair string-literal spelling only. Object/array structure, missing values
@@ -66,19 +66,19 @@ def repair(chars: String, state: RepairStep, fragments: List<&2, String>) -> Str
 def repairJson(json: String) -> String:
   repair(json, RepairStep{OutsideString{}, ""}, Nil{})
 
-def reparse(changed: Bool, error: Json.Error, repaired: String) -> Result<&2, &2, Json.Error, V.Value>:
+def reparse(changed: Bool, error: Json.ParseError, repaired: String) -> Result<&2, &2, Json.ParseError, V.Value>:
   match changed:
     case False{}: Fail{error}
     case True{}: Json.parse(repaired)
 
-def tryRepaired(result: Result<&2, &2, Json.Error, V.Value>, +json: String) -> Result<&2, &2, Json.Error, V.Value>:
+def tryRepaired(result: Result<&2, &2, Json.ParseError, V.Value>, +json: String) -> Result<&2, &2, Json.ParseError, V.Value>:
   match result:
     case Done{value}: Done{value}
     case Fail{error}:
       +repaired = repairJson(json)
       reparse(Bool.not(String.eq(repaired, json)), error, repaired)
 
-def parseJsonWithRepair(+json: String) -> Result<&2, &2, Json.Error, V.Value>:
+def parseJsonWithRepair(+json: String) -> Result<&2, &2, Json.ParseError, V.Value>:
   tryRepaired(Json.parse(json), json)
 
 
@@ -98,7 +98,7 @@ def recoverRepaired(result: Result<&2, &2, Partial.Error, V.Value>, json: String
     case Done{value}: value
     case Fail{_}: recovered(Partial.parse(repairJson(json)))
 
-def recoverPartial(result: Result<&2, &2, Json.Error, V.Value>, +json: String) -> V.Value:
+def recoverPartial(result: Result<&2, &2, Json.ParseError, V.Value>, +json: String) -> V.Value:
   match result:
     case Done{value}: value
     case Fail{_}: recoverRepaired(Partial.parse(json), json)

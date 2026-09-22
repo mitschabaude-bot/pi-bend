@@ -1,6 +1,6 @@
 import Base
 import ../src/api/openai-sse.bend as Sse
-import ../../runtime/src/json-parse.bend as Json
+import ../../runtime/src/json.bend as Json
 import ../../runtime/src/sse.bend as SSE
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/test/utf8-runner.bend as H
@@ -8,7 +8,7 @@ import ../../runtime/test/utf8-runner.bend as H
 def text(value: String) -> String:
   H.fromScalars(H.parseNumbers(value))
 
-def compareValue(value: V.Value, expected: Result<&2, &2, Json.Error, V.Value>) -> Bool:
+def compareValue(value: V.Value, expected: Result<&2, &2, Json.ParseError, V.Value>) -> Bool:
   match expected:
     case Fail{_}: False{}
     case Done{other}: V.equal(value, other)

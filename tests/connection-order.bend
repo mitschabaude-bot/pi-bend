@@ -4,7 +4,7 @@ import ../packages/runtime/src/connection-driver.bend as Candidates
 import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/url.bend as IPv4
 import ../packages/runtime/src/url.bend as IPv6
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def address(words: List<&2, U32>) -> Result<&2, &2, Unit, Connect.Address>:

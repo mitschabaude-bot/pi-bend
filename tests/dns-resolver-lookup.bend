@@ -5,7 +5,7 @@ import ../packages/runtime/src/resolver-config.bend as ParsedOptions
 import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/dns-resolver.bend as Network
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/test/utf8-runner.bend as Scalar

@@ -13,7 +13,7 @@ import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/model-api.bend as Api
 import ../../ai/test/model-types.bend as Models
 import ../../runtime/src/schema-value.bend as Schema
-import ../../runtime/src/string-set.bend as Set
+import ../../runtime/src/string.bend as Set
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
@@ -68,7 +68,7 @@ def completeModel(model: Ai.Model<Unit>, expectedApi: String) -> Bool:
   match model:
     case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)
     case _: False{}
-def emptyPending(values: Set.Set) -> Bool: Nat.is_eq(List.length(&2, String, Set.toList(values)), 0n)
+def emptyPending(values: Set.StringSet) -> Bool: Nat.is_eq(List.length(&2, String, Set.toList(values)), 0n)
 def defaultState(value: Snapshot()) -> Bool:
   match value:
     case T.AgentState{Ai.Model{"unknown", _, _, _, _, _, _, _, _, _, _, _, _, _}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)

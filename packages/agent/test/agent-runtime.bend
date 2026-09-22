@@ -7,7 +7,7 @@ import ../src/agent.bend as Q
 import ../src/agent.bend as Pending
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
-import ../../runtime/src/string-set.bend as Set
+import ../../runtime/src/string.bend as Set
 import ../../runtime/src/f64.bend as F
 import ./agent-queues.bend as Fixture
 import ./message-events.bend as Test

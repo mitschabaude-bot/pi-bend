@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/abort-outcome.bend as Outcome
+import ../packages/runtime/src/abort.bend as Outcome
 import ../packages/runtime/src/abort.bend as Abort
 
 law retained_abort_wins:

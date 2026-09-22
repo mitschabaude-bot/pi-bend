@@ -1,9 +1,9 @@
 import Base
 import ./http-message.bend as Head
 import ./callback.bend as C
-import ./bounded-bytes.bend as Bytes
-import ./utf8-strict.bend as UTF8
-import ./json-parse.bend as JSON
+import ./bounded.bend as Bytes
+import ./utf8.bend as UTF8
+import ./json.bend as JSON
 import ./schema-value.bend as Value
 import ./sse.bend as SSE
 import ./serial-resource.bend as Serial
@@ -686,7 +686,7 @@ def textResult(-E: Data, value: Result<&2, &2, UTF8.Error, String>) -> Result<&2
 def decodeText(-E: Data, value: Result<&2, &2, Error<E>, List<&2, U32>>) -> Result<&2, &2, TextError<E>, String>:
   match value:
     case Fail{error}: Fail{BodyFailure{error}}
-    case Done{bytes}: textResult(E, UTF8.decode(bytes))
+    case Done{bytes}: textResult(E, UTF8.decodeStrict(bytes))
 
 def textUsing(-E: Data, -State: Type, read: Read(E, State), close: Close(E, State), limit: Nat, body: Body<State>) -> IO(Result<&2, &2, TextError<E>, String>):
   do IO<Result<&2, &2, TextError<E>, String>>:
@@ -695,9 +695,9 @@ def textUsing(-E: Data, -State: Type, read: Read(E, State), close: Close(E, Stat
 
 type JSONError<-E: Data> is Data:
   TextFailure{error: TextError<E>}
-  InvalidJSON{error: JSON.Error}
+  InvalidJSON{error: JSON.ParseError}
 
-def jsonResult(-E: Data, value: Result<&2, &2, JSON.Error, Value.Value>) -> Result<&2, &2, JSONError<E>, Value.Value>:
+def jsonResult(-E: Data, value: Result<&2, &2, JSON.ParseError, Value.Value>) -> Result<&2, &2, JSONError<E>, Value.Value>:
   match value:
     case Fail{error}: Fail{InvalidJSON{error}}
     case Done{json}: Done{json}
