@@ -113,6 +113,32 @@ def main():
         ('', r'\w', '\U0001E6C0'),
     ]
     unicode_expected = ['true', 'false', 'true', 'true', 'true', 'true', 'true', 'true']
+    stream_sources = [
+        ('', 'abc', 'xabcx'), ('', 'aaab', 'aaaaab'), ('', 'abc', 'abx'),
+        ('', '(?i)ſKé', 'xSkÉ'), ('', '^abc$', 'abc'), ('', '^abc$', 'abcx'),
+        ('', 'abc$', 'abc\n'), ('', '(?m)^abc$', 'x\nabc\ny'),
+        ('', '(?mR)^abc$', 'x\r\nabc\r\ny'), ('', '(?mR)^$', '\r\n'),
+        ('', '(?mR)abc$', 'abc\rX'), ('', r'\bélan\b', 'élan!'),
+        ('', r'\bélan\b', 'élans'), ('', r'\Bélan', 'xélan'),
+        ('', r'\A(?:a|é)+\z', 'aéa'), ('', r'\p{Greek}+', 'xαβ'),
+        ('', '😀é', 'x😀é'), ('', '', ''), ('', '$', ''), ('', '$a', 'a'),
+        ('', '(a?)*b', 'aaaaab'), ('', 'a[^b]c', 'aéc'),
+    ]
+    stream_expected = reference(stream_sources, args.reference)
+    streams = [(('s' + 'x'*split, pattern, text), wanted)
+               for (_, pattern, text), wanted in zip(stream_sources, stream_expected)
+               for split in range(len(text)+1)]
+    literals = [(mode, pattern, text) for mode in ['l', 'li']
+                for pattern in ['', '[a-z]+', '--pre=x', 'é😀', 'ſK', '\0']
+                for text in ['', 'x[a-z]+y', '--pre=x', 'É😀', 'é😀', 'sk', '\0']]
+    # Use the Rust engine with every scalar escaped as a literal, so the oracle
+    # does not share the native fast-path implementation or its parser.
+    literal_reference = [('i' if mode == 'li' else '', ''.join(r'\x{' + format(ord(c), 'x') + '}' for c in pattern), text)
+                         for mode, pattern, text in literals]
+    literal_expected = reference(literal_reference, args.reference)
+    literal_streams = [(('L' + 'x'*split, pattern, text), wanted)
+                       for (mode, pattern, text), wanted in zip(literals, literal_expected) if mode == 'l'
+                       for split in range(len(text)+1)]
     for backend in args.backends:
         compared = rejected = 0
         for start in range(0, len(cases), 150):
@@ -128,13 +154,18 @@ def main():
                     compared += 1
         assert run(backend, args.prefix, required_bytes) == ['byte-input-required'] * len(required_bytes)
         assert run(backend, args.prefix, unicode17) == unicode_expected
+        assert run(backend, args.prefix, literals) == literal_expected
+        for chunk_start in range(0, len(streams + literal_streams), 150):
+            chunk = (streams + literal_streams)[chunk_start:chunk_start+150]
+            actual_stream = run(backend, args.prefix, [case for case, _ in chunk])
+            assert actual_stream == [wanted for _, wanted in chunk], (backend, chunk, actual_stream)
         started = time.monotonic()
         actual = run(backend, args.prefix, long_cases)
         assert actual == long_expected, (backend, actual, long_expected)
         duration = time.monotonic() - started
         tables = subprocess.run(command(backend, args.prefix) + ['tables'], capture_output=True, text=True, timeout=60)
         assert tables.returncode == 0 and tables.stdout.strip() == 'true', (backend, tables.stdout, tables.stderr[-1000:])
-        print(f'{backend}: {compared} Rust comparisons, {rejected + len(required_bytes)} explicit byte-input rejections, {len(unicode17)} Unicode 17, {len(long_cases)} long/adversarial checks ({duration:.3f}s) and 131,101 indexed-table checks passed', flush=True)
+        print(f'{backend}: {compared} Rust comparisons, {rejected + len(required_bytes)} explicit byte-input rejections, {len(unicode17)} Unicode 17, {len(streams)+len(literal_streams)} chunk-boundary and {len(literals)} literal API checks, {len(long_cases)} long/adversarial checks ({duration:.3f}s) and 131,101 indexed-table checks passed', flush=True)
 
 
 if __name__ == '__main__':

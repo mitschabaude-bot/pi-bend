@@ -238,11 +238,6 @@ def literalTable(+text: String,insensitive: Bool) -> Table.Table<LiteralRow>:
     case SNil{}: Table.fromSortedEntries(LiteralRow,Nil{})
     case SCon{char,rest}: literalFailures(rest,1,0,literalRows(SCon{char,rest},0,Nil{}),insensitive)
 
-def literalScan(text: String,+count: U32,+table: Table.Table<LiteralRow>,+prefix: U32,+insensitive: Bool) -> Bool:
-  match text:
-    case SNil{}: U32.is_eq(prefix,count)
-    case SCon{char,rest}: Bool.pick(Unit -> Bool,U32.is_eq(prefix,count),_ => True{},_ => literalScan(rest,count,table,literalAdvance(U32.to_nat(count) + 1n,table,char,prefix,insensitive),insensitive))(Unit{})
-
 type Literal is Data:
   Literal{text: String,insensitive: Bool}
 
@@ -286,6 +281,10 @@ def stringLength(text: String,count: Nat) -> Nat:
   match text:
     case SNil{}: count
     case SCon{_,rest}: stringLength(rest,Succ{count})
+
+def compileLiteral(+text: String,+insensitive: Bool) -> Result<&2,&2,Error,Regex>:
+  +count = stringLength(text,Zero{})
+  Bool.pick(Unit -> Result<&2,&2,Error,Regex>,Nat.is_lt(count,65536n),_ => Done{LiteralRegex{U32.from_nat(count),literalTable(text,insensitive),insensitive}},_ => Fail{SizeLimit{}})(Unit{})
 
 def compileSelected(literal: Maybe<&2,Literal>,expression: Expression) -> Regex:
   match literal:
@@ -357,32 +356,62 @@ def closure(fuel: Nat,state: Frontier,+stamp: U32,+table: Table.Table<Instructio
     case Succ{remaining} Frontier{seen,+index <> pending,next,matched}:
       closure(remaining,visit(Array.get(U32,seen,index),index,stamp,pending,next,matched,table,left,right),stamp,table,left,right)
 
-def nextChar(text: String) -> Maybe<&2,Char>:
-  match text:
-    case SNil{}: None{}
-    case SCon{char,_}: Some{char}
-
-# At every boundary add the start state (unanchored search), then close epsilon
-# edges once. The next frontier contains exactly the states reached by consuming
-# the next scalar; no backtracking history or repeated start-position scans.
-def scan(text: String,left: Maybe<&2,Char>,+start: U32,+count: U32,+table: Table.Table<Instruction>,+stamp: U32,state: Frontier) -> Bool:
-  match text state:
-    case _ Frontier{_,_,_,True{}}: True{}
-    case SNil{} Frontier{_,_,_,False{}}: False{}
-    case SCon{+char,+rest} Frontier{seen,_,next,False{}}:
-      scan(rest,Some{char},start,count,table,(stamp + 1 : U32),closure(U32.to_nat(count) * 3n + 2n,Frontier{seen,start <> next,Nil{},False{}},(stamp + 1 : U32),table,Some{char},nextChar(rest)))
-
 def arrayDepth(fuel: Nat,count: U32,depth: Nat) -> Nat:
   match fuel count:
     case _ 0: depth
     case Zero{} _: depth
     case Succ{fuel} count: arrayDepth(fuel,U32.shrn(count,1n),Succ{depth})
 
-def isMatch(regex: Regex,+text: String) -> Bool:
+# A cursor owns its visitation array. Input chunks need not coincide with regex
+# boundaries; only finish supplies end-of-input, so $ and word boundaries cannot
+# accidentally treat a chunk boundary as the end of the haystack.
+type Cursor is Type:
+  Matched{}
+  LiteralCursor{count: U32,table: Table.Table<LiteralRow>,insensitive: Bool,prefix: U32}
+  NfaCursor{start: U32,count: U32,table: Table.Table<Instruction>,stamp: U32,left: Maybe<&2,Char>,pending: List<&2,U32>,seen: Array<U32>}
+
+def create(regex: Regex) -> Cursor:
   match regex:
-    case LiteralRegex{count,table,insensitive}: literalScan(text,count,table,0,insensitive)
-    case Regex{+start,+count,+table}:
-      scan(text,None{},start,count,table,1,closure(U32.to_nat(count) * 3n + 2n,Frontier{Array.new(U32,arrayDepth(32n,(count - 1 : U32),Zero{}),0),start <> Nil{},Nil{},False{}},1,table,None{},nextChar(text)))
+    case LiteralRegex{0,_,_}: Matched{}
+    case LiteralRegex{count,table,insensitive}: LiteralCursor{count,table,insensitive,0}
+    case Regex{start,+count,table}: NfaCursor{start,count,table,1,None{},Nil{},Array.new(U32,arrayDepth(32n,(count - 1 : U32),Zero{}),0)}
+
+def afterLiteral(+prefix: U32,+count: U32,table: Table.Table<LiteralRow>,insensitive: Bool) -> Cursor:
+  Bool.pick(Cursor,U32.is_eq(prefix,count),Matched{},LiteralCursor{count,table,insensitive,prefix})
+
+def afterChar(+char: Char,+start: U32,+count: U32,+table: Table.Table<Instruction>,+stamp: U32,state: Frontier) -> Cursor:
+  match state:
+    case Frontier{_,_,_,True{}}: Matched{}
+    case Frontier{seen,_,+next,False{}}:
+      Bool.pick(Unit -> Cursor,U32.is_eq(stamp,4294967295),
+        _ => NfaCursor{start,count,table,1,Some{char},next,Array.new(U32,arrayDepth(32n,(count - 1 : U32),Zero{}),0)},
+        _ => NfaCursor{start,count,table,(stamp + 1 : U32),Some{char},next,seen})(Unit{})
+
+# Start a candidate at every boundary, then close epsilon edges once. The next
+# frontier consists exactly of states reached by consuming this scalar.
+def feedChar(cursor: Cursor,+char: Char) -> Cursor:
+  match cursor:
+    case Matched{}: Matched{}
+    case LiteralCursor{+count,+table,+insensitive,prefix}: afterLiteral(literalAdvance(U32.to_nat(count) + 1n,table,char,prefix,insensitive),count,table,insensitive)
+    case NfaCursor{+start,+count,+table,+stamp,left,pending,seen}: afterChar(char,start,count,table,stamp,closure(U32.to_nat(count) * 3n + 2n,Frontier{seen,start <> pending,Nil{},False{}},stamp,table,left,Some{char}))
+
+def feed(text: String,cursor: Cursor) -> Cursor:
+  match text cursor:
+    case _ Matched{}: Matched{}
+    case SNil{} cursor: cursor
+    case SCon{char,rest} cursor: feed(rest,feedChar(cursor,char))
+
+def finalFrontier(state: Frontier) -> Bool:
+  match state:
+    case Frontier{_,_,_,matched}: matched
+
+def finish(cursor: Cursor) -> Bool:
+  match cursor:
+    case Matched{}: True{}
+    case LiteralCursor{_,_,_,_}: False{}
+    case NfaCursor{start,+count,table,stamp,left,pending,seen}: finalFrontier(closure(U32.to_nat(count) * 3n + 2n,Frontier{seen,start <> pending,Nil{},False{}},stamp,table,left,None{}))
+
+def isMatch(regex: Regex,text: String) -> Bool: finish(feed(text,create(regex)))
 
 # The generated UCD payload stores delta-coded interval endpoints. Decode only
 # referenced properties at compile time; matching uses an immutable range tree.

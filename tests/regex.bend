@@ -4,12 +4,25 @@ import ../packages/runtime/src/base64.bend as B64
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/u32-table.bend as Table
 
-def report(result: Result<&2,&2,R.Error,R.Regex>,text: String) -> IO(Unit):
+def matched(mode: String,regex: R.Regex,+text: String) -> Bool:
+  match mode:
+    case SCon{'s',+rest}: R.finish(R.feed(String.drop(text,String.length(rest)),R.feed("",R.feed(String.take(text,String.length(rest)),R.create(regex)))))
+    case SCon{'L',+rest}: R.finish(R.feed(String.drop(text,String.length(rest)),R.feed("",R.feed(String.take(text,String.length(rest)),R.create(regex)))))
+    case _: R.isMatch(regex,text)
+
+def compile(+mode: String,pattern: String) -> Result<&2,&2,R.Error,R.Regex>:
+  match mode:
+    case SCon{'L',_}: R.compileLiteral(pattern,False{})
+    case "li": R.compileLiteral(pattern,True{})
+    case "l": R.compileLiteral(pattern,False{})
+    case _: R.compile(pattern,String.eq(mode,"i"))
+
+def report(mode: String,result: Result<&2,&2,R.Error,R.Regex>,text: String) -> IO(Unit):
   match result:
     case Fail{R.Syntax{message}}: IO.print(String.append("error:",message))
     case Fail{R.RequiresByteInput{}}: IO.print("byte-input-required")
     case Fail{R.SizeLimit{}}: IO.print("error:Pattern size limit")
-    case Done{regex}: IO.print(Bool.pick(String,R.isMatch(regex,text),"true","false"))
+    case Done{regex}: IO.print(Bool.pick(String,matched(mode,regex,text),"true","false"))
 
 def textDecoded(result: Result<&2,&2,Utf8.Error,String>) -> Maybe<&2,String>:
   match result:
@@ -21,9 +34,9 @@ def decoded(bytes: Result<&2,&2,B64.Error,List<&2,U32>>) -> Maybe<&2,String>:
     case Fail{_}: None{}
     case Done{bytes}: textDecoded(Utf8.decodeWith(Utf8.Preserve{},bytes))
 
-def runCase(mode: String,pattern: Maybe<&2,String>,text: Maybe<&2,String>) -> IO(Unit):
+def runCase(+mode: String,pattern: Maybe<&2,String>,text: Maybe<&2,String>) -> IO(Unit):
   match pattern text:
-    case Some{pattern} Some{text}: report(R.compile(pattern,String.eq(mode,"i")),text)
+    case Some{pattern} Some{text}: report(mode,compile(mode,pattern),text)
     case _ _: IO.die(Unit,1,"invalid fixture Base64/UTF-8")
 
 def rows(count: Nat,+index: U32,reversed: List<&2,Table.Entry<U32>>) -> List<&2,Table.Entry<U32>>:
