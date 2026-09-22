@@ -5,9 +5,9 @@ import ./config.bend as Config
 import ./core/agent-runtime.bend as Runtime
 import ./core/session-manager.bend as S
 import ./core/session-persistence.bend as Sessions
+import ./core/agent-session.bend as AgentSession
 import ./core/settings-manager.bend as Settings
 import ./core/tools/index.bend as Tools
-import ./modes/json-event.bend as JsonEvent
 import ./modes/print-mode.bend as Print
 import ./utils/paths.bend as Paths
 import ../../agent/src/types.bend as T
@@ -174,44 +174,9 @@ def fail(message: String) -> IO(Unit):
 
 # Sessions
 # --------
-# The session codecs of the CLI: no diagnostic details, tool details
-# rendered as the JSON events do (restored ones kept raw), extension
-# payloads as JSON values.
 
-def Session() -> Data: Sessions.Session<Unit, Tools.ToolDetails, V.Value>
-def State() -> Data: S.SessionManager<Unit, Tools.ToolDetails, V.Value>
-def Appended() -> Data: Sessions.Appended<Unit, Tools.ToolDetails, V.Value>
-
-def unitValue(value: Unit) -> V.Value: V.Null{}
-def rawValue(value: V.Value) -> V.Value: value
-def readUnit(value: V.Value) -> Result<&2, &2, Decode.Error, Unit>: Done{Unit{}}
-def readRaw(value: V.Value) -> Result<&2, &2, Decode.Error, V.Value>: Done{value}
-def readDetails(value: V.Value) -> Result<&2, &2, Decode.Error, Tools.ToolDetails>: Done{Tools.RawDetails{value}}
-
-def createSession(cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.create(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, ~readUnit, ~readDetails, ~readRaw, cwd, sessionDir, agentDir, options)
-
-def openSession(path: String, sessionDir: Maybe<&2, String>, cwd: String) -> IO(Sessions.Outcome(Session())):
-  Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, ~readUnit, ~readDetails, ~readRaw, path, sessionDir, None{}, cwd)
-
-def continueSession(cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Sessions.Outcome(Session())):
-  Sessions.continueRecent(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, ~readUnit, ~readDetails, ~readRaw, cwd, sessionDir, agentDir)
-
-def memorySession(cwd: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.inMemory(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, ~readUnit, ~readDetails, ~readRaw, cwd, options, None{})
-
-def forkSession(source: String, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.forkFrom(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, ~readUnit, ~readDetails, ~readRaw, source, cwd, sessionDir, agentDir, options)
-
-def recordName(session: Session(), name: String) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendSessionInfo(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, session, name)
-
-def recordThinking(session: Session(), level: Ai.ModelThinkingLevel) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendThinkingLevelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, session, Levels.name(level))
-
-def recordModel(session: Session(), model: Ai.Model<Ai.JsonValue>) -> IO(Sessions.Outcome(Appended())):
-  match model:
-    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _}: Sessions.appendModelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~JsonEvent.toolDetails, ~rawValue, session, provider, id)
+def Session() -> Data: AgentSession.Session()
+def Appended() -> Data: AgentSession.Appended()
 
 # The session-related arguments, by name.
 type SessionFlags is Data:
@@ -345,18 +310,18 @@ def forkedIf(confirmed: Bool, path: String, cwd: String, sessionDir: Maybe<&2, S
     case False{}: IO.pure(Selected(), Fail{Aborted{"Aborted."}})
     case True{}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- forkSession(path, cwd, sessionDir, agentDir, Sessions.noOptions())
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.noOptions())
         return selected(forked)
 
 def openResolved(resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Selected()):
   match resolved:
     case ResolvedPath{path}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- openSession(path, sessionDir, cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path, sessionDir, cwd)
         return selected(opened)
     case ResolvedLocal{path}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- openSession(path, sessionDir, cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path, sessionDir, cwd)
         return selected(opened)
     case ResolvedGlobal{path, other}:
       do IO<Selected()>:
@@ -370,15 +335,15 @@ def forkResolved(resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String
     case NotFound{arg}: IO.pure(Selected(), Fail{Failed{"No session found matching '" ++ arg ++ "'"}})
     case ResolvedPath{path}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
     case ResolvedLocal{path}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
     case ResolvedGlobal{path, _}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
 
 def forkUnlessExisting(existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>) -> IO(Selected()):
@@ -398,16 +363,16 @@ def openOrCreateById(existing: Maybe<&2, String>, +cwd: String, +sessionDir: May
   match existing sessionId:
     case Some{path} _:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- openSession(path, sessionDir, cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path, sessionDir, cwd)
         return selected(opened)
     case None{} Some{+id}:
       do IO<Selected()>:
         IO.print_err("Warning: No project session found with id '" ++ id ++ "'; creating a new session with that id.")
-        created : Sessions.Outcome(Session()) <- createSession(cwd, sessionDir, agentDir, Sessions.NewSessionOptions{Some{id}, None{}})
+        created : Sessions.Outcome(Session()) <- AgentSession.createSession(cwd, sessionDir, agentDir, Sessions.NewSessionOptions{Some{id}, None{}})
         return selected(created)
     case None{} None{}:
       do IO<Selected()>:
-        created : Sessions.Outcome(Session()) <- createSession(cwd, sessionDir, agentDir, Sessions.noOptions())
+        created : Sessions.Outcome(Session()) <- AgentSession.createSession(cwd, sessionDir, agentDir, Sessions.noOptions())
         return selected(created)
 
 # upstream createSessionManager: --no-session (and help/model listing) stay
@@ -426,7 +391,7 @@ def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +s
     case _ True{} None{} None{}: IO.pure(Selected(), Fail{Failed{"Error: --resume needs the interactive session selector, which this port does not have yet."}})
     case True{} False{} None{} None{}:
       do IO<Selected()>:
-        continued : Sessions.Outcome(Session()) <- continueSession(cwd, sessionDir, agentDir)
+        continued : Sessions.Outcome(Session()) <- AgentSession.continueSession(cwd, sessionDir, agentDir)
         return selected(continued)
     case False{} False{} None{} None{}:
       do IO<Selected()>:
@@ -437,7 +402,7 @@ def inMemoryOrSelected(ephemeral: Bool, continue: Bool, resume: Bool, session: M
   match ephemeral:
     case True{}:
       do IO<Selected()>:
-        memory : Sessions.Outcome(Session()) <- memorySession(cwd, Sessions.NewSessionOptions{sessionId, None{}})
+        memory : Sessions.Outcome(Session()) <- AgentSession.memorySession(cwd, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(memory)
     case False{}: selectSession(continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir)
 
@@ -475,7 +440,7 @@ def namedWith(session: Session(), normalized: Maybe<&2, String>) -> IO(Selected(
     case None{}: IO.pure(Selected(), Fail{Failed{"Error: --name requires a non-empty value"}})
     case Some{value}:
       do IO<Selected()>:
-        outcome : Sessions.Outcome(Appended()) <- recordName(session, value)
+        outcome : Sessions.Outcome(Appended()) <- AgentSession.recordName(session, value)
         return appendedSession(outcome)
 
 def named(+session: Session(), name: Maybe<&2, String>) -> IO(Selected()):
@@ -515,7 +480,7 @@ def recordedThinking(session: Selected(), thinking: Ai.ModelThinkingLevel) -> IO
     case Fail{stop}: IO.pure(Selected(), Fail{stop})
     case Done{value}:
       do IO<Selected()>:
-        outcome : Sessions.Outcome(Appended()) <- recordThinking(value, thinking)
+        outcome : Sessions.Outcome(Appended()) <- AgentSession.recordThinking(value, thinking)
         return appendedSession(outcome)
 
 # upstream: a resumed session records its thinking level once; a new one
@@ -526,17 +491,20 @@ def recordSelection(+session: Session(), hasExisting: Bool, hasThinking: Bool, s
     case True{} True{} Runtime.Selection{_, _}: IO.pure(Selected(), Done{session})
     case False{} _ Runtime.Selection{model, thinking}:
       do IO<Selected()>:
-        first : Sessions.Outcome(Appended()) <- recordModel(session, model)
+        first : Sessions.Outcome(Appended()) <- AgentSession.recordModel(session, model)
         recordedThinking(appendedSession(first), thinking)
 
 # Runs
 # ----
 
-def printWith(options: Print.PrintModeOptions, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+# The AgentSession owns the run; the runtime owns the agent and its services.
+def printWith(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
   match pair:
     case Tuple{runtime, agent}:
       do IO<Unit>:
-        code : U32 <- Print.runPrintMode(agent, options)
+        +live : AgentSession.AgentSession <- AgentSession.create(agent, stored, settings, cwd)
+        code : U32 <- Print.runPrintMode(live, options)
+        AgentSession.dispose(live)
         Runtime.dispose(runtime)
         exitWith(code)
 
@@ -545,10 +513,7 @@ def outputMode(mode: AppMode) -> Args.Mode:
     case PrintJson{}: Args.Json{}
     case _: Args.Text{}
 
-def headerOf(+session: Session()) -> S.SessionHeader:
-  S.getHeader(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session))
-
-def printRecorded(mode: Args.Mode, initial: InitialMessage, recorded: Selected(), runtime: Runtime.AgentRuntime) -> IO(Unit):
+def printRecorded(mode: Args.Mode, initial: InitialMessage, recorded: Selected(), settings: Settings.SettingsManager, cwd: String, runtime: Runtime.AgentRuntime) -> IO(Unit):
   match initial recorded:
     case _ Fail{Failed{message}}:
       do IO<Unit>:
@@ -558,19 +523,19 @@ def printRecorded(mode: Args.Mode, initial: InitialMessage, recorded: Selected()
       do IO<Unit>:
         Runtime.dispose(runtime)
         IO.print(note)
-    case InitialMessage{text, images, remaining} Done{+session}: printWith(Print.PrintModeOptions{mode, remaining, text, images, headerOf(session)}, Runtime.agentOf(runtime))
+    case InitialMessage{text, images, remaining} Done{+session}: printWith(Print.PrintModeOptions{mode, remaining, text, images}, session, settings, cwd, Runtime.agentOf(runtime))
 
-def printWithSelection(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
+def printWithSelection(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
   match pair:
     case Tuple{kept, selection}:
       do IO<Unit>:
         recorded : Selected() <- recordSelection(session, hasExisting, hasThinking, selection)
-        printRecorded(mode, initial, recorded, kept)
+        printRecorded(mode, initial, recorded, settings, cwd, kept)
 
-def printSelected(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+def printSelected(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match created:
     case Fail{error}: fail(error)
-    case Done{runtime}: printWithSelection(mode, initial, session, hasExisting, hasThinking, Runtime.selectionOf(runtime))
+    case Done{runtime}: printWithSelection(mode, initial, session, hasExisting, hasThinking, settings, cwd, Runtime.selectionOf(runtime))
 
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
@@ -655,9 +620,9 @@ def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +sessio
     case Done{+value}:
       +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
       do IO<Unit>:
-        settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
+        +settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, sessionCwd, agentDir, authPath, bundlePath, packageDir, value, settings))
-        printSelected(outputMode(mode), initial, session, seedMessages(value), seedThinking(value), created)
+        printSelected(outputMode(mode), initial, session, seedMessages(value), seedThinking(value), settings, sessionCwd, created)
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:

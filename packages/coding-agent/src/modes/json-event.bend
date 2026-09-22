@@ -3,17 +3,14 @@ import ../../../agent/src/types.bend as Agent
 import ../../../agent/src/agent.bend as Runner
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/utils/message-json.bend as Json
+import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/f64.bend as F
 import ../core/tools/index.bend as Tools
-import ../core/tools/read.bend as Read
-import ../core/tools/bash.bend as Bash
-import ../core/tools/edit.bend as Edit
-import ../core/tools/find.bend as Find
-import ../core/tools/truncate.bend as Truncate
 import ../core/messages.bend as Messages
 import ../core/session-json.bend as SessionJson
+import ../core/agent-session.bend as Session
 
 # Session event shape emitted by the JSON stdout protocol. Cumulative assistant
 # snapshots are removed from streaming wire events: `message_start` provides
@@ -36,54 +33,12 @@ def natural(value: Nat) -> V.Value: V.Number{F.fromU32(U32.from_nat(value))}
 def unitDetails(value: Unit) -> V.Value: V.Null{}
 def rawValue(value: V.Value) -> V.Value: value
 
-# Tool details
-# ------------
-
-def limit(value: Maybe<&2, Truncate.Limit>) -> V.Value:
-  match value:
-    case None{}: V.Null{}
-    case Some{Truncate.Lines{}}: V.Text{"lines"}
-    case Some{Truncate.Bytes{}}: V.Text{"bytes"}
-
-def truncation(value: Truncate.TruncationResult) -> V.Value:
-  match value:
-    case Truncate.TruncationResult{content, truncated, truncatedBy, totalLines, totalBytes, outputLines, outputBytes, lastLinePartial, firstLineExceedsLimit, maxLines, maxBytes}:
-      object(field("content", text(content), field("truncated", V.Boolean{truncated}, field("truncatedBy", limit(truncatedBy), field("totalLines", natural(totalLines), field("totalBytes", natural(totalBytes), field("outputLines", natural(outputLines), field("outputBytes", natural(outputBytes), field("lastLinePartial", V.Boolean{lastLinePartial}, field("firstLineExceedsLimit", V.Boolean{firstLineExceedsLimit}, field("maxLines", natural(maxLines), field("maxBytes", natural(maxBytes), Nil{}))))))))))))
-
-def readDetails(value: Maybe<&2, Read.ReadToolDetails>) -> V.Value:
-  match value:
-    case None{}: object(Nil{})
-    case Some{Read.ReadToolDetails{result}}: object(field("truncation", truncation(result), Nil{}))
-
-def bashDetails(value: Maybe<&2, Bash.BashToolDetails>) -> V.Value:
-  match value:
-    case None{}: object(Nil{})
-    case Some{Bash.BashToolDetails{result, fullOutputPath}}: object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncation, result), Json.optionalText("fullOutputPath", fullOutputPath, Nil{})))
-
-def editDetails(value: Edit.EditToolDetails) -> V.Value:
-  match value:
-    case Edit.EditToolDetails{diff, patch, firstChangedLine}: object(field("diff", text(diff), field("patch", text(patch), Json.optional("firstChangedLine", Maybe.map(&2, Nat, V.Value, natural, firstChangedLine), Nil{}))))
-
-def findDetails(value: Maybe<&2, Find.FindToolDetails>) -> V.Value:
-  match value:
-    case None{}: V.Null{}
-    case Some{Find.FindToolDetails{cut, resultLimit}}: object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncation, cut), Json.optional("resultLimitReached", Maybe.map(&2, Nat, V.Value, natural, resultLimit), Nil{})))
-
-def toolDetails(value: Tools.ToolDetails) -> V.Value:
-  match value:
-    case Tools.ReadDetails{details}: readDetails(details)
-    case Tools.BashDetails{details}: bashDetails(details)
-    case Tools.EditDetails{details}: editDetails(details)
-    case Tools.WriteDetails{}: object(Nil{})
-    case Tools.FindDetails{details}: findDetails(details)
-    case Tools.RawDetails{value}: value
-
 # Messages
 # --------
 
 def message(value: Message()) -> V.Value:
   match value:
-    case Agent.LlmMessage{value}: Json.message(~Unit, ~Tools.ToolDetails, ~unitDetails, ~toolDetails, value)
+    case Agent.LlmMessage{value}: Json.message(~Unit, ~Tools.ToolDetails, ~unitDetails, ~Tools.detailsValue, value)
     case Agent.CustomMessage{value}: SessionJson.codingMessage(~V.Value, ~rawValue, value)
 
 def messages(values: List<&2, Message()>) -> List<&2, V.Value>:
@@ -94,11 +49,11 @@ def messages(values: List<&2, Message()>) -> List<&2, V.Value>:
 def toolResults(values: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> List<&2, V.Value>:
   match values:
     case Nil{}: Nil{}
-    case value <> rest: Json.toolResultMessage(~Tools.ToolDetails, ~toolDetails, value) <> toolResults(rest)
+    case value <> rest: Json.toolResultMessage(~Tools.ToolDetails, ~Tools.detailsValue, value) <> toolResults(rest)
 
 def toolResult(value: ToolResult()) -> V.Value:
   match value:
-    case Agent.AgentToolResult{content, details, usage, terminate}: object(field("content", V.ArrayValue{Json.textImageContents(content)}, field("details", toolDetails(details), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optionalBoolean("terminate", terminate, Nil{})))))
+    case Agent.AgentToolResult{content, details, usage, terminate}: object(field("content", V.ArrayValue{Json.textImageContents(content)}, field("details", Tools.detailsValue(details), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optionalBoolean("terminate", terminate, Nil{})))))
 
 # Streaming events without snapshots
 # ----------------------------------
@@ -162,3 +117,23 @@ def toJsonEvent(event: SessionEvent()) -> Result<&2, &2, String, V.Value>:
     case Agent.ToolExecutionStart{toolCallId, toolName, args}: Done{object(field("type", text("tool_execution_start"), field("toolCallId", text(toolCallId), field("toolName", text(toolName), field("args", args, Nil{})))))}
     case Agent.ToolExecutionUpdate{toolCallId, toolName, args, partialResult}: Done{object(field("type", text("tool_execution_update"), field("toolCallId", text(toolCallId), field("toolName", text(toolName), field("args", args, field("partialResult", toolResult(partialResult), Nil{}))))))}
     case Agent.ToolExecutionEnd{toolCallId, toolName, result, isError}: Done{object(field("type", text("tool_execution_end"), field("toolCallId", text(toolCallId), field("toolName", text(toolName), field("result", toolResult(result), field("isError", V.Boolean{isError}, Nil{}))))))}
+
+# Session events
+# --------------
+# upstream toJsonEvent passes every AgentSession event through except
+# message_update; the session-level events keep their upstream shapes.
+
+def texts(values: List<&2, String>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: V.Text{value} <> texts(rest)
+
+def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, String, V.Value>:
+  match event:
+    case Session.AgentEvent{value}: toJsonEvent(value)
+    case Session.AgentEnd{values, willRetry}: Done{object(field("type", text("agent_end"), field("messages", V.ArrayValue{messages(values)}, field("willRetry", V.Boolean{willRetry}, Nil{}))))}
+    case Session.AgentSettled{}: Done{object(field("type", text("agent_settled"), Nil{}))}
+    case Session.QueueUpdate{steering, followUp}: Done{object(field("type", text("queue_update"), field("steering", V.ArrayValue{texts(steering)}, field("followUp", V.ArrayValue{texts(followUp)}, Nil{}))))}
+    case Session.SessionInfoChanged{name}: Done{object(field("type", text("session_info_changed"), Json.optionalText("name", name, Nil{})))}
+    case Session.ThinkingLevelChanged{level}: Done{object(field("type", text("thinking_level_changed"), field("level", text(Levels.name(level)), Nil{})))}
+

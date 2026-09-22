@@ -50,9 +50,10 @@ import ./tools/index.bend as Tools
 import ./tools/file-mutation-queue.bend as Queue
 
 # The owned services behind one agent: transport, credentials, model runtime,
-# tools and the Agent itself. This is the print-mode slice of upstream's
-# AgentSessionServices/AgentSessionRuntime: no session persistence,
-# extensions, skills, settings or interactive mode yet.
+# settings-driven selection, tools and the Agent itself. This is the print-mode
+# slice of upstream's AgentSessionServices/AgentSessionRuntime; the session
+# record and persistence live in agent-session.bend. Extensions, skills and
+# interactive mode are not ported yet.
 
 def Error() -> Data: Tools.ToolError
 def Details() -> Data: Tools.ToolDetails
