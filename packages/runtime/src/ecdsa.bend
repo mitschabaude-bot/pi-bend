@@ -1,5 +1,7 @@
 import Base
 import ./big-nat.bend as Big
+import ./prime-field.bend as Field
+import ./modular.bend as Modular
 import ./der.bend as DER
 import ./sha256.bend as SHA
 import ./sha512.bend as WideSHA
@@ -25,10 +27,10 @@ type Error is Data:
   WideHashFailure{cause: WideSHA.Error}
 
 type Point is Data:
-  Point{x: Big.BigNat, y: Big.BigNat}
+  Point{x: Field.Field, y: Field.Field}
 
 type Jacobian is Data:
-  Jacobian{x: Big.BigNat, y: Big.BigNat, z: Big.BigNat}
+  Jacobian{x: Field.Field, y: Field.Field, z: Field.Field}
 
 # P-256: FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
 def prime(+selected: Curve) -> Big.BigNat:
@@ -36,11 +38,16 @@ def prime(+selected: Curve) -> Big.BigNat:
     case P256{}: Big.BigNat{65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 0 <> 0 <> 0 <> 0 <> 0 <> 0 <> 1 <> 0 <> 65535 <> 65535 <> Nil{}}
     case P384{}: Big.BigNat{65535 <> 65535 <> 0 <> 0 <> 0 <> 0 <> 65535 <> 65535 <> 65534 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> Nil{}}
 
-# P-256: FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-def order(+selected: Curve) -> Big.BigNat:
+def scalarContext(selected: Curve) -> Modular.Context:
   match selected:
-    case P256{}: Big.BigNat{9553 <> 64611 <> 51906 <> 62393 <> 40580 <> 42775 <> 64173 <> 48358 <> 65535 <> 65535 <> 65535 <> 65535 <> 0 <> 0 <> 65535 <> 65535 <> Nil{}}
-    case P384{}: Big.BigNat{10611 <> 52421 <> 6506 <> 60652 <> 42874 <> 18608 <> 3506 <> 22554 <> 11743 <> 62519 <> 19841 <> 51043 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> 65535 <> Nil{}}
+    case P256{}: Modular.p256()
+    case P384{}: Modular.p384()
+
+def scalarModulus(context: Modular.Context) -> Big.BigNat:
+  match context:
+    case Modular.Context{modulus,_,_,_}: modulus
+
+def order(selected: Curve) -> Big.BigNat: scalarModulus(scalarContext(selected))
 
 # P-256: 5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
 def coefficient(+selected: Curve) -> Big.BigNat:
@@ -65,21 +72,25 @@ def width(+selected: Curve) -> Nat:
     case P256{}: 32n
     case P384{}: 48n
 
-def generator(+selected: Curve) -> Point: Point{generatorX(selected),generatorY(selected)}
-def infinity() -> Jacobian: Jacobian{Big.zero(),Big.one(),Big.zero()}
+def fieldPrime(selected: Curve) -> Field.Prime:
+  match selected:
+    case P256{}: Field.P256{}
+    case P384{}: Field.P384{}
 
-def add(+selected: Curve, a: Big.BigNat, b: Big.BigNat) -> Big.BigNat: Big.reduce(Big.add(a,b),prime(selected))
-def mul(+selected: Curve, a: Big.BigNat, b: Big.BigNat) -> Big.BigNat: Big.reduce(Big.multiply(a,b),prime(selected))
-def square(+selected: Curve, +a: Big.BigNat) -> Big.BigNat: mul(selected,a,a)
-def scale(+selected: Curve, a: Big.BigNat, k: U32) -> Big.BigNat: Big.reduce(Big.multiplyU32(a,k),prime(selected))
+def generator(+selected: Curve) -> Point:
+  Point{Field.fromBig(fieldPrime(selected),generatorX(selected)),Field.fromBig(fieldPrime(selected),generatorY(selected))}
+
+def infinity() -> Jacobian: Jacobian{Field.zero(),Field.one(),Field.zero()}
+
+def add(selected: Curve, a: Field.Field, b: Field.Field) -> Field.Field: Field.add(fieldPrime(selected),a,b)
+def mul(selected: Curve, a: Field.Field, b: Field.Field) -> Field.Field: Field.mul(fieldPrime(selected),a,b)
+def square(selected: Curve, a: Field.Field) -> Field.Field: Field.square(fieldPrime(selected),a)
+def scale(selected: Curve, a: Field.Field, k: U32) -> Field.Field: Field.scale(fieldPrime(selected),a,k)
+def sub(selected: Curve, a: Field.Field, b: Field.Field) -> Field.Field: Field.sub(fieldPrime(selected),a,b)
 
 def difference(a: Big.BigNat, b: Big.BigNat) -> Big.BigNat:
   match a b:
     case Big.BigNat{xs} Big.BigNat{ys}: Big.BigNat{Big.trim(Big.subtractLimbs(xs,ys,0))}
-
-# Operands are canonical field elements, so a+p >= b and the subtraction is
-# nonnegative. Every field operation returns a canonical value below p.
-def sub(+selected: Curve, a: Big.BigNat, b: Big.BigNat) -> Big.BigNat: Big.reduce(difference(Big.add(a,prime(selected)),b),prime(selected))
 
 def doubleFormula(+selected: Curve, point: Jacobian) -> Jacobian:
   match point:
@@ -96,9 +107,9 @@ def doubleFormula(+selected: Curve, point: Jacobian) -> Jacobian:
 def double(+selected: Curve, point: Jacobian) -> Jacobian:
   match point:
     case Jacobian{x,y,+z}:
-      Bool.pick(Unit -> Jacobian,Big.isZero(z),unused => infinity(),unused => doubleFormula(selected,Jacobian{x,y,z}))(Unit{})
+      Bool.pick(Unit -> Jacobian,Field.isZero(z),unused => infinity(),unused => doubleFormula(selected,Jacobian{x,y,z}))(Unit{})
 
-def addDistinct(+selected: Curve, point: Jacobian, +h: Big.BigNat, +r: Big.BigNat) -> Jacobian:
+def addDistinct(+selected: Curve, point: Jacobian, +h: Field.Field, +r: Field.Field) -> Jacobian:
   match point:
     case Jacobian{+x,y,+z}:
       +hh = square(selected,h)
@@ -110,9 +121,9 @@ def addDistinct(+selected: Curve, point: Jacobian, +h: Big.BigNat, +r: Big.BigNa
       nz = sub(selected,sub(selected,square(selected,add(selected,z,h)),square(selected,z)),hh)
       Jacobian{nx,ny,nz}
 
-def addCases(+selected: Curve, zero: Bool, sameX: Bool, sameY: Bool, point: Jacobian, other: Point, h: Big.BigNat, r: Big.BigNat) -> Jacobian:
+def addCases(+selected: Curve, zero: Bool, sameX: Bool, sameY: Bool, point: Jacobian, other: Point, h: Field.Field, r: Field.Field) -> Jacobian:
   match zero sameX sameY other:
-    case True{} _ _ Point{x,y}: Jacobian{x,y,Big.one()}
+    case True{} _ _ Point{x,y}: Jacobian{x,y,Field.one()}
     case False{} True{} True{} _: double(selected,point)
     case False{} True{} False{} _: infinity()
     case False{} False{} _ _: addDistinct(selected,point,h,r)
@@ -123,7 +134,7 @@ def addPoint(+selected: Curve, point: Jacobian, +other: Point) -> Jacobian:
       +zz = square(selected,z)
       +u = mul(selected,ox,zz)
       +s = mul(selected,oy,mul(selected,z,zz))
-      addCases(selected,Big.isZero(z),Big.equal(u,x),Big.equal(s,y),Jacobian{x,y,z},other,sub(selected,u,x),scale(selected,sub(selected,s,y),2))
+      addCases(selected,Field.isZero(z),Field.equal(u,x),Field.equal(s,y),Jacobian{x,y,z},other,sub(selected,u,x),scale(selected,sub(selected,s,y),2))
 
 def addBit(+selected: Curve, set: Bool, point: Jacobian, base: Point) -> Jacobian:
   match set:
@@ -145,30 +156,52 @@ def less(order: Cmp) -> Bool:
     case LT{}: True{}
     case _: False{}
 
-def inverse(+selected: Curve, value: Big.BigNat, +modulus: Big.BigNat) -> Big.BigNat:
-  Big.powerMod(Big.toBigEndian(width(selected),difference(modulus,Big.fromU32(2))),value,modulus)
+def powerBit(+selected: Curve, set: Bool, value: Field.Field, base: Field.Field) -> Field.Field:
+  match set:
+    case False{}: value
+    case True{}: mul(selected,value,base)
 
-def normalized(+selected: Curve, zero: Bool, point: Jacobian) -> Maybe<&2,Point>:
-  match zero point:
-    case True{} _: None{}
-    case False{} Jacobian{x,y,z}:
-      +zi = inverse(selected,z,prime(selected))
+def powerByte(+selected: Curve, fuel: Nat, +byte: U32, +base: Field.Field, value: Field.Field) -> Field.Field:
+  match fuel:
+    case 0n: value
+    case 1n+fuel:
+      next = powerBit(selected,U32.is_eq(U32.and(byte,128),128),square(selected,value),base)
+      powerByte(selected,fuel,U32.and(U32.shl(byte),255),base,next)
+
+def fieldPower(+selected: Curve, bytes: List<&2,U32>, +base: Field.Field, value: Field.Field) -> Field.Field:
+  match bytes:
+    case Nil{}: value
+    case byte <> rest: fieldPower(selected,rest,base,powerByte(selected,8n,byte,base,value))
+
+def normalizedInverse(+selected: Curve, x: Field.Field, y: Field.Field, inverse: Maybe<&2,Big.BigNat>) -> Maybe<&2,Point>:
+  match inverse:
+    case None{}: None{}
+    case Some{value}:
+      +zi = Field.fromBig(fieldPrime(selected),value)
       +zz = square(selected,zi)
       Some{Point{mul(selected,x,zz),mul(selected,y,mul(selected,zz,zi))}}
 
 def normalize(+selected: Curve, point: Jacobian) -> Maybe<&2,Point>:
   match point:
-    case Jacobian{x,y,+z}: normalized(selected,Big.isZero(z),Jacobian{x,y,z})
+    case Jacobian{x,y,z}: normalizedInverse(selected,x,y,Modular.inverse(Field.toBig(z),prime(selected)))
 
-def curve(+selected: Curve, +x: Big.BigNat) -> Big.BigNat: add(selected,sub(selected,mul(selected,square(selected,x),x),scale(selected,x,3)),coefficient(selected))
+def curve(+selected: Curve, +x: Field.Field) -> Field.Field: add(selected,sub(selected,mul(selected,square(selected,x),x),scale(selected,x,3)),Field.fromBig(fieldPrime(selected),coefficient(selected)))
 
-def checkedPoint(allowed: Bool, x: Big.BigNat, y: Big.BigNat) -> Result<&2,&2,Error,Point>:
+def checkedPoint(allowed: Bool, x: Field.Field, y: Field.Field) -> Result<&2,&2,Error,Point>:
   match allowed:
     case False{}: Fail{InvalidKey{}}
     case True{}: Done{Point{x,y}}
 
+def pointWithinField(+selected: Curve, allowed: Bool, x: Big.BigNat, y: Big.BigNat) -> Result<&2,&2,Error,Point>:
+  match allowed:
+    case False{}: Fail{InvalidKey{}}
+    case True{}:
+      +fx = Field.fromBig(fieldPrime(selected),x)
+      +fy = Field.fromBig(fieldPrime(selected),y)
+      checkedPoint(Field.equal(square(selected,fy),curve(selected,fx)),fx,fy)
+
 def point(+selected: Curve, +x: Big.BigNat, +y: Big.BigNat) -> Result<&2,&2,Error,Point>:
-  checkedPoint(less(Big.compare(x,prime(selected))) && less(Big.compare(y,prime(selected))) && Big.equal(square(selected,y),curve(selected,x)),x,y)
+  pointWithinField(selected,less(Big.compare(x,prime(selected))) && less(Big.compare(y,prime(selected))),x,y)
 
 def octets(bytes: List<&2,U32>) -> Bool:
   match bytes:
@@ -184,9 +217,15 @@ def rootExponent(+selected: Curve, divided: Big.SmallDivision) -> List<&2,U32>:
   match divided:
     case Big.SmallDivision{quotient,_}: Big.toBigEndian(width(selected),quotient)
 
+def compressedWithinField(+selected: Curve, allowed: Bool, odd: Bool, +x: Big.BigNat) -> Result<&2,&2,Error,Point>:
+  match allowed:
+    case False{}: Fail{InvalidKey{}}
+    case True{}:
+      +y = Field.toBig(fieldPower(selected,rootExponent(selected,Big.divideSmallRaw(Big.add(prime(selected),Big.one()),4)),curve(selected,Field.fromBig(fieldPrime(selected),x)),Field.one()))
+      point(selected,x,Bool.pick(Big.BigNat,Bool.not(Bool.xor(odd,parity(y))),y,difference(prime(selected),y)))
+
 def compressed(+selected: Curve, odd: Bool, +x: Big.BigNat) -> Result<&2,&2,Error,Point>:
-  +y = Big.powerMod(rootExponent(selected,Big.divideSmallRaw(Big.add(prime(selected),Big.one()),4)),curve(selected,x),prime(selected))
-  point(selected,x,Bool.pick(Big.BigNat,Bool.not(Bool.xor(odd,parity(y))),y,difference(prime(selected),y)))
+  compressedWithinField(selected,less(Big.compare(x,prime(selected))),odd,x)
 
 def keyFormat(+selected: Curve, bytes: List<&2,U32>) -> Result<&2,&2,Error,Point>:
   match bytes:
@@ -207,38 +246,52 @@ def publicKey(+selected: Curve, +bytes: List<&2,U32>) -> Result<&2,&2,Error,Poin
 
 # Joint public multiplication computes u*G + v*Q with one doubling per bit.
 # Scalars are fixed-width byte strings supplied by verification below.
-def jointByte(+selected: Curve, fuel: Nat, +a: U32, +b: U32, +base: Point, acc: Jacobian) -> Jacobian:
+def jointByte(+selected: Curve, fuel: Nat, +a: U32, +b: U32, +g: Point, +base: Point, acc: Jacobian) -> Jacobian:
   match fuel:
     case 0n: acc
     case 1n+fuel:
-      next = addBit(selected,U32.is_eq(U32.and(b,128),128),addBit(selected,U32.is_eq(U32.and(a,128),128),double(selected,acc),generator(selected)),base)
-      jointByte(selected,fuel,U32.and(U32.shl(a),255),U32.and(U32.shl(b),255),base,next)
+      next = addBit(selected,U32.is_eq(U32.and(b,128),128),addBit(selected,U32.is_eq(U32.and(a,128),128),double(selected,acc),g),base)
+      jointByte(selected,fuel,U32.and(U32.shl(a),255),U32.and(U32.shl(b),255),g,base,next)
 
-def joint(+selected: Curve, a: List<&2,U32>, b: List<&2,U32>, +base: Point, acc: Jacobian) -> Jacobian:
+def jointWithGenerator(+selected: Curve, a: List<&2,U32>, b: List<&2,U32>, +g: Point, +base: Point, acc: Jacobian) -> Jacobian:
   match a b:
     case Nil{} Nil{}: acc
-    case x <> xs y <> ys: joint(selected,xs,ys,base,jointByte(selected,8n,x,y,base,acc))
+    case x <> xs y <> ys: jointWithGenerator(selected,xs,ys,g,base,jointByte(selected,8n,x,y,g,base,acc))
     case _ _: infinity()
+
+def joint(+selected: Curve, a: List<&2,U32>, b: List<&2,U32>, base: Point, acc: Jacobian) -> Jacobian:
+  jointWithGenerator(selected,a,b,generator(selected),base,acc)
+
+def matchesAlternate(+selected: Curve, allowed: Bool, x: Field.Field, zz: Field.Field, rn: Big.BigNat) -> Bool:
+  match allowed:
+    case False{}: False{}
+    case True{}: Field.equal(x,mul(selected,Field.fromBig(fieldPrime(selected),rn),zz))
 
 def matches(+selected: Curve, result: Jacobian, +r: Big.BigNat) -> Bool:
   match result:
     case Jacobian{+x,_,+z}:
       +zz = square(selected,z)
       +rn = Big.add(r,order(selected))
-      Bool.not(Big.isZero(z)) && (Big.equal(x,mul(selected,r,zz)) || (less(Big.compare(rn,prime(selected))) && Big.equal(x,mul(selected,rn,zz))))
+      Bool.not(Field.isZero(z)) && (Field.equal(x,mul(selected,Field.fromBig(fieldPrime(selected),r),zz)) || matchesAlternate(selected,less(Big.compare(rn,prime(selected))),x,zz,rn))
 
 def verification(valid: Bool) -> Result<&2,&2,Error,Unit>:
   match valid:
     case False{}: Fail{InvalidSignature{}}
     case True{}: Done{Unit{}}
 
+def verifyInverse(+selected: Curve, public: Point, hash: List<&2,U32>, +r: Big.BigNat, inverse: Maybe<&2,Big.BigNat>) -> Result<&2,&2,Error,Unit>:
+  match inverse:
+    case None{}: Fail{InvalidSignature{}}
+    case Some{+w}:
+      +context = scalarContext(selected)
+      u = Big.toBigEndian(width(selected),Modular.multiply(context,Big.fromBigEndian(List.take(&2,U32,hash,width(selected))),w))
+      v = Big.toBigEndian(width(selected),Modular.multiply(context,r,w))
+      verification(matches(selected,joint(selected,u,v,public,infinity()),r))
+
 def verifyNumbers(+selected: Curve, public: Point, hash: List<&2,U32>, +r: Big.BigNat, +s: Big.BigNat) -> Result<&2,&2,Error,Unit>:
   checked = verification(Bool.not(Big.isZero(r)) && Bool.not(Big.isZero(s)) && less(Big.compare(r,order(selected))) && less(Big.compare(s,order(selected))))
   Result.bind(&2,&2,Error,Unit,Unit,checked,unused =>
-    +w = inverse(selected,s,order(selected))
-    u = Big.toBigEndian(width(selected),Big.reduce(Big.multiply(Big.fromBigEndian(List.take(&2,U32,hash,width(selected))),w),order(selected)))
-    v = Big.toBigEndian(width(selected),Big.reduce(Big.multiply(r,w),order(selected)))
-    verification(matches(selected,joint(selected,u,v,public,infinity()),r)))
+    verifyInverse(selected,public,hash,r,Modular.inverse(s,order(selected))))
 
 def decoded(-A: Data, result: Result<&2,&2,DER.Error,A>) -> Result<&2,&2,Error,A>:
   match result:

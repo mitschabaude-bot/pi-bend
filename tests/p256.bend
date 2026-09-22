@@ -1,6 +1,7 @@
 import Base
 import ../packages/runtime/src/ecdsa.bend as P
 import ../packages/runtime/src/big-nat.bend as Big
+import ../packages/runtime/src/prime-field.bend as Field
 import ../packages/runtime/src/string.bend as Split
 import ./aes128-gcm.bend as Bytes
 import ../packages/runtime/src/der.bend as DER
@@ -15,7 +16,7 @@ def error(cause: P.Error) -> String:
 
 def show(+selected: P.Curve,point: P.Point) -> String:
   match point:
-    case P.Point{x,y}: Bytes.show(4 <> DER.append(Big.toBigEndian(P.width(selected),x),Big.toBigEndian(P.width(selected),y)))
+    case P.Point{x,y}: Bytes.show(4 <> DER.append(Big.toBigEndian(P.width(selected),Field.toBig(x)),Big.toBigEndian(P.width(selected),Field.toBig(y))))
 
 def key(+selected: P.Curve,result: Result<&2,&2,P.Error,P.Point>) -> String:
   match result:
@@ -39,7 +40,7 @@ def verified(result: Result<&2,&2,P.Error,Unit>) -> String:
 
 def added(+selected: P.Curve,left: P.Point, right: P.Point) -> Maybe<&2,P.Point>:
   match left:
-    case P.Point{x,y}: P.normalize(selected,P.addPoint(selected,P.Jacobian{x,y,Big.one()},right))
+    case P.Point{x,y}: P.normalize(selected,P.addPoint(selected,P.Jacobian{x,y,Field.one()},right))
 
 def addition(+selected: P.Curve,result: Result<&2,&2,P.Error,Maybe<&2,P.Point>>) -> String:
   match result:
