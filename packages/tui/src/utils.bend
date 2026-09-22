@@ -332,3 +332,221 @@ def visibleMeasured(value: Maybe<&2,Nat>,text: String) -> Nat:
     case Some{width}: width
     case None{}: visibleClean(widthText(tokens(text),""))
 def visibleWidth(+text: String) -> Nat: visibleMeasured(asciiWidth(text,0n),text)
+
+# Layout retains controls as zero-cell tokens and segments each visible run.
+# Column counts are natural numbers; no UTF-16 offsets enter this interface.
+type WidthResult is Data: WidthResult{text: String,width: Nat}
+type Segments is Data: Segments{before: String,beforeWidth: Nat,after: String,afterWidth: Nat}
+def cellRun(items: List<&2,String>,reversed: List<&2,Token>) -> List<&2,Token>:
+  match items:
+    case Nil{}: reversed
+    case text <> rest: cellRun(rest,Token{text,False{}} <> reversed)
+def cellTokens(items: List<&2,Token>,+reversed: List<&2,Token>) -> List<&2,Token>:
+  match items:
+    case Nil{}: List.reverse(&2,Token,reversed)
+    case Token{+text,+control} <> rest:
+      cellTokens(rest,Bool.pick(List<&2,Token>,control,Token{text,control} <> reversed,cellRun(Grapheme.segments(text),reversed)))
+def cells(text: String) -> List<&2,Token>: cellTokens(tokens(text),Nil{})
+# A cursor visits only the columns a slice/truncation needs. It never builds
+# a grapheme list for the unconsumed suffix of a long terminal line.
+type CellCursor is Data: CellCursor{run: String,rest: String}
+type CellStep is Data:
+  CellEnd{}
+  CellNext{cell: Token,rest: CellCursor}
+def clusterCell(value: Maybe<&1,String & String>,after: String) -> CellStep:
+  match value:
+    case None{}: CellEnd{}
+    case Some{(text,rest)}: CellNext{Token{text,False{}},CellCursor{rest,after}}
+def rawCluster(value: Maybe<&1,String & String>) -> CellStep:
+  match value:
+    case None{}: CellEnd{}
+    case Some{(text,rest)}: CellNext{Token{text,False{}},CellCursor{"",rest}}
+def scannedCell(value: Scan) -> CellStep:
+  match value:
+    case Scan{Token{text,True{}},rest,_}: CellNext{Token{text,True{}},CellCursor{"",rest}}
+    case Scan{Token{text,False{}},rest,_}: clusterCell(Grapheme.next(text),rest)
+def nextCell(cursor: CellCursor) -> CellStep:
+  match cursor:
+    case CellCursor{SNil{},SNil{}}: CellEnd{}
+    case CellCursor{SNil{},SCon{Chr{27},rest}}: scannedCell(scan(SCon{Chr{27},rest}))
+    case CellCursor{SNil{},text}: rawCluster(Grapheme.next(text))
+    case CellCursor{run,rest}: clusterCell(Grapheme.next(run),rest)
+def spaces(count: Nat,result: String) -> String:
+  match count:
+    case Zero{}: result
+    case Succ{rest}: spaces(rest,SCon{' ',result})
+def padResult(text: String,width: Nat,maxWidth: Nat,pad: Bool) -> String:
+  text ++ Bool.pick(String,pad,spaces(maxWidth - width,""),"")
+@unsafe
+def sliceCells(items: CellStep,+start: Nat,+end: Nat,+strict: Bool,+column: Nat,+reversed: String,+pending: String,width: Nat) -> WidthResult:
+  match items:
+    case CellEnd{}: WidthResult{reverseInto(reversed,""),width}
+    case CellNext{Token{+text,True{}},rest}:
+      sliceCells(nextCell(rest),start,end,strict,column,Bool.pick(String,Nat.is_ge(column,start) && Nat.is_lt(column,end),prependReversed(text,reversed),reversed),Bool.pick(String,Nat.is_lt(column,start),prependReversed(text,pending),pending),width)
+    case CellNext{Token{+text,False{}},rest}:
+      +size = graphemeWidth(text)
+      +keep = Nat.is_ge(column,start) && Nat.is_lt(column,end) && (Bool.not(strict) || Nat.is_le(column + size,end))
+      +next = Bool.pick(String,keep,prependReversed(text,(pending ++ reversed)),reversed)
+      +nextWidth = width + Bool.pick(Nat,keep,size,0n)
+      Bool.pick(Unit -> WidthResult,Nat.is_ge(column + size,end),
+        _ => WidthResult{reverseInto(next,""),nextWidth},
+        _ => sliceCells(nextCell(rest),start,end,strict,column + size,next,Bool.pick(String,keep,"",pending),nextWidth))(Unit{})
+def sliceWithWidth(line: String,+startCol: Nat,+length: Nat,strict: Bool) -> WidthResult:
+  Bool.pick(Unit -> WidthResult,Nat.is_eq(length,0n),_ => WidthResult{"",0n},_ => sliceCells(nextCell(CellCursor{"",line}),startCol,startCol + length,strict,0n,"","",0n))(Unit{})
+def resultText(value: WidthResult) -> String:
+  match value:
+    case WidthResult{text,_}: text
+def sliceByColumn(line: String,startCol: Nat,length: Nat,strict: Bool) -> String:
+  resultText(sliceWithWidth(line,startCol,length,strict))
+# A contiguous prefix cannot resume after a wide grapheme misses the budget.
+@unsafe
+def fragmentCells(items: CellStep,+limit: Nat,+width: Nat,+reversed: String,pending: String) -> WidthResult:
+  match items:
+    case CellEnd{}: WidthResult{reverseInto(reversed,""),width}
+    case CellNext{Token{text,True{}},rest}: fragmentCells(nextCell(rest),limit,width,reversed,prependReversed(text,pending))
+    case CellNext{Token{+text,False{}},rest}:
+      +size = graphemeWidth(text)
+      Bool.pick(Unit -> WidthResult,Nat.is_gt(width + size,limit),
+        _ => WidthResult{reverseInto(reversed,""),width},
+        _ => fragmentCells(nextCell(rest),limit,width + size,prependReversed(text,(pending ++ reversed)),""))(Unit{})
+def truncateFragmentToWidth(text: String,+maxWidth: Nat) -> WidthResult:
+  Bool.pick(Unit -> WidthResult,Nat.is_eq(maxWidth,0n),_ => WidthResult{"",0n},_ => fragmentCells(nextCell(CellCursor{"",text}),maxWidth,0n,"",""))(Unit{})
+def finalizeTruncatedResult(+prefix: String,prefixWidth: Nat,+ellipsis: String,ellipsisWidth: Nat,maxWidth: Nat,pad: Bool) -> String:
+  padResult(prefix ++ getActiveOsc8Close(prefix) ++ "\u{1b}[0m" ++ ellipsis ++ Bool.pick(String,Strings.equal(ellipsis,""),"","\u{1b}[0m"),prefixWidth + ellipsisWidth,maxWidth,pad)
+def finishPrefix(prefix: WidthResult,ellipsis: String,ellipsisWidth: Nat,maxWidth: Nat,pad: Bool) -> String:
+  match prefix:
+    case WidthResult{text,width}: finalizeTruncatedResult(text,width,ellipsis,ellipsisWidth,maxWidth,pad)
+def finishEllipsis(value: WidthResult,+maxWidth: Nat,+pad: Bool) -> String:
+  match value:
+    case WidthResult{+text,+width}:
+      Bool.pick(Unit -> String,Nat.is_eq(width,0n),_ => padResult("",0n,maxWidth,pad),_ => finalizeTruncatedResult("",0n,text,width,maxWidth,pad))(Unit{})
+@unsafe
+def layoutWidth(items: CellStep,+limit: Nat,+width: Nat) -> Nat:
+  match items:
+    case CellEnd{}: width
+    case CellNext{Token{_,True{}},rest}: layoutWidth(nextCell(rest),limit,width)
+    case CellNext{Token{text,False{}},rest}:
+      +total = width + graphemeWidth(text)
+      Bool.pick(Unit -> Nat,Nat.is_gt(total,limit),_ => total,_ => layoutWidth(nextCell(rest),limit,total))(Unit{})
+def truncateMeasured(+text: String,+maxWidth: Nat,+ellipsis: String,+pad: Bool,+ellipsisWidth: Nat,+textWidth: Nat) -> String:
+  Bool.pick(Unit -> String,Nat.is_le(textWidth,maxWidth),
+    _ => padResult(text,textWidth,maxWidth,pad),
+    _ => Bool.pick(Unit -> String,Nat.is_ge(ellipsisWidth,maxWidth),
+      _ => finishEllipsis(truncateFragmentToWidth(ellipsis,maxWidth),maxWidth,pad),
+      _ => finishPrefix(truncateFragmentToWidth(text,maxWidth - ellipsisWidth),ellipsis,ellipsisWidth,maxWidth,pad))(Unit{}))(Unit{})
+def truncateToWidth(+text: String,+maxWidth: Nat,+ellipsis: String,pad: Bool) -> String:
+  Bool.pick(Unit -> String,Nat.is_eq(maxWidth,0n),_ => "",_ => truncateMeasured(text,maxWidth,ellipsis,pad,visibleWidth(ellipsis),Bool.pick(Unit -> Nat,Nat.is_ge(visibleWidth(ellipsis),maxWidth),_ => visibleWidth(text),_ => layoutWidth(nextCell(CellCursor{"",text}),maxWidth,0n))(Unit{})))(Unit{})
+
+type OverlayState is Data: OverlayState{before: String,beforeWidth: Nat,after: String,afterWidth: Nat,pending: String,started: Bool,tracker: AnsiCodeTracker}
+def overlayResult(state: OverlayState) -> Segments:
+  match state:
+    case OverlayState{before,beforeWidth,after,afterWidth,_,_,_}: Segments{reverseInto(before,""),beforeWidth,reverseInto(after,""),afterWidth}
+def overlayControl(state: OverlayState,+code: String,+column: Nat,beforeEnd: Nat,afterStart: Nat,afterEnd: Nat) -> OverlayState:
+  match state:
+    case OverlayState{before,beforeWidth,+after,afterWidth,+pending,+started,tracker}:
+      +isBefore = Nat.is_lt(column,beforeEnd)
+      +isAfter = Bool.not(isBefore) && Nat.is_ge(column,afterStart) && Nat.is_lt(column,afterEnd) && started
+      OverlayState{before,beforeWidth,Bool.pick(String,isAfter,prependReversed(code,after),after),afterWidth,Bool.pick(String,isBefore,prependReversed(code,pending),pending),started,process(tracker,code)}
+def overlayVisible(state: OverlayState,+text: String,+size: Nat,+column: Nat,+beforeEnd: Nat,afterStart: Nat,+afterEnd: Nat,strict: Bool) -> OverlayState:
+  match state:
+    case OverlayState{+before,+beforeWidth,+after,+afterWidth,+pending,+started,+tracker}:
+      +isBefore = Nat.is_lt(column,beforeEnd) && Nat.is_le(column + size,beforeEnd)
+      +isAfter = Bool.not(isBefore) && Nat.is_ge(column,afterStart) && Nat.is_lt(column,afterEnd) && (Bool.not(strict) || Nat.is_le(column + size,afterEnd))
+      OverlayState{Bool.pick(String,isBefore,prependReversed(text,(pending ++ before)),before),beforeWidth + Bool.pick(Nat,isBefore,size,0n),Bool.pick(String,isAfter,prependReversed(text,prependReversed(Bool.pick(String,started,"",getActiveCodes(tracker)),after)),after),afterWidth + Bool.pick(Nat,isAfter,size,0n),Bool.pick(String,isBefore,"",pending),started || isAfter,tracker}
+@unsafe
+def overlayCells(items: CellStep,+beforeEnd: Nat,+afterStart: Nat,+afterEnd: Nat,+stop: Nat,+strict: Bool,+column: Nat,state: OverlayState) -> Segments:
+  match items:
+    case CellEnd{}: overlayResult(state)
+    case CellNext{Token{text,True{}},rest}: overlayCells(nextCell(rest),beforeEnd,afterStart,afterEnd,stop,strict,column,overlayControl(state,text,column,beforeEnd,afterStart,afterEnd))
+    case CellNext{Token{+text,False{}},rest}:
+      +size = graphemeWidth(text)
+      +next = overlayVisible(state,text,size,column,beforeEnd,afterStart,afterEnd,strict)
+      Bool.pick(Unit -> Segments,Nat.is_ge(column + size,stop),_ => overlayResult(next),_ => overlayCells(nextCell(rest),beforeEnd,afterStart,afterEnd,stop,strict,column + size,next))(Unit{})
+def extractSegments(line: String,+beforeEnd: Nat,+afterStart: Nat,+afterLen: Nat,strictAfter: Bool) -> Segments:
+  overlayCells(nextCell(CellCursor{"",line}),beforeEnd,afterStart,afterStart + afterLen,Bool.pick(Nat,Nat.is_eq(afterLen,0n),beforeEnd,afterStart + afterLen),strictAfter,0n,OverlayState{"",0n,"",0n,"",False{},emptyTracker()})
+
+# The source deliberately groups literal spaces, not locale word boundaries.
+def whitespaceScalar(+point: U32) -> Bool:
+  range(point,9,13) || U32.is_eq(point,32) || U32.is_eq(point,160) || U32.is_eq(point,5760) || range(point,8192,8202) || range(point,8232,8233) || U32.is_eq(point,8239) || U32.is_eq(point,8287) || U32.is_eq(point,12288) || U32.is_eq(point,65279)
+def allWhitespace(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{char,rest}: whitespaceScalar(Char.to_u32(char)) && allWhitespace(rest)
+def dropWhitespace(text: String) -> String:
+  match text:
+    case SNil{}: ""
+    case SCon{+char,+rest}: Bool.pick(Unit -> String,whitespaceScalar(Char.to_u32(char)),_ => dropWhitespace(rest),_ => SCon{char,rest})(Unit{})
+def trimEnd(text: String) -> String: reverseInto(dropWhitespace(reverseInto(text,"")),"")
+def cjkBreak(text: String) -> Bool:
+  match text:
+    case SNil{}: False{}
+    case SCon{char,rest}: U32.is_ne(U32.and(Display.properties(Char.to_u32(char)),256),0) || cjkBreak(rest)
+def flushGroup(+current: String,+done: List<&2,String>) -> List<&2,String>:
+  Bool.pick(List<&2,String>,Strings.equal(current,""),done,reverseInto(current,"") <> done)
+def finishGroups(+current: String,+pending: String,done: List<&2,String>) -> List<&2,String>:
+  match done:
+    case Nil{}: List.reverse(&2,String,flushGroup((pending ++ current),Nil{}))
+    case +last <> +rest:
+      List.reverse(&2,String,Bool.pick(List<&2,String>,Strings.equal(current,""),(last ++ reverseInto(pending,"")) <> rest,reverseInto((pending ++ current),"") <> (last <> rest)))
+def groupCells(items: List<&2,Token>,+current: String,+pending: String,+space: Bool,+done: List<&2,String>) -> List<&2,String>:
+  match items:
+    case Nil{}: finishGroups(current,pending,done)
+    case Token{text,True{}} <> rest: groupCells(rest,current,prependReversed(text,pending),space,done)
+    case Token{+text,False{}} <> +rest:
+      +isSpace = Strings.equal(text," ")
+      Bool.pick(Unit -> List<&2,String>,Bool.not(isSpace) && cjkBreak(text),
+        _ => groupCells(rest,"","",False{},reverseInto(prependReversed(text,pending),"") <> flushGroup(current,done)),
+        _ => groupCells(rest,prependReversed(text,(pending ++ Bool.pick(String,Bool.not(Bool.pick(Bool,space,isSpace,Bool.not(isSpace))),"",current))),"",isSpace,Bool.pick(List<&2,String>,Bool.not(Bool.pick(Bool,space,isSpace,Bool.not(isSpace))),flushGroup(current,done),done)))(Unit{})
+def splitIntoTokensWithAnsi(text: String) -> List<&2,String>: groupCells(cells(text),"","",False{},Nil{})
+type WrapState is Data: WrapState{line: String,width: Nat,tracker: AnsiCodeTracker,lines: List<&2,String>}
+def breakCells(items: List<&2,Token>,+limit: Nat,state: WrapState) -> WrapState:
+  match items:
+    case Nil{}: state
+    case Token{+text,+control} <> rest:
+      match state:
+        case WrapState{+line,+width,+tracker,+lines}:
+          +size = Bool.pick(Nat,control,0n,visibleWidth(text))
+          +overflow = Bool.not(control) && Nat.is_gt(width + size,limit)
+          breakCells(rest,limit,WrapState{prependReversed(text,Bool.pick(String,overflow,prependReversed(getActiveCodes(tracker),""),line)),Bool.pick(Nat,overflow,0n,width) + size,Bool.pick(AnsiCodeTracker,control,process(tracker,text),tracker),Bool.pick(List<&2,String>,overflow,(reverseInto(line,"") ++ getLineEndReset(tracker)) <> lines,lines)})
+def longWordState(state: WrapState) -> WrapState:
+  match state:
+    case WrapState{+line,_,+tracker,+lines}: WrapState{prependReversed(getActiveCodes(tracker),""),0n,tracker,Bool.pick(List<&2,String>,Strings.equal(line,""),lines,(reverseInto(line,"") ++ getLineEndReset(tracker)) <> lines)}
+def wordState(state: WrapState,+token: String,+size: Nat,+limit: Nat) -> WrapState:
+  match state:
+    case WrapState{+line,+width,+tracker,+lines}:
+      +overflow = Nat.is_gt(width + size,limit) && Nat.is_gt(width,0n)
+      +white = allWhitespace(token)
+      WrapState{Bool.pick(String,overflow,prependReversed(getActiveCodes(tracker) ++ Bool.pick(String,white,"",token),""),prependReversed(token,line)),Bool.pick(Nat,overflow,Bool.pick(Nat,white,0n,size),width + size),updateTrackerFromText(token,tracker),Bool.pick(List<&2,String>,overflow,(trimEnd(reverseInto(line,"")) ++ getLineEndReset(tracker)) <> lines,lines)}
+def wrapTokens(items: List<&2,String>,+limit: Nat,+state: WrapState) -> WrapState:
+  match items:
+    case Nil{}: state
+    case +token <> rest:
+      +size = visibleWidth(token)
+      wrapTokens(rest,limit,Bool.pick(Unit -> WrapState,Nat.is_gt(size,limit) && Bool.not(allWhitespace(token)),_ => breakCells(cells(token),limit,longWordState(state)),_ => wordState(state,token,size,limit))(Unit{}))
+def trimLines(items: List<&2,String>,result: List<&2,String>) -> List<&2,String>:
+  match items:
+    case Nil{}: result
+    case text <> rest: trimLines(rest,trimEnd(text) <> result)
+def finishWrap(state: WrapState) -> List<&2,String>:
+  match state:
+    case WrapState{+line,_,_,+lines}:
+      +result = flushGroup(line,lines)
+      Bool.pick(List<&2,String>,List.is_empty(&2,String,result),"" <> Nil{},trimLines(result,Nil{}))
+def wrapSingleLine(+line: String,+width: Nat) -> List<&2,String>:
+  Bool.pick(Unit -> List<&2,String>,Nat.is_le(visibleWidth(line),width),_ => line <> Nil{},_ => finishWrap(wrapTokens(splitIntoTokensWithAnsi(line),width,WrapState{"",0n,emptyTracker(),Nil{}})))(Unit{})
+def physicalLines(text: String,current: String,done: List<&2,String>) -> List<&2,String>:
+  match text:
+    case SNil{}: List.reverse(&2,String,reverseInto(current,"") <> done)
+    case SCon{Chr{13},SCon{Chr{10},rest}}: physicalLines(rest,"",reverseInto(current,"") <> done)
+    case SCon{Chr{13},rest}: physicalLines(rest,"",reverseInto(current,"") <> done)
+    case SCon{Chr{10},rest}: physicalLines(rest,"",reverseInto(current,"") <> done)
+    case SCon{char,rest}: physicalLines(rest,SCon{char,current},done)
+def addLines(items: List<&2,String>,done: List<&2,String>) -> List<&2,String>:
+  match items:
+    case Nil{}: done
+    case text <> rest: addLines(rest,text <> done)
+def wrapPhysicalLines(items: List<&2,String>,+width: Nat,+tracker: AnsiCodeTracker,done: List<&2,String>) -> List<&2,String>:
+  match items:
+    case Nil{}: List.reverse(&2,String,done)
+    case +text <> rest: wrapPhysicalLines(rest,width,updateTrackerFromText(text,tracker),addLines(wrapSingleLine(getActiveCodes(tracker) ++ text,width),done))
+def wrapTextWithAnsi(text: String,width: Nat) -> List<&2,String>: wrapPhysicalLines(physicalLines(text,"",Nil{}),width,emptyTracker(),Nil{})
