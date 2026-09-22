@@ -4,6 +4,7 @@ import ../../types.bend as T
 import ../../api/openai-client.bend as Client
 import ../../api/openai-responses.bend as Responses
 import ../../utils/provider-retry.bend as Retry
+import ../../utils/jwt.bend as Jwt
 import ../../../../runtime/src/fetch.bend as Fetch
 import ../../../../runtime/src/http-message.bend as Headers
 import ../../../../runtime/src/http-response.bend as Response
@@ -11,9 +12,6 @@ import ../../../../runtime/src/url.bend as URL
 import ../../../../runtime/src/json.bend as Json
 import ../../../../runtime/src/schema-value.bend as V
 import ../../../../runtime/src/record.bend as R
-import ../../../../runtime/src/base64.bend as Base64
-import ../../../../runtime/src/utf8.bend as Utf8
-import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/f64.bend as F
@@ -35,67 +33,16 @@ type Flow is Data:
 # JWT payload
 # -----------
 
-# JWT segments are base64url without padding; atob-style decoding expects the
-# standard alphabet, so translate before decoding.
-def standardAlphabet(text: String) -> String:
-  match text:
-    case SNil{}: SNil{}
-    case SCon{'-', rest}: SCon{'+', standardAlphabet(rest)}
-    case SCon{'_', rest}: SCon{'/', standardAlphabet(rest)}
-    case SCon{c, rest}: SCon{c, standardAlphabet(rest)}
+def getAccountId(accessToken: String) -> Maybe<&2, String>:
+  Jwt.chatgptAccountId(accessToken)
 
-def padding(remainder: Nat) -> String:
-  match remainder:
-    case 2n: "=="
-    case 3n: "="
-    case _: ""
-
-def padded(+text: String) -> String:
-  text ++ padding(Nat.mod(String.length(text), 4n))
-
-def parsedJson(text: Result<&2, &2, Utf8.Error, String>) -> Maybe<&2, V.Value>:
-  match text:
-    case Fail{_}: None{}
-    case Done{value}: Result.default(&2, &2, Json.ParseError, Maybe<&2, V.Value>, Result.map(&2, &2, Json.ParseError, V.Value, Maybe<&2, V.Value>, value => Some{value}, Json.parse(value)), None{})
-
-def decodedJson(bytes: Result<&2, &2, Base64.Error, List<&2, U32>>) -> Maybe<&2, V.Value>:
-  match bytes:
-    case Fail{_}: None{}
-    case Done{octets}: parsedJson(Utf8.decodeStrict(octets))
-
-def payloadSegment(segments: List<&2, String>) -> Maybe<&2, String>:
-  match segments:
-    case _ <> payload <> _ <> Nil{}: Some{payload}
-    case _: None{}
-
-def decodeSegment(segment: Maybe<&2, String>) -> Maybe<&2, V.Value>:
-  match segment:
-    case None{}: None{}
-    case Some{payload}: decodedJson(Base64.decode(padded(standardAlphabet(payload))))
-
-def decodeJwt(token: String) -> Maybe<&2, V.Value>:
-  decodeSegment(payloadSegment(Strings.split(token, '.')))
+# Token responses
+# ---------------
 
 def nonemptyText(value: Maybe<&2, V.Value>) -> Maybe<&2, String>:
   match value:
     case Some{V.Text{SCon{first, rest}}}: Some{SCon{first, rest}}
     case _: None{}
-
-def claimField(claims: Maybe<&2, V.Value>) -> Maybe<&2, String>:
-  match claims:
-    case Some{V.ObjectValue{fields}}: nonemptyText(R.get(V.Value, fields, "chatgpt_account_id"))
-    case _: None{}
-
-def accountClaim(payload: Maybe<&2, V.Value>) -> Maybe<&2, String>:
-  match payload:
-    case Some{V.ObjectValue{fields}}: claimField(R.get(V.Value, fields, JWT_CLAIM_PATH()))
-    case _: None{}
-
-def getAccountId(accessToken: String) -> Maybe<&2, String>:
-  accountClaim(decodeJwt(accessToken))
-
-# Token responses
-# ---------------
 
 type OAuthToken is Data:
   OAuthToken{access: String, refresh: String, expires: F64}

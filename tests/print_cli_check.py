@@ -86,4 +86,9 @@ if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
 
     wrong = run(['--no-tools', '--model', 'gpt-4.1-mini', '--api-key', 'sk-invalid', '-p', 'hi'], timeout=300)
     check(wrong.returncode == 1 and wrong.stdout == b'' and wrong.stderr.strip() != b'', 'a rejected request exits 1 with the error on stderr')
+if os.environ.get('PI_BEND_CODEX_LIVE') == '1':
+    codex = run(['--no-tools', '--provider', 'openai-codex', '--model', 'gpt-5.5', '-p', 'Reply with exactly the word pong'],
+                env={'OPENAI_API_KEY': ''}, timeout=300)
+    check(codex.returncode == 0 and codex.stdout.decode().strip().lower().rstrip('.') == 'pong' and codex.stderr == b'', 'Codex runs through the existing OAuth login')
+
 print('print_cli_check: all checks passed', flush=True)

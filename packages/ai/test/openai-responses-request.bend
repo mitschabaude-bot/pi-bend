@@ -59,7 +59,7 @@ def check(actual: V.Value, expected: Result<&2, &2, Parse.ParseError, V.Value>) 
 
 def run(mode: String, +flags: String, expected: String) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, Request.BuildError, T.JsonValue> <- Request.buildParams(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, model(P.compat(String.split(flags, '.'))), context(H.decimal(mode, 0)), settings(), Request.getCompat("openai", "https://example.test", P.compat(String.split(flags, '.'))), R.new(String), T.CacheLong{})
+    result : Result<&2, &2, Request.BuildError, T.JsonValue> <- Request.buildParams(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, model(P.compat(String.split(flags, '.'))), context(H.decimal(mode, 0)), settings(), Request.getCompat("openai", "https://example.test", P.compat(String.split(flags, '.'))), R.new(String), T.CacheLong{}, Request.ResponsesEndpoint{})
     check(output(result), Parse.parse(H.fromScalars(H.parseNumbers(expected))))
 
 def all(arguments: List<String>) -> IO(Unit):
