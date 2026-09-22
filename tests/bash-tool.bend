@@ -13,11 +13,8 @@ import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/base64.bend as B64
 
 # One public call drives real callbacks; the host runner checks the wire frames.
-def encoded(value: Result<&2,&2,B64.Error,String>) -> String:
-  match value:
-    case Done{text}: text
-    case Fail{_}: "invalid"
-def wire(text: String) -> String: encoded(B64.encode(Utf8.encode(text)))
+# UTF-8 encoding already guarantees valid octets; use the direct encoder.
+def wire(text: String) -> String: B64.encoded(Utf8.encode(text), "")
 def check(value: Bool, message: String) -> IO(Unit):
   Bool.pick(IO(Unit),value,IO.pure(Unit,Unit{}),IO.die(Unit,1,message))
 def flag(value: Bool) -> String: Bool.pick(String,value,"true","false")
