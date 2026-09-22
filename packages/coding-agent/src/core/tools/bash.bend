@@ -10,6 +10,8 @@ import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/schema-value.bend as Value
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/f64.bend as F
+import ../../../../runtime/src/serial-resource.bend as Serial
+import ../../../../runtime/src/ref.bend as Ref
 
 # Typed operations are shared by local and injected (for example remote) shells.
 type BashToolInput is Data:
@@ -42,10 +44,15 @@ type BashToolOptions is Data:
   BashToolOptions{operations: Maybe<&2,BashOperations>, commandPrefix: Maybe<&2,String>, shellPath: Maybe<&2,String>, exposeSessionEnvironment: Maybe<&2,Bool>, spawnHook: Maybe<&2,C.Callback<BashSpawnContext,Result<&2,&2,OperationError,BashSpawnContext>>>}
 type LocalShell is Data:
   LocalShell{binDir: String, shellPath: Maybe<&2,String>}
+# Injected operations may retain onData until the tool is disposed. Closed
+# gates retain no output, and serialize retirement with in-flight appends.
+type OutputConsumer is Type:
+  OutputConsumer{gate: Serial.Owner<Maybe<&2,Output.StreamHandle>>, callback: C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>}
+def Consumers() -> Type: List<&1,OutputConsumer>
 type Invocation is Data:
-  Invocation{binDir: String, cwd: String, options: BashToolOptions, operations: BashOperations}
+  Invocation{binDir: String, cwd: String, options: BashToolOptions, operations: BashOperations, consumers: Maybe<&2,Ref.Ref<Consumers()>>}
 type ToolOwner is Type:
-  ToolOwner{tool: Agent.AgentTool<Maybe<&2,BashToolDetails>,Error>, ownedOperations: Maybe<&2,BashOperations>}
+  ToolOwner{tool: Agent.AgentTool<Maybe<&2,BashToolDetails>,Error>, ownedOperations: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>}
 
 def ToolResult() -> Data: Result<&2,&2,Error,Agent.AgentToolResult<Maybe<&2,BashToolDetails>>>
 def defaults() -> BashToolOptions: BashToolOptions{None{},None{},None{},None{},None{}}
@@ -315,10 +322,19 @@ def appendResult(result: Result<&2,&2,Output.Error,Unit>) -> Result<&2,&2,String
     case Done{Unit{}}: Done{Unit{}}
     case Fail{cause}: Fail{outputMessage(cause)}
 
-def acceptOutput(handle: Output.StreamHandle, bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
-  do IO<Result<&2,&2,String,Unit>>:
-    result : Result<&2,&2,Output.Error,Unit> <- Output.appendStream(handle,bytes)
-    return appendResult(result)
+def appendAccepted(bytes: List<&2,U32>, gate: Maybe<&2,Output.StreamHandle>) -> IO(Maybe<&2,Output.StreamHandle> & Result<&2,&2,String,Unit>):
+  match gate:
+    case None{}: IO.pure(Maybe<&2,Output.StreamHandle> & Result<&2,&2,String,Unit>,(None{},Done{Unit{}}))
+    case Some{+handle}:
+      do IO<Maybe<&2,Output.StreamHandle> & Result<&2,&2,String,Unit>>:
+        result : Result<&2,&2,Output.Error,Unit> <- Output.appendStream(handle,bytes)
+        return (Some{handle},appendResult(result))
+
+def acceptOutput(gate: Serial.Handle<Maybe<&2,Output.StreamHandle>>, bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  Serial.run(Maybe<&2,Output.StreamHandle>,Result<&2,&2,String,Unit>,gate,value => appendAccepted(bytes,value))
+
+def stopOutput(gate: Maybe<&2,Output.StreamHandle>) -> IO(Maybe<&2,Output.StreamHandle> & Unit):
+  IO.pure(Maybe<&2,Output.StreamHandle> & Unit,(None{},Unit{}))
 
 def publication(update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>) -> IO(Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>>):
   match update:
@@ -334,24 +350,41 @@ def disposePublication(publication: Maybe<&2,C.Callback<Output.OutputSnapshot,Un
     case None{}: IO.pure(Unit,Unit{})
     case Some{callback}: C.dispose(Output.OutputSnapshot,Unit,callback)
 
-def runOwned(operations: BashOperations, spawn: BashSpawnContext, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, stream: Output.StreamOwner & Output.StreamHandle) -> IO(ToolResult()):
-  match operations spawn stream:
-    case BashOperations{exec} BashSpawnContext{command,cwd,env} Tuple{owner,handle}:
+def retainConsumer(registry: Maybe<&2,Ref.Ref<Consumers()>>, consumer: OutputConsumer) -> IO(Unit):
+  match registry consumer:
+    case Some{registry} value: Ref.modify(Consumers(),Unit,registry,previous => (value <> previous,Unit{}))
+    case None{} OutputConsumer{gate,callback}:
+      do IO<Unit>:
+        C.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,callback)
+        retired : Maybe<&2,Output.StreamHandle> <- Serial.retire(Maybe<&2,Output.StreamHandle>,gate)
+        return Unit{}
+
+def executeObserved(operations: BashOperations, spawn: BashSpawnContext, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, consumers: Maybe<&2,Ref.Ref<Consumers()>>, owner: Output.StreamOwner, gate: Serial.Owner<Maybe<&2,Output.StreamHandle>> & Serial.Handle<Maybe<&2,Output.StreamHandle>>) -> IO(ToolResult()):
+  match operations spawn gate:
+    case BashOperations{exec} BashSpawnContext{command,cwd,env} Tuple{gateOwner,+handle}:
       do IO<ToolResult()>:
-        +onData : C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- C.create(~Output.StreamHandle,~List<&2,U32>,~Result<&2,&2,String,Unit>,~acceptOutput,handle)
+        +onData : C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- C.create(~Serial.Handle<Maybe<&2,Output.StreamHandle>>,~List<&2,U32>,~Result<&2,&2,String,Unit>,~acceptOutput,handle)
         result : Result<&2,&2,OperationError,Maybe<&2,U32>> <- C.call(BashExecutionInput,Result<&2,&2,OperationError,Maybe<&2,U32>>,exec,BashExecutionInput{command,cwd,onData,signal,timeout,Some{env}})
-        C.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,onData)
+        Serial.run(Maybe<&2,Output.StreamHandle>,Unit,handle,stopOutput)
+        retainConsumer(consumers,OutputConsumer{gateOwner,onData})
         output : Result<&2,&1,Output.Error,Output.OutputSnapshot & Nat> <- Output.finishStream(owner)
         return finishResult(result,output)
 
-def runPrepared(operations: BashOperations, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>, spawn: Result<&2,&2,OperationError,BashSpawnContext>) -> IO(ToolResult()):
+def runOwned(operations: BashOperations, spawn: BashSpawnContext, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, consumers: Maybe<&2,Ref.Ref<Consumers()>>, stream: Output.StreamOwner & Output.StreamHandle) -> IO(ToolResult()):
+  match stream:
+    case (owner,handle):
+      do IO<ToolResult()>:
+        gate : Serial.Owner<Maybe<&2,Output.StreamHandle>> <- Serial.create(Maybe<&2,Output.StreamHandle>,Some{handle})
+        executeObserved(operations,spawn,signal,timeout,consumers,owner,Serial.borrow(Maybe<&2,Output.StreamHandle>,gate))
+
+def runPrepared(consumers: Maybe<&2,Ref.Ref<Consumers()>>, operations: BashOperations, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>, spawn: Result<&2,&2,OperationError,BashSpawnContext>) -> IO(ToolResult()):
   match spawn:
     case Fail{cause}: IO.pure(ToolResult(),Fail{ExecutionError{cause,""}})
     case Done{context}:
       do IO<ToolResult()>:
         +observer : Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>> <- publication(update)
         stream : Output.StreamOwner <- Output.createStream(Output.OutputAccumulatorOptions{None{},None{},Some{"pi-bash"}},observer)
-        result : ToolResult() <- runOwned(operations,context,signal,timeout,Output.borrowStream(stream))
+        result : ToolResult() <- runOwned(operations,context,signal,timeout,consumers,Output.borrowStream(stream))
         disposePublication(observer)
         return result
 
@@ -369,11 +402,11 @@ def preparedContext(cwd: String, command: String, options: BashToolOptions, +con
 def invokeInput(invocation: Invocation, context: BashContext, signal: Maybe<&2,Abort.AbortSignal<Unit>>, update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>, input: Result<&2,&2,Error,BashToolInput>) -> IO(ToolResult()):
   match invocation input:
     case _ Fail{cause}: IO.pure(ToolResult(),Fail{cause})
-    case Invocation{binDir,cwd,options,operations} Done{BashToolInput{command,timeout}}:
+    case Invocation{binDir,cwd,options,operations,consumers} Done{BashToolInput{command,timeout}}:
       do IO<ToolResult()>:
         env : Result<&2,&2,Shell.Error,Shell.Environment()> <- Shell.loadShellEnv(binDir)
         spawn : Result<&2,&2,OperationError,BashSpawnContext> <- preparedContext(cwd,command,options,context,env)
-        runPrepared(operations,signal,timeout,update,spawn)
+        runPrepared(consumers,operations,signal,timeout,update,spawn)
 
 def invokeWithContext(invocation: Invocation, context: BashContext, request: Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>) -> IO(ToolResult()):
   match request:
@@ -382,33 +415,50 @@ def invokeWithContext(invocation: Invocation, context: BashContext, request: Age
 def invoke(invocation: Invocation, request: Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>) -> IO(ToolResult()):
   invokeWithContext(invocation,noContext(),request)
 
-def created(invocation: Invocation, owned: Maybe<&2,BashOperations>) -> IO(ToolOwner):
+def created(invocation: Invocation, owned: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
   do IO<ToolOwner>:
     callback : C.Callback<Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,ToolResult()> <- C.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,~ToolResult(),~invoke,invocation)
-    return ToolOwner{Agent.AgentTool{"bash","Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"bash",None{},callback,None{},None{}},owned}
+    return ToolOwner{Agent.AgentTool{"bash","Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"bash",None{},callback,None{},None{}},owned,consumers}
 
 # The managed binary directory is an explicit runtime/configuration dependency.
 # Injected operations and hooks remain borrowed; default operations are owned.
-def createBashTool(+binDir: String, cwd: String, +options: BashToolOptions) -> IO(ToolOwner):
+def createWithConsumers(+binDir: String, cwd: String, +options: BashToolOptions, +consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
   match options:
-    case BashToolOptions{Some{operations},_,_,_,_}: created(Invocation{binDir,cwd,options,operations},None{})
+    case BashToolOptions{Some{operations},_,_,_,_}: created(Invocation{binDir,cwd,options,operations,Some{consumers}},None{},consumers)
     case BashToolOptions{None{},_,shellPath,_,_}:
       do IO<ToolOwner>:
         +operations : BashOperations <- createLocalBashOperations(binDir,shellPath)
-        created(Invocation{binDir,cwd,options,operations},Some{operations})
+        created(Invocation{binDir,cwd,options,operations,None{}},Some{operations},consumers)
+
+def createBashTool(binDir: String, cwd: String, options: BashToolOptions) -> IO(ToolOwner):
+  do IO<ToolOwner>:
+    consumers : Ref.Ref<Consumers()> <- Ref.new(Consumers(),Nil{})
+    createWithConsumers(binDir,cwd,options,consumers)
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,BashToolDetails>,Error>:
   match owner:
-    case ToolOwner{+tool,operations}: (ToolOwner{tool,operations},tool)
+    case ToolOwner{+tool,operations,consumers}: (ToolOwner{tool,operations,consumers},tool)
 
 def disposeOwned(operations: Maybe<&2,BashOperations>) -> IO(Unit):
   match operations:
     case None{}: IO.pure(Unit,Unit{})
     case Some{operations}: disposeOperations(operations)
 
+def disposeConsumers(values: Consumers()) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case OutputConsumer{gate,callback} <> rest:
+      do IO<Unit>:
+        C.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,callback)
+        retired : Maybe<&2,Output.StreamHandle> <- Serial.retire(Maybe<&2,Output.StreamHandle>,gate)
+        disposeConsumers(rest)
+
+# As with other tool callbacks, callers retire borrowed aliases before disposal.
 def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
-    case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_},operations}:
+    case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_},operations,consumers}:
       do IO<Unit>:
         C.dispose(Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,ToolResult(),callback)
         disposeOwned(operations)
+        retained : Consumers() <- Ref.dispose(Consumers(),consumers)
+        disposeConsumers(retained)
