@@ -41,15 +41,10 @@ def strictSchemaMessage(error: StrictSchemaError) -> String:
 def unsupportedKeys() -> List<&2, String>:
   "$ref" <> "$defs" <> "definitions" <> "allOf" <> "oneOf" <> "patternProperties" <> "dependentSchemas" <> "dependencies" <> "unevaluatedProperties" <> "propertyNames" <> "contains" <> "prefixItems" <> "not" <> "if" <> "then" <> "else" <> Nil{}
 
-def present(value: Maybe<&2, V.Value>) -> Bool:
-  match value:
-    case None{}: False{}
-    case Some{_}: True{}
-
 def unsupported(keys: List<&2, String>, +fields: R.Record<V.Value>) -> Maybe<&2, String>:
   match keys:
     case Nil{}: None{}
-    case +key <> rest: Bool.pick(Maybe<&2, String>, present(R.get(V.Value, fields, key)), Some{key}, unsupported(rest, fields))
+    case +key <> rest: Bool.pick(Maybe<&2, String>, Maybe.is_some(&2, V.Value, R.get(V.Value, fields, key)), Some{key}, unsupported(rest, fields))
 
 def textEquals(value: Maybe<&2, V.Value>, expected: String) -> Bool:
   match value:
@@ -75,7 +70,7 @@ def typeIncludes(value: Maybe<&2, V.Value>, +expected: String) -> Bool:
 
 def structured(value: V.Value) -> Bool:
   match value:
-    case V.ObjectValue{+fields}: typeIncludes(R.get(V.Value, fields, "type"), "object") || typeIncludes(R.get(V.Value, fields, "type"), "array") || present(R.get(V.Value, fields, "properties")) || present(R.get(V.Value, fields, "items"))
+    case V.ObjectValue{+fields}: typeIncludes(R.get(V.Value, fields, "type"), "object") || typeIncludes(R.get(V.Value, fields, "type"), "array") || Maybe.is_some(&2, V.Value, R.get(V.Value, fields, "properties")) || Maybe.is_some(&2, V.Value, R.get(V.Value, fields, "items"))
     case _: False{}
 
 def nullConstant(value: Maybe<&2, V.Value>) -> Bool:
@@ -158,7 +153,7 @@ def stringValues(values: List<&2, V.Value>) -> Bool:
 def knownRequired(required: List<&2, V.Value>, +properties: R.Record<V.Value>) -> Bool:
   match required:
     case Nil{}: True{}
-    case V.Text{key} <> rest: present(R.get(V.Value, properties, key)) && knownRequired(rest, properties)
+    case V.Text{key} <> rest: Maybe.is_some(&2, V.Value, R.get(V.Value, properties, key)) && knownRequired(rest, properties)
     case _: False{}
 
 def propertyNames(properties: List<&2, R.Property<V.Value>>) -> List<&2, V.Value>:
@@ -193,7 +188,7 @@ def additionalPlan(value: Maybe<&2, V.Value>, +fields: R.Record<V.Value>, rest: 
 def objectPlan(isObject: Bool, +fields: R.Record<V.Value>, rest: List<&2, Task>) -> Step:
   match isObject:
     case True{}: additionalPlan(R.get(V.Value, fields, "additionalProperties"), fields, rest)
-    case False{}: Bool.pick(Step, present(R.get(V.Value, fields, "properties")), Reject{PropertiesRequireObject{}}, Continue{rest, V.ObjectValue{fields}})
+    case False{}: Bool.pick(Step, Maybe.is_some(&2, V.Value, R.get(V.Value, fields, "properties")), Reject{PropertiesRequireObject{}}, Continue{rest, V.ObjectValue{fields}})
 
 def completedObject(fields: R.Record<V.Value>, properties: R.Record<V.Value>, names: List<&2, V.Value>, hadProperties: Bool) -> V.Value:
   +result = R.set(V.Value, R.set(V.Value, fields, "required", V.ArrayValue{names}), "additionalProperties", V.Boolean{False{}})

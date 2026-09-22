@@ -425,11 +425,6 @@ type LabelError is Data:
 type ValidatedLabel is Data:
   ValidatedLabel{text: String, empty: Bool, bidi: Analysis}
 
-def isEmpty(text: String) -> Bool:
-  match text:
-    case SNil{}: True{}
-    case _: False{}
-
 def effectiveMode(encoded: Bool, mode: Mode) -> Mode:
   match encoded:
     case True{}: Nontransitional{}
@@ -440,7 +435,7 @@ def contextualResult(analysis: Result<&2, &2, U32, LabelContextAnalysis>, checkJ
     case Fail{code} _: Fail{MissingProperties{code}}
     case Done{LabelContextAnalysis{True{}, _, _}} _: Fail{LeadingMark{}}
     case Done{LabelContextAnalysis{False{}, _, False{}}} True{}: Fail{JoinerContext{}}
-    case Done{LabelContextAnalysis{False{}, bidi, _}} _: Done{ValidatedLabel{text, isEmpty(text), bidi}}
+    case Done{LabelContextAnalysis{False{}, bidi, _}} _: Done{ValidatedLabel{text, String.is_empty(text), bidi}}
 
 def afterRules(failure: Maybe<&2, LabelRulesError>, properties: Table.Table<Data.PropertiesEntry>, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, ValidatedLabel>:
   match failure:

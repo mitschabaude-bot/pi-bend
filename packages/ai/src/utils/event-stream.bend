@@ -92,11 +92,6 @@ def push(-T: Data, -R: Data, stream: EventStream<T, R>, event: T) -> IO(Unit):
         closed : Bool <- Ref.modify(State<T>, Bool, state, current => doneState(T, current))
         pushOpen(T, R, closed, state, finalResult, predicate, extract, event)
 
-def hasResult(-R: Data, value: Maybe<&2, R>) -> Bool:
-  match value:
-    case None{}: False{}
-    case Some{_}: True{}
-
 def endState(-T: Data, state: State<T>, +provided: Bool) -> State<T> & (List<&2, Chan(Iteration<T>)> & Bool):
   match state:
     case State{queue, waiting, _, +claimed}: (State{queue, Q.new(Chan(Iteration<T>)), True{}, claimed || provided}, (Q.drain(Chan(Iteration<T>), waiting), provided && Bool.not(claimed)))
@@ -127,7 +122,7 @@ def end(-T: Data, -R: Data, stream: EventStream<T, R>, +value: Maybe<&2, R>) -> 
   match stream:
     case EventStream{state, finalResult, _, _}:
       do IO<Unit>:
-        ended : List<&2, Chan(Iteration<T>)> & Bool <- Ref.modify(State<T>, List<&2, Chan(Iteration<T>)> & Bool, state, current => endState(T, current, hasResult(R, value)))
+        ended : List<&2, Chan(Iteration<T>)> & Bool <- Ref.modify(State<T>, List<&2, Chan(Iteration<T>)> & Bool, state, current => endState(T, current, Maybe.is_some(&2, R, value)))
         publishEnd(T, R, finalResult, value, ended)
 
 # Like the upstream method, return the same final-result promise immediately.
