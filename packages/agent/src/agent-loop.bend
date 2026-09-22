@@ -1726,8 +1726,8 @@ def Validator(-Error: Data) -> Data: C.Callback<ValidationInput(), ValidationOut
 
 def validatePlain(input: ValidationInput()) -> Validation.ToolValidation():
   match input:
-    case ToolValidationInput{tool, OriginalCall{call}}: Validation.validatePlainToolArguments(tool, call)
-    case ToolValidationInput{tool, ReplacedCall{call}}: Validation.validatePlainToolArguments(tool, call)
+    case ToolValidationInput{tool, OriginalCall{call}}: Validation.checkPlainToolArguments(tool, call)
+    case ToolValidationInput{tool, ReplacedCall{call}}: Validation.checkPlainToolArguments(tool, call)
 
 def mapped(-Error: Data, mapError: Validation.ToolValidationError -> Error, result: Validation.ToolValidation()) -> ValidationOutput(Error):
   match result:

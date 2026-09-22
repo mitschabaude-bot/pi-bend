@@ -314,6 +314,24 @@ def validatePlainToolArguments(tool: Ai.Tool<V.Value>, call: Ai.ToolCall<V.Value
     case Ai.Tool{_, _, +schema, _} Ai.ToolCall{_, name, +arguments, _, _}:
       normalizedToolArguments(name, schema, arguments, normalizeOptionalNulls(arguments, schema))
 
+# Agent execution checks types before invoking effects. Conversion remains an
+# explicit library operation; it must not turn malformed model output into a
+# different command. Optional non-nullable nulls retain their omission policy.
+def checkedSchema(name: String, schema: V.Value, received: V.Value, +value: V.Value, compiled: Loader.Loaded()) -> ToolValidation():
+  match compiled:
+    case Fail{error}: Fail{InvalidToolSchema{name, error}}
+    case Done{+validator}: toolArgumentsChecked(Schema.check(validator, value), name, schema, received, validator, value)
+
+def checkedNormalized(name: String, +schema: V.Value, received: V.Value, normalized: Normalize.Outcome()) -> ToolValidation():
+  match normalized:
+    case Fail{error}: Fail{NormalizationFailed{name, error}}
+    case Done{value}: checkedSchema(name, schema, received, value, Loader.compile(schema))
+
+def checkPlainToolArguments(tool: Ai.Tool<V.Value>, call: Ai.ToolCall<V.Value>) -> ToolValidation():
+  match tool call:
+    case Ai.Tool{_, _, +schema, _} Ai.ToolCall{_, name, +arguments, _, _}:
+      checkedNormalized(name, schema, arguments, normalizeOptionalNulls(arguments, schema))
+
 def declaredToolName(tool: Ai.Tool<V.Value>) -> String:
   match tool:
     case Ai.Tool{name, _, _, _}: name

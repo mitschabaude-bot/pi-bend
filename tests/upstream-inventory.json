@@ -20,7 +20,7 @@
         "packages/agent/test/agent-loop-termination.bend"
       ],
       "sha256": "47cdde0c9b42b99baed7d2d8aeca2409b9465b1155b3b060b59ae20535cf9f53",
-      "notes": "All 24 named upstream cases ported across seven native fixtures and rebuilt/passed on one and four threads. Original meaningful assertions retained; typed errors/default selection, immutable hook updates and system field equality replace JS exceptions/omission/mutation/identity. Channel gates replace timing assumptions. This status covers this pinned test suite, not the higher-level Agent API, complete schema integration or providers. Supplemental wrapper/failure tests are tracked separately."
+      "notes": "All 24 named upstream cases ported across seven native fixtures and rebuilt/passed on one and four threads. Original meaningful assertions retained; typed errors/default selection, immutable hook updates and system field equality replace JS exceptions/omission/mutation/identity. Channel gates replace timing assumptions. This status covers this pinned test suite, not the higher-level Agent API, complete schema integration or providers. Supplemental wrapper/failure tests are tracked separately. Supplemental agent-validation.bend covers strict default validation: unlike upstream, coercible scalar mismatches are rejected before execution; optional-null normalization remains. Both original/prepared call paths retain typed failures. Explicit coercion APIs are still available; see packages/agent/README.md."
     },
     {
       "source": "packages/agent/test/agent.test.ts",
@@ -36,7 +36,7 @@
         "packages/agent/test/agent-late-updates.bend"
       ],
       "sha256": "c749bae5d7d9787b9f64009c065210c51622ad04dfd941388fee6b668c5b29f4",
-      "notes": "All 27 named upstream cases mapped across eight native fixtures; all pass together on one and four threads with exact upstream names checked once per run. Meaningful original assertions retained. Typed errors, immutable snapshots, explicit optional callbacks and channel/abort barriers replace JS exceptions, reference assertions and timer polling. Empty argument/detail fixture adapters use Unit where their values are not asserted; declaration schema structure is retained. This status covers the pinned Agent test suite, not full Agent API/configuration accessors, complete schema validation/inference, providers or package parity."
+      "notes": "All 27 named upstream cases mapped across eight native fixtures; all pass together on one and four threads with exact upstream names checked once per run. Meaningful original assertions retained. Typed errors, immutable snapshots, explicit optional callbacks and channel/abort barriers replace JS exceptions, reference assertions and timer polling. Empty argument/detail fixture adapters use Unit where their values are not asserted; declaration schema structure is retained. This status covers the pinned Agent test suite, not full Agent API/configuration accessors, complete schema validation/inference, providers or package parity. Supplemental agent-validation.bend covers strict default validation: unlike upstream, coercible scalar mismatches are rejected before execution; optional-null normalization remains. Both original/prepared call paths retain typed failures. Explicit coercion APIs are still available; see packages/agent/README.md."
     },
     {
       "source": "packages/agent/test/e2e.test.ts",
@@ -3007,11 +3007,15 @@
         "tests/edit-public.bend",
         "tests/edit_public_check.py",
         "tests/edit-operations.bend",
-        "tests/edit_operations_check.py"
+        "tests/edit_operations_check.py",
+        "tests/read-public.bend",
+        "tests/read_public_check.py",
+        "tests/read-operations.bend",
+        "tests/read_operations_check.py"
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
       "implementation": "packages/coding-agent/src/core/tools/",
-      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial."
+      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default image codecs and rendering remain pending (tests/read-tool.md)."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",

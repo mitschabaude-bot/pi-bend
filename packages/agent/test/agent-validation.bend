@@ -34,7 +34,7 @@ def mapError(error: Validation.ToolValidationError) -> String:
 def typedIdentity(error: Validation.ToolValidationError) -> Validation.ToolValidationError: error
 def field(value: V.Value) -> V.Value: V.ObjectValue{Record.Record{Record.Property{"value", value} <> Nil{}}}
 def raw(valid: Bool) -> V.Value:
-  V.ObjectValue{Record.Record{Record.Property{"value", V.Text{Bool.pick(String, valid, "42", "bad")}} <> Record.Property{"note", V.Null{}} <> Nil{}}}
+  V.ObjectValue{Record.Record{Record.Property{"value", Bool.pick(V.Value, valid, V.Number{F.fromU32(42)}, V.Text{"bad"})} <> Record.Property{"note", V.Null{}} <> Nil{}}}
 def kind(name: String) -> V.Value: V.ObjectValue{Record.Record{Record.Property{"type", V.Text{name}} <> Nil{}}}
 def schema() -> V.Value:
   V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", V.ObjectValue{Record.Record{Record.Property{"value", kind("number")} <> Record.Property{"note", kind("string")} <> Nil{}}}} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Record.Property{"additionalProperties", V.Boolean{False{}}} <> Nil{}}}
@@ -56,7 +56,7 @@ def execute(counter: R.Ref<U32>, input: ExecuteInput()) -> IO(ExecuteOutput()):
   match input:
     case T.ToolExecutionInput{"call", args, Some{_}, Some{_}}:
       do IO<ExecuteOutput()>:
-        Test.assertion(V.equal(args, field(V.Number{F.fromU32(42)})), "executor receives coerced number with optional null removed")
+        Test.assertion(V.equal(args, field(V.Number{F.fromU32(42)})), "executor receives the original number with optional null removed")
         R.modify(U32, Unit, counter, old => (U32.add(old, 1), Unit{}))
         return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"accepted", None{}}} <> Nil{}, "done", None{}, None{}}}
     case _: IO.die(ExecuteOutput(), 1, "unexpected executor input")
@@ -143,8 +143,52 @@ def typedFailure() -> IO(Unit):
     second : Service.ValidationOutput(Validation.ToolValidationError) <- C.call(Service.ValidationInput(), Service.ValidationOutput(Validation.ToolValidationError), validator, Loop.ToolValidationInput{tool, Loop.ReplacedCall{call}})
     Test.assertion(invalidSchema(first) && invalidSchema(second), "both call paths preserve typed unsupported-schema failures")
     Service.disposeValidation(Validation.ToolValidationError, validator)
+
+def strictOutcome(valid: Bool, input: V.Value, result: Validation.ToolValidation()) -> IO(Unit):
+  match valid result:
+    case True{} Done{value}: Test.assertion(V.equal(input,value), "strict validation preserves matching arguments")
+    case False{} Fail{Validation.InvalidToolArguments{_,_,original,_,_}}: Test.assertion(V.equal(input,original), "strict rejection retains original arguments")
+    case _ _: Test.assertion(False{}, "strict validator must reject type mismatches without conversion")
+
+def strictCase(typeName: String, +value: V.Value, +valid: Bool) -> IO(Unit):
+  do IO<Unit>:
+    +parameters : V.Value = V.ObjectValue{Record.Record{Record.Property{"type",V.Text{"object"}} <> Record.Property{"properties",field(kind(typeName))} <> Record.Property{"required",V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
+    +tool : Ai.Tool<V.Value> = Ai.Tool{"echo","Echo",parameters,None{}}
+    +call : Ai.ToolCall<V.Value> = Ai.ToolCall{"call","echo",field(value),None{},None{}}
+    strictOutcome(valid,field(value),Service.validatePlain(Loop.ToolValidationInput{tool,Loop.OriginalCall{call}}))
+    strictOutcome(valid,field(value),Service.validatePlain(Loop.ToolValidationInput{tool,Loop.ReplacedCall{call}}))
+
+type TypedValue is Data:
+  TypedValue{kind: String, value: V.Value}
+
+def strictColumns(+wanted: String, values: List<&2,TypedValue>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case TypedValue{actual,value} <> rest:
+      do IO<Unit>:
+        strictCase(wanted,value,String.eq(wanted,actual))
+        strictColumns(wanted,rest)
+
+def strictRows(values: List<&2,TypedValue>, +all: List<&2,TypedValue>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case TypedValue{kind,_} <> rest:
+      do IO<Unit>:
+        strictColumns(kind,all)
+        strictRows(rest,all)
+
+def strictTypes() -> IO(Unit):
+  do IO<Unit>:
+    +values : List<&2,TypedValue> = TypedValue{"string",V.Text{"42"}} <> TypedValue{"number",V.Number{F.fromU32(1)}} <> TypedValue{"boolean",V.Boolean{False{}}} <> TypedValue{"null",V.Null{}} <> TypedValue{"array",V.ArrayValue{Nil{}}} <> TypedValue{"object",V.ObjectValue{Record.Record{Nil{}}}} <> Nil{}
+    strictRows(values,values)
+    strictCase("boolean",V.Text{"true"},False{})
+    strictCase("integer",V.Text{"42"},False{})
+    strictCase("integer",V.Number{F.fromU32(42)},True{})
+    IO.print("PASS strict original/replaced tool argument types without scalar conversion")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     scenario(True{})
     scenario(False{})
     typedFailure()
+    strictTypes()
