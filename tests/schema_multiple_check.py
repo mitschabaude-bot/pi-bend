@@ -31,7 +31,7 @@ for i,(case,result) in enumerate(zip(builders,reference,strict=True),len(cases))
     converted=result['converted']
     if 'number' in converted:output='V.Number{F.fromBits('+', '.join(map(str,converted['number']))+')}'
     else:output=value(converted['scalar'])
-    lines += [f'def case{i}() -> IO(Unit):',f'  BuilderTest.configured(D.withOptions(D.numberBuilder(), {options}), {value(case["value"])}, {value(result["schema"])}, {output}, '+('True{}' if result['valid'] else 'False{}')+f', "multiple builder {i}")']
+    lines += [f'def case{i}() -> IO(Unit):',f'  BuilderTest.configured(D.withOptions(D.number(), {options}), {value(case["value"])}, {value(result["schema"])}, {output}, '+('True{}' if result['valid'] else 'False{}')+f', "multiple builder {i}")']
 count=len(cases)+len(builders)
 for i,bad in enumerate([None,True,'2',[],{}],count):
     lines += [f'def case{i}() -> IO(Unit):',f'  T.schemaFailure(Validation.validatePlainToolArguments(Ai.Tool{{"echo", "", {value({"multipleOf":bad})}, None{{}}}}, Ai.ToolCall{{"id", "echo", V.Null{{}}, None{{}}, None{{}}}}))']

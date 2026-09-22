@@ -44,7 +44,7 @@ def adaptValue(+delta: U32, points: U32) -> U32:
 def adapt(+delta: U32, points: U32, first: Bool) -> U32:
   adaptValue(Bool.pick(U32, first, (delta / 700 : U32), (delta / 2 : U32)), points)
 
-def digitCore(+value: U32) -> Char:
+def digitChar(+value: U32) -> Char:
   Chr{Bool.pick(U32, U32.is_lt(value, 26), (97 + value : U32), (22 + value : U32))}
 
 def digitValue(+code: U32) -> Maybe<&2, U32>:
@@ -54,13 +54,13 @@ def digitValue(+code: U32) -> Maybe<&2, U32>:
 
 def writeLoop(fuel: Nat, +q: U32, +bias: U32, +k: U32, reversed: String, +t: U32, stop: Bool) -> Result<&2, &2, Error, String>:
   match fuel stop:
-    case _ True{}: Done{SCon{digitCore(q), reversed}}
+    case _ True{}: Done{SCon{digitChar(q), reversed}}
     case Zero{} False{}: Fail{Overflow{}}
     case Succ{rest} False{}:
       +next = ((q - t) / (36 - t) : U32)
       +step = (k + 36 : U32)
       +limit = threshold(step, bias)
-      writeLoop(rest, next, bias, step, SCon{digitCore((t + (q - t) % (36 - t) : U32)), reversed}, limit, U32.is_lt(next, limit))
+      writeLoop(rest, next, bias, step, SCon{digitChar((t + (q - t) % (36 - t) : U32)), reversed}, limit, U32.is_lt(next, limit))
 
 # Append the encoded integer to an already reversed output accumulator.
 def write(+q: U32, +bias: U32, reversed: String) -> Result<&2, &2, Error, String>:
@@ -90,10 +90,10 @@ def digitProduct(value: U32, product: Result<&2, &2, Error, U32>) -> Result<&2, 
     case Fail{error}: Fail{error}
     case Done{product}: add(value, product)
 
-def readDigit(digitCore: Maybe<&2, U32>, value: U32, +weight: U32, k: U32, +t: U32) -> Result<&2, &2, Error, IntegerState>:
-  match digitCore:
+def readDigit(digit: Maybe<&2, U32>, value: U32, +weight: U32, k: U32, +t: U32) -> Result<&2, &2, Error, IntegerState>:
+  match digit:
     case None{}: Fail{InvalidInput{}}
-    case Some{+digitCore}: integerStep(U32.is_lt(digitCore, t), digitProduct(value, multiply(digitCore, weight)), weight, k, t)
+    case Some{+digit}: integerStep(U32.is_lt(digit, t), digitProduct(value, multiply(digit, weight)), weight, k, t)
 
 def readLoop(text: String, +bias: U32, state: Result<&2, &2, Error, IntegerState>) -> Result<&2, &2, Error, Read>:
   match text state:
@@ -109,17 +109,17 @@ def read(text: String, bias: U32, initial: U32) -> Result<&2, &2, Error, Read>:
 type Basics is Data:
   Basics{count: U32, total: U32, reversed: String}
 
-def basicEncode(valid: Bool, ascii: Bool, code: U32, state: Basics) -> Result<&2, &2, Error, Basics>:
+def encodeBasic(valid: Bool, ascii: Bool, code: U32, state: Basics) -> Result<&2, &2, Error, Basics>:
   match valid ascii state:
     case False{} _ _: Fail{InvalidInput{}}
     case True{} True{} Basics{count, total, reversed}: Done{Basics{(count + 1 : U32), (total + 1 : U32), SCon{Chr{code}, reversed}}}
     case True{} False{} Basics{count, total, reversed}: Done{Basics{count, (total + 1 : U32), reversed}}
 
-def basicsEncode(text: String, state: Result<&2, &2, Error, Basics>) -> Result<&2, &2, Error, Basics>:
+def encodeBasics(text: String, state: Result<&2, &2, Error, Basics>) -> Result<&2, &2, Error, Basics>:
   match text state:
     case _ Fail{error}: Fail{error}
     case SNil{} result: result
-    case SCon{Chr{+code}, rest} Done{state}: basicsEncode(rest, basicEncode(scalar(code), U32.is_lt(code, 128), code, state))
+    case SCon{Chr{+code}, rest} Done{state}: encodeBasics(rest, encodeBasic(scalar(code), U32.is_lt(code, 128), code, state))
 
 type EncodeState is Data:
   EncodeState{next: U32, delta: U32, bias: U32, handled: U32, reversed: String}
@@ -143,22 +143,22 @@ def advance(+next: U32, state: EncodeState) -> Result<&2, &2, Error, EncodeState
   match state:
     case EncodeState{previous, delta, bias, +handled, reversed}: advanced(multiply((next - previous : U32), (handled + 1 : U32)), delta, next, bias, handled, reversed)
 
-def emitted(result: Result<&2, &2, Error, String>, next: U32, delta: U32, +handled: U32, basicsEncode: U32) -> Result<&2, &2, Error, EncodeState>:
+def emitted(result: Result<&2, &2, Error, String>, next: U32, delta: U32, +handled: U32, basicCount: U32) -> Result<&2, &2, Error, EncodeState>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{reversed}: Done{EncodeState{next, 0, adapt(delta, (handled + 1 : U32), U32.is_eq(handled, basicsEncode)), (handled + 1 : U32), reversed}}
+    case Done{reversed}: Done{EncodeState{next, 0, adapt(delta, (handled + 1 : U32), U32.is_eq(handled, basicCount)), (handled + 1 : U32), reversed}}
 
-def pointEncode(less: Bool, equal: Bool, state: EncodeState, basicsEncode: U32) -> Result<&2, &2, Error, EncodeState>:
+def encodePoint(less: Bool, equal: Bool, state: EncodeState, basicCount: U32) -> Result<&2, &2, Error, EncodeState>:
   match less equal state:
     case True{} _ EncodeState{next, delta, bias, handled, reversed}: withDelta(add(delta, 1), next, bias, handled, reversed)
-    case False{} True{} EncodeState{next, +delta, bias, handled, reversed}: emitted(write(delta, bias, reversed), next, delta, handled, basicsEncode)
+    case False{} True{} EncodeState{next, +delta, bias, handled, reversed}: emitted(write(delta, bias, reversed), next, delta, handled, basicCount)
     case False{} False{} state: Done{state}
 
-def scan(text: String, +basicsEncode: U32, state: Result<&2, &2, Error, EncodeState>) -> Result<&2, &2, Error, EncodeState>:
+def scan(text: String, +basicCount: U32, state: Result<&2, &2, Error, EncodeState>) -> Result<&2, &2, Error, EncodeState>:
   match text state:
     case _ Fail{error}: Fail{error}
     case SNil{} result: result
-    case SCon{Chr{+code}, rest} Done{EncodeState{+next, delta, bias, handled, reversed}}: scan(rest, basicsEncode, pointEncode(U32.is_lt(code, next), U32.is_eq(code, next), EncodeState{next, delta, bias, handled, reversed}, basicsEncode))
+    case SCon{Chr{+code}, rest} Done{EncodeState{+next, delta, bias, handled, reversed}}: scan(rest, basicCount, encodePoint(U32.is_lt(code, next), U32.is_eq(code, next), EncodeState{next, delta, bias, handled, reversed}, basicCount))
 
 type Progress is Data:
   Active{state: EncodeState}
@@ -179,18 +179,18 @@ def passResult(total: U32, result: Result<&2, &2, Error, EncodeState>) -> Result
     case Fail{error}: Fail{error}
     case Done{EncodeState{next, delta, bias, +handled, reversed}}: checkedPass(U32.is_eq(handled, total), EncodeState{next, delta, bias, handled, reversed})
 
-def pass(+text: String, basicsEncode: U32, total: U32, state: EncodeState) -> Result<&2, &2, Error, Progress>:
+def pass(+text: String, basicCount: U32, total: U32, state: EncodeState) -> Result<&2, &2, Error, Progress>:
   match state:
-    case EncodeState{+next, delta, bias, handled, reversed}: passResult(total, scan(text, basicsEncode, advance(nextCode(text, next, 1114111), EncodeState{next, delta, bias, handled, reversed})))
+    case EncodeState{+next, delta, bias, handled, reversed}: passResult(total, scan(text, basicCount, advance(nextCode(text, next, 1114111), EncodeState{next, delta, bias, handled, reversed})))
 
 # Each pass emits at least one previously unhandled scalar; input length is
 # therefore a structural upper bound on the number of passes.
-def loopEncode(fuel: String, +text: String, +basicsEncode: U32, +total: U32, progress: Result<&2, &2, Error, Progress>) -> Result<&2, &2, Error, String>:
+def encodeLoop(fuel: String, +text: String, +basicCount: U32, +total: U32, progress: Result<&2, &2, Error, Progress>) -> Result<&2, &2, Error, String>:
   match fuel progress:
     case _ Fail{error}: Fail{error}
     case _ Done{EncodeComplete{output}}: Done{output}
     case SNil{} _: Fail{Overflow{}}
-    case SCon{_, rest} Done{Active{state}}: loopEncode(rest, text, basicsEncode, total, pass(text, basicsEncode, total, state))
+    case SCon{_, rest} Done{Active{state}}: encodeLoop(rest, text, basicCount, total, pass(text, basicCount, total, state))
 
 def initial(done: Bool, count: U32, reversed: String) -> Progress:
   match done:
@@ -201,10 +201,10 @@ def preparedEncode(+text: String, result: Result<&2, &2, Error, Basics>) -> Resu
   match result:
     case Fail{error}: Fail{error}
     case Done{Basics{+count, +total, +reversed}}:
-      loopEncode(text, text, count, total, Done{initial(U32.is_eq(count, total), count, Bool.pick(String, U32.is_eq(count, 0), reversed, SCon{'-', reversed}))})
+      encodeLoop(text, text, count, total, Done{initial(U32.is_eq(count, total), count, Bool.pick(String, U32.is_eq(count, 0), reversed, SCon{'-', reversed}))})
 
 def encode(+text: String) -> Result<&2, &2, Error, String>:
-  preparedEncode(text, basicsEncode(text, Done{Basics{0, 0, ""}}))
+  preparedEncode(text, encodeBasics(text, Done{Basics{0, 0, ""}}))
 
 
 type Input is Data:

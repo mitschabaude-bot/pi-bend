@@ -122,7 +122,7 @@ def model() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"failure-model", "Failure", Ai.CustomModelApi{"failure-api"}, "failure-provider", "", False{}, None{}, Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
 def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
-    Test.assertion(valid(Failure.messageFailure(Unit, model(), aborted, error, F.fromU32(42)), aborted, error, F.fromU32(42), F.fromU32(42)), "explicit failure constructor preserves timestamp and complete message shape")
+    Test.assertion(valid(Failure.failureMessage(Unit, model(), aborted, error, F.fromU32(42)), aborted, error, F.fromU32(42), F.fromU32(42)), "explicit failure constructor preserves timestamp and complete message shape")
     initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{Some{"base"}, Some{model()}, None{}, None{}, None{}}
     +runtime : Fixture.Runtime() <- Runtime.newRuntime(Unit, Unit, String, String, initial, T.OneAtATime{}, T.OneAtATime{})
     +registry : EventTest.Registry() <- Listeners.newListeners(EventTest.EmittedEvent(), String)

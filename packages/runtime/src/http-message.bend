@@ -42,18 +42,18 @@ def punctuation(value: U32) -> Bool:
     case 126: True{}
     case _: False{}
 
-def tokenHeader(+value: U32) -> Bool:
+def isTokenByte(+value: U32) -> Bool:
   between(value, 48, 57) || between(value, 65, 90) || between(value, 97, 122) || punctuation(value)
 
 def validTokens(text: String) -> Bool:
   match text:
     case SNil{}: True{}
-    case SCon{Chr{code}, rest}: tokenHeader(code) && validTokens(rest)
+    case SCon{Chr{code}, rest}: isTokenByte(code) && validTokens(rest)
 
 def validName(text: String) -> Bool:
   match text:
     case SNil{}: False{}
-    case SCon{Chr{code}, rest}: tokenHeader(code) && validTokens(rest)
+    case SCon{Chr{code}, rest}: isTokenByte(code) && validTokens(rest)
 
 def lowercase(text: String) -> String:
   match text:
@@ -348,7 +348,7 @@ type SyntaxError is Data:
   InvalidStatus{}
   InvalidReason{}
 
-def digitStatus(+byte: U32) -> Bool: U32.is_ge(byte, 48) && U32.is_le(byte, 57)
+def isAsciiDigit(+byte: U32) -> Bool: U32.is_ge(byte, 48) && U32.is_le(byte, 57)
 
 def validReason(bytes: List<&2, U32>) -> Bool:
   match bytes:
@@ -372,26 +372,26 @@ def reason(major: U32, minor: U32, status: U32, bytes: List<&2, U32>) -> Result<
     case 32 <> +rest: finishReason(validReason(rest), major, minor, status, rest)
     case _: Fail{InvalidStatus{}}
 
-def checkedCode(valid: Bool, major: U32, minor: U32, codeStatus: U32, bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine>:
+def checkedCode(valid: Bool, major: U32, minor: U32, code: U32, bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine>:
   match valid:
     case False{}: Fail{InvalidStatus{}}
-    case True{}: reason(major, minor, codeStatus, bytes)
+    case True{}: reason(major, minor, code, bytes)
 
-def codeStatus(major: U32, minor: U32, bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine>:
+def statusLine(major: U32, minor: U32, bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine>:
   match bytes:
     case +a <> +b <> +c <> rest:
-      checkedCode(digitStatus(a) && digitStatus(b) && digitStatus(c), major, minor, ((a - 48) * 100 + (b - 48) * 10 + c - 48 : U32), rest)
+      checkedCode(isAsciiDigit(a) && isAsciiDigit(b) && isAsciiDigit(c), major, minor, ((a - 48) * 100 + (b - 48) * 10 + c - 48 : U32), rest)
     case _: Fail{InvalidStatus{}}
 
 def checkedVersion(valid: Bool, major: U32, minor: U32, bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine>:
   match valid:
     case False{}: Fail{InvalidVersion{}}
-    case True{}: codeStatus((major - 48 : U32), (minor - 48 : U32), bytes)
+    case True{}: statusLine((major - 48 : U32), (minor - 48 : U32), bytes)
 
 def version(bytes: List<&2, U32>) -> Result<&2, &2, SyntaxError, StatusLine>:
   match bytes:
     case +major <> 46 <> +minor <> 32 <> rest:
-      checkedVersion(digitStatus(major) && digitStatus(minor), major, minor, rest)
+      checkedVersion(isAsciiDigit(major) && isAsciiDigit(minor), major, minor, rest)
     case _: Fail{InvalidVersion{}}
 
 def prefix(expected: List<&2, U32>, bytes: List<&2, U32>) -> Bool:
@@ -515,12 +515,12 @@ def readHead(reader: HeadReader, bytes: List<&2, U32>) -> HeadReadResult:
 
 def finishHead(reader: HeadReader) -> HeadReadResult: HeadFailed{IncompleteHead{}}
 
-def collectHead(fields: List<&2, Header>, headersHead: Headers) -> Headers:
+def collectHead(fields: List<&2, Header>, headers: Headers) -> Headers:
   match fields:
-    case Nil{}: headersHead
-    case field <> rest: collectHead(rest, appendField(headersHead, field))
+    case Nil{}: headers
+    case field <> rest: collectHead(rest, appendField(headers, field))
 
-def headersHead(head: ResponseHead) -> Headers:
+def headHeaders(head: ResponseHead) -> Headers:
   match head:
     case ResponseHead{_, fields}: collectHead(fields, new())
 
@@ -587,11 +587,11 @@ def fieldsChecked(valid: Bool, name: String, value: String, tail: Result<&2, &2,
     case True{} Fail{error}: Fail{error}
     case True{} Done{bytes}: Done{prepend(name, 58 <> 32 <> prepend(value, 13 <> 10 <> bytes))}
 
-def fieldsRequestHead(values: List<&2, Header>) -> Result<&2, &2, RequestHeadError, List<&2, U32>>:
+def requestHeadFields(values: List<&2, Header>) -> Result<&2, &2, RequestHeadError, List<&2, U32>>:
   match values:
     case Nil{}: Done{13 <> 10 <> Nil{}}
     case Header{+name, +value} <> rest:
-      fieldsChecked(validName(name) && validFieldValue(value), name, value, fieldsRequestHead(rest))
+      fieldsChecked(validName(name) && validFieldValue(value), name, value, requestHeadFields(rest))
 
 def headedRequestHead(+method: String, target: String, tail: Result<&2, &2, RequestHeadError, List<&2, U32>>) -> Result<&2, &2, RequestHeadError, Head>:
   match tail:
@@ -601,7 +601,7 @@ def headedRequestHead(+method: String, target: String, tail: Result<&2, &2, Requ
 def targeted(method: String, target: String, headers: List<&2, Header>, valid: Bool) -> Result<&2, &2, RequestHeadError, Head>:
   match valid:
     case False{}: Fail{InvalidTarget{}}
-    case True{}: headedRequestHead(method, target, fieldsRequestHead(headers))
+    case True{}: headedRequestHead(method, target, requestHeadFields(headers))
 
 def requested(method: Result<&2, &2, RequestMethodError, String>, +target: String, headers: List<&2, Header>) -> Result<&2, &2, RequestHeadError, Head>:
   match method:
@@ -680,7 +680,7 @@ def observed(previous: Maybe<&2, W.U64>, value: String) -> Result<&2, &2, Length
     case None{}: optional(parseContentLength(value))
     case Some{_}: Fail{DuplicateLength{}}
 
-def fieldContentLength(matches: Bool, previous: Maybe<&2, W.U64>, value: String) -> Result<&2, &2, LengthError, Maybe<&2, W.U64>>:
+def contentLengthField(matches: Bool, previous: Maybe<&2, W.U64>, value: String) -> Result<&2, &2, LengthError, Maybe<&2, W.U64>>:
   match matches:
     case False{}: Done{previous}
     case True{}: observed(previous, value)
@@ -690,7 +690,7 @@ def collectContentLength(fields: List<&2, Header>, result: Result<&2, &2, Length
     case _ Fail{error}: Fail{error}
     case Nil{} Done{value}: Done{value}
     case Header{name, value} <> rest Done{previous}:
-      collectContentLength(rest, fieldContentLength(String.eq(lowercase(name), "content-length"), previous, value))
+      collectContentLength(rest, contentLengthField(String.eq(lowercase(name), "content-length"), previous, value))
 
 def fromFields(fields: List<&2, Header>) -> Result<&2, &2, LengthError, Maybe<&2, W.U64>>:
   collectContentLength(fields, Done{None{}})
@@ -737,13 +737,13 @@ def nameStep(size: W.U64, byte: U32) -> Result<&2, &2, SizeError, State>:
   match byte:
     case 61: Done{State{ExtensionValue{}, size}}
     case 59: Done{State{ExtensionStart{}, size}}
-    case other: tokenStep(tokenHeader(other), ExtensionName{}, size)
+    case other: tokenStep(isTokenByte(other), ExtensionName{}, size)
 
 def valueStep(size: W.U64, byte: U32) -> Result<&2, &2, SizeError, State>:
   match byte:
     case 34: Done{State{QuotedValue{}, size}}
     case 59: Done{State{ExtensionStart{}, size}}
-    case other: tokenStep(tokenHeader(other), ExtensionValue{}, size)
+    case other: tokenStep(isTokenByte(other), ExtensionValue{}, size)
 
 # The installed Fetch parser accepts DEL inside an unescaped quoted value;
 # its escaped-pair and header-field character classes are stricter.
@@ -1092,7 +1092,7 @@ def receivedLength(state: Fields, value: String) -> Result<&2, &2, FramingFields
     case Fields{previous, NoTransferEncoding{}}: parsedLength(observed(previous, value))
     case _: Fail{ConflictingFraming{}}
 
-def fieldFramingFields(name: String, value: String, state: Fields) -> Result<&2, &2, FramingFieldsFieldError, Fields>:
+def framingField(name: String, value: String, state: Fields) -> Result<&2, &2, FramingFieldsFieldError, Fields>:
   match name:
     case "content-length": receivedLength(state, value)
     case "transfer-encoding": receivedTransfer(state, value)
@@ -1102,7 +1102,7 @@ def collectFramingFields(fields: List<&2, Header>, state: Result<&2, &2, Framing
   match fields state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{result}: Done{result}
-    case Header{name, value} <> rest Done{result}: collectFramingFields(rest, fieldFramingFields(lowercase(name), value, result))
+    case Header{name, value} <> rest Done{result}: collectFramingFields(rest, framingField(lowercase(name), value, result))
 
 # Consume validated received fields, before they are coalesced for public use.
 def analyze(fields: List<&2, Header>) -> Result<&2, &2, FramingFieldsFieldError, Fields>:
@@ -1121,7 +1121,7 @@ type Transport is Data:
   TLS{}
 
 type Endpoint is Data:
-  Endpoint{transport: Transport, host: Host.Host, portUrl: U32, authority: String, targetUrl: String}
+  Endpoint{transport: Transport, host: Host.Host, port: U32, authority: String, target: String}
 
 type EndpointError is Data:
   UnsupportedScheme{}
@@ -1129,19 +1129,19 @@ type EndpointError is Data:
   InvalidHost{}
   InvalidPath{}
 
-def portUrl(value: Maybe<&2, U32>, default: U32) -> U32:
+def urlPort(value: Maybe<&2, U32>, default: U32) -> U32:
   match value:
     case None{}: default
     case Some{number}: number
 
 # A present empty query contributes '?'. URL.search alone cannot preserve this
 # distinction. Fragments never belong to an HTTP request target.
-def targetUrl(parts: List<&2, String>, query: Maybe<&2, String>) -> String:
-  String.reverse(Serialize.component(query, '?', Serialize.segmentsSerialize(parts, "")))
+def urlTarget(parts: List<&2, String>, query: Maybe<&2, String>) -> String:
+  String.reverse(Serialize.component(query, '?', Serialize.serializeSegments(parts, "")))
 
 def withPath(transport: Transport, +host: Host.Host, +number: Maybe<&2, U32>, default: U32, urlPath: URL.RecordPath, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
   match urlPath:
-    case URL.Hierarchical{first <> rest}: Done{Endpoint{transport, host, portUrl(number, default), String.reverse(Serialize.portSerialize(number, Serialize.appendSerialize(Host.serializeHost(host), ""))), targetUrl(first <> rest, query)}}
+    case URL.Hierarchical{first <> rest}: Done{Endpoint{transport, host, urlPort(number, default), String.reverse(Serialize.serializePort(number, Serialize.appendSerialize(Host.serializeHost(host), ""))), urlTarget(first <> rest, query)}}
     case _: Fail{InvalidPath{}}
 
 def withHost(transport: Transport, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, default: U32, urlPath: URL.RecordPath, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
@@ -1198,7 +1198,7 @@ type ClockFields is Data:
   ClockFields{hour: U32, minute: U32, second: U32}
 
 type DateFields is Data:
-  DateFields{format: Format, weekdayDateSyntax: U32, year: U32, monthDateSyntax: U32, day: U32, clockDateSyntax: ClockFields}
+  DateFields{format: Format, weekdayValue: U32, year: U32, month: U32, day: U32, clockValue: ClockFields}
 
 def digits(count: Nat, text: String, value: U32) -> Maybe<&2, U32>:
   match count text:
@@ -1212,10 +1212,10 @@ def find(+text: String, names: List<&2, String>, +index: U32) -> Maybe<&2, U32>:
     case Nil{}: None{}
     case name <> rest: Bool.pick(Maybe<&2, U32>, String.eq(text, name), Some{index}, find(text, rest, (index + 1 : U32)))
 
-def monthDateSyntax(text: String) -> Maybe<&2, U32>:
+def parseMonth(text: String) -> Maybe<&2, U32>:
   find(text, "Jan" <> "Feb" <> "Mar" <> "Apr" <> "May" <> "Jun" <> "Jul" <> "Aug" <> "Sep" <> "Oct" <> "Nov" <> "Dec" <> Nil{}, 1)
 
-def weekdayDateSyntax(text: String) -> Maybe<&2, U32>:
+def parseWeekday(text: String) -> Maybe<&2, U32>:
   find(text, "Mon" <> "Tue" <> "Wed" <> "Thu" <> "Fri" <> "Sat" <> "Sun" <> Nil{}, 1)
 
 def longWeekday(text: String) -> Maybe<&2, U32>:
@@ -1238,16 +1238,16 @@ def clockParts(parts: List<&2, String>) -> Maybe<&2, ClockFields>:
     case hour <> minute <> second <> Nil{}: clockFields(digits(2n, hour, 0), digits(2n, minute, 0), digits(2n, second, 0))
     case _: None{}
 
-def clockDateSyntax(text: String) -> Maybe<&2, ClockFields>: clockParts(String.split(text, ':'))
+def parseClock(text: String) -> Maybe<&2, ClockFields>: clockParts(String.split(text, ':'))
 
-def fieldsDateSyntax(format: Format, weekdayDateSyntax: Maybe<&2, U32>, year: Maybe<&2, U32>, monthDateSyntax: Maybe<&2, U32>, day: Maybe<&2, U32>, clockDateSyntax: Maybe<&2, ClockFields>) -> Maybe<&2, DateFields>:
-  match weekdayDateSyntax year monthDateSyntax day clockDateSyntax:
+def dateFields(format: Format, weekdayValue: Maybe<&2, U32>, year: Maybe<&2, U32>, month: Maybe<&2, U32>, day: Maybe<&2, U32>, clockValue: Maybe<&2, ClockFields>) -> Maybe<&2, DateFields>:
+  match weekdayValue year month day clockValue:
     case Some{w} Some{y} Some{m} Some{d} Some{t}: Some{DateFields{format, w, y, m, d, t}}
     case _ _ _ _ _: None{}
 
-def rfc850(weekdayDateSyntax: String, date: List<&2, String>, time: String) -> Maybe<&2, DateFields>:
+def rfc850(weekdayValue: String, date: List<&2, String>, time: String) -> Maybe<&2, DateFields>:
   match date:
-    case day <> mon <> year <> Nil{}: fieldsDateSyntax(Rfc850{}, longWeekday(withoutComma(weekdayDateSyntax)), digits(2n, year, 0), monthDateSyntax(mon), digits(2n, day, 0), clockDateSyntax(time))
+    case day <> mon <> year <> Nil{}: dateFields(Rfc850{}, longWeekday(withoutComma(weekdayValue)), digits(2n, year, 0), parseMonth(mon), digits(2n, day, 0), parseClock(time))
     case _: None{}
 
 def shortDay(+text: String) -> Maybe<&2, U32>:
@@ -1261,10 +1261,10 @@ def gmt(zone: String, value: Maybe<&2, DateFields>) -> Maybe<&2, DateFields>:
 def words(parts: List<&2, String>) -> Maybe<&2, DateFields>:
   match parts:
     case week <> day <> mon <> year <> time <> zone <> Nil{}:
-      gmt(zone, fieldsDateSyntax(ImfFixdate{}, weekdayDateSyntax(withoutComma(week)), digits(4n, year, 0), monthDateSyntax(mon), digits(2n, day, 0), clockDateSyntax(time)))
+      gmt(zone, dateFields(ImfFixdate{}, parseWeekday(withoutComma(week)), digits(4n, year, 0), parseMonth(mon), digits(2n, day, 0), parseClock(time)))
     case week <> date <> time <> zone <> Nil{}: gmt(zone, rfc850(week, String.split(date, '-'), time))
     case week <> mon <> day <> time <> year <> Nil{}:
-      fieldsDateSyntax(Asctime{}, weekdayDateSyntax(week), digits(4n, year, 0), monthDateSyntax(mon), shortDay(day), clockDateSyntax(time))
+      dateFields(Asctime{}, parseWeekday(week), digits(4n, year, 0), parseMonth(mon), shortDay(day), parseClock(time))
     case _: None{}
 
 # Accept surrounding/repeated spaces without changing recognized field tokens.
@@ -1296,7 +1296,7 @@ def laterInYear(date: DateFields, reference: Calendar.CivilTime) -> Bool:
     case DateFields{_, _, _, month, day, ClockFields{hour, minute, second}} Calendar.CivilTime{_, rmonth, rday, rhour, rminute, rsecond, _}:
       afterField(month, rmonth, afterField(day, rday, afterField(hour, rhour, afterField(minute, rminute, U32.is_gt(second, rsecond)))))
 
-def previousDateYear(+candidate: U32, valid: Bool) -> Result<&2, &2, DateYearError, U32>:
+def previousYear(+candidate: U32, valid: Bool) -> Result<&2, &2, DateYearError, U32>:
   match valid:
     case False{}: Fail{OutsideCalendar{}}
     case True{}: bounded((candidate - 100 : U32))
@@ -1304,7 +1304,7 @@ def previousDateYear(+candidate: U32, valid: Bool) -> Result<&2, &2, DateYearErr
 def select(+candidate: U32, rollback: Bool) -> Result<&2, &2, DateYearError, U32>:
   match rollback:
     case False{}: bounded(candidate)
-    case True{}: previousDateYear(candidate, U32.is_ge(candidate, 100))
+    case True{}: previousYear(candidate, U32.is_ge(candidate, 100))
 
 def candidate(+upper: U32, +year: U32, later: Bool) -> Result<&2, &2, DateYearError, U32>:
   +value = ((upper / 100) * 100 + year : U32)
@@ -1312,22 +1312,22 @@ def candidate(+upper: U32, +year: U32, later: Bool) -> Result<&2, &2, DateYearEr
 
 def window(reference: Calendar.CivilTime, +date: DateFields) -> Result<&2, &2, DateYearError, U32>:
   match reference date:
-    case Calendar.CivilTime{+year, month, day, hour, minute, second, millis} DateFields{_, _, shortYearDateYear, _, _, _}:
-      candidate((year + 50 : U32), shortYearDateYear, laterInYear(date, Calendar.CivilTime{year, month, day, hour, minute, second, millis}))
+    case Calendar.CivilTime{+year, month, day, hour, minute, second, millis} DateFields{_, _, shortYearValue, _, _, _}:
+      candidate((year + 50 : U32), shortYearValue, laterInYear(date, Calendar.CivilTime{year, month, day, hour, minute, second, millis}))
 
 def checkedReference(reference: Calendar.CivilTime, date: DateFields, valid: Result<&2, &2, Calendar.CalendarError, W.U64>) -> Result<&2, &2, DateYearError, U32>:
   match valid:
     case Fail{cause}: Fail{InvalidReference{cause}}
     case Done{_}: window(reference, date)
 
-def shortYearDateYear(+reference: Calendar.CivilTime, date: DateFields, valid: Bool) -> Result<&2, &2, DateYearError, U32>:
+def shortYear(+reference: Calendar.CivilTime, date: DateFields, valid: Bool) -> Result<&2, &2, DateYearError, U32>:
   match valid:
     case False{}: Fail{InvalidShortYear{}}
     case True{}: checkedReference(reference, date, Calendar.toEpochMilliseconds(reference))
 
 def resolve(reference: Calendar.CivilTime, +date: DateFields) -> Result<&2, &2, DateYearError, U32>:
   match date:
-    case DateFields{Rfc850{}, _, year, _, _, _}: shortYearDateYear(reference, date, U32.is_lt(year, 100))
+    case DateFields{Rfc850{}, _, year, _, _, _}: shortYear(reference, date, U32.is_lt(year, 100))
     case DateFields{_, _, year, _, _, _}: bounded(year)
 
 # Unix timestamps cannot identify a leap second uniquely. Preserve that case
@@ -1444,7 +1444,7 @@ def textType(method: String, headers: Headers, text: String, contentType: String
     case Done{True{}}: buffered(method, headers, Utf8.encode(text))
     case Done{False{}}: textHeaders(method, set(headers, "content-type", contentType), text)
 
-def bodyBufferedBody(method: String, +headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
+def bufferedBody(method: String, +headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match input:
     case Absent{}: Done{Prepared{method, headers, None{}}}
     case Bytes{bytes}: buffered(method, headers, bytes)
@@ -1455,7 +1455,7 @@ def permitted(method: String, headers: Headers, input: Input, disallowed: Bool) 
   match input disallowed:
     case Absent{} _: Done{Prepared{method, headers, None{}}}
     case _ True{}: Fail{BodyNotAllowed{}}
-    case value False{}: bodyBufferedBody(method, headers, value)
+    case value False{}: bufferedBody(method, headers, value)
 
 def normalizedBufferedBody(method: Result<&2, &2, RequestMethodError, String>, headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
   match method:

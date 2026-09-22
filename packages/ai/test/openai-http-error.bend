@@ -56,14 +56,14 @@ def shown(provider: String, +value: Client.APIError) -> IO(Unit):
 def constructed(provider: String, value: Result<&2, &2, Client.ConstructionError<String>, Client.APIError>) -> IO(Unit):
   match value:
     case Done{value}: shown(provider, value)
-    case Fail{Client.DiagnosticReadFailure{metadata, Consume.BodyFailure{Buffer.PrimaryFailure{Buffer.ByteLimitExceeded{}}}}}: IO.print("read-limit:" ++ U32.show(Metadata.statusResponseMetadata(metadata)))
+    case Fail{Client.DiagnosticReadFailure{metadata, Consume.BodyFailure{Buffer.PrimaryFailure{Buffer.ByteLimitExceeded{}}}}}: IO.print("read-limit:" ++ U32.show(Metadata.metadataStatus(metadata)))
     case Fail{Client.DiagnosticEncodingFailure{metadata, Client.TextDiagnostic{text}}}:
-      IO.print("encoding:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Text.showText(text))
+      IO.print("encoding:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Text.showText(text))
     case Fail{_}: IO.die(Unit, 1, "unexpected construction error")
 
 def run(provider: String, mode: String, metadata: Metadata.Metadata, raw: String) -> IO(Unit):
   match mode:
-    case "truncate": IO.print("truncated:" ++ Text.showText(Body.truncateErrorText(raw, U32.to_nat(Metadata.statusResponseMetadata(metadata)))))
+    case "truncate": IO.print("truncated:" ++ Text.showText(Body.truncateErrorText(raw, U32.to_nat(Metadata.metadataStatus(metadata)))))
     case "read": constructed(provider, Client.fromResponse(String, Provider.StatusFailure{metadata, Fail{Consume.BodyFailure{Buffer.PrimaryFailure{Buffer.ByteLimitExceeded{}}}}}))
     case "encoding": constructed(provider, Client.constructed(String, metadata, Client.TextDiagnostic{raw}, None{}))
     case _: constructed(provider, Client.fromResponse(String, Provider.StatusFailure{metadata, Done{raw}}))

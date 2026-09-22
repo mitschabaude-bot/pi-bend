@@ -11,7 +11,7 @@ law stopped_prefix_is_stable:
   for chars: String
   for prefix: String
   for omitted: Nat
-  {Budget.prefixUnitBudget(Budget.collect(chars, Budget.Stopped{prefix, omitted})) == prefix : String}
+  {Budget.budgetPrefix(Budget.collect(chars, Budget.Stopped{prefix, omitted})) == prefix : String}
 
 law fitting_character_is_preserved:
   for remaining: Nat

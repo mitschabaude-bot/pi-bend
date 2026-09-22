@@ -69,7 +69,7 @@ def response(mode: U32, value: Result<&2, &1, Progress.ResponseProgressError<Exc
     case Fail{_}: IO.die(Unit, 1, "response failed")
     case Done{Response.Response{_, body}}:
       do IO<Unit>:
-        owner : Source.Owner<Exchange.Exchange<String>, String> <- HTTP.sourceExchangeResponse(~String, ~String, ~mapped, body)
+        owner : Source.Owner<Exchange.Exchange<String>, String> <- HTTP.responseSource(~String, ~String, ~mapped, body)
         acquired(mode, Source.borrow(Exchange.Exchange<String>, String, owner))
 
 def exchange(mode: U32, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Unit):

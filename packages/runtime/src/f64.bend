@@ -624,23 +624,23 @@ def fromRatio(negative: Bool, numerator: B.BigNat, denominator: B.BigNat) -> May
 def subtractOnce(+value: W.U64, +divisor: W.U64) -> W.U64:
   Bool.pick(W.U64, W.atLeast(W.compare(value, divisor)), W.subtract(value, divisor), value)
 
-def bitsRemainder(steps: Nat, value: W.U64, +divisor: W.U64) -> W.U64:
+def remainderBits(steps: Nat, value: W.U64, +divisor: W.U64) -> W.U64:
   match steps:
     case Zero{}: subtractOnce(value, divisor)
-    case Succ{rest}: bitsRemainder(rest, W.shiftLeftOne(subtractOnce(value, divisor)), divisor)
+    case Succ{rest}: remainderBits(rest, W.shiftLeftOne(subtractOnce(value, divisor)), divisor)
 
 def packed(negative: Bool, normalizedRemainder: Normalized) -> F64:
   match normalizedRemainder:
     case Normalized{+exponent, value}:
       roundExtended(U32.is_le(exponent, 2048), negative, exponent, W.shiftLeft(value, 3n))
 
-def resultRemainder(negative: Bool, exponent: U32, +value: W.U64) -> F64:
+def remainderResult(negative: Bool, exponent: U32, +value: W.U64) -> F64:
   packed(negative, normalizeOperand(52n, W.atLeast(W.compare(value, W.U64{1048576, 0})) || W.equal(value, W.zero()), exponent, value))
 
 def ordered(smaller: Bool, original: F64, negative: Bool, ea: U32, ma: W.U64, +eb: U32, mb: W.U64) -> F64:
   match smaller:
     case True{}: original
-    case False{}: resultRemainder(negative, eb, bitsRemainder(U32.to_nat(U32.sub(ea, eb)), ma, mb))
+    case False{}: remainderResult(negative, eb, remainderBits(U32.to_nat(U32.sub(ea, eb)), ma, mb))
 
 def normalizedRemainder(original: F64, negative: Bool, left: Normalized, right: Normalized) -> F64:
   match left right:

@@ -123,7 +123,7 @@ type SocketSourceError<-Reason: Data> is Data:
   SocketSourceSocketFailure{error: Connect.Error<Reason>}
   CleanupFailure{error: Connect.InterruptError}
   UploadFailure{error: Connect.UploadError<Reason>}
-  UploadWithCleanup{error: Connect.UploadError<Reason>, cleanupSocketSource: Connect.InterruptError}
+  UploadWithCleanup{error: Connect.UploadError<Reason>, cleanup: Connect.InterruptError}
   TLSSourceFailure{error: TLS.Error<Reason>}
   TLSWithCleanup{error: TLS.Error<Reason>, cleanup: TLS.Error<Reason>}
   Released{}
@@ -141,7 +141,7 @@ type Environment<-Reason: Data> is Data:
 type Owner<-Reason: Data> is Type:
   Owner{resource: Resource.Owner<Maybe<&1, Lease<Reason>>>, source: Response.Source<SocketSourceError<Reason>>}
 
-def bytesSocketSource(-Reason: Data, value: Result<&2, &2, Connect.Error<Reason>, List<&2, U32>>) -> Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>:
+def sourceBytes(-Reason: Data, value: Result<&2, &2, Connect.Error<Reason>, List<&2, U32>>) -> Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>:
   match value:
     case Fail{error}: Fail{SocketSourceSocketFailure{error}}
     case Done{Nil{}}: Done{None{}}
@@ -162,7 +162,7 @@ def checkUpload(-Reason: Data, upload: Maybe<&1, Connect.UploadOwner<Reason>>) -
 def observed(-Reason: Data, connection: Connect.Owner<Reason>, result: Result<&2, &2, Connect.Error<Reason>, List<&2, U32>>, pair: Maybe<&1, Connect.UploadOwner<Reason>> & Maybe<&2, Connect.Error<Reason>>) -> Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>:
   match pair:
     case (upload, Some{error}): (Some{Lease{connection, upload}}, Fail{SocketSourceSocketFailure{error}})
-    case (upload, None{}): (Some{Lease{connection, upload}}, bytesSocketSource(Reason, result))
+    case (upload, None{}): (Some{Lease{connection, upload}}, sourceBytes(Reason, result))
 
 def received(-Reason: Data, upload: Maybe<&1, Connect.UploadOwner<Reason>>, pair: Connect.Owner<Reason> & Result<&2, &2, Connect.Error<Reason>, List<&2, U32>>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>):
   match pair:
@@ -217,7 +217,7 @@ def readCallback(-Reason: Data, environment: Environment<Reason>, unused: Unit) 
         result : Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>> <- Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>, resource, value => readOwned(Reason, maximum, value))
         classify(Reason, result)
 
-def cleanupSocketSource(-Reason: Data, value: Result<&2, &2, Connect.InterruptError, Unit>) -> Result<&2, &2, SocketSourceError<Reason>, Unit>:
+def sourceCleanup(-Reason: Data, value: Result<&2, &2, Connect.InterruptError, Unit>) -> Result<&2, &2, SocketSourceError<Reason>, Unit>:
   match value:
     case Done{_}: Done{Unit{}}
     case Fail{error}: Fail{CleanupFailure{error}}
@@ -227,9 +227,9 @@ def stopUpload(-Reason: Data, upload: Maybe<&1, Connect.UploadOwner<Reason>>) ->
     case None{}: IO.pure(Result<&2, &2, Connect.UploadError<Reason>, Unit>, Done{Unit{}})
     case Some{owner}: Connect.stop(Reason, owner)
 
-def closedSocketSource(-Reason: Data, upload: Result<&2, &2, Connect.UploadError<Reason>, Unit>, connection: Result<&2, &2, Connect.InterruptError, Unit>) -> Result<&2, &2, SocketSourceError<Reason>, Unit>:
+def closedSource(-Reason: Data, upload: Result<&2, &2, Connect.UploadError<Reason>, Unit>, connection: Result<&2, &2, Connect.InterruptError, Unit>) -> Result<&2, &2, SocketSourceError<Reason>, Unit>:
   match upload connection:
-    case Done{_} result: cleanupSocketSource(Reason, result)
+    case Done{_} result: sourceCleanup(Reason, result)
     case Fail{error} Done{_}: Fail{UploadFailure{error}}
     case Fail{error} Fail{secondary}: Fail{UploadWithCleanup{error, secondary}}
 
@@ -264,7 +264,7 @@ def closeOwned(-Reason: Data, value: Maybe<&1, Lease<Reason>>) -> IO(Result<&2, 
       do IO<Result<&2, &2, SocketSourceError<Reason>, Unit>>:
         stopped : Result<&2, &2, Connect.UploadError<Reason>, Unit> <- stopUpload(Reason, upload)
         result : Result<&2, &2, Connect.InterruptError, Unit> <- Connect.close(Reason, connection)
-        return closedSocketSource(Reason, stopped, result)
+        return closedSource(Reason, stopped, result)
 
 def releaseOwned(-Reason: Data, value: Maybe<&1, Lease<Reason>>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
   do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
@@ -288,7 +288,7 @@ def adoptLease(~Reason: Data, maximum: U32, lease: Lease<Reason>) -> IO(Owner<Re
     resource : Resource.Owner<Maybe<&1, Lease<Reason>>> <- Resource.create(Maybe<&1, Lease<Reason>>, Some{lease})
     callbacks(~Reason, maximum, Resource.borrow(Maybe<&1, Lease<Reason>>, resource))
 
-def adoptedSocketSource(~Reason: Data, maximum: U32, result: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>):
+def adoptedSource(~Reason: Data, maximum: U32, result: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>, Fail{SocketSourceSocketFailure{error}})
     case Done{owner}:
@@ -307,7 +307,7 @@ def create(~Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reason>, max
     case size:
       do IO<Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>>:
         result : Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
-        adoptedSocketSource(~Reason, size, result)
+        adoptedSource(~Reason, size, result)
 
 # Grant this borrowed lease to one response cursor only.
 def borrow(-Reason: Data, owner: Owner<Reason>) -> Owner<Reason> & Response.Source<SocketSourceError<Reason>>:
@@ -360,7 +360,7 @@ type Next<-Reason: Data> is Type:
 
 def opened(-Reason: Data, method: String, limits: Response.Limits, pair: Owner<Reason> & Response.Source<SocketSourceError<Reason>>) -> Exchange<Reason>:
   match pair:
-    case (owner, source): Open{owner, Response.createResponseReader(SocketSourceError<Reason>, source, method, limits)}
+    case (owner, source): Open{owner, Response.createReader(SocketSourceError<Reason>, source, method, limits)}
 
 def adopted(-Reason: Data, method: String, limits: Response.Limits, result: Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>) -> Result<&2, &1, StartError<Reason>, Exchange<Reason>>:
   match result:
@@ -471,7 +471,7 @@ def nextSocketExchange(-Reason: Data, exchange: Exchange<Reason>) -> IO(Next<Rea
     case Closed{}: IO.pure(Next<Reason>, Next{Closed{}, Done{None{}}})
     case Open{owner, cursor}:
       do IO<Next<Reason>>:
-        result : Response.ResponseReaderNext<SocketSourceError<Reason>> <- Response.nextResponseReader(SocketSourceError<Reason>, cursor)
+        result : Response.ResponseReaderNext<SocketSourceError<Reason>> <- Response.readerNext(SocketSourceError<Reason>, cursor)
         readSocketExchange(Reason, owner, result)
 
 def closed(-Reason: Data, owner: Owner<Reason>, result: Response.CloseResult<SocketSourceError<Reason>>) -> IO(Result<&2, &2, ReadError<Reason>, Unit>):
@@ -486,7 +486,7 @@ def closeSocketExchange(-Reason: Data, exchange: Exchange<Reason>) -> IO(Result<
     case Closed{}: IO.pure(Result<&2, &2, ReadError<Reason>, Unit>, Done{Unit{}})
     case Open{owner, cursor}:
       do IO<Result<&2, &2, ReadError<Reason>, Unit>>:
-        result : Response.CloseResult<SocketSourceError<Reason>> <- Response.closeResponseReader(SocketSourceError<Reason>, cursor)
+        result : Response.CloseResult<SocketSourceError<Reason>> <- Response.closeReader(SocketSourceError<Reason>, cursor)
         closed(Reason, owner, result)
 
 # Numeric cleartext transport. Address selection, TLS and URL preparation are
@@ -537,7 +537,7 @@ def next(~Reason: Data, body: Response.Body<Exchange<Reason>>) -> IO(Response.Ne
 def close(-Reason: Data, body: Response.Body<Exchange<Reason>>) -> IO(Response.Next<ReadError<Reason>, Exchange<Reason>>):
   Response.closeWith(ReadError<Reason>, Exchange<Reason>, closeSocketExchange(Reason), body)
 
-def sourceExchangeResponse(~Reason: Data, ~E: Data, ~map: Response.ResponseProgressError<ReadError<Reason>> -> E, body: Response.Body<Exchange<Reason>>) -> IO(Response.Owner<Exchange<Reason>, E>):
+def responseSource(~Reason: Data, ~E: Data, ~map: Response.ResponseProgressError<ReadError<Reason>> -> E, body: Response.Body<Exchange<Reason>>) -> IO(Response.Owner<Exchange<Reason>, E>):
   Response.create(~ReadError<Reason>, ~Exchange<Reason>, ~E, ~map, ~(read(Reason)), ~(closeSocketExchange(Reason)), body)
 
 # Consume and retire the owned body under an explicit caller byte budget.

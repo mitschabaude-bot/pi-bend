@@ -158,7 +158,7 @@ def scenario(+truncated: Bool, name: String) -> IO(Unit):
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     eventCount : U32 <- consume(truncated, iterator, 0, None{})
     Test.assertion(U32.is_eq(eventCount, 11), "one execution start and one execution end")
-    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+    outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
     checkOutcome(truncated, outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
     W.disposeStreamRun(Unit, String, String, String, run)

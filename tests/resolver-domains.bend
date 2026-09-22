@@ -41,7 +41,7 @@ def prepared(base: Name.Name, dots: U32, absolute: Bool, ndots: U32, notld: Bool
       do IO<Unit>:
         issues(failures)
         SearchTest.drain(10000n, 4294967295, 0, Search.next(cursor))
-        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearchRun(~Unit, ~String, ~String, ~request, Unit{}, cursor)
+        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearch(~Unit, ~String, ~String, ~request, Unit{}, cursor)
         RunTest.report(result)
 
 def texts(values: List<String>, reversed: List<&2, String>) -> List<&2, String>:

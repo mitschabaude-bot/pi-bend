@@ -106,12 +106,12 @@ def execute(actions: List<&2, Action>, +capture: Ref.Ref<Capture>, cursor: D.Cur
     case Nil{}: IO.pure(D.Cursor<String>, cursor)
     case Pull{} <> rest:
       do IO<D.Cursor<String>>:
-        next : D.ResponseReaderNext<String> <- D.nextResponseReader(String, cursor)
+        next : D.ResponseReaderNext<String> <- D.readerNext(String, cursor)
         cursor : D.Cursor<String> <- recordNext(capture, next)
         execute(rest, capture, cursor)
     case Return{} <> rest:
       do IO<D.Cursor<String>>:
-        closed : D.CloseResult<String> <- D.closeResponseReader(String, cursor)
+        closed : D.CloseResult<String> <- D.closeReader(String, cursor)
         cursor : D.Cursor<String> <- recordClose(capture, closed)
         execute(rest, capture, cursor)
 
@@ -124,8 +124,8 @@ def run(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails: Bool) -
     +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{inputs, Nil{}})
     +reader : Cb.Callback<Unit, Result<&2, &2, String, Maybe<&2, List<&2, U32>>>> <- Cb.create(~Environment, ~Unit, ~Result<&2, &2, String, Maybe<&2, List<&2, U32>>>, ~readCallback, Environment{capture, closeFails})
     +closer : Cb.Callback<D.Release, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~D.Release, ~Result<&2, &2, String, Unit>, ~closeCallback, Environment{capture, closeFails})
-    finished : D.Cursor<String> <- execute(actions, capture, D.createResponseReader(String, D.Source{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
-    cleanup : D.CloseResult<String> <- D.closeResponseReader(String, finished)
+    finished : D.Cursor<String> <- execute(actions, capture, D.createReader(String, D.Source{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
+    cleanup : D.CloseResult<String> <- D.closeReader(String, finished)
     Cb.dispose(Unit, Result<&2, &2, String, Maybe<&2, List<&2, U32>>>, reader)
     Cb.dispose(D.Release, Result<&2, &2, String, Unit>, closer)
     trace : Capture <- Ref.dispose(Capture, capture)
@@ -147,8 +147,8 @@ def runTransport(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails
     +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{inputs, Nil{}})
     +reader : Cb.Callback<Unit, D.ReadResult<String>> <- Cb.create(~Environment, ~Unit, ~D.ReadResult<String>, ~transportCallback, Environment{capture, closeFails})
     +closer : Cb.Callback<D.Release, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~D.Release, ~Result<&2, &2, String, Unit>, ~closeCallback, Environment{capture, closeFails})
-    finished : D.Cursor<String> <- execute(actions, capture, D.createResponseReader(String, D.TransportSource{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
-    cleanup : D.CloseResult<String> <- D.closeResponseReader(String, finished)
+    finished : D.Cursor<String> <- execute(actions, capture, D.createReader(String, D.TransportSource{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
+    cleanup : D.CloseResult<String> <- D.closeReader(String, finished)
     Cb.dispose(Unit, D.ReadResult<String>, reader)
     Cb.dispose(D.Release, Result<&2, &2, String, Unit>, closer)
     trace : Capture <- Ref.dispose(Capture, capture)

@@ -17,10 +17,10 @@ def blank(text: String) -> Bool:
 # manufactured; an indivisible character either fits completely or is omitted.
 type State is Data:
   Taking{remaining: Nat, reversed: String}
-  Stopped{prefixUnitBudget: String, omitted: Nat}
+  Stopped{prefix: String, omitted: Nat}
 
 type Cut is Data:
-  Cut{prefixUnitBudget: String, omitted: Nat}
+  Cut{prefix: String, omitted: Nat}
 
 def width(char: Char) -> Nat:
   match char:
@@ -36,7 +36,7 @@ def feed(+char: Char, state: State) -> State:
     case Taking{+remaining, reversed}:
       +size = width(char)
       room(Nat.is_ge(remaining, size), remaining, size, char, reversed)
-    case Stopped{prefixUnitBudget, omitted}: Stopped{prefixUnitBudget, omitted + width(char)}
+    case Stopped{prefix, omitted}: Stopped{prefix, omitted + width(char)}
 
 def collect(chars: String, state: State) -> State:
   match chars:
@@ -46,12 +46,12 @@ def collect(chars: String, state: State) -> State:
 def finish(state: State) -> Cut:
   match state:
     case Taking{_, reversed}: Cut{String.reverse(reversed), 0n}
-    case Stopped{prefixUnitBudget, omitted}: Cut{prefixUnitBudget, omitted}
+    case Stopped{prefix, omitted}: Cut{prefix, omitted}
 
 def take(text: String, budget: Nat) -> Cut:
   finish(collect(text, Taking{budget, ""}))
 
-def prefixUnitBudget(state: State) -> String:
+def budgetPrefix(state: State) -> String:
   match state:
     case Taking{_, reversed}: String.reverse(reversed)
     case Stopped{text, _}: text

@@ -136,7 +136,7 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     events : List<&2, String> <- Turns.collect(iterator, Nil{}, None{})
     Test.assertion(U32.is_eq(occurrences(events, "turn_end"), Bool.pick(U32, continues(mode), 2, 1)), "original turn-end count")
-    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+    outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
     checkOutcome(mode, outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
     W.disposeStreamRun(Unit, String, String, String, run)

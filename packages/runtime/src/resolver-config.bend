@@ -75,7 +75,7 @@ type Entry is Data:
   Search{names: List<&2, String>}
   Options{values: List<&2, String>}
   Sortlist{values: List<&2, String>}
-  Unknown{lineConfig: String}
+  Unknown{line: String}
 
 type Keyword is Data:
   ServerKey{}
@@ -115,7 +115,7 @@ def words(text: String, state: Words) -> List<&2, String>:
     case SNil{} Words{part, fields}: List.reverse(&2, String, pushed(part, fields))
     case SCon{+char, rest} previous: words(rest, stepped(Char.is_eq(char, ' ') || Char.is_eq(char, '\t'), char, previous))
 
-def entryConfig(kind: Keyword, fields: List<&2, String>, original: String) -> Maybe<&2, Entry>:
+def configEntry(kind: Keyword, fields: List<&2, String>, original: String) -> Maybe<&2, Entry>:
   match kind fields:
     case ServerKey{} Nil{}: Some{Nameserver{"", Fail{InvalidAddress{}}}}
     case ServerKey{} +token <> _: Some{Nameserver{token, parseAddress(token)}}
@@ -132,11 +132,11 @@ def entryConfig(kind: Keyword, fields: List<&2, String>, original: String) -> Ma
 def header(text: String, original: String, reversed: String) -> Maybe<&2, Entry>:
   match text:
     case SNil{}: Some{Unknown{original}}
-    case SCon{' ', rest}: entryConfig(keyword(String.reverse(reversed)), words(rest, Words{"", Nil{}}), original)
-    case SCon{'\t', rest}: entryConfig(keyword(String.reverse(reversed)), words(rest, Words{"", Nil{}}), original)
+    case SCon{' ', rest}: configEntry(keyword(String.reverse(reversed)), words(rest, Words{"", Nil{}}), original)
+    case SCon{'\t', rest}: configEntry(keyword(String.reverse(reversed)), words(rest, Words{"", Nil{}}), original)
     case SCon{char, rest}: header(rest, original, SCon{char, reversed})
 
-def lineConfig(+text: String) -> Maybe<&2, Entry>:
+def configLine(+text: String) -> Maybe<&2, Entry>:
   match text:
     case SNil{}: None{}
     case SCon{'#', _}: None{}
@@ -151,7 +151,7 @@ def appended(value: Maybe<&2, Entry>, reversed: List<&2, Entry>) -> List<&2, Ent
 def lines(input: List<&2, String>, reversed: List<&2, Entry>) -> List<&2, Entry>:
   match input:
     case Nil{}: List.reverse(&2, Entry, reversed)
-    case text <> rest: lines(rest, appended(lineConfig(text), reversed))
+    case text <> rest: lines(rest, appended(configLine(text), reversed))
 
 # Input is decoded configuration text. File loading, byte-decoding policy,
 # environment overrides, defaults and applying the entries are separate layers.
@@ -337,14 +337,14 @@ def prepend(values: List<&2, String>, reversed: List<&2, String>) -> List<&2, St
     case Nil{}: reversed
     case value <> rest: prepend(rest, value <> reversed)
 
-def serverSettings(token: String, value: Result<&2, &2, AddressError, Address>, state: Collected) -> Collected:
+def collectServer(token: String, value: Result<&2, &2, AddressError, Address>, state: Collected) -> Collected:
   match value state:
     case Done{address} Collected{servers, searchValue, options, sort, diagnostics}: Collected{address <> servers, searchValue, options, sort, diagnostics}
     case Fail{_} Collected{servers, searchValue, options, sort, Diagnostics{invalid, unknown}}: Collected{servers, searchValue, options, sort, Diagnostics{token <> invalid, unknown}}
 
 def applyEntry(entry: Entry, state: Collected) -> Collected:
   match entry state:
-    case Nameserver{token, parsed} previous: serverSettings(token, parsed, previous)
+    case Nameserver{token, parsed} previous: collectServer(token, parsed, previous)
     case Domain{name} Collected{servers, _, options, sort, diagnostics}: Collected{servers, Some{name <> Nil{}}, options, sort, diagnostics}
     case Search{names} Collected{servers, _, options, sort, diagnostics}: Collected{servers, Some{names}, options, sort, diagnostics}
     case Options{values} Collected{servers, searchValue, options, sort, diagnostics}: Collected{servers, searchValue, prepend(values, options), sort, diagnostics}
@@ -634,12 +634,12 @@ def prepareStrict(tokens: List<&2, String>) -> Result<&2, &2, List<&2, Diagnosti
 type Configuration is Data:
   Configuration{options: ResolverOptions, domains: Report}
 
-def ndotsSearch(options: ResolverOptions) -> U32:
+def searchNdots(options: ResolverOptions) -> U32:
   match options:
     case ResolverOptions{value, _, _, _}: value
 
 def policy(+options: ResolverOptions) -> Search.Policy:
-  Search.Policy{ndotsSearch(options), True{}, True{}, enabled(NoTldQuery{}, options)}
+  Search.Policy{searchNdots(options), True{}, True{}, enabled(NoTldQuery{}, options)}
 
 # Callers supplying explicit option values have already selected their policy.
 def prepareSearch(options: ResolverOptions, domains: List<&2, String>) -> Configuration:
@@ -682,8 +682,8 @@ def plan(+configuration: Configuration, base: Search.Name, dots: U32, absolute: 
 type SystemReport is Data:
   SystemReport{settings: Settings, hostnameFailure: Maybe<&2, Failure>}
 
-def configuredSystem(entries: List<&2, Entry>, values: Values, hostnameSystem: HostnameReport) -> SystemReport:
-  match hostnameSystem:
+def configuredSystem(entries: List<&2, Entry>, values: Values, hostname: HostnameReport) -> SystemReport:
+  match hostname:
     case HostnameReport{name, failure}: SystemReport{configure(entries, overrides(name, values)), failure}
 
 def parsedSystem(~DecodeError: Data, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, +values: Values, result: Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemReport>):
@@ -691,8 +691,8 @@ def parsedSystem(~DecodeError: Data, ~Context: Data, ~lookup: Context -> IO(Resu
     case Fail{error}: IO.pure(Result<&2, &2, LoadError<DecodeError>, SystemReport>, Fail{LoadFile{error}})
     case Done{+entries}:
       do IO<Result<&2, &2, LoadError<DecodeError>, SystemReport>>:
-        hostnameSystem : HostnameReport <- resolveWith(~Context, ~lookup, context, entries, values)
-        return Done{configuredSystem(entries, values, hostnameSystem)}
+        hostname : HostnameReport <- resolveWith(~Context, ~lookup, context, entries, values)
+        return Done{configuredSystem(entries, values, hostname)}
 
 # Hostname fallback is lazy: capture errors and file errors return first, and
 # an environment/file search list suppresses the hostname call entirely.
@@ -704,13 +704,13 @@ def capturedWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, De
         entries : Result<&2, &2, FileError<DecodeError>, List<&2, Entry>> <- readWith(~DecodeError, ~decode, path, chunkSize, byteLimit)
         parsedSystem(~DecodeError, ~Context, ~lookup, context, values, entries)
 
-def hostnameSystem(unused: Unit) -> IO(Result<&1, &1, U32 & String, String>):
+def systemHostname(unused: Unit) -> IO(Result<&1, &1, U32 & String, String>):
   IO.get_hostname()
 
 def loadWithSystem(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemReport>):
   do IO<Result<&2, &2, LoadError<DecodeError>, SystemReport>>:
     captureResult : Result<&2, &2, EnvironmentError, Values> <- capture()
-    capturedWith(~DecodeError, ~decode, ~Unit, ~hostnameSystem, Unit{}, path, chunkSize, byteLimit, captureResult)
+    capturedWith(~DecodeError, ~decode, ~Unit, ~systemHostname, Unit{}, path, chunkSize, byteLimit, captureResult)
 
 # Linux errno values are confined to this platform policy. Only persistent
 # open failures permit defaults; read/resource/decoder failures stay fatal.
@@ -766,7 +766,7 @@ def capturedWithSystemLinux(~DecodeError: Data, ~decode: List<&2, U32> -> Result
 def loadWithSystemLinux(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>):
   do IO<Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>>:
     captureResult : Result<&2, &2, EnvironmentError, Values> <- capture()
-    capturedWithSystemLinux(~DecodeError, ~decode, ~Unit, ~hostnameSystem, Unit{}, path, chunkSize, byteLimit, captureResult)
+    capturedWithSystemLinux(~DecodeError, ~decode, ~Unit, ~systemHostname, Unit{}, path, chunkSize, byteLimit, captureResult)
 
 # Valid original positions in glibc's one-to-three-server configuration.
 # Rotation reorders entries, never changes this position metadata.
@@ -851,7 +851,7 @@ def timed(-Server: Data, server: Server, position: Position, result: Result<&2, 
     case Fail{UdpTimeoutInvalidTimeout{wholeSeconds}}: Fail{InvalidTimeout{wholeSeconds}}
     case Done{duration}: Done{Attempt{server, position, duration}}
 
-def entryUdpPlan(-Server: Data, timeout: U32, value: Located<Server>) -> Result<&2, &2, Error, Attempt<Server>>:
+def udpAttempt(-Server: Data, timeout: U32, value: Located<Server>) -> Result<&2, &2, Error, Attempt<Server>>:
   match value:
     case Located{server, +position}: timed(Server, server, position, budget(timeout, position))
 
@@ -865,7 +865,7 @@ def budgets(-Server: Data, values: List<&2, Located<Server>>, +timeout: U32, acc
   match values accumulated:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{reversed}: Done{List.reverse(&2, Attempt<Server>, reversed)}
-    case first <> rest previous: budgets(Server, rest, timeout, appendedUdpPlan(Server, previous, entryUdpPlan(Server, timeout, first)))
+    case first <> rest previous: budgets(Server, rest, timeout, appendedUdpPlan(Server, previous, udpAttempt(Server, timeout, first)))
 
 def located(-Server: Data, timeout: U32, result: Result<&2, &2, Error, List<&2, Located<Server>>>) -> Result<&2, &2, Error, List<&2, Attempt<Server>>>:
   match result:

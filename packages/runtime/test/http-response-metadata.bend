@@ -17,7 +17,7 @@ def strings(values: List<&2, String>) -> List<&2, String>:
     case value <> rest: Text.showText(value) <> strings(rest)
 
 def shown(+value: Metadata.Metadata) -> String:
-  U32.show(Metadata.statusResponseMetadata(value)) ++ "#" ++ Text.showText(Metadata.statusText(value)) ++ "#" ++ Bool.pick(String, Metadata.ok(value), "true", "false") ++ "#" ++ Bool.pick(String, Metadata.bodyPresent(value), "body", "null") ++ "#" ++ String.join(fields(Headers.entries(Metadata.headers(value))), "|") ++ "#" ++ String.join(strings(Headers.getSetCookie(Metadata.headers(value))), "|")
+  U32.show(Metadata.metadataStatus(value)) ++ "#" ++ Text.showText(Metadata.statusText(value)) ++ "#" ++ Bool.pick(String, Metadata.ok(value), "true", "false") ++ "#" ++ Bool.pick(String, Metadata.bodyPresent(value), "body", "null") ++ "#" ++ String.join(fields(Headers.entries(Metadata.headers(value))), "|") ++ "#" ++ String.join(strings(Headers.getSetCookie(Metadata.headers(value))), "|")
 
 def events(values: List<&2, Stream.StreamEvent>) -> List<&2, String>:
   match values:

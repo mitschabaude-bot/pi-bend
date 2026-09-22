@@ -100,6 +100,6 @@ def continuationScenario(active: Bool, historyIndex: U32, steeringMode: U32, fol
   do IO<Unit>:
     +queues : Q.Queues<Message()> = fill(queued(steeringCount, "s"), fill(queued(followCount, "f"), Q.newQueues(Message(), mode(steeringMode), mode(followMode)), Q.FollowUp{}), Q.QueuesSteering{})
     before : String = planKey((queues, Done{Continue.Continue{}}))
-    result : Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>> = Continue.planContinue(Unit, Unit, String, active, history(historyIndex), queues)
+    result : Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>> = Continue.continuationPlan(Unit, Unit, String, active, history(historyIndex), queues)
     Test.assertion(String.eq(planKey(result), expected), "Agent continuation decision/remaining queues differ from source")
     Test.assertion(String.eq(planKey((queues, Done{Continue.Continue{}})), before), "earlier queue snapshot stays unchanged")

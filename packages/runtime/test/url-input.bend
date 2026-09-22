@@ -16,7 +16,7 @@ def show(value: Input.InputPrefix) -> String:
     case Input.Absolute{scheme, remainder}: "absolute;" ++ Text.showText(Scheme.serializeScheme(scheme)) ++ ";" ++ Text.showText(remainder)
 
 def report(+input: String, +prepared: String) -> String:
-  Text.showText(prepared) ++ ";" ++ Text.showText(Input.removeTabsAndNewlines(input)) ++ ";" ++ show(Input.prefixInput(prepared))
+  Text.showText(prepared) ++ ";" ++ Text.showText(Input.removeTabsAndNewlines(input)) ++ ";" ++ show(Input.inputPrefix(prepared))
 
 def run(+input: String) -> String: report(input, Input.prepareInput(input))
 

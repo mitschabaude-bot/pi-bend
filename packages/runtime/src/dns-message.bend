@@ -173,7 +173,7 @@ def encodeName(name: Name) -> Result<&2, &2, DomainNameError, List<&2, U32>>:
 # Wire structure only. Transaction matching and record-specific interpretation
 # belong to the resolver; retain unknown flags, classes and record types.
 type Header is Data:
-  Header{id: U32, flags: U32, questions: U32, answersMessage: U32, authoritiesMessage: U32, additional: U32}
+  Header{id: U32, flags: U32, questions: U32, answers: U32, authorities: U32, additional: U32}
 
 type Question is Data:
   Question{name: Name, kind: U32, class: U32}
@@ -184,7 +184,7 @@ type Record is Data:
   Record{name: Name, kind: U32, class: U32, ttl: U32, start: U32, length: U32}
 
 type Message is Data:
-  Message{packet: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, additional: List<&2, Record>}
+  Message{packet: Packet, header: Header, questions: List<&2, Question>, answers: List<&2, Record>, authorities: List<&2, Record>, additional: List<&2, Record>}
 
 type Parsed<-Item: Data> is Data:
   Parsed{value: Item, next: U32}
@@ -224,7 +224,7 @@ def questionName(+packet: Packet, value: Result<&2, &2, DomainNameError, Decoded
     case Fail{error}: Fail{NameError{error}}
     case Done{Decoded{name, +following}}: questionFields(available(packet, following, 4), packet, name, following)
 
-def questionMessage(+packet: Packet, position: U32) -> Result<&2, &2, Error, Parsed<Question>>:
+def parsedQuestion(+packet: Packet, position: U32) -> Result<&2, &2, Error, Parsed<Question>>:
   questionName(packet, decodeName(packet, position))
 
 def recordData(valid: Bool, name: Name, kind: U32, class: U32, ttl: U32, +offset: U32, +length: U32) -> Result<&2, &2, Error, Parsed<Record>>:
@@ -261,35 +261,35 @@ def section(~Item: Data, ~parse: (Packet -> U32 -> Result<&2, &2, Error, Parsed<
     case Zero{} Done{Parsed{reversed, following}}: Done{Parsed{List.reverse(&2, Item, reversed), following}}
     case Succ{rest} Done{Parsed{reversed, following}}: section(~Item, ~parse, rest, packet, added(Item, reversed, parse(packet, following)))
 
-def complete(valid: Bool, packet: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, additional: List<&2, Record>) -> Result<&2, &2, Error, Message>:
+def complete(valid: Bool, packet: Packet, header: Header, questions: List<&2, Question>, answers: List<&2, Record>, authorities: List<&2, Record>, additional: List<&2, Record>) -> Result<&2, &2, Error, Message>:
   match valid:
     case False{}: Fail{TrailingData{}}
-    case True{}: Done{Message{packet, header, questions, answersMessage, authoritiesMessage, additional}}
+    case True{}: Done{Message{packet, header, questions, answers, authorities, additional}}
 
-def additionals(+packet: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
+def additionals(+packet: Packet, header: Header, questions: List<&2, Question>, answers: List<&2, Record>, authorities: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{additional, following}}: complete(U32.is_eq(packetSize(packet), following), packet, header, questions, answersMessage, authoritiesMessage, additional)
+    case Done{Parsed{additional, following}}: complete(U32.is_eq(packetSize(packet), following), packet, header, questions, answers, authorities, additional)
 
-def authoritiesMessage(+packet: Packet, header: Header, count: U32, questions: List<&2, Question>, answersMessage: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
+def parsedAuthorities(+packet: Packet, header: Header, count: U32, questions: List<&2, Question>, answers: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{values, following}}: additionals(packet, header, questions, answersMessage, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(count), packet, Done{Parsed{Nil{}, following}}))
+    case Done{Parsed{values, following}}: additionals(packet, header, questions, answers, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(count), packet, Done{Parsed{Nil{}, following}}))
 
-def answersMessage(+packet: Packet, header: Header, authorityCount: U32, additionalCount: U32, questions: List<&2, Question>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
+def parsedAnswers(+packet: Packet, header: Header, authorityCount: U32, additionalCount: U32, questions: List<&2, Question>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{values, following}}: authoritiesMessage(packet, header, additionalCount, questions, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(authorityCount), packet, Done{Parsed{Nil{}, following}}))
+    case Done{Parsed{values, following}}: parsedAuthorities(packet, header, additionalCount, questions, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(authorityCount), packet, Done{Parsed{Nil{}, following}}))
 
 def questions(+packet: Packet, header: Header, answerCount: U32, authorityCount: U32, additionalCount: U32, result: Result<&2, &2, Error, Parsed<List<&2, Question>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{values, following}}: answersMessage(packet, header, authorityCount, additionalCount, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(answerCount), packet, Done{Parsed{Nil{}, following}}))
+    case Done{Parsed{values, following}}: parsedAnswers(packet, header, authorityCount, additionalCount, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(answerCount), packet, Done{Parsed{Nil{}, following}}))
 
 def withHeader(+packet: Packet, value: Result<&2, &2, Error, Header>) -> Result<&2, &2, Error, Message>:
   match value:
     case Fail{error}: Fail{error}
-    case Done{Header{id, flags, +qd, +an, +ns, +ar}}: questions(packet, Header{id, flags, qd, an, ns, ar}, an, ns, ar, section(~Question, ~(p => i => questionMessage(p, i)), U32.to_nat(qd), packet, Done{Parsed{Nil{}, 12}}))
+    case Done{Header{id, flags, +qd, +an, +ns, +ar}}: questions(packet, Header{id, flags, qd, an, ns, ar}, an, ns, ar, section(~Question, ~(p => i => parsedQuestion(p, i)), U32.to_nat(qd), packet, Done{Parsed{Nil{}, 12}}))
 
 def fromPacket(value: Result<&2, &2, DomainNameError, Packet>) -> Result<&2, &2, Error, Message>:
   match value:
@@ -309,13 +309,13 @@ def queryName(id: U32, flags: U32, kind: U32, class: U32, encoded: Result<&2, &2
     case Fail{error}: Fail{NameError{error}}
     case Done{bytes}: Done{u16(id, u16(flags, 0 <> 1 <> 0 <> 0 <> 0 <> 0 <> 0 <> 0 <> List.append(&2, U32, bytes, u16(kind, u16(class, Nil{})))))}
 
-def queryFields(valid: Bool, id: U32, flags: U32, questionMessage: Question) -> Result<&2, &2, Error, List<&2, U32>>:
-  match valid questionMessage:
+def queryFields(valid: Bool, id: U32, flags: U32, question: Question) -> Result<&2, &2, Error, List<&2, U32>>:
+  match valid question:
     case False{} _: Fail{InvalidField{}}
     case True{} Question{name, kind, class}: queryName(id, flags, kind, class, encodeName(name))
 
-def query(+id: U32, +flags: U32, questionMessage: Question) -> Result<&2, &2, Error, List<&2, U32>>:
-  match questionMessage:
+def query(+id: U32, +flags: U32, question: Question) -> Result<&2, &2, Error, List<&2, U32>>:
+  match question:
     case Question{name, +kind, +class}: queryFields(U32.is_le(id, 65535) && U32.is_le(flags, 65535) && U32.is_le(kind, 65535) && U32.is_le(class, 65535), id, flags, Question{name, kind, class})
 
 # Text-to-wire syntax only. IDNA, hostname policy and search expansion belong
@@ -551,7 +551,7 @@ type Rejection is Data:
 
 type Decision is Data:
   Ignore{reason: Rejection}
-  ResponseTruncated{headerResponse: Header}
+  ResponseTruncated{parsedHeader: Header}
   Matched{message: Message}
 
 def sameAddress(left: Address, right: Address) -> Bool:
@@ -599,53 +599,53 @@ def parsed(value: Result<&2, &2, Error, Message>) -> Decision:
     case Fail{error}: Ignore{Malformed{error}}
     case Done{message}: Matched{message}
 
-def matched(truncated: Bool, packetResponse: Packet, headerResponse: Header) -> Decision:
+def matched(truncated: Bool, packet: Packet, parsedHeader: Header) -> Decision:
   match truncated:
-    case True{}: ResponseTruncated{headerResponse}
-    case False{}: parsed(withHeader(packetResponse, Done{headerResponse}))
+    case True{}: ResponseTruncated{parsedHeader}
+    case False{}: parsed(withHeader(packet, Done{parsedHeader}))
 
-def questionMatches(equal: Bool, packetResponse: Packet, headerResponse: Header, flags: U32) -> Decision:
+def questionMatches(equal: Bool, packet: Packet, parsedHeader: Header, flags: U32) -> Decision:
   match equal:
     case False{}: Ignore{QuestionMismatch{}}
-    case True{}: matched(U32.is_ne(U32.and(flags, 512), 0), packetResponse, headerResponse)
+    case True{}: matched(U32.is_ne(U32.and(flags, 512), 0), packet, parsedHeader)
 
-def checkedQuestion(packetResponse: Packet, headerResponse: Header, flags: U32, expected: Question, value: Result<&2, &2, Error, Parsed<Question>>) -> Decision:
+def checkedQuestion(packet: Packet, parsedHeader: Header, flags: U32, expected: Question, value: Result<&2, &2, Error, Parsed<Question>>) -> Decision:
   match value:
     case Fail{error}: Ignore{Malformed{error}}
-    case Done{Parsed{actual, _}}: questionMatches(sameQuestion(expected, actual), packetResponse, headerResponse, flags)
+    case Done{Parsed{actual, _}}: questionMatches(sameQuestion(expected, actual), packet, parsedHeader, flags)
 
-def absentQuestion(allowed: Bool, packetResponse: Packet, headerResponse: Header, flags: U32) -> Decision:
+def absentQuestion(allowed: Bool, packet: Packet, parsedHeader: Header, flags: U32) -> Decision:
   match allowed:
     case False{}: Ignore{QuestionCountMismatch{}}
-    case True{}: matched(U32.is_ne(U32.and(flags, 512), 0), packetResponse, headerResponse)
+    case True{}: matched(U32.is_ne(U32.and(flags, 512), 0), packet, parsedHeader)
 
-def questionCount(optional: Bool, count: U32, +packetResponse: Packet, headerResponse: Header, flags: U32, expected: Question) -> Decision:
+def questionCount(optional: Bool, count: U32, +packet: Packet, parsedHeader: Header, flags: U32, expected: Question) -> Decision:
   match count:
-    case 0: absentQuestion(optional, packetResponse, headerResponse, flags)
-    case 1: checkedQuestion(packetResponse, headerResponse, flags, expected, questionMessage(packetResponse, 12))
+    case 0: absentQuestion(optional, packet, parsedHeader, flags)
+    case 1: checkedQuestion(packet, parsedHeader, flags, expected, parsedQuestion(packet, 12))
     case _: Ignore{QuestionCountMismatch{}}
 
-def checkedHeader(equalId: Bool, response: Bool, equalOpcode: Bool, optional: Bool, count: U32, packetResponse: Packet, headerResponse: Header, flags: U32, expected: Question) -> Decision:
+def checkedHeader(equalId: Bool, response: Bool, equalOpcode: Bool, optional: Bool, count: U32, packet: Packet, parsedHeader: Header, flags: U32, expected: Question) -> Decision:
   match equalId response equalOpcode:
     case False{} _ _: Ignore{IdMismatch{}}
     case True{} False{} _: Ignore{NotResponse{}}
     case True{} True{} False{}: Ignore{OpcodeMismatch{}}
-    case True{} True{} True{}: questionCount(optional, count, packetResponse, headerResponse, flags, expected)
+    case True{} True{} True{}: questionCount(optional, count, packet, parsedHeader, flags, expected)
 
-def headerResponse(optional: Bool, packetResponse: Packet, id: U32, opcode: U32, expected: Question, result: Result<&2, &2, Error, Header>) -> Decision:
+def decideHeader(optional: Bool, packet: Packet, id: U32, opcode: U32, expected: Question, result: Result<&2, &2, Error, Header>) -> Decision:
   match result:
     case Fail{error}: Ignore{Malformed{error}}
-    case Done{Header{+actualId, +flags, +qd, an, ns, ar}}: checkedHeader(U32.is_eq(id, actualId), U32.is_ne(U32.and(flags, 32768), 0), U32.is_eq(opcode, (flags / 2048 % 16 : U32)), optional, qd, packetResponse, Header{actualId, flags, qd, an, ns, ar}, flags, expected)
+    case Done{Header{+actualId, +flags, +qd, an, ns, ar}}: checkedHeader(U32.is_eq(id, actualId), U32.is_ne(U32.and(flags, 32768), 0), U32.is_eq(opcode, (flags / 2048 % 16 : U32)), optional, qd, packet, Header{actualId, flags, qd, an, ns, ar}, flags, expected)
 
-def packetResponse(optional: Bool, id: U32, opcode: U32, expected: Question, value: Result<&2, &2, DomainNameError, Packet>) -> Decision:
+def decidePacket(optional: Bool, id: U32, opcode: U32, expected: Question, value: Result<&2, &2, DomainNameError, Packet>) -> Decision:
   match value:
     case Fail{error}: Ignore{Malformed{NameError{error}}}
-    case Done{+messagePacket}: headerResponse(optional, messagePacket, id, opcode, expected, header(messagePacket))
+    case Done{+messagePacket}: decideHeader(optional, messagePacket, id, opcode, expected, header(messagePacket))
 
 def endpoints(equal: Bool, optional: Bool, id: U32, opcode: U32, expected: Question, wire: List<&2, U32>) -> Decision:
   match equal:
     case False{}: Ignore{EndpointMismatch{}}
-    case True{}: packetResponse(optional, id, opcode, expected, parsePacket(wire))
+    case True{}: decidePacket(optional, id, opcode, expected, parsePacket(wire))
 
 def inspectPolicy(optional: Bool, transaction: Transaction, source: Endpoint, destination: Endpoint, wire: List<&2, U32>) -> Decision:
   match transaction:
@@ -681,15 +681,15 @@ type ReadResult is Data:
 
 def newTcpFrame() -> Reader: Prefix{}
 
-def lengthTcpFrame(value: U32) -> ReadResult:
+def tcpFrameLength(value: U32) -> ReadResult:
   match value:
     case 0: Frame{Nil{}, Nil{}}
-    case countTcpFrame: More{Payload{countTcpFrame, Nil{}}}
+    case count: More{Payload{count, Nil{}}}
 
 def consumeTcpFrame(reader: Reader, byte: U32) -> ReadResult:
   match reader:
     case Prefix{}: More{LengthLow{byte}}
-    case LengthLow{high}: lengthTcpFrame((high * 256 + byte : U32))
+    case LengthLow{high}: tcpFrameLength((high * 256 + byte : U32))
     case Payload{1, reversed}: Frame{List.reverse(&2, U32, byte <> reversed), Nil{}}
     case Payload{remaining, reversed}: More{Payload{(remaining - 1 : U32), byte <> reversed}}
 
@@ -715,21 +715,21 @@ def finish(reader: Reader) -> Result<&2, &2, TcpFrameError, Unit>:
     case Prefix{}: Done{Unit{}}
     case _: Fail{IncompleteFrame{}}
 
-def countByte(valid: Bool, value: U32, countTcpFrame: U32) -> Result<&2, &2, TcpFrameError, U32>:
+def countByte(valid: Bool, value: U32, count: U32) -> Result<&2, &2, TcpFrameError, U32>:
   match valid:
     case False{}: Fail{TcpFrameInvalidByte{value}}
-    case True{}: Done{(countTcpFrame + 1 : U32)}
+    case True{}: Done{(count + 1 : U32)}
 
-def increment(countTcpFrame: U32, +value: U32) -> Result<&2, &2, TcpFrameError, U32>:
-  match countTcpFrame:
+def increment(count: U32, +value: U32) -> Result<&2, &2, TcpFrameError, U32>:
+  match count:
     case 65535: Fail{TcpFrameTooLong{}}
     case size: countByte(U32.is_le(value, 255), value, size)
 
-def countTcpFrame(bytes: List<&2, U32>, result: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, TcpFrameError, U32>:
+def tcpFrameCount(bytes: List<&2, U32>, result: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, TcpFrameError, U32>:
   match bytes result:
     case _ Fail{error}: Fail{error}
     case Nil{} result: result
-    case byte <> rest Done{size}: countTcpFrame(rest, increment(size, byte))
+    case byte <> rest Done{size}: tcpFrameCount(rest, increment(size, byte))
 
 def encodedTcpFrame(bytes: List<&2, U32>, size: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, TcpFrameError, List<&2, U32>>:
   match size:
@@ -739,7 +739,7 @@ def encodedTcpFrame(bytes: List<&2, U32>, size: Result<&2, &2, TcpFrameError, U3
 # Prefix and payload form one buffer for the socket writer. The caller owns
 # DNS message validity and chooses when to pipeline another framed message.
 def encodeTcpFrame(+bytes: List<&2, U32>) -> Result<&2, &2, TcpFrameError, List<&2, U32>>:
-  encodedTcpFrame(bytes, countTcpFrame(bytes, Done{0}))
+  encodedTcpFrame(bytes, tcpFrameCount(bytes, Done{0}))
 
 # EDNS(0) request fields. Unknown option codes and duplicate options are
 # preserved in order; interpreting individual option payloads is separate.
@@ -788,7 +788,7 @@ def optionSize(code: U32, data: List<&2, U32>, buffer: Buffer, result: Result<&2
 def optionCode(valid: Bool, code: U32, +data: List<&2, U32>, buffer: Buffer) -> Result<&2, &2, EdnsError, Buffer>:
   match valid:
     case False{}: Fail{EdnsInvalidField{}}
-    case True{}: optionSize(code, data, buffer, measured(countTcpFrame(data, Done{0})))
+    case True{}: optionSize(code, data, buffer, measured(tcpFrameCount(data, Done{0})))
 
 def add(option: Option, buffer: Buffer) -> Result<&2, &2, EdnsError, Buffer>:
   match option:
@@ -800,22 +800,22 @@ def options(values: List<&2, Option>, result: Result<&2, &2, EdnsError, Buffer>)
     case Nil{} result: result
     case value <> rest Done{buffer}: options(rest, add(value, buffer))
 
-def recordEdns(payloadSize: U32, dnssecOkFlag: Bool, result: Result<&2, &2, EdnsError, Buffer>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
+def ednsRecord(payloadSize: U32, dnssecOkFlag: Bool, result: Result<&2, &2, EdnsError, Buffer>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match result:
     case Fail{error}: Fail{error}
     case Done{Buffer{size, reversed}}:
       Done{0 <> 0 <> 41 <> u16(payloadSize, 0 <> 0 <> Bool.pick(U32, dnssecOkFlag, 128, 0) <> 0 <> u16(size, List.reverse(&2, U32, reversed)))}
 
-def recordFieldsEdns(valid: Bool, payloadSize: U32, dnssecOkFlag: Bool, values: List<&2, Option>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
+def ednsRecordFields(valid: Bool, payloadSize: U32, dnssecOkFlag: Bool, values: List<&2, Option>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match valid:
     case False{}: Fail{EdnsInvalidField{}}
-    case True{}: recordEdns(payloadSize, dnssecOkFlag, options(values, Done{Buffer{0, Nil{}}}))
+    case True{}: ednsRecord(payloadSize, dnssecOkFlag, options(values, Done{Buffer{0, Nil{}}}))
 
 # OPT uses the root owner, type 41, advertised payload in CLASS, version zero,
 # zero extended RCODE and no reserved flag bits. Only the DO bit is settable.
 def encode(value: Query) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match value:
-    case Query{+payloadSize, dnssecOkFlag, values}: recordFieldsEdns(U32.is_le(payloadSize, 65535), payloadSize, dnssecOkFlag, values)
+    case Query{+payloadSize, dnssecOkFlag, values}: ednsRecordFields(U32.is_le(payloadSize, 65535), payloadSize, dnssecOkFlag, values)
 
 def bounded(bytes: List<&2, U32>, size: Result<&2, &2, EdnsError, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match size:
@@ -823,7 +823,7 @@ def bounded(bytes: List<&2, U32>, size: Result<&2, &2, EdnsError, U32>) -> Resul
     case Done{_}: Done{bytes}
 
 def counted(+bytes: List<&2, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
-  bounded(bytes, measured(countTcpFrame(bytes, Done{0})))
+  bounded(bytes, measured(tcpFrameCount(bytes, Done{0})))
 
 # Input is the validated single-question message emitted by query.
 # Replace ARCOUNT, append one OPT record and enforce the full message bound.
@@ -922,7 +922,7 @@ def selected(isOpt: Bool, packet: Packet, value: Record, prior: Result<&2, &2, E
     case True{} Done{Some{_}}: Fail{Duplicate{}}
     case True{} Done{None{}}: optional(decode(packet, value))
 
-def kindEdnsResponse(value: Record) -> U32:
+def ednsRecordKind(value: Record) -> U32:
   match value:
     case Record{_, code, _, _, _, _}: code
 
@@ -930,7 +930,7 @@ def scan(+packet: Packet, values: List<&2, Record>, state: Result<&2, &2, EdnsRe
   match values state:
     case _ Fail{error}: Fail{error}
     case Nil{} state: state
-    case +value <> rest state: scan(packet, rest, selected(U32.is_eq(kindEdnsResponse(value), 41), packet, value, state))
+    case +value <> rest state: scan(packet, rest, selected(U32.is_eq(ednsRecordKind(value), 41), packet, value, state))
 
 def placement(invalid: Bool, packet: Packet, values: List<&2, Record>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
   match invalid:
@@ -1134,11 +1134,11 @@ type History is Data:
 
 type SearchResponseDecision is Data:
   Continue{cursor: SearchCursor, history: History}
-  Stop{errorSearchResponse: SearchResponseError}
+  Stop{error: SearchResponseError}
 
 def new() -> History: History{None{}, False{}, False{}, NotFound{}}
 
-def errorSearchResponse(cause: Cause) -> SearchResponseError:
+def searchResponseError(cause: Cause) -> SearchResponseError:
   match cause:
     case Missing{}: NotFound{}
     case EmptyAnswer{}: NoData{}
@@ -1152,7 +1152,7 @@ def exhausted(history: History) -> SearchResponseError:
     case History{None{}, False{}, True{}, _}: TryAgain{}
     case History{None{}, False{}, False{}, value}: value
 
-def suffixSearchResponse(cause: Cause, cursor: SearchCursor, history: History) -> SearchResponseDecision:
+def searchSuffixDecision(cause: Cause, cursor: SearchCursor, history: History) -> SearchResponseDecision:
   match cause history:
     case ConnectionRefused{} _: Stop{TryAgain{}}
     case Missing{} History{initial, noData, serverFailure, _}: Continue{cursor, History{initial, noData, serverFailure, NotFound{}}}
@@ -1166,10 +1166,10 @@ def suffixSearchResponse(cause: Cause, cursor: SearchCursor, history: History) -
 def failed(origin: Origin, cause: Cause, cursor: SearchCursor, history: History) -> SearchResponseDecision:
   match origin history:
     case Initial{} History{_, noData, serverFailure, _}:
-      +value = errorSearchResponse(cause)
+      +value = searchResponseError(cause)
       Continue{cursor, History{Some{value}, noData, serverFailure, value}}
-    case Final{} History{initial, noData, serverFailure, _}: Continue{cursor, History{initial, noData, serverFailure, errorSearchResponse(cause)}}
-    case Suffix{_} previous: suffixSearchResponse(cause, cursor, previous)
+    case Final{} History{initial, noData, serverFailure, _}: Continue{cursor, History{initial, noData, serverFailure, searchResponseError(cause)}}
+    case Suffix{_} previous: searchSuffixDecision(cause, cursor, previous)
 
 type SearchRunRequest is Data:
   SearchRunRequest{origin: Origin, name: Name}
@@ -1198,7 +1198,7 @@ def received(-Failure: Data, -Value: Data, origin: Origin, cursor: SearchCursor,
     case SearchHalt{failure}: SearchRunFinished{Fail{Halted{failure}}}
     case SearchRunFailed{cause}: decided(Failure, Value, failed(origin, cause, cursor, history))
 
-def candidateSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, +origin: Origin, cursor: SearchCursor, history: History, name: Result<&2, &2, DomainNameError, Name>) -> IO(Progress<Failure, Value>):
+def searchCandidate(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, +origin: Origin, cursor: SearchCursor, history: History, name: Result<&2, &2, DomainNameError, Name>) -> IO(Progress<Failure, Value>):
   match name:
     case Fail{_}: IO.pure(Progress<Failure, Value>, decided(Failure, Value, failed(origin, Unrecoverable{}, cursor, history)))
     case Done{value}:
@@ -1209,7 +1209,7 @@ def candidateSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~reques
 def advance(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, history: History, step: Step) -> IO(Progress<Failure, Value>):
   match step:
     case Exhausted{}: IO.pure(Progress<Failure, Value>, SearchRunFinished{Fail{NoAnswer{exhausted(history)}}})
-    case Candidate{origin, name, following}: candidateSearchRun(~Environment, ~Failure, ~Value, ~request, environment, origin, following, history, name)
+    case Candidate{origin, name, following}: searchCandidate(~Environment, ~Failure, ~Value, ~request, environment, origin, following, history, name)
 
 # Each advance consumes a suffix or a direct-name phase; response policy can
 # only discard additional suffixes. That finite progress crosses record fields
@@ -1225,7 +1225,7 @@ def advance(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environm
 # The request function owns each exchange until it returns. The environment is
 # borrowed and remains caller-owned. SearchHalt preserves non-DNS errors immediately;
 # no earlier search failure can override cancellation/entropy/cleanup failures.
-def runSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, cursor: SearchCursor) -> IO(Result<&2, &2, SearchRunError<Failure>, Value>):
+def runSearch(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, cursor: SearchCursor) -> IO(Result<&2, &2, SearchRunError<Failure>, Value>):
   drive(~Environment, ~Failure, ~Value, ~request, environment, Active{cursor, new()})
 
 # The search threshold counts presentation dots, including the terminal dot.
@@ -1269,7 +1269,7 @@ def candidate(~Environment: Data, ~Left: Data, ~Right: Data, ~Failure: Data, ~Va
 # Search advances only after both children have returned and been joined.
 # Callbacks own cleanup; a shared abort/deadline must make each one finish.
 def run(~Environment: Data, ~Left: Data, ~Right: Data, ~Failure: Data, ~Value: Data, ~left: Environment -> SearchRunRequest -> IO(Left), ~right: Environment -> SearchRunRequest -> IO(Right), ~merge: Left -> Right -> Outcome<Failure, Value>, environment: Environment, cursor: SearchCursor) -> IO(Result<&2, &2, SearchRunError<Failure>, Value>):
-  runSearchRun(~Environment, ~Failure, ~Value, ~candidate(~Environment, ~Left, ~Right, ~Failure, ~Value, ~left, ~right, ~merge), environment, cursor)
+  runSearch(~Environment, ~Failure, ~Value, ~searchCandidate(~Environment, ~Left, ~Right, ~Failure, ~Value, ~left, ~right, ~merge), environment, cursor)
 
 type Family is Data:
   IPv4{}

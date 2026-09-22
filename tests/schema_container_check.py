@@ -41,7 +41,7 @@ def policy(p):
         elif isinstance(v,(int,float)): arg='C.NumberLiteral{'+value(v)[len('V.Number{'):-1]+'}'
         else: arg='C.StringLiteral{'+string(v)+'}'
         return 'C.Literal{'+arg+'}'
-    if p['kind']=='union': return 'C.unionConvert('+''.join('C.Branch{'+schema(x)+', '+policy(x)+'} <> ' for x in p['items'])+'Nil{})'
+    if p['kind']=='union': return 'C.unionPolicy('+''.join('C.Branch{'+schema(x)+', '+policy(x)+'} <> ' for x in p['items'])+'Nil{})'
     if p['kind']=='scalar': return 'C.Scalar{C.'+names[p['index']]+'{}}'
     if p['kind']=='array': return 'C.ArrayItems{'+policy(p['item'])+'}'
     if p['kind']=='tuple': return 'C.TupleItems{'+''.join(policy(x)+' <> ' for x in p['items'])+'Nil{}}'

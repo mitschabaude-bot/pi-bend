@@ -62,7 +62,7 @@ def scenario(+failAt: String, configured: Maybe<&2, T.ToolExecutionMode>, toolMo
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     capture : Call.CallCapture<Unit, String, String, String, Unit> = Call.CallCapture{assistant, configuration(configured, converter, beforeHook, hook), Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"}
     +execution : Execution.Execution<Unit, String, String, String> <- Execution.executeToolCalls(~Unit, ~String, ~String, ~String, ~Unit, ~S.render, capture, context)
-    result : S.Outcome() <- Execution.resultExecution(Unit, String, String, String, execution)
+    result : S.Outcome() <- Execution.executionResult(Unit, String, String, String, execution)
     Execution.disposeExecution(Unit, String, String, String, execution)
     S.checkOutcome(result, Bool.not(String.is_empty(failAt)), Bool.not(empty), Bool.pick(List<&2, Bool>, empty, Nil{}, False{} <> True{} <> True{} <> Nil{}), False{})
     saved : Maybe<&2, S.Update()> <- R.read(Maybe<&2, S.Update()>, retained)

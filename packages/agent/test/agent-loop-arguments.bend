@@ -131,7 +131,7 @@ def scenario(+prepare: Bool, name: String) -> IO(Unit):
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{Bool.pick(String, prepare, "edit something", "echo something")}, F.fromU32(0)}}} <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
-    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+    outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
     checkOutcome(prepare, outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
     W.disposeStreamRun(Unit, String, String, String, run)

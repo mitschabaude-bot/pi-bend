@@ -46,7 +46,7 @@ law short_weekday:
   for +day: U32
   for +clock: S.ClockFields
   for +valid: Bool
-  {Y.shortYearDateYear(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}, valid) == Y.shortYearDateYear(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}, valid) : Result<&2, &2, Y.DateYearError, U32>}
+  {Y.shortYear(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}, valid) == Y.shortYear(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}, valid) : Result<&2, &2, Y.DateYearError, U32>}
 
 def short_weekday(reference, a, b, year, month, day, clock, valid):
   match valid:

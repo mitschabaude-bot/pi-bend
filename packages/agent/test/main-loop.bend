@@ -326,8 +326,8 @@ def consumeRun(gate: Maybe<&2, Gates>, created: Result<&2, &2, String, StreamRun
     case Done{+run}:
       do IO<Outcome()>:
         releaseProvider(gate)
-        outcome : Outcome() <- Wrapper.resultStream(Unit, String, String, String, run)
-        repeated : Outcome() <- Wrapper.resultStream(Unit, String, String, String, run)
+        outcome : Outcome() <- Wrapper.streamOutcome(Unit, String, String, String, run)
+        repeated : Outcome() <- Wrapper.streamOutcome(Unit, String, String, String, run)
         checked(repeated, expectedHistory, expectedError)
         +iterator : Stream.Iterator<H.EventValue(), Outcome()> <- Wrapper.iterator(Unit, String, String, String, run)
         events : List<&2, String> <- collectEvents(iterator, Nil{}, None{})

@@ -72,7 +72,7 @@ def inspect(+mode: U32, created: Result<&2, &2, String, H.StreamRun()>, reply: S
     case Fail{error}: verify(mode, Fail{error}, reply)
     case Done{+run}:
       do IO<Unit>:
-        outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+        outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
         verify(mode, outcome, reply)
         +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
         events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
@@ -200,7 +200,7 @@ def transcriptScenario(name: String, +mode: U32, expectedLog: String) -> IO(Unit
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
     config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, Bool.pick(Maybe<&2, C.Callback<TransformInput(), TransformResult()>>, U32.is_eq(mode, 2), Some{transformer}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, transcriptPrompts(mode), transcriptContext(mode), config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
-    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
+    outcome : H.Outcome() <- W.streamOutcome(Unit, String, String, String, run)
     transcriptOutcome(mode, outcome)
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})

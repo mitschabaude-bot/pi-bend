@@ -56,10 +56,10 @@ def finished(read: Bool, value: Result<&2, &1, Provider.StatusFailure<String>, R
   match value:
     case Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("accepted:" ++ U32.show(Metadata.statusResponseMetadata(metadata)))
+        IO.print("accepted:" ++ U32.show(Metadata.metadataStatus(metadata)))
         useBody(read, body)
     case Fail{Provider.StatusFailure{metadata, body}}:
-      IO.print("rejected:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Show.shownText(body))
+      IO.print("rejected:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Show.shownText(body))
 
 def field(parts: List<&2, String>) -> Header.Header:
   match parts:

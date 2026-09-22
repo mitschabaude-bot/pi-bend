@@ -382,7 +382,7 @@ law busy_agents_cannot_continue:
   for -C: Data
   for messages: List<&2, Agent(G, D, C)>
   for queues: Runtime.Queues<Agent(G, D, C)>
-  {Runtime.planContinue(G, D, C, True{}, messages, queues) == (queues, Fail{Runtime.ContinueBusy{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
+  {Runtime.continuationPlan(G, D, C, True{}, messages, queues) == (queues, Fail{Runtime.ContinueBusy{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
 
 law system_only_transcripts_cannot_continue:
   for -G: Data
@@ -390,7 +390,7 @@ law system_only_transcripts_cannot_continue:
   for -C: Data
   for systems: List<&2, Ai.SystemMessage<Schema.Value>>
   for queues: Runtime.Queues<Agent(G, D, C)>
-  {Runtime.planContinue(G, D, C, False{}, systemsOf(G, D, C, systems), queues) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
+  {Runtime.continuationPlan(G, D, C, False{}, systemsOf(G, D, C, systems), queues) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
 
 law continue_after_a_user_message_resumes_the_run:
   for -G: Data
@@ -399,7 +399,7 @@ law continue_after_a_user_message_resumes_the_run:
   for messages: List<&2, Agent(G, D, C)>
   for user: Ai.UserMessage
   for queues: Runtime.Queues<Agent(G, D, C)>
-  {Runtime.planContinue(G, D, C, False{}, List.append(&2, Agent(G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), queues) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
+  {Runtime.continuationPlan(G, D, C, False{}, List.append(&2, Agent(G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), queues) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
 
 law continue_after_assistant_prefers_steering:
   for -M: Data

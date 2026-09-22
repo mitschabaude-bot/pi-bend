@@ -23,7 +23,7 @@ def run(text: String, dots: U32, absolute: Bool, result: Result<&2, &2, List<&2,
       do IO<Unit>:
         OptionsTest.report(Options.OptionsReport{options, Nil{}})
         SearchTest.drain(10000n, 4294967295, 0, Search.next(cursor))
-        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearchRun(~Unit, ~String, ~String, ~DomainsTest.request, Unit{}, cursor)
+        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearch(~Unit, ~String, ~String, ~DomainsTest.request, Unit{}, cursor)
         RunTest.report(result)
 
 def args(values: List<String>) -> IO(Unit):

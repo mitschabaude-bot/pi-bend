@@ -34,11 +34,11 @@ def statusFailure(value: Provider.StatusFailure<Exchange.ReadError<String>>) -> 
   match value:
     case Provider.StatusFailure{+metadata, Done{+text}}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        IO.print("diagnostic:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Text.showText(text))
+        IO.print("diagnostic:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Text.showText(text))
         return Fail{Provider.retryFailure(Failure, StatusFailure{Provider.StatusFailure{metadata, Done{text}}}, text, metadata)}
     case Provider.StatusFailure{+metadata, Fail{+cause}}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        IO.print("diagnostic-error:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Show.textFailure(cause))
+        IO.print("diagnostic-error:" ++ U32.show(Metadata.metadataStatus(metadata)) ++ ":" ++ Show.textFailure(cause))
         return Fail{Retry.Other{StatusFailure{Provider.StatusFailure{metadata, Fail{cause}}}}}
 
 def accepted(value: Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
@@ -80,7 +80,7 @@ def finished(value: Result<&2, &1, Retry.RetryFailure<Failure>, Response.Respons
     case Fail{Retry.DelayRejected{_, _}}: IO.print("failed:delay")
     case Done{Response.Response{metadata, body}}:
       do IO<Unit>:
-        IO.print("accepted:" ++ U32.show(Metadata.statusResponseMetadata(metadata)))
+        IO.print("accepted:" ++ U32.show(Metadata.metadataStatus(metadata)))
         result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(~String, 1000n, body)
         IO.print(Show.shownText(result))
 

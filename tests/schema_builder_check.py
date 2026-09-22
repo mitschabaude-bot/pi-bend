@@ -61,7 +61,7 @@ def seq(items): return ''.join(x+' <> ' for x in items)+'Nil{}'
 def declaration(p):
     k=p['kind']
     if k=='object':
-        fields='R.Record{'+seq('R.Property{'+string(key)+', D.'+('optional' if optional else 'required')+'('+declaration(child)+')}' for key,child,optional in p['fields'])+'}'
+        fields='R.Record{'+seq('R.Property{'+string(key)+', D.'+('optional' if optional else 'requiredField')+'('+declaration(child)+')}' for key,child,optional in p['fields'])+'}'
         return 'D.objectWithAdditional('+fields+', '+declaration(p['additional'])+')' if 'additional' in p else 'D.object('+fields+')'
     if k=='never': return 'D.never()'
     if k=='scalar': return 'D.'+['boolean','number','integer','string','null'][p['index']]+'()'
@@ -72,7 +72,7 @@ def declaration(p):
         if isinstance(v,bool): arg='C.BooleanLiteral{'+('True{}' if v else 'False{}')+'}'
         elif isinstance(v,(int,float)): arg='C.NumberLiteral{'+value(v)[len('V.Number{'):-1]+'}'
         else: arg='C.StringLiteral{'+string(v)+'}'
-        return 'D.literalBuilder('+arg+')'
+        return 'D.literal('+arg+')'
     return 'D.unknown()'
 def decoded(v):
     if 'number' in v: return 'V.Number{F.fromBits('+', '.join(map(str,v['number']))+')}'

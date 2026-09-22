@@ -46,7 +46,7 @@ def reserve(-Error: Data, state: State<Error>) -> State<Error> & Maybe<&2, Nat>:
     case State{True{}, active, +next, failure, outcome}: {(State{True{}, 1n+active, 1n+next, failure, outcome}, Some{next}) : State<Error> & Maybe<&2, Nat>}
     case other: {(other, None{}) : State<Error> & Maybe<&2, Nat>}
 
-def ticketScope(-Error: Data, scope: Scope<Error>, index: Maybe<&2, Nat>) -> Maybe<&1, Ticket<Error>>:
+def scopeTicket(-Error: Data, scope: Scope<Error>, index: Maybe<&2, Nat>) -> Maybe<&1, Ticket<Error>>:
   match index:
     case None{}: None{}
     case Some{value}: Some{Ticket{scope, value}}
@@ -56,7 +56,7 @@ def begin(-Error: Data, +scope: Scope<Error>) -> IO(Maybe<&1, Ticket<Error>>):
     case Scope{state, _, _}:
       do IO<Maybe<&1, Ticket<Error>>>:
         index : Maybe<&2, Nat> <- R.modify(State<Error>, Maybe<&2, Nat>, state, current => reserve(Error, current))
-        return ticketScope(Error, scope, index)
+        return scopeTicket(Error, scope, index)
 
 # Before closing, already-failed updates are selected in registration order.
 # After closing, the first arriving failure wins the pending completion.
@@ -146,7 +146,7 @@ def close(-Error: Data, scope: Scope<Error>) -> IO(Unit):
         action : Notification<Error> <- R.modify(State<Error>, Notification<Error>, state, current => closeState(Error, current))
         notify(Error, completion, drained, action)
 
-def resultScope(-Error: Data, scope: Scope<Error>) -> IO(ScopeOutcome(Error)):
+def scopeOutcome(-Error: Data, scope: Scope<Error>) -> IO(ScopeOutcome(Error)):
   match scope:
     case Scope{_, completion, _}: D.result(ScopeOutcome(Error), completion)
 
@@ -1125,7 +1125,7 @@ def executePreparedToolCall(-Details: Data, -Error: Data, prepared: PreparedTool
       do IO<Result<&2, &2, Error, ExecutedToolCallOutcome<Details>>>:
         executed : Result<&2, &2, Error, T.AgentToolResult<Details>> <- C.call(T.ToolExecutionInput<Details>, Result<&2, &2, Error, T.AgentToolResult<Details>>, execute, T.ToolExecutionInput{id, args, signal, Some{callback}})
         close(Error, scope)
-        settled : Result<&2, &2, Error, Unit> <- resultScope(Error, scope)
+        settled : Result<&2, &2, Error, Unit> <- scopeOutcome(Error, scope)
         return checkedExecutionOutcome(Details, Error, executed, settled, failureDetails, renderError)
 
 # Native sinks distinguish ordered initiation from optional async completion.
@@ -1528,7 +1528,7 @@ def collected(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: D
 
 # One consumer owns result-message delivery. On failure this may return while
 # sibling execution is still running; dispose is the separate lifetime boundary.
-def resultParallel(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, run: ParallelRun<DiagnosticDetails, Details, Custom, Error>) -> IO(Result<&2, &2, Error, Batch<T.AgentContext<DiagnosticDetails, Details, Custom, Error>, Ai.ToolResultMessage<Details>>>):
+def parallelResult(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, run: ParallelRun<DiagnosticDetails, Details, Custom, Error>) -> IO(Result<&2, &2, Error, Batch<T.AgentContext<DiagnosticDetails, Details, Custom, Error>, Ai.ToolResultMessage<Details>>>):
   match run:
     case ParallelRun{context, collection, _, sink}:
       do IO<Result<&2, &2, Error, Batch<T.AgentContext<DiagnosticDetails, Details, Custom, Error>, Ai.ToolResultMessage<Details>>>>:
@@ -1704,10 +1704,10 @@ def executeToolCalls(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~E
 
 # The caller consumes result delivery once, then drains before releasing the
 # captured resources. A failed parallel result does not cancel sibling tools.
-def resultExecution(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, execution: Execution<DiagnosticDetails, Details, Custom, Error>) -> IO(ExecutionOutcome(DiagnosticDetails, Details, Custom, Error)):
+def executionResult(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, execution: Execution<DiagnosticDetails, Details, Custom, Error>) -> IO(ExecutionOutcome(DiagnosticDetails, Details, Custom, Error)):
   match execution:
     case Settled{outcome}: IO.pure(ExecutionOutcome(DiagnosticDetails, Details, Custom, Error), outcome)
-    case Concurrent{run}: resultParallel(DiagnosticDetails, Details, Custom, Error, run)
+    case Concurrent{run}: parallelResult(DiagnosticDetails, Details, Custom, Error, run)
 
 # This drains batch workers. Retained tool-update scopes remain in Capture.owners;
 # retire their aliases and dispose that owner before releasing event resources.
@@ -1762,7 +1762,7 @@ def completedTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Erro
       +added = toolMessages(DiagnosticDetails, Details, Custom, results)
       T.ShouldStopAfterTurnContext{assistant, results, T.AgentContext{List.append(&2, T.AgentMessage<DiagnosticDetails, Details, Custom>, messages, added), tools}, List.append(&2, T.AgentMessage<DiagnosticDetails, Details, Custom>, newMessages, added)}
 
-def historyCompletion(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
+def completedHistory(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
   match completed:
     case T.ShouldStopAfterTurnContext{_, _, _, messages}: messages
 
@@ -1781,7 +1781,7 @@ def followed(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Da
     case Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
     case Done{Nil{}}:
       do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
-        emitted : Result<&2, &2, Error, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>, sink, T.AgentEnd{historyCompletion(DiagnosticDetails, Details, Custom, Error, completed)})
+        emitted : Result<&2, &2, Error, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>, sink, T.AgentEnd{completedHistory(DiagnosticDetails, Details, Custom, Error, completed)})
         return endedCompletion(DiagnosticDetails, Details, Custom, Error, completed, emitted)
     case Done{head <> tail}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, head <> tail}})
 
@@ -1801,7 +1801,7 @@ def afterTurnEnd(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error
     case Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
     case Done{_}:
       do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
-        queued : Result<&2, &2, Error, Maybe<&2, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>> <- finishCompletedTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, T.AgentToolResult<Details>, T.AgentToolResult<Details>, config, completed, historyCompletion(DiagnosticDetails, Details, Custom, Error, completed), sink)
+        queued : Result<&2, &2, Error, Maybe<&2, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>> <- finishCompletedTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, T.AgentToolResult<Details>, T.AgentToolResult<Details>, config, completed, completedHistory(DiagnosticDetails, Details, Custom, Error, completed), sink)
         afterSteering(DiagnosticDetails, Details, Custom, Error, Telemetry, config, completed, sink, queued, moreTools)
 
 # Commit successful tool results to both histories before turn_end and the
@@ -1949,7 +1949,7 @@ def executeLoop(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error:
       do IO<ExecutionOutcome(DiagnosticDetails, Details, Custom, Error)>:
         +execution : Execution<DiagnosticDetails, Details, Custom, Error> <- executeToolCalls(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, CallCapture{message, config, signal, validate, isAborted, emit, sink, updates, emptyDetails}, context)
         R.modify(List<&2, Execution<DiagnosticDetails, Details, Custom, Error>>, Unit, batches, entries => (execution <> entries, Unit{}))
-        resultExecution(DiagnosticDetails, Details, Custom, Error, execution)
+        executionResult(DiagnosticDetails, Details, Custom, Error, execution)
 
 def completedContext(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>) -> T.AgentContext<DiagnosticDetails, Details, Custom, Error>:
   match completed:
@@ -1996,7 +1996,7 @@ def advanceLoop(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error:
         case LoopCompleted{Done{CompletionContinue{+completed, pending}}}:
           do IO<Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
             +context : T.AgentContext<DiagnosticDetails, Details, Custom, Error> = completedContext(DiagnosticDetails, Details, Custom, Error, completed)
-            messages : List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>> = historyCompletion(DiagnosticDetails, Details, Custom, Error, completed)
+            messages : List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>> = completedHistory(DiagnosticDetails, Details, Custom, Error, completed)
             R.write(T.AgentContext<DiagnosticDetails, Details, Custom, Error>, contextCell, context)
             prepared : Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>> <- nextTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, context, config, completed, messages, pending, sink, error => declarationError(error))
             advanceLoop(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, capture, contextCell, config, Nil{}, LoopPrepared{prepared})
@@ -2170,7 +2170,7 @@ def agentLoopContinue(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~
   match context:
     case T.AgentContext{messages, _}: continueValidatedStream(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, ~streamError, ~entryError, context, config, options, validateContinuation(DiagnosticDetails, Details, Custom, messages))
 
-def resultStream(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, run: StreamRun<DiagnosticDetails, Details, Custom, Error>) -> IO(StreamOutcome(DiagnosticDetails, Details, Custom, Error)):
+def streamOutcome(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, run: StreamRun<DiagnosticDetails, Details, Custom, Error>) -> IO(StreamOutcome(DiagnosticDetails, Details, Custom, Error)):
   match run:
     case StreamRun{stream, _, _, _, _, _}: Stream.resultValue(LoopEvent(DiagnosticDetails, Details, Custom), StreamOutcome(DiagnosticDetails, Details, Custom, Error), stream)
 

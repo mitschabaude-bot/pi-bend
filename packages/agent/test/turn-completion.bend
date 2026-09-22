@@ -140,7 +140,7 @@ def scenario(+tools: Bool, terminate: Bool, stopMode: U32, steeringMode: U32, fo
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     capture : Call.CallCapture<Unit, String, String, String, Unit> = Call.CallCapture{assistant, config, Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"}
     +execution : Execution.Execution<Unit, String, String, String> <- Execution.executeToolCalls(~Unit, ~String, ~String, ~String, ~Unit, ~S.render, capture, context)
-    batch : S.Outcome() <- Execution.resultExecution(Unit, String, String, String, execution)
+    batch : S.Outcome() <- Execution.executionResult(Unit, String, String, String, execution)
     history : H.Messages() = T.CustomMessage{"prompt"} <> T.LlmMessage{Ai.Assistant{assistant}} <> Nil{}
     result : Outcome() <- Completion.completeTurn(Unit, String, String, String, Unit, assistant, history, config, sink, batch)
     check(result, category, tools, expectedPending, expectedError)

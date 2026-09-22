@@ -286,7 +286,7 @@ def collect(addresses: List<&2, Connect.Address>, groups: Groups) -> Groups:
     case Nil{}: groups
     case first <> rest: collect(rest, insert(first, groups))
 
-def orderedOrder(preference: Preference, groups: Groups) -> List<&2, Connect.Address>:
+def orderedAddresses(preference: Preference, groups: Groups) -> List<&2, Connect.Address>:
   match preference groups:
     case IPv4First{} Groups{ipv4, ipv6}: Interleave.interleave(Connect.Address, List.reverse(&2, Connect.Address, ipv4), List.reverse(&2, Connect.Address, ipv6))
     case IPv6First{} Groups{ipv4, ipv6}: Interleave.interleave(Connect.Address, List.reverse(&2, Connect.Address, ipv6), List.reverse(&2, Connect.Address, ipv4))
@@ -296,8 +296,8 @@ def orderedOrder(preference: Preference, groups: Groups) -> List<&2, Connect.Add
 # Deduplication applies to attempts only; original resolution reports remain intact.
 def prepare(preference: Preference, candidates: Candidates) -> List<&2, Connect.Address>:
   match candidates:
-    case Ordered{+first, rest}: orderedOrder(family(first), collect(first <> rest, Groups{Nil{}, Nil{}}))
-    case Paired{ipv4, ipv6}: orderedOrder(preference, collect(ipv6, collect(ipv4, Groups{Nil{}, Nil{}})))
+    case Ordered{+first, rest}: orderedAddresses(family(first), collect(first <> rest, Groups{Nil{}, Nil{}}))
+    case Paired{ipv4, ipv6}: orderedAddresses(preference, collect(ipv6, collect(ipv4, Groups{Nil{}, Nil{}})))
 
 type PlanReport<-Resolution: Data, -Reason: Data, -Value: Type> is Type:
   Unresolved{resolution: Resolution}
