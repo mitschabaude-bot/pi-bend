@@ -83,6 +83,7 @@ def stringsValue(values: R.Record<String>) -> V.Value:
 def preparationError(cause: Prepare.PreparationError) -> String:
   match cause:
     case Prepare.MissingApiKey{provider}: "No API key for provider: " ++ provider
+    case Prepare.MissingAccountId{}: "Failed to extract accountId from token"
     case Prepare.GrammarFailure{error}: Sampling.errorMessage(error)
     case Prepare.PayloadFailure{_}: "payload conversion failed"
     case Prepare.UnsupportedApi{_}: "unsupported API"
@@ -90,7 +91,7 @@ def preparationError(cause: Prepare.PreparationError) -> String:
 def preparationValue(result: Result<&2, &2, Prepare.PreparationError, Prepare.Prepared>) -> V.Value:
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{preparationError(cause)}} <> Nil{}}}
-    case Done{Prepare.Prepared{apiKey, baseUrl, headers, payload, compat, declarations, retention}}:
+    case Done{Prepare.Prepared{apiKey, baseUrl, headers, payload, compat, declarations, retention, _, _, _}}:
       V.ObjectValue{R.Record{R.Property{"apiKey", V.Text{apiKey}} <> R.Property{"baseUrl", V.Text{baseUrl}} <> R.Property{"headers", headersValue(headers)} <> R.Property{"payload", Data.project(payload)} <> R.Property{"compat", V.Text{P.showCompat(compat)}} <> R.Property{"grammar", stringsValue(declarations)} <> R.Property{"retention", V.Text{P.showRetention(retention)}} <> Nil{}}}
 
 def prepareCase(mode: String, flags: String, scenario: String, provider: String, expected: String) -> IO(Unit):
