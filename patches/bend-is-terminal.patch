@@ -18,9 +18,9 @@
 +#include <unistd.h>
 +
 +// Whether a file descriptor refers to a terminal. Errors (EBADF, ENOTTY)
-+// report false, as Node's tty.isatty does.
++// report false, as Node's tty.isatty does. The def returns a plain Bool.
 +Term io_isterminal_run(Env e, Term* f, IoWork* w) {
-+  return io_done(e, term_pak(isatty((int)(u32)f[0]) ? CID_TRUE : CID_FALSE, 0));
++  return term_pak(isatty((int)(u32)f[0]) ? CID_TRUE : CID_FALSE, 0);
 +}
 +
 +static void __attribute__((constructor)) io_isterminal_use(void) {
@@ -28,8 +28,9 @@
 +}
 --- /dev/null
 +++ b/bend2/effs/is_terminal.js
-@@ -0,0 +1,4 @@
+@@ -0,0 +1,5 @@
 +// Separate compiler-backend implementation; native programs never invoke JS.
++// Bool values are plain JavaScript booleans on this backend.
 +function io_isterminal(descriptor) {
-+  return io_done(require("tty").isatty(descriptor));
++  return require("tty").isatty(descriptor);
 +}

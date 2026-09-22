@@ -1448,14 +1448,21 @@
     {
       "source": "packages/coding-agent/test/ansi-utils.test.ts",
       "status": "partial",
-      "ports": ["tests/ansi.bend", "tests/ansi_check.py"],
+      "ports": [
+        "tests/ansi.bend",
+        "tests/ansi_check.py"
+      ],
       "notes": "Named RIS, single-byte ESC and combined color/hyperlink assertions pass on native one/four workers. Non-string rejection is static; generated malformed-regex compatibility is deliberately adapted, not claimed identical. See tests/ansi.md.",
       "sha256": "c0deb09e3f927314fbd60a5484d961497826254279398aaadaa3517567053cec"
     },
     {
       "source": "packages/coding-agent/test/args.test.ts",
       "status": "ported",
-      "ports": ["tests/cli-args.bend", "tests/cli_args_check.py", "tests/cli_args_reference.ts"],
+      "ports": [
+        "tests/cli-args.bend",
+        "tests/cli_args_check.py",
+        "tests/cli_args_reference.ts"
+      ],
       "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md.",
       "sha256": "55660408eaa82498adfcf5b91df15658796919797dba9472922e5805ede575b0"
     },
@@ -1473,9 +1480,13 @@
     },
     {
       "source": "packages/coding-agent/test/auth-storage.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe"
+      "status": "partial",
+      "ports": [
+        "tests/auth-storage.bend",
+        "tests/auth_storage_check.py"
+      ],
+      "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe",
+      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Pending: file-lock contention/compromise, coalesced reloads, cancellation/abort and Models refresh-failure cases; the port takes no cross-process lock."
     },
     {
       "source": "packages/coding-agent/test/bash-close-hang-windows.test.ts",
@@ -2147,9 +2158,12 @@
     },
     {
       "source": "packages/coding-agent/test/print-mode.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7",
+      "notes": "The harness drives the native CLI: help/version/diagnostic exits and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events and non-zero exit on request errors. Pending: session_shutdown events (no session layer), SIGTERM/SIGHUP exits (no signal primitive)."
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
@@ -2171,9 +2185,13 @@
     },
     {
       "source": "packages/coding-agent/test/resolve-config-value.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "da87e84e5a4aae4b671140ad33b19b4438bb3b97e8699acf5c13c97bf403608c"
+      "status": "partial",
+      "ports": [
+        "tests/config-value.bend",
+        "tests/config_value_check.py"
+      ],
+      "sha256": "da87e84e5a4aae4b671140ad33b19b4438bb3b97e8699acf5c13c97bf403608c",
+      "notes": "Ported: literals/environment templates/escapes; credential-scoped env precedence; shell command execution and trimming; command failures; caching until cleared; environment values never cached (per-run env); uncached resolution. Command cases run on native lanes only (no JS process primitive). Pending: the Windows stdin-transport shell case."
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
@@ -2225,9 +2243,13 @@
     },
     {
       "source": "packages/coding-agent/test/runtime-credentials.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409"
+      "status": "partial",
+      "ports": [
+        "tests/auth-storage.bend",
+        "tests/auth_storage_check.py"
+      ],
+      "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409",
+      "notes": "Ported: runtime overrides mask stored credentials without persisting; enumeration merges overrides without exposing keys; delete clears both the override and persisted credential. Pending: forwards operation signals to the persistent store; keeps a runtime override when persistent deletion is cancelled."
     },
     {
       "source": "packages/coding-agent/test/scoped-models-selector.test.ts",
@@ -2592,7 +2614,10 @@
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
       "status": "ported",
-      "ports": ["tests/bash-tool.bend", "tests/bash_tool_check.py"],
+      "ports": [
+        "tests/bash-tool.bend",
+        "tests/bash_tool_check.py"
+      ],
       "notes": "Retained injected onData is called after public execution returns and before ToolOwner disposal; it is ignored without changing output or emitting another update. Passes Bun and native one/four workers; see tests/bash-tool.md.",
       "sha256": "9d6fc0d457e6d7470246d821deec9937d428e86fdad6858d05e7d5c956802f8c"
     },
@@ -2605,7 +2630,10 @@
     {
       "source": "packages/coding-agent/test/suite/regressions/5303-bash-output-truncation.test.ts",
       "status": "partial",
-      "ports": ["tests/child-process.bend", "tests/child_process_check.py"],
+      "ports": [
+        "tests/child-process.bend",
+        "tests/child_process_check.py"
+      ],
       "sha256": "d38754f1abadb955553f0d2ce3276f580fb07ca9b937e0d4abe3b6226d2e3b87",
       "notes": "Native child-process draining covers sustained post-exit output and quiet inherited pipes on explicit one/four threads. Virtual-clock 99ms/100ms assertions and hosted process execution remain pending; scope in tests/child-process.md."
     },
@@ -2953,9 +2981,13 @@
     },
     {
       "source": "packages/coding-agent/test/system-prompt.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101"
+      "status": "partial",
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py"
+      ],
+      "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101",
+      "notes": "Ported: empty tools; file paths guideline; exact default/custom prefixes; forced prompt; appended instructions and project context sections; default tool snippets; docs paths; custom snippets present/absent; prompt guideline append/dedupe/trim; custom sections and invalid names; cwd slashes; section diffs. Pending: skills sections (skills prompt formatting not ported)."
     },
     {
       "source": "packages/coding-agent/test/test-harness.test.ts",
