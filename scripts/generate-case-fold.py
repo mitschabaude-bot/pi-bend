@@ -25,6 +25,43 @@ def mappings():
     return result
 
 
+def uppercase():
+    path = ROOT / 'build/unicode-17/DerivedCoreProperties.txt'
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(urlopen('https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt', timeout=30).read())
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == '24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08'
+    values = set()
+    for line in raw.decode().splitlines():
+        fields = line.split('#')[0].split(';')
+        if len(fields) < 2 or fields[1].strip() != 'Uppercase':
+            continue
+        bounds = fields[0].strip().split('..')
+        values.update(range(int(bounds[0],16),int(bounds[-1],16)+1))
+    return values
+
+
+def uppercase_table():
+    keys = sorted(uppercase())
+    rows, index = [], 0
+    while index < len(keys):
+        first = last = keys[index]
+        step = keys[index+1]-first if index+1 < len(keys) else 1
+        index += 1
+        while index < len(keys) and keys[index]-last == step:
+            last = keys[index]
+            index += 1
+        rows.append((first,last,step))
+    assert {c for first,last,step in rows for c in range(first,last+1,step)} == set(keys)
+    def tree(rows):
+        if not rows: return 'Table.Empty{}'
+        mid = len(rows)//2
+        first,last,step = rows[mid]
+        return f'Table.Branch{{{first},UppercaseRange{{{first},{last},{step}}},\n  {tree(rows[:mid])},\n  {tree(rows[mid+1:])}}}'
+    return (f'# {len(keys)} Uppercase scalars, {len(rows)} arithmetic ranges.\n'
+            f'def uppercaseRanges() -> Table.Table<UppercaseRange>:\n  Table.Table{{{len(rows).bit_length()}n,{tree(rows)}}}\n')
+
 def generate():
     groups = defaultdict(set)
     for source, target in mappings().items():
@@ -66,7 +103,7 @@ def generate():
     text = path.read_text()
     prefix, rest = text.split('# BEGIN GENERATED UNICODE TABLE\n')
     _, suffix = rest.split('# END GENERATED UNICODE TABLE')
-    path.write_text(prefix + '# BEGIN GENERATED UNICODE TABLE\n' + generated + '# END GENERATED UNICODE TABLE' + suffix)
+    path.write_text(prefix + '# BEGIN GENERATED UNICODE TABLE\n' + generated + uppercase_table() + '# END GENERATED UNICODE TABLE' + suffix)
     print(f'{len(cycles)} scalars, {len(segments)} segments')
 
 

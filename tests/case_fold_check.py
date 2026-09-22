@@ -10,6 +10,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 generator = runpy.run_path(str(ROOT / 'scripts/generate-case-fold.py'))
 mapping = generator['mappings']()
+uppercase = generator['uppercase']()
 groups = defaultdict(set)
 for source, target in mapping.items():
     groups[target].update([source, target])
@@ -39,6 +40,8 @@ for backend in a.backends:
         assert code not in observed and values[0] == code and len(values) == len(set(values)), (code,values)
         observed[code] = set(values)
     assert observed == classes, backend
+    observed_uppercase = {int(code) for code in run("uppercase",0,0xd800)+run("uppercase",0xe000,0x110000-0xe000)}
+    assert observed_uppercase == uppercase, (backend,observed_uppercase ^ uppercase)
     elapsed = time.monotonic()-started
     for left,right in pairs:
         expected = mapping.get(left,left) == mapping.get(right,right)
@@ -46,7 +49,7 @@ for backend in a.backends:
     for code,first,last in ranges:
         expected = any(first <= value <= last for value in classes.get(code,{code}))
         assert run('range',code,first,last) == [str(expected).lower()], (backend,code,first,last)
-    print(f'{backend}: all 1,112,064 Unicode scalars checked ({elapsed:.3f}s), 2,994 class members, symmetric equality, {len(pairs)} literal / {len(ranges)} range cases PASS',flush=True)
+    print(f'{backend}: all 1,112,064 Unicode scalars checked ({elapsed:.3f}s), 2,994 class members, symmetric equality, {len(uppercase)} Uppercase scalars, {len(pairs)} literal / {len(ranges)} range cases PASS',flush=True)
 
 if a.reference:
     source_pairs = list(mapping.items())
