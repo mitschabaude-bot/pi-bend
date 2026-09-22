@@ -3535,21 +3535,24 @@
     },
     {
       "source": "packages/tui/test/regression-overlay-cjk-boundary.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "51438c36784bb4ffb6304e1d179eb9daa046b8b93c80582c87c41f6415449b20"
+      "status": "partial",
+      "ports": [
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "sha256": "51438c36784bb4ffb6304e1d179eb9daa046b8b93c80582c87c41f6415449b20",
+      "notes": "Native slice/extract helper assertions are covered by tests/ansi-layout.md; the two compositeTuiLine cases remain pending."
     },
     {
       "source": "packages/tui/test/regression-regional-indicator-width.test.ts",
       "status": "partial",
       "ports": [
-        "tests/visible-width.bend"
+        "tests/visible-width.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
       ],
       "sha256": "a057bc5b61cd287e2f2f554e878222ebace84a515e6cf67b87191eba5c91ae47",
-      "notes": "Native width observations now pass through the pure Bend implementation; prototype ICU checks are no longer the port evidence. See tests/visible-width.md.",
-      "pending": [
-        "wraps intermediate partial-flag list line before overflow"
-      ]
+      "notes": "Native width observations and intermediate partial-flag wrapping now pass through pure Bend on all three backends; see tests/visible-width.md and tests/ansi-layout.md."
     },
     {
       "source": "packages/tui/test/regression-sigwinch-kill-eacces.test.ts",
@@ -3586,8 +3589,12 @@
     {
       "source": "packages/tui/test/tab-width.test.ts",
       "status": "partial",
-      "ports": ["tests/ansi-utils.bend"],
-      "notes": "Control-sequence normalization and observed visible-width assertions replay on Bun/native one/four. Actual slicing and TUI layout remain pending. See tests/ansi-utils.md and tests/visible-width.md.",
+      "ports": [
+        "tests/ansi-utils.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "notes": "Native normalization, observed widths, slice helper widths and overlay segment widths are covered; input/editor/TUI component cases remain pending. See tests/ansi-layout.md.",
       "sha256": "59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419"
     },
     {
@@ -3613,8 +3620,12 @@
     {
       "source": "packages/tui/test/truncate-to-width.test.ts",
       "status": "partial",
-      "ports": ["tests/ansi-utils.bend"],
-      "notes": "Original normalization and observed visible-width assertions replay on Bun/native one/four. Source-produced truncated output is measured only for width; native truncation remains pending. See tests/ansi-utils.md and tests/visible-width.md.",
+      "ports": [
+        "tests/ansi-utils.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "notes": "Native normalization/width observations and all nine truncation cases are covered across tests/ansi-utils.md, tests/visible-width.md and tests/ansi-layout.md.",
       "sha256": "fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8"
     },
     {
@@ -3662,8 +3673,12 @@
     {
       "source": "packages/tui/test/wrap-ansi.test.ts",
       "status": "partial",
-      "ports": ["tests/visible-width.bend"],
-      "notes": "Observed visible-width calls from actual named source tests replay on all three backends. Source-produced wrapped output does not prove native wrapping, which remains pending. See tests/visible-width.md.",
+      "ports": [
+        "tests/visible-width.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "notes": "Native width observations and all 16 wrapping cases are covered across tests/visible-width.md and tests/ansi-layout.md; native layout results are compared exactly.",
       "sha256": "9c238d85ad676ca6d4e063caa8d44d493b0c220dd9aba9ea11a31d51c92d791d"
     }
   ]
