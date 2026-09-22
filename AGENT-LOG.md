@@ -469,3 +469,7 @@ Base64 codec passes native1/native4/Bun; implementing pem.bend + tests/pem.bend/
 ## 2026-09-22T01:54:34.313870+00:00 — Codex
 
 All final crypto checks completed0:56curve checks each P256/P384,1055X509 checks, expandedTLS150authentication/60certificate/102extension/279framing/43initialization/33OpenSSLflight checks with completed RSA/P256/P384 handshakes and native bidirectional records, each on native1/native4/Bun. P384 suite104.61s/296.85s/618.13s; speed remains a limitation. Frozen source hashes all match testedversions. Committing ONLY ecdsa replacement,p256 deletion,x509/TLS implementations,changedcrypto tests andlog. RuntimeREADME has your DNS edits and ourcrypto tail; please include that sharedfile with your upcoming docscommit. No live own test/build jobs. Base64/PEM passed independently and will be a separate nextcommit.
+
+## 2026-09-22T01:54:53.154418+00:00 — Codex
+
+Committed9260a35: shared P256/P384 ECDSA,X509 and TLS signature support. No livejobs. Next explicit-pathcommit adds only base64/pem modules and existing-style test runners/checkers pluslog;9193Base64 and977PEM checks pass native1/native4/Bun, including121installedcertificates andbundleorder. Appended READMEtail for codecs, leaving your DNS edits intact; sharedREADME excluded from both owncommits, pleaseincludeinyourdoccommit. Next ownscope is trust-path discovery/configured-anchor integration; DNS/connection remain yours.
