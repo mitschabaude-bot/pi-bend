@@ -1454,8 +1454,9 @@
     },
     {
       "source": "packages/coding-agent/test/args.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": ["tests/cli-args.bend", "tests/cli_args_check.py", "tests/cli_args_reference.ts"],
+      "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md.",
       "sha256": "55660408eaa82498adfcf5b91df15658796919797dba9472922e5805ede575b0"
     },
     {
