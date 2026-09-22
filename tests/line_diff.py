@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import random
+import statistics
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,12 +103,15 @@ def main():
         parser.error("Install test oracle: npm pack diff@8.0.4 --pack-destination build; tar -xzf build/diff-8.0.4.tgz -C build")
     compiler = args.bend or Path(os.environ.get("BEND", str(ROOT / "build/bend-native-toolchain/bend2/main.ts")))
     prefix = ROOT / "build/line-diff"
+    long_prefix = ROOT / "build/line-diff-long"
     if not args.no_build:
         if "bun" in args.backends:
-            subprocess.run([str(compiler), "tests/line-diff.bend", "-o", str(prefix) + ".js"], cwd=ROOT, check=True)
+            for source, output in [("tests/line-diff.bend", prefix), ("tests/line-diff-long.bend", long_prefix)]:
+                subprocess.run([str(compiler), source, "-o", str(output) + ".js"], cwd=ROOT, check=True)
         if any(name.startswith("native") for name in args.backends):
-            subprocess.run(["sh", "scripts/build-pure.sh", "tests/line-diff.bend", str(prefix)], cwd=ROOT,
-                           env=dict(os.environ, BEND=str(compiler)), check=True)
+            for source, output in [("tests/line-diff.bend", prefix), ("tests/line-diff-long.bend", long_prefix)]:
+                subprocess.run(["sh", "scripts/build-pure.sh", source, str(output)], cwd=ROOT,
+                               env=dict(os.environ, BEND=str(compiler)), check=True)
     cases = corpus()
     expected = oracle(args.reference.resolve(), args.diff_package.resolve(), cases, directory)
     for backend in args.backends:
@@ -122,6 +126,16 @@ def main():
                 assert got == wanted, (backend, start + offset, case, got, wanted)
                 invariants(case, got)
         print(f"{backend}: {len(cases)} exact reference comparisons; reconstruction, maximal runs and minimal edits pass", flush=True)
+        long_command = ["bun", str(long_prefix) + ".js"] if backend == "bun" else [str(long_prefix), "--threads", backend[-1]]
+        measurements = []
+        for sample in range(3):
+            timing = directory / f"long-{backend}-{sample}.time"
+            output = subprocess.check_output(["/usr/bin/time", "-f", "%e %M", "-o", str(timing), *long_command], text=True, timeout=90)
+            assert output.strip() == "long lines: identity, replacement, EOF and context pass", output
+            measurements.append(tuple(map(float, timing.read_text().split())))
+        print(f"{backend}: 200KB long-line cases pass; process wall median {statistics.median(x[0] for x in measurements):.3f}s, "
+              f"peak RSS {max(x[1] for x in measurements):.0f} KiB (3 runs, including fixture construction)", flush=True)
+
 
 
 if __name__ == "__main__":

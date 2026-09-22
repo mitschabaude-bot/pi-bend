@@ -1,4 +1,5 @@
 import Base
+import ../../../../runtime/src/string.bend as Strings
 
 # Line tokens retain their terminator, including CRLF and a missing final LF.
 type ChangeKind is Data:
@@ -15,7 +16,7 @@ type DiffResult is Data:
 def tokenize(text: String, +reversed: String, +lines: List<&2,String>) -> List<&2,String>:
   match text:
     case SNil{}:
-      List.reverse(&2,String,Bool.pick(List<&2,String>,String.eq(reversed,""),lines,String.reverse(reversed) <> lines))
+      List.reverse(&2,String,Bool.pick(List<&2,String>,Strings.equal(reversed,""),lines,String.reverse(reversed) <> lines))
     case SCon{'\n',rest}: tokenize(rest,"",String.reverse(SCon{'\n',reversed}) <> lines)
     case SCon{char,rest}: tokenize(rest,SCon{char,reversed},lines)
 
@@ -38,7 +39,7 @@ type Path is Data:
 def common(old: List<&2,String>, newer: List<&2,String>, +position: Nat, +history: List<&2,Change>) -> Path:
   match old newer:
     case +left <> +rest +right <> +tail:
-      Bool.pick(Unit -> Path,String.eq(left,right),
+      Bool.pick(Unit -> Path,Strings.equal(left,right),
         unused => common(rest,tail,1n+position,record(Same{},right,history)),
         unused => Path{left <> rest,right <> tail,position,history})(Unit{})
     case left right: Path{left,right,position,history}
@@ -192,7 +193,7 @@ def patchLines(lines: List<&2,String>, +kind: ChangeKind, +output: List<&2,Strin
     case Nil{}: output
     case +line <> rest:
       +text = prefix(kind) ++ stripLf(line)
-      patchLines(rest,kind,Bool.pick(List<&2,String>,String.eq(line,stripLf(line)),"\\ No newline at end of file" <> text <> output,text <> output))
+      patchLines(rest,kind,Bool.pick(List<&2,String>,Strings.equal(line,stripLf(line)),"\\ No newline at end of file" <> text <> output,text <> output))
 
 def grow(kind: ChangeKind, +lines: List<&2,String>, hunk: Hunk) -> Hunk:
   match kind hunk:
