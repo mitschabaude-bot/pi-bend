@@ -126,6 +126,7 @@ type Override is Data:
   Override{pattern: Glob.Pattern,negative: Bool}
 type Mode is Data:
   Find{}
+  Completion{}
   Grep{root: String,glob: Maybe<&2,Override>}
 
 type Configuration is Data:
@@ -165,9 +166,14 @@ def isFind(mode: Mode) -> Bool:
   match mode:
     case Find{}: True{}
     case _: False{}
+def usesFdIgnores(mode: Mode) -> Bool:
+  match mode:
+    case Grep{_,_}: False{}
+    case _: True{}
 def customName(mode: Mode) -> String:
   match mode:
     case Find{}: ".fdignore"
+    case Completion{}: ".fdignore"
     case _: ".rgignore"
 def conditionalIgnore(enabled: Bool,path: String) -> IO(ResultOf(Ignore.Matcher)):
   match enabled:
@@ -273,11 +279,18 @@ def insideGit(paths: List<&2,String>,+signal: Maybe<&2,Abort.AbortSignal<Unit>>)
     case path <> rest:
       then(Unit,Bool,check(signal),_ => then(Bool,Bool,localExists(Path.join(path,".git")),found => Bool.pick(Unit -> IO(ResultOf(Bool)),found,_ => IO.pure(ResultOf(Bool),Done{True{}}),_ => insideGit(rest,signal))(Unit{})))
 
+# Symlink identity is tracked only along the current ancestry: aliases remain
+# visible, while a link to a containing directory cannot recurse forever.
+type WalkPolicy is Data:
+  WalkPolicy{followLinks: Bool,maxDepth: Maybe<&2,Nat>,excludeGit: Bool}
+def ordinaryWalk() -> WalkPolicy: WalkPolicy{False{},None{},False{}}
+type WalkFrame is Data:
+  WalkFrame{depth: Nat,ancestors: List<&2,String>}
 type Work is Data:
-  Enter{path: String, scopes: List<&2,Scope>}
-  Visit{parent: String, entry: FS.DirectoryEntry, scopes: List<&2,Scope>}
+  Enter{path: String, scopes: List<&2,Scope>,frame: WalkFrame}
+  Visit{parent: String, entry: FS.DirectoryEntry, scopes: List<&2,Scope>,frame: WalkFrame}
 type Cursor is Data:
-  Cursor{work: List<&2,Work>,configuration: Configuration,signal: Maybe<&2,Abort.AbortSignal<Unit>>}
+  Cursor{work: List<&2,Work>,configuration: Configuration,signal: Maybe<&2,Abort.AbortSignal<Unit>>,policy: WalkPolicy}
 type Entry is Data:
   Entry{path: String,name: String,kind: FS.FileKind}
 type Step is Data:
@@ -298,23 +311,55 @@ def scalarOrder(left: String,right: String) -> Bool:
     case SCon{Chr{+a},restA} SCon{Chr{+b},restB}:
       Bool.pick(Unit -> Bool,U32.is_eq(a,b),_ => scalarOrder(restA,restB),_ => U32.is_lt(a,b))(Unit{})
 def entryOrder(a: FS.DirectoryEntry,b: FS.DirectoryEntry) -> Bool: scalarOrder(entryKey(a),entryKey(b))
-def visits(entries: List<&2,FS.DirectoryEntry>,+path: String,+scopes: List<&2,Scope>,work: List<&2,Work>) -> List<&2,Work>:
+def visits(entries: List<&2,FS.DirectoryEntry>,+path: String,+scopes: List<&2,Scope>,+frame: WalkFrame,work: List<&2,Work>) -> List<&2,Work>:
   match entries:
     case Nil{}: work
-    case entry <> rest: visits(rest,path,scopes,Visit{path,entry,scopes} <> work)
-def enterResult(path: String,scopes: List<&2,Scope>,state: Cursor,value: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>) -> ResultOf(Cursor):
+    case entry <> rest: visits(rest,path,scopes,frame,Visit{path,entry,scopes,frame} <> work)
+def enterResult(path: String,scopes: List<&2,Scope>,frame: WalkFrame,state: Cursor,value: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>) -> ResultOf(Cursor):
   match state value:
-    case Cursor{work,config,signal} Done{entries}: Done{Cursor{visits(List.reverse(&2,FS.DirectoryEntry,Sort.sort(~FS.DirectoryEntry,~entryOrder,entries)),path,scopes,work),config,signal}}
-    case Cursor{_,Configuration{_,Grep{_,_},_,_},_} Fail{cause}: Fail{Filesystem{cause}}
+    case Cursor{work,config,signal,policy} Done{entries}: Done{Cursor{visits(List.reverse(&2,FS.DirectoryEntry,Sort.sort(~FS.DirectoryEntry,~entryOrder,entries)),path,scopes,frame,work),config,signal,policy}}
+    case Cursor{_,Configuration{_,Grep{_,_},_,_},_,_} Fail{cause}: Fail{Filesystem{cause}}
     case state Fail{FS.System{_,_}}: Done{state}
     case _ Fail{cause}: Fail{Filesystem{cause}}
-def enter(+path: String,+scopes: List<&2,Scope>,state: Cursor,config: Configuration) -> IO(ResultOf(Cursor)):
+def loadDirectory(+path: String,+scopes: List<&2,Scope>,frame: WalkFrame,state: Cursor,config: Configuration) -> IO(ResultOf(Cursor)):
   match config:
     case Configuration{requireGit,mode,_,_}:
       then(Scope,Cursor,loadScope(path,requireGit,mode,scopes),scope =>
         do IO<ResultOf(Cursor)>:
           entries : Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>> <- FS.readDirectory(path)
-          return enterResult(path,scope <> scopes,state,entries))
+          return enterResult(path,scope <> scopes,frame,state,entries))
+def containsPath(paths: List<&2,String>,+path: String) -> Bool:
+  match paths:
+    case Nil{}: False{}
+    case first <> +rest: Bool.pick(Unit -> Bool,Strings.equal(first,path),_ => True{},_ => containsPath(rest,path))(Unit{})
+def resolvedPathDirectory(path: String,scopes: List<&2,Scope>,frame: WalkFrame,+state: Cursor,config: Configuration,value: Result<&2,&2,FS.Error,String>) -> IO(ResultOf(Cursor)):
+  match frame value:
+    case _ Fail{FS.System{_,_}}: IO.pure(ResultOf(Cursor),Done{state})
+    case _ Fail{cause}: IO.pure(ResultOf(Cursor),Fail{Filesystem{cause}})
+    case WalkFrame{depth,ancestorPaths} Done{directoryPath}:
+      +ancestorPaths = {ancestorPaths: List<&2,String>}
+      +directoryPath = {directoryPath: String}
+      Bool.pick(Unit -> IO(ResultOf(Cursor)),containsPath(ancestorPaths,directoryPath),_ => IO.pure(ResultOf(Cursor),Done{state}),_ => loadDirectory(path,scopes,WalkFrame{depth,directoryPath <> ancestorPaths},state,config))(Unit{})
+def atDepthLimit(depth: Nat,maximum: Maybe<&2,Nat>) -> Bool:
+  match maximum:
+    case None{}: False{}
+    case Some{maximum}: Nat.is_ge(depth,maximum)
+def enter(+path: String,+scopes: List<&2,Scope>,+frame: WalkFrame,+state: Cursor,+config: Configuration,policy: WalkPolicy) -> IO(ResultOf(Cursor)):
+  match frame policy:
+    case WalkFrame{depth,_} WalkPolicy{follow,maximum,_}:
+      Bool.pick(Unit -> IO(ResultOf(Cursor)),atDepthLimit(depth,maximum),_ => IO.pure(ResultOf(Cursor),Done{state}),
+        _ => Bool.pick(Unit -> IO(ResultOf(Cursor)),follow,
+          _ => do IO<ResultOf(Cursor)>:
+            resolvedPath : Result<&2,&2,FS.Error,String> <- FS.realpath(path)
+            resolvedPathDirectory(path,scopes,frame,state,config,resolvedPath),
+          _ => loadDirectory(path,scopes,frame,state,config))(Unit{}))(Unit{})
+def followedKind(path: String,+kind: FS.FileKind,policy: WalkPolicy) -> IO(Result<&2,&2,FS.Error,FS.FileKind>):
+  match kind policy:
+    case FS.SymbolicLink{} WalkPolicy{True{},_,_}: FS.fileKind(path)
+    case _ _: IO.pure(Result<&2,&2,FS.Error,FS.FileKind>,Done{kind})
+def omittedGit(name: String,policy: WalkPolicy) -> Bool:
+  match policy:
+    case WalkPolicy{_,_,exclude}: exclude && Strings.equal(name,".git")
 
 def overrideDecision(mode: Mode,+path: String,+directory: Bool) -> Maybe<&2,Bool>:
   match mode:
@@ -327,20 +372,29 @@ def excluded(+config: Configuration,+scopes: List<&2,Scope>,+path: String,+direc
   match config:
     case Configuration{_,mode,_,_}: Maybe.default(&2,Bool,overrideDecision(mode,path,directory),ignored(config,scopes,path,directory))
 
-# The cursor owns only immutable work snapshots, not open directory handles.
-# Each call checks cancellation and yields one accepted entry. Directory links
-# are emitted but never traversed; ignored directories prune their descendants.
+def visitResolved(resume: Cursor -> IO(ResultOf(Step)),+path: String,name: String,+scopes: List<&2,Scope>,frame: WalkFrame,+state: Cursor,value: Result<&2,&2,FS.Error,FS.FileKind>) -> IO(ResultOf(Step)):
+  match state value:
+    case _ Fail{FS.System{_,_}}: resume(state)
+    case _ Fail{cause}: IO.pure(ResultOf(Step),Fail{Filesystem{cause}})
+    case Cursor{+rest,+config,signal,policy} Done{+kind}:
+      +directory = isDirectory(kind)
+      Bool.pick(Unit -> IO(ResultOf(Step)),excluded(config,scopes,path,directory),_ => resume(state),
+        _ => IO.pure(ResultOf(Step),Done{Yield{Entry{path,name,kind},Cursor{Bool.pick(List<&2,Work>,directory,Enter{path,scopes,frame} <> rest,rest),config,signal,policy}}}))(Unit{})
+
+# The cursor owns immutable work snapshots, never open directory handles.
+# Find/Grep use ordinaryWalk; followed links and depth limits are explicit.
 @unsafe def next(cursor: Cursor) -> IO(ResultOf(Step)):
   match cursor:
-    case Cursor{Nil{},_,_}: IO.pure(ResultOf(Step),Done{End{}})
-    case Cursor{Enter{path,scopes} <> rest,+config,+signal}:
-      then(Unit,Step,check(signal),_ => then(Cursor,Step,enter(path,scopes,Cursor{rest,config,signal},config),cursor => next(cursor)))
-    case Cursor{Visit{parent,FS.DirectoryEntry{+name,+kind},+scopes} <> +rest,+config,+signal}:
+    case Cursor{Nil{},_,_,_}: IO.pure(ResultOf(Step),Done{End{}})
+    case Cursor{Enter{path,scopes,frame} <> rest,+config,+signal,+policy}:
+      then(Unit,Step,check(signal),_ => then(Cursor,Step,enter(path,scopes,frame,Cursor{rest,config,signal,policy},config,policy),cursor => next(cursor)))
+    case Cursor{Visit{parent,FS.DirectoryEntry{+name,kind},+scopes,WalkFrame{depth,ancestorPaths}} <> +rest,+config,+signal,+policy}:
       +path = Path.join(parent,name)
-      +directory = isDirectory(kind)
-      then(Unit,Step,check(signal),_ => Bool.pick(Unit -> IO(ResultOf(Step)),excluded(config,scopes,path,directory),
-        _ => next(Cursor{rest,config,signal}),
-        _ => IO.pure(ResultOf(Step),Done{Yield{Entry{path,name,kind},Cursor{Bool.pick(List<&2,Work>,directory,Enter{path,scopes} <> rest,rest),config,signal}}}))(Unit{}))
+      then(Unit,Step,check(signal),_ => Bool.pick(Unit -> IO(ResultOf(Step)),omittedGit(name,policy),
+        _ => next(Cursor{rest,config,signal,policy}),
+        _ => do IO<ResultOf(Step)>:
+          value : Result<&2,&2,FS.Error,FS.FileKind> <- followedKind(path,kind,policy)
+          visitResolved(cursor => next(cursor),path,name,scopes,WalkFrame{depth + 1n,ancestorPaths},Cursor{rest,config,signal,policy},value))(Unit{}))
 
 def limitReached(+limit: Nat,count: Nat) -> Bool:
   Nat.is_gt(limit,0n) && Nat.is_ge(count,limit)
@@ -371,8 +425,8 @@ def create(+path: String,+home: String,+xdg: String,+requireGit: Bool,+mode: Mod
   then(Maybe<&2,String>,Cursor,configFile(Path.join(home,".gitconfig")),homeConfig =>
     then(Maybe<&2,String>,Cursor,configFile(Path.join(xdg,"git/config")),xdgConfig =>
       then(Ignore.Matcher,Cursor,readIgnore(expandHome(home,nonempty(Maybe.or(&2,String,homeConfig,xdgConfig),Path.join(xdg,"git/ignore")))),globalGit =>
-        then(Ignore.Matcher,Cursor,conditionalIgnore(isFind(mode),Path.join(xdg,"fd/ignore")),globalFd =>
-          then(List<&2,Scope>,Cursor,loadScopes(Bool.pick(List<&2,String>,Strings.equal(path,"/"),Nil{},ancestors(dirname(path))),requireGit,mode,signal,Nil{}),scopes => IO.pure(ResultOf(Cursor),Done{Cursor{Enter{path,scopes} <> Nil{},Configuration{requireGit,mode,globalGit,globalFd},signal}}))))))
+        then(Ignore.Matcher,Cursor,conditionalIgnore(usesFdIgnores(mode),Path.join(xdg,"fd/ignore")),globalFd =>
+          then(List<&2,Scope>,Cursor,loadScopes(Bool.pick(List<&2,String>,Strings.equal(path,"/"),Nil{},ancestors(dirname(path))),requireGit,mode,signal,Nil{}),scopes => IO.pure(ResultOf(Cursor),Done{Cursor{Enter{path,scopes,WalkFrame{0n,Nil{}}} <> Nil{},Configuration{requireGit,mode,globalGit,globalFd},signal,ordinaryWalk()}}))))))
 def searchDirectory(path: String,value: Result<&2,&2,FS.Error,FS.FileKind>) -> ResultOf(Unit):
   match value:
     case Done{FS.Directory{}}: Done{Unit{}}
@@ -400,3 +454,6 @@ def compileOverride(value: Maybe<&2,String>) -> ResultOf(Maybe<&2,Override>):
     case Some{SCon{'!',rest}}: overrideText(rest,True{})
     case Some{text}: overrideText(text,False{})
 
+def withPolicy(cursor: Cursor,policy: WalkPolicy) -> Cursor:
+  match cursor:
+    case Cursor{work,configuration,signal,_}: Cursor{work,configuration,signal,policy}
