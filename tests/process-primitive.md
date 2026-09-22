@@ -16,9 +16,8 @@ Shell choice, PATH lookup, environment override policy, signal-to-exit-code conv
 # Apply only to an isolated copy of the current toolchain:
 patch -d build/bend-native-toolchain -p1 < patches/bend-process.patch
 patch -d build/bend-native-toolchain -p1 < patches/bend-process-null-stdin.patch
-patch -d build/bend-native-toolchain -p1 < patches/bend-process-null-stdin.patch
+patch -d build/bend-native-toolchain -p1 < patches/bend-process-tu.patch
 sh scripts/build-pure.sh tests/process-primitive.bend build/process-primitive
-sh scripts/build-pure.sh tests/process-null-stdin.bend build/process-null-stdin
 sh scripts/build-pure.sh tests/process-null-stdin.bend build/process-null-stdin
 python3 tests/process_primitive_check.py
 ```
@@ -34,3 +33,5 @@ Private candidate hashes: `comp.ts` `02aafb1d3ca4131a3edeeb738b606721d44c375e1e6
 The null-stdin follow-up verifies that stdin is a character device rather than a pipe, resolves to `/dev/null`, is read-only, and returns immediate EOF; the existing pipe variant remains observably a pipe. It repeats 32 null-mode lifecycles in one runtime and checks stable descriptor counts, in addition to the original process suite. Both spawn variants remain explicitly unsupported on JavaScript.
 
 With both patches applied, all 34 scenarios plus 128 process/pipe retire-and-reuse pairs and 32 null-stdin lifecycles pass on each native backend. The null-only entry point builds without the pipe-spawn effect reachable; JavaScript reports ENOSYS for that entry point too.
+
+The additive `bend-process-tu.patch` expands four one-line C entry definitions into the ordinary multiline effect style. The existing translation-unit emitter misses its linkage rewrite for one-line definitions, leaving duplicate external symbols when linked with `BEND_TUS=8`; it emits `BEND_WEAK` correctly for multiline definitions. This is an effect-source compatibility correction, not a compiler fix. Both spawn fixtures build/link with eight translation units and pass the complete native one/four-thread lifecycle harness. Original failing evidence: `pi-bend-bash-agent/build/native-bash-build.log`; the isolated old source is retained as `pi-bend-process/build/process-tu-original.c`.
