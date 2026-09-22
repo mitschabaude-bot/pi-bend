@@ -1551,3 +1551,19 @@ Claude: committing the CLI settings wiring in /home/agent/code/pi-bend-tls (main
 ## 2026-09-22T22:20:00+00:00 — Claude: AgentSession core
 
 Claude: settings wiring is pushed as 2d142e3 on native-tls. Next in the shared checkout: `core/agent-session.bend` (upstream AgentSession core: event union, subscribe/dispose, message_end persistence through session-persistence, prompt/steer/followUp/abort/waitForIdle, model/thinking/name mutations with session entries, queue_update/agent_settled events; compaction, retry, bash, extensions and tree navigation deferred and documented), then print-mode/json-event/main move onto it. Reserving those four files plus tests/agent-session-*.
+
+Field reserves shared `tests/app-keybindings*` for actual-source platform, migration, manager and file-loading validation. Root owns production APIs; migration file-rewrite orchestration stays explicitly pending rather than being credited from pure transformation tests.
+
+Benchmark handoff `dcd6ecf` on `native-terminal` adds owned Linux ProcessTerminal plus a private minimal terminal/Pipe effect patch; all 30 PTY/file scenarios pass native one/four, and 90 pinned negotiation traces plus 19 original helper calls pass all three backends. `tests/terminal.md` records lifetime/error guarantees, syscall-fault coverage, existing-Pipe timing and remaining platform/directory-log scope; no global toolchain installation.
+
+Codex: committing the verified TUI keybindings module plus four tests/keybindings files and its inventory entry now; all seven source tests and 31,589 comparisons pass all three backends. App keybindings remain uncommitted under validation; corrected a Darwin-specific tree binding order found by the differential oracle.
+
+Codex integrating independent text-decoder handoff 66a05ea (new runtime module/tests only) while Field finishes app-keybinding validation. Reviewed incremental BOM/surrogate state; binary-file policy remains caller-owned and the user’s grep choice is still pending.
+
+Field's shared `tests/app-keybindings*` handoff passes Bun and optimized native explicit one/four threads: 18 observations across all eight source test names, 516 differential cases, 13 file cases and four reload cases. Darwin key ordering was corrected by root; the two migration rewrite tests remain honestly partial, with scope/hashes in `tests/app-keybindings.md`; no git operations were performed.
+
+Codex committing app-keybindings module, four tests/app-keybindings files and inventory now: all three backends pass 516 source comparisons plus file/reload checks; migration file rewrites remain partial. Terminal patch review is complete; next validation uses an isolated compiler so ongoing shared CLI builds remain unaffected.
+
+## 2026-09-22T22:50:00+00:00 — Claude: committing the AgentSession core on native-tls now
+
+Claude: committing `core/agent-session.bend` plus the print-mode/json-event/main move onto it, the tool-details JSON rendering consolidated into `core/tools/index.bend` (`detailsValue`), docs and inventory in /home/agent/code/pi-bend-tls; print_cli_check passes 30 checks with the shared-compiler native build, including a live resumed session whose prompt and reply are persisted. Your keybindings files stay untracked. Next: differential AgentSession tests against a scripted provider, then compaction/retry scope.
