@@ -2590,8 +2590,9 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": ["tests/bash-tool.bend", "tests/bash_tool_check.py"],
+      "notes": "Retained injected onData is called after public execution returns and before ToolOwner disposal; it is ignored without changing output or emitting another update. Passes Bun and native one/four workers; see tests/bash-tool.md.",
       "sha256": "9d6fc0d457e6d7470246d821deec9937d428e86fdad6858d05e7d5c956802f8c"
     },
     {
@@ -3031,11 +3032,13 @@
         "tests/read-public.bend",
         "tests/read_public_check.py",
         "tests/read-operations.bend",
-        "tests/read_operations_check.py"
+        "tests/read_operations_check.py",
+        "tests/bash-tool.bend",
+        "tests/bash_tool_check.py"
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
       "implementation": "packages/coding-agent/src/core/tools/",
-      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md)."
+      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md). Public Bash covers native execution, hooks/context, streaming/truncation, cancellation, late callbacks and owned cleanup (tests/bash-tool.md); renderers, other platforms and the remaining tools stay pending."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
