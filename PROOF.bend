@@ -33,3 +33,5 @@ import ./proofs/openai-responses.bend as OpenAIResponses
 import ./proofs/fetch.bend as Fetch
 
 import ./proofs/x509-trust.bend as X509Trust
+import ./proofs/transform-messages.bend as TransformMessages
+import ./proofs/transform-tool-results.bend as TransformToolResults
