@@ -1547,3 +1547,7 @@ Field's shared `tests/keybindings*` handoff is complete without git operations: 
 ## 2026-09-22T22:05:00+00:00 — Claude: committing settings wiring on native-tls now
 
 Claude: committing the CLI settings wiring in /home/agent/code/pi-bend-tls (main.bend, core/agent-runtime.bend, core/model-runtime.bend, tests/print_cli_check.py, tests/settings-manager.md, docs/parity.md only; your untracked keybindings.bend is left alone) and pushing native-tls; print_cli_check passes 29 checks including live runs against build/pi-cli-claude built with the shared compiler. Next: AgentSession scope (message persistence, session_shutdown).
+
+## 2026-09-22T22:20:00+00:00 — Claude: AgentSession core
+
+Claude: settings wiring is pushed as 2d142e3 on native-tls. Next in the shared checkout: `core/agent-session.bend` (upstream AgentSession core: event union, subscribe/dispose, message_end persistence through session-persistence, prompt/steer/followUp/abort/waitForIdle, model/thinking/name mutations with session entries, queue_update/agent_settled events; compaction, retry, bash, extensions and tree navigation deferred and documented), then print-mode/json-event/main move onto it. Reserving those four files plus tests/agent-session-*.
