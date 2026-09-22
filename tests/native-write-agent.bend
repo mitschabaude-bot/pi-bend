@@ -19,6 +19,7 @@ def fileError(error: FS.Error) -> String:
     case FS.System{_, message}: message
     case FS.InvalidPathEncoding{_}: "Invalid filename encoding"
     case FS.WriteAndClose{_, write, _, close}: write ++ "; close: " ++ close
+    case FS.ReadAndClose{_, write, _, close}: write ++ "; close: " ++ close
 
 # This fixture uses String as the loop's error type. The canonical write tool
 # still exposes its typed errors; only this host boundary formats them.

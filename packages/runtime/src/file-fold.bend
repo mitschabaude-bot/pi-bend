@@ -14,14 +14,23 @@ type Error is Data:
   InvalidReadSize{}
   Open{code: U32, message: String}
   Read{code: U32, message: String}
+  Close{code: U32, message: String}
+  ReadAndClose{readCode: U32, readMessage: String, closeCode: U32, closeMessage: String}
 
 type Outcome<-State: Type> is Type:
   Outcome{state: State, result: Result<&2, &2, Error, Completion>}
 
+def closed(result: Result<&2, &2, Error, Completion>, close: Result<&1, &1, U32 & String, Unit>) -> Result<&2, &2, Error, Completion>:
+  match result close:
+    case value Done{Unit{}}: value
+    case Fail{Read{rc, rm}} Fail{(cc, cm)}: Fail{ReadAndClose{rc, rm, cc, cm}}
+    case Fail{error} Fail{_}: Fail{error}
+    case Done{_} Fail{(code, message)}: Fail{Close{code, message}}
+
 def completed(-State: Type, state: State, result: Result<&2, &2, Error, Completion>, file: File) -> IO(Outcome<State>):
   do IO<Outcome<State>>:
-    File.close(file)
-    return Outcome{state, result}
+    close : Result<&1, &1, U32 & String, Unit> <- File.close_checked(file)
+    return Outcome{state, closed(result, close)}
 
 type Progress<-State: Type> is Type:
   ReadMore{file: File, state: State}

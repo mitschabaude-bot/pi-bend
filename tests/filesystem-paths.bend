@@ -7,6 +7,7 @@ def error(value: FS.Error) -> String:
     case FS.System{code,_}: "error:" ++ U32.show(code)
     case FS.InvalidPathEncoding{_}: "encoding"
     case FS.WriteAndClose{wc,_,cc,_}: "write-close:" ++ U32.show(wc) ++ ":" ++ U32.show(cc)
+    case FS.ReadAndClose{wc,_,cc,_}: "read-close:" ++ U32.show(wc) ++ ":" ++ U32.show(cc)
 
 def unit(result: Result<&2,&2,FS.Error,Unit>) -> String:
   match result:

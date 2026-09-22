@@ -1,11 +1,13 @@
 import Base
 import ./string.bend as Strings
 import ./utf8.bend as Utf8
+import ./file-fold.bend as Fold
 
 type Error is Data:
   System{code: U32, message: String}
   InvalidPathEncoding{cause: Utf8.Error}
   WriteAndClose{writeCode: U32, writeMessage: String, closeCode: U32, closeMessage: String}
+  ReadAndClose{readCode: U32, readMessage: String, closeCode: U32, closeMessage: String}
 
 def system(-A: Data, result: Result<&1,&1,U32 & String,A>) -> Result<&2,&2,Error,A>:
   match result:
@@ -98,3 +100,27 @@ def writeFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
     result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"w",438)
     opened(content,result)
+
+# Accumulate chunks in reverse byte order, then reverse once at EOF. Short
+# reads and resource retirement are owned by the shared file fold.
+def collectBytes(bytes: List<&2, U32>, reversed: List<&2, U32>) -> List<&2, U32>:
+  match bytes:
+    case Nil{}: reversed
+    case byte <> rest: collectBytes(rest, byte <> reversed)
+
+def consumeBytes(reversed: List<&2, U32>, bytes: List<&2, U32>) -> Fold.Control<List<&2, U32>>:
+  Fold.Continue{collectBytes(bytes, reversed)}
+
+def readResult(outcome: Fold.Outcome<List<&2, U32>>) -> Result<&2, &2, Error, List<&2, U32>>:
+  match outcome:
+    case Fold.Outcome{bytes, Done{_}}: Done{List.reverse(&2, U32, bytes)}
+    case Fold.Outcome{_, Fail{Fold.Open{code, message}}}: Fail{System{code, message}}
+    case Fold.Outcome{_, Fail{Fold.Read{code, message}}}: Fail{System{code, message}}
+    case Fold.Outcome{_, Fail{Fold.Close{code, message}}}: Fail{System{code, message}}
+    case Fold.Outcome{_, Fail{Fold.ReadAndClose{rc, rm, cc, cm}}}: Fail{ReadAndClose{rc, rm, cc, cm}}
+    case Fold.Outcome{_, Fail{Fold.InvalidReadSize{}}}: Fail{System{22, "Invalid file read size"}}
+
+def readFile(path: String) -> IO(Result<&2, &2, Error, List<&2, U32>>):
+  do IO<Result<&2, &2, Error, List<&2, U32>>>:
+    outcome : Fold.Outcome<List<&2, U32>> <- Fold.read(~List<&2, U32>, ~consumeBytes, path, 65536, Nil{})
+    return readResult(outcome)
