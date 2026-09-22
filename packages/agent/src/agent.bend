@@ -18,7 +18,6 @@ import ../../runtime/src/big-nat.bend as N
 import ../../ai/src/utils/model-api.bend as Api
 import ../../runtime/src/fifo.bend as Fifo
 
-# ---- from agent-stateLocal.bend ----
 # Pure stateLocal transitions from agent.ts. The Agent owner provides synchronization
 # and waits for listeners before applying finishRunState; agent_end alone is not idle.
 type AgentInitialState<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data> is Data:

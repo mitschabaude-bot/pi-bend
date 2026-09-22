@@ -2,6 +2,12 @@
 
 Reference: pi-mono `46c9de402`, `packages/agent`. This is a partial library port, separate from the bootstrap CLI. The native Agent owner executes the assembled loop. The broader API, configuration mutation accessors and most named upstream Agent tests remain unfinished.
 
+## Modules
+
+`types.bend` (pi's agent `types.ts`, including the stream lease at the provider boundary), `agent-loop.bend` (`agent-loop.ts`: tool preparation, sequential and parallel execution, event emission, turn completion, tool-change declarations, the main loop and its entries), `agent.bend` (`agent.ts`: immutable state transitions, the two pending queues, continue planning, the synchronized run owner, listeners, failure recovery and the public `Agent`), `stream-fn.bend` (the default stream-function registry) and `harness/utils/truncate.bend`.
+
+## History
+
 `src/types.bend` preserves the typed tool, message, event, context, configuration and hook interfaces. Ordinary records and message/tool lists are immutable values. Custom messages and argument/result types are explicit generic parameters. Reusable callbacks, cancellation and running-agent state are effectful resources; they are not hidden inside ordinary data to reproduce JavaScript aliasing.
 
 `toTool` projects an executable tool to its declaration without invoking callbacks. Argument preparation returns an original or replaced call, preserving metadata while allowing different raw/prepared argument types. Before-tool hooks return `BeforeToolCallUpdate` with explicit arguments, context and an optional decision. This preserves the ability to change execution arguments without revalidation. The public loop threads that update into prepared execution.

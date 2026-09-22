@@ -31,7 +31,7 @@ import ./laws/openai-responses-stream.bend as OpenAIResponsesStream
 import ./laws/openai-responses.bend as OpenAIResponses
 import ./laws/fetch.bend as Fetch
 
-import ./laws/x509-trust.bend as X509Trust
+import ./laws/x509.bend as X509
 import ./laws/transform-messages.bend as TransformMessages
 import ./laws/transform-tool-results.bend as TransformToolResults
 import ./laws/validation.bend as Validation
