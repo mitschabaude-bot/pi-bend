@@ -2,7 +2,7 @@
 
 `patches/bend-process.patch` adds OS marshalling to Base and one cohesive effect implementation. It changes no compiler or existing effects. The candidate is isolated in `build/bend-native-toolchain`; nothing is installed globally. This implementation targets Linux with glibc's `posix_spawn` session/chdir/closefrom extensions. JavaScript `Process.spawn` explicitly returns ENOSYS; equivalent JavaScript lifecycle support remains unfinished.
 
-`Process.spawn(path, argv, cwd, environment)` takes an exact executable path, arguments excluding argv[0], and OS-form `NAME=value` entries. `IO.environment()` snapshots the inherited environment for Bend to apply overrides. Embedded NUL and malformed environment entries fail before spawning. All three standard streams are pipes. Closing stdin sends EOF; a `/dev/null` stdin option has not been added. Spawn creates a new session/process group, resets signal defaults and the signal mask, and closes all inherited descriptors above 2 after connecting the standard streams. Parent pipe ends are nonblocking and close-on-exec; child ends remain blocking.
+`Process.spawn(path, argv, cwd, environment)` takes an exact executable path, arguments excluding argv[0], and OS-form `NAME=value` entries. `IO.environment()` snapshots the inherited environment for Bend to apply overrides. Embedded NUL and malformed environment entries fail before spawning. `Process.spawn` gives all three standard streams pipes; closing stdin sends EOF. The additive `patches/bend-process-null-stdin.patch` adds `Process.spawn_null_stdin` with the same arguments and an actual read-only `/dev/null` descriptor as stdin. Its result contains only `(process, control, (stdout, stdoutCancel), (stderr, stderrCancel))`; no input pipe is allocated or returned. Spawn creates a new session/process group, resets signal defaults and the signal mask, and closes all inherited descriptors above 2 after connecting the standard streams. Parent pipe ends are nonblocking and close-on-exec; child ends remain blocking.
 
 The result contains `(process, control, (stdin, stdinCancel), (stdout, stdoutCancel), (stderr, stderrCancel))`, represented as right-associated pairs. `Process.wait` returns the owner and `ProcessExited{code}` or `ProcessSignalled{signal}` without reaping. The unreaped leader reserves its PID, so a control remains safe while Bend drains inherited descendant pipes. `Process.signal(control, signal)` signals the group with a leader fallback, returning false for retired controls. `Process.close_checked` waits if necessary, reaps on the IO loop, retires the capability, and reports an OS error. It does not kill; callers must arrange cancellation before retirement when needed. Waiting uses the runtime's existing blocking IO worker pool.
 
@@ -15,7 +15,9 @@ Shell choice, PATH lookup, environment override policy, signal-to-exit-code conv
 ```
 # Apply only to an isolated copy of the current toolchain:
 patch -d build/bend-native-toolchain -p1 < patches/bend-process.patch
+patch -d build/bend-native-toolchain -p1 < patches/bend-process-null-stdin.patch
 sh scripts/build-pure.sh tests/process-primitive.bend build/process-primitive
+sh scripts/build-pure.sh tests/process-null-stdin.bend build/process-null-stdin
 python3 tests/process_primitive_check.py
 ```
 
@@ -26,3 +28,7 @@ A minimal spawn/close-only entry point also builds and runs, confirming unused w
 Recorded on Linux/glibc 2.39: 27 lifecycle scenarios and 128 repeated retire/reuse pairs pass on each of native 1/native 4. Reuse sampling peaked at 11 descriptors and one unreaped child. The ordinary-O1 fixture build took 4.35 seconds, peaked at 216736 KiB and emitted 668602 bytes of C. These measurements describe this fixture, not public-tool throughput.
 
 Private candidate hashes: `comp.ts` `02aafb1d3ca4131a3edeeb738b606721d44c375e1e6bdda20166801cb11608fb`, `bend.ts` `ab4d244ca0c199856ffdc00ab9f88e50fd50b17ba0b73132f3775fd2f087f951`, patched `base.bend` `65fcb13a076ef98a926992e6fc6104480f7fb97a4616d5e39ca28a9f676eb35a`. Applying the checked-in patch to the captured unmodified Base reconstructs the tested Base/C/JS files byte-for-byte.
+
+The null-stdin follow-up verifies that stdin is a character device rather than a pipe, resolves to `/dev/null`, is read-only, and returns immediate EOF; the existing pipe variant remains observably a pipe. It repeats 32 null-mode lifecycles in one runtime and checks stable descriptor counts, in addition to the original process suite. Both spawn variants remain explicitly unsupported on JavaScript.
+
+With both patches applied, all 34 scenarios plus 128 process/pipe retire-and-reuse pairs and 32 null-stdin lifecycles pass on each native backend. The null-only entry point builds without the pipe-spawn effect reachable; JavaScript reports ENOSYS for that entry point too.

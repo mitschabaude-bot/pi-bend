@@ -11,6 +11,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--prefix', type=Path, default=ROOT / 'build/process-primitive')
+parser.add_argument('--null-prefix', type=Path, default=ROOT / 'build/process-null-stdin')
 args = parser.parse_args()
 
 
@@ -78,6 +79,33 @@ def checks(threads, folder):
     noexec.write_text('#!/bin/sh\nexit 0\n')
     noexec.chmod(0o600)
     assert run('', shell=str(noexec), code=None) == [f'spawn-error:{errno.EACCES}']
+
+    null_base = [str(args.null_prefix), '--threads', str(threads)]
+    for command, expected in [
+        ('test -c /dev/stdin && ! test -p /dev/stdin && printf null', b'null'),
+        ('read line; printf "%s" "$?"', b'1'),
+        ('readlink /proc/self/fd/0', b'/dev/null\n'),
+        ("python3 -c 'import fcntl,os; print(fcntl.fcntl(0,fcntl.F_GETFL)&os.O_ACCMODE)'", b'0\n'),
+        ('head -c 65536 /dev/zero', bytes(65536)),
+    ]:
+        result = subprocess.run(null_base + ['/bin/sh', str(folder), command],
+                                capture_output=True, text=True, timeout=5)
+        assert result.returncode == 0 and not result.stderr, result
+        lines = result.stdout.splitlines()
+        assert decoded(lines, 'stdout') == expected and decoded(lines, 'stderr') == b'', lines[:5]
+        assert 'exit:0' in lines and 'pipes-close:ok:ok' in lines and 'process-close:ok' in lines
+        count += 1
+    lines = run('test -p /dev/stdin && printf pipe')
+    assert decoded(lines, 'stdout') == b'pipe'
+    repeated_null = subprocess.run(null_base + ['/bin/sh', str(folder), 'ls /proc/$PPID/fd | wc -l', '32'],
+                                   capture_output=True, text=True, timeout=10)
+    assert repeated_null.returncode == 0 and not repeated_null.stderr, repeated_null
+    lines = repeated_null.stdout.splitlines()
+    fd_counts = [int(bytes(int(n) for n in line[7:].replace(';', ',').split(',') if n))
+                 for line in lines if line.startswith('stdout:')]
+    assert len(fd_counts) == 32 and len(set(fd_counts)) == 1 and fd_counts[0] < 20, fd_counts
+    assert lines.count('process-close:ok') == 32
+    count += 1
 
     # The leader has exited but a descendant owns the pipes: wait reports before
     # EOF, and /proc confirms the zombie reserves its PID until explicit reap.

@@ -1,0 +1,100 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3215,6 +3215,11 @@
+   import "./effs/process.c"
+   import "./effs/process.js"
+ 
++# The same spawn, with read-only /dev/null as stdin; only output pipes are owned.
++def Process.spawn_null_stdin(path: String, argv: List<String>, cwd: String, environment: List<String>) -> IO(Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel)>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
+ def Process.wait(owner: Process) -> IO(Process & Result<&1,&1,U32 & String,ProcessStatus>):
+   import "./effs/process.c"
+   import "./effs/process.js"
+--- a/bend2/effs/process.c
++++ b/bend2/effs/process.c
+@@ -41,10 +41,10 @@
+   }
+ }
+ 
+-#ifdef CID_PROCESS_SPAWN
++#if defined(CID_PROCESS_SPAWN) || defined(CID_PROCESS_SPAWN_NULL_STDIN)
+ typedef struct {
+   char* path; char* cwd; char** argv; char** env;
+-  pid_t pid; int pipes[6];
++  pid_t pid; int pipes[6]; bool input;
+ } ProcessSpawn;
+ static void process_strings_free(char** strings) {
+   if (strings) { for (size_t i=0; strings[i]; i++) free(strings[i]); free(strings); }
+@@ -78,15 +78,19 @@
+   if (error) goto done;
+   have_attributes = true;
+   for (int i=0; i<6; i+=2) {
+-    if (pipe2(s->pipes+i, O_CLOEXEC) < 0) { error=errno; goto done; }
++    if (i==0 && !s->input) {
++      s->pipes[0]=open("/dev/null",O_RDONLY | O_CLOEXEC);
++      if (s->pipes[0]<0) { error=errno; goto done; }
++    } else if (pipe2(s->pipes+i, O_CLOEXEC) < 0) { error=errno; goto done; }
+     for (int j=i; j<i+2; j++) {
+       // dup2 must not close a pipe accidentally when the parent lacked stdio.
+-      if (s->pipes[j] < 3) {
++      if (s->pipes[j] >= 0 && s->pipes[j] < 3) {
+         int fd = fcntl(s->pipes[j], F_DUPFD_CLOEXEC, 3);
+         if (fd < 0) { error=errno; goto done; }
+         close(s->pipes[j]); s->pipes[j]=fd;
+       }
+     }
++    if (i==0 && !s->input) continue;
+     int parent = s->pipes[i + (i == 0 ? 1 : 0)];
+     if (fcntl(parent,F_SETFL,O_NONBLOCK) < 0) { error=errno; goto done; }
+   }
+@@ -117,18 +121,19 @@
+   if (work->code) result=io_fail(e,work->code,NULL);
+   else {
+     Term process=process_resource(0,s->pid);
+-    Term input=process_resource(1,s->pipes[1]);
++    Term input=s->input ? process_resource(1,s->pipes[1]) : 0;
+     Term output=process_resource(2,s->pipes[2]);
+     Term error=process_resource(2,s->pipes[4]);
+-    result=io_done(e,io_tup(e,process,io_tup(e,process,
+-      io_tup(e,io_tup(e,input,input),io_tup(e,io_tup(e,output,output),io_tup(e,error,error))))));
++    Term streams=io_tup(e,io_tup(e,output,output),io_tup(e,error,error));
++    if (s->input) streams=io_tup(e,io_tup(e,input,input),streams);
++    result=io_done(e,io_tup(e,process,io_tup(e,process,streams)));
+   }
+   free(s->path); free(s->cwd); process_strings_free(s->argv); process_strings_free(s->env); free(s);
+   return result;
+ }
+-Term process_spawn_run(Env e, Term* fields, IoWork* work) {
++static Term process_spawn_start(Env e, Term* fields, IoWork* work, bool input) {
+   ProcessSpawn* s=io_mem(calloc(1,sizeof(ProcessSpawn)));
+-  work->data=(char*)s; work->code=0;
++  work->data=(char*)s; work->code=0; s->input=input;
+   for (int i=0; i<6; i++) s->pipes[i]=-1;
+   u64 path_length=0,cwd_length=0;
+   s->path=io_cstr(e,fields[0],&path_length);
+@@ -138,7 +143,14 @@
+   s->env=process_strings(e,fields[3],NULL,true,&work->code);
+   return work->code ? process_spawn_pack(e,work) : io_work(work,process_spawn_call,process_spawn_pack);
+ }
++#ifdef CID_PROCESS_SPAWN
++Term process_spawn_run(Env e, Term* f, IoWork* w) { return process_spawn_start(e,f,w,true); }
+ static void __attribute__((constructor)) process_spawn_use(void) { io_eff(CID_PROCESS_SPAWN,process_spawn_run,0); }
++#endif
++#ifdef CID_PROCESS_SPAWN_NULL_STDIN
++Term process_spawn_null_stdin_run(Env e, Term* f, IoWork* w) { return process_spawn_start(e,f,w,false); }
++static void __attribute__((constructor)) process_spawn_null_stdin_use(void) { io_eff(CID_PROCESS_SPAWN_NULL_STDIN,process_spawn_null_stdin_run,0); }
++#endif
+ #endif
+ 
+ #if defined(CID_PROCESS_WAIT) || defined(CID_PROCESS_CLOSE_CHECKED)
+--- a/bend2/effs/process.js
++++ b/bend2/effs/process.js
+@@ -1,5 +1,6 @@
+ // Native POSIX implementation first; no weaker PID-lifetime approximation.
+ function process_spawn(path, argv, cwd, environment) { return io_fail(38); }
++function process_spawn_null_stdin(path, argv, cwd, environment) { return io_fail(38); }
+ function process_wait(owner) { throw Error('native POSIX Process required'); }
+ function process_signal(control, signal) { return io_fail(38); }
+ function process_close_checked(owner) { throw Error('native POSIX Process required'); }
