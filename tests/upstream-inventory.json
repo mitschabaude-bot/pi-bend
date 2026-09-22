@@ -1633,9 +1633,14 @@
     },
     {
       "source": "packages/coding-agent/test/edit-tool-legacy-input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f1db5bc4684c9d148a1c65160d097f617c5613716196a23442146b669ba163a7"
+      "status": "partial",
+      "ports": [
+        "tests/edit-public.bend",
+        "tests/edit_public_check.py"
+      ],
+      "sha256": "f1db5bc4684c9d148a1c65160d097f617c5613716196a23442146b669ba163a7",
+      "implementation": "packages/coding-agent/src/core/tools/edit.bend",
+      "notes": "Canonical batches, intentional top-level legacy pairs and their append order are covered through createEditTool. User-approved strict parsing rejects stringified arrays, non-array edits, partial pairs and non-object arguments. Immutable preparation preserves extra fields. Extension ToolDefinition/context integration remains pending; see tests/edit-tool.md."
     },
     {
       "source": "packages/coding-agent/test/edit-tool-no-full-redraw.test.ts",
@@ -1804,11 +1809,15 @@
       "status": "partial",
       "ports": [
         "tests/file-mutation-queue.bend",
-        "tests/file_mutation_queue_check.py"
+        "tests/file_mutation_queue_check.py",
+        "tests/edit-operations.bend",
+        "tests/edit_operations_check.py",
+        "tests/write-tool.bend",
+        "tests/write_tool_check.py"
       ],
       "sha256": "d65f903a056b4cbfd33850986b5a5ffec394b8340a1db491737f892d0e2d4462",
       "implementation": "packages/coding-agent/src/core/tools/file-mutation-queue.bend",
-      "notes": "First three upstream contracts ported: same-file serialization, different-file parallelism, symlink aliases. Channel gates replace sleeps. Additional coverage checks typed operation failures, registration errors, lexical aliases, ENOENT/ENOTDIR fallback, reuse and disposal. Four edit/write integration contracts, including retaining the lock during aborted in-flight writes, remain pending until the real tools are ported. The write execution core now also has gated abort/in-flight serialization coverage in tests/write_tool_check.py; public write-tool integration remains pending."
+      "notes": "Shared queue serialization, different-file parallelism and symlink aliases are covered with deterministic channel gates. Actual edit execution now preserves parallel edits and retains the queue during aborted in-flight edit writes before a queued write, including symlink aliases. Write execution separately covers aborted in-flight write retention. Exact public-factory coverage of every upstream mixed-tool scenario remains to be audited; suite stays partial."
     },
     {
       "source": "packages/coding-agent/test/first-time-setup-fork.test.ts",
@@ -2994,11 +3003,15 @@
         "tests/write_tool_check.py",
         "tests/write-public.bend",
         "tests/write_public_check.py",
-        "tests/edit-diff.bend"
+        "tests/edit-diff.bend",
+        "tests/edit-public.bend",
+        "tests/edit_public_check.py",
+        "tests/edit-operations.bend",
+        "tests/edit_operations_check.py"
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
       "implementation": "packages/coding-agent/src/core/tools/",
-      "notes": "The two write-tool cases (file contents/exact result details and parent creation) are covered through createWriteTool on Bun/native1/native4. Additional tests cover path normalization, overwrite and cancellation in the execution core. Extension createWriteToolDefinition/context overrides, rendering, and all other tools remain pending. Pure edit content assertions ported for exact/fuzzy matching, original-snapshot multi-edits, uniqueness, overlap, no-change and untouched-line preservation; tests/edit_diff_check.py compares the pinned upstream pure source directly, plus generated cases. Unicode17 NFKC conformance is checked independently. This does not port edit IO/cancellation/rendering, patch application or the other tools in this suite. Empty fuzzy needles are rejected and exact whitespace-only needles are counted literally, by explicit user-approved invalid-case policy. Native positions count characters; the oracle translates UTF16 offsets."
+      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
