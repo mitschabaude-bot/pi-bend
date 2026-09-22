@@ -1,6 +1,7 @@
 import Base
 import ./deflate.bend as Deflate
 import ./image.bend as Image
+import ./deflate-encode.bend as Encode
 
 # Decode one complete PNG into the shared straight-alpha RGBA8 raster.
 # All legal static color/depth combinations, Adam7 and tRNS are supported.
@@ -26,6 +27,9 @@ type Error is Data:
   Filter{}
   PaletteIndex{}
   PixelLimit{}
+  InvalidRaster{}
+  OutputLimit{}
+  Encoding{cause: Encode.Error}
 
 type Header is Data:
   Header{width: U32, height: U32, depth: U32, color: U32, interlace: U32}
@@ -486,3 +490,156 @@ def checkedBytes(valid: Bool, bytes: List<&2,U32>, limit: Nat) -> Result<&2,&1,E
 # The decompression budget is the exact sum of all nonempty pass scanlines.
 def decode(+bytes: List<&2,U32>, limit: Nat) -> Result<&2,&1,Error,Image.Raster>:
   checkedBytes(Deflate.validBytes(bytes),bytes,limit)
+
+# PNG encoding uses the same RGBA8 representation as Photon's image pipeline.
+# Adaptive filtering scores signed-byte residuals for Sub, Up, Average, Paeth;
+# ties select the later filter, matching image/png's default adaptive heuristic.
+# Compression choices differ from Photon, so lossless files need not have the
+# same bytes or size; callers must evaluate their actual encoded-size budget.
+type Filters is Data:
+  Filters{sub: Nat, up: Nat, average: Nat, paeth: Nat, subs: List<&2,U32>, ups: List<&2,U32>, averages: List<&2,U32>, paeths: List<&2,U32>}
+
+def octet(value: U32, shift: Nat) -> U32: U32.and(U32.shrn(value,shift),255)
+
+def residual(filter: U32, value: U32, left: U32, above: U32, upperLeft: U32) -> U32:
+  U32.and((value - predictor(filter,left,above,upperLeft) : U32),255)
+
+def filterPixel(+filter: U32, +value: U32, +left: U32, +above: U32, +upperLeft: U32) -> U32:
+  packWord(residual(filter,octet(value,24n),octet(left,24n),octet(above,24n),octet(upperLeft,24n)),residual(filter,octet(value,16n),octet(left,16n),octet(above,16n),octet(upperLeft,16n)),residual(filter,octet(value,8n),octet(left,8n),octet(above,8n),octet(upperLeft,8n)),residual(filter,octet(value,0n),octet(left,0n),octet(above,0n),octet(upperLeft,0n)))
+
+def scoreByte(+value: U32) -> U32: Bool.pick(U32,U32.is_le(value,128),value,(256 - value : U32))
+
+def scorePixel(+value: U32) -> Nat:
+  U32.to_nat((scoreByte(octet(value,24n)) + scoreByte(octet(value,16n)) + scoreByte(octet(value,8n)) + scoreByte(octet(value,0n)) : U32))
+
+def addFilters(+sub: U32, +up: U32, +average: U32, +paeth: U32, filters: Filters) -> Filters:
+  match filters:
+    case Filters{s,u,a,p,ss,us,as,ps}: Filters{s + scorePixel(sub),u + scorePixel(up),a + scorePixel(average),p + scorePixel(paeth),sub <> ss,up <> us,average <> as,paeth <> ps}
+
+type Filtering is Type:
+  Filtering{pixels: Array<U32>, index: U32, left: U32, upperLeft: U32, filters: Filters}
+
+def filteredPixel(index: U32, +current: U32, +above: U32, +left: U32, +upperLeft: U32, filters: Filters, pixels: Array<U32>) -> Filtering:
+  Filtering{pixels,(index + 1 : U32),current,above,addFilters(filterPixel(1,current,left,above,upperLeft),filterPixel(2,current,left,above,upperLeft),filterPixel(3,current,left,above,upperLeft),filterPixel(4,current,left,above,upperLeft),filters)}
+
+def abovePixel(index: U32, current: U32, left: U32, upperLeft: U32, filters: Filters, fetched: Array<U32> & U32) -> Filtering:
+  match fetched:
+    case (pixels,above): filteredPixel(index,current,above,left,upperLeft,filters,pixels)
+
+def currentPixel(firstRow: Bool, width: U32, +index: U32, left: U32, upperLeft: U32, filters: Filters, fetched: Array<U32> & U32) -> Filtering:
+  match firstRow fetched:
+    case True{} Tuple{pixels,current}: filteredPixel(index,current,0,left,upperLeft,filters,pixels)
+    case False{} Tuple{pixels,current}: abovePixel(index,current,left,upperLeft,filters,Array.get(U32,pixels,(index - width : U32)))
+
+def filterRow(count: Nat, +firstRow: Bool, +width: U32, state: Filtering) -> Filtering:
+  match count state:
+    case 0n state: state
+    case 1n+n Filtering{pixels,+index,left,upperLeft,filters}: filterRow(n,firstRow,width,currentPixel(firstRow,width,index,left,upperLeft,filters,Array.get(U32,pixels,index)))
+
+type FilterChoice is Data:
+  FilterChoice{kind: U32, score: Nat, words: List<&2,U32>}
+
+def prefer(+kind: U32, +score: Nat, +words: List<&2,U32>, previous: FilterChoice) -> FilterChoice:
+  match previous:
+    case FilterChoice{oldKind,+oldScore,oldWords}: Bool.pick(FilterChoice,Nat.is_le(score,oldScore),FilterChoice{kind,score,words},FilterChoice{oldKind,oldScore,oldWords})
+
+def chooseFilter(filters: Filters) -> FilterChoice:
+  match filters:
+    case Filters{s,u,a,p,ss,us,as,ps}: prefer(4,p,ps,prefer(3,a,as,prefer(2,u,us,FilterChoice{1,s,ss})))
+
+# All byte builders accumulate in reverse order, including chunk payloads.
+def appendWord(+value: U32, reversed: List<&2,U32>) -> List<&2,U32>:
+  octet(value,0n) <> octet(value,8n) <> octet(value,16n) <> octet(value,24n) <> reversed
+
+def appendPixels(words: List<&2,U32>, reversed: List<&2,U32>) -> List<&2,U32>:
+  match words:
+    case Nil{}: reversed
+    case value <> rest: appendPixels(rest,appendWord(value,reversed))
+
+def appendFiltered(choice: FilterChoice, reversed: List<&2,U32>) -> List<&2,U32>:
+  match choice:
+    case FilterChoice{kind,_,words}: appendPixels(List.reverse(&2,U32,words),kind <> reversed)
+
+type Filtered is Type:
+  Filtered{pixels: Array<U32>, reversed: List<&2,U32>}
+
+def filteredRow(reversed: List<&2,U32>, state: Filtering) -> Filtered:
+  match state:
+    case Filtering{pixels,_,_,_,filters}: Filtered{pixels,appendFiltered(chooseFilter(filters),reversed)}
+
+def filterRows(count: Nat, +width: U32, +row: U32, state: Filtered) -> Filtered:
+  match count state:
+    case 0n state: state
+    case 1n+n Filtered{pixels,reversed}:
+      filterRows(n,width,(row + 1 : U32),filteredRow(reversed,filterRow(U32.to_nat(width),U32.is_eq(row,0),width,Filtering{pixels,(row * width : U32),0,0,Filters{0n,0n,0n,0n,Nil{},Nil{},Nil{},Nil{}}})))
+
+def crcKind(+kind: U32) -> U32:
+  crcByte(crcByte(crcByte(crcByte(4294967295,octet(kind,24n)),octet(kind,16n)),octet(kind,8n)),octet(kind,0n))
+
+type Written is Data:
+  Written{rest: List<&2,U32>, reversed: List<&2,U32>, crc: U32}
+
+def writeSpan(count: Nat, state: Written) -> Written:
+  match count state:
+    case 0n state: state
+    case 1n+n Written{+byte <> rest,reversed,crc}: writeSpan(n,Written{rest,byte <> reversed,crcByte(crc,byte)})
+    case _ state: state
+
+def endSpan(state: Written) -> Written:
+  match state:
+    case Written{rest,reversed,crc}: Written{rest,appendWord(U32.xor(crc,4294967295),reversed),0}
+
+def writeChunk(+kind: U32, +count: Nat, bytes: List<&2,U32>, reversed: List<&2,U32>) -> Written:
+  endSpan(writeSpan(count,Written{bytes,appendWord(kind,appendWord(U32.from_nat(count),reversed)),crcKind(kind)}))
+
+def writeData(count: Nat, +remaining: Nat, state: Written) -> Written:
+  match count state:
+    case 0n state: state
+    case 1n+n Written{rest,reversed,_}:
+      +size = Bool.pick(Nat,Nat.is_le(remaining,2147483647n),remaining,2147483647n)
+      writeData(n,remaining - size,writeChunk(1229209940,size,rest,reversed))
+
+def endImage(state: Written) -> List<&2,U32>:
+  match state:
+    case Written{_,reversed,_}: List.reverse(&2,U32,appendWord(2923585666,appendWord(1229278788,appendWord(0,reversed))))
+
+def writeImageData(count: Nat, size: Nat, bytes: List<&2,U32>, state: Written) -> List<&2,U32>:
+  match state:
+    case Written{_,reversed,_}: endImage(writeData(count,size,Written{bytes,reversed,0}))
+
+def encodeChunks(+width: U32, +height: U32, +bytes: List<&2,U32>, +limit: Nat) -> Result<&2,&2,Error,List<&2,U32>>:
+  +size = length(bytes,0n)
+  +count = (size + 2147483646n) / 2147483647n
+  Bool.pick(Unit -> Result<&2,&2,Error,List<&2,U32>>,Nat.is_le(45n + size + count * 12n,limit),_ =>
+    header = {octet(width,24n) <> octet(width,16n) <> octet(width,8n) <> octet(width,0n) <> octet(height,24n) <> octet(height,16n) <> octet(height,8n) <> octet(height,0n) <> 8 <> 6 <> 0 <> 0 <> 0 <> Nil{} : List<&2,U32>}
+    Done{writeImageData(count,size,bytes,writeChunk(1229472850,13n,header,10 <> 26 <> 10 <> 13 <> 71 <> 78 <> 80 <> 137 <> Nil{}))},_ => Fail{OutputLimit{}})(Unit{})
+
+def compressedImage(width: U32, height: U32, limit: Nat, result: Result<&2,&2,Encode.Error,List<&2,U32>>) -> Result<&2,&2,Error,List<&2,U32>>:
+  match result:
+    case Fail{Encode.OutputLimit{}}: Fail{OutputLimit{}}
+    case Fail{error}: Fail{Encoding{error}}
+    case Done{bytes}: encodeChunks(width,height,bytes,limit)
+
+def encodeFiltered(+width: U32, +height: U32, +limit: Nat, filtered: Filtered) -> Image.Raster & Result<&2,&2,Error,List<&2,U32>>:
+  match filtered:
+    case Filtered{pixels,reversed}:
+      (Image.Raster{width,height,pixels},compressedImage(width,height,limit,Encode.compressZlib(List.reverse(&2,U32,reversed),limit - 57n)))
+
+def encodeCapacity(valid: Bool, +width: U32, +height: U32, +limit: Nat, sized: Array<U32> & U32) -> Image.Raster & Result<&2,&2,Error,List<&2,U32>>:
+  match valid sized:
+    case False{} Tuple{pixels,_}: (Image.Raster{width,height,pixels},Fail{InvalidRaster{}})
+    case True{} Tuple{pixels,+capacity}:
+      Bool.pick(Array<U32> -> Image.Raster & Result<&2,&2,Error,List<&2,U32>>,U32.is_ge(capacity,(width * height : U32)),
+        buffer => encodeFiltered(width,height,limit,filterRows(U32.to_nat(height),width,0,Filtered{buffer,Nil{}})),
+        buffer => (Image.Raster{width,height,buffer},Fail{InvalidRaster{}}))(pixels)
+
+def encodeBudget(enough: Bool, image: Image.Raster, limit: Nat) -> Image.Raster & Result<&2,&2,Error,List<&2,U32>>:
+  match enough image:
+    case False{} image: (image,Fail{OutputLimit{}})
+    case True{} Image.Raster{+width,+height,pixels}:
+      encodeCapacity(Image.validDimensions(width,height) && U32.is_le(width,2147483647) && U32.is_le(height,2147483647),width,height,limit,Array.size(U32,pixels))
+
+# Encoding preserves the owned raster so PNG/JPEG trials can share its buffer.
+# The byte limit includes the signature, chunk framing and checksums.
+def encode(image: Image.Raster, +limit: Nat) -> Image.Raster & Result<&2,&2,Error,List<&2,U32>>:
+  encodeBudget(Nat.is_ge(limit,57n),image,limit)

@@ -22,6 +22,9 @@ def error(value: Png.Error) -> String:
     case Png.Filter{}: "filter"
     case Png.PaletteIndex{}: "index"
     case Png.PixelLimit{}: "limit"
+    case Png.InvalidRaster{}: "raster"
+    case Png.OutputLimit{}: "output"
+    case Png.Encoding{_}: "encoding"
 
 def numbers(values: List<U32>, reversed: String) -> String:
   match values:
