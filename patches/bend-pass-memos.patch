@@ -1,0 +1,40 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -679,9 +679,11 @@
+   return out;
+ }
+ 
++const WORDVALS = new Map<HTerm, number | null>();
++
+ function memo_gc(): void {
+   PROBES.length = 1; // Keep DUMMY; opened binders belong to this definition.
+-  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS].forEach((m) => m.clear());
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS, WORDVALS].forEach((m) => m.clear());
+ }
+ 
+ // Probe
+@@ -1065,7 +1067,8 @@
+     die("a constructor outside a datatype");
+   }
+   const word = adt.k === "U32" || adt.k === "F32";
+-  return [arr_open(fl.book, adt), word ? Bend.u32_from_term(x, adt.k) : null];
++  return [arr_open(fl.book, adt), word ? memo(WORDVALS, x, () =>
++    Bend.u32_from_term(x, adt.k)) : null];
+ }
+ 
+ // A constructor's fields: the last n domains of its type, over the
+@@ -2964,10 +2967,12 @@
+     if (changed) fl = undefined;
+     Bun.gc(true);
+   } while (changed);
++  const refs = new Map<string, Iterable<string> | undefined>();
++  for (const s of fl.segs) refs.set(s.fid, s.refs);
++  for (const s of fl.spins) refs.has(s[0]) || refs.set(s[0], s[2]);
+   const reach = (from: string[], set = new Set<string>()): Set<string> => {
+     const grab = (fid: string) => set.has(fid) || (set.add(fid)
+-      && (fl.segs.find((s) => s.fid === fid)?.refs
+-        ?? fl.spins.find((s) => s[0] === fid)?.[2])?.forEach(grab));
++      && refs.get(fid)?.forEach(grab));
+     from.forEach(grab);
+     return set;
+   };

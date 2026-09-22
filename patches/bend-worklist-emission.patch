@@ -1,0 +1,310 @@
+--- a/comp.ts	2026-09-22 14:18:56.390060265 +0200
++++ b/comp.ts	2026-09-22 14:43:30.382227885 +0200
+@@ -60,18 +60,58 @@
+ 
+ type Src = { refs: Set<Bend.Name>; deps: Set<Bend.Name>; flat: boolean };
+ 
++// The unit (a def, with the spins of its calls) whose retained output the
++// emitter is producing; "" outside emission.
++let UNIT: Bend.Name = "";
++// The units whose retained output read a fact that has since grown.
++const DIRTY = new Set<Bend.Name>();
++let SPIN_NEXT = 0;
++
++// A fact set: a read is remembered per unit, and a new fact dirties every
++// unit that read it, so only those units are emitted again.
++class Facts extends Set<string> {
++  readers = new Map<string, Set<Bend.Name>>();
++  gave = new Map<Bend.Name, Set<string>>();
++  has(k: string): boolean {
++    if (UNIT !== "") {
++      const rs = this.readers.get(k);
++      rs === undefined ? this.readers.set(k, new Set([UNIT])) : rs.add(UNIT);
++    }
++    return super.has(k);
++  }
++  add(k: string): this {
++    if (!super.has(k)) {
++      super.add(k);
++      this.readers.get(k)?.forEach((u) => DIRTY.add(u));
++    }
++    if (UNIT !== "") {
++      const gs = this.gave.get(UNIT);
++      gs === undefined ? this.gave.set(UNIT, new Set([k])) : gs.add(k);
++    }
++    return this;
++  }
++  // Drops what a unit contributed, ahead of its re-emission.
++  forget(u: Bend.Name): void {
++    this.gave.get(u)?.forEach((k) => super.delete(k));
++    this.gave.delete(u);
++  }
++}
++
+ type Carb = {
+   book: Book;
+   bangs: Set<Bend.Name>;
+   sites: Map<Bend.Name, number>;
+-  hot: Set<Bend.Name>;
+-  stat: Set<Bend.Name>;
+-  own: Set<string>;
+-  lend: Set<string>;
++  hot: Facts;
++  stat: Facts;
++  own: Facts;
++  lend: Facts;
+ };
+ 
++type Spun = { name: string; key: string; ck: Call; ers: HTerm[] };
++
+ type File = Carb & {
+   emit: boolean;
++  units: Map<Bend.Name, { segs: Seg[]; spins: Spun[] }>;
+   spares: { words: number; name: string; z: boolean }[];
+   fresh: Map<string, number>;
+   uses: Map<Probe, Bind>;
+@@ -1196,11 +1236,9 @@
+ 
+ // A def's borrowed parameters (a box, not an Array, not owned), fixed a pass.
+ function brw_of(cb: Carb, k: Bend.Name): boolean[] {
+-  return memo(BRWS, k, () => {
+-    const { live, lays } = sig_def(cb, k);
+-    return lays.map((l, i) => done_live(def_body(cb, k)) && l.ks.includes("box")
+-      && ty_adt(cb.book, live[i][2])?.k !== "Array" && !cb.own.has(k + "~" + i));
+-  });
++  const { live, lays } = sig_def(cb, k);
++  return lays.map((l, i) => done_live(def_body(cb, k)) && l.ks.includes("box")
++    && ty_adt(cb.book, live[i][2])?.k !== "Array" && !cb.own.has(k + "~" + i));
+ }
+ 
+ function def_raise(book: Bend.Book, t: HTerm, left: number): number {
+@@ -1466,10 +1504,10 @@
+     book: { ...src, tlds: { ...src.tlds } },
+     bangs: new Set(),
+     sites: new Map(),
+-    hot: new Set(),
+-    stat: new Set(),
+-    own: new Set(),
+-    lend: new Set(),
++    hot: new Facts(),
++    stat: new Facts(),
++    own: new Facts(),
++    lend: new Facts(),
+   };
+   for (const queue = roots.slice(); queue.length > 0;) {
+     const d = queue.shift() as Bend.Name;
+@@ -1566,7 +1604,7 @@
+ // ====
+ 
+ function file_new(cb: Carb, decl: string): File {
+-  return { ...cb, emit: true, decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
++  return { ...cb, emit: true, units: new Map(), decl, segs: [], seg: seg_new("", BOX, []), tab: 2,
+     cids: new Map(), tabs: new Map(), spins: [], spun: new Map(), clos: new Set(),
+     img: [], lits: new Map(), reqs: "", fuel: 0, fresh: new Map(), spares: [],
+     uses: new Map(), brwl: new Map(), rest: [], def: "" };
+@@ -1658,7 +1696,7 @@
+   const ts = ks.map(() => name_local(fl, k));
+   const seg = seg_new(name, ret, [...news, ...ts],
+     [...live.flatMap(([, b]) => b.val.lay.ks), ...ks], frame);
+-  fl.segs.push(seg);
++  seg_push(fl, seg);
+   Object.assign(fl, { seg, spares: [], tab: 2, uses: new Map() });
+   olds.forEach((w, i) =>
+     fl.brwl.has(w) && fl.brwl.set(news[i], fl.brwl.get(w)!));
+@@ -1780,8 +1818,10 @@
+       r !== undefined && cb.lend.has(r) && cb.lend.add(a);
+     });
+   }
+-  BRWS.forEach((bs, k) => bs.forEach((b, i) =>
+-    b && !cb.lend.has(k + "~" + i) && cb.own.add(k + "~" + i)));
++  for (const [k] of done_defs(cb)) {
++    brw_of(cb, k).forEach((b, i) =>
++      b && !cb.lend.has(k + "~" + i) && cb.own.add(k + "~" + i));
++  }
+ }
+ 
+ // A value with no heap: a constructor packed into its word.
+@@ -2217,17 +2257,23 @@
+   return vals;
+ }
+ 
+-function emit_native(fl: File, ck: Call, ers: HTerm[]): string {
+-  const key = [ck.k, ...ers.map((e) => JSON.stringify(lay_of(fl.book, e)))]
+-    .join("|");
+-  const got = fl.spun.get(key);
++function emit_native(fl: File, ck: Call, ers: HTerm[], again?: Spun): string {
++  const key = again?.key ?? [ck.k, ...ers.map((e) =>
++    JSON.stringify(lay_of(fl.book, e)))].join("|");
++  const got = again === undefined ? fl.spun.get(key) : undefined;
+   if (got !== undefined) {
+     return seg_ref(fl, got);
+   }
+-  const name = seg_ref(fl, `spin_${fl.spun.size}`);
++  // The counter lives outside `fl`: a spin emitted within a spin restores
++  // `fl` afterwards, and the name must never be reused.
++  const name = again?.name ?? seg_ref(fl, `spin_${SPIN_NEXT++}`);
+   fl.spun.set(key, name);
++  if (again === undefined) {
++    unit_of(fl, ck.k).spins.push({ name, key, ck, ers });
++  }
+   const tld = fl.book.tlds[ck.k] as Def;
+-  const outer = { ...fl };
++  const outer = { ...fl, unit: UNIT };
++  UNIT = ck.k;
+   const vals = emit_open(fl, ck.k);
+   const seg = fl.seg;
+   seg.fid = name;
+@@ -2241,6 +2287,8 @@
+   "  WL_SPIN", ...seg.lines, "  break;", "  }",
+   ...dst.ws.map((v, j) => `  o[${j}] = ${v};`),
+   "  return 1;", "}"].join("\n") : "", seg.refs]);
++  UNIT = outer.unit;
++  delete (outer as { unit?: Bend.Name }).unit;
+   Object.assign(fl, outer);
+   return name;
+ }
+@@ -2813,11 +2861,40 @@
+ // Compile
+ // =======
+ 
++function unit_of(fl: File, k: Bend.Name): { segs: Seg[]; spins: Spun[] } {
++  return memo(fl.units, k, () => ({ segs: [], spins: [] }));
++}
++
++// A segment belongs to the unit being emitted: a def's own, or, within a
++// spin, the spin's callee (closures a spin body makes included).
++function seg_push(fl: File, seg: Seg): void {
++  fl.segs.push(seg);
++  if (UNIT !== "") unit_of(fl, UNIT).segs.push(seg);
++}
++
++// Emits a unit afresh: its segments, its spins (with their names kept, as
++// their callers hold them) and the facts it gave are dropped first.
++function compile_unit(fl: File, k: Bend.Name, tld: Def): void {
++  const unit = unit_of(fl, k);
++  const old = new Set(unit.segs);
++  fl.segs = fl.segs.filter((s) => !old.has(s));
++  const names = new Set(unit.spins.map((s) => s.name));
++  fl.spins = fl.spins.filter(([n]) => !names.has(n));
++  for (const s of unit.spins) fl.spun.delete(s.key);
++  // own, hot and stat only grow; lend is what the current outputs lend.
++  fl.lend.forget(k);
++  unit.segs = [];
++  UNIT = k;
++  compile_def(fl, k, tld);
++  for (const s of unit.spins) emit_native(fl, s.ck, s.ers, s);
++  UNIT = "";
++}
++
+ function compile_def(fl: File, k: Bend.Name, tld: Def): void {
+   Object.assign(fl, { fresh: new Map(), brwl: new Map(), rest: [] });
+   memo_gc();
+   const vals = emit_open(fl, k);
+-  fl.segs.push(fl.seg);
++  seg_push(fl, fl.seg);
+   emit_body(fl, tld.h as HTerm, tld.T, [], vals, null);
+ }
+ 
+@@ -2932,41 +3009,45 @@
+ export function compile_book(book: Bend.Book): string {
+   const show = show_main(book);
+   const cb = carb_book(book, ["main", ...RUNTIME_ADTS]);
+-  const facts = () => JSON.stringify([[...cb.own], [...cb.hot],
+-    [...cb.stat]]);
+-  const pass = (defs: [Bend.Name, Def][]): File => {
+-    [cb.lend, BRWS].forEach((m) => m.clear());
+-    const fl = file_new(cb, "Term");
+-    const count = cb.own.size + cb.hot.size + cb.stat.size;
+-    for (const k of SRCS.keys()) {
+-      for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
+-        fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
+-      }
+-    }
+-    for (const [k, tld] of defs) {
+-      compile_def(fl, k, tld);
+-      // These sets only grow: once they change, this pass's source is discarded.
+-      if (fl.emit && count !== cb.own.size + cb.hot.size + cb.stat.size) {
+-        fl.emit = false;
+-        for (const seg of fl.segs) seg.lines = [];
+-        for (const spin of fl.spins) spin[1] = "";
+-      }
+-    }
+-    compile_reqs(fl);
++  // The facts (own, hot, stat) only grow. Every unit is emitted once,
++  // callees first; a unit whose output read a fact that grew afterwards is
++  // emitted again, until no unit is dirty: then every retained output was
++  // produced under the final facts.
++  BRWS.clear();
++  DIRTY.clear();
++  SPIN_NEXT = 0;
++  const fl = file_new(cb, "Term");
++  for (const k of SRCS.keys()) {
++    for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
++      fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
++    }
++  }
++  const order = done_defs(cb).reverse();
++  order.forEach(([k]) => DIRTY.add(k));
++  const first = process.env.BEND_ORDER === "callers" ? order.slice().reverse() : order;
++  let rounds = 0;
++  while (DIRTY.size > 0) {
++    const todo = new Set(DIRTY);
++    const t0 = performance.now();
++    DIRTY.clear();
++    for (const [k, tld] of rounds === 0 ? first : order) {
++      if (todo.has(k)) compile_unit(fl, k, tld);
++    }
++    // Lends are rebuilt from every retained output before their closure.
++    const gave = [...cb.lend.gave.values()].flatMap((gs) => [...gs]);
++    cb.lend.clear();
++    gave.forEach((l) => cb.lend.add(l));
+     facts_lend(cb);
+-    return fl;
+-  };
+-  // Emitted callees first until a pass changes nothing (own, hot and poly
+-  // only grow): that pass is kept.
+-  let fl: File | undefined;
+-  let changed: boolean;
+-  do {
+-    const was = facts();
+-    fl = pass(done_defs(cb).reverse());
+-    changed = was !== facts();
+-    if (changed) fl = undefined;
+-    Bun.gc(true);
+-  } while (changed);
++    rounds += 1;
++    if (process.env.BEND_TIMES !== undefined) console.error(`TIME round ${rounds} ${((performance.now() - t0) / 1000).toFixed(1)}s units=${todo.size} dirty=${DIRTY.size} own=${cb.own.size} hot=${cb.hot.size} stat=${cb.stat.size} rss=${(process.memoryUsage().rss / 2 ** 30).toFixed(2)}GiB`);
++    if (todo.size > 256) Bun.gc(true);
++  }
++  const ta = performance.now();
++  const rank = new Map(order.map(([k], i) => [k, i]));
++  const of = (s: Seg) => rank.get(s.def.split("$")[0]) ?? 1e9;
++  fl.segs.sort((a, b) => of(a) - of(b));
++  UNIT = "";
++  compile_reqs(fl);
+   const refs = new Map<string, Iterable<string> | undefined>();
+   for (const s of fl.segs) refs.set(s.fid, s.refs);
+   for (const s of fl.spins) refs.has(s[0]) || refs.set(s[0], s[2]);
+@@ -3000,7 +3081,9 @@
+   const fills: [string, string[]][] = [
+     ["Tables", [defs.join("\n"), ...[...fl.tabs].map(([r, i]) =>
+       `CONSTV u64 TAB_${i}[] = { ${r} };`)]],
++    // A spin emitted again lands after the spins that call it: declare all.
+     ["Spins", [`CONSTV u64 STAT_IMG[] = { ${fl.img.join(", ") || 0} };`,
++      fl.spins.map((s) => s[1].split("\n")[0].replace(/ \{$/, ";")).join("\n"),
+       ...fl.spins.map((s) => s[1])]],
+     ["Segments", [compile_segs(fl)]],
+     ["Requests", [fl.reqs]],
+@@ -3009,9 +3092,11 @@
+     die("an unbound name in the emitted C");
+   }
+   fills[0][1].push(...desc);
+-  return fills.reduce((src, [mark, parts]) => src.replace(
++  const out = fills.reduce((src, [mark, parts]) => src.replace(
+     new RegExp("^// " + mark + "\\n// " + "=".repeat(mark.length) + "$", "m"),
+     (m) => [m, ...parts].join("\n\n")), TEMPLATE);
++  if (process.env.BEND_TIMES !== undefined) console.error(`TIME assemble ${((performance.now() - ta) / 1000).toFixed(1)}s rss=${(process.memoryUsage().rss / 2 ** 30).toFixed(2)}GiB`);
++  return out;
+ }
+ 
+ // Js

@@ -1,0 +1,27 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -937,6 +937,8 @@
+ 
+ // An Array is a block, and an IO.OP holds the foreign requests beyond its
+ // constructors: boxes.
++const LAY_MAX = Number(process.env.BEND_LAY_MAX ?? "32");
++
+ function lay_of(book: Bend.Book, A: HTerm | null): Lay {
+   return memo(LAYS, A, () => {
+     const t = ty_adt(book, A);
+@@ -947,8 +949,13 @@
+     if (WORDS[t.k] !== undefined) return WORDS[t.k];
+     if (t.k === "Array" || t.k === "IO.OP" || tld?.$ !== "ADT"
+       || lay_cyclic(book, t.k)) return BOX;
+-    const get = () => lay_pack(tld.c.map((c): Arm =>
+-      ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) })));
++    // Wide records stay boxed: every live inline cell is a parameter of each
++    // segment that holds the value, and the C arity table is a byte.
++    const get = () => {
++      const lay = lay_pack(tld.c.map((c): Arm =>
++        ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) })));
++      return lay.ks.length > LAY_MAX ? BOX : lay;
++    };
+     const key = tld.n === 0 && t.x.length === 0 ? 0
+       : t.k === "Word.Con" && t.x.length === 1
+         ? ctr_index(book.ctrs.WCon, t.x[0]) : null;

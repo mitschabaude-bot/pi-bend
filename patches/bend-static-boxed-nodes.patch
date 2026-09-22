@@ -1,0 +1,48 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -1844,7 +1844,7 @@
+     return v;
+   }
+   if (lay_box(lay)) {
+-    return val_new([val_box(fl, v)], BOX);
++    return val_boxed(fl, v);
+   }
+   if (lay_box(v.lay)) {
+     return val_unbox(fl, v, lay);
+@@ -1897,14 +1897,20 @@
+ }
+ 
+ function val_box(fl: File, v: Val): string {
++  return val_word(val_boxed(fl, v));
++}
++
++// A boxed static value stays static: a constant record boxed into a
++// generic field (a table's entries) then lands in the image with its node.
++function val_boxed(fl: File, v: Val): Val {
+   if (v.lay.arms === null) {
+-    return val_own(fl, v)[0];
++    return val_new([val_own(fl, v)[0]], BOX, v.stat);
+   }
+   const arms = v.lay.arms!;
+-  const build = (arm: Arm): string =>
+-    node_build(fl, arm.k, arm.fs.map((f) => val_field(v, f)));
++  const build = (arm: Arm): Val =>
++    node_value(fl, arm.k, arm.fs.map((f) => val_field(v, f)));
+   if (arms.length <= 1) {
+-    return arms.map(build)[0] ?? "0";
++    return arms.map(build)[0] ?? val_new(["0"], BOX);
+   }
+   if (v.stat) {
+     return build(arms[Number(v.ws[0])]);
+@@ -1912,9 +1918,9 @@
+   const out = emit_hold(fl, ["0"], "b")[0];
+   const tag = emit_alias(fl, v.ws[0], "t");
+   emit_chain(fl, (i) => `${tag} == ${i}`, arms.map((arm) => () => {
+-    file_push(fl, `${out} = ${build(arm)};`);
++    file_push(fl, `${out} = ${val_word(build(arm))};`);
+   }));
+-  return out;
++  return val_new([out], BOX);
+ }
+ 
+ function val_unbox(fl: File, v: Val, lay: Lay): Val {
