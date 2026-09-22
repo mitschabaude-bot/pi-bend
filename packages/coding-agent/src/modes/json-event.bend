@@ -12,6 +12,8 @@ import ../core/tools/bash.bend as Bash
 import ../core/tools/edit.bend as Edit
 import ../core/tools/find.bend as Find
 import ../core/tools/truncate.bend as Truncate
+import ../core/messages.bend as Messages
+import ../core/session-json.bend as SessionJson
 
 # Session event shape emitted by the JSON stdout protocol. Cumulative assistant
 # snapshots are removed from streaming wire events: `message_start` provides
@@ -19,8 +21,9 @@ import ../core/tools/truncate.bend as Truncate
 # authoritative message. Tool-call ids and names remain available because
 # their size is constant.
 
-def SessionEvent() -> Data: Runner.RunEvent(Unit, Tools.ToolDetails, Unit)
-def Message() -> Data: Agent.AgentMessage<Unit, Tools.ToolDetails, Unit>
+def Custom() -> Data: Messages.CodingMessage<V.Value>
+def SessionEvent() -> Data: Runner.RunEvent(Unit, Tools.ToolDetails, Custom())
+def Message() -> Data: Agent.AgentMessage<Unit, Tools.ToolDetails, Custom()>
 def ToolResult() -> Data: Agent.AgentToolResult<Tools.ToolDetails>
 
 def field(key: String, value: V.Value, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
@@ -31,6 +34,7 @@ def text(value: String) -> V.Value: V.Text{value}
 def natural(value: Nat) -> V.Value: V.Number{F.fromU32(U32.from_nat(value))}
 
 def unitDetails(value: Unit) -> V.Value: V.Null{}
+def rawValue(value: V.Value) -> V.Value: value
 
 # Tool details
 # ------------
@@ -72,6 +76,7 @@ def toolDetails(value: Tools.ToolDetails) -> V.Value:
     case Tools.EditDetails{details}: editDetails(details)
     case Tools.WriteDetails{}: object(Nil{})
     case Tools.FindDetails{details}: findDetails(details)
+    case Tools.RawDetails{value}: value
 
 # Messages
 # --------
@@ -79,7 +84,7 @@ def toolDetails(value: Tools.ToolDetails) -> V.Value:
 def message(value: Message()) -> V.Value:
   match value:
     case Agent.LlmMessage{value}: Json.message(~Unit, ~Tools.ToolDetails, ~unitDetails, ~toolDetails, value)
-    case Agent.CustomMessage{_}: V.Null{}
+    case Agent.CustomMessage{value}: SessionJson.codingMessage(~V.Value, ~rawValue, value)
 
 def messages(values: List<&2, Message()>) -> List<&2, V.Value>:
   match values:

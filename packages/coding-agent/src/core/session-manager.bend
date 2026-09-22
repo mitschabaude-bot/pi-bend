@@ -248,6 +248,15 @@ def inMemory(-D: Data,-T: Data,-C: Data, +header: SessionHeader) -> Result<&2,&2
     case SessionHeader{_,id,timestamp,_,_}:
       Result.map(&2,&2,Error,F64,SessionManager<D,T,C>,_ => SessionManager{header,Nil{},EntryIndex{Map.new(&2,Maybe<&2,SessionEntry<D,T,C>>),None{},0n},None{},Map.new(&2,Maybe<&2,ResolvedLabel>),Nil{},0n},dated(F64,id,Date.parseIso(timestamp)))
 
+# A persisted fork records the file it was branched from in its header.
+def withParentSession(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, parent: Maybe<&2,String>) -> SessionManager<D,T,C>:
+  match state:
+    case SessionManager{SessionHeader{version,id,timestamp,cwd,_},reversed,index,leaf,labels,order,next}: SessionManager{SessionHeader{version,id,timestamp,cwd,parent},reversed,index,leaf,labels,order,next}
+
+def withVersion(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, version: Nat) -> SessionManager<D,T,C>:
+  match state:
+    case SessionManager{SessionHeader{_,id,timestamp,cwd,parent},reversed,index,leaf,labels,order,next}: SessionManager{SessionHeader{Some{version},id,timestamp,cwd,parent},reversed,index,leaf,labels,order,next}
+
 def getHeader(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> SessionHeader:
   match state:
     case SessionManager{header,_,_,_,_,_,_}: header
@@ -343,6 +352,27 @@ def appendChecked(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +en
   match state metadata:
     case SessionManager{_,_,index,_,_,_,_} SessionEntryBase{+id,_,timestamp}:
       Result.bind(&2,&2,Error,F64,SessionManager<D,T,C>,dated(F64,id,Date.parseIso(timestamp)),_ => acceptEntry(D,T,C,state,entry,insertEntry(D,T,C,entry,index,id)))
+
+# Restoring stored entries keeps their own ids, parent links and order; only
+# id uniqueness and timestamp syntax are checked, as the index and label maps
+# are rebuilt from them (upstream's _buildIndex). The leaf is the last entry.
+def restoreLabel(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, entry: SessionEntry<D,T,C>) -> SessionManager<D,T,C>:
+  match entry:
+    case LabelEntry{SessionEntryBase{_,_,timestamp},target,label}: updateLabel(D,T,C,state,target,label,timestamp)
+    case _: state
+
+def restoreEntry(-D: Data,-T: Data,-C: Data, state: Result<&2,&2,Error,SessionManager<D,T,C>>, +entry: SessionEntry<D,T,C>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match state:
+    case Fail{cause}: Fail{cause}
+    case Done{+current}: Result.map(&2,&2,Error,SessionManager<D,T,C>,SessionManager<D,T,C>,next => restoreLabel(D,T,C,next,entry),appendChecked(D,T,C,current,entry,entryBase(D,T,C,entry)))
+
+def restoreEntries(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, state: Result<&2,&2,Error,SessionManager<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match entries:
+    case Nil{}: state
+    case entry <> rest: restoreEntries(D,T,C,rest,restoreEntry(D,T,C,state,entry))
+
+def restore(-D: Data,-T: Data,-C: Data, header: SessionHeader, entries: List<&2,SessionEntry<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  restoreEntries(D,T,C,entries,inMemory(D,T,C,header))
 
 def appendMessage(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, message: Agent.AgentMessage<D,T,Messages.CodingMessage<C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
   match message:

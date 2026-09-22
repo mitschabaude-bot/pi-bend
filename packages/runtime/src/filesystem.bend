@@ -3,6 +3,7 @@ import ./string.bend as Strings
 import ./utf8.bend as Utf8
 import ./file-fold.bend as Fold
 import ./u64.bend as Word
+import ./f64.bend as F
 
 type Error is Data:
   System{code: U32, message: String}
@@ -106,6 +107,18 @@ def writeFileMode(path: String, content: String, permissions: U32) -> IO(Result<
 def writeFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
   writeFileMode(path,content,438)
 
+# Node's appendFile: create with the default mode or append to the end.
+def appendFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"a",438)
+    opened(content,result)
+
+# Node's writeFile with flag "wx": creation fails with EEXIST for an existing path.
+def writeFileExclusive(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"wx",438)
+    opened(content,result)
+
 # Accumulate chunks in reverse byte order, then reverse once at EOF. Short
 # reads and resource retirement are owned by the shared file fold.
 def collectBytes(bytes: List<&2, U32>, reversed: List<&2, U32>) -> List<&2, U32>:
@@ -150,6 +163,24 @@ def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
   do IO<Result<&2,&2,Error,Word.U64>>:
     result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
     return fileSize(result)
+
+# Node's Stats.mtime.getTime(): the exact modification time (signed seconds
+# high/low, nanoseconds) as milliseconds, rounded to the nearest integer.
+def modifiedMilliseconds(value: U32 & U32 & U32) -> F64:
+  match value:
+    case (high,(low,nanos)):
+      +raw = F64.add(F64.mul(F.fromU64(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
+      F64.floor(F64.add(raw,F64.div(U32.to_f64(1),U32.to_f64(2))))
+
+def modifiedResult(result: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Result<&2,&2,Error,F64>:
+  match result:
+    case Fail{(code,message)}: Fail{System{code,message}}
+    case Done{value}: Done{modifiedMilliseconds(value)}
+
+def modified(path: String) -> IO(Result<&2,&2,Error,F64>):
+  do IO<Result<&2,&2,Error,F64>>:
+    result : Result<&1,&1,U32 & String,U32 & U32 & U32> <- File.modified_time(path)
+    return modifiedResult(result)
 
 # Metadata inspection never opens the contents of FIFOs, devices or sockets.
 type FileKind is Data:

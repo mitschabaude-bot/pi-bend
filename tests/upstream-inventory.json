@@ -2170,7 +2170,7 @@
         "tests/print_cli_check.py"
       ],
       "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7",
-      "notes": "The harness drives the native CLI: help/version/diagnostic exits and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events and non-zero exit on request errors. Pending: session_shutdown events (no session layer), SIGTERM/SIGHUP exits (no signal primitive)."
+      "notes": "The harness drives the native CLI: help/version/diagnostic exits, session flag conflicts, invalid ids, invalid session files and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events, non-zero exit on request errors and a resumed stored session (header from the file, context seeding, thinking level recorded). Pending: session_shutdown events and message persistence (AgentSession), SIGTERM/SIGHUP exits (no signal primitive)."
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
@@ -2310,15 +2310,24 @@
     },
     {
       "source": "packages/coding-agent/test/session-cwd.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2e8d17d803f72089efbd6aff8458c9307532425952060515bde2052d3f8e8089"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py",
+        "tests/session_file_check.py"
+      ],
+      "sha256": "2e8d17d803f72089efbd6aff8458c9307532425952060515bde2052d3f8e8089",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The missing stored cwd is detected and reported with the upstream message before the runtime is created (print mode exits 1), and open() honours a cwd override (session harness). The AgentSessionRuntime factory case is pending with that module."
     },
     {
       "source": "packages/coding-agent/test/session-file-invalid.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f4bb8926eace65475052884f90f3358da758c60e04bc80783ad44279dfb7eddb"
+      "status": "ported",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "f4bb8926eace65475052884f90f3358da758c60e04bc80783ad44279dfb7eddb",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The native CLI run with --session on a non-session file exits 1 with 'Error: Session file is not a valid pi session: <path>', prints no stack, and leaves the file unchanged."
     },
     {
       "source": "packages/coding-agent/test/session-id-readonly.test.ts",
@@ -2328,9 +2337,15 @@
     },
     {
       "source": "packages/coding-agent/test/session-info-modified-timestamp.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "eda6144dda92760ec70f2e3dc1da518e63826cbf52bb9b3346b3ee332be62a80"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "eda6144dda92760ec70f2e3dc1da518e63826cbf52bb9b3346b3ee332be62a80",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "Passes on Bun and native one/four threads: list() reports the last assistant message timestamp, not the file mtime."
     },
     {
       "source": "packages/coding-agent/test/session-manager/build-context.test.ts",
@@ -2345,15 +2360,27 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/custom-session-id.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "551b05e9d0081ed678bf1af4e4854dd1784ed81c651ff8caf6ea6bffe73a1ae9"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "551b05e9d0081ed678bf1af4e4854dd1784ed81c651ff8caf6ea6bffe73a1ae9",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "All 13 cases pass on Bun and native one/four threads, including the ten rejected ids, persisted file naming and forks."
     },
     {
       "source": "packages/coding-agent/test/session-manager/file-operations.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "71b66d7b2fb5b84528f93b4488cafc1a9186239522ca0dd604be15a745f6229d"
+      "status": "partial",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "71b66d7b2fb5b84528f93b4488cafc1a9186239522ca0dd604be15a745f6229d",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "All loadEntriesFromFile, header discovery, scan-limit, findMostRecentSession, flat custom directory and corrupted-file cases pass on Bun and native one/four threads against the pinned SessionManager. Pending: 'opens session files larger than Node's max string length' (a JavaScript string-limit case with a 512 MiB sparse file). See tests/session-persistence.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/labels.test.ts",
@@ -2369,21 +2396,39 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/load-entries.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fd0ce2facdce5ea9b6a666675ad32adcd1568c8a66a2fd69fe6d614617c77e68"
+      "status": "partial",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "fd0ce2facdce5ea9b6a666675ad32adcd1568c8a66a2fd69fe6d614617c77e68",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "13 of 14 cases pass through inMemory with restored entries on Bun and native one/four threads. 'adopts headerless entries as current-version without migrating them' keeps a hookMessage role that the typed messages cannot represent. See tests/session-persistence.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/migration.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7e936fe5402e4225854eeaf4fb0505ece574e3774e1aef97a8c121c34fd48877"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "7e936fe5402e4225854eeaf4fb0505ece574e3774e1aef97a8c121c34fd48877",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "Both cases pass on the JSON-object migration (fresh ids drawn from the OS) on Bun and native one/four threads."
     },
     {
       "source": "packages/coding-agent/test/session-manager/save-entry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "530b961602e351e7d3ff987487350888218e8e51be3f8e6eebf12677b2dd622e"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "530b961602e351e7d3ff987487350888218e8e51be3f8e6eebf12677b2dd622e",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "Passes on Bun and native one/four threads through the persisting append API."
     },
     {
       "source": "packages/coding-agent/test/session-manager/tree-traversal.test.ts",
