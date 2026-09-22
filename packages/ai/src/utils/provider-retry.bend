@@ -37,23 +37,12 @@ type DelayError is Data:
 
 def DEFAULT_MAX_RETRY_DELAY_MS() -> F.F64: F.fromU32(60000)
 
-def atLeast500(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{EQ{}}: True{}
-    case Some{GT{}}: True{}
-    case _: False{}
-
-def equalOrder(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{EQ{}}: True{}
-    case _: False{}
-
-def equal(left: F.F64, right: F.F64) -> Bool: equalOrder(F.compare(left, right))
+def equal(left: F.F64, right: F.F64) -> Bool: F.isEqual(F.compare(left, right))
 
 def retryableStatus(status: Maybe<&2, F.F64>) -> Bool:
   match status:
     case None{}: True{}
-    case Some{+value}: equal(value, F.fromU32(408)) || equal(value, F.fromU32(409)) || equal(value, F.fromU32(429)) || atLeast500(F.compare(value, F.fromU32(500)))
+    case Some{+value}: equal(value, F.fromU32(408)) || equal(value, F.fromU32(409)) || equal(value, F.fromU32(429)) || F.isAtLeast(F.compare(value, F.fromU32(500)))
 
 # Mirrors the pinned OpenAI/Anthropic SDK retry policy.
 def isRetryableProviderError(status: Maybe<&2, F.F64>, shouldRetry: Maybe<&2, String>) -> Bool:
@@ -88,11 +77,6 @@ def selectDelaySource(milliseconds: Maybe<&2, String>, seconds: Maybe<&2, String
       +value = Number.parseFloat(text)
       millisecondsOrFallback(F.isNaN(value), value, seconds)
 
-def positive(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{GT{}}: True{}
-    case _: False{}
-
 def maxDelay(value: Maybe<&2, F.F64>) -> F.F64:
   match value:
     case None{}: DEFAULT_MAX_RETRY_DELAY_MS()
@@ -105,7 +89,7 @@ def limited(excessive: Bool, delayMs: F.F64, maxDelayMs: F.F64) -> Result<&2, &2
 
 def validateServerRetryDelayMs(+delayMs: F.F64, maximum: Maybe<&2, F.F64>) -> Result<&2, &2, DelayError, F.F64>:
   +limit = maxDelay(maximum)
-  limited(positive(F.compare(limit, F.fromU32(0))) && positive(F.compare(delayMs, limit)), delayMs, limit)
+  limited(F.isGreater(F.compare(limit, F.fromU32(0))) && F.isGreater(F.compare(delayMs, limit)), delayMs, limit)
 
 def baseDelay(index: Nat) -> F.F64:
   match index:
@@ -174,15 +158,10 @@ def nonnegative(comparison: Maybe<&2, Cmp>) -> Bool:
     case Some{GT{}}: True{}
     case _: False{}
 
-def finite(value: F.Decoded) -> Bool:
-  match value:
-    case F.Finite{_, _, _}: True{}
-    case _: False{}
-
 def delayLimit(value: Maybe<&2, F.F64>) -> Result<&2, &2, OptionsError, Maybe<&2, F.F64>>:
   match value:
     case None{}: Done{None{}}
-    case Some{+number}: delayChecked(number, finite(F.decode(number)) && nonnegative(F.compare(number, F.fromU32(0))))
+    case Some{+number}: delayChecked(number, F.isFinite(F.decode(number)) && nonnegative(F.compare(number, F.fromU32(0))))
 
 def completed(-Reason: Data, retries: Maybe<&2, Nat>, signal: Maybe<&2, A.AbortSignal<Reason>>, value: Result<&2, &2, OptionsError, Maybe<&2, F.F64>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
   match value:

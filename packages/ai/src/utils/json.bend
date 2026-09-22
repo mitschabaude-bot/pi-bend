@@ -61,14 +61,9 @@ def stringifyPretty(value: T.JsonValue) -> Maybe<&2, String>:
 # Numeric leaves must be finite before serialization (JSON.stringify emits
 # null for NaN/Infinity; the provider rejects the payload instead). A lazily
 # selected continuation keeps the array/object tail a tail call.
-def finiteNumber(value: F.Decoded) -> Bool:
-  match value:
-    case F.Finite{_, _, _}: True{}
-    case _: False{}
-
 def finite(value: T.JsonValue) -> Bool:
   match value:
-    case T.JsonNumber{value}: finiteNumber(F.decode(value))
+    case T.JsonNumber{value}: F.isFinite(F.decode(value))
     case T.JsonArray{Nil{}}: True{}
     case T.JsonArray{head <> rest}: Bool.pick(Unit -> Bool, finite(head), unused => finite(T.JsonArray{rest}), unused => False{})(Unit{})
     case T.JsonObject{R.Record{Nil{}}}: True{}

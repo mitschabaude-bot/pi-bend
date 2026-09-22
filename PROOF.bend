@@ -40,3 +40,4 @@ import ./proofs/transcript.bend as Transcript
 import ./proofs/simple-options.bend as SimpleOptions
 import ./proofs/thinking-levels.bend as ThinkingLevels
 import ./proofs/agent-loop.bend as AgentLoop
+import ./proofs/f64.bend as F64Laws

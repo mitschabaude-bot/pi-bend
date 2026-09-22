@@ -17,11 +17,6 @@ type Comparison is Data:
   Arrays{left: List<&2, Value>, right: List<&2, Value>}
   Fields{remaining: List<&2, R.Property<Value>>, other: R.Record<Value>}
 
-def sameNumber(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{EQ{}}: True{}
-    case _: False{}
-
 def matchedField(value: Value, other: Maybe<&2, Value>, rest: List<&2, Comparison>) -> Maybe<&2, List<&2, Comparison>>:
   match other:
     case None{}: None{}
@@ -35,7 +30,7 @@ def compare(work: Maybe<&2, List<&2, Comparison>>) -> Bool:
     case Some{Nil{}}: True{}
     case Some{Values{Null{}, Null{}} <> rest}: compare(Some{rest})
     case Some{Values{Boolean{+a}, Boolean{+b}} <> rest}: ((a && b) || (Bool.not(a) && Bool.not(b))) && compare(Some{rest})
-    case Some{Values{Number{a}, Number{b}} <> rest}: sameNumber(F.compare(a, b)) && compare(Some{rest})
+    case Some{Values{Number{a}, Number{b}} <> rest}: F.isEqual(F.compare(a, b)) && compare(Some{rest})
     case Some{Values{Text{a}, Text{b}} <> rest}: String.eq(a, b) && compare(Some{rest})
     case Some{Values{ArrayValue{a}, ArrayValue{b}} <> rest}: compare(Some{Arrays{a, b} <> rest})
     case Some{Values{ObjectValue{a}, ObjectValue{b}} <> rest}: compare(Some{Fields{R.entries(Value, a), b} <> rest})

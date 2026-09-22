@@ -268,7 +268,7 @@ def activeNumber(value: F.Decoded) -> Bool:
 # `options.maxTokens &&`: zero and NaN are falsy and send no budget.
 def outputTokens(enabled: Bool, value: Maybe<&2, F.F64>) -> Maybe<&2, F.F64>:
   match enabled value:
-    case True{} Some{+scalar}: Bool.pick(Maybe<&2, F.F64>, activeNumber(F.decode(scalar)), Some{Simple.maximum(scalar, OPENAI_RESPONSES_MIN_OUTPUT_TOKENS())}, None{})
+    case True{} Some{+scalar}: Bool.pick(Maybe<&2, F.F64>, activeNumber(F.decode(scalar)), Some{F.maximum(scalar, OPENAI_RESPONSES_MIN_OUTPUT_TOKENS())}, None{})
     case _ _: None{}
 
 def mappedEffort(value: Maybe<&2, T.Nullable<String>>, fallback: String) -> String:
