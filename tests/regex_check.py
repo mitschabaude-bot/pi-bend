@@ -33,9 +33,44 @@ def corpus():
         '(?<1bad>a)', '(?q)a', '(?i-i)a', '[z-a]', 'a{,3}', 'a{1,2,3}',
         r'\p{Not_A_Property}', r'\p{^Lu}', r'\b{unknown}', '\\', '--help', '--pre=x',
     ]
+    # Selective Rust verbose-mode token boundaries: escapes and repetitions
+    # accept ignored text internally, but escaped text and group flags do not.
+    patterns += [
+        '(?x)'+p for p in [
+            r'\x { 4 1 }', '\\x#prefix\n{4#digit\n1}',
+            '\\x4#digit\n1', '\\u0#digit\n0 4 1',
+            '\\U0000#digit\n0041', '\\x{#empty\n}', '\\x4#EOF',
+            '\\x{4#EOF}', '\\x{4#CR\r1}', '\\x{4#CRLF\r\n1}',
+            '\\x{4#unicode line separator\u20281}', r'\x{0000000000041}',
+            '\\p#prefix\n{G r e e k}', '\\p{G#part\nreek}',
+            '\\p{ g c ! #operator\n = L u }', '\\P #prefix\n L',
+            '\\p{#empty\n}', '\\p{Greek#EOF}',
+            '\\b{s#part\ntart}a', '\\b{start-#part\nhalf}a',
+            '\\b{#prefix\nend}', '\\b #gap\n{start}',
+            '\\b{ #prefix\n2 }a', r'\b{2}a', r'\b{0,2}a',
+            'a{#prefix\n2}', 'a{1#part\n2}', 'a{2#comma\n,#upper\n3}',
+            'a{2,#unbounded\n}', 'a{#empty\n}', 'a{2#EOF}',
+            'a{2,#EOF}', 'a{2,3#end\n}#lazy\n?', 'a*#lazy\n?',
+            'a+#lazy\n?b', 'a?#lazy\n?', r'\#', r'\ ',
+            r'[\#\ ]', '[\\x4#digit\n1-\\x4#digit\n3]',
+            '[\\p{G#part\nreek}]', '(?-x:a#b)', '(?-x:a{ 2 })',
+            '(?-x:\\x4#digit\n1)', '(? #invalid flags\ni:a)',
+            '( #group prefix\n?:a)', '( #group prefix\n?i:a)',
+            '(?P<na me>a)', '(?P<na#comment\nme>a)',
+        ]
+    ]
+    for gap in [' \t', '#comment\n', '\r\n', '\u0085', '\u00a0', '\u1680',
+                '\u2007', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000']:
+        patterns += ['(?x)\\x'+gap+'{4'+gap+'1}',
+                     '(?x)\\p{G'+gap+'reek}',
+                     '(?x)a{'+gap+'2'+gap+','+gap+'3'+gap+'}']
+    patterns += ['(?x-u)\\xC#digit\n3\\xA#digit\n9', '(?x-u)\\x #prefix\n{E9}', '(?x-u)[\\x4#digit\n1]', '(?x-u)\\b{start-#suffix\nhalf}a']
+    patterns += [r'\b{2}a', r'\b{0,2}a', 'a{ 2 }', 'a{2 , 3}',
+                 'a{2, }', 'a{ 2 3}', 'a{2 ,}', 'a{2, 3 }',
+                 r'\x {41}', r'\p {Greek}', 'a{2} ?']
     texts = ['', 'a', 'b', 'ab', 'abc', 'aaaa', 'aaaab', 'a\na', 'a\r\nb', '\n',
              '\r', ' ', '\t', '-', ']', 'c', 'xword y', 'word', 'words', 'é', 'É',
-             'α', '😀', 'ſ', 'K', 'A', 'Z', '_', '2', '\0', '\u00a0']
+             'α', '😀', 'ſ', 'K', 'A', 'Z', '_', '2', '\0', '\u00a0', '#', 'a#b', 'a'*12]
     random.seed(81270)
     atoms = ['a', 'b', '.', r'\w', r'\d', r'\s', '[a-c]', '[^a]', '[a-c--b]',
              r'\p{Greek}', r'\b', '^', '$', '']

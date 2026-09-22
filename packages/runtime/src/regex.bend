@@ -509,6 +509,25 @@ def regexWhitespace(char: Char) -> Bool:
   match char:
     case Chr{+point}: (U32.is_ge(point,9) && U32.is_le(point,13)) || U32.is_eq(point,32) || U32.is_eq(point,133) || U32.is_eq(point,160) || U32.is_eq(point,5760) || (U32.is_ge(point,8192) && U32.is_le(point,8202)) || U32.is_eq(point,8232) || U32.is_eq(point,8233) || U32.is_eq(point,8239) || U32.is_eq(point,8287) || U32.is_eq(point,12288)
 
+def skipComment(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{'\n',rest}: rest
+    case SCon{_,rest}: skipComment(rest)
+
+# Extended mode skips comments through LF (a CR alone does not end one).
+# Escaped whitespace/# never goes through this token-boundary helper.
+def ignoredText(text: String,+flags: U32,comment: Bool) -> String:
+  match text comment:
+    case SNil{} _: SNil{}
+    case SCon{char,rest} True{}: ignoredText(rest,flags,Bool.not(Char.is_eq(char,'\n')))
+    case SCon{'#',+rest} False{}: Bool.pick(Unit -> String,enabled(flags,64),_ => ignoredText(rest,flags,True{}),_ => SCon{'#',rest})(Unit{})
+    case SCon{char,+rest} False{}:
+      +char = {char: Char}
+      Bool.pick(Unit -> String,enabled(flags,64) && regexWhitespace(char),_ => ignoredText(rest,flags,False{}),_ => SCon{char,rest})(Unit{})
+
+def skipIgnored(text: String,flags: U32) -> String: ignoredText(text,flags,False{})
+
 def escapedScalar(+point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
   +raw = Bool.not(enabled(flags,32)) && enabled(flags,256)
   +nonAsciiClass = Bool.not(enabled(flags,32)) && enabled(flags,128) && U32.is_ge(point,128) && Bool.not(raw)
@@ -531,29 +550,33 @@ def addHex(value: Maybe<&2,U32>,+word: U32) -> Maybe<&2,U32>:
     case None{}: None{}
     case Some{digit}: Bool.pick(Maybe<&2,U32>,U32.is_le(word,69631),Some{(word * 16 + digit : U32)},None{})
 
-def hexEscape(text: String,+flags: U32,remaining: Nat,braced: Bool,+count: Nat,word: Maybe<&2,U32>) -> Result<&2,&2,Error,Atom>:
-  match text remaining braced word:
-    case _ _ _ None{}: Fail{Syntax{"Invalid hexadecimal escape"}}
-    case SCon{'}',rest} _ True{} Some{word}: Bool.pick(Result<&2,&2,Error,Atom>,Nat.is_gt(count,Zero{}),escapedPoint(word,flags,rest),Fail{Syntax{"Empty hexadecimal escape"}})
-    case text Zero{} False{} Some{word}: escapedPoint(word,flags,text)
-    case SCon{char,rest} remaining True{} Some{word}:
+def hexEscape(text: String,comment: Bool,+flags: U32,remaining: Nat,braced: Bool,+count: Nat,word: Maybe<&2,U32>) -> Result<&2,&2,Error,Atom>:
+  match text comment remaining braced word:
+    case SCon{char,rest} True{} remaining braced word: hexEscape(rest,Bool.not(Char.is_eq(char,'\n')),flags,remaining,braced,count,word)
+    case _ _ _ _ None{}: Fail{Syntax{"Invalid hexadecimal escape"}}
+    case SCon{'}',rest} _ _ True{} Some{word}: Bool.pick(Result<&2,&2,Error,Atom>,Nat.is_gt(count,Zero{}),escapedPoint(word,flags,rest),Fail{Syntax{"Empty hexadecimal escape"}})
+    case text _ Zero{} False{} Some{word}: escapedPoint(word,flags,text)
+    case SCon{'#',+rest} _ remaining braced Some{word}:
+      Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64),_ => hexEscape(rest,True{},flags,remaining,braced,count,Some{word}),_ => Fail{Syntax{"Invalid hexadecimal escape"}})(Unit{})
+    case SCon{char,rest} _ remaining True{} Some{word}:
       +remaining = {remaining : Nat}
       +word = {word : U32}
       +char = {char : Char}
       +rest = {rest : String}
-      Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64) && regexWhitespace(char),_ => hexEscape(rest,flags,remaining,True{},count,Some{word}),_ => hexEscape(rest,flags,remaining,True{},Succ{count},addHex(hexDigit(Char.to_u32(char)),word)))(Unit{})
-    case SCon{char,rest} Succ{remaining} False{} Some{word}:
+      Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64) && regexWhitespace(char),_ => hexEscape(rest,False{},flags,remaining,True{},count,Some{word}),_ => hexEscape(rest,False{},flags,remaining,True{},Succ{count},addHex(hexDigit(Char.to_u32(char)),word)))(Unit{})
+    case SCon{char,rest} _ Succ{remaining} False{} Some{word}:
       +point = Char.to_u32(char)
       +rest = {rest : String}
       +remaining = {remaining : Nat}
       +word = {word : U32}
-      Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64) && regexWhitespace(Chr{point}),_ => hexEscape(rest,flags,Succ{remaining},False{},count,Some{word}),_ => hexEscape(rest,flags,remaining,False{},Succ{count},addHex(hexDigit(point),word)))(Unit{})
-    case _ _ _ _: Fail{Syntax{"Unterminated hexadecimal escape"}}
+      Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64) && regexWhitespace(Chr{point}),_ => hexEscape(rest,False{},flags,Succ{remaining},False{},count,Some{word}),_ => hexEscape(rest,False{},flags,remaining,False{},Succ{count},addHex(hexDigit(point),word)))(Unit{})
+    case _ _ _ _ _: Fail{Syntax{"Unterminated hexadecimal escape"}}
+
 
 def beginHex(text: String,+flags: U32,+width: Nat) -> Result<&2,&2,Error,Atom>:
   match text:
-    case SCon{'{',rest}: hexEscape(rest,flags,6n,True{},Zero{},Some{0})
-    case text: hexEscape(text,U32.or(flags,Bool.pick(U32,Nat.is_eq(width,2n),256,0)),width,False{},Zero{},Some{0})
+    case SCon{'{',rest}: hexEscape(rest,False{},flags,6n,True{},Zero{},Some{0})
+    case text: hexEscape(text,False{},U32.or(flags,Bool.pick(U32,Nat.is_eq(width,2n),256,0)),width,False{},Zero{},Some{0})
 
 def propertyQuery(text: String,negative: Bool,reversed: String,flags: U32,rest: String) -> Result<&2,&2,Error,Atom>:
   match text:
@@ -561,15 +584,19 @@ def propertyQuery(text: String,negative: Bool,reversed: String,flags: U32,rest: 
     case SCon{'!',SCon{'=',tail}}: propertyQuery(tail,Bool.not(negative),SCon{'=',reversed},flags,rest)
     case SCon{char,tail}: propertyQuery(tail,negative,SCon{char,reversed},flags,rest)
 
-def namedProperty(text: String,flags: U32,negative: Bool,reversed: String) -> Result<&2,&2,Error,Atom>:
-  match text:
-    case SNil{}: Fail{Syntax{"Unterminated Unicode property"}}
-    case SCon{'}',rest}: propertyQuery(String.reverse(reversed),negative,"",flags,rest)
-    case SCon{char,rest}: namedProperty(rest,flags,negative,SCon{char,reversed})
+def namedProperty(text: String,comment: Bool,+flags: U32,negative: Bool,+reversed: String) -> Result<&2,&2,Error,Atom>:
+  match text comment:
+    case SCon{char,rest} True{}: namedProperty(rest,Bool.not(Char.is_eq(char,'\n')),flags,negative,reversed)
+    case SNil{} _: Fail{Syntax{"Unterminated Unicode property"}}
+    case SCon{'}',rest} _: propertyQuery(String.reverse(reversed),negative,"",flags,rest)
+    case SCon{'#',+rest} False{}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64),_ => namedProperty(rest,True{},flags,negative,reversed),_ => Fail{Syntax{"Invalid name"}})(Unit{})
+    case SCon{char,rest} False{}:
+      +char = {char: Char}
+      namedProperty(rest,False{},flags,negative,Bool.pick(String,enabled(flags,64) && regexWhitespace(char),reversed,SCon{char,reversed}))
 
-def beginProperty(text: String,flags: U32,negative: Bool) -> Result<&2,&2,Error,Atom>:
+def beginProperty(text: String,+flags: U32,negative: Bool) -> Result<&2,&2,Error,Atom>:
   match text:
-    case SCon{'{',rest}: namedProperty(rest,flags,negative,"")
+    case SCon{'{',rest}: namedProperty(skipIgnored(rest,flags),False{},flags,negative,"")
     case SCon{char,rest}: classAtom(property(SCon{char,SNil{}}),flags,negative,rest)
     case SNil{}: Fail{Syntax{"Missing Unicode property"}}
 
@@ -586,15 +613,24 @@ def wordNamed(kind: Maybe<&2,U32>,+flags: U32,rest: String) -> Result<&2,&2,Erro
     case None{}: Fail{Syntax{"Unknown word boundary"}}
     case Some{kind}: wordAtom(shorthand('w',enabled(flags,32)),kind,enabled(flags,32),rest)
 
-def wordName(text: String,flags: U32,reversed: String) -> Result<&2,&2,Error,Atom>:
+def wordName(text: String,comment: Bool,+flags: U32,+reversed: String) -> Result<&2,&2,Error,Atom>:
+  match text comment:
+    case SCon{char,rest} True{}: wordName(rest,Bool.not(Char.is_eq(char,'\n')),flags,reversed)
+    case SNil{} _: Fail{Syntax{"Unterminated word boundary"}}
+    case SCon{'}',rest} _: wordNamed(wordKind(String.reverse(reversed)),flags,rest)
+    case SCon{'#',+rest} False{}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,64),_ => wordName(rest,True{},flags,reversed),_ => Fail{Syntax{"Invalid name"}})(Unit{})
+    case SCon{char,rest} False{}:
+      +char = {char: Char}
+      wordName(rest,False{},flags,Bool.pick(String,enabled(flags,64) && regexWhitespace(char),reversed,SCon{char,reversed}))
+
+def wordOrCount(+text: String,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
   match text:
-    case SNil{}: Fail{Syntax{"Unterminated word boundary"}}
-    case SCon{'}',rest}: wordNamed(wordKind(String.reverse(reversed)),flags,rest)
-    case SCon{char,rest}: wordName(rest,flags,SCon{char,reversed})
+    case SCon{char,_}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,Char.is_alpha(char) || Char.is_eq(char,'-'),_ => wordName(text,False{},flags,""),_ => wordAtom(shorthand('w',enabled(flags,32)),0,enabled(flags,32),rest))(Unit{})
+    case SNil{}: Fail{Syntax{"Unterminated word boundary or repetition"}}
 
 def wordEscape(text: String,+flags: U32) -> Result<&2,&2,Error,Atom>:
   match text:
-    case SCon{'{',rest}: wordName(rest,flags,"")
+    case SCon{'{',+rest}: wordOrCount(skipIgnored(rest,flags),flags,SCon{'{',rest})
     case text: wordAtom(shorthand('w',enabled(flags,32)),0,enabled(flags,32),text)
 
 def escape(text: String,+flags: U32) -> Result<&2,&2,Error,Atom>:
@@ -606,17 +642,17 @@ def escape(text: String,+flags: U32) -> Result<&2,&2,Error,Atom>:
     case SCon{'a',rest}: escapedPoint(7,flags,rest)
     case SCon{'f',rest}: escapedPoint(12,flags,rest)
     case SCon{'v',rest}: escapedPoint(11,flags,rest)
-    case SCon{'x',rest}: beginHex(rest,flags,2n)
-    case SCon{'u',rest}: beginHex(rest,flags,4n)
-    case SCon{'U',rest}: beginHex(rest,flags,8n)
+    case SCon{'x',rest}: beginHex(skipIgnored(rest,flags),flags,2n)
+    case SCon{'u',rest}: beginHex(skipIgnored(rest,flags),flags,4n)
+    case SCon{'U',rest}: beginHex(skipIgnored(rest,flags),flags,8n)
     case SCon{'d',rest}: classAtom(shorthand('d',enabled(flags,32)),flags,False{},rest)
     case SCon{'D',rest}: classAtom(shorthand('d',enabled(flags,32)),flags,True{},rest)
     case SCon{'s',rest}: classAtom(shorthand('s',enabled(flags,32)),flags,False{},rest)
     case SCon{'S',rest}: classAtom(shorthand('s',enabled(flags,32)),flags,True{},rest)
     case SCon{'w',rest}: classAtom(shorthand('w',enabled(flags,32)),flags,False{},rest)
     case SCon{'W',rest}: classAtom(shorthand('w',enabled(flags,32)),flags,True{},rest)
-    case SCon{'p',rest}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,32),_ => beginProperty(rest,flags,False{}),_ => Fail{Syntax{"Unicode properties require Unicode mode"}})(Unit{})
-    case SCon{'P',rest}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,32),_ => beginProperty(rest,flags,True{}),_ => Fail{Syntax{"Unicode properties require Unicode mode"}})(Unit{})
+    case SCon{'p',rest}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,32),_ => beginProperty(skipIgnored(rest,flags),flags,False{}),_ => Fail{Syntax{"Unicode properties require Unicode mode"}})(Unit{})
+    case SCon{'P',rest}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,32),_ => beginProperty(skipIgnored(rest,flags),flags,True{}),_ => Fail{Syntax{"Unicode properties require Unicode mode"}})(Unit{})
     case SCon{'A',rest}: Done{Atom{Assert{Start{}},rest}}
     case SCon{'z',rest}: Done{Atom{Assert{End{}},rest}}
     case SCon{'b',rest}: wordEscape(rest,flags)
@@ -745,12 +781,6 @@ def classDash(text: String,frame: ClassFrame,parents: List<&2,ClassFrame>) -> Cl
     case SCon{']',rest} frame: appendScalar(45,SCon{']',rest},frame,parents)
     case text ClassFrame{negative,left,operator,current,Some{point},False{},_}: InClass{text,ClassFrame{negative,left,operator,current,Some{point},True{},False{}},parents}
     case text frame: appendScalar(45,text,frame,parents)
-
-def skipComment(text: String) -> String:
-  match text:
-    case SNil{}: SNil{}
-    case SCon{'\n',rest}: rest
-    case SCon{_,rest}: skipComment(rest)
 
 def classStep(state: ClassParsing,+flags: U32) -> ClassParsing:
   match state:
@@ -906,22 +936,24 @@ def lazySuffix(text: String) -> String:
 def repeated(text: String,minimum: Nat,maximum: Maybe<&2,Nat>,frame: Frame,parents: List<&2,Frame>,depth: Nat) -> Parsing:
   match frame:
     case Frame{_,Nil{},_,_}: ParseError{Syntax{"Repetition has no preceding expression"}}
-    case Frame{flags,value <> sequence,alternatives,names}: Parsing{lazySuffix(text),Frame{flags,Repeat{value,minimum,maximum} <> sequence,alternatives,names},parents,depth}
+    case Frame{+flags,value <> sequence,alternatives,names}: Parsing{lazySuffix(text),Frame{flags,Repeat{value,minimum,maximum} <> sequence,alternatives,names},parents,depth}
 
-def repeatBounds(text: String,+minimum: Nat,+maximum: Nat,+comma: Bool,+haveDigit: Bool,+frame: Frame,+parents: List<&2,Frame>,+depth: Nat) -> Parsing:
-  match text:
-    case SNil{}: ParseError{Syntax{"Unterminated repetition"}}
-    case SCon{'}',+rest}: Bool.pick(Unit -> Parsing,comma,
+def repeatBounds(text: String,comment: Bool,+minimum: Nat,+maximum: Nat,+comma: Bool,+haveDigit: Bool,+gap: Bool,+frame: Frame,+parents: List<&2,Frame>,+depth: Nat) -> Parsing:
+  match text comment:
+    case SCon{char,rest} True{}: repeatBounds(rest,Bool.not(Char.is_eq(char,'\n')),minimum,maximum,comma,haveDigit,gap,frame,parents,depth)
+    case SNil{} _: ParseError{Syntax{"Unterminated repetition"}}
+    case SCon{'}',+rest} _: Bool.pick(Unit -> Parsing,comma,
       _ => Bool.pick(Unit -> Parsing,haveDigit,
-        _ => Bool.pick(Unit -> Parsing,Nat.is_ge(maximum,minimum),_ => repeated(rest,minimum,Some{maximum},frame,parents,depth),_ => ParseError{Syntax{"Reversed repetition bounds"}})(Unit{}),
-        _ => repeated(rest,minimum,None{},frame,parents,depth))(Unit{}),
-      _ => Bool.pick(Unit -> Parsing,haveDigit,_ => repeated(rest,maximum,Some{maximum},frame,parents,depth),_ => ParseError{Syntax{"Empty repetition"}})(Unit{}))(Unit{})
-    case SCon{',',rest}: Bool.pick(Unit -> Parsing,Bool.not(comma) && haveDigit,_ => repeatBounds(rest,maximum,Zero{},True{},False{},frame,parents,depth),_ => ParseError{Syntax{"Invalid repetition bounds"}})(Unit{})
-    case SCon{char,rest}:
+        _ => Bool.pick(Unit -> Parsing,Nat.is_ge(maximum,minimum),_ => repeated(skipIgnored(rest,flagsOf(frame)),minimum,Some{maximum},frame,parents,depth),_ => ParseError{Syntax{"Reversed repetition bounds"}})(Unit{}),
+        _ => Bool.pick(Unit -> Parsing,gap,_ => ParseError{Syntax{"Empty repetition upper bound"}},_ => repeated(skipIgnored(rest,flagsOf(frame)),minimum,None{},frame,parents,depth))(Unit{}))(Unit{}),
+      _ => Bool.pick(Unit -> Parsing,haveDigit,_ => repeated(skipIgnored(rest,flagsOf(frame)),maximum,Some{maximum},frame,parents,depth),_ => ParseError{Syntax{"Empty repetition"}})(Unit{}))(Unit{})
+    case SCon{',',rest} _: Bool.pick(Unit -> Parsing,Bool.not(comma) && haveDigit,_ => repeatBounds(rest,False{},maximum,Zero{},True{},False{},False{},frame,parents,depth),_ => ParseError{Syntax{"Invalid repetition bounds"}})(Unit{})
+    case SCon{'#',rest} _: Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),64),_ => repeatBounds(rest,True{},minimum,maximum,comma,haveDigit,gap,frame,parents,depth),_ => ParseError{Syntax{"Invalid repetition bounds"}})(Unit{})
+    case SCon{char,rest} _:
       +char = {char : Char}
       +rest = {rest : String}
       +number = maximum * 10n + U32.to_nat((Char.to_u32(char) - 48 : U32))
-      Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),64) && regexWhitespace(char),_ => repeatBounds(rest,minimum,maximum,comma,haveDigit,frame,parents,depth),_ => Bool.pick(Unit -> Parsing,Char.is_digit(char) && Nat.is_le(number,65536n),_ => repeatBounds(rest,minimum,number,comma,True{},frame,parents,depth),_ => ParseError{Syntax{"Invalid or excessive repetition count"}})(Unit{}))(Unit{})
+      Bool.pick(Unit -> Parsing,regexWhitespace(char),_ => repeatBounds(rest,False{},minimum,maximum,comma,haveDigit,Bool.not(enabled(flagsOf(frame),64)),frame,parents,depth),_ => Bool.pick(Unit -> Parsing,Char.is_digit(char) && Bool.not(gap && haveDigit) && Nat.is_le(number,65536n),_ => repeatBounds(rest,False{},minimum,number,comma,True{},False{},frame,parents,depth),_ => ParseError{Syntax{"Invalid or excessive repetition count"}})(Unit{}))(Unit{})
 
 def alternative(text: String,frame: Frame,parents: List<&2,Frame>,depth: Nat) -> Parsing:
   match frame:
@@ -935,13 +967,13 @@ def parserStep(state: Parsing) -> Parsing:
   match state:
     case Parsing{SNil{},frame,Nil{},_}: Parsed{frameExpression(frame)}
     case Parsing{SNil{},_,_,_}: ParseError{Syntax{"Unclosed group"}}
-    case Parsing{SCon{'(',rest},frame,parents,depth}: beginGroup(rest,frame,parents,depth)
+    case Parsing{SCon{'(',rest},+frame,parents,depth}: beginGroup(skipIgnored(rest,flagsOf(frame)),frame,parents,depth)
     case Parsing{SCon{')',rest},frame,parents,depth}: groupClose(rest,frame,parents,depth)
     case Parsing{SCon{'|',rest},frame,parents,depth}: alternative(rest,frame,parents,depth)
     case Parsing{SCon{'*',rest},frame,parents,depth}: repeated(rest,Zero{},None{},frame,parents,depth)
     case Parsing{SCon{'+',rest},frame,parents,depth}: repeated(rest,1n,None{},frame,parents,depth)
     case Parsing{SCon{'?',rest},frame,parents,depth}: repeated(rest,Zero{},Some{1n},frame,parents,depth)
-    case Parsing{SCon{'{',rest},frame,parents,depth}: repeatBounds(rest,Zero{},Zero{},False{},False{},frame,parents,depth)
+    case Parsing{SCon{'{',rest},frame,parents,depth}: repeatBounds(rest,False{},Zero{},Zero{},False{},False{},False{},frame,parents,depth)
     case Parsing{SCon{'[',+rest},+frame,parents,depth}: appendAtom(readClass(Succ{textLength(rest,Zero{})},beginClass(rest,Nil{}),flagsOf(frame)),frame,parents,depth)
     case Parsing{SCon{'\\',rest},+frame,parents,depth}: appendAtom(escape(rest,flagsOf(frame)),frame,parents,depth)
     case Parsing{SCon{'.',rest},+frame,parents,depth}: appendAtom(Bool.pick(Result<&2,&2,Error,Atom>,enabled(flagsOf(frame),32) || enabled(flagsOf(frame),512),Done{Atom{dot(flagsOf(frame)),rest}},Fail{RequiresByteInput{}}),frame,parents,depth)
