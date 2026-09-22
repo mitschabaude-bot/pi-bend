@@ -529,7 +529,7 @@ def safeLiteral(negative: Bool, result: Maybe<&2, B.BigNat>) -> Maybe<&2, V.Valu
   match result:
     case None{}: None{}
     case Some{+magnitude}:
-      limit = {B.BigNat{65535 <> 65535 <> 65535 <> 31 <> Nil{}} : B.BigNat}
+      limit = {B.BigNat{4294967295 <> 2097151 <> Nil{}} : B.BigNat}
       prefix = Bool.pick(String, negative && Bool.not(B.isZero(magnitude)), "-", "")
       Bool.pick(Unit -> Maybe<&2, V.Value>, Cmp.is_le(B.compare(magnitude, limit)),
         _ => Some{V.Number{Number.toNumber(prefix ++ B.toDecimal(magnitude))}}, _ => None{})(Unit{})

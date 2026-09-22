@@ -96,8 +96,8 @@ def natural(v):
     n = int(rounded)
     limbs = []
     while n:
-        limbs.append(str(n & 65535))
-        n >>= 16
+        limbs.append(str(n & 0xFFFFFFFF))
+        n >>= 32
     return 'B.BigNat{' + seq(limbs) + '}'
 
 

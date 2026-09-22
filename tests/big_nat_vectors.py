@@ -17,8 +17,8 @@ vectors += [(5**1074, 10**300), (2**2200-1, 2**1074+1)]
 def big(value):
     limbs = []
     while value:
-        limbs.append(str(value & 65535))
-        value >>= 16
+        limbs.append(str(value & 0xFFFFFFFF))
+        value >>= 32
     return 'B.BigNat{' + ' <> '.join(limbs + ['Nil{}']) + '}'
 
 source = ['import Base', 'import ../packages/runtime/src/big-nat.bend as B',

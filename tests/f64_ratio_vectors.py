@@ -11,8 +11,8 @@ BUILD.mkdir(exist_ok=True)
 def big(value):
     limbs=[]
     while value:
-        limbs.append(str(value & 65535))
-        value >>= 16
+        limbs.append(str(value & 0xFFFFFFFF))
+        value >>= 32
     return 'B.BigNat{'+' <> '.join(limbs+['Nil{}'])+'}'
 def bits(value):return struct.unpack('>Q',struct.pack('>d',value))[0]
 def exact(word):return Fraction.from_float(struct.unpack('>d',struct.pack('>Q',word))[0])

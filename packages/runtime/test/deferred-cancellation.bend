@@ -146,7 +146,7 @@ def checkNone(observation: D.Observation<Maybe<&2, U32>>) -> IO(Unit):
 def seedLargeCounter(source: D.Deferred<U32>) -> IO(Unit):
   match source:
     case D.Deferred{state}:
-      R.write(D.State<U32>, state, D.Pending{N.BigNat{65535 <> 65535 <> 65535 <> 65535 <> Nil{}}, Nil{}})
+      R.write(D.State<U32>, state, D.Pending{N.BigNat{4294967295 <> 4294967295 <> Nil{}}, Nil{}})
 
 def main() -> IO(Unit):
   do IO<Unit>:

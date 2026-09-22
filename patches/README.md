@@ -88,3 +88,5 @@ The additive [owned timer experiment](experimental/timer/README.md) is isolated 
 `bend-worklist-emission.patch` (2026-09-22, applied after the pass memos) replaces the whole-book fact passes by a worklist over the units that read a grown fact; native-agent emission 85 s → 43 s. See the issue log's BEND-001 resolution entry.
 
 `bend-native-f64.patch` (2026-09-22) adds Base's native `F64` (two `U32` words of IEEE 754 bits) with arithmetic, comparison, conversion, shortest decimal spelling and reading as primitives on the host, CUDA and JS lanes (Metal has no `double`; there the operations fail-stop as functions the device does not hold). `bend-translation-units.patch` lets `BEND_TUS=N` deal the generated host segments to N translation units compiled in parallel by `scripts/build-pure.sh`; the native agent builds in under a minute instead of about four. Both are installed in `build/bend-native-toolchain/bend2`; evidence is in the issue log's BEND-013 and BEND-016 entries.
+
+`bend-u32-mul-hi.patch` (2026-09-22, installed) adds `U32.mul_hi`, the high word of the 64-bit product, as a primitive on both lanes; the big-natural module's 32-bit limbs are built on it.

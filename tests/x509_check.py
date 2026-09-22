@@ -675,6 +675,8 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-x509-path-') as temp:
 if '--discovery-only' in sys.argv[2:]:
     cases=[case for case in cases if case[0].startswith(('discover:', 'limited:'))]
 
+if '--dump' in sys.argv:
+    Path('build/x509-cases-dump.txt').write_text('\n'.join(f'{i}\t{expected}\t{arg}' for i, (arg, expected) in enumerate(cases)))
 for name, command in [('native-1', [ARTIFACT, '--threads', '1']),
                       ('native-4', [ARTIFACT, '--threads', '4']),
                       ('bun', ['bun', ARTIFACT+'.js'])]:
@@ -682,6 +684,10 @@ for name, command in [('native-1', [ARTIFACT, '--threads', '1']),
     assert run.returncode == 0, (name, run.stderr[-2000:])
     lines = run.stdout.splitlines()
     assert len(lines) == len(cases), (name, len(lines), len(cases))
+    failures = [(i, actual[:60], expected[:60]) for i, (actual, (_, expected)) in enumerate(zip(lines, cases)) if actual != expected]
+    if failures and '--report-all' in sys.argv:
+        print(f'{name}: failures {failures[:8]}', flush=True)
+        continue
     for i, (actual, (_, expected)) in enumerate(zip(lines, cases)):
-        assert actual == expected, (name, i, actual[:100], expected[:100])
+        assert actual == expected, (name, i, actual[:100], expected[:100], cases[i][0][:120])
     print(f'{name}: {len(cases)} X509 checks PASS', flush=True)

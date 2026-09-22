@@ -1,0 +1,44 @@
+--- a/base.bend
++++ b/base.bend
+@@ -1647,6 +1647,12 @@
+ type F64 is Data:
+   F64{high: U32, low: U32}
+ 
++# The high word of the 64-bit product.
++law U32.mul_hi:
++  for a: U32
++  for b: U32
++  U32
++
+ law U32.to_f64:
+   for a: U32
+   F64
+--- a/comp.ts
++++ b/comp.ts
+@@ -222,6 +222,10 @@
+     C:  "U32_BIN($0, *, $1)",
+     JS: "(Math.imul($0, $1) >>> 0)",
+   },
++  u32_mul_hi: {
++    C:  "((u64)(u32)(((u64)(u32)($0) * (u64)(u32)($1)) >> 32))",
++    JS: "u32_mul_hi($0, $1)",
++  },
+   u32_div: {
+     C:  "((u32)($1) == 0 ? 0 : U32_BIN($0, /, $1))",
+     JS: "($1 === 0 ? 0 : ($0 / $1) >>> 0)",
+@@ -727,6 +731,15 @@
+   return w;
+ }
+ 
++// The high word of a 32x32 product in doubles: every partial product and
++// sum stays below 2^53, so the result is exact.
++function u32_mul_hi(a, b) {
++  const ah = a >>> 16, al = a & 65535, bh = b >>> 16, bl = b & 65535;
++  const low = al * bl, mid = ah * bl + al * bh;
++  return (ah * bh + Math.floor(mid / 65536)
++    + Math.floor((low + (mid % 65536) * 65536) / 4294967296)) >>> 0;
++}
++
+ function cmp_new(a, b) {
+   return {$: a < b ? "LT"
+     : a === b ? "EQ" : "GT"};
