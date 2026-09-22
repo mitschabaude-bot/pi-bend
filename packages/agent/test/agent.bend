@@ -21,30 +21,30 @@ import ./agent-owner.bend as Owner
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Snapshot() -> Data: T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>
-def Tool() -> Data: T.AgentTool<Schema.Value, Unit, Unit, Unit, Run.RunSignal(), String>
-def Executor() -> Data: C.Callback<T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>
-def Validator() -> Data: C.Callback<Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>>
-def StreamFunction() -> Data: T.StreamFn(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-def Fallback() -> Data: Provider.Registry(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
+def Snapshot() -> Data: T.AgentState<Unit, Unit, String, String>
+def Tool() -> Data: T.AgentTool<Unit, String>
+def Executor() -> Data: C.Callback<T.ToolExecutionInput<Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>
+def Validator() -> Data: C.Callback<Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>>
+def StreamFunction() -> Data: T.StreamFn(Unit, Unit, H.Config(), String)
+def Fallback() -> Data: Provider.Registry(Unit, Unit, H.Config(), String)
 type Fixture is Data:
   Fixture{agent: Owner.Owner(), stream: StreamFunction(), validate: Validator(), execute: Executor(), fallback: Fallback()}
 def unused(unused: Unit, input: H.ProviderInput()) -> IO(H.ProviderOutput()): IO.die(H.ProviderOutput(), 1, "state test unexpectedly invoked the provider")
-def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>:
+def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState<Unit, Unit, String, String>>:
   match mode:
     case 1: Some{State.AgentInitialState{Some{"You are a helpful assistant."}, Some{Models.model(Ai.OpenAIResponsesApi{}, None{})}, Some{Ai.Thinking{Ai.Low{}}}, None{}, None{}}}
     case 2: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), None{}}}
     case 3: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), Some{H.user("old") <> Nil{}}}}
     case _: None{}
-def options(initial: Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
+def options(initial: Maybe<&2, State.AgentInitialState<Unit, Unit, String, String>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
   Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def create(mode: U32) -> IO(Fixture):
   do IO<Fixture>:
     +stream : StreamFunction() <- C.create(~Unit, ~H.ProviderInput(), ~H.ProviderOutput(), ~unused, Unit{})
-    +validate : Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +execute : Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
-    +fallback : Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    created : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, options(initial(mode, execute), stream), fallback, validate, Unit{})
+    +validate : Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 0)
+    +execute : Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +fallback : Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    created : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, options(initial(mode, execute), stream), fallback, validate, Unit{})
     value : Owner.Owner() <- Owner.requireOwner(created)
     return Fixture{value, stream, validate, execute, fallback}
 def getAgent(fixture: Fixture) -> Owner.Owner():
@@ -54,17 +54,17 @@ def dispose(fixture: Fixture) -> IO(Unit):
   match fixture:
     case Fixture{agent, stream, validate, execute, fallback}:
       do IO<Unit>:
-        Agent.dispose(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        Agent.dispose(Unit, Unit, String, String, Unit, agent)
         C.dispose(H.ProviderInput(), H.ProviderOutput(), stream)
-        C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validate)
-        C.dispose(T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute)
-        Provider.dispose(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String, fallback)
+        C.dispose(Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>, validate)
+        C.dispose(T.ToolExecutionInput<Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute)
+        Provider.dispose(Unit, Unit, H.Config(), String, fallback)
 def comparison(value: Maybe<&2, Cmp>) -> Bool:
   match value:
     case Some{EQ{}}: True{}
     case _: False{}
 def equals(value: F.F64, expected: U32) -> Bool: comparison(F.compare(value, F.fromU32(expected)))
-def completeModel(model: Ai.Model<Unit>, expectedApi: String) -> Bool:
+def completeModel(model: Ai.Model<Ai.JsonValue>, expectedApi: String) -> Bool:
   match model:
     case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)
     case _: False{}
@@ -89,7 +89,7 @@ def checkConstructor(mode: U32, value: Snapshot()) -> IO(Unit):
 def constructor(+mode: U32, name: String) -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(mode)
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, getAgent(fixture))
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, getAgent(fixture))
     checkConstructor(mode, value)
     dispose(fixture)
     IO.print("PASS " ++ name)
@@ -98,7 +98,7 @@ def thinking(value: Snapshot(), expected: String) -> Bool:
     case T.AgentState{_, Ai.Thinking{Ai.Low{}}, _, _, _, _, _, _}: String.eq(expected, "low")
     case T.AgentState{_, Ai.Thinking{Ai.High{}}, _, _, _, _, _, _}: String.eq(expected, "high")
     case _: False{}
-def countEvent(count: R.Ref<U32>, input: Listeners.Input<H.EventValue(), Run.RunSignal()>) -> IO(Emission.Emission<String>):
+def countEvent(count: R.Ref<U32>, input: Listeners.Input<H.EventValue()>) -> IO(Emission.Emission<String>):
   do IO<Emission.Emission<String>>:
     R.modify(U32, Unit, count, old => (U32.add(old, 1), Unit{}))
     return Emission.EmissionReady{Done{Unit{}}}
@@ -107,20 +107,20 @@ def subscription() -> IO(Unit):
     +fixture : Fixture <- create(0)
     +agent : Owner.Owner() = getAgent(fixture)
     +count : R.Ref<U32> <- R.new(U32, 0)
-    +callback : Listeners.Handler(H.EventValue(), Run.RunSignal(), String) <- C.create(~R.Ref<U32>, ~Listeners.Input<H.EventValue(), Run.RunSignal()>, ~Emission.Emission<String>, ~countEvent, count)
-    token : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, callback)
+    +callback : Listeners.Handler(H.EventValue(), String) <- C.create(~R.Ref<U32>, ~Listeners.Input<H.EventValue()>, ~Emission.Emission<String>, ~countEvent, count)
+    token : Listeners.Subscription<H.EventValue(), String> <- Agent.subscribe(Unit, Unit, String, String, Unit, agent, callback)
     calls : U32 <- R.read(U32, count)
     Test.assertion(U32.is_eq(calls, 0), "subscribe emits no initial event")
-    Agent.setThinkingLevel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Thinking{Ai.Low{}})
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setThinkingLevel(Unit, Unit, String, String, Unit, agent, Ai.Thinking{Ai.Low{}})
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     calls : U32 <- R.read(U32, count)
     Test.assertion(thinking(value, "low") && U32.is_eq(calls, 0), "state update takes effect without emitting")
-    Listeners.unsubscribe(H.EventValue(), Run.RunSignal(), String, token)
-    Agent.setThinkingLevel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Thinking{Ai.High{}})
+    Listeners.unsubscribe(H.EventValue(), String, token)
+    Agent.setThinkingLevel(Unit, Unit, String, String, Unit, agent, Ai.Thinking{Ai.High{}})
     calls : U32 <- R.read(U32, count)
     Test.assertion(U32.is_eq(calls, 0), "unsubscribe and later mutation emit no event")
     dispose(fixture)
-    C.dispose(Listeners.Input<H.EventValue(), Run.RunSignal()>, Emission.Emission<String>, callback)
+    C.dispose(Listeners.Input<H.EventValue()>, Emission.Emission<String>, callback)
     old : U32 <- R.dispose(U32, count)
     IO.print("PASS should subscribe to events")
 def getMessages(value: Snapshot()) -> H.Messages():
@@ -128,26 +128,26 @@ def getMessages(value: Snapshot()) -> H.Messages():
     case T.AgentState{_, _, _, messages, _, _, _, _}: messages
 def enqueue(agent: Owner.Owner(), follow: Bool) -> IO(Unit):
   match follow:
-    case False{}: Agent.steer(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("Steering message"))
-    case True{}: Agent.followUp(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("Follow-up message"))
+    case False{}: Agent.steer(Unit, Unit, String, String, Unit, agent, H.user("Steering message"))
+    case True{}: Agent.followUp(Unit, Unit, String, String, Unit, agent, H.user("Follow-up message"))
 def queueCase(follow: Bool, name: String) -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(0)
     +agent : Owner.Owner() = getAgent(fixture)
     enqueue(agent, follow)
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(Nat.is_eq(List.length(&2, H.Message(), getMessages(value)), 0n), "queued messages are not inserted into the transcript")
-    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, String, String, Unit, agent)
     Test.assertion(queued, "queue query observes the queued message")
-    Agent.clearAllQueues(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.clearAllQueues(Unit, Unit, String, String, Unit, agent)
+    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, String, String, Unit, agent)
     Test.assertion(Bool.not(queued), "queue clearing preserves empty transcript")
     dispose(fixture)
     IO.print("PASS " ++ name)
 def abortIdle() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(0)
-    Agent.abort(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, getAgent(fixture))
+    Agent.abort(Unit, Unit, String, String, Unit, getAgent(fixture))
     dispose(fixture)
     IO.print("PASS should handle abort controller")
 
@@ -162,7 +162,7 @@ def toolList(execute: Executor()) -> List<&2, Tool()>:
 def exactTools(values: List<&2, Tool()>, expected: Executor()) -> Bool:
   match values:
     case T.AgentTool{"test", "test tool", Schema.ObjectValue{Record.Record{Nil{}}}, None{}, "Test", None{}, execute, None{}, None{}} <> Nil{}:
-      C.same(T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute, expected)
+      C.same(T.ToolExecutionInput<Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute, expected)
     case _: False{}
 def changedTools(value: Snapshot(), expected: Executor()) -> Bool:
   match value:
@@ -181,35 +181,35 @@ def cleared(value: Snapshot()) -> Bool:
     case _: False{}
 def mutateConfiguration(+agent: Owner.Owner(), +execute: Executor()) -> IO(Unit):
   do IO<Unit>:
-    Agent.setModel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Models.model(Ai.GoogleGenerativeAiApi{}, None{}))
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setModel(Unit, Unit, String, String, Unit, agent, Models.model(Ai.GoogleGenerativeAiApi{}, None{}))
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(changedModel(value), "setModel retains the complete supplied model value")
-    Agent.setThinkingLevel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Thinking{Ai.High{}})
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setThinkingLevel(Unit, Unit, String, String, Unit, agent, Ai.Thinking{Ai.High{}})
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(thinking(value, "high"), "setThinkingLevel updates thinking")
     +suppliedTools : List<&2, Tool()> = toolList(execute)
-    Agent.setTools(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, suppliedTools)
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setTools(Unit, Unit, String, String, Unit, agent, suppliedTools)
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(changedTools(value, execute), "setTools retains declarations and borrowed callbacks")
     Test.assertion(exactTools(suppliedTools, execute), "supplied immutable tools stay unchanged")
 def mutateMessages(+agent: Owner.Owner()) -> IO(Unit):
   do IO<Unit>:
     +suppliedMessages : H.Messages() = H.user("Hello") <> Nil{}
-    Agent.replaceMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, suppliedMessages)
-    +retained : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.replaceMessages(Unit, Unit, String, String, Unit, agent, suppliedMessages)
+    +retained : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(singleUser(getMessages(retained)), "replaceMessages retains the supplied contents")
-    Agent.appendMessage(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, T.LlmMessage{Ai.Assistant{H.assistant()}})
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.appendMessage(Unit, Unit, String, String, Unit, agent, T.LlmMessage{Ai.Assistant{H.assistant()}})
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(appended(getMessages(value)), "appendMessage appends the complete supplied message")
-    Agent.clearMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.clearMessages(Unit, Unit, String, String, Unit, agent)
+    value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(cleared(value), "clearMessages preserves thinking and runtime-owned fields")
     Test.assertion(singleUser(getMessages(retained)) && singleUser(suppliedMessages), "immutable message inputs and retained snapshots survive later edits")
 def mutators() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(0)
     +agent : Owner.Owner() = getAgent(fixture)
-    original : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    original : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     mutateConfiguration(agent, executor(fixture))
     mutateMessages(agent)
     Test.assertion(defaultState(original), "previous Agent state snapshots remain immutable")
@@ -223,12 +223,12 @@ def queueModes() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(0)
     +agent : Owner.Owner() = getAgent(fixture)
-    Agent.setSteeringMode(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, T.All{})
-    steering : T.QueueMode <- Agent.getSteeringMode(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    follow : T.QueueMode <- Agent.getFollowUpMode(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setSteeringMode(Unit, Unit, String, String, Unit, agent, T.All{})
+    steering : T.QueueMode <- Agent.getSteeringMode(Unit, Unit, String, String, Unit, agent)
+    follow : T.QueueMode <- Agent.getFollowUpMode(Unit, Unit, String, String, Unit, agent)
     Test.assertion(isAll(steering) && Bool.not(isAll(follow)), "steering mode update leaves follow-up mode unchanged")
-    Agent.setFollowUpMode(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, T.All{})
-    follow : T.QueueMode <- Agent.getFollowUpMode(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setFollowUpMode(Unit, Unit, String, String, Unit, agent, T.All{})
+    follow : T.QueueMode <- Agent.getFollowUpMode(Unit, Unit, String, String, Unit, agent)
     Test.assertion(isAll(follow), "follow-up mode is readable after setting")
     dispose(fixture)
     IO.print("PASS native Agent queue-mode accessors")
@@ -240,11 +240,11 @@ def resetBaseline() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(3)
     +agent : Owner.Owner() = getAgent(fixture)
-    Agent.steer(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("queued"))
-    result : Result<&2, &2, String, Unit> <- Agent.reset(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    +value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.steer(Unit, Unit, String, String, Unit, agent, H.user("queued"))
+    result : Result<&2, &2, String, Unit> <- Agent.reset(Unit, Unit, String, String, Unit, agent)
+    +value : Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(resetResult(result) && Nat.is_eq(List.length(&2, H.Message(), getMessages(value)), 1n) && declaredState(value), "reset restores the exact prompt and tool declaration baseline")
-    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    queued : Bool <- Agent.hasQueuedMessages(Unit, Unit, String, String, Unit, agent)
     Test.assertion(Bool.not(queued), "reset clears queued messages")
     dispose(fixture)
     IO.print("PASS restores the transcript baseline when reset")

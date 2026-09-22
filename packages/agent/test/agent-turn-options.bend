@@ -22,28 +22,28 @@ import ./agent-declarations.bend as Declarations
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Turn() -> Data: Options.Turn(Unit, Unit, Unit, String, Unit, String)
-def Update() -> Data: Options.Update(Unit, Unit, Unit, String, Unit, String, Unit)
+def Turn() -> Data: Options.Turn(Unit, Unit, String, String)
+def Update() -> Data: Options.Update(Unit, Unit, String, String)
 def PrepareResult() -> Data: Hooks.PrepareResult(Update(), String)
-def StopInput() -> Data: T.ToolHookInput<Turn(), Run.RunSignal()>
+def StopInput() -> Data: T.ToolHookInput<Turn()>
 type Capture is Data:
   Capture{count: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
-def toolAssistant() -> Ai.AssistantMessage<Unit, Unit>:
-  Ai.AssistantMessage{Ai.AssistantToolCall{Ai.ToolCall{"tool-1", "noop", Unit{}, None{}, None{}}} <> Nil{}, "unknown", "unknown", "unknown", None{}, None{}, None{}, None{}, Failure.emptyUsage(), Ai.ToolUse{}, None{}, None{}, None{}, None{}, F.fromU32(0)}
+def toolAssistant() -> Ai.AssistantMessage<Schema.Value, Unit>:
+  Ai.AssistantMessage{Ai.AssistantToolCall{Ai.ToolCall{"tool-1", "noop", Schema.Null{}, None{}, None{}}} <> Nil{}, "unknown", "unknown", "unknown", None{}, None{}, None{}, None{}, Failure.emptyUsage(), Ai.ToolUse{}, None{}, None{}, None{}, None{}, F.fromU32(0)}
 def finish(stream: H.StreamValue(), count: U32) -> IO(Unit):
   match count:
-    case 0: Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, toolAssistant()})
-    case _: Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
+    case 0: Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, toolAssistant()})
+    case _: Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
 def increment(+old: U32) -> U32 & U32: (U32.add(old, 1), old)
 def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match capture:
     case Capture{count, streams}:
       do IO<H.ProviderOutput()>:
         previous : U32 <- R.modify(U32, U32, count, old => increment(old))
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         finish(stream, previous)
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 def inspectSignal(slot: R.Ref<Bool>, value: Maybe<&2, Run.RunSignal()>) -> IO(Unit):
   match value:
     case Some{signal}:
@@ -68,17 +68,17 @@ def stop(seen: R.Ref<Bool>, input: StopInput()) -> IO(Result<&2, &2, String, Boo
         inspectSignal(seen, signal)
         Test.assertion(String.eq(roles(messages), "suat"), "stop hook receives system/user/assistant/toolResult context")
         return Done{True{}}
-def execute(mode: U32, input: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
+def execute(mode: U32, input: T.ToolExecutionInput<Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   IO.pure(Result<&2, &2, String, T.AgentToolResult<Unit>>, Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, U32.is_eq(mode, 0), "ok", "tool complete"), None{}}} <> Nil{}, Unit{}, None{}, None{}}})
-def options(+mode: U32, stream: Named.StreamFunction(), executor: Named.Executor(), prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Hooks.StopHook(Turn(), String)) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
+def options(+mode: U32, stream: Named.StreamFunction(), executor: Named.Executor(), prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Hooks.StopHook(Turn(), String)) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
   Options.AgentOptions{Some{State.AgentInitialState{None{}, None{}, None{}, Some{Declarations.tool("noop", "Noop tool", executor) <> Nil{}}, None{}}}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, Hooks.StopHook(Turn(), String)>, U32.is_eq(mode, 1), Some{stopHook}, None{}), Bool.pick(Maybe<&2, Hooks.LegacyHook(Update(), String)>, U32.is_eq(mode, 0), Some{prepareHook}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def create(+mode: U32, capture: Capture, prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Hooks.StopHook(Turn(), String)) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~U32, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~execute, mode)
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, options(mode, stream, executor, prepareHook, stopHook), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
+    +executor : Named.Executor() <- C.create(~U32, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~execute, mode)
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, options(mode, stream, executor, prepareHook, stopHook), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}
 def scenario(+mode: U32, name: String) -> IO(Unit):

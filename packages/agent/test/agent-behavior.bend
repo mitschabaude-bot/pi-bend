@@ -25,14 +25,14 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
     case Capture{calls, sessions, requests, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, Some{config}}:
       do IO<H.ProviderOutput()>:
         R.modify(U32, Unit, calls, old => (U32.add(old, 1), Unit{}))
-        R.modify(List<&2, Maybe<&2, String>>, Unit, sessions, old => (Agent.configSessionId(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, config) <> old, Unit{}))
+        R.modify(List<&2, Maybe<&2, String>>, Unit, sessions, old => (Agent.configSessionId(Unit, Unit, String, String, Unit, config) <> old, Unit{}))
         R.modify(List<&2, String>, Unit, requests, old => (H.llmRoles(messages) <> old, Unit{}))
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
-        Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
+        return Done{T.borrowedStream(Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider did not receive request options")
-def options(stream: Maybe<&2, Named.StreamFunction()>, session: Maybe<&2, String>) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
+def options(stream: Maybe<&2, Named.StreamFunction()>, session: Maybe<&2, String>) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
   Options.AgentOptions{None{}, None{}, None{}, stream, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, session, None{}, None{}, None{}, None{}}
 def create(+legacy: Bool, session: Maybe<&2, String>) -> IO(Fixture):
   do IO<Fixture>:
@@ -42,10 +42,10 @@ def create(+legacy: Bool, session: Maybe<&2, String>) -> IO(Fixture):
     streams : R.Ref<List<&2, H.StreamValue()>> <- R.new(List<&2, H.StreamValue()>, Nil{})
     +capture : Capture = Capture{calls, sessions, requests, streams}
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validate : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +fallback : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    Provider.setDefaultStreamFn(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String, fallback, Some{stream})
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, options(Bool.pick(Maybe<&2, Named.StreamFunction()>, legacy, None{}, Some{stream}), session), fallback, validate, Unit{})
+    +validate : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 0)
+    +fallback : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    Provider.setDefaultStreamFn(Unit, Unit, H.Config(), String, fallback, Some{stream})
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, options(Bool.pick(Maybe<&2, Named.StreamFunction()>, legacy, None{}, Some{stream}), session), fallback, validate, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Fixture{agent, stream, validate, fallback, capture}
 def getAgent(fixture: Fixture) -> Owner.Owner():
@@ -64,10 +64,10 @@ def dispose(fixture: Fixture) -> IO(Unit):
   match fixture:
     case Fixture{agent, stream, validate, fallback, Capture{calls, sessions, requests, streams}}:
       do IO<Unit>:
-        Agent.dispose(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        Agent.dispose(Unit, Unit, String, String, Unit, agent)
         C.dispose(H.ProviderInput(), H.ProviderOutput(), stream)
-        C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validate)
-        Provider.dispose(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String, fallback)
+        C.dispose(Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>, validate)
+        Provider.dispose(Unit, Unit, H.Config(), String, fallback)
         old : U32 <- R.dispose(U32, calls)
         old : List<&2, Maybe<&2, String>> <- R.dispose(List<&2, Maybe<&2, String>>, sessions)
         old : List<&2, String> <- R.dispose(List<&2, String>, requests)
@@ -79,11 +79,11 @@ def success(value: Owner.Outcome()) -> IO(Unit):
     case _: IO.die(Unit, 1, "Agent method unexpectedly failed")
 def prompt(agent: Owner.Owner(), text: String) -> IO(Unit):
   do IO<Unit>:
-    result : Owner.Outcome() <- Agent.prompt(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.identity, ~H.identity, ~H.declaration, agent, Agent.Text{text, Nil{}})
+    result : Owner.Outcome() <- Agent.prompt(~Unit, ~Unit, ~String, ~String, ~Unit, ~H.identity, ~H.identity, ~H.declaration, agent, Agent.Text{text, Nil{}})
     success(result)
 def continuation(agent: Owner.Owner()) -> IO(Unit):
   do IO<Unit>:
-    result : Owner.Outcome() <- Agent.continueRun(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.identity, ~H.identity, ~H.declaration, agent)
+    result : Owner.Outcome() <- Agent.continueRun(~Unit, ~Unit, ~String, ~String, ~Unit, ~H.identity, ~H.identity, ~H.declaration, agent)
     success(result)
 def legacyDefault() -> IO(Unit):
   do IO<Unit>:
@@ -106,8 +106,8 @@ def sessionId() -> IO(Unit):
     +fixture : Fixture <- create(False{}, Some{"session-abc"})
     +agent : Owner.Owner() = getAgent(fixture)
     prompt(agent, "hello")
-    Agent.setSessionId(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{"session-def"})
-    value : Maybe<&2, String> <- Agent.getSessionId(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setSessionId(Unit, Unit, String, String, Unit, agent, Some{"session-def"})
+    value : Maybe<&2, String> <- Agent.getSessionId(Unit, Unit, String, String, Unit, agent)
     Test.assertion(sessionValue(value, "session-def"), "session getter observes assigned value")
     prompt(agent, "hello again")
     received : List<&2, Maybe<&2, String>> <- readSessions(fixture)
@@ -129,10 +129,10 @@ def followUp() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(False{}, None{})
     +agent : Owner.Owner() = getAgent(fixture)
-    Agent.replaceMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, initialHistory())
-    Agent.followUp(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("Queued follow-up"))
+    Agent.replaceMessages(Unit, Unit, String, String, Unit, agent, initialHistory())
+    Agent.followUp(Unit, Unit, String, String, Unit, agent, H.user("Queued follow-up"))
     continuation(agent)
-    value : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    value : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     +messages : H.Messages() = Named.getMessages(value)
     Test.assertion(followUpPresent(messages) && assistantTail(messages), "queued follow-up is processed and assistant response ends history")
     dispose(fixture)
@@ -141,11 +141,11 @@ def steering() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(False{}, None{})
     +agent : Owner.Owner() = getAgent(fixture)
-    Agent.replaceMessages(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, initialHistory())
-    Agent.steer(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("Steering 1"))
-    Agent.steer(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, H.user("Steering 2"))
+    Agent.replaceMessages(Unit, Unit, String, String, Unit, agent, initialHistory())
+    Agent.steer(Unit, Unit, String, String, Unit, agent, H.user("Steering 1"))
+    Agent.steer(Unit, Unit, String, String, Unit, agent, H.user("Steering 2"))
     continuation(agent)
-    value : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    value : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     calls : U32 <- count(fixture)
     Test.assertion(String.eq(H.roles(Named.getMessages(value)), "uauaua") && U32.is_eq(calls, 2), "one-at-a-time steering preserves alternating user/assistant history and two requests")
     dispose(fixture)

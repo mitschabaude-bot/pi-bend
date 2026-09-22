@@ -4,7 +4,7 @@ import ../src/utils/model-api.bend as Api
 import ../../runtime/src/f64.bend as F
 
 # The dependent API argument binds the type of compat at construction time.
-def model(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(api)>) -> T.Model<Unit>:
+def model(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(api)>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
   T.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, T.InputText{} <> T.InputImage{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
 
@@ -22,8 +22,8 @@ def category(api: T.ModelApi) -> U32:
     case T.PiMessagesApi{}: 10
     case T.CustomModelApi{_}: 0
 
-def check(+model: T.Model<Unit>, +expected: String) -> IO(Unit):
-  Bool.pick(IO(Unit), U32.is_eq(category(Api.modelApi(Unit, model)), category(Api.fromString(expected))) && String.eq(Api.name(Api.modelApi(Unit, model)), expected) && String.eq(Api.name(Api.fromString(expected)), expected), IO.pure(Unit, Unit{}), IO.die(Unit, 1, "model API did not round trip"))
+def check(+model: T.Model<T.JsonValue>, +expected: String) -> IO(Unit):
+  Bool.pick(IO(Unit), U32.is_eq(category(Api.modelApi(T.JsonValue, model)), category(Api.fromString(expected))) && String.eq(Api.name(Api.modelApi(T.JsonValue, model)), expected) && String.eq(Api.name(Api.fromString(expected)), expected), IO.pure(Unit, Unit{}), IO.die(Unit, 1, "model API did not round trip"))
 
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -5,6 +5,7 @@ import ../../ai/src/types.bend as Ai
 import ../../ai/test/model-cost.bend as Cost
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/date.bend as Date
+import ../../runtime/src/schema-value.bend as Schema
 
 def assertion(ok: Bool, label: String) -> IO(Unit):
   match ok:
@@ -43,12 +44,12 @@ def main() -> IO(Unit):
     +zero : F.F64 = F.fromU32(0)
     +details : String <- IO.pure(String, "before")
     +cost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
-    +call : T.AgentToolCall(Unit) = Ai.ToolCall{"call-id", "echo", Unit{}, None{}, None{}}
+    +call : T.AgentToolCall = Ai.ToolCall{"call-id", "echo", Schema.Null{}, None{}, None{}}
     +result : T.AgentToolResult<String> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"tool output", None{}}} <> Nil{}, details, Some{Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}}, Some{True{}}}
-    +finalized : Loop.FinalizedToolCallOutcome<Unit, String> = Loop.FinalizedToolCallOutcome{call, result, True{}}
+    +finalized : Loop.FinalizedToolCallOutcome<String> = Loop.FinalizedToolCallOutcome{call, result, True{}}
     +lower : F.F64 <- Date.now()
-    +first : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(Unit, String, finalized)
-    +second : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(Unit, String, finalized)
+    +first : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, finalized)
+    +second : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, finalized)
     +upper : F.F64 <- Date.now()
     firstValue : Ai.ToolResultMessage<String> = first
     secondValue : Ai.ToolResultMessage<String> = second
@@ -59,7 +60,7 @@ def main() -> IO(Unit):
     retained : String <- IO.pure(String, details)
     assertion(String.eq(retained, "before"), "message disposal must not dispose supplied details")
     oldResult : T.AgentToolResult<String> = result
-    oldCall : Ai.ToolCall<Unit> = call
+    oldCall : Ai.ToolCall<Schema.Value> = call
     oldDetails : String <- IO.pure(String, details)
     oldCost : Ai.UsageCost = cost
     IO.print("PASS tool-result artifact fields, wall-clock timestamps, immutable payloads")

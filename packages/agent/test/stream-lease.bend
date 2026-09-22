@@ -38,7 +38,7 @@ def detail(event: H.EventValue()) -> String:
     case T.MessageEnd{T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, Some{error}, _, _, _}}}}: "(" ++ error ++ ")"
     case _: ""
 
-def listener(capture: ListenerCapture, input: Listeners.Input<H.EventValue(), Run.RunSignal()>) -> IO(Emission.Emission<String>):
+def listener(capture: ListenerCapture, input: Listeners.Input<H.EventValue()>) -> IO(Emission.Emission<String>):
   match capture input:
     case ListenerCapture{trace, failAtEnd} Listeners.Input{+event, _}:
       do IO<Emission.Emission<String>>:
@@ -61,10 +61,10 @@ def opened(+mode: U32, +trace: R.Ref<String>, streams: R.Ref<List<&2, H.StreamVa
     case 2: IO.pure(H.ProviderOutput(), Fail{"open failed"})
     case _:
       do IO<H.ProviderOutput()>:
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
-        Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.Start{H.assistant()})
-        Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.Start{H.assistant()})
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
         return Done{T.StreamLease{stream, release(trace, cleanup(mode))}}
 
 def provider(capture: LeaseCapture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
@@ -76,33 +76,33 @@ def provider(capture: LeaseCapture, input: H.ProviderInput()) -> IO(H.ProviderOu
 
 def scenario(+mode: U32, +expected: String) -> IO(Unit):
   do IO<Unit>:
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{Some{"base"}, None{}, None{}, None{}, None{}}
-    +runtime : H.Owner() <- Runtime.newRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
-    +listeners : Run.Registry(Unit, Unit, Unit, String, String) <- Listeners.newListeners(H.EventValue(), Run.RunSignal(), String)
+    initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{Some{"base"}, None{}, None{}, None{}, None{}}
+    +runtime : H.Owner() <- Runtime.newRuntime(Unit, Unit, String, String, initial, T.OneAtATime{}, T.OneAtATime{})
+    +listeners : Run.Registry(Unit, Unit, String, String) <- Listeners.newListeners(H.EventValue(), String)
     +trace : R.Ref<String> <- R.new(String, "")
     +streams : R.Ref<List<&2, H.StreamValue()>> <- R.new(List<&2, H.StreamValue()>, Nil{})
-    +observe : Listeners.Handler(H.EventValue(), Run.RunSignal(), String) <- C.create(~ListenerCapture, ~Listeners.Input<H.EventValue(), Run.RunSignal()>, ~Emission.Emission<String>, ~listener, ListenerCapture{trace, U32.is_eq(mode, 3)})
-    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Listeners.subscribeListeners(H.EventValue(), Run.RunSignal(), String, listeners, observe)
+    +observe : Listeners.Handler(H.EventValue(), String) <- C.create(~ListenerCapture, ~Listeners.Input<H.EventValue()>, ~Emission.Emission<String>, ~listener, ListenerCapture{trace, U32.is_eq(mode, 3)})
+    ignored : Listeners.Subscription<H.EventValue(), String> <- Listeners.subscribeListeners(H.EventValue(), String, listeners, observe)
     +convert : C.Callback<H.Messages(), H.Converted()> <- C.create(~Unit, ~H.Messages(), ~H.Converted(), ~H.converter, Unit{})
-    +validation : C.Callback<Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>> <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +stream : T.StreamFn(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String) <- C.create(~LeaseCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, LeaseCapture{mode, trace, streams})
-    prepared : H.Claim() <- Runtime.beginPrompt(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime, H.user("prompt") <> Nil{})
+    +validation : C.Callback<Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>> <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 0)
+    +stream : T.StreamFn(Unit, Unit, H.Config(), String) <- C.create(~LeaseCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, LeaseCapture{mode, trace, streams})
+    prepared : H.Claim() <- Runtime.beginPrompt(Unit, Unit, String, String, runtime, H.user("prompt") <> Nil{})
     claimed : Life.Claimed<Plan.Plan<H.Message()>> <- H.requireClaim(prepared)
-    completed : H.Completion() <- Run.runClaimedRun(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.identity, ~H.identity, ~H.declaration, runtime, listeners, Run.Options{H.config(convert), Provider.Explicit{stream}, validation, Unit{}}, claimed)
+    completed : H.Completion() <- Run.runClaimedRun(~Unit, ~Unit, ~String, ~String, ~Unit, ~H.identity, ~H.identity, ~H.declaration, runtime, listeners, Run.Options{H.config(convert), Provider.Explicit{stream}, validation, Unit{}}, claimed)
     outcome : String <- H.finish(completed)
-    Runtime.waitForIdleRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
+    Runtime.waitForIdleRuntime(Unit, Unit, String, String, runtime)
     events : String <- R.read(String, trace)
     +actual : String = events ++ "#" ++ outcome
     Test.assertion(String.eq(actual, expected), "stream lease trace mismatch: " ++ actual ++ " != " ++ expected)
-    Listeners.disposeListeners(H.EventValue(), Run.RunSignal(), String, listeners)
-    C.dispose(Listeners.Input<H.EventValue(), Run.RunSignal()>, Emission.Emission<String>, observe)
+    Listeners.disposeListeners(H.EventValue(), String, listeners)
+    C.dispose(Listeners.Input<H.EventValue()>, Emission.Emission<String>, observe)
     C.dispose(H.Messages(), H.Converted(), convert)
-    C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validation)
+    C.dispose(Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>, validation)
     C.dispose(H.ProviderInput(), H.ProviderOutput(), stream)
     all : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
     H.disposeStreams(all)
     old : String <- R.dispose(String, trace)
-    state : Runtime.OwnedState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> <- Runtime.disposeRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
+    state : Runtime.OwnedState<Unit, Unit, String, String> <- Runtime.disposeRuntime(Unit, Unit, String, String, runtime)
     return Unit{}
 
 def main() -> IO(Unit):

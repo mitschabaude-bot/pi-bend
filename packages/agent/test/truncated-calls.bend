@@ -6,9 +6,10 @@ import ../../runtime/src/record.bend as Record
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ./message-events.bend as Test
+import ../../runtime/src/schema-value.bend as Schema
 
 def Details() -> Data: Record.Record<Unit>
-def EventValue() -> Data: T.AgentEvent<Unit, String, Unit, Details(), String, Unit, T.AgentToolResult<Details()>>
+def EventValue() -> Data: T.AgentEvent<Unit, Details(), String, Unit, T.AgentToolResult<Details()>>
 def BatchResult() -> Data: Result<&2, &2, String, Loop.ExecutedToolCallBatch<Details()>>
 type State is Data:
   State{log: R.Ref<List<&2, String>>, failAt: String}
@@ -45,7 +46,7 @@ def run(+failAt: String, expectedTrace: String) -> IO(Unit):
   do IO<Unit>:
     +log : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
     +emit : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~State, ~EventValue(), ~Result<&2, &2, String, Unit>, ~sink, State{log, failAt})
-    result : BatchResult() <- Loop.failToolCallsFromTruncatedMessage(Unit, String, Unit, String, Unit, String, Details(), Loop.TruncatedToolCallRun{emit, Record.new(Unit)}, Ai.ToolCall{"a", "echo", "incomplete", None{}, None{}} <> Ai.ToolCall{"b", "echo", "incomplete", None{}, None{}} <> Nil{})
+    result : BatchResult() <- Loop.failToolCallsFromTruncatedMessage(Unit, String, Unit, String, Details(), Loop.TruncatedToolCallRun{emit, Record.new(Unit)}, Ai.ToolCall{"a", "echo", Schema.Text{"incomplete"}, None{}, None{}} <> Ai.ToolCall{"b", "echo", Schema.Text{"incomplete"}, None{}, None{}} <> Nil{})
     check(result, failAt)
     trace : List<&2, String> <- R.read(List<&2, String>, log)
     Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), expectedTrace), "truncated-call events must be awaited in order and stop on failure")

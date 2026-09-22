@@ -8,11 +8,11 @@ import ../../runtime/src/date.bend as Date
 import ./message-events.bend as Test
 
 # Agent's schema parameter is fixed; prompt content itself does not contain it.
-def NativeMessage() -> Data: T.AgentMessage<Schema.Value, Unit, Unit, Unit, String>
+def NativeMessage() -> Data: T.AgentMessage<Unit, Unit, String>
 def existing() -> NativeMessage(): T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"existing"}, F.fromU32(17)}}}
 def images() -> List<&2, Ai.ImageContent>:
   Ai.ImageContent{"one", "image/png"} <> Ai.ImageContent{"two", "image/jpeg"} <> Nil{}
-def input(mode: U32) -> Agent.PromptInput<Unit, Unit, Unit, String>:
+def input(mode: U32) -> Agent.PromptInput<Unit, Unit, String>:
   match mode:
     case 0: Agent.Text{"", Nil{}}
     case 1: Agent.Text{"hello", images()}
@@ -49,7 +49,7 @@ def key(messages: List<&2, NativeMessage()>) -> IO(String):
     case _: IO.die(String, 1, "unexpected normalized message")
 def scenario(mode: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
-    actual : String <- key(Agent.normalizePromptInputAt(Unit, Unit, Unit, String, input(mode), F.fromU32(555)))
+    actual : String <- key(Agent.normalizePromptInputAt(Unit, Unit, String, input(mode), F.fromU32(555)))
     Test.assertion(String.eq(actual, expected), "prompt overload content and image order match the source")
 def ordered(value: Maybe<&2, Cmp>) -> Bool:
   match value:
@@ -64,6 +64,6 @@ def live(messages: List<&2, NativeMessage()>, before: F.F64, after: F.F64) -> IO
 def wallClock() -> IO(Unit):
   do IO<Unit>:
     before : F.F64 <- Date.now()
-    messages : List<&2, NativeMessage()> <- Agent.normalizePromptInput(Unit, Unit, Unit, String, Agent.Text{"live", Nil{}})
+    messages : List<&2, NativeMessage()> <- Agent.normalizePromptInput(Unit, Unit, String, Agent.Text{"live", Nil{}})
     after : F.F64 <- Date.now()
     live(messages, before, after)

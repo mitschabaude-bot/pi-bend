@@ -13,13 +13,15 @@ import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
 import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
+import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
-def Input() -> Data: Call.CallInput(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit)
-def Output() -> Data: Call.CallOutput(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit)
+def Input() -> Data: Call.CallInput(Unit, String, String, String, Unit)
+def Output() -> Data: Call.CallOutput(Unit, String, String, String, Unit)
 def Outcome() -> Data: Result<&2, &2, String, Batch.Batch<H.Context(), Ai.ToolResultMessage<String>>>
-def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>, Unit>
-def BeforeOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<V.Value, H.Context()>>
-def AfterInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>, Unit>
+def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Unit, String, String, String>>
+def BeforeOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<H.Context()>>
+def AfterInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Unit, String, String, String>>
 def AfterOutput() -> Data: Result<&2, &2, String, Maybe<&2, T.AfterToolCallResult<String>>>
 def Update() -> Data: T.AgentToolUpdateCallback(String)
 
@@ -49,7 +51,7 @@ def emit(environment: Recording, event: H.EventValue()) -> IO(E.Emission<String>
 
 def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
   match environment input:
-    case Execution{calls, retained} T.ToolExecutionInput{id, arguments, Some{Unit{}}, Some{+update}}:
+    case Execution{calls, retained} T.ToolExecutionInput{id, arguments, Some{_}, Some{+update}}:
       do IO<H.ExecuteOutput()>:
         Test.assertion(String.eq(id, "call") && V.equal(arguments, H.field(V.Text{"changed by hook"})), "execution receives before-hook arguments without revalidation")
         R.modify(U32, Unit, calls, count => ((count + 1 : U32), Unit{}))
@@ -69,7 +71,7 @@ def before(block: Bool, input: BeforeInput()) -> IO(BeforeOutput()):
       do IO<BeforeOutput()>:
         Test.assertion(V.equal(arguments, H.field(V.Number{F.fromU32(42)})), "before hook receives successfully validated arguments")
         decision : Maybe<&2, T.BeforeToolCallResult> = Bool.pick(Maybe<&2, T.BeforeToolCallResult>, block, Some{T.BeforeToolCallResult{Some{True{}}, Some{"blocked"}, Some{True{}}}}, None{})
-        return Done{T.BeforeToolCallUpdate{H.field(V.Text{"changed by hook"}), T.AgentContext{List.append(&2, T.AgentMessage<V.Value, V.Value, Unit, String, String>, messages, T.CustomMessage{"before hook"} <> Nil{}), tools}, decision}}
+        return Done{T.BeforeToolCallUpdate{H.field(V.Text{"changed by hook"}), T.AgentContext{List.append(&2, T.AgentMessage<Unit, String, String>, messages, T.CustomMessage{"before hook"} <> Nil{}), tools}, decision}}
 
 def after(counter: R.Ref<U32>, input: AfterInput()) -> IO(AfterOutput()):
   match input:
@@ -80,12 +82,12 @@ def after(counter: R.Ref<U32>, input: AfterInput()) -> IO(AfterOutput()):
         return Done{Some{T.AfterToolCallResult{None{}, Some{"finalized"}, None{}, None{}, Some{True{}}}}}
     case _: IO.die(AfterOutput(), 1, "after hook must not run for immediate outcomes")
 
-def aborted(signal: R.Ref<Bool>, unused: Maybe<&2, Unit>) -> IO(Bool): R.read(Bool, signal)
+def aborted(signal: R.Ref<Bool>, unused: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Bool): R.read(Bool, signal)
 def batchAborted(signal: R.Ref<Bool>, unused: Unit) -> IO(Bool): R.read(Bool, signal)
 def render(error: String) -> String: error
 
 def configuration(converter: C.Callback<H.Messages(), H.Converted()>, beforeHook: C.Callback<BeforeInput(), BeforeOutput()>, hook: C.Callback<AfterInput(), AfterOutput()>) -> H.Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{beforeHook}, Some{hook}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{beforeHook}, Some{hook}}
 
 def equal(left: List<&2, String>, right: List<&2, String>) -> Bool:
   match left right:
@@ -133,16 +135,17 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Unit, ~H.Messages(), ~H.Converted(), ~H.convert, Unit{})
     +beforeHook : C.Callback<BeforeInput(), BeforeOutput()> <- C.create(~Bool, ~BeforeInput(), ~BeforeOutput(), ~before, blockBefore)
     +hook : C.Callback<AfterInput(), AfterOutput()> <- C.create(~R.Ref<U32>, ~AfterInput(), ~AfterOutput(), ~after, hooks)
-    +abort : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Unit>, ~Bool, ~aborted, signal)
+    +abort : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~aborted, signal)
     +batchAbort : C.Callback<Unit, Bool> <- C.create(~R.Ref<Bool>, ~Unit, ~Bool, ~batchAborted, signal)
     +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~Recording, ~H.EventValue(), ~E.Emission<String>, ~emit, Recording{events, failAt, abortAfter, signal})
-    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
+    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    +runner : C.Callback<Input(), Output()> <- Call.create(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, Call.CallCapture{assistant, configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"})
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +runner : C.Callback<Input(), Output()> <- Call.create(~Unit, ~String, ~String, ~String, ~Unit, ~render, Call.CallCapture{assistant, configuration(converter, beforeHook, hook), Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"})
     toolCalls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}} <> Ai.ToolCall{"bad", "echo", H.field(V.Text{"bad"}), None{}, None{}} <> Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}} <> Nil{}
     result : Outcome() <- Batch.executeSequential(H.Context(), Ai.ToolCall<V.Value>, Ai.ToolResultMessage<String>, String, context, toolCalls, runner, batchAbort)
     # Upstream runs the before hook before checking abort; its returned
@@ -163,7 +166,7 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     C.dispose(H.Messages(), H.Converted(), converter)
     C.dispose(BeforeInput(), BeforeOutput(), beforeHook)
     C.dispose(AfterInput(), AfterOutput(), hook)
-    C.dispose(Maybe<&2, Unit>, Bool, abort)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, abort)
     C.dispose(Unit, Bool, batchAbort)
     C.dispose(H.EventValue(), Result<&2, &2, String, Unit>, sink)
     C.dispose(H.EventValue(), E.Emission<String>, emitter)

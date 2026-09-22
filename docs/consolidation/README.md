@@ -9,3 +9,5 @@ Each file maps `old-module.name` to the name the definition received when its mo
 | `renames-http.json` | c8e962b | socket, http-message, sse, http-response, http-exchange |
 | `renames-url.json` | 799e1af | punycode, unicode, idna, url, numeric-host |
 | `renames-small.json` | dfcef5f | schema, f64, json, random, utf8, text, string, calendar, bounded, timer, abort |
+
+The first merges also suffixed binders that collided with same-module definitions with `Local`; those names were replaced by hand afterwards (see the parity record for 2026-09-22), so the tables describe definitions only.

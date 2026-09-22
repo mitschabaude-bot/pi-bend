@@ -22,7 +22,7 @@ import ./agent-run.bend as H
 import ./message-events.bend as Test
 
 def Update() -> Data: T.AgentToolUpdateCallback(Unit)
-def ExecuteInput() -> Data: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>
+def ExecuteInput() -> Data: T.ToolExecutionInput<Unit>
 def ExecuteResult() -> Data: Result<&2, &2, String, T.AgentToolResult<Unit>>
 def result(text: String, terminate: Bool) -> T.AgentToolResult<Unit>:
   T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Unit{}, None{}, Some{terminate}}
@@ -51,11 +51,11 @@ def execute(capture: ExecuteCapture, input: ExecuteInput()) -> IO(ExecuteResult(
         progress(mode, callback)
         return Done{result(Bool.pick(String, U32.is_eq(mode, 0), "ok", "done"), True{})}
     case _ _: IO.die(ExecuteResult(), 1, "unexpected tool invocation")
-def calls(mode: U32) -> List<&2, Ai.AssistantContent<Unit>>:
+def calls(mode: U32) -> List<&2, Ai.AssistantContent<Schema.Value>>:
   match mode:
-    case 0: Ai.AssistantToolCall{Ai.ToolCall{"call-1", "delayed_tool", Unit{}, None{}, None{}}} <> Nil{}
-    case _: Ai.AssistantToolCall{Ai.ToolCall{"call-1", "settled_tool", Unit{}, None{}, None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-2", "slow_tool", Unit{}, None{}, None{}}} <> Nil{}
-def assistant(mode: U32) -> Ai.AssistantMessage<Unit, Unit>:
+    case 0: Ai.AssistantToolCall{Ai.ToolCall{"call-1", "delayed_tool", Schema.Null{}, None{}, None{}}} <> Nil{}
+    case _: Ai.AssistantToolCall{Ai.ToolCall{"call-1", "settled_tool", Schema.Null{}, None{}, None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-2", "slow_tool", Schema.Null{}, None{}, None{}}} <> Nil{}
+def assistant(mode: U32) -> Ai.AssistantMessage<Schema.Value, Unit>:
   Ai.AssistantMessage{calls(mode), "unknown", "unknown", "unknown", None{}, None{}, None{}, None{}, Failure.emptyUsage(), Ai.ToolUse{}, None{}, None{}, None{}, None{}, F.fromU32(0)}
 type ProviderCapture is Data:
   ProviderCapture{mode: U32, streams: R.Ref<List<&2, H.StreamValue()>>}
@@ -63,10 +63,10 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
   match capture:
     case ProviderCapture{mode, streams}:
       do IO<H.ProviderOutput()>:
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
-        Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, assistant(mode)})
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, assistant(mode)})
+        return Done{T.borrowedStream(Unit, String, stream)}
 def tools(mode: U32, +executor: Named.Executor()) -> List<&2, Named.Tool()>:
   match mode:
     case 0: Declarations.tool("delayed_tool", "Captures progress callbacks", executor) <> Nil{}
@@ -74,14 +74,14 @@ def tools(mode: U32, +executor: Named.Executor()) -> List<&2, Named.Tool()>:
 def create(+mode: U32, capture: ExecuteCapture, streams: R.Ref<List<&2, H.StreamValue()>>) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, ProviderCapture{mode, streams})
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
     +executor : Named.Executor() <- C.create(~ExecuteCapture, ~ExecuteInput(), ~ExecuteResult(), ~execute, capture)
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, Some{tools(mode, executor)}, None{}}
-    created : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{None{}, None{}, None{}, Some{tools(mode, executor)}, None{}}
+    created : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(created)
     return Named.Fixture{agent, stream, validator, executor, registry}
-def Input() -> Data: Listeners.Input<H.EventValue(), Run.RunSignal()>
+def Input() -> Data: Listeners.Input<H.EventValue()>
 type ObserveCapture is Data:
   ObserveCapture{events: R.Ref<U32>, updates: R.Ref<U32>, ended: Chan(Unit)}
 def record(event: H.EventValue(), updates: R.Ref<U32>, ended: Chan(Unit)) -> IO(Unit):
@@ -132,8 +132,8 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +fixture : Named.Fixture <- create(mode, ExecuteCapture{mode, saved, started, release}, streams)
     +events : R.Ref<U32> <- R.new(U32, 0)
     +updates : R.Ref<U32> <- R.new(U32, 0)
-    +listener : Listeners.Handler(H.EventValue(), Run.RunSignal(), String) <- C.create(~ObserveCapture, ~Input(), ~Emission.Emission<String>, ~observe, ObserveCapture{events, updates, ended})
-    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, Named.getAgent(fixture), listener)
+    +listener : Listeners.Handler(H.EventValue(), String) <- C.create(~ObserveCapture, ~Input(), ~Emission.Emission<String>, ~observe, ObserveCapture{events, updates, ended})
+    ignored : Listeners.Subscription<H.EventValue(), String> <- Agent.subscribe(Unit, Unit, String, String, Unit, Named.getAgent(fixture), listener)
     +reply : Chan(Unit) <- IO.fork(Unit, Behavior.prompt(Named.getAgent(fixture), "run tools"))
     waitBefore(mode, reply, started, ended)
     late(saved, events)

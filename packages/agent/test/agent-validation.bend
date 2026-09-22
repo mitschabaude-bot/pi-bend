@@ -19,13 +19,13 @@ import ../../runtime/src/f64.bend as F
 import ./main-loop.bend as M
 import ./message-events.bend as Test
 
-def Owner() -> Data: Agent.Agent<V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit>
-def Config() -> Data: Run.Config(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit)
-def Messages() -> Data: List<&2, Run.RunMessage(V.Value, Unit, String, String)>
+def Owner() -> Data: Agent.Agent<Unit, String, String, String, Unit>
+def Config() -> Data: Run.Config(Unit, String, String, String, Unit)
+def Messages() -> Data: List<&2, Run.RunMessage(Unit, String, String)>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
-def ProviderInput() -> Data: T.StreamInput<V.Value, V.Value, Unit, String, Unit, Config()>
-def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<V.Value, Unit, String>>
-def ExecuteInput() -> Data: T.ToolExecutionInput<V.Value, Run.RunSignal(), String>
+def ProviderInput() -> Data: T.StreamInput<Unit, String, Config()>
+def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<Unit, String>>
+def ExecuteInput() -> Data: T.ToolExecutionInput<String>
 def ExecuteOutput() -> Data: Result<&2, &2, String, T.AgentToolResult<String>>
 def identity(value: String) -> String: value
 def declarationError(error: Declaration.DeclarationError) -> String: "declaration failed"
@@ -81,7 +81,7 @@ def provider(capture: Capture, input: ProviderInput()) -> IO(ProviderOutput()):
         +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, providerEvent(index, valid))
-        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 def required(result: Result<&2, &2, Provider.MissingDefault, Owner()>) -> IO(Owner()):
   match result:
     case Done{agent}: IO.pure(Owner(), agent)
@@ -90,7 +90,7 @@ def success(result: Result<&2, &2, Agent.AgentError<String>, Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit, Unit{})
     case _: IO.die(Unit, 1, "Agent execution failed")
-def messages(state: T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Run.RunSignal(), String, Unit>) -> Messages():
+def messages(state: T.AgentState<Unit, String, String, String>) -> Messages():
   match state:
     case T.AgentState{_, _, _, history, _, _, _, _}: history
 def disposeStreams(streams: List<&2, StreamValue()>) -> IO(Unit):
@@ -107,24 +107,24 @@ def scenario(+valid: Bool) -> IO(Unit):
     +streams : R.Ref<List<&2, StreamValue()>> <- R.new(List<&2, StreamValue()>, Nil{})
     +validator : Service.Validator(String) <- Service.createPlain(~String, ~mapError)
     +executor : C.Callback<ExecuteInput(), ExecuteOutput()> <- C.create(~R.Ref<U32>, ~ExecuteInput(), ~ExecuteOutput(), ~execute, executions)
-    +stream : T.StreamFn(V.Value, V.Value, Unit, String, Unit, Config(), String) <- C.create(~Capture, ~ProviderInput(), ~ProviderOutput(), ~provider, Capture{valid, calls, streams})
-    +registry : Provider.Registry(V.Value, V.Value, Unit, String, Unit, Config(), String) <- Provider.create(V.Value, V.Value, Unit, String, Unit, Config(), String)
-    initial : State.AgentInitialState<V.Value, V.Value, Unit, String, String, V.Value, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, Some{T.AgentTool{"echo", "Echo", schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}, None{}}
-    options : Options.AgentOptions<V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit> = Options.AgentOptions{Some{initial}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
-    created : Result<&2, &2, Provider.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~String, ~Unit, ~Unit, ~Unit, options, registry, validator, "empty")
+    +stream : T.StreamFn(Unit, String, Config(), String) <- C.create(~Capture, ~ProviderInput(), ~ProviderOutput(), ~provider, Capture{valid, calls, streams})
+    +registry : Provider.Registry(Unit, String, Config(), String) <- Provider.create(Unit, String, Config(), String)
+    initial : State.AgentInitialState<Unit, String, String, String> = State.AgentInitialState{None{}, None{}, None{}, Some{T.AgentTool{"echo", "Echo", schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}, None{}}
+    options : Options.AgentOptions<Unit, String, String, String, Unit> = Options.AgentOptions{Some{initial}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+    created : Result<&2, &2, Provider.MissingDefault, Owner()> <- Agent.new(~Unit, ~String, ~String, ~String, ~Unit, options, registry, validator, "empty")
     +agent : Owner() <- required(created)
-    result : Result<&2, &2, Agent.AgentError<String>, Unit> <- Agent.prompt(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~String, ~Unit, ~Unit, ~Unit, ~identity, ~identity, ~declarationError, agent, Agent.Text{"run tool", Nil{}})
+    result : Result<&2, &2, Agent.AgentError<String>, Unit> <- Agent.prompt(~Unit, ~String, ~String, ~String, ~Unit, ~identity, ~identity, ~declarationError, agent, Agent.Text{"run tool", Nil{}})
     success(result)
-    snapshot : T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Run.RunSignal(), String, Unit> <- Agent.state(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit, agent)
+    snapshot : T.AgentState<Unit, String, String, String> <- Agent.state(Unit, String, String, String, Unit, agent)
     Test.assertion(original(messages(snapshot), valid), "persisted assistant retains original unnormalized arguments")
     executed : U32 <- R.read(U32, executions)
     requests : U32 <- R.read(U32, calls)
     Test.assertion(U32.is_eq(executed, Bool.pick(U32, valid, 1, 0)) && U32.is_eq(requests, 2), "invalid arguments never execute; Agent continues after either outcome")
-    Agent.dispose(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit, agent)
+    Agent.dispose(Unit, String, String, String, Unit, agent)
     Service.disposeValidation(String, validator)
     C.dispose(ExecuteInput(), ExecuteOutput(), executor)
     C.dispose(ProviderInput(), ProviderOutput(), stream)
-    Provider.dispose(V.Value, V.Value, Unit, String, Unit, Config(), String, registry)
+    Provider.dispose(Unit, String, Config(), String, registry)
     old : U32 <- R.dispose(U32, executions)
     old : U32 <- R.dispose(U32, calls)
     all : List<&2, StreamValue()> <- R.dispose(List<&2, StreamValue()>, streams)

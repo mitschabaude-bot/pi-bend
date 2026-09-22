@@ -12,14 +12,17 @@ import ../packages/runtime/src/fifo.bend as Fifo
 import ./string.bend as SetProof
 import ../laws/string.bend as SetLaws
 import ../packages/ai/src/types.bend as Ai
+import ../packages/runtime/src/schema-value.bend as Schema
+import ../packages/runtime/src/abort.bend as Abort
+import ../packages/runtime/src/fetch.bend as Fetch
 
 # Agent owner
 
-def Laws.enqueue_preserves_state(P, A, G, D, C, V, S, E, J, owned, kind, message):
+def Laws.enqueue_preserves_state(G, D, C, E, owned, kind, message):
   match owned:
     case Runtime.OwnedState{_, _}: {==}
 
-def Laws.queue_update_preserves_state(P, A, G, D, C, V, S, E, J, owned, update):
+def Laws.queue_update_preserves_state(G, D, C, E, owned, update):
   match owned:
     case Runtime.OwnedState{_, _}: {==}
 
@@ -33,19 +36,19 @@ law drained_preserves_state:
   for -S: Data
   for -E: Data
   for -J: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for result: Q.Queues<T.AgentMessage<P, A, G, D, C>> & List<&2, T.AgentMessage<P, A, G, D, C>>
-  {Laws.resultingState(P, A, G, D, C, V, S, E, J, List<&2, T.AgentMessage<P, A, G, D, C>>, Runtime.drainedRuntime(P, A, G, D, C, V, S, E, J, state, result)) == state : T.AgentState<P, A, G, D, C, V, S, E, J>}
+  for +state: T.AgentState<G, D, C, E>
+  for result: Q.Queues<T.AgentMessage<G, D, C>> & List<&2, T.AgentMessage<G, D, C>>
+  {Laws.resultingState(G, D, C, E, List<&2, T.AgentMessage<G, D, C>>, Runtime.drainedRuntime(G, D, C, E, state, result)) == state : T.AgentState<G, D, C, E>}
 
 def drained_preserves_state(P, A, G, D, C, V, S, E, J, state, result):
   match result:
     case Tuple{_, _}: {==}
 
-def Laws.drain_preserves_state(P, A, G, D, C, V, S, E, J, owned, kind):
+def Laws.drain_preserves_state(G, D, C, E, owned, kind):
   match owned:
-    case Runtime.OwnedState{state, queues}: drained_preserves_state(P, A, G, D, C, V, S, E, J, state, Q.drainQueues(T.AgentMessage<P, A, G, D, C>, queues, kind))
+    case Runtime.OwnedState{state, queues}: drained_preserves_state(Schema.Value, Schema.Value, G, D, C, Schema.Value, Abort.AbortSignal<Unit>, E, Ai.JsonValue, state, Q.drainQueues(T.AgentMessage<G, D, C>, queues, kind))
 
-def Laws.changes_preserve_run_state(P, A, G, D, C, V, S, E, J, state, change):
+def Laws.changes_preserve_run_state(G, D, C, E, state, change):
   match state change:
     case T.AgentState{_, _, _, _, _, _, _, _} State.SetModel{_}: {==}
     case T.AgentState{_, _, _, _, _, _, _, _} State.SetThinkingLevel{_}: {==}
@@ -53,11 +56,11 @@ def Laws.changes_preserve_run_state(P, A, G, D, C, V, S, E, J, state, change):
     case T.AgentState{_, _, _, _, _, _, _, _} State.ReplaceMessages{_}: {==}
     case T.AgentState{_, _, _, _, _, _, _, _} State.AppendMessage{_}: {==}
 
-def Laws.replace_messages(P, A, G, D, C, V, S, E, J, state, messages):
+def Laws.replace_messages(G, D, C, E, state, messages):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
-def Laws.append_message(P, A, G, D, C, V, S, E, J, state, message):
+def Laws.append_message(G, D, C, E, state, message):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
@@ -204,19 +207,19 @@ def Laws.has_items(A, queue):
 
 # Agent events
 
-def Laws.message_start(P, A, G, D, C, V, S, E, J, Partial, Execution, state, message):
+def Laws.message_start(G, D, C, E, Partial, Execution, state, message):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
-def Laws.message_update(P, A, G, D, C, V, S, E, J, Partial, Execution, state, message, detail):
+def Laws.message_update(G, D, C, E, Partial, Execution, state, message, detail):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
-def Laws.message_end(P, A, G, D, C, V, S, E, J, Partial, Execution, state, message):
+def Laws.message_end(G, D, C, E, Partial, Execution, state, message):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
-def Laws.events_preserve_configuration(P, A, G, D, C, V, S, E, J, Partial, Execution, state, event):
+def Laws.events_preserve_configuration(G, D, C, E, Partial, Execution, state, event):
   match state event:
     case T.AgentState{_, _, _, _, _, _, _, _} T.AgentStart{}: {==}
     case T.AgentState{_, _, _, _, _, _, _, _} T.AgentEnd{_}: {==}
@@ -229,41 +232,41 @@ def Laws.events_preserve_configuration(P, A, G, D, C, V, S, E, J, Partial, Execu
     case T.AgentState{_, _, _, _, _, _, _, _} T.ToolExecutionUpdate{_, _, _, _}: {==}
     case T.AgentState{_, _, _, _, _, _, _, _} T.ToolExecutionEnd{_, _, _, _}: {==}
 
-def Laws.agent_end(P, A, G, D, C, V, S, E, J, Partial, Execution, state, reported):
+def Laws.agent_end(G, D, C, E, Partial, Execution, state, reported):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
-def Laws.tool_start_membership(P, A, G, D, C, V, S, E, J, Partial, Execution, state, id, name, arguments):
+def Laws.tool_start_membership(G, D, C, E, Partial, Execution, state, id, name, arguments):
   match state:
     case T.AgentState{_, _, _, _, _, _, pending, _}: SetLaws.insert_membership(pending, id)
 
-def Laws.tool_end_membership(P, A, G, D, C, V, S, E, J, Partial, Execution, state, id, name, result, failed):
+def Laws.tool_end_membership(G, D, C, E, Partial, Execution, state, id, name, result, failed):
   match state:
     case T.AgentState{_, _, _, _, _, _, pending, _}: SetLaws.remove_membership(pending, id)
 
-def Laws.finish_idle(P, A, G, D, C, V, S, E, J, state):
+def Laws.finish_idle(G, D, C, E, state):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
-def Laws.finish_messages(P, A, G, D, C, V, S, E, J, state):
+def Laws.finish_messages(G, D, C, E, state):
   match state:
     case T.AgentState{_, _, _, _, _, _, _, _}: {==}
 
 
 # Continue planning
 
-def Laws.busy_agents_cannot_continue(P, A, G, D, C, messages, queues): {==}
+def Laws.busy_agents_cannot_continue(G, D, C, messages, queues): {==}
 
-def system_tail(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, systems: List<&2, Ai.SystemMessage<P>>) -> {Runtime.tail(P, A, G, D, C, Laws.systemsOf(P, A, G, D, C, systems), False{}) == Runtime.Empty{} : Runtime.Tail}:
+def system_tail(-G: Data, -D: Data, -C: Data, systems: List<&2, Ai.SystemMessage<Schema.Value>>) -> {Runtime.tail(G, D, C, Laws.systemsOf(G, D, C, systems), False{}) == Runtime.Empty{} : Runtime.Tail}:
   match systems:
     case Nil{}: {==}
     case system <> rest:
       match rest:
         case Nil{}: {==}
-        case next <> more: system_tail(P, A, G, D, C, next <> more)
+        case next <> more: system_tail(G, D, C, next <> more)
 
-def Laws.system_only_transcripts_cannot_continue(P, A, G, D, C, systems, queues):
-  %Equal.sym(Runtime.Tail, Runtime.tail(P, A, G, D, C, Laws.systemsOf(P, A, G, D, C, systems), False{}), Runtime.Empty{}, system_tail(P, A, G, D, C, systems)) : {Runtime.planTail(Laws.Agent(P, A, G, D, C), queues, _) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Laws.Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Laws.Agent(P, A, G, D, C)>>}
+def Laws.system_only_transcripts_cannot_continue(G, D, C, systems, queues):
+  %Equal.sym(Runtime.Tail, Runtime.tail(G, D, C, Laws.systemsOf(G, D, C, systems), False{}), Runtime.Empty{}, system_tail(G, D, C, systems)) : {Runtime.planTail(Laws.Agent(G, D, C), queues, _) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Laws.Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Laws.Agent(G, D, C)>>}
   {==}
 
 def or_true_is_other(seen: Bool) -> {Bool.pick(Runtime.Tail, Bool.or(seen, True{}), Runtime.Other{}, Runtime.Empty{}) == Runtime.Other{} : Runtime.Tail}:
@@ -271,16 +274,16 @@ def or_true_is_other(seen: Bool) -> {Bool.pick(Runtime.Tail, Bool.or(seen, True{
     case True{}: {==}
     case False{}: {==}
 
-def user_tail(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, messages: List<&2, Laws.Agent(P, A, G, D, C)>, user: Ai.UserMessage, seen: Bool) -> {Runtime.tail(P, A, G, D, C, List.append(&2, Laws.Agent(P, A, G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), seen) == Runtime.Other{} : Runtime.Tail}:
+def user_tail(-G: Data, -D: Data, -C: Data, messages: List<&2, Laws.Agent(G, D, C)>, user: Ai.UserMessage, seen: Bool) -> {Runtime.tail(G, D, C, List.append(&2, Laws.Agent(G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), seen) == Runtime.Other{} : Runtime.Tail}:
   match messages:
     case Nil{}: or_true_is_other(seen)
     case message <> rest:
       match rest:
-        case Nil{}: or_true_is_other(Bool.or(seen, Bool.not(Runtime.isSystem(P, A, G, D, C, message))))
-        case next <> more: user_tail(P, A, G, D, C, next <> more, user, Bool.or(seen, Bool.not(Runtime.isSystem(P, A, G, D, C, message))))
+        case Nil{}: or_true_is_other(Bool.or(seen, Bool.not(Runtime.isSystem(G, D, C, message))))
+        case next <> more: user_tail(G, D, C, next <> more, user, Bool.or(seen, Bool.not(Runtime.isSystem(G, D, C, message))))
 
-def Laws.continue_after_a_user_message_resumes_the_run(P, A, G, D, C, messages, user, queues):
-  %Equal.sym(Runtime.Tail, Runtime.tail(P, A, G, D, C, List.append(&2, Laws.Agent(P, A, G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), False{}), Runtime.Other{}, user_tail(P, A, G, D, C, messages, user, False{})) : {Runtime.planTail(Laws.Agent(P, A, G, D, C), queues, _) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Laws.Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Laws.Agent(P, A, G, D, C)>>}
+def Laws.continue_after_a_user_message_resumes_the_run(G, D, C, messages, user, queues):
+  %Equal.sym(Runtime.Tail, Runtime.tail(G, D, C, List.append(&2, Laws.Agent(G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), False{}), Runtime.Other{}, user_tail(G, D, C, messages, user, False{})) : {Runtime.planTail(Laws.Agent(G, D, C), queues, _) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Laws.Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Laws.Agent(G, D, C)>>}
   {==}
 
 def Laws.continue_after_assistant_prefers_steering(M, mode, followUp, message):

@@ -16,6 +16,8 @@ import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 
 import ./tool-call-sequential.bend as S
+import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def content(empty: Bool) -> List<&2, Ai.AssistantContent<V.Value>>:
   match empty:
@@ -24,7 +26,7 @@ def content(empty: Bool) -> List<&2, Ai.AssistantContent<V.Value>>:
       Ai.AssistantText{Ai.TextContent{"before", None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}}} <> Ai.AssistantText{Ai.TextContent{"between", None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"bad", "badtool", H.field(V.Text{"bad"}), None{}, None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}}} <> Nil{}
 
 def configuration(mode: Maybe<&2, T.ToolExecutionMode>, converter: C.Callback<H.Messages(), H.Converted()>, beforeHook: C.Callback<S.BeforeInput(), S.BeforeOutput()>, hook: C.Callback<S.AfterInput(), S.AfterOutput()>) -> H.Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, mode, Some{beforeHook}, Some{hook}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, mode, Some{beforeHook}, Some{hook}}
 
 def expectedEvents(empty: Bool, sequential: Bool) -> List<&2, String>:
   match empty sequential:
@@ -49,18 +51,19 @@ def scenario(+failAt: String, configured: Maybe<&2, T.ToolExecutionMode>, toolMo
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Unit, ~H.Messages(), ~H.Converted(), ~H.convert, Unit{})
     +beforeHook : C.Callback<S.BeforeInput(), S.BeforeOutput()> <- C.create(~Bool, ~S.BeforeInput(), ~S.BeforeOutput(), ~S.before, False{})
     +hook : C.Callback<S.AfterInput(), S.AfterOutput()> <- C.create(~R.Ref<U32>, ~S.AfterInput(), ~S.AfterOutput(), ~S.after, hooks)
-    +abort : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Unit>, ~Bool, ~S.aborted, signal)
+    +abort : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~S.aborted, signal)
     +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~S.Recording, ~H.EventValue(), ~E.Emission<String>, ~S.emit, S.Recording{events, failAt, False{}, signal})
-    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
+    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
     +schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, toolMode} <> T.AgentTool{"echo", "", schema, None{}, "Duplicate", None{}, executor, None{}, Some{T.Sequential{}}} <> T.AgentTool{"badtool", "", schema, None{}, "Bad", None{}, executor, None{}, lateMode} <> T.AgentTool{"unused", "", schema, None{}, "Unused", None{}, executor, None{}, Some{T.Sequential{}}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{content(empty), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, configuration(configured, converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
-    +execution : Execution.Execution<V.Value, V.Value, Unit, String, String, V.Value, Unit, String> <- Execution.executeToolCalls(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context)
-    result : S.Outcome() <- Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
-    Execution.disposeExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    capture : Call.CallCapture<Unit, String, String, String, Unit> = Call.CallCapture{assistant, configuration(configured, converter, beforeHook, hook), Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"}
+    +execution : Execution.Execution<Unit, String, String, String> <- Execution.executeToolCalls(~Unit, ~String, ~String, ~String, ~Unit, ~S.render, capture, context)
+    result : S.Outcome() <- Execution.resultExecution(Unit, String, String, String, execution)
+    Execution.disposeExecution(Unit, String, String, String, execution)
     S.checkOutcome(result, Bool.not(String.is_empty(failAt)), Bool.not(empty), Bool.pick(List<&2, Bool>, empty, Nil{}, False{} <> True{} <> True{} <> Nil{}), False{})
     saved : Maybe<&2, S.Update()> <- R.read(Maybe<&2, S.Update()>, retained)
     S.late(saved)
@@ -76,7 +79,7 @@ def scenario(+failAt: String, configured: Maybe<&2, T.ToolExecutionMode>, toolMo
     C.dispose(H.Messages(), H.Converted(), converter)
     C.dispose(S.BeforeInput(), S.BeforeOutput(), beforeHook)
     C.dispose(S.AfterInput(), S.AfterOutput(), hook)
-    C.dispose(Maybe<&2, Unit>, Bool, abort)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, abort)
     C.dispose(H.EventValue(), Result<&2, &2, String, Unit>, sink)
     C.dispose(H.EventValue(), E.Emission<String>, emitter)
     dropped : List<&2, String> <- R.dispose(List<&2, String>, events)

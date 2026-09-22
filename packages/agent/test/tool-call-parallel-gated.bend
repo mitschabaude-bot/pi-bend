@@ -15,8 +15,9 @@ import ../../runtime/src/record.bend as Record
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
+import ../../runtime/src/abort.bend as Abort
 
-def Run() -> Data: Execution.Execution<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>
+def Run() -> Data: Execution.Execution<Unit, String, String, String>
 
 type Gates is Data:
   Gates{started: Chan(String), ended: Chan(String), first: Chan(Unit), second: Chan(Unit), third: Chan(Unit)}
@@ -40,7 +41,7 @@ def announce(gates: Gates, id: String) -> IO(Unit):
 
 def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
   match environment input:
-    case Execution{+gates, retained} T.ToolExecutionInput{+id, arguments, Some{Unit{}}, Some{+update}}:
+    case Execution{+gates, retained} T.ToolExecutionInput{+id, arguments, Some{_}, Some{+update}}:
       do IO<H.ExecuteOutput()>:
         Test.assertion(V.equal(arguments, H.field(V.Text{"changed by hook"})), "parallel execution receives hook-updated arguments without revalidation")
         R.modify(List<&2, S.Update()>, Unit, retained, callbacks => (update <> callbacks, Unit{}))
@@ -103,14 +104,14 @@ def finish(failure: Bool, +run: Run(), gates: Gates) -> IO(S.Outcome()):
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         release(first)
-        Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Execution.resultExecution(Unit, String, String, String, run)
     case True{} Gates{_, end, first, second, third}:
       do IO<S.Outcome()>:
         release(second)
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         # First and third remain blocked until the failed batch result arrives.
-        result : S.Outcome() <- Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        result : S.Outcome() <- Execution.resultExecution(Unit, String, String, String, run)
         release(third)
         release(first)
         return result
@@ -163,7 +164,7 @@ def active(+failure: Bool, +run: Run(), +gates: Gates) -> IO(Unit):
         Test.assertion(began(started(a), started(b), started(c)), "all three real tool executors start before any gate opens")
         outcome : S.Outcome() <- finish(failure, run, gates)
         checked(outcome, failure)
-        Execution.disposeExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Execution.disposeExecution(Unit, String, String, String, run)
     case _ _: Test.assertion(False{}, "parallel preparation unexpectedly failed")
 
 def contents(calls: List<&2, Ai.ToolCall<V.Value>>) -> List<&2, Ai.AssistantContent<V.Value>>:
@@ -188,9 +189,9 @@ def scenario(+failure: Bool) -> IO(Unit):
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Unit, ~H.Messages(), ~H.Converted(), ~H.convert, Unit{})
     +beforeHook : C.Callback<S.BeforeInput(), S.BeforeOutput()> <- C.create(~Bool, ~S.BeforeInput(), ~S.BeforeOutput(), ~S.before, False{})
     +hook : C.Callback<S.AfterInput(), S.AfterOutput()> <- C.create(~R.Ref<U32>, ~S.AfterInput(), ~S.AfterOutput(), ~after, hooks)
-    +abort : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Unit>, ~Bool, ~S.aborted, signal)
+    +abort : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~S.aborted, signal)
     +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~Recording, ~H.EventValue(), ~E.Emission<String>, ~emit, Recording{events, gates, failure})
-    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
+    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
@@ -198,8 +199,9 @@ def scenario(+failure: Bool) -> IO(Unit):
     +arguments : V.Value = H.field(V.Text{"42"})
     calls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"one", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"two", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"three", "echo", arguments, None{}, None{}} <> Nil{}
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{contents(calls), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
-    run : Run() <- Execution.executeToolCalls(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context)
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    capture : Call.CallCapture<Unit, String, String, String, Unit> = Call.CallCapture{assistant, S.configuration(converter, beforeHook, hook), Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"}
+    run : Run() <- Execution.executeToolCalls(~Unit, ~String, ~String, ~String, ~Unit, ~S.render, capture, context)
     active(failure, run, gates)
     saved : List<&2, S.Update()> <- R.read(List<&2, S.Update()>, retained)
     late(saved)
@@ -214,7 +216,7 @@ def scenario(+failure: Bool) -> IO(Unit):
     C.dispose(H.Messages(), H.Converted(), converter)
     C.dispose(S.BeforeInput(), S.BeforeOutput(), beforeHook)
     C.dispose(S.AfterInput(), S.AfterOutput(), hook)
-    C.dispose(Maybe<&2, Unit>, Bool, abort)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, abort)
     C.dispose(H.EventValue(), Result<&2, &2, String, Unit>, sink)
     C.dispose(H.EventValue(), E.Emission<String>, emitter)
     dropped : List<&2, String> <- R.dispose(List<&2, String>, events)

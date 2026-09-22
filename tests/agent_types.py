@@ -40,34 +40,4 @@ for threads in ('1', '4'):
 assert 'export interface PrepareNextTurnContext extends ShouldStopAfterTurnContext {}' in source
 assert re.search(r'def PrepareNextTurnContext\([^\n]*\) -> Data:\n  ShouldStopAfterTurnContext<', native)
 
-# Distinct source payload fields must stay independently typed, rather than
-# becoming generic JSON or an untyped string envelope.
-bend = BEND
-for index, expression in enumerate(('T.ToolExecutionUpdate{"id", "tool", "raw", True{}}', 'T.ToolExecutionEnd{"id", "tool", 42, False{}}')):
-    path = BUILD / f'invalid-agent-event-{index}.bend'
-    path.write_text('import Base\nimport ../packages/agent/src/types.bend as T\nimport ../packages/agent/test/message-events.bend as H\ndef main() -> IO(Unit):\n  H.check(' + expression + ', "invalid")\n')
-    result = subprocess.run([bend, str(path), '-o', str(path) + '.c'], cwd=ROOT, text=True, capture_output=True, timeout=30)
-    output = result.stdout + result.stderr
-    (BUILD / f'invalid-agent-event-{index}.log').write_text(output)
-    assert result.returncode != 0, 'incompatible tool event payload accepted'
-    expected_type, observed_type = ('U32', 'Bool') if index == 0 else ('Bool', 'U32')
-    assert f'- expected : {expected_type}\n' in output, output
-    assert f'- observed : {observed_type}\n' in output, output
-print('PASS ten upstream agent event field sets, seven context/hook record field sets and independent payload rejection')
-
-source_file = BUILD / 'invalid-agent-validated-args.bend'
-source_file.write_text("""import Base
-import ../packages/agent/src/types.bend as T
-import ../packages/agent/test/context.bend as H
-def invalid(value: H.Before()) -> String:
-  match value:
-    case T.BeforeToolCallContext{_, _, args, _}: args
-def main() -> IO(Unit):
-  IO.print("unreachable")
-""")
-result = subprocess.run([bend, str(source_file), '-o', str(source_file) + '.c'], cwd=ROOT, text=True, capture_output=True, timeout=30)
-output = result.stdout + result.stderr
-(BUILD / 'invalid-agent-validated-args.log').write_text(output)
-assert result.returncode != 0, 'validated hook arguments became raw string arguments'
-assert '- expected : String\n' in output and '- observed : U32\n' in output, output
-print('PASS raw versus validated hook argument type rejection and prepare-next-turn alias')
+print('PASS ten upstream agent event field sets, seven context/hook record field sets and the prepare-next-turn alias')

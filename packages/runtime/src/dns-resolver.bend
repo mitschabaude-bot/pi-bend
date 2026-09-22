@@ -277,57 +277,57 @@ def cancelled(-Reason: Data, source: Source.Source, why: Abort.AbortReason<Deadl
     case Source.Configured{_, _}: Finished{Fail{Aborted{why}}}
 
 # Observe cancellation again after entropy, before committing a rotation step.
-def route(-Reason: Data, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, id: U32, optionsLocal: Id.QueryOptions, +kind: U32, +name: Id.Name, history: History, maximum: U32, check: Result<&2, &2, Abort.AbortReason<Deadline.Cause<Reason>>, Unit>) -> IO(Progress<Reason>):
+def route(-Reason: Data, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, id: U32, queryOptions: Id.QueryOptions, +kind: U32, +name: Id.Name, history: History, maximum: U32, check: Result<&2, &2, Abort.AbortReason<Deadline.Cause<Reason>>, Unit>) -> IO(Progress<Reason>):
   match check:
     case Fail{why}: IO.pure(Progress<Reason>, cancelled(Reason, source, why))
     case Done{_}:
       do IO<Progress<Reason>>:
-        result : Result<&2, &2, Source.ExchangeSourceError<Reason>, Source.Reply> <- Source.exchangeRequestExchangeSource(Reason, source, signal, Id.createQuery(optionsLocal, id, Id.Question{name, kind, 1}), maximum)
+        result : Result<&2, &2, Source.ExchangeSourceError<Reason>, Source.Reply> <- Source.exchangeRequestExchangeSource(Reason, source, signal, Id.createQuery(queryOptions, id, Id.Question{name, kind, 1}), maximum)
         return exchanged(Reason, name, kind, history, result)
 
-def identified(-Reason: Data, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, +kind: U32, +name: Id.Name, history: History, maximum: U32, value: Result<&2, &2, Id.IdError, U32>) -> IO(Progress<Reason>):
+def identified(-Reason: Data, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, +kind: U32, +name: Id.Name, history: History, maximum: U32, value: Result<&2, &2, Id.IdError, U32>) -> IO(Progress<Reason>):
   match value:
     case Fail{error}: IO.pure(Progress<Reason>, Finished{Fail{Identifier{error}}})
     case Done{id}:
       do IO<Progress<Reason>>:
         check : Result<&2, &2, Abort.AbortReason<Deadline.Cause<Reason>>, Unit> <- Abort.throwIfAborted(Deadline.Cause<Reason>, signal)
-        route(Reason, source, signal, id, optionsLocal, kind, name, history, maximum, check)
+        route(Reason, source, signal, id, queryOptions, kind, name, history, maximum, check)
 
 # Inspect the retained abort reason before drawing an ID. After the draw,
 # identified checks again before selecting servers; connect also checks.
-def ready(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, history: History, maximum: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Progress<Reason>):
+def ready(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, kind: U32, name: Id.Name, history: History, maximum: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Progress<Reason>):
   match reason:
     case Some{why}: IO.pure(Progress<Reason>, cancelled(Reason, source, why))
     case None{}:
       do IO<Progress<Reason>>:
         value : Result<&2, &2, Id.IdError, U32> <- draw(environment)
-        identified(Reason, source, signal, optionsLocal, kind, name, history, maximum, value)
+        identified(Reason, source, signal, queryOptions, kind, name, history, maximum, value)
 
 # Each follow-up draws a new ID for its question. Server failover and reset
 # recovery reuse that ID under the same deadline. The environment is borrowed;
 # its owner disposes resources after this call. Static injection needs no mutable callback registry.
-@unsafe def drive(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, +environment: Environment, +source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +optionsLocal: Id.QueryOptions, +kind: U32, +maximum: U32, progress: Progress<Reason>) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+@unsafe def drive(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, +environment: Environment, +source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +queryOptions: Id.QueryOptions, +kind: U32, +maximum: U32, progress: Progress<Reason>) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   match progress:
     case Finished{result}: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, result)
     case Again{name, history}:
       do IO<Result<&2, &2, AddressLookupError<Reason>, Selection>>:
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Abort.reason(Deadline.Cause<Reason>, signal)
-        next : Progress<Reason> <- ready(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, kind, name, history, maximum, reason)
-        drive(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, kind, maximum, next)
+        next : Progress<Reason> <- ready(~Environment, ~draw, Reason, environment, source, signal, queryOptions, kind, name, history, maximum, reason)
+        drive(~Environment, ~draw, Reason, environment, source, signal, queryOptions, kind, maximum, next)
 
 # Execute one name and its alias follow-ups under a caller-owned deadline.
 # Validation precedes entropy/network effects. This function neither resets the
 # deadline nor retires its signal, allowing an enclosing search to reuse it.
-def exchangeChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+def exchangeChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   match valid available maximum:
     case False{} _ _: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, Fail{AddressLookupUnsupportedType{}})
     case True{} _ 0: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, Fail{InvalidReadSize{}})
     case True{} False{} _: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, Fail{NoServers{}})
-    case True{} True{} size: drive(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, kind, size, Again{name, newHistory()})
+    case True{} True{} size: drive(~Environment, ~draw, Reason, environment, source, signal, queryOptions, kind, size, Again{name, newHistory()})
 
 # Use a caller-reserved identifier for the first question. Alias follow-ups
 # still draw fresh identifiers through the supplied environment.
-def exchangeIdentifiedChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, readable: Bool, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, id: U32, kind: U32, name: Id.Name, +maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+def exchangeIdentifiedChecked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, readable: Bool, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, id: U32, kind: U32, name: Id.Name, +maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   match valid available readable:
     case False{} _ _: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, Fail{AddressLookupUnsupportedType{}})
     case True{} _ False{}: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, Fail{InvalidReadSize{}})
@@ -336,7 +336,7 @@ def exchangeIdentifiedChecked(~Environment: Data, ~draw: Environment -> IO(Resul
       +sharedEnvironment = environment
       +sharedSource = source
       +sharedSignal = signal
-      +sharedOptions = optionsLocal
+      +sharedOptions = queryOptions
       +sharedKind = kind
       +sharedMaximum = maximum
       do IO<Result<&2, &2, AddressLookupError<Reason>, Selection>>:
@@ -349,24 +349,24 @@ def exchangeRequestWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, 
       exchangeIdentifiedChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), U32.is_ne(maximum, 0), environment, source, signal, Id.QueryOptions{flags, extension}, id, kind, name, maximum)
     case _: IO.pure(Result<&2, &2, AddressLookupError<Reason>, Selection>, Fail{UnsupportedClass{}})
 
-def exchangeTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
-  exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), environment, source, signal, optionsLocal, kind, name, maximum)
+def exchangeTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+  exchangeChecked(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), environment, source, signal, queryOptions, kind, name, maximum)
 
-def exchangeSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
-  exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, Source.TcpSource{source}, signal, optionsLocal, kind, name, maximum)
+def exchangeSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
+  exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, Source.TcpSource{source}, signal, queryOptions, kind, name, maximum)
 
 def exchangeSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   exchangeSourceOptionsWith(~Environment, ~draw, Reason, environment, source, signal, Id.defaults(), kind, name, maximum)
 
-def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
+def scoped(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, queryOptions: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(Report<Reason>):
   match pair:
     case (scope, signal):
       do IO<Report<Reason>>:
-        result : Result<&2, &2, AddressLookupError<Reason>, Selection> <- exchangeSourceOptionsWith(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, kind, name, maximum)
+        result : Result<&2, &2, AddressLookupError<Reason>, Selection> <- exchangeSourceOptionsWith(~Environment, ~draw, Reason, environment, source, signal, queryOptions, kind, name, maximum)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return Report{result, reason}
 
-def startAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+def startAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   match valid available maximum:
     case False{} _ _: IO.pure(Report<Reason>, Report{Fail{AddressLookupUnsupportedType{}}, None{}})
     case True{} _ 0: IO.pure(Report<Reason>, Report{Fail{InvalidReadSize{}}, None{}})
@@ -374,14 +374,14 @@ def startAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &
     case True{} True{} size:
       do IO<Report<Reason>>:
         scope : Deadline.Scope<Reason> <- Deadline.create(Reason, milliseconds, parent)
-        scoped(~Environment, ~draw, Reason, environment, source, optionsLocal, kind, name, size, Deadline.borrow(Reason, scope))
+        scoped(~Environment, ~draw, Reason, environment, source, queryOptions, kind, name, size, Deadline.borrow(Reason, scope))
 
 def exchangeServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, servers: List<&2, Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   exchangeSourceWith(~Environment, ~draw, Reason, environment, Source.Fixed{servers}, signal, kind, name, maximum)
 
 # The caller owns the selection source and retains it across lookup calls.
-def lookupSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
-  startAddressLookup(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.availableServerSource(Source.Server, source), environment, source, milliseconds, parent, optionsLocal, kind, name, maximum)
+def lookupSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
+  startAddressLookup(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.availableServerSource(Source.Server, source), environment, source, milliseconds, parent, queryOptions, kind, name, maximum)
 
 def lookupSourceWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   lookupSourceOptionsWith(~Environment, ~draw, Reason, environment, source, milliseconds, parent, Id.defaults(), kind, name, maximum)
@@ -418,7 +418,7 @@ def lookupSourceRandom(-Reason: Data, source: Source.ServerSource<Source.Server>
 # The context borrows the ID environment, server selector and deadline signal.
 # Each candidate closes its exchanges before returning.
 type Context<-Environment: Data, -Reason: Data> is Data:
-  Context{environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, kind: U32, maximum: U32}
+  Context{environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Id.QueryOptions, kind: U32, maximum: U32}
 
 type AddressSearchReport<-Reason: Data> is Data:
   AddressSearchReport{result: Result<&2, &2, Id.SearchRunError<AddressLookupError<Reason>>, Selection>, deadline: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>}
@@ -492,20 +492,20 @@ def completedAddressSearch(-Reason: Data, result: Result<&2, &2, AddressLookupEr
 
 def requestAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: Context<Environment, Reason>, requestAddressSearch: Id.SearchRunRequest) -> IO(Id.Outcome<AddressLookupError<Reason>, Selection>):
   match context requestAddressSearch:
-    case Context{environment, source, signal, optionsLocal, kind, maximum} Id.SearchRunRequest{_, name}:
+    case Context{environment, source, signal, queryOptions, kind, maximum} Id.SearchRunRequest{_, name}:
       do IO<Id.Outcome<AddressLookupError<Reason>, Selection>>:
-        result : Result<&2, &2, AddressLookupError<Reason>, Selection> <- exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, kind, name, maximum)
+        result : Result<&2, &2, AddressLookupError<Reason>, Selection> <- exchangeTransportOptionsWith(~Environment, ~draw, Reason, environment, source, signal, queryOptions, kind, name, maximum)
         completedAddressSearch(Reason, result)
 
-def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.Source, optionsLocal: Id.QueryOptions, kind: U32, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(AddressSearchReport<Reason>):
+def scopedOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.Source, queryOptions: Id.QueryOptions, kind: U32, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(AddressSearchReport<Reason>):
   match pair:
     case (scope, signal):
       do IO<AddressSearchReport<Reason>>:
-        result : Result<&2, &2, Id.SearchRunError<AddressLookupError<Reason>>, Selection> <- Id.runSearchRun(~Context<Environment, Reason>, ~AddressLookupError<Reason>, ~Selection, ~requestAddressSearch(~Environment, ~draw, ~Reason), Context{environment, source, signal, optionsLocal, kind, maximum}, cursor)
+        result : Result<&2, &2, Id.SearchRunError<AddressLookupError<Reason>>, Selection> <- Id.runSearchRun(~Context<Environment, Reason>, ~AddressLookupError<Reason>, ~Selection, ~requestAddressSearch(~Environment, ~draw, ~Reason), Context{environment, source, signal, queryOptions, kind, maximum}, cursor)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return AddressSearchReport{result, reason}
 
-def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, valid: Bool, available: Bool, environment: Environment, source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
   match valid available maximum:
     case False{} _ _: IO.pure(AddressSearchReport<Reason>, AddressSearchReport{Fail{Id.Halted{AddressLookupUnsupportedType{}}}, None{}})
     case True{} _ 0: IO.pure(AddressSearchReport<Reason>, AddressSearchReport{Fail{Id.Halted{InvalidReadSize{}}}, None{}})
@@ -513,15 +513,15 @@ def startOptions(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.
     case True{} True{} size:
       do IO<AddressSearchReport<Reason>>:
         scope : Deadline.Scope<Reason> <- Deadline.create(Reason, milliseconds, parent)
-        scopedOptions(~Environment, ~draw, ~Reason, environment, source, optionsLocal, kind, size, cursor, Deadline.borrow(Reason, scope))
+        scopedOptions(~Environment, ~draw, ~Reason, environment, source, queryOptions, kind, size, cursor, Deadline.borrow(Reason, scope))
 
 # One total deadline spans candidates, server attempts and alias follow-ups.
 # The source must return promptly; arbitrary user IO cannot be force-cancelled.
-def searchTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
-  startOptions(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), environment, source, milliseconds, parent, optionsLocal, kind, maximum, cursor)
+def searchTransportOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+  startOptions(~Environment, ~draw, ~Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.available(source), environment, source, milliseconds, parent, queryOptions, kind, maximum, cursor)
 
-def searchSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
-  searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, Source.TcpSource{source}, milliseconds, parent, optionsLocal, kind, maximum, cursor)
+def searchSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, +kind: U32, maximum: U32, cursor: Id.SearchCursor) -> IO(AddressSearchReport<Reason>):
+  searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, Source.TcpSource{source}, milliseconds, parent, queryOptions, kind, maximum, cursor)
 
 def scopedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, kind: U32, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(AddressSearchReport<Reason>):
   scopedOptions(~Environment, ~draw, ~Reason, environment, Source.TcpSource{source}, Id.defaults(), kind, maximum, cursor, pair)
@@ -553,13 +553,13 @@ def searchRandom(~Reason: Data, address: Connect.Address, port: U32, millisecond
 # consumes search/request policy, not timeout/attempt scheduling or reload.
 def plannedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
   match plan:
-    case Configuration.Plan{optionsLocal, cursor}: searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, optionsLocal, kind, maximum, cursor)
+    case Configuration.Plan{queryOptions, cursor}: searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, queryOptions, kind, maximum, cursor)
 
 def searchConfiguredWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, configuration: Configuration.Configuration, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
   plannedAddressSearch(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, kind, maximum, Configuration.plan(configuration, name, dots, absolute))
 
 # Own only rotation state. Immutable validated settings are retained across
-# borrows; every lookup derives search and wire policy from the same optionsLocal.
+# borrows; every lookup derives search and wire policy from the same options.
 type Owner is Type:
   Owner{config: Configuration.Config<Endpoint.Endpoint>, selector: Source.Owner<Configuration.Attempt<Endpoint.Endpoint>>}
 
@@ -588,8 +588,8 @@ def configured(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
 
 def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index.Error, U32>), environment: Environment, config: Configuration.Config<Endpoint.Endpoint>) -> IO(Result<&2, &1, Index.Error, Owner>):
   match config:
-    case Configuration.Config{Configuration.TransportPrepared{+optionsLocal, +servers}, domains, milliseconds, maximum}:
-      configured(~Environment, ~draw, environment, Configuration.Config{Configuration.TransportPrepared{optionsLocal, servers}, domains, milliseconds, maximum}, servers, Configuration.enabled(Configuration.Rotate{}, optionsLocal))
+    case Configuration.Config{Configuration.TransportPrepared{+queryOptions, +servers}, domains, milliseconds, maximum}:
+      configured(~Environment, ~draw, environment, Configuration.Config{Configuration.TransportPrepared{queryOptions, servers}, domains, milliseconds, maximum}, servers, Configuration.enabled(Configuration.Rotate{}, queryOptions))
 
 def create(config: Configuration.Config<Endpoint.Endpoint>) -> IO(Result<&2, &1, Index.Error, Owner>):
   createWith(~Unit, ~Index.wordIndex, Unit{}, config)
@@ -630,7 +630,7 @@ def replace(previous: Owner, config: Configuration.Config<Endpoint.Endpoint>) ->
 # its candidate, alias and server attempts. The supplied parent stays borrowed.
 def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>, config: Configuration.Config<Endpoint.Endpoint>, parent: Abort.AbortSignal<Reason>, kind: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
   match config plan:
-    case Configuration.Config{Configuration.TransportPrepared{optionsLocal, _}, _, milliseconds, maximum} Configuration.Plan{request, cursor}: searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, Source.Configured{source, optionsLocal}, milliseconds, parent, request, kind, maximum, cursor)
+    case Configuration.Config{Configuration.TransportPrepared{queryOptions, _}, _, milliseconds, maximum} Configuration.Plan{request, cursor}: searchTransportOptionsWith(~Environment, ~draw, ~Reason, environment, Source.Configured{source, queryOptions}, milliseconds, parent, request, kind, maximum, cursor)
 
 def lookupWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, resolver: Resolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
   match resolver:
@@ -663,52 +663,52 @@ def committed(-Reason: Data, source: Source.Source, queries: Id.Queries, check: 
     case Fail{reason}: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupAborted{reason}})
     case Done{_}: validated(Reason, source, Id.validate(queries))
 
-def second(-Reason: Data, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name, id4: U32, result: Result<&2, &2, Id.IdError, U32>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
+def second(-Reason: Data, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name, id4: U32, result: Result<&2, &2, Id.IdError, U32>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupIdentifier{Id.IPv6{}, error}})
     case Done{id6}:
       do IO<Result<&2, &2, PairSetupError<Reason>, Prepared>>:
         check : Result<&2, &2, Abort.AbortReason<Deadline.Cause<Reason>>, Unit> <- Abort.throwIfAborted(Deadline.Cause<Reason>, signal)
-        committed(Reason, source, Id.create(optionsLocal, id4, id6, name), check)
+        committed(Reason, source, Id.create(queryOptions, id4, id6, name), check)
 
-def nextPairSetup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name, id4: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
+def nextPairSetup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name, id4: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
   match reason:
     case Some{why}: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupAborted{why}})
     case None{}:
       do IO<Result<&2, &2, PairSetupError<Reason>, Prepared>>:
         result : Result<&2, &2, Id.IdError, U32> <- draw(environment)
-        second(Reason, source, signal, optionsLocal, name, id4, result)
+        second(Reason, source, signal, queryOptions, name, id4, result)
 
-def firstPairSetup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name, result: Result<&2, &2, Id.IdError, U32>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
+def firstPairSetup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name, result: Result<&2, &2, Id.IdError, U32>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupIdentifier{Id.IPv4{}, error}})
     case Done{id4}:
       do IO<Result<&2, &2, PairSetupError<Reason>, Prepared>>:
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Abort.reason(Deadline.Cause<Reason>, signal)
-        nextPairSetup(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, name, id4, reason)
+        nextPairSetup(~Environment, ~draw, Reason, environment, source, signal, queryOptions, name, id4, reason)
 
-def readyPairSetup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, +environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
+def readyPairSetup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, +environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
   match reason:
     case Some{why}: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupAborted{why}})
     case None{}:
       do IO<Result<&2, &2, PairSetupError<Reason>, Prepared>>:
         result : Result<&2, &2, Id.IdError, U32> <- draw(environment)
-        firstPairSetup(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, name, result)
+        firstPairSetup(~Environment, ~draw, Reason, environment, source, signal, queryOptions, name, result)
 
-def checked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, available: Bool, maximum: U32, environment: Environment, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
+def checked(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, available: Bool, maximum: U32, environment: Environment, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
   match available maximum:
     case _ 0: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupInvalidReadSize{}})
     case False{} _: IO.pure(Result<&2, &2, PairSetupError<Reason>, Prepared>, Fail{PairSetupNoServers{}})
     case True{} _:
       do IO<Result<&2, &2, PairSetupError<Reason>, Prepared>>:
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Abort.reason(Deadline.Cause<Reason>, signal)
-        readyPairSetup(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, name, reason)
+        readyPairSetup(~Environment, ~draw, Reason, environment, source, signal, queryOptions, name, reason)
 
 # Reserve IDs in family order, checking the retained abort state before each
 # draw and before the single rotation commit. IDs may repeat: dedicated query
 # connections/sockets and question matching provide transaction isolation.
-def prepareWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
-  checked(~Environment, ~draw, Reason, Source.available(source), maximum, environment, source, signal, optionsLocal, name)
+def prepareWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, PairSetupError<Reason>, Prepared>):
+  checked(~Environment, ~draw, Reason, Source.available(source), maximum, environment, source, signal, queryOptions, name)
 
 type Reports<-Reason: Data> is Data:
   Reports{ipv4: Result<&2, &2, AddressLookupError<Reason>, Selection>, ipv6: Result<&2, &2, AddressLookupError<Reason>, Selection>}
@@ -730,9 +730,9 @@ def execute(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdErr
 # TCP fallback and alias work; both settle and close before this call returns.
 # Setup failure is distinct from a started query's report; no sibling outcome
 # is fabricated for a question that never started. Merge/search policy is external.
-def exchangeWithAddressPair(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, +environment: Environment, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, name: Id.Name, +maximum: U32) -> IO(Result<&2, &2, PairSetupError<Reason>, Reports<Reason>>):
+def exchangeWithAddressPair(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, +environment: Environment, source: Source.Source, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, queryOptions: Id.QueryOptions, name: Id.Name, +maximum: U32) -> IO(Result<&2, &2, PairSetupError<Reason>, Reports<Reason>>):
   do IO<Result<&2, &2, PairSetupError<Reason>, Reports<Reason>>>:
-    setup : Result<&2, &2, PairSetupError<Reason>, Prepared> <- prepareWith(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, name, maximum)
+    setup : Result<&2, &2, PairSetupError<Reason>, Prepared> <- prepareWith(~Environment, ~draw, Reason, environment, source, signal, queryOptions, name, maximum)
     execute(~Environment, ~draw, Reason, environment, signal, maximum, setup)
 
 # Keep a complete report beside its classification. A protocol response is
@@ -829,8 +829,8 @@ type Config is Data:
 # The deadline is supplied by the caller; timeout/attempt scheduling is separate.
 def fromSearch(servers: List<&2, Source.Server>, milliseconds: U32, maximum: U32, configuration: Configuration.Configuration) -> Config:
   match configuration:
-    case Configuration.Configuration{+optionsLocal, Configuration.Report{+domains, issues}}:
-      Config{servers, domains, Configuration.policy(optionsLocal), Configuration.requestOptions(Configuration.Configuration{optionsLocal, Configuration.Report{domains, issues}}), milliseconds, maximum, Configuration.enabled(Configuration.Rotate{}, optionsLocal)}
+    case Configuration.Configuration{+queryOptions, Configuration.Report{+domains, issues}}:
+      Config{servers, domains, Configuration.policy(queryOptions), Configuration.requestOptions(Configuration.Configuration{queryOptions, Configuration.Report{domains, issues}}), milliseconds, maximum, Configuration.enabled(Configuration.Rotate{}, queryOptions)}
 
 type TcpResolverOwner is Type:
   TcpResolverOwner{config: Config, selector: Source.Owner<Source.Server>}
@@ -963,7 +963,7 @@ type PairSearchReport<-Reason: Data> is Data:
   PairSearchReport{result: Result<&2, &2, Id.SearchRunError<Failure<Reason>>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>, deadline: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>}
 
 type PairSearchContext<-Environment: Data, -Reason: Data> is Data:
-  PairSearchContext{environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, optionsLocal: Id.QueryOptions, priority: Priority, maximum: U32}
+  PairSearchContext{environment: Environment, source: Source.Source, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, options: Id.QueryOptions, priority: Priority, maximum: U32}
 
 def merged(-Reason: Data, outcome: Id.Outcome<PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>) -> Id.Outcome<Failure<Reason>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>:
   match outcome:
@@ -982,37 +982,37 @@ def completedPairSearch(~Reason: Data, priority: Priority, result: Result<&2, &2
 
 def requestPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, context: PairSearchContext<Environment, Reason>, requestPairSearch: Id.SearchRunRequest) -> IO(Id.Outcome<Failure<Reason>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>):
   match context requestPairSearch:
-    case PairSearchContext{environment, source, signal, optionsLocal, priority, maximum} Id.SearchRunRequest{_, name}:
+    case PairSearchContext{environment, source, signal, queryOptions, priority, maximum} Id.SearchRunRequest{_, name}:
       do IO<Id.Outcome<Failure<Reason>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>>>:
-        result : Result<&2, &2, PairSetupError<Reason>, Reports<Reason>> <- exchangeWithAddressPair(~Environment, ~draw, Reason, environment, source, signal, optionsLocal, name, maximum)
+        result : Result<&2, &2, PairSetupError<Reason>, Reports<Reason>> <- exchangeWithAddressPair(~Environment, ~draw, Reason, environment, source, signal, queryOptions, name, maximum)
         completedPairSearch(~Reason, priority, result)
 
-def scopedPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.Source, optionsLocal: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(PairSearchReport<Reason>):
+def scopedPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.Source, queryOptions: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(PairSearchReport<Reason>):
   match pair:
     case (scope, signal):
       do IO<PairSearchReport<Reason>>:
-        result : Result<&2, &2, Id.SearchRunError<Failure<Reason>>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>> <- Id.runSearchRun(~PairSearchContext<Environment, Reason>, ~Failure<Reason>, ~PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>, ~requestPairSearch(~Environment, ~draw, ~Reason), PairSearchContext{environment, source, signal, optionsLocal, priority, maximum}, cursor)
+        result : Result<&2, &2, Id.SearchRunError<Failure<Reason>>, PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>> <- Id.runSearchRun(~PairSearchContext<Environment, Reason>, ~Failure<Reason>, ~PairResultReports<Result<&2, &2, AddressLookupError<Reason>, Selection>>, ~requestPairSearch(~Environment, ~draw, ~Reason), PairSearchContext{environment, source, signal, queryOptions, priority, maximum}, cursor)
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return PairSearchReport{result, reason}
 
-def startPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, available: Bool, environment: Environment, source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor) -> IO(PairSearchReport<Reason>):
+def startPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, available: Bool, environment: Environment, source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor) -> IO(PairSearchReport<Reason>):
   match available maximum:
     case _ 0: IO.pure(PairSearchReport<Reason>, PairSearchReport{Fail{Id.Halted{SetupFailed{PairSetupInvalidReadSize{}}}}, None{}})
     case False{} _: IO.pure(PairSearchReport<Reason>, PairSearchReport{Fail{Id.Halted{SetupFailed{PairSetupNoServers{}}}}, None{}})
     case True{} size:
       do IO<PairSearchReport<Reason>>:
         scope : Deadline.Scope<Reason> <- Deadline.create(Reason, milliseconds, parent)
-        scopedPairSearch(~Environment, ~draw, ~Reason, environment, source, optionsLocal, priority, size, cursor, Deadline.borrow(Reason, scope))
+        scopedPairSearch(~Environment, ~draw, ~Reason, environment, source, queryOptions, priority, size, cursor, Deadline.borrow(Reason, scope))
 
 # Both families finish for a candidate before the shared search cursor advances.
 # One owned deadline spans every candidate and alias. Priority is explicit;
 # this API does not choose an application default or emulate receipt order.
-def searchWithPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor) -> IO(PairSearchReport<Reason>):
-  startPairSearch(~Environment, ~draw, ~Reason, Source.available(source), environment, source, milliseconds, parent, optionsLocal, priority, maximum, cursor)
+def searchWithPairSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, +source: Source.Source, milliseconds: U32, parent: Abort.AbortSignal<Reason>, queryOptions: Id.QueryOptions, priority: Priority, maximum: U32, cursor: Id.SearchCursor) -> IO(PairSearchReport<Reason>):
+  startPairSearch(~Environment, ~draw, ~Reason, Source.available(source), environment, source, milliseconds, parent, queryOptions, priority, maximum, cursor)
 
 def plannedPairResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Configuration.Attempt<Endpoint.Endpoint>>, config: Configuration.Config<Endpoint.Endpoint>, parent: Abort.AbortSignal<Reason>, priority: Priority, plan: Configuration.Plan) -> IO(PairSearchReport<Reason>):
   match config plan:
-    case Configuration.Config{Configuration.TransportPrepared{optionsLocal, _}, _, milliseconds, maximum} Configuration.Plan{request, cursor}: searchWithPairSearch(~Environment, ~draw, ~Reason, environment, Source.Configured{source, optionsLocal}, milliseconds, parent, request, priority, maximum, cursor)
+    case Configuration.Config{Configuration.TransportPrepared{queryOptions, _}, _, milliseconds, maximum} Configuration.Plan{request, cursor}: searchWithPairSearch(~Environment, ~draw, ~Reason, environment, Source.Configured{source, queryOptions}, milliseconds, parent, request, priority, maximum, cursor)
 
 # Borrow the same persistent owner as single-family lookups. Immutable settings
 # supply search, transport, request and deadline policy; rotation state persists
@@ -1090,14 +1090,14 @@ def collectWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -
 def resolveWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, addresses: List<&2, Configuration.Address>) -> IO(ServersReport<LookupError>):
   collectWith(~LookupError, ~Context, ~lookup, context, addresses, State{0n, Nil{}, Nil{}})
 
-# Preserve all source settings for the subsequent search/optionsLocal/reload policy.
+# Preserve all source settings for the subsequent search/options/reload policy.
 # This phase resolves addresses only; it never applies partial option values.
 def prepareWithServers(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, settings: Configuration.Settings) -> IO(Configuration<LookupError>):
   match settings:
-    case Configuration.Settings{+servers, search, optionsLocal, sortlist, diagnostics}:
+    case Configuration.Settings{+servers, search, queryOptions, sortlist, diagnostics}:
       do IO<Configuration<LookupError>>:
         endpoints : ServersReport<LookupError> <- resolveWith(~LookupError, ~Context, ~lookup, context, servers)
-        return Configuration{Configuration.Settings{servers, search, optionsLocal, sortlist, diagnostics}, endpoints}
+        return Configuration{Configuration.Settings{servers, search, queryOptions, sortlist, diagnostics}, endpoints}
 
 # Keep the OS effect separate from the injectable pure scope policy.
 def resolve(address: Configuration.Address) -> IO(Configuration.ScopeReport<Interface.Error>):
@@ -1177,7 +1177,7 @@ def loadWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, Decode
 
 # Native configuration diagnostics retain operation, source code and position.
 # The typed report remains available separately; formatting does not determine
-# whether a configuration is accepted or silently drop invalid optionsLocal.
+# whether a configuration is accepted or silently drop invalid options.
 def operatingSystem(operation: String, code: U32, message: String) -> String:
   operation ++ " (code " ++ Nat.show(U32.to_nat(code)) ++ "): " ++ message
 

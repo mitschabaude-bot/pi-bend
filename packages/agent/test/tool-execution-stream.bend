@@ -11,11 +11,13 @@ import ./tool-execution.bend as Execute
 import ./tool-finalization.bend as Finalize
 import ./turn-update.bend as ConfigTest
 import ./context.bend as H
+import ../../runtime/src/schema-value.bend as Schema
+import ../../runtime/src/abort.bend as Abort
 
 def ResultValue() -> Data: T.AgentToolResult<String>
 def EventValue() -> Data: Execute.EventValue()
 def Emitted() -> Data: Result<&2, &2, String, Unit>
-def StreamValue() -> Data: Loop.AgentEventStream(Unit, String, Unit, String, String, ResultValue(), ResultValue())
+def StreamValue() -> Data: Loop.AgentEventStream(Unit, String, String, ResultValue(), ResultValue())
 def Emitter() -> Data: C.Callback<EventValue(), E.Emission<String>>
 def Sink() -> Data: C.Callback<EventValue(), Emitted()>
 
@@ -31,7 +33,7 @@ def after(unused: Unit, input: Finalize.Input()) -> IO(Finalize.Output()):
   match input:
     case T.ToolHookInput{T.AfterToolCallContext{_, _, args, T.AgentToolResult{_, details, _, _}, False{}, _}, _}:
       do IO<Finalize.Output()>:
-        Test.assertion(U32.is_eq(args, 123) && String.eq(details, "done"), "after hook lost actual execution result")
+        Test.assertion(Schema.equal(args, Schema.Number{F.fromU32(123)}) && String.eq(details, "done"), "after hook lost actual execution result")
         return Done{Some{T.AfterToolCallResult{None{}, None{}, None{}, None{}, Some{True{}}}}}
     case _: IO.die(Finalize.Output(), 1, "after hook execution input differs")
 
@@ -47,7 +49,7 @@ def emitted(value: Emitted()) -> IO(Unit):
 
 def next(value: S.Iteration<EventValue()>, expected: String) -> IO(Unit):
   match value:
-    case S.Yield{event}: Test.assertion(String.eq(T.eventType(Unit, String, Unit, String, String, ResultValue(), ResultValue(), event), expected), "composed tool pipeline event order")
+    case S.Yield{event}: Test.assertion(String.eq(T.eventType(Unit, String, String, ResultValue(), ResultValue(), event), expected), "composed tool pipeline event order")
     case S.End{}: Test.assertion(String.eq(expected, "end"), "composed pipeline ended early")
 
 def drain(expected: List<&2, String>, +iterator: S.Iterator<EventValue(), H.Messages()>) -> IO(Unit):
@@ -67,28 +69,30 @@ def finalMessages(values: H.Messages()) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +stream : StreamValue() <- Loop.createAgentStream(~Unit, ~String, ~Unit, ~String, ~String, ~ResultValue(), ~ResultValue())
+    +stream : StreamValue() <- Loop.createAgentStream(~Unit, ~String, ~String, ~ResultValue(), ~ResultValue())
     +iterator : S.Iterator<EventValue(), H.Messages()> <- S.iterator(EventValue(), H.Messages(), stream)
-    +emitter : Emitter() <- Loop.createAgentStreamEmitter(~Unit, ~String, ~Unit, ~String, ~String, ~ResultValue(), ~ResultValue(), ~String, stream)
-    +sink : Sink() <- Loop.createAwaitedEventSink(~Unit, ~String, ~Unit, ~String, ~String, ~ResultValue(), ~ResultValue(), ~String, emitter)
+    +emitter : Emitter() <- Loop.createAgentStreamEmitter(~Unit, ~String, ~String, ~ResultValue(), ~ResultValue(), ~String, stream)
+    +sink : Sink() <- Loop.createAwaitedEventSink(~Unit, ~String, ~String, ~ResultValue(), ~ResultValue(), ~String, emitter)
     +executor : C.Callback<Execute.Input(), Execute.Output()> <- C.create(~Unit, ~Execute.Input(), ~Execute.Output(), ~execute, Unit{})
     +hook : Finalize.Hook() <- C.create(~Unit, ~Finalize.Input(), ~Finalize.Output(), ~after, Unit{})
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
-    +call : Ai.ToolCall<String> = Ai.ToolCall{"call", "echo", "raw", None{}, None{}}
-    +updates : Loop.ToolUpdateRun<String, String> <- Loop.createToolUpdateRun(~Unit, ~String, ~Unit, ~String, ~String, ~String, call, emitter)
-    +prepared : Loop.PreparedToolCall<Unit, U32, String, String, Unit, String> = Loop.PreparedToolCall{call, T.AgentTool{"echo", "", Unit{}, None{}, "", None{}, executor, None{}, None{}}, 123}
-    started : Emitted() <- C.call(EventValue(), Emitted(), sink, T.ToolExecutionStart{"call", "echo", "raw"})
+    +call : Ai.ToolCall<Schema.Value> = Ai.ToolCall{"call", "echo", Schema.Text{"raw"}, None{}, None{}}
+    +updates : Loop.ToolUpdateRun<String, String> <- Loop.createToolUpdateRun(~Unit, ~String, ~String, ~String, call, emitter)
+    +prepared : Loop.PreparedToolCall<String, String> = Loop.PreparedToolCall{call, T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, executor, None{}, None{}}, Schema.Number{F.fromU32(123)}}
+    started : Emitted() <- C.call(EventValue(), Emitted(), sink, T.ToolExecutionStart{"call", "echo", Schema.Text{"raw"}})
     emitted(started)
-    outcome : Execute.Outcome() <- Loop.executePreparedToolCall(Unit, U32, String, String, Unit, String, prepared, Some{Unit{}}, updates, "empty details", error => error)
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    outcome : Execute.Outcome() <- Loop.executePreparedToolCall(String, String, prepared, Some{Abort.signal(Unit, controller)}, updates, "empty details", error => error)
     result : Loop.ExecutedToolCallOutcome<String> <- executed(outcome)
     +zero : F.F64 = F.fromU32(0)
-    assistant : Ai.AssistantMessage<String, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
-    +finalized : Loop.FinalizedToolCallOutcome<String, String> <- Loop.finalizeExecutedToolCall(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, T.AgentContext{Nil{}, None{}}, assistant, prepared, result, Finalize.configuration(converter, Some{hook}), Some{Unit{}}, "empty details", error => error)
-    Test.assertion(Loop.shouldTerminateToolBatch(String, String, finalized <> Nil{}), "after hook termination must affect batch policy")
-    ended : Emitted() <- Loop.emitToolExecutionEnd(Unit, String, Unit, String, String, ResultValue(), String, finalized, sink)
+    assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
+    controller2 : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +finalized : Loop.FinalizedToolCallOutcome<String> <- Loop.finalizeExecutedToolCall(Unit, String, String, String, Unit, T.AgentContext{Nil{}, None{}}, assistant, prepared, result, Finalize.configuration(converter, Some{hook}), Some{Abort.signal(Unit, controller2)}, "empty details", error => error)
+    Test.assertion(Loop.shouldTerminateToolBatch(String, finalized <> Nil{}), "after hook termination must affect batch policy")
+    ended : Emitted() <- Loop.emitToolExecutionEnd(Unit, String, String, ResultValue(), String, finalized, sink)
     emitted(ended)
-    +message : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, String, finalized)
-    delivered : Emitted() <- Loop.emitToolResultMessage(Unit, String, Unit, String, String, ResultValue(), ResultValue(), String, message, sink)
+    +message : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, finalized)
+    delivered : Emitted() <- Loop.emitToolResultMessage(Unit, String, String, ResultValue(), ResultValue(), String, message, sink)
     emitted(delivered)
     completed : Emitted() <- C.call(EventValue(), Emitted(), sink, T.AgentEnd{T.LlmMessage{Ai.ToolResult{message}} <> Nil{}})
     emitted(completed)
@@ -102,5 +106,5 @@ def main() -> IO(Unit):
     C.dispose(EventValue(), Emitted(), sink)
     C.dispose(EventValue(), E.Emission<String>, emitter)
     S.disposeIterator(EventValue(), H.Messages(), iterator)
-    Loop.disposeAgentStream(Unit, String, Unit, String, String, ResultValue(), ResultValue(), stream)
+    Loop.disposeAgentStream(Unit, String, String, ResultValue(), ResultValue(), stream)
     IO.print("PASS composed tool execution, progress, after-hook termination, result messages and canonical agent stream")

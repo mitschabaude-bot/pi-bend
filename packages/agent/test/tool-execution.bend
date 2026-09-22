@@ -7,10 +7,13 @@ import ../../runtime/src/callback.bend as C
 import ../../runtime/src/deferred.bend as D
 import ../../runtime/src/ref.bend as R
 import ./message-events.bend as Test
+import ../../runtime/src/schema-value.bend as Schema
+import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/f64.bend as F
 
-def Input() -> Data: T.ToolExecutionInput<U32, Unit, String>
+def Input() -> Data: T.ToolExecutionInput<String>
 def Output() -> Data: Result<&2, &2, String, T.AgentToolResult<String>>
-def EventValue() -> Data: T.AgentEvent<Unit, String, Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>>
+def EventValue() -> Data: T.AgentEvent<Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>>
 def Outcome() -> Data: Result<&2, &2, String, Loop.ExecutedToolCallOutcome<String>>
 def Update() -> Data: T.AgentToolUpdateCallback(String)
 type ToolState is Data:
@@ -34,9 +37,9 @@ def sendUpdates(enabled: Bool, +callback: Update()) -> IO(Unit):
 
 def execute(state: ToolState, input: Input()) -> IO(Output()):
   match state input:
-    case ToolState{saved, returned, fail, updates} T.ToolExecutionInput{id, args, Some{Unit{}}, Some{+callback}}:
+    case ToolState{saved, returned, fail, updates} T.ToolExecutionInput{id, args, Some{_}, Some{+callback}}:
       do IO<Output()>:
-        Test.assertion(String.eq(id, "call") && U32.is_eq(args, 123), "tool execution lost id/validated arguments")
+        Test.assertion(String.eq(id, "call") && Schema.equal(args, Schema.Number{F.fromU32(123)}), "tool execution lost id/validated arguments")
         R.write(Maybe<&2, Update()>, saved, Some{callback})
         sendUpdates(updates, callback)
         sent : Bool <- Chan.send(Unit, returned, Unit{})
@@ -57,7 +60,7 @@ def emit(state: EmitState, event: EventValue()) -> IO(E.Emission<String>):
   match state event:
     case EmitState{log, first, second, fail, +immediate} T.ToolExecutionUpdate{id, name, raw, T.AgentToolResult{_, +details, _, _}}:
       do IO<E.Emission<String>>:
-        Test.assertion(String.eq(id, "call") && String.eq(name, "echo") && String.eq(raw, "raw"), "update must preserve original call arguments")
+        Test.assertion(String.eq(id, "call") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw"}), "update must preserve original call arguments")
         R.modify(List<&2, String>, Unit, log, entries => (details <> entries, Unit{}))
         returnGate : Chan(Unit) = Bool.pick(Chan(Unit), String.eq(details, "first"), first, second)
         error : String = Bool.pick(String, fail && (immediate || String.eq(details, "first")), Bool.pick(String, String.eq(details, "first"), "listener failed", "second listener failed"), "")
@@ -118,10 +121,11 @@ def scenario(+toolFailed: Bool, +listenerFailed: Bool, +hasUpdates: Bool, +immed
     +log : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
     +emitter : C.Callback<EventValue(), E.Emission<String>> <- C.create(~EmitState, ~EventValue(), ~E.Emission<String>, ~emit, EmitState{log, first, second, listenerFailed, immediate})
     +executor : C.Callback<Input(), Output()> <- C.create(~ToolState, ~Input(), ~Output(), ~execute, ToolState{saved, returned, toolFailed, hasUpdates})
-    +call : Ai.ToolCall<String> = Ai.ToolCall{"call", "echo", "raw", None{}, None{}}
-    +updates : Loop.ToolUpdateRun<String, String> <- Loop.createToolUpdateRun(~Unit, ~String, ~Unit, ~String, ~String, ~String, call, emitter)
-    prepared : Loop.PreparedToolCall<Unit, U32, String, String, Unit, String> = Loop.PreparedToolCall{call, T.AgentTool{"echo", "", Unit{}, None{}, "", None{}, executor, None{}, None{}}, 123}
-    running : Chan(Outcome()) <- IO.fork(Outcome(), finish(Loop.executePreparedToolCall(Unit, U32, String, String, Unit, String, prepared, Some{Unit{}}, updates, "empty details", error => error), done))
+    +call : Ai.ToolCall<Schema.Value> = Ai.ToolCall{"call", "echo", Schema.Text{"raw"}, None{}, None{}}
+    +updates : Loop.ToolUpdateRun<String, String> <- Loop.createToolUpdateRun(~Unit, ~String, ~String, ~String, call, emitter)
+    prepared : Loop.PreparedToolCall<String, String> = Loop.PreparedToolCall{call, T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, executor, None{}, None{}}, Schema.Number{F.fromU32(123)}}
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    running : Chan(Outcome()) <- IO.fork(Outcome(), finish(Loop.executePreparedToolCall(String, String, prepared, Some{Abort.signal(Unit, controller)}, updates, "empty details", error => error), done))
     # Both update invocations must return while their listeners are blocked.
     toolReturned : Maybe<&1, Unit> <- Chan.recv(Unit, returned)
     +delayed : Bool = hasUpdates && Bool.not(immediate)

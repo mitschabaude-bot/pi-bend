@@ -16,6 +16,7 @@ import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 
 import ./tool-call-sequential.bend as S
+import ../../runtime/src/abort.bend as Abort
 
 # Abort during preparation as well as at a blocked immediate outcome.
 def emit(environment: S.Recording, event: H.EventValue()) -> IO(E.Emission<String>):
@@ -28,13 +29,13 @@ def emit(environment: S.Recording, event: H.EventValue()) -> IO(E.Emission<Strin
         R.write(Bool, signal, previous || (abortAfter && (String.eq(name, "end:call") || String.eq(name, "end:bad"))))
         return E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
 
-def finishRun(started: Result<&2, &2, String, Parallel.ParallelRun<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>>) -> IO(S.Outcome()):
+def finishRun(started: Result<&2, &2, String, Parallel.ParallelRun<Unit, String, String, String>>) -> IO(S.Outcome()):
   match started:
     case Fail{error}: IO.pure(S.Outcome(), Fail{error})
     case Done{+run}:
       do IO<S.Outcome()>:
-        result : S.Outcome() <- Parallel.resultParallel(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
-        Parallel.disposeParallel(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        result : S.Outcome() <- Parallel.resultParallel(Unit, String, String, String, run)
+        Parallel.disposeParallel(Unit, String, String, String, run)
         return result
 
 def contains(+name: String, events: List<&2, String>) -> Bool:
@@ -54,17 +55,18 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     +converter : C.Callback<H.Messages(), H.Converted()> <- C.create(~Unit, ~H.Messages(), ~H.Converted(), ~H.convert, Unit{})
     +beforeHook : C.Callback<S.BeforeInput(), S.BeforeOutput()> <- C.create(~Bool, ~S.BeforeInput(), ~S.BeforeOutput(), ~S.before, blockBefore)
     +hook : C.Callback<S.AfterInput(), S.AfterOutput()> <- C.create(~R.Ref<U32>, ~S.AfterInput(), ~S.AfterOutput(), ~S.after, hooks)
-    +abort : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Unit>, ~Bool, ~S.aborted, signal)
+    +abort : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~R.Ref<Bool>, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~S.aborted, signal)
     +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~S.Recording, ~H.EventValue(), ~E.Emission<String>, ~emit, S.Recording{events, failAt, abortAfter, signal})
-    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
+    +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    capture : Call.CallCapture<Unit, String, String, String, Unit> = Call.CallCapture{assistant, S.configuration(converter, beforeHook, hook), Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"}
     toolCalls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}} <> Ai.ToolCall{"bad", "echo", H.field(V.Text{"bad"}), None{}, None{}} <> Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}} <> Nil{}
-    started : Result<&2, &2, String, Parallel.ParallelRun<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>> <- Parallel.startParallel(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context, toolCalls)
+    started : Result<&2, &2, String, Parallel.ParallelRun<Unit, String, String, String>> <- Parallel.startParallel(~Unit, ~String, ~String, ~String, ~Unit, ~S.render, capture, context, toolCalls)
     result : S.Outcome() <- finishRun(started)
     # Upstream runs the before hook before checking abort; its returned
     # context survives even when the signal was already aborted.
@@ -83,7 +85,7 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     C.dispose(H.Messages(), H.Converted(), converter)
     C.dispose(S.BeforeInput(), S.BeforeOutput(), beforeHook)
     C.dispose(S.AfterInput(), S.AfterOutput(), hook)
-    C.dispose(Maybe<&2, Unit>, Bool, abort)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, abort)
     C.dispose(H.EventValue(), Result<&2, &2, String, Unit>, sink)
     C.dispose(H.EventValue(), E.Emission<String>, emitter)
     dropped : List<&2, String> <- R.dispose(List<&2, String>, events)

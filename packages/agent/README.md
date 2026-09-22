@@ -4,7 +4,7 @@ Reference: pi-mono `46c9de402`, `packages/agent`. This is a partial library port
 
 ## Modules
 
-`types.bend` (pi's agent `types.ts`, including the stream lease at the provider boundary), `agent-loop.bend` (`agent-loop.ts`: tool preparation, sequential and parallel execution, event emission, turn completion, tool-change declarations, the main loop and its entries), `agent.bend` (`agent.ts`: immutable state transitions, the two pending queues, continue planning, the synchronized run owner, listeners, failure recovery and the public `Agent`), `stream-fn.bend` (the default stream-function registry) and `harness/utils/truncate.bend`.
+`types.bend` (pi's agent `types.ts`, including the stream lease at the provider boundary; the package is generic over `DiagnosticDetails`, `ToolDetails`, `Custom`, `ExecutionError` and `Telemetry` only, with schema-valued tool arguments, the runtime abort signal, JSON sampling values and the native fetch fixed), `agent-loop.bend` (`agent-loop.ts`: tool preparation, sequential and parallel execution, event emission, turn completion, tool-change declarations, the main loop and its entries), `agent.bend` (`agent.ts`: immutable state transitions, the two pending queues, continue planning, the synchronized run owner, listeners, failure recovery and the public `Agent`), `stream-fn.bend` (the default stream-function registry) and `harness/utils/truncate.bend`.
 
 ## History
 

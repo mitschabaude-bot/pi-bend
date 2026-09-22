@@ -85,8 +85,8 @@ type Keyword is Data:
   SortKey{}
   OtherKey{}
 
-def keywordFlags(server: Bool, domain: Bool, searchLocal: Bool, options: Bool, sort: Bool) -> Keyword:
-  match server domain searchLocal options sort:
+def keywordFlags(server: Bool, domain: Bool, searchValue: Bool, options: Bool, sort: Bool) -> Keyword:
+  match server domain searchValue options sort:
     case True{} _ _ _ _: ServerKey{}
     case _ True{} _ _ _: DomainKey{}
     case _ _ True{} _ _: SearchKey{}
@@ -318,7 +318,7 @@ def resolveWithScope(~LookupError: Data, ~Context: Data, ~lookup: Context -> Str
         return resolved(LookupError, value, result)
 
 # Inputs are already decoded. Supplying Some for localDomains explicitly
-# overrides file searchLocal/domain directives, including an empty supplied list.
+# overrides file search/domain directives, including an empty supplied list.
 type Overrides is Data:
   Overrides{hostname: Maybe<&2, String>, localDomains: Maybe<&2, List<&2, String>>, options: List<&2, String>}
 
@@ -326,12 +326,12 @@ type Diagnostics is Data:
   Diagnostics{invalidServers: List<&2, String>, unknownLines: List<&2, String>}
 
 type Settings is Data:
-  Settings{servers: List<&2, Address>, searchLocal: List<&2, String>, options: List<&2, String>, sortlist: List<&2, String>, diagnostics: Diagnostics}
+  Settings{servers: List<&2, Address>, search: List<&2, String>, options: List<&2, String>, sortlist: List<&2, String>, diagnostics: Diagnostics}
 
 type Collected is Data:
-  Collected{servers: List<&2, Address>, searchLocal: Maybe<&2, List<&2, String>>, options: List<&2, String>, sortlist: List<&2, String>, diagnostics: Diagnostics}
+  Collected{servers: List<&2, Address>, search: Maybe<&2, List<&2, String>>, options: List<&2, String>, sortlist: List<&2, String>, diagnostics: Diagnostics}
 
-# All accumulated lists except the replacing searchLocal list are reversed.
+# All accumulated lists except the replacing search list are reversed.
 def prepend(values: List<&2, String>, reversed: List<&2, String>) -> List<&2, String>:
   match values:
     case Nil{}: reversed
@@ -339,25 +339,25 @@ def prepend(values: List<&2, String>, reversed: List<&2, String>) -> List<&2, St
 
 def serverSettings(token: String, value: Result<&2, &2, AddressError, Address>, state: Collected) -> Collected:
   match value state:
-    case Done{address} Collected{servers, searchLocal, options, sort, diagnostics}: Collected{address <> servers, searchLocal, options, sort, diagnostics}
-    case Fail{_} Collected{servers, searchLocal, options, sort, Diagnostics{invalid, unknown}}: Collected{servers, searchLocal, options, sort, Diagnostics{token <> invalid, unknown}}
+    case Done{address} Collected{servers, searchValue, options, sort, diagnostics}: Collected{address <> servers, searchValue, options, sort, diagnostics}
+    case Fail{_} Collected{servers, searchValue, options, sort, Diagnostics{invalid, unknown}}: Collected{servers, searchValue, options, sort, Diagnostics{token <> invalid, unknown}}
 
 def applyEntry(entry: Entry, state: Collected) -> Collected:
   match entry state:
     case Nameserver{token, parsed} previous: serverSettings(token, parsed, previous)
     case Domain{name} Collected{servers, _, options, sort, diagnostics}: Collected{servers, Some{name <> Nil{}}, options, sort, diagnostics}
     case Search{names} Collected{servers, _, options, sort, diagnostics}: Collected{servers, Some{names}, options, sort, diagnostics}
-    case Options{values} Collected{servers, searchLocal, options, sort, diagnostics}: Collected{servers, searchLocal, prepend(values, options), sort, diagnostics}
-    case Sortlist{values} Collected{servers, searchLocal, options, sort, diagnostics}: Collected{servers, searchLocal, options, prepend(values, sort), diagnostics}
-    case Unknown{line} Collected{servers, searchLocal, options, sort, Diagnostics{invalid, unknown}}: Collected{servers, searchLocal, options, sort, Diagnostics{invalid, line <> unknown}}
+    case Options{values} Collected{servers, searchValue, options, sort, diagnostics}: Collected{servers, searchValue, prepend(values, options), sort, diagnostics}
+    case Sortlist{values} Collected{servers, searchValue, options, sort, diagnostics}: Collected{servers, searchValue, options, prepend(values, sort), diagnostics}
+    case Unknown{line} Collected{servers, searchValue, options, sort, Diagnostics{invalid, unknown}}: Collected{servers, searchValue, options, sort, Diagnostics{invalid, line <> unknown}}
 
 def collectSettings(entries: List<&2, Entry>, state: Collected) -> Collected:
   match entries:
     case Nil{}: state
     case entry <> rest: collectSettings(rest, applyEntry(entry, state))
 
-# The default searchLocal domain is the suffix after the hostname's first dot.
-# No dot means no local searchLocal suffix; an explicit final dot retains root.
+# The default search domain is the suffix after the hostname's first dot.
+# No dot means no local search suffix; an explicit final dot retains root.
 def hostnameDomain(text: String) -> List<&2, String>:
   match text:
     case SNil{}: Nil{}
@@ -382,8 +382,8 @@ def nameservers(reversed: List<&2, Address>) -> List<&2, Address>:
 
 def finalized(overrides: Overrides, state: Collected) -> Settings:
   match overrides state:
-    case Overrides{hostname, local, environmentOptions} Collected{servers, searchLocal, options, sort, Diagnostics{invalid, unknown}}:
-      Settings{nameservers(servers), searchList(hostname, local, searchLocal), List.reverse(&2, String, prepend(environmentOptions, options)), List.reverse(&2, String, sort), Diagnostics{List.reverse(&2, String, invalid), List.reverse(&2, String, unknown)}}
+    case Overrides{hostname, local, environmentOptions} Collected{servers, searchValue, options, sort, Diagnostics{invalid, unknown}}:
+      Settings{nameservers(servers), searchList(hostname, local, searchValue), List.reverse(&2, String, prepend(environmentOptions, options)), List.reverse(&2, String, sort), Diagnostics{List.reverse(&2, String, invalid), List.reverse(&2, String, unknown)}}
 
 # Resolve source precedence only. Option/sort interpretation, server limits,
 # IPv6 scope resolution and network scheduling are subsequent typed layers.
@@ -396,7 +396,7 @@ type Issue is Data:
 type Report is Data:
   Report{domains: List<&2, Search.Domain>, issues: List<&2, Issue>}
 
-# The system searchLocal loop removes one leading dot before appending a suffix.
+# The system search loop removes one leading dot before appending a suffix.
 # Empty and "." both mean root. A remaining leading dot would create an
 # empty label after the base name and must not become another root alias.
 def withoutLeadingDot(text: String) -> String:
@@ -427,7 +427,7 @@ def collect(values: List<&2, String>, +position: Nat, report: Report) -> Report:
     case +text <> rest previous: collect(rest, (position + 1n : Nat), added(position, text, suffix(withoutLeadingDot(text)), previous))
 
 # Retain every entry, including duplicates and invalid suffixes. No query is
-# issued here and no searchLocal option or error-recovery policy is inferred.
+# issued here and no search option or error-recovery policy is inferred.
 def prepareDomains(values: List<&2, String>) -> Report:
   collect(values, 0n, Report{Nil{}, Nil{}})
 
@@ -548,7 +548,7 @@ type Failure is Data:
 type HostnameReport is Data:
   HostnameReport{hostname: Maybe<&2, String>, failure: Maybe<&2, Failure>}
 
-# Domain/searchLocal directives replace a searchLocal list but never erase its presence.
+# Domain/search directives replace a search list but never erase its presence.
 # One such entry is enough to know hostname fallback is unnecessary.
 def fileNeedsHostname(entries: List<&2, Entry>) -> Bool:
   match entries:
@@ -589,10 +589,10 @@ def loaded(-DecodeError: Data, result: Result<&2, &2, FileError<DecodeError>, Se
     case Fail{error}: Fail{LoadFile{error}}
     case Done{settings}: Done{settings}
 
-# An injected environment captureLocal can use the same file-loading path. A failed
-# captureLocal never opens the file or substitutes missing-variable defaults.
-def captured(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, hostname: Maybe<&2, String>, path: String, chunkSize: U32, byteLimit: Nat, captureLocal: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, Settings>):
-  match captureLocal:
+# An injected environment capture can use the same file-loading path. A failed
+# capture never opens the file or substitutes missing-variable defaults.
+def captured(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, hostname: Maybe<&2, String>, path: String, chunkSize: U32, byteLimit: Nat, captureResult: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, Settings>):
+  match captureResult:
     case Fail{error}: IO.pure(Result<&2, &2, LoadError<DecodeError>, Settings>, Fail{Environment{error}})
     case Done{values}:
       do IO<Result<&2, &2, LoadError<DecodeError>, Settings>>:
@@ -603,8 +603,8 @@ def captured(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, Decode
 # policy remain explicit inputs; errors do not become an incomplete config.
 def loadWithLoad(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, hostname: Maybe<&2, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<DecodeError>, Settings>):
   do IO<Result<&2, &2, LoadError<DecodeError>, Settings>>:
-    captureLocal : Result<&2, &2, EnvironmentError, Values> <- capture()
-    captured(~DecodeError, ~decode, hostname, path, chunkSize, byteLimit, captureLocal)
+    captureResult : Result<&2, &2, EnvironmentError, Values> <- capture()
+    captured(~DecodeError, ~decode, hostname, path, chunkSize, byteLimit, captureResult)
 
 # Request policy is only one projection of resolver settings. Keep all values
 # for the later transport, retry, rotation, response and reload layers.
@@ -694,10 +694,10 @@ def parsedSystem(~DecodeError: Data, ~Context: Data, ~lookup: Context -> IO(Resu
         hostnameSystem : HostnameReport <- resolveWith(~Context, ~lookup, context, entries, values)
         return Done{configuredSystem(entries, values, hostnameSystem)}
 
-# Hostname fallback is lazy: captureLocal errors and file errors return first, and
-# an environment/file searchLocal list suppresses the hostname call entirely.
-def capturedWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, path: String, chunkSize: U32, byteLimit: Nat, captureLocal: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemReport>):
-  match captureLocal:
+# Hostname fallback is lazy: capture errors and file errors return first, and
+# an environment/file search list suppresses the hostname call entirely.
+def capturedWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, path: String, chunkSize: U32, byteLimit: Nat, captureResult: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemReport>):
+  match captureResult:
     case Fail{error}: IO.pure(Result<&2, &2, LoadError<DecodeError>, SystemReport>, Fail{Environment{error}})
     case Done{values}:
       do IO<Result<&2, &2, LoadError<DecodeError>, SystemReport>>:
@@ -709,8 +709,8 @@ def hostnameSystem(unused: Unit) -> IO(Result<&1, &1, U32 & String, String>):
 
 def loadWithSystem(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemReport>):
   do IO<Result<&2, &2, LoadError<DecodeError>, SystemReport>>:
-    captureLocal : Result<&2, &2, EnvironmentError, Values> <- capture()
-    capturedWith(~DecodeError, ~decode, ~Unit, ~hostnameSystem, Unit{}, path, chunkSize, byteLimit, captureLocal)
+    captureResult : Result<&2, &2, EnvironmentError, Values> <- capture()
+    capturedWith(~DecodeError, ~decode, ~Unit, ~hostnameSystem, Unit{}, path, chunkSize, byteLimit, captureResult)
 
 # Linux errno values are confined to this platform policy. Only persistent
 # open failures permit defaults; read/resource/decoder failures stay fatal.
@@ -753,10 +753,10 @@ def selectedWith(~DecodeError: Data, ~Context: Data, ~lookup: Context -> IO(Resu
 def parsedWith(~DecodeError: Data, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, values: Values, result: Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>):
   selectedWith(~DecodeError, ~Context, ~lookup, context, values, select(DecodeError, result))
 
-# Environment captureLocal precedes file access, including the fallback path.
+# Environment capture precedes file access, including the fallback path.
 # An unavailable file still allows LOCALDOMAIN/RES_OPTIONS and lazy hostname.
-def capturedWithSystemLinux(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, path: String, chunkSize: U32, byteLimit: Nat, captureLocal: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>):
-  match captureLocal:
+def capturedWithSystemLinux(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, ~Context: Data, ~lookup: Context -> IO(Result<&1, &1, U32 & String, String>), context: Context, path: String, chunkSize: U32, byteLimit: Nat, captureResult: Result<&2, &2, EnvironmentError, Values>) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>):
+  match captureResult:
     case Fail{error}: IO.pure(Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>, Fail{Environment{error}})
     case Done{values}:
       do IO<Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>>:
@@ -765,8 +765,8 @@ def capturedWithSystemLinux(~DecodeError: Data, ~decode: List<&2, U32> -> Result
 
 def loadWithSystemLinux(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>):
   do IO<Result<&2, &2, LoadError<DecodeError>, SystemLinuxReport>>:
-    captureLocal : Result<&2, &2, EnvironmentError, Values> <- capture()
-    capturedWithSystemLinux(~DecodeError, ~decode, ~Unit, ~hostnameSystem, Unit{}, path, chunkSize, byteLimit, captureLocal)
+    captureResult : Result<&2, &2, EnvironmentError, Values> <- capture()
+    capturedWithSystemLinux(~DecodeError, ~decode, ~Unit, ~hostnameSystem, Unit{}, path, chunkSize, byteLimit, captureResult)
 
 # Valid original positions in glibc's one-to-three-server configuration.
 # Rotation reorders entries, never changes this position metadata.
@@ -776,15 +776,15 @@ type Position is Data:
   SecondOfThree{}
   ThirdOfThree{}
 
-# Whole secondsLocal, necessarily positive even when retransmission is configured 0.
+# Whole seconds, necessarily positive even when retransmission is configured 0.
 type Duration is Data:
   Duration{additionalSeconds: Nat}
 
 type UdpTimeoutError is Data:
-  UdpTimeoutInvalidTimeout{secondsLocal: U32}
+  UdpTimeoutInvalidTimeout{seconds: U32}
 
-def positive(secondsLocal: Nat) -> Duration:
-  match secondsLocal:
+def positive(wholeSeconds: Nat) -> Duration:
+  match wholeSeconds:
     case Zero{}: Duration{Zero{}}
     case Succ{rest}: Duration{rest}
 
@@ -806,17 +806,17 @@ def checked(valid: Bool, timeout: U32, position: Position) -> Result<&2, &2, Udp
 
 # Resolver option parsing already caps timeout at 30. Reject direct invalid
 # values instead of overflowing arithmetic or silently changing caller input.
-# Checked values scale to at most 40 secondsLocal, so U32 arithmetic cannot overflow.
+# Checked values scale to at most 40 seconds, so U32 arithmetic cannot overflow.
 def budget(+timeout: U32, position: Position) -> Result<&2, &2, UdpTimeoutError, Duration>:
   checked(U32.is_le(timeout, 30), timeout, position)
 
-# Prepared UDP budgets are 1..40 secondsLocal. Validate even manually constructed
+# Prepared UDP budgets are 1..40 seconds. Validate even manually constructed
 # durations before conversion, consuming at most 40 successors of their Nat.
 type MillisecondsError is Data:
   OutOfRange{}
 
-def countMilliseconds(fuel: Nat, secondsLocal: Nat, accumulated: U32) -> Result<&2, &2, MillisecondsError, U32>:
-  match fuel secondsLocal:
+def countMilliseconds(fuel: Nat, wholeSeconds: Nat, accumulated: U32) -> Result<&2, &2, MillisecondsError, U32>:
+  match fuel wholeSeconds:
     case _ Zero{}: Done{accumulated}
     case Zero{} Succ{_}: Fail{OutOfRange{}}
     case Succ{rest} Succ{remaining}: countMilliseconds(rest, remaining, (accumulated + 1000 : U32))
@@ -827,7 +827,7 @@ def milliseconds(duration: Duration) -> Result<&2, &2, MillisecondsError, U32>:
 type Error is Data:
   NoServers{}
   TooManyServers{}
-  InvalidTimeout{secondsLocal: U32}
+  InvalidTimeout{seconds: U32}
 
 type Located<-Server: Data> is Data:
   Located{server: Server, position: Position}
@@ -848,7 +848,7 @@ def locate(-Server: Data, servers: List<&2, Server>) -> Result<&2, &2, Error, Li
 
 def timed(-Server: Data, server: Server, position: Position, result: Result<&2, &2, UdpTimeoutError, Duration>) -> Result<&2, &2, Error, Attempt<Server>>:
   match result:
-    case Fail{UdpTimeoutInvalidTimeout{secondsLocal}}: Fail{InvalidTimeout{secondsLocal}}
+    case Fail{UdpTimeoutInvalidTimeout{wholeSeconds}}: Fail{InvalidTimeout{wholeSeconds}}
     case Done{duration}: Done{Attempt{server, position, duration}}
 
 def entryUdpPlan(-Server: Data, timeout: U32, value: Located<Server>) -> Result<&2, &2, Error, Attempt<Server>>:
@@ -892,7 +892,7 @@ def prepareTransport(-Server: Data, options: ResolverOptions, servers: List<&2, 
     case ResolverOptions{ndots, +timeout, attempts, features}: timedTransport(Server, ResolverOptions{ndots, timeout, attempts, features}, prepare(Server, timeout, servers))
 
 # A complete immutable configuration. Options have one canonical home in
-# transport; request/searchLocal projections use those same retained settings.
+# transport; request/search projections use those same retained settings.
 type Config<-Server: Data> is Data:
   Config{transport: TransportPrepared<Server>, domains: Report, milliseconds: U32, maximum: U32}
 
@@ -901,8 +901,8 @@ def assembled(-Server: Data, domains: Report, milliseconds: U32, maximum: U32, r
     case Fail{error}: Fail{error}
     case Done{transport}: Done{Config{transport, domains, milliseconds, maximum}}
 
-def prepareConfiguration(-Server: Data, servers: List<&2, Server>, milliseconds: U32, maximum: U32, searchLocal: Configuration) -> Result<&2, &2, Error, Config<Server>>:
-  match searchLocal:
+def prepareConfiguration(-Server: Data, servers: List<&2, Server>, milliseconds: U32, maximum: U32, searchValue: Configuration) -> Result<&2, &2, Error, Config<Server>>:
+  match searchValue:
     case Configuration{options, domains}: assembled(Server, domains, milliseconds, maximum, prepareTransport(Server, options, servers))
 
 def search(-Server: Data, config: Config<Server>) -> Configuration:

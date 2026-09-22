@@ -9,7 +9,7 @@ import ./bounded.bend as File
 # A hosts entry retains the file's canonical spelling and aliases. Address
 # values are generic so name matching and ordering laws need no socket IO.
 type Entry<-Address: Data> is Data:
-  Entry{addressLocal: Address, canonical: String, aliases: List<&2, String>}
+  Entry{address: Address, canonical: String, aliases: List<&2, String>}
 
 def same(left: String, right: String) -> Bool:
   match left right:
@@ -135,8 +135,8 @@ type Family is Data:
   IPv4Only{}
   IPv6Only{}
 
-def accepts(family: Family, addressLocal: Address) -> Bool:
-  match family addressLocal:
+def accepts(family: Family, entryAddress: Address) -> Bool:
+  match family entryAddress:
     case Any{} _: True{}
     case IPv4Only{} V4{_}: True{}
     case IPv6Only{} V6{_}: True{}
@@ -145,7 +145,7 @@ def accepts(family: Family, addressLocal: Address) -> Bool:
 def select(+family: Family, entries: List<&2, Entry<Address>>) -> List<&2, Entry<Address>>:
   match entries:
     case Nil{}: Nil{}
-    case Entry{+addressLocal, canonical, aliases} <> rest: selected(Address, accepts(family, addressLocal), Entry{addressLocal, canonical, aliases}, select(family, rest))
+    case Entry{+entryAddress, canonical, aliases} <> rest: selected(Address, accepts(family, entryAddress), Entry{entryAddress, canonical, aliases}, select(family, rest))
 
 def lookupFamily(family: Family, name: String, entries: List<&2, Entry<Address>>) -> List<&2, Entry<Address>>:
   select(family, lookup(Address, name, entries))

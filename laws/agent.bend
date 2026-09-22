@@ -7,105 +7,78 @@ import ../packages/agent/src/types.bend as T
 import ../packages/agent/src/agent.bend as Queues
 import ../packages/agent/src/agent.bend as Queue
 import ../packages/ai/src/types.bend as Ai
+import ../packages/runtime/src/schema-value.bend as Schema
+import ../packages/runtime/src/abort.bend as Abort
+import ../packages/runtime/src/fetch.bend as Fetch
 
 # Agent owner
 
 # Observe the complete agent state returned by an owner transition.
-def resultingState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Result: Type, result: Runtime.OwnedState<P, A, G, D, C, V, S, E, J> & Result) -> T.AgentState<P, A, G, D, C, V, S, E, J>:
+def resultingState(-G: Data, -D: Data, -C: Data, -E: Data, -Result: Type, result: Runtime.OwnedState<G, D, C, E> & Result) -> T.AgentState<G, D, C, E>:
   match result:
-    case Tuple{owned, _}: Runtime.stateValue(P, A, G, D, C, V, S, E, J, owned)
+    case Tuple{owned, _}: Runtime.stateValue(G, D, C, E, owned)
 
 law enqueue_preserves_state:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +owned: Runtime.OwnedState<P, A, G, D, C, V, S, E, J>
+  for +owned: Runtime.OwnedState<G, D, C, E>
   for kind: Q.QueueKind
-  for message: T.AgentMessage<P, A, G, D, C>
-  {resultingState(P, A, G, D, C, V, S, E, J, Unit, Runtime.enqueueState(P, A, G, D, C, V, S, E, J, owned, kind, message)) == Runtime.stateValue(P, A, G, D, C, V, S, E, J, owned) : T.AgentState<P, A, G, D, C, V, S, E, J>}
+  for message: T.AgentMessage<G, D, C>
+  {resultingState(G, D, C, E, Unit, Runtime.enqueueState(G, D, C, E, owned, kind, message)) == Runtime.stateValue(G, D, C, E, owned) : T.AgentState<G, D, C, E>}
 
 law queue_update_preserves_state:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +owned: Runtime.OwnedState<P, A, G, D, C, V, S, E, J>
-  for update: Q.Queues<T.AgentMessage<P, A, G, D, C>> -> Q.Queues<T.AgentMessage<P, A, G, D, C>>
-  {resultingState(P, A, G, D, C, V, S, E, J, Unit, Runtime.updatedQueues(P, A, G, D, C, V, S, E, J, owned, update)) == Runtime.stateValue(P, A, G, D, C, V, S, E, J, owned) : T.AgentState<P, A, G, D, C, V, S, E, J>}
+  for +owned: Runtime.OwnedState<G, D, C, E>
+  for update: Q.Queues<T.AgentMessage<G, D, C>> -> Q.Queues<T.AgentMessage<G, D, C>>
+  {resultingState(G, D, C, E, Unit, Runtime.updatedQueues(G, D, C, E, owned, update)) == Runtime.stateValue(G, D, C, E, owned) : T.AgentState<G, D, C, E>}
 
 law drain_preserves_state:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +owned: Runtime.OwnedState<P, A, G, D, C, V, S, E, J>
+  for +owned: Runtime.OwnedState<G, D, C, E>
   for kind: Q.QueueKind
-  {resultingState(P, A, G, D, C, V, S, E, J, List<&2, T.AgentMessage<P, A, G, D, C>>, Runtime.drainState(P, A, G, D, C, V, S, E, J, owned, kind)) == Runtime.stateValue(P, A, G, D, C, V, S, E, J, owned) : T.AgentState<P, A, G, D, C, V, S, E, J>}
+  {resultingState(G, D, C, E, List<&2, T.AgentMessage<G, D, C>>, Runtime.drainState(G, D, C, E, owned, kind)) == Runtime.stateValue(G, D, C, E, owned) : T.AgentState<G, D, C, E>}
 
-type RunState<-P: Data, -A: Data, -G: Data, -D: Data, -C: Data> is Data:
-  RunState{streaming: Bool, current: Maybe<&2, T.AgentMessage<P, A, G, D, C>>, pending: Set.StringSet, error: Maybe<&2, String>}
+type RunState<-G: Data, -D: Data, -C: Data> is Data:
+  RunState{streaming: Bool, current: Maybe<&2, T.AgentMessage<G, D, C>>, pending: Set.StringSet, error: Maybe<&2, String>}
 
-def runState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> RunState<P, A, G, D, C>:
+def runState(-G: Data, -D: Data, -C: Data, -E: Data, state: T.AgentState<G, D, C, E>) -> RunState<G, D, C>:
   match state:
     case T.AgentState{_, _, _, _, streaming, current, pending, error}: RunState{streaming, current, pending, error}
 
 law changes_preserve_run_state:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for change: State.StateChange<P, A, G, D, C, V, S, E, J>
-  {runState(P, A, G, D, C, V, S, E, J, State.applyChange(P, A, G, D, C, V, S, E, J, state, change)) == runState(P, A, G, D, C, V, S, E, J, state) : RunState<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  for change: State.StateChange<G, D, C, E>
+  {runState(G, D, C, E, State.applyChange(G, D, C, E, state, change)) == runState(G, D, C, E, state) : RunState<G, D, C>}
 
 law replace_messages:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for +messages: List<&2, T.AgentMessage<P, A, G, D, C>>
-  {Runtime.history(P, A, G, D, C, V, S, E, J, State.applyChange(P, A, G, D, C, V, S, E, J, state, State.ReplaceMessages{messages})) == messages : List<&2, T.AgentMessage<P, A, G, D, C>>}
+  for state: T.AgentState<G, D, C, E>
+  for +messages: List<&2, T.AgentMessage<G, D, C>>
+  {Runtime.history(G, D, C, E, State.applyChange(G, D, C, E, state, State.ReplaceMessages{messages})) == messages : List<&2, T.AgentMessage<G, D, C>>}
 
 law append_message:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for +message: T.AgentMessage<P, A, G, D, C>
-  {Runtime.history(P, A, G, D, C, V, S, E, J, State.applyChange(P, A, G, D, C, V, S, E, J, state, State.AppendMessage{message})) == List.append(&2, T.AgentMessage<P, A, G, D, C>, Runtime.history(P, A, G, D, C, V, S, E, J, state), message <> Nil{}) : List<&2, T.AgentMessage<P, A, G, D, C>>}
+  for +state: T.AgentState<G, D, C, E>
+  for +message: T.AgentMessage<G, D, C>
+  {Runtime.history(G, D, C, E, State.applyChange(G, D, C, E, state, State.AppendMessage{message})) == List.append(&2, T.AgentMessage<G, D, C>, Runtime.history(G, D, C, E, state), message <> Nil{}) : List<&2, T.AgentMessage<G, D, C>>}
 
 
 # Agent queues
@@ -257,227 +230,176 @@ law has_items:
 
 # Agent events
 
-type Messages<-P: Data, -A: Data, -G: Data, -D: Data, -C: Data> is Data:
-  Messages{history: List<&2, T.AgentMessage<P, A, G, D, C>>, partial: Maybe<&2, T.AgentMessage<P, A, G, D, C>>}
+type Messages<-G: Data, -D: Data, -C: Data> is Data:
+  Messages{history: List<&2, T.AgentMessage<G, D, C>>, partial: Maybe<&2, T.AgentMessage<G, D, C>>}
 
-def messages(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Messages<P, A, G, D, C>:
+def messages(-G: Data, -D: Data, -C: Data, -E: Data, state: T.AgentState<G, D, C, E>) -> Messages<G, D, C>:
   match state:
     case T.AgentState{_, _, _, history, _, partial, _, _}: Messages{history, partial}
 
-def partial(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, before: Messages<P, A, G, D, C>, message: T.AgentMessage<P, A, G, D, C>) -> Messages<P, A, G, D, C>:
+def partial(-G: Data, -D: Data, -C: Data, before: Messages<G, D, C>, message: T.AgentMessage<G, D, C>) -> Messages<G, D, C>:
   match before:
     case Messages{history, _}: Messages{history, Some{message}}
 
-def completed(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, before: Messages<P, A, G, D, C>, message: T.AgentMessage<P, A, G, D, C>) -> Messages<P, A, G, D, C>:
+def completed(-G: Data, -D: Data, -C: Data, before: Messages<G, D, C>, message: T.AgentMessage<G, D, C>) -> Messages<G, D, C>:
   match before:
-    case Messages{history, _}: Messages{List.append(&2, T.AgentMessage<P, A, G, D, C>, history, message <> Nil{}), None{}}
+    case Messages{history, _}: Messages{List.append(&2, T.AgentMessage<G, D, C>, history, message <> Nil{}), None{}}
 
 law message_start:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for +message: T.AgentMessage<P, A, G, D, C>
-  {messages(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.MessageStart{message})) == partial(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state), message) : Messages<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  for +message: T.AgentMessage<G, D, C>
+  {messages(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, T.MessageStart{message})) == partial(G, D, C, messages(G, D, C, E, state), message) : Messages<G, D, C>}
 
 law message_update:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for +message: T.AgentMessage<P, A, G, D, C>
-  for detail: Ai.AssistantMessageEvent<A, G>
-  {messages(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.MessageUpdate{message, detail})) == partial(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state), message) : Messages<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  for +message: T.AgentMessage<G, D, C>
+  for detail: Ai.AssistantMessageEvent<Schema.Value, G>
+  {messages(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, T.MessageUpdate{message, detail})) == partial(G, D, C, messages(G, D, C, E, state), message) : Messages<G, D, C>}
 
 law message_end:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for +message: T.AgentMessage<P, A, G, D, C>
-  {messages(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.MessageEnd{message})) == completed(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state), message) : Messages<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  for +message: T.AgentMessage<G, D, C>
+  {messages(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, T.MessageEnd{message})) == completed(G, D, C, messages(G, D, C, E, state), message) : Messages<G, D, C>}
 
 # Loop events cannot edit configuration or declare the run idle. The owner
 # settles listeners and calls finishRun separately.
-type Configuration<-P: Data, -A: Data, -D: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
-  Configuration{model: Ai.Model<J>, thinking: T.ThinkingLevel(), tools: List<&2, T.AgentTool<P, V, D, A, S, E>>, streaming: Bool}
+type Configuration<-D: Data, -E: Data> is Data:
+  Configuration{model: Ai.Model<Ai.JsonValue>, thinking: T.ThinkingLevel(), tools: List<&2, T.AgentTool<D, E>>, streaming: Bool}
 
-def configuration(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Configuration<P, A, D, V, S, E, J>:
+def configuration(-G: Data, -D: Data, -C: Data, -E: Data, state: T.AgentState<G, D, C, E>) -> Configuration<D, E>:
   match state:
     case T.AgentState{model, thinking, tools, _, streaming, _, _, _}: Configuration{model, thinking, tools, streaming}
 
 law events_preserve_configuration:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for event: T.AgentEvent<P, A, G, D, C, Partial, Execution>
-  {configuration(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, event)) == configuration(P, A, G, D, C, V, S, E, J, state) : Configuration<P, A, D, V, S, E, J>}
+  for +state: T.AgentState<G, D, C, E>
+  for event: T.AgentEvent<G, D, C, Partial, Execution>
+  {configuration(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, event)) == configuration(G, D, C, E, state) : Configuration<D, E>}
 
-def ended(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, before: Messages<P, A, G, D, C>) -> Messages<P, A, G, D, C>:
+def ended(-G: Data, -D: Data, -C: Data, before: Messages<G, D, C>) -> Messages<G, D, C>:
   match before:
     case Messages{history, _}: Messages{history, None{}}
 
 law agent_end:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for reported: List<&2, T.AgentMessage<P, A, G, D, C>>
-  {messages(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.AgentEnd{reported})) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  for reported: List<&2, T.AgentMessage<G, D, C>>
+  {messages(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, T.AgentEnd{reported})) == ended(G, D, C, messages(G, D, C, E, state)) : Messages<G, D, C>}
 
-def pending(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Set.StringSet:
+def pending(-G: Data, -D: Data, -C: Data, -E: Data, state: T.AgentState<G, D, C, E>) -> Set.StringSet:
   match state:
     case T.AgentState{_, _, _, _, _, _, tools, _}: tools
 
-def error(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, state: T.AgentState<P, A, G, D, C, V, S, E, J>) -> Maybe<&2, String>:
+def error(-G: Data, -D: Data, -C: Data, -E: Data, state: T.AgentState<G, D, C, E>) -> Maybe<&2, String>:
   match state:
     case T.AgentState{_, _, _, _, _, _, _, value}: value
 
 law tool_start_membership:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for state: T.AgentState<P, A, G, D, C, V, S, E, J>
+  for state: T.AgentState<G, D, C, E>
   for +id: String
   for name: String
-  for arguments: A
-  {Set.contains(pending(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.ToolExecutionStart{id, name, arguments})), id) == True{} : Bool}
+  for arguments: Schema.Value
+  {Set.contains(pending(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, T.ToolExecutionStart{id, name, arguments})), id) == True{} : Bool}
 
 law tool_end_membership:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
   for -Partial: Data
   for -Execution: Data
-  for state: T.AgentState<P, A, G, D, C, V, S, E, J>
+  for state: T.AgentState<G, D, C, E>
   for +id: String
   for name: String
   for result: Execution
   for failed: Bool
-  {Set.contains(pending(P, A, G, D, C, V, S, E, J, State.processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, state, T.ToolExecutionEnd{id, name, result, failed})), id) == False{} : Bool}
+  {Set.contains(pending(G, D, C, E, State.processEvent(G, D, C, E, Partial, Execution, state, T.ToolExecutionEnd{id, name, result, failed})), id) == False{} : Bool}
 
 law finish_idle:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  {runState(P, A, G, D, C, V, S, E, J, State.finishRunState(P, A, G, D, C, V, S, E, J, state)) == RunState{False{}, None{}, Set.empty(), error(P, A, G, D, C, V, S, E, J, state)} : RunState<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  {runState(G, D, C, E, State.finishRunState(G, D, C, E, state)) == RunState{False{}, None{}, Set.empty(), error(G, D, C, E, state)} : RunState<G, D, C>}
 
 law finish_messages:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for -V: Data
-  for -S: Data
   for -E: Data
-  for -J: Data
-  for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  {messages(P, A, G, D, C, V, S, E, J, State.finishRunState(P, A, G, D, C, V, S, E, J, state)) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}
+  for +state: T.AgentState<G, D, C, E>
+  {messages(G, D, C, E, State.finishRunState(G, D, C, E, state)) == ended(G, D, C, messages(G, D, C, E, state)) : Messages<G, D, C>}
 
 
 # Continue planning: pi's continue() as a pure decision over the transcript
 # tail and the two pending queues.
 
-def Agent(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data) -> Data: T.AgentMessage<P, A, G, D, C>
+def Agent(-G: Data, -D: Data, -C: Data) -> Data: T.AgentMessage<G, D, C>
 
-def systemsOf(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, systems: List<&2, Ai.SystemMessage<P>>) -> List<&2, T.AgentMessage<P, A, G, D, C>>:
+def systemsOf(-G: Data, -D: Data, -C: Data, systems: List<&2, Ai.SystemMessage<Schema.Value>>) -> List<&2, T.AgentMessage<G, D, C>>:
   match systems:
     case Nil{}: Nil{}
-    case system <> rest: T.LlmMessage{Ai.System{system}} <> systemsOf(P, A, G, D, C, rest)
+    case system <> rest: T.LlmMessage{Ai.System{system}} <> systemsOf(G, D, C, rest)
 
 law busy_agents_cannot_continue:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for messages: List<&2, Agent(P, A, G, D, C)>
-  for queues: Runtime.Queues<Agent(P, A, G, D, C)>
-  {Runtime.planContinue(P, A, G, D, C, True{}, messages, queues) == (queues, Fail{Runtime.ContinueBusy{}}) : Runtime.Queues<Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(P, A, G, D, C)>>}
+  for messages: List<&2, Agent(G, D, C)>
+  for queues: Runtime.Queues<Agent(G, D, C)>
+  {Runtime.planContinue(G, D, C, True{}, messages, queues) == (queues, Fail{Runtime.ContinueBusy{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
 
 law system_only_transcripts_cannot_continue:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for systems: List<&2, Ai.SystemMessage<P>>
-  for queues: Runtime.Queues<Agent(P, A, G, D, C)>
-  {Runtime.planContinue(P, A, G, D, C, False{}, systemsOf(P, A, G, D, C, systems), queues) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(P, A, G, D, C)>>}
+  for systems: List<&2, Ai.SystemMessage<Schema.Value>>
+  for queues: Runtime.Queues<Agent(G, D, C)>
+  {Runtime.planContinue(G, D, C, False{}, systemsOf(G, D, C, systems), queues) == (queues, Fail{Runtime.NoMessages{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
 
 law continue_after_a_user_message_resumes_the_run:
-  for -P: Data
-  for -A: Data
   for -G: Data
   for -D: Data
   for -C: Data
-  for messages: List<&2, Agent(P, A, G, D, C)>
+  for messages: List<&2, Agent(G, D, C)>
   for user: Ai.UserMessage
-  for queues: Runtime.Queues<Agent(P, A, G, D, C)>
-  {Runtime.planContinue(P, A, G, D, C, False{}, List.append(&2, Agent(P, A, G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), queues) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Agent(P, A, G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(P, A, G, D, C)>>}
+  for queues: Runtime.Queues<Agent(G, D, C)>
+  {Runtime.planContinue(G, D, C, False{}, List.append(&2, Agent(G, D, C), messages, T.LlmMessage{Ai.User{user}} <> Nil{}), queues) == (queues, Done{Runtime.Continue{}}) : Runtime.Queues<Agent(G, D, C)> & Result<&2, &2, Runtime.ContinueError, Runtime.Plan<Agent(G, D, C)>>}
 
 law continue_after_assistant_prefers_steering:
   for -M: Data

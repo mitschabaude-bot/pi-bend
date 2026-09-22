@@ -16,8 +16,8 @@ import ./agent-behavior.bend as Behavior
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Input() -> Data: Listeners.Input<H.EventValue(), Run.RunSignal()>
-def Handler() -> Data: Listeners.Handler(H.EventValue(), Run.RunSignal(), String)
+def Input() -> Data: Listeners.Input<H.EventValue()>
+def Handler() -> Data: Listeners.Handler(H.EventValue(), String)
 def streaming(value: Named.Snapshot()) -> Bool:
   match value:
     case T.AgentState{_, _, _, _, active, _, _, _}: active
@@ -52,7 +52,7 @@ def idleWorker(agent: Owner.Owner(), started: Chan(Unit), resolved: R.Ref<Bool>)
   do IO<Unit>:
     sent : Bool <- Chan.send(Unit, started, Unit{})
     R.requireSent(sent)
-    Agent.waitForIdle(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.waitForIdle(Unit, Unit, String, String, Unit, agent)
     R.write(Bool, resolved, True{})
 def checkSuspended(+agent: Owner.Owner(), finished: R.Ref<Bool>, prompted: R.Ref<Bool>, idle: R.Ref<Bool>) -> IO(Unit):
   do IO<Unit>:
@@ -62,14 +62,14 @@ def checkSuspended(+agent: Owner.Owner(), finished: R.Ref<Bool>, prompted: R.Ref
     listenerDone : Bool <- R.read(Bool, finished)
     promptDone : Bool <- R.read(Bool, prompted)
     idleDone : Bool <- R.read(Bool, idle)
-    value : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    value : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(Bool.not(listenerDone) && Bool.not(promptDone) && Bool.not(idleDone) && streaming(value), "suspended subscriber keeps prompt and idle pending and state streaming")
 def checkFinished(agent: Owner.Owner(), finished: R.Ref<Bool>, prompted: R.Ref<Bool>, idle: R.Ref<Bool>) -> IO(Unit):
   do IO<Unit>:
     listenerDone : Bool <- R.read(Bool, finished)
     promptDone : Bool <- R.read(Bool, prompted)
     idleDone : Bool <- R.read(Bool, idle)
-    value : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    value : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(listenerDone && promptDone && idleDone && Bool.not(streaming(value)), "listener completion precedes resolved prompt and idle state")
 def awaitCase(+mode: U32, name: String) -> IO(Unit):
   do IO<Unit>:
@@ -81,7 +81,7 @@ def awaitCase(+mode: U32, name: String) -> IO(Unit):
     +prompted : R.Ref<Bool> <- R.new(Bool, False{})
     +idle : R.Ref<Bool> <- R.new(Bool, False{})
     +observe : Handler() <- C.create(~Gate, ~Input(), ~Emission.Emission<String>, ~listener, Gate{mode, entered, release, finished})
-    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
+    ignored : Listeners.Subscription<H.EventValue(), String> <- Agent.subscribe(Unit, Unit, String, String, Unit, agent, observe)
     promptReply : Chan(Unit) <- IO.fork(Unit, promptWorker(agent, prompted))
     IO.join(Unit, entered)
     +idleStarted : Chan(Unit) <- Chan.new(Unit, 1)
@@ -107,9 +107,9 @@ def failProvider(unused: Unit, input: H.ProviderInput()) -> IO(H.ProviderOutput(
 def failureFixture() -> IO(FailureFixture):
   do IO<FailureFixture>:
     +provider : Named.StreamFunction() <- C.create(~Unit, ~H.ProviderInput(), ~H.ProviderOutput(), ~failProvider, Unit{})
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Behavior.options(Some{provider}, None{}), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 0)
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Behavior.options(Some{provider}, None{}), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return FailureFixture{agent, provider, validator, registry}
 def failureAgent(fixture: FailureFixture) -> Owner.Owner():
@@ -119,10 +119,10 @@ def disposeFailure(fixture: FailureFixture) -> IO(Unit):
   match fixture:
     case FailureFixture{agent, provider, validator, registry}:
       do IO<Unit>:
-        Agent.dispose(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        Agent.dispose(Unit, Unit, String, String, Unit, agent)
         C.dispose(H.ProviderInput(), H.ProviderOutput(), provider)
-        C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validator)
-        Provider.dispose(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String, registry)
+        C.dispose(Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>, validator)
+        Provider.dispose(Unit, Unit, H.Config(), String, registry)
 def record(trace: R.Ref<String>, input: Input()) -> IO(Emission.Emission<String>):
   match input:
     case Listeners.Input{event, _}:
@@ -144,11 +144,11 @@ def failureCase() -> IO(Unit):
     +agent : Owner.Owner() = failureAgent(fixture)
     +trace : R.Ref<String> <- R.new(String, "")
     +observe : Handler() <- C.create(~R.Ref<String>, ~Input(), ~Emission.Emission<String>, ~record, trace)
-    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
+    ignored : Listeners.Subscription<H.EventValue(), String> <- Agent.subscribe(Unit, Unit, String, String, Unit, agent, observe)
     Behavior.prompt(agent, "hello")
     events : String <- R.read(String, trace)
     Test.assertion(String.eq(events, "agent_start;turn_start;start:u;end:u;start:a;end:a;turn_end;agent_end;"), "provider failure emits the exact full recovery lifecycle")
-    value : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    value : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(failedState(value), "last assistant and Agent state retain provider error and error stop reason")
     disposeFailure(fixture)
     C.dispose(Input(), Emission.Emission<String>, observe)

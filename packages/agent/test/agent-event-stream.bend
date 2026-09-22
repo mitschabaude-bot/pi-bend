@@ -5,12 +5,12 @@ import ../../ai/src/utils/event-stream.bend as S
 import ./context.bend as H
 import ./message-events.bend as Test
 
-def EventValue() -> Data: T.AgentEvent<Unit, String, Unit, String, String, Unit, Unit>
-def StreamValue() -> Data: Loop.AgentEventStream(Unit, String, Unit, String, String, Unit, Unit)
+def EventValue() -> Data: T.AgentEvent<Unit, String, String, Unit, Unit>
+def StreamValue() -> Data: Loop.AgentEventStream(Unit, String, String, Unit, Unit)
 
 def event(value: S.Iteration<EventValue()>, expected: String) -> IO(Unit):
   match value:
-    case S.Yield{value}: Test.assertion(String.eq(T.eventType(Unit, String, Unit, String, String, Unit, Unit, value), expected), "agent stream event order")
+    case S.Yield{value}: Test.assertion(String.eq(T.eventType(Unit, String, String, Unit, Unit, value), expected), "agent stream event order")
     case S.End{}: Test.assertion(String.eq(expected, "end"), "agent stream ended early")
 
 def messages(values: H.Messages(), expected: Bool) -> IO(Unit):
@@ -26,7 +26,7 @@ def history(present: Bool) -> H.Messages():
 
 def scenario(+present: Bool) -> IO(Unit):
   do IO<Unit>:
-    +stream : StreamValue() <- Loop.createAgentStream(~Unit, ~String, ~Unit, ~String, ~String, ~Unit, ~Unit)
+    +stream : StreamValue() <- Loop.createAgentStream(~Unit, ~String, ~String, ~Unit, ~Unit)
     +iterator : S.Iterator<EventValue(), H.Messages()> <- S.iterator(EventValue(), H.Messages(), stream)
     S.push(EventValue(), H.Messages(), stream, T.AgentStart{})
     S.push(EventValue(), H.Messages(), stream, T.TurnStart{})
@@ -44,7 +44,7 @@ def scenario(+present: Bool) -> IO(Unit):
     ended : S.Iteration<EventValue()> <- S.nextValue(EventValue(), H.Messages(), iterator)
     event(ended, "end")
     S.disposeIterator(EventValue(), H.Messages(), iterator)
-    Loop.disposeAgentStream(Unit, String, Unit, String, String, Unit, Unit, stream)
+    Loop.disposeAgentStream(Unit, String, String, Unit, Unit, stream)
 
 def main() -> IO(Unit):
   do IO<Unit>:

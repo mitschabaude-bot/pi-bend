@@ -1230,7 +1230,7 @@ def simpleSettings(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.J
 def simpleApiKey(-Reason: Data, -Telemetry: Data, -E: Data, options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> Maybe<&2, String>:
   match options:
     case None{}: None{}
-    case Some{T.SimpleStreamOptions{_, _, apiKey, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: apiKey
+    case Some{options}: T.apiKeyOption(T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E, options)
 
 # streamSimple: base options with the model's defaults and context budget,
 # tool choice, and the reasoning level clamped to the model's support.

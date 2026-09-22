@@ -19,47 +19,47 @@ type DomainNameError is Data:
   InvalidPointer{}
 
 type Packet is Data:
-  Packet{sizeLocal: U32, bytes: Map<&2, U32>}
+  Packet{size: U32, bytes: Map<&2, U32>}
 
 def key(+index: U32) -> String:
   SCon{Chr{(index / 256 : U32)}, SCon{Chr{(index % 256 : U32)}, SNil{}}}
 
-def inserted(valid: Bool, +index: U32, byteLocal: U32, bytes: Map<&2, U32>) -> Result<&2, &2, DomainNameError, Packet>:
+def inserted(valid: Bool, +index: U32, byte: U32, bytes: Map<&2, U32>) -> Result<&2, &2, DomainNameError, Packet>:
   match valid:
     case False{}: Fail{NameInvalidByte{}}
-    case True{}: Done{Packet{(index + 1 : U32), Map.set(&2, U32, bytes, key(index), byteLocal)}}
+    case True{}: Done{Packet{(index + 1 : U32), Map.set(&2, U32, bytes, key(index), byte)}}
 
-def insert(result: Result<&2, &2, DomainNameError, Packet>, +byteLocal: U32) -> Result<&2, &2, DomainNameError, Packet>:
+def insert(result: Result<&2, &2, DomainNameError, Packet>, +byte: U32) -> Result<&2, &2, DomainNameError, Packet>:
   match result:
     case Fail{error}: Fail{error}
     case Done{Packet{65535, _}}: Fail{PacketTooLong{}}
-    case Done{Packet{index, bytes}}: inserted(U32.is_le(byteLocal, 255), index, byteLocal, bytes)
+    case Done{Packet{index, bytes}}: inserted(U32.is_le(byte, 255), index, byte, bytes)
 
-# An immutable offset index avoids scanning the packetLocal for each pointer.
+# An immutable offset index avoids scanning the packet for each pointer.
 def packetLoop(input: List<&2, U32>, result: Result<&2, &2, DomainNameError, Packet>) -> Result<&2, &2, DomainNameError, Packet>:
   match input result:
     case _ Fail{error}: Fail{error}
     case Nil{} result: result
-    case value <> rest packetLocal: packetLoop(rest, insert(packetLocal, value))
+    case value <> rest packet: packetLoop(rest, insert(packet, value))
 
-def packet(input: List<&2, U32>) -> Result<&2, &2, DomainNameError, Packet>:
+def parsePacket(input: List<&2, U32>) -> Result<&2, &2, DomainNameError, Packet>:
   packetLoop(input, Done{Packet{0, MTip{}}})
 
 def found(value: Map<&2, U32> & U32) -> U32:
   match value:
-    case (_, byteLocal): byteLocal
+    case (_, byte): byte
 
 def boundedByte(valid: Bool, bytes: Map<&2, U32>, index: U32) -> U32:
   match valid:
     case False{}: 256
     case True{}: found(Map.get(U32, 256, bytes, key(index)))
 
-def byte(packetLocal: Packet, +index: U32) -> U32:
-  match packetLocal:
-    case Packet{sizeLocal, bytes}: boundedByte(U32.is_lt(index, sizeLocal), bytes, index)
+def byteAt(packet: Packet, +index: U32) -> U32:
+  match packet:
+    case Packet{size, bytes}: boundedByte(U32.is_lt(index, size), bytes, index)
 
 type Decoded is Data:
-  Decoded{name: Name, nextLocal: U32}
+  Decoded{name: Name, next: U32}
 
 type Mode is Data:
   Head{}
@@ -67,66 +67,66 @@ type Mode is Data:
   Pointer{high: U32}
 
 type State is Data:
-  Reading{position: U32, ceiling: U32, nextLocal: Maybe<&2, U32>, length: U32, reversed: List<&2, List<&2, U32>>, mode: Mode}
+  Reading{position: U32, ceiling: U32, next: Maybe<&2, U32>, length: U32, reversed: List<&2, List<&2, U32>>, mode: Mode}
   Finished{value: Decoded}
   Failed{error: DomainNameError}
 
-def nextOffset(nextLocal: Maybe<&2, U32>, fallback: U32) -> U32:
-  match nextLocal:
+def nextOffset(following: Maybe<&2, U32>, fallback: U32) -> U32:
+  match following:
     case None{}: fallback
     case Some{value}: value
 
-def labelHead(valid: Bool, position: U32, ceiling: U32, nextLocal: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>, count: U32) -> State:
+def labelHead(valid: Bool, position: U32, ceiling: U32, following: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>, count: U32) -> State:
   match valid:
     case False{}: Failed{NameTooLong{}}
-    case True{}: Reading{position, ceiling, nextLocal, length, labels, Label{count, Nil{}}}
+    case True{}: Reading{position, ceiling, following, length, labels, Label{count, Nil{}}}
 
-def headFlags(zero: Bool, label: Bool, pointer: Bool, +tag: U32, position: U32, ceiling: U32, nextLocal: Maybe<&2, U32>, +length: U32, labels: List<&2, List<&2, U32>>) -> State:
+def headFlags(zero: Bool, label: Bool, pointer: Bool, +tag: U32, position: U32, ceiling: U32, following: Maybe<&2, U32>, +length: U32, labels: List<&2, List<&2, U32>>) -> State:
   match zero label pointer:
-    case True{} _ _: Finished{Decoded{Name{List.reverse(&2, List<&2, U32>, labels)}, nextOffset(nextLocal, position)}}
-    case False{} True{} _: labelHead(U32.is_le((length + tag + 1 : U32), 255), position, ceiling, nextLocal, (length + tag + 1 : U32), labels, tag)
-    case False{} False{} True{}: Reading{position, ceiling, nextLocal, length, labels, Pointer{(tag - 192 : U32)}}
+    case True{} _ _: Finished{Decoded{Name{List.reverse(&2, List<&2, U32>, labels)}, nextOffset(following, position)}}
+    case False{} True{} _: labelHead(U32.is_le((length + tag + 1 : U32), 255), position, ceiling, following, (length + tag + 1 : U32), labels, tag)
+    case False{} False{} True{}: Reading{position, ceiling, following, length, labels, Pointer{(tag - 192 : U32)}}
     case _ _ _: Failed{ReservedLabel{}}
 
-def head(+tag: U32, position: U32, ceiling: U32, nextLocal: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
-  headFlags(U32.is_eq(tag, 0), U32.is_lt(tag, 64), U32.is_ge(tag, 192), tag, position, ceiling, nextLocal, length, labels)
+def head(+tag: U32, position: U32, ceiling: U32, following: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
+  headFlags(U32.is_eq(tag, 0), U32.is_lt(tag, 64), U32.is_ge(tag, 192), tag, position, ceiling, following, length, labels)
 
-def pointed(valid: Bool, +target: U32, position: U32, nextLocal: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
+def pointed(valid: Bool, +target: U32, position: U32, following: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
   match valid:
     case False{}: Failed{InvalidPointer{}}
-    case True{}: Reading{target, target, Some{nextOffset(nextLocal, position)}, length, labels, Head{}}
+    case True{}: Reading{target, target, Some{nextOffset(following, position)}, length, labels, Head{}}
 
-def consume(mode: Mode, +value: U32, +position: U32, +ceiling: U32, nextLocal: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
+def consume(mode: Mode, +value: U32, +position: U32, +ceiling: U32, following: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
   match mode:
-    case Head{}: head(value, position, ceiling, nextLocal, length, labels)
-    case Label{1, reversed}: Reading{position, ceiling, nextLocal, length, List.reverse(&2, U32, value <> reversed) <> labels, Head{}}
-    case Label{left, reversed}: Reading{position, ceiling, nextLocal, length, labels, Label{(left - 1 : U32), value <> reversed}}
-    case Pointer{+high}: pointed(U32.is_lt((high * 256 + value : U32), ceiling), (high * 256 + value : U32), position, nextLocal, length, labels)
+    case Head{}: head(value, position, ceiling, following, length, labels)
+    case Label{1, reversed}: Reading{position, ceiling, following, length, List.reverse(&2, U32, value <> reversed) <> labels, Head{}}
+    case Label{left, reversed}: Reading{position, ceiling, following, length, labels, Label{(left - 1 : U32), value <> reversed}}
+    case Pointer{+high}: pointed(U32.is_lt((high * 256 + value : U32), ceiling), (high * 256 + value : U32), position, following, length, labels)
 
-def present(valid: Bool, mode: Mode, value: U32, position: U32, ceiling: U32, nextLocal: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
+def present(valid: Bool, mode: Mode, value: U32, position: U32, ceiling: U32, following: Maybe<&2, U32>, length: U32, labels: List<&2, List<&2, U32>>) -> State:
   match valid:
     case False{}: Failed{NameTruncated{}}
-    case True{}: consume(mode, value, position, ceiling, nextLocal, length, labels)
+    case True{}: consume(mode, value, position, ceiling, following, length, labels)
 
-def step(packetLocal: Packet, state: State) -> State:
+def step(packet: Packet, state: State) -> State:
   match state:
-    case Reading{+position, ceiling, nextLocal, length, labels, mode}:
-      +value = byte(packetLocal, position)
-      present(U32.is_le(value, 255), mode, value, (position + 1 : U32), ceiling, nextLocal, length, labels)
+    case Reading{+position, ceiling, following, length, labels, mode}:
+      +value = byteAt(packet, position)
+      present(U32.is_le(value, 255), mode, value, (position + 1 : U32), ceiling, following, length, labels)
     case final: final
 
 # Every pointer must refer to an earlier name segment. The ceiling strictly
 # decreases on a jump, rejecting self/forward/cyclic references. Labels count
 # toward the expanded 255-octet limit, including their lengths and root.
-def loop(fuel: Nat, +packetLocal: Packet, state: State) -> Result<&2, &2, DomainNameError, Decoded>:
+def loop(fuel: Nat, +packet: Packet, state: State) -> Result<&2, &2, DomainNameError, Decoded>:
   match fuel state:
     case _ Finished{value}: Done{value}
     case _ Failed{error}: Fail{error}
     case Zero{} _: Fail{InvalidPointer{}}
-    case Succ{rest} reading: loop(rest, packetLocal, step(packetLocal, reading))
+    case Succ{rest} reading: loop(rest, packet, step(packet, reading))
 
-def decodeName(packetLocal: Packet, +position: U32) -> Result<&2, &2, DomainNameError, Decoded>:
-  loop(65536n, packetLocal, Reading{position, position, None{}, 1, Nil{}, Head{}})
+def decodeName(packet: Packet, +position: U32) -> Result<&2, &2, DomainNameError, Decoded>:
+  loop(65536n, packet, Reading{position, position, None{}, 1, Nil{}, Head{}})
 
 type EncodedLabel is Data:
   EncodedLabel{length: U32, reversed: List<&2, U32>}
@@ -158,7 +158,7 @@ def encodedLabel(state: Result<&2, &2, DomainNameError, EncodedLabel>, value: Re
   match state value:
     case Fail{error} _: Fail{error}
     case _ Fail{error}: Fail{error}
-    case Done{EncodedLabel{+length, reversed}} Done{EncodedLabel{+sizeLocal, bytes}}: appended(U32.is_le((length + sizeLocal + 1 : U32), 255), (length + sizeLocal + 1 : U32), List.append(&2, U32, bytes, sizeLocal <> reversed))
+    case Done{EncodedLabel{+length, reversed}} Done{EncodedLabel{+size, bytes}}: appended(U32.is_le((length + size + 1 : U32), 255), (length + size + 1 : U32), List.append(&2, U32, bytes, size <> reversed))
 
 def encodeLoop(labels: List<&2, List<&2, U32>>, state: Result<&2, &2, DomainNameError, EncodedLabel>) -> Result<&2, &2, DomainNameError, List<&2, U32>>:
   match labels state:
@@ -178,16 +178,16 @@ type Header is Data:
 type Question is Data:
   Question{name: Name, kind: U32, class: U32}
 
-# RDATA stays a span in the original immutable packetLocal. Compression offsets
+# RDATA stays a span in the original immutable packet. Compression offsets
 # inside CNAME/SOA/etc. remain meaningful; opaque record types stay lossless.
 type Record is Data:
-  Record{name: Name, kind: U32, class: U32, ttl: U32, startLocal: U32, length: U32}
+  Record{name: Name, kind: U32, class: U32, ttl: U32, start: U32, length: U32}
 
 type Message is Data:
-  Message{packetLocal: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, additional: List<&2, Record>}
+  Message{packet: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, additional: List<&2, Record>}
 
 type Parsed<-Item: Data> is Data:
-  Parsed{value: Item, nextLocal: U32}
+  Parsed{value: Item, next: U32}
 
 type Error is Data:
   NameError{error: DomainNameError}
@@ -195,109 +195,109 @@ type Error is Data:
   TrailingData{}
   InvalidField{}
 
-def size(packetLocal: Packet) -> U32:
-  match packetLocal:
-    case Packet{packetSize, _}: packetSize
+def packetSize(packet: Packet) -> U32:
+  match packet:
+    case Packet{value, _}: value
 
-def available(+packetLocal: Packet, +position: U32, count: U32) -> Bool:
-  U32.is_le(position, size(packetLocal)) && U32.is_le(count, (size(packetLocal) - position : U32))
+def available(+packet: Packet, +position: U32, count: U32) -> Bool:
+  U32.is_le(position, packetSize(packet)) && U32.is_le(count, (packetSize(packet) - position : U32))
 
-# Call only after validating the containing fixed-sizeLocal field.
-def word(+packetLocal: Packet, +position: U32) -> U32:
-  (byte(packetLocal, position) * 256 + byte(packetLocal, (position + 1 : U32)) : U32)
+# Call only after validating the containing fixed-size field.
+def word(+packet: Packet, +position: U32) -> U32:
+  (byteAt(packet, position) * 256 + byteAt(packet, (position + 1 : U32)) : U32)
 
-def headerFields(valid: Bool, +packetLocal: Packet) -> Result<&2, &2, Error, Header>:
+def headerFields(valid: Bool, +packet: Packet) -> Result<&2, &2, Error, Header>:
   match valid:
     case False{}: Fail{Truncated{}}
-    case True{}: Done{Header{word(packetLocal, 0), word(packetLocal, 2), word(packetLocal, 4), word(packetLocal, 6), word(packetLocal, 8), word(packetLocal, 10)}}
+    case True{}: Done{Header{word(packet, 0), word(packet, 2), word(packet, 4), word(packet, 6), word(packet, 8), word(packet, 10)}}
 
-def header(+packetLocal: Packet) -> Result<&2, &2, Error, Header>:
-  headerFields(available(packetLocal, 0, 12), packetLocal)
+def header(+packet: Packet) -> Result<&2, &2, Error, Header>:
+  headerFields(available(packet, 0, 12), packet)
 
-def questionFields(valid: Bool, +packetLocal: Packet, name: Name, +position: U32) -> Result<&2, &2, Error, Parsed<Question>>:
+def questionFields(valid: Bool, +packet: Packet, name: Name, +position: U32) -> Result<&2, &2, Error, Parsed<Question>>:
   match valid:
     case False{}: Fail{Truncated{}}
-    case True{}: Done{Parsed{Question{name, word(packetLocal, position), word(packetLocal, (position + 2 : U32))}, (position + 4 : U32)}}
+    case True{}: Done{Parsed{Question{name, word(packet, position), word(packet, (position + 2 : U32))}, (position + 4 : U32)}}
 
-def questionName(+packetLocal: Packet, value: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, Error, Parsed<Question>>:
+def questionName(+packet: Packet, value: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, Error, Parsed<Question>>:
   match value:
     case Fail{error}: Fail{NameError{error}}
-    case Done{Decoded{name, +nextLocal}}: questionFields(available(packetLocal, nextLocal, 4), packetLocal, name, nextLocal)
+    case Done{Decoded{name, +following}}: questionFields(available(packet, following, 4), packet, name, following)
 
-def questionMessage(+packetLocal: Packet, position: U32) -> Result<&2, &2, Error, Parsed<Question>>:
-  questionName(packetLocal, decodeName(packetLocal, position))
+def questionMessage(+packet: Packet, position: U32) -> Result<&2, &2, Error, Parsed<Question>>:
+  questionName(packet, decodeName(packet, position))
 
-def recordData(valid: Bool, name: Name, kind: U32, class: U32, ttl: U32, +startLocal: U32, +length: U32) -> Result<&2, &2, Error, Parsed<Record>>:
+def recordData(valid: Bool, name: Name, kind: U32, class: U32, ttl: U32, +offset: U32, +length: U32) -> Result<&2, &2, Error, Parsed<Record>>:
   match valid:
     case False{}: Fail{Truncated{}}
-    case True{}: Done{Parsed{Record{name, kind, class, ttl, startLocal, length}, (startLocal + length : U32)}}
+    case True{}: Done{Parsed{Record{name, kind, class, ttl, offset, length}, (offset + length : U32)}}
 
-def recordFields(valid: Bool, +packetLocal: Packet, name: Name, +position: U32) -> Result<&2, &2, Error, Parsed<Record>>:
+def recordFields(valid: Bool, +packet: Packet, name: Name, +position: U32) -> Result<&2, &2, Error, Parsed<Record>>:
   match valid:
     case False{}: Fail{Truncated{}}
     case True{}:
-      +length = word(packetLocal, (position + 8 : U32))
-      +startLocal = (position + 10 : U32)
-      recordData(available(packetLocal, startLocal, length), name, word(packetLocal, position), word(packetLocal, (position + 2 : U32)), (word(packetLocal, (position + 4 : U32)) * 65536 + word(packetLocal, (position + 6 : U32)) : U32), startLocal, length)
+      +length = word(packet, (position + 8 : U32))
+      +offset = (position + 10 : U32)
+      recordData(available(packet, offset, length), name, word(packet, position), word(packet, (position + 2 : U32)), (word(packet, (position + 4 : U32)) * 65536 + word(packet, (position + 6 : U32)) : U32), offset, length)
 
-def recordName(+packetLocal: Packet, value: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, Error, Parsed<Record>>:
+def recordName(+packet: Packet, value: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, Error, Parsed<Record>>:
   match value:
     case Fail{error}: Fail{NameError{error}}
-    case Done{Decoded{name, +nextLocal}}: recordFields(available(packetLocal, nextLocal, 10), packetLocal, name, nextLocal)
+    case Done{Decoded{name, +following}}: recordFields(available(packet, following, 10), packet, name, following)
 
-def record(+packetLocal: Packet, position: U32) -> Result<&2, &2, Error, Parsed<Record>>:
-  recordName(packetLocal, decodeName(packetLocal, position))
+def record(+packet: Packet, position: U32) -> Result<&2, &2, Error, Parsed<Record>>:
+  recordName(packet, decodeName(packet, position))
 
 def added(-Item: Data, reversed: List<&2, Item>, value: Result<&2, &2, Error, Parsed<Item>>) -> Result<&2, &2, Error, Parsed<List<&2, Item>>>:
   match value:
     case Fail{error}: Fail{error}
-    case Done{Parsed{item, nextLocal}}: Done{Parsed{item <> reversed, nextLocal}}
+    case Done{Parsed{item, following}}: Done{Parsed{item <> reversed, following}}
 
 # Parser callbacks are pure values. Section counts guide traversal but never
-# authorize reading beyond the packetLocal; malformed counts stop at the first error.
-def section(~Item: Data, ~parse: (Packet -> U32 -> Result<&2, &2, Error, Parsed<Item>>), count: Nat, +packetLocal: Packet, state: Result<&2, &2, Error, Parsed<List<&2, Item>>>) -> Result<&2, &2, Error, Parsed<List<&2, Item>>>:
+# authorize reading beyond the packet; malformed counts stop at the first error.
+def section(~Item: Data, ~parse: (Packet -> U32 -> Result<&2, &2, Error, Parsed<Item>>), count: Nat, +packet: Packet, state: Result<&2, &2, Error, Parsed<List<&2, Item>>>) -> Result<&2, &2, Error, Parsed<List<&2, Item>>>:
   match count state:
     case _ Fail{error}: Fail{error}
-    case Zero{} Done{Parsed{reversed, nextLocal}}: Done{Parsed{List.reverse(&2, Item, reversed), nextLocal}}
-    case Succ{rest} Done{Parsed{reversed, nextLocal}}: section(~Item, ~parse, rest, packetLocal, added(Item, reversed, parse(packetLocal, nextLocal)))
+    case Zero{} Done{Parsed{reversed, following}}: Done{Parsed{List.reverse(&2, Item, reversed), following}}
+    case Succ{rest} Done{Parsed{reversed, following}}: section(~Item, ~parse, rest, packet, added(Item, reversed, parse(packet, following)))
 
-def complete(valid: Bool, packetLocal: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, additional: List<&2, Record>) -> Result<&2, &2, Error, Message>:
+def complete(valid: Bool, packet: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, additional: List<&2, Record>) -> Result<&2, &2, Error, Message>:
   match valid:
     case False{}: Fail{TrailingData{}}
-    case True{}: Done{Message{packetLocal, header, questions, answersMessage, authoritiesMessage, additional}}
+    case True{}: Done{Message{packet, header, questions, answersMessage, authoritiesMessage, additional}}
 
-def additionals(+packetLocal: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
+def additionals(+packet: Packet, header: Header, questions: List<&2, Question>, answersMessage: List<&2, Record>, authoritiesMessage: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{additional, nextLocal}}: complete(U32.is_eq(size(packetLocal), nextLocal), packetLocal, header, questions, answersMessage, authoritiesMessage, additional)
+    case Done{Parsed{additional, following}}: complete(U32.is_eq(packetSize(packet), following), packet, header, questions, answersMessage, authoritiesMessage, additional)
 
-def authoritiesMessage(+packetLocal: Packet, header: Header, count: U32, questions: List<&2, Question>, answersMessage: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
+def authoritiesMessage(+packet: Packet, header: Header, count: U32, questions: List<&2, Question>, answersMessage: List<&2, Record>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{values, nextLocal}}: additionals(packetLocal, header, questions, answersMessage, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(count), packetLocal, Done{Parsed{Nil{}, nextLocal}}))
+    case Done{Parsed{values, following}}: additionals(packet, header, questions, answersMessage, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(count), packet, Done{Parsed{Nil{}, following}}))
 
-def answersMessage(+packetLocal: Packet, header: Header, authorityCount: U32, additionalCount: U32, questions: List<&2, Question>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
+def answersMessage(+packet: Packet, header: Header, authorityCount: U32, additionalCount: U32, questions: List<&2, Question>, result: Result<&2, &2, Error, Parsed<List<&2, Record>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{values, nextLocal}}: authoritiesMessage(packetLocal, header, additionalCount, questions, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(authorityCount), packetLocal, Done{Parsed{Nil{}, nextLocal}}))
+    case Done{Parsed{values, following}}: authoritiesMessage(packet, header, additionalCount, questions, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(authorityCount), packet, Done{Parsed{Nil{}, following}}))
 
-def questions(+packetLocal: Packet, header: Header, answerCount: U32, authorityCount: U32, additionalCount: U32, result: Result<&2, &2, Error, Parsed<List<&2, Question>>>) -> Result<&2, &2, Error, Message>:
+def questions(+packet: Packet, header: Header, answerCount: U32, authorityCount: U32, additionalCount: U32, result: Result<&2, &2, Error, Parsed<List<&2, Question>>>) -> Result<&2, &2, Error, Message>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Parsed{values, nextLocal}}: answersMessage(packetLocal, header, authorityCount, additionalCount, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(answerCount), packetLocal, Done{Parsed{Nil{}, nextLocal}}))
+    case Done{Parsed{values, following}}: answersMessage(packet, header, authorityCount, additionalCount, values, section(~Record, ~(p => i => record(p, i)), U32.to_nat(answerCount), packet, Done{Parsed{Nil{}, following}}))
 
-def withHeader(+packetLocal: Packet, value: Result<&2, &2, Error, Header>) -> Result<&2, &2, Error, Message>:
+def withHeader(+packet: Packet, value: Result<&2, &2, Error, Header>) -> Result<&2, &2, Error, Message>:
   match value:
     case Fail{error}: Fail{error}
-    case Done{Header{id, flags, +qd, +an, +ns, +ar}}: questions(packetLocal, Header{id, flags, qd, an, ns, ar}, an, ns, ar, section(~Question, ~(p => i => questionMessage(p, i)), U32.to_nat(qd), packetLocal, Done{Parsed{Nil{}, 12}}))
+    case Done{Header{id, flags, +qd, +an, +ns, +ar}}: questions(packet, Header{id, flags, qd, an, ns, ar}, an, ns, ar, section(~Question, ~(p => i => questionMessage(p, i)), U32.to_nat(qd), packet, Done{Parsed{Nil{}, 12}}))
 
 def fromPacket(value: Result<&2, &2, DomainNameError, Packet>) -> Result<&2, &2, Error, Message>:
   match value:
     case Fail{error}: Fail{NameError{error}}
-    case Done{+packetLocal}: withHeader(packetLocal, header(packetLocal))
+    case Done{+packet}: withHeader(packet, header(packet))
 
 def parse(bytes: List<&2, U32>) -> Result<&2, &2, Error, Message>:
-  fromPacket(packet(bytes))
+  fromPacket(parsePacket(bytes))
 
 # Uncompressed single-question query. Caller supplies transaction ID and flags
 # (e.g. recursion desired); validation/matching policy remains explicit above.
@@ -338,26 +338,26 @@ type PresentationMode is Data:
   ThirdDigit{value: U32}
 
 type Cursor is Data:
-  Cursor{labels: List<&2, List<&2, U32>>, label: List<&2, U32>, sizeLocal: U32, total: U32}
+  Cursor{labels: List<&2, List<&2, U32>>, label: List<&2, U32>, size: U32, total: U32}
 
 type PresentationState is Data:
   PresentationState{cursor: Cursor, mode: PresentationMode, absolute: Bool}
 
-def byteAdded(fits: Bool, byteLocal: U32, labels: List<&2, List<&2, U32>>, label: List<&2, U32>, sizeLocal: U32, total: U32) -> Result<&2, &2, PresentationError, Cursor>:
+def byteAdded(fits: Bool, byte: U32, labels: List<&2, List<&2, U32>>, label: List<&2, U32>, size: U32, total: U32) -> Result<&2, &2, PresentationError, Cursor>:
   match fits:
     case False{}: Fail{PresentationNameTooLong{}}
-    case True{}: Done{Cursor{labels, byteLocal <> label, (sizeLocal + 1 : U32), total}}
+    case True{}: Done{Cursor{labels, byte <> label, (size + 1 : U32), total}}
 
-def withinLabel(valid: Bool, byteLocal: U32, labels: List<&2, List<&2, U32>>, label: List<&2, U32>, +sizeLocal: U32, total: U32) -> Result<&2, &2, PresentationError, Cursor>:
+def withinLabel(valid: Bool, byte: U32, labels: List<&2, List<&2, U32>>, label: List<&2, U32>, +size: U32, total: U32) -> Result<&2, &2, PresentationError, Cursor>:
   match valid:
     case False{}: Fail{LabelTooLong{}}
     case True{}:
-      +nextLocal = (total + Bool.pick(U32, U32.is_zero(sizeLocal), 2, 1) : U32)
-      byteAdded(U32.is_le(nextLocal, 255), byteLocal, labels, label, sizeLocal, nextLocal)
+      +following = (total + Bool.pick(U32, U32.is_zero(size), 2, 1) : U32)
+      byteAdded(U32.is_le(following, 255), byte, labels, label, size, following)
 
-def appendByte(byteLocal: U32, cursor: Cursor) -> Result<&2, &2, PresentationError, Cursor>:
+def appendByte(byte: U32, cursor: Cursor) -> Result<&2, &2, PresentationError, Cursor>:
   match cursor:
-    case Cursor{labels, label, +sizeLocal, total}: withinLabel(U32.is_lt(sizeLocal, 63), byteLocal, labels, label, sizeLocal, total)
+    case Cursor{labels, label, +size, total}: withinLabel(U32.is_lt(size, 63), byte, labels, label, size, total)
 
 def stateResult(result: Result<&2, &2, PresentationError, Cursor>) -> Result<&2, &2, PresentationError, PresentationState>:
   match result:
@@ -375,35 +375,35 @@ def decimalByte(valid: Bool, value: U32, cursor: Cursor) -> Result<&2, &2, Prese
     case False{}: Fail{InvalidEscape{}}
     case True{}: stateResult(appendByte(value, cursor))
 
-def escaped(digit: Bool, byteLocal: U32, cursor: Cursor) -> Result<&2, &2, PresentationError, PresentationState>:
+def escaped(digit: Bool, byte: U32, cursor: Cursor) -> Result<&2, &2, PresentationError, PresentationState>:
   match digit:
-    case True{}: Done{PresentationState{cursor, SecondDigit{(byteLocal - 48 : U32)}, False{}}}
-    case False{}: stateResult(appendByte(byteLocal, cursor))
+    case True{}: Done{PresentationState{cursor, SecondDigit{(byte - 48 : U32)}, False{}}}
+    case False{}: stateResult(appendByte(byte, cursor))
 
-def second(valid: Bool, byteLocal: U32, value: U32, cursor: Cursor) -> Result<&2, &2, PresentationError, PresentationState>:
+def second(valid: Bool, byte: U32, value: U32, cursor: Cursor) -> Result<&2, &2, PresentationError, PresentationState>:
   match valid:
     case False{}: Fail{InvalidEscape{}}
-    case True{}: Done{PresentationState{cursor, ThirdDigit{(value * 10 + byteLocal - 48 : U32)}, False{}}}
+    case True{}: Done{PresentationState{cursor, ThirdDigit{(value * 10 + byte - 48 : U32)}, False{}}}
 
-def isDigit(+byteLocal: U32) -> Bool: U32.is_ge(byteLocal, 48) && U32.is_le(byteLocal, 57)
+def isDigit(+byte: U32) -> Bool: U32.is_ge(byte, 48) && U32.is_le(byte, 57)
 
-def plain(byteLocal: U32, last: Bool, cursor: Cursor) -> Result<&2, &2, PresentationError, PresentationState>:
-  match byteLocal:
+def plain(byte: U32, last: Bool, cursor: Cursor) -> Result<&2, &2, PresentationError, PresentationState>:
+  match byte:
     case 92: Done{PresentationState{cursor, Escape{}, False{}}}
     case 46: separator(last, cursor)
     case value: stateResult(appendByte(value, cursor))
 
-def stepPresentation(+byteLocal: U32, last: Bool, state: PresentationState) -> Result<&2, &2, PresentationError, PresentationState>:
+def stepPresentation(+byte: U32, last: Bool, state: PresentationState) -> Result<&2, &2, PresentationError, PresentationState>:
   match state:
-    case PresentationState{cursor, Plain{}, _}: plain(byteLocal, last, cursor)
-    case PresentationState{cursor, Escape{}, _}: escaped(isDigit(byteLocal), byteLocal, cursor)
-    case PresentationState{cursor, SecondDigit{number}, _}: second(isDigit(byteLocal), byteLocal, number, cursor)
+    case PresentationState{cursor, Plain{}, _}: plain(byte, last, cursor)
+    case PresentationState{cursor, Escape{}, _}: escaped(isDigit(byte), byte, cursor)
+    case PresentationState{cursor, SecondDigit{number}, _}: second(isDigit(byte), byte, number, cursor)
     case PresentationState{cursor, ThirdDigit{number}, _}:
-      +decodedLocal = (number * 10 + byteLocal - 48 : U32)
-      decimalByte(isDigit(byteLocal) && U32.is_le(decodedLocal, 255), decodedLocal, cursor)
+      +accumulated = (number * 10 + byte - 48 : U32)
+      decimalByte(isDigit(byte) && U32.is_le(accumulated, 255), accumulated, cursor)
 
-def checkedByte(valid: Bool, byteLocal: U32, last: Bool, state: PresentationState) -> Result<&2, &2, PresentationError, PresentationState>:
-  match valid byteLocal:
+def checkedByte(valid: Bool, byte: U32, last: Bool, state: PresentationState) -> Result<&2, &2, PresentationError, PresentationState>:
+  match valid byte:
     case False{} _: Fail{PresentationInvalidByte{}}
     case True{} 0: Fail{RawNul{}}
     case True{} value: stepPresentation(value, last, state)
@@ -423,7 +423,7 @@ def scanPresentation(bytes: List<&2, U32>, state: Result<&2, &2, PresentationErr
   match bytes state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{value}: finished(value)
-    case +byteLocal <> +rest Done{value}: scanPresentation(rest, checkedByte(U32.is_le(byteLocal, 255), byteLocal, empty(rest), value))
+    case +byte <> +rest Done{value}: scanPresentation(rest, checkedByte(U32.is_le(byte, 255), byte, empty(rest), value))
 
 # Raw zero cannot occur in a C presentation string. Keep it a typed error,
 # rather than silently truncating a Bend value. The escape \000 is valid data.
@@ -449,18 +449,18 @@ type RecordError is Data:
   InvalidLength{}
   InvalidName{error: DomainNameError}
 
-def integer(+packetLocal: Packet, +startLocal: U32) -> U32:
-  (word(packetLocal, startLocal) * 65536 + word(packetLocal, (startLocal + 2 : U32)) : U32)
+def integer(+packet: Packet, +offset: U32) -> U32:
+  (word(packet, offset) * 65536 + word(packet, (offset + 2 : U32)) : U32)
 
-def address4(valid: Bool, packetLocal: Packet, startLocal: U32) -> Result<&2, &2, RecordError, Value>:
+def address4(valid: Bool, packet: Packet, offset: U32) -> Result<&2, &2, RecordError, Value>:
   match valid:
     case False{}: Fail{InvalidLength{}}
-    case True{}: Done{A{IPv4.Address{integer(packetLocal, startLocal)}}}
+    case True{}: Done{A{IPv4.Address{integer(packet, offset)}}}
 
-def address6(valid: Bool, +packetLocal: Packet, +startLocal: U32) -> Result<&2, &2, RecordError, Value>:
+def address6(valid: Bool, +packet: Packet, +offset: U32) -> Result<&2, &2, RecordError, Value>:
   match valid:
     case False{}: Fail{InvalidLength{}}
-    case True{}: Done{AAAA{IPv6.Ipv6Address{integer(packetLocal, startLocal), integer(packetLocal, (startLocal + 4 : U32)), integer(packetLocal, (startLocal + 8 : U32)), integer(packetLocal, (startLocal + 12 : U32))}}}
+    case True{}: Done{AAAA{IPv6.Ipv6Address{integer(packet, offset), integer(packet, (offset + 4 : U32)), integer(packet, (offset + 8 : U32)), integer(packet, (offset + 12 : U32))}}}
 
 def named(kind: U32, target: Name) -> Value:
   match kind:
@@ -476,57 +476,57 @@ def exactName(valid: Bool, kind: U32, target: Name) -> Result<&2, &2, RecordErro
 def nameResult(kind: U32, end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
-    case Done{Decoded{target, nextLocal}}: exactName(U32.is_eq(nextLocal, end), kind, target)
+    case Done{Decoded{target, following}}: exactName(U32.is_eq(following, end), kind, target)
 
-def soaFields(valid: Bool, +packetLocal: Packet, primary: Name, mailbox: Name, +startLocal: U32) -> Result<&2, &2, RecordError, Value>:
+def soaFields(valid: Bool, +packet: Packet, primary: Name, mailbox: Name, +offset: U32) -> Result<&2, &2, RecordError, Value>:
   match valid:
     case False{}: Fail{InvalidLength{}}
-    case True{}: Done{SOA{primary, mailbox, integer(packetLocal, startLocal), integer(packetLocal, (startLocal + 4 : U32)), integer(packetLocal, (startLocal + 8 : U32)), integer(packetLocal, (startLocal + 12 : U32)), integer(packetLocal, (startLocal + 16 : U32))}}
+    case True{}: Done{SOA{primary, mailbox, integer(packet, offset), integer(packet, (offset + 4 : U32)), integer(packet, (offset + 8 : U32)), integer(packet, (offset + 12 : U32)), integer(packet, (offset + 16 : U32))}}
 
-def soaMailbox(packetLocal: Packet, primary: Name, end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
+def soaMailbox(packet: Packet, primary: Name, end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
-    case Done{Decoded{mailbox, +nextLocal}}: soaFields(U32.is_eq((nextLocal + 20 : U32), end), packetLocal, primary, mailbox, nextLocal)
+    case Done{Decoded{mailbox, +following}}: soaFields(U32.is_eq((following + 20 : U32), end), packet, primary, mailbox, following)
 
-def soaMore(valid: Bool, +packetLocal: Packet, primary: Name, end: U32, nextLocal: U32) -> Result<&2, &2, RecordError, Value>:
+def soaMore(valid: Bool, +packet: Packet, primary: Name, end: U32, following: U32) -> Result<&2, &2, RecordError, Value>:
   match valid:
     case False{}: Fail{InvalidLength{}}
-    case True{}: soaMailbox(packetLocal, primary, end, decodeName(packetLocal, nextLocal))
+    case True{}: soaMailbox(packet, primary, end, decodeName(packet, following))
 
-def soaPrimary(packetLocal: Packet, +end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
+def soaPrimary(packet: Packet, +end: U32, result: Result<&2, &2, DomainNameError, Decoded>) -> Result<&2, &2, RecordError, Value>:
   match result:
     case Fail{error}: Fail{InvalidName{error}}
-    case Done{Decoded{primary, +nextLocal}}: soaMore(U32.is_lt(nextLocal, end), packetLocal, primary, end, nextLocal)
+    case Done{Decoded{primary, +following}}: soaMore(U32.is_lt(following, end), packet, primary, end, following)
 
-def kindFields(+packetLocal: Packet, kind: U32, +startLocal: U32, +length: U32, original: Record) -> Result<&2, &2, RecordError, Value>:
+def kindFields(+packet: Packet, kind: U32, +offset: U32, +length: U32, original: Record) -> Result<&2, &2, RecordError, Value>:
   match kind:
-    case 1: address4(U32.is_eq(length, 4), packetLocal, startLocal)
-    case 28: address6(U32.is_eq(length, 16), packetLocal, startLocal)
-    case 5: nameResult(5, (startLocal + length : U32), decodeName(packetLocal, startLocal))
-    case 2: nameResult(2, (startLocal + length : U32), decodeName(packetLocal, startLocal))
-    case 12: nameResult(12, (startLocal + length : U32), decodeName(packetLocal, startLocal))
-    case 6: soaPrimary(packetLocal, (startLocal + length : U32), decodeName(packetLocal, startLocal))
+    case 1: address4(U32.is_eq(length, 4), packet, offset)
+    case 28: address6(U32.is_eq(length, 16), packet, offset)
+    case 5: nameResult(5, (offset + length : U32), decodeName(packet, offset))
+    case 2: nameResult(2, (offset + length : U32), decodeName(packet, offset))
+    case 12: nameResult(12, (offset + length : U32), decodeName(packet, offset))
+    case 6: soaPrimary(packet, (offset + length : U32), decodeName(packet, offset))
     case _: Done{Opaque{original}}
 
-def classFields(class: U32, packetLocal: Packet, kind: U32, startLocal: U32, length: U32, original: Record) -> Result<&2, &2, RecordError, Value>:
+def classFields(class: U32, packet: Packet, kind: U32, offset: U32, length: U32, original: Record) -> Result<&2, &2, RecordError, Value>:
   match class:
-    case 1: kindFields(packetLocal, kind, startLocal, length, original)
+    case 1: kindFields(packet, kind, offset, length, original)
     case _: Done{Opaque{original}}
 
-def fields(packetLocal: Packet, record: Record) -> Result<&2, &2, RecordError, Value>:
+def fields(packet: Packet, record: Record) -> Result<&2, &2, RecordError, Value>:
   match record:
-    case Record{name, +kind, +class, ttl, +startLocal, +length}: classFields(class, packetLocal, kind, startLocal, length, Record{name, kind, class, ttl, startLocal, length})
+    case Record{name, +kind, +class, ttl, +offset, +length}: classFields(class, packet, kind, offset, length, Record{name, kind, class, ttl, offset, length})
 
-def checkedRecord(valid: Bool, packetLocal: Packet, record: Record) -> Result<&2, &2, RecordError, Value>:
+def checkedRecord(valid: Bool, packet: Packet, record: Record) -> Result<&2, &2, RecordError, Value>:
   match valid:
     case False{}: Fail{InvalidSpan{}}
-    case True{}: fields(packetLocal, record)
+    case True{}: fields(packet, record)
 
 # Validate even manually constructed spans. parse already checks them,
 # but callers may supply a record independently. Unknown data stays opaque.
-def decodeRecord(+packetLocal: Packet, record: Record) -> Result<&2, &2, RecordError, Value>:
+def decodeRecord(+packet: Packet, record: Record) -> Result<&2, &2, RecordError, Value>:
   match record:
-    case Record{name, kind, class, ttl, +startLocal, +length}: checkedRecord(available(packetLocal, startLocal, length), packetLocal, Record{name, kind, class, ttl, startLocal, length})
+    case Record{name, kind, class, ttl, +offset, +length}: checkedRecord(available(packet, offset, length), packet, Record{name, kind, class, ttl, offset, length})
 
 type Address is Data:
   V4{value: IPv4.Address}
@@ -645,7 +645,7 @@ def packetResponse(optional: Bool, id: U32, opcode: U32, expected: Question, val
 def endpoints(equal: Bool, optional: Bool, id: U32, opcode: U32, expected: Question, wire: List<&2, U32>) -> Decision:
   match equal:
     case False{}: Ignore{EndpointMismatch{}}
-    case True{}: packetResponse(optional, id, opcode, expected, packet(wire))
+    case True{}: packetResponse(optional, id, opcode, expected, parsePacket(wire))
 
 def inspectPolicy(optional: Bool, transaction: Transaction, source: Endpoint, destination: Endpoint, wire: List<&2, U32>) -> Decision:
   match transaction:
@@ -686,24 +686,24 @@ def lengthTcpFrame(value: U32) -> ReadResult:
     case 0: Frame{Nil{}, Nil{}}
     case countTcpFrame: More{Payload{countTcpFrame, Nil{}}}
 
-def consumeTcpFrame(reader: Reader, byteLocal: U32) -> ReadResult:
+def consumeTcpFrame(reader: Reader, byte: U32) -> ReadResult:
   match reader:
-    case Prefix{}: More{LengthLow{byteLocal}}
-    case LengthLow{high}: lengthTcpFrame((high * 256 + byteLocal : U32))
-    case Payload{1, reversed}: Frame{List.reverse(&2, U32, byteLocal <> reversed), Nil{}}
-    case Payload{remaining, reversed}: More{Payload{(remaining - 1 : U32), byteLocal <> reversed}}
+    case Prefix{}: More{LengthLow{byte}}
+    case LengthLow{high}: lengthTcpFrame((high * 256 + byte : U32))
+    case Payload{1, reversed}: Frame{List.reverse(&2, U32, byte <> reversed), Nil{}}
+    case Payload{remaining, reversed}: More{Payload{(remaining - 1 : U32), byte <> reversed}}
 
-def checkedTcpFrame(valid: Bool, reader: Reader, byteLocal: U32) -> ReadResult:
+def checkedTcpFrame(valid: Bool, reader: Reader, byte: U32) -> ReadResult:
   match valid:
-    case False{}: TcpFrameFailed{TcpFrameInvalidByte{byteLocal}}
-    case True{}: consumeTcpFrame(reader, byteLocal)
+    case False{}: TcpFrameFailed{TcpFrameInvalidByte{byte}}
+    case True{}: consumeTcpFrame(reader, byte)
 
 def feed(input: List<&2, U32>, state: ReadResult) -> ReadResult:
   match input state:
     case rest Frame{bytes, _}: Frame{bytes, rest}
     case _ TcpFrameFailed{error}: TcpFrameFailed{error}
     case Nil{} More{reader}: More{reader}
-    case +byteLocal <> rest More{reader}: feed(rest, checkedTcpFrame(U32.is_le(byteLocal, 255), reader, byteLocal))
+    case +byte <> rest More{reader}: feed(rest, checkedTcpFrame(U32.is_le(byte, 255), reader, byte))
 
 # Return at most one frame and the unread suffix, so the caller can process
 # messages with backpressure rather than accumulating an unbounded event list.
@@ -723,16 +723,16 @@ def countByte(valid: Bool, value: U32, countTcpFrame: U32) -> Result<&2, &2, Tcp
 def increment(countTcpFrame: U32, +value: U32) -> Result<&2, &2, TcpFrameError, U32>:
   match countTcpFrame:
     case 65535: Fail{TcpFrameTooLong{}}
-    case sizeLocal: countByte(U32.is_le(value, 255), value, sizeLocal)
+    case size: countByte(U32.is_le(value, 255), value, size)
 
 def countTcpFrame(bytes: List<&2, U32>, result: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, TcpFrameError, U32>:
   match bytes result:
     case _ Fail{error}: Fail{error}
     case Nil{} result: result
-    case byteLocal <> rest Done{sizeLocal}: countTcpFrame(rest, increment(sizeLocal, byteLocal))
+    case byte <> rest Done{size}: countTcpFrame(rest, increment(size, byte))
 
-def encodedTcpFrame(bytes: List<&2, U32>, sizeLocal: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, TcpFrameError, List<&2, U32>>:
-  match sizeLocal:
+def encodedTcpFrame(bytes: List<&2, U32>, size: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, TcpFrameError, List<&2, U32>>:
+  match size:
     case Fail{error}: Fail{error}
     case Done{+byteCount}: Done{(byteCount / 256 : U32) <> (byteCount % 256 : U32) <> bytes}
 
@@ -747,7 +747,7 @@ type Option is Data:
   Option{code: U32, data: List<&2, U32>}
 
 type Query is Data:
-  Query{payloadSize: U32, dnssecOkLocal: Bool, options: List<&2, Option>}
+  Query{payloadSize: U32, dnssecOk: Bool, options: List<&2, Option>}
 
 type EdnsError is Data:
   EdnsInvalidField{}
@@ -756,34 +756,34 @@ type EdnsError is Data:
   EdnsMessage{error: Error}
 
 type Buffer is Data:
-  Buffer{sizeLocal: U32, reversed: List<&2, U32>}
+  Buffer{size: U32, reversed: List<&2, U32>}
 
 def measured(result: Result<&2, &2, TcpFrameError, U32>) -> Result<&2, &2, EdnsError, U32>:
   match result:
-    case Done{sizeLocal}: Done{sizeLocal}
+    case Done{size}: Done{size}
     case Fail{TcpFrameInvalidByte{value}}: Fail{InvalidByte{value}}
     case Fail{_}: Fail{TooLong{}}
 
 def prepend(reversed: List<&2, U32>, tail: List<&2, U32>) -> List<&2, U32>:
   match reversed:
     case Nil{}: tail
-    case byteLocal <> rest: prepend(rest, byteLocal <> tail)
+    case byte <> rest: prepend(rest, byte <> tail)
 
 # Inputs to append have already been measured and checked as octets.
 def append(bytes: List<&2, U32>, reversed: List<&2, U32>) -> List<&2, U32>:
   match bytes:
     case Nil{}: reversed
-    case byteLocal <> rest: append(rest, byteLocal <> reversed)
+    case byte <> rest: append(rest, byte <> reversed)
 
-def optionFits(fits: Bool, code: U32, +length: U32, data: List<&2, U32>, sizeLocal: U32, reversed: List<&2, U32>) -> Result<&2, &2, EdnsError, Buffer>:
+def optionFits(fits: Bool, code: U32, +length: U32, data: List<&2, U32>, size: U32, reversed: List<&2, U32>) -> Result<&2, &2, EdnsError, Buffer>:
   match fits:
     case False{}: Fail{TooLong{}}
-    case True{}: Done{Buffer{(sizeLocal + length + 4 : U32), append(data, append(u16(code, u16(length, Nil{})), reversed))}}
+    case True{}: Done{Buffer{(size + length + 4 : U32), append(data, append(u16(code, u16(length, Nil{})), reversed))}}
 
 def optionSize(code: U32, data: List<&2, U32>, buffer: Buffer, result: Result<&2, &2, EdnsError, U32>) -> Result<&2, &2, EdnsError, Buffer>:
   match buffer result:
     case _ Fail{error}: Fail{error}
-    case Buffer{+sizeLocal, reversed} Done{+length}: optionFits(U32.is_le((sizeLocal + length + 4 : U32), 65535), code, length, data, sizeLocal, reversed)
+    case Buffer{+size, reversed} Done{+length}: optionFits(U32.is_le((size + length + 4 : U32), 65535), code, length, data, size, reversed)
 
 def optionCode(valid: Bool, code: U32, +data: List<&2, U32>, buffer: Buffer) -> Result<&2, &2, EdnsError, Buffer>:
   match valid:
@@ -800,25 +800,25 @@ def options(values: List<&2, Option>, result: Result<&2, &2, EdnsError, Buffer>)
     case Nil{} result: result
     case value <> rest Done{buffer}: options(rest, add(value, buffer))
 
-def recordEdns(payloadSize: U32, dnssecOkLocal: Bool, result: Result<&2, &2, EdnsError, Buffer>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
+def recordEdns(payloadSize: U32, dnssecOkFlag: Bool, result: Result<&2, &2, EdnsError, Buffer>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Buffer{sizeLocal, reversed}}:
-      Done{0 <> 0 <> 41 <> u16(payloadSize, 0 <> 0 <> Bool.pick(U32, dnssecOkLocal, 128, 0) <> 0 <> u16(sizeLocal, List.reverse(&2, U32, reversed)))}
+    case Done{Buffer{size, reversed}}:
+      Done{0 <> 0 <> 41 <> u16(payloadSize, 0 <> 0 <> Bool.pick(U32, dnssecOkFlag, 128, 0) <> 0 <> u16(size, List.reverse(&2, U32, reversed)))}
 
-def recordFieldsEdns(valid: Bool, payloadSize: U32, dnssecOkLocal: Bool, values: List<&2, Option>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
+def recordFieldsEdns(valid: Bool, payloadSize: U32, dnssecOkFlag: Bool, values: List<&2, Option>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match valid:
     case False{}: Fail{EdnsInvalidField{}}
-    case True{}: recordEdns(payloadSize, dnssecOkLocal, options(values, Done{Buffer{0, Nil{}}}))
+    case True{}: recordEdns(payloadSize, dnssecOkFlag, options(values, Done{Buffer{0, Nil{}}}))
 
 # OPT uses the root owner, type 41, advertised payload in CLASS, version zero,
 # zero extended RCODE and no reserved flag bits. Only the DO bit is settable.
 def encode(value: Query) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match value:
-    case Query{+payloadSize, dnssecOkLocal, values}: recordFieldsEdns(U32.is_le(payloadSize, 65535), payloadSize, dnssecOkLocal, values)
+    case Query{+payloadSize, dnssecOkFlag, values}: recordFieldsEdns(U32.is_le(payloadSize, 65535), payloadSize, dnssecOkFlag, values)
 
-def bounded(bytes: List<&2, U32>, sizeLocal: Result<&2, &2, EdnsError, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
-  match sizeLocal:
+def bounded(bytes: List<&2, U32>, size: Result<&2, &2, EdnsError, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
+  match size:
     case Fail{error}: Fail{error}
     case Done{_}: Done{bytes}
 
@@ -830,7 +830,7 @@ def counted(+bytes: List<&2, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
 def attach(remaining: Nat, bytes: List<&2, U32>, reversed: List<&2, U32>, opt: List<&2, U32>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
   match remaining bytes:
     case Zero{} _ <> _ <> body: counted(prepend(reversed, 0 <> 1 <> prepend(List.reverse(&2, U32, body), opt)))
-    case Succ{rest} byteLocal <> tail: attach(rest, tail, byteLocal <> reversed, opt)
+    case Succ{rest} byte <> tail: attach(rest, tail, byte <> reversed, opt)
     case _ _: Fail{EdnsInvalidField{}}
 
 def encoded(message: Result<&2, &2, Error, List<&2, U32>>, opt: Result<&2, &2, EdnsError, List<&2, U32>>) -> Result<&2, &2, EdnsError, List<&2, U32>>:
@@ -858,51 +858,51 @@ type Options is Data:
   Complete{values: List<&2, Option>}
   Options{position: U32, remaining: U32, reversed: List<&2, Option>}
 
-def copyBytes(count: Nat, +packetLocal: Packet, +position: U32, reversed: List<&2, U32>) -> List<&2, U32>:
+def copyBytes(count: Nat, +packet: Packet, +position: U32, reversed: List<&2, U32>) -> List<&2, U32>:
   match count:
     case Zero{}: List.reverse(&2, U32, reversed)
-    case Succ{rest}: copyBytes(rest, packetLocal, (position + 1 : U32), byte(packetLocal, position) <> reversed)
+    case Succ{rest}: copyBytes(rest, packet, (position + 1 : U32), byteAt(packet, position) <> reversed)
 
 def progress(empty: Bool, position: U32, remaining: U32, reversed: List<&2, Option>) -> Options:
   match empty:
     case True{}: Complete{List.reverse(&2, Option, reversed)}
     case False{}: Options{position, remaining, reversed}
 
-def optionData(valid: Bool, packetLocal: Packet, +position: U32, +remaining: U32, code: U32, +length: U32, reversed: List<&2, Option>) -> Result<&2, &2, EdnsResponseError, Options>:
+def optionData(valid: Bool, packet: Packet, +position: U32, +remaining: U32, code: U32, +length: U32, reversed: List<&2, Option>) -> Result<&2, &2, EdnsResponseError, Options>:
   match valid:
     case False{}: Fail{TruncatedOption{}}
-    case True{}: Done{progress(U32.is_eq(remaining, length), (position + length : U32), (remaining - length : U32), Option{code, copyBytes(U32.to_nat(length), packetLocal, position, Nil{})} <> reversed)}
+    case True{}: Done{progress(U32.is_eq(remaining, length), (position + length : U32), (remaining - length : U32), Option{code, copyBytes(U32.to_nat(length), packet, position, Nil{})} <> reversed)}
 
-def optionHeader(valid: Bool, +packetLocal: Packet, +position: U32, +remaining: U32, reversed: List<&2, Option>) -> Result<&2, &2, EdnsResponseError, Options>:
+def optionHeader(valid: Bool, +packet: Packet, +position: U32, +remaining: U32, reversed: List<&2, Option>) -> Result<&2, &2, EdnsResponseError, Options>:
   match valid:
     case False{}: Fail{TruncatedOption{}}
     case True{}:
-      +length = word(packetLocal, (position + 2 : U32))
-      optionData(U32.is_le(length, (remaining - 4 : U32)), packetLocal, (position + 4 : U32), (remaining - 4 : U32), word(packetLocal, position), length, reversed)
+      +length = word(packet, (position + 2 : U32))
+      optionData(U32.is_le(length, (remaining - 4 : U32)), packet, (position + 4 : U32), (remaining - 4 : U32), word(packet, position), length, reversed)
 
-def optionLoop(fuel: Nat, +packetLocal: Packet, state: Result<&2, &2, EdnsResponseError, Options>) -> Result<&2, &2, EdnsResponseError, List<&2, Option>>:
+def optionLoop(fuel: Nat, +packet: Packet, state: Result<&2, &2, EdnsResponseError, Options>) -> Result<&2, &2, EdnsResponseError, List<&2, Option>>:
   match fuel state:
     case _ Fail{error}: Fail{error}
     case _ Done{Complete{values}}: Done{values}
     case Zero{} _: Fail{TruncatedOption{}}
-    case Succ{rest} Done{Options{position, +remaining, reversed}}: optionLoop(rest, packetLocal, optionHeader(U32.is_le(4, remaining), packetLocal, position, remaining, reversed))
+    case Succ{rest} Done{Options{position, +remaining, reversed}}: optionLoop(rest, packet, optionHeader(U32.is_le(4, remaining), packet, position, remaining, reversed))
 
 def metadata(payloadSize: U32, +ttl: U32, result: Result<&2, &2, EdnsResponseError, List<&2, Option>>) -> Result<&2, &2, EdnsResponseError, Response>:
   match result:
     case Fail{error}: Fail{error}
     case Done{values}: Done{Response{payloadSize, (ttl / 16777216 : U32), (ttl / 65536 % 256 : U32), (ttl % 65536 : U32), values}}
 
-def boundedEdnsResponse(valid: Bool, packetLocal: Packet, payloadSize: U32, ttl: U32, startLocal: U32, +length: U32) -> Result<&2, &2, EdnsResponseError, Response>:
+def boundedEdnsResponse(valid: Bool, packet: Packet, payloadSize: U32, ttl: U32, offset: U32, +length: U32) -> Result<&2, &2, EdnsResponseError, Response>:
   match valid:
     case False{}: Fail{EdnsResponseInvalidField{}}
-    case True{}: metadata(payloadSize, ttl, optionLoop(U32.to_nat((length / 4 : U32)), packetLocal, Done{progress(U32.is_eq(length, 0), startLocal, length, Nil{})}))
+    case True{}: metadata(payloadSize, ttl, optionLoop(U32.to_nat((length / 4 : U32)), packet, Done{progress(U32.is_eq(length, 0), offset, length, Nil{})}))
 
-# Packet must come from packetLocal/parse. Check the public record's
+# Packet must come from packet/parse. Check the public record's
 # span before computing its end, so even U32-sized invalid spans cannot wrap.
-def decode(+packetLocal: Packet, value: Record) -> Result<&2, &2, EdnsResponseError, Response>:
+def decode(+packet: Packet, value: Record) -> Result<&2, &2, EdnsResponseError, Response>:
   match value:
-    case Record{Name{Nil{}}, +recordType, +class, ttl, +startLocal, +length}:
-      boundedEdnsResponse(U32.is_eq(recordType, 41) && U32.is_le(class, 65535) && U32.is_le(length, 65535) && available(packetLocal, startLocal, length), packetLocal, class, ttl, startLocal, length)
+    case Record{Name{Nil{}}, +recordType, +class, ttl, +offset, +length}:
+      boundedEdnsResponse(U32.is_eq(recordType, 41) && U32.is_le(class, 65535) && U32.is_le(length, 65535) && available(packet, offset, length), packet, class, ttl, offset, length)
     case _: Fail{InvalidOwner{}}
 
 def hasOpt(values: List<&2, Record>) -> Bool:
@@ -915,32 +915,32 @@ def optional(result: Result<&2, &2, EdnsResponseError, Response>) -> Result<&2, 
     case Fail{error}: Fail{error}
     case Done{response}: Done{Some{response}}
 
-def selected(isOpt: Bool, packetLocal: Packet, value: Record, prior: Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
+def selected(isOpt: Bool, packet: Packet, value: Record, prior: Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
   match isOpt prior:
     case _ Fail{error}: Fail{error}
     case False{} prior: prior
     case True{} Done{Some{_}}: Fail{Duplicate{}}
-    case True{} Done{None{}}: optional(decode(packetLocal, value))
+    case True{} Done{None{}}: optional(decode(packet, value))
 
 def kindEdnsResponse(value: Record) -> U32:
   match value:
     case Record{_, code, _, _, _, _}: code
 
-def scan(+packetLocal: Packet, values: List<&2, Record>, state: Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
+def scan(+packet: Packet, values: List<&2, Record>, state: Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
   match values state:
     case _ Fail{error}: Fail{error}
     case Nil{} state: state
-    case +value <> rest state: scan(packetLocal, rest, selected(U32.is_eq(kindEdnsResponse(value), 41), packetLocal, value, state))
+    case +value <> rest state: scan(packet, rest, selected(U32.is_eq(kindEdnsResponse(value), 41), packet, value, state))
 
-def placement(invalid: Bool, packetLocal: Packet, values: List<&2, Record>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
+def placement(invalid: Bool, packet: Packet, values: List<&2, Record>) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
   match invalid:
     case True{}: Fail{Misplaced{}}
-    case False{}: scan(packetLocal, values, Done{None{}})
+    case False{}: scan(packet, values, Done{None{}})
 
 # OPT may appear anywhere in additional, but nowhere else and at most once.
 def inspect(message: Message) -> Result<&2, &2, EdnsResponseError, Maybe<&2, Response>>:
   match message:
-    case Message{packetLocal, _, _, answers, authorities, additional}: placement(hasOpt(answers) || hasOpt(authorities), packetLocal, additional)
+    case Message{packet, _, _, answers, authorities, additional}: placement(hasOpt(answers) || hasOpt(authorities), packet, additional)
 
 def responseCode(header: Header, extension: Maybe<&2, Response>) -> U32:
   match header extension:
@@ -1008,7 +1008,7 @@ def fixed(value: U32) -> IO(Result<&2, &2, IdError, U32>):
 
 # Flags correspond to the resolver's default-name, search-list and no-TLD
 # policies. Input dot count/absolute status are supplied by the caller so text
-# policy is not guessed from binary labels (which can themselves contain dotsLocal).
+# policy is not guessed from binary labels (which can themselves contain dots).
 type Policy is Data:
   Policy{ndots: U32, defaultNames: Bool, searchNames: Bool, noTld: Bool}
 
@@ -1024,11 +1024,11 @@ type Domain is Data:
   Invalid{error: DomainNameError}
 
 type SearchCursor is Data:
-  SearchCursor{base: Name, dotsLocal: U32, noTld: Bool, first: Bool, domains: List<&2, Domain>, index: Nat, triedDirect: Bool, triedRoot: Bool, searched: Bool}
+  SearchCursor{base: Name, dots: U32, noTld: Bool, first: Bool, domains: List<&2, Domain>, index: Nat, triedDirect: Bool, triedRoot: Bool, searched: Bool}
 
 type Step is Data:
   Exhausted{}
-  Candidate{origin: Origin, name: Result<&2, &2, DomainNameError, Name>, nextLocal: SearchCursor}
+  Candidate{origin: Origin, name: Result<&2, &2, DomainNameError, Name>, next: SearchCursor}
 
 def checkedSearch(+name: Name, encoded: Result<&2, &2, DomainNameError, List<&2, U32>>) -> Result<&2, &2, DomainNameError, Name>:
   match encoded:
@@ -1059,16 +1059,16 @@ def domainList(allowed: Bool, all: Bool, domains: List<&2, Domain>) -> List<&2, 
     case True{} False{} Nil{}: Nil{}
     case True{} False{} first <> _: first <> Nil{}
 
-def preparedDomains(absolute: Bool, base: Name, +dotsLocal: U32, domains: List<&2, Domain>, policy: Policy) -> SearchCursor:
+def preparedDomains(absolute: Bool, base: Name, +dotCount: U32, domains: List<&2, Domain>, policy: Policy) -> SearchCursor:
   match absolute policy:
-    case True{} _: SearchCursor{base, dotsLocal, False{}, True{}, Nil{}, Zero{}, False{}, False{}, False{}}
+    case True{} _: SearchCursor{base, dotCount, False{}, True{}, Nil{}, Zero{}, False{}, False{}, False{}}
     case False{} Policy{ndots, defaultNames, +searchNames, noTld}:
-      SearchCursor{base, dotsLocal, noTld, U32.is_ge(dotsLocal, ndots), domainList(Bool.pick(Bool, U32.is_zero(dotsLocal), defaultNames, searchNames), searchNames, domains), Zero{}, False{}, False{}, False{}}
+      SearchCursor{base, dotCount, noTld, U32.is_ge(dotCount, ndots), domainList(Bool.pick(Bool, U32.is_zero(dotCount), defaultNames, searchNames), searchNames, domains), Zero{}, False{}, False{}, False{}}
 
 # Names are validated individually when requested, including the composed wire
 # length. No candidate is silently removed merely because it cannot be encoded.
-def startDomains(base: Name, dotsLocal: U32, absolute: Bool, domains: List<&2, Domain>, policy: Policy) -> SearchCursor:
-  preparedDomains(absolute, base, dotsLocal, domains, policy)
+def startDomains(base: Name, dotCount: U32, absolute: Bool, domains: List<&2, Domain>, policy: Policy) -> SearchCursor:
+  preparedDomains(absolute, base, dotCount, domains, policy)
 
 def wrapDomains(names: List<&2, Name>, reversed: List<&2, Domain>) -> List<&2, Domain>:
   match names:
@@ -1076,11 +1076,11 @@ def wrapDomains(names: List<&2, Name>, reversed: List<&2, Domain>) -> List<&2, D
     case name <> rest: wrapDomains(rest, Valid{name} <> reversed)
 
 # Existing callers supplying wire names retain the same entry point.
-def prepared(absolute: Bool, base: Name, dotsLocal: U32, domains: List<&2, Name>, policy: Policy) -> SearchCursor:
-  preparedDomains(absolute, base, dotsLocal, wrapDomains(domains, Nil{}), policy)
+def prepared(absolute: Bool, base: Name, dotCount: U32, domains: List<&2, Name>, policy: Policy) -> SearchCursor:
+  preparedDomains(absolute, base, dotCount, wrapDomains(domains, Nil{}), policy)
 
-def start(base: Name, dotsLocal: U32, absolute: Bool, domains: List<&2, Name>, policy: Policy) -> SearchCursor:
-  prepared(absolute, base, dotsLocal, domains, policy)
+def start(base: Name, dotCount: U32, absolute: Bool, domains: List<&2, Name>, policy: Policy) -> SearchCursor:
+  prepared(absolute, base, dotCount, domains, policy)
 
 def domainRoot(domain: Domain) -> Bool:
   match domain:
@@ -1092,25 +1092,25 @@ def domainCandidate(base: Name, domain: Domain) -> Result<&2, &2, DomainNameErro
     case Valid{name}: valid(joined(base, name))
     case Invalid{error}: Fail{error}
 
-def finalCandidate(allowed: Bool, +base: Name, dotsLocal: U32, noTld: Bool, index: Nat, triedRoot: Bool, searched: Bool) -> Step:
+def finalCandidate(allowed: Bool, +base: Name, dotCount: U32, noTld: Bool, index: Nat, triedRoot: Bool, searched: Bool) -> Step:
   match allowed:
     case False{}: Exhausted{}
-    case True{}: Candidate{Final{}, valid(base), SearchCursor{base, dotsLocal, noTld, False{}, Nil{}, index, True{}, triedRoot, searched}}
+    case True{}: Candidate{Final{}, valid(base), SearchCursor{base, dotCount, noTld, False{}, Nil{}, index, True{}, triedRoot, searched}}
 
 def next(cursor: SearchCursor) -> Step:
   match cursor:
-    case SearchCursor{+base, dotsLocal, noTld, True{}, domains, index, _, triedRoot, searched}:
-      Candidate{Initial{}, valid(base), SearchCursor{base, dotsLocal, noTld, False{}, domains, index, True{}, triedRoot, searched}}
-    case SearchCursor{+base, dotsLocal, noTld, False{}, +domain <> rest, +index, triedDirect, triedRoot, _}:
-      Candidate{Suffix{index}, domainCandidate(base, domain), SearchCursor{base, dotsLocal, noTld, False{}, rest, Succ{index}, triedDirect, triedRoot || domainRoot(domain), True{}}}
-    case SearchCursor{base, +dotsLocal, +noTld, False{}, Nil{}, index, triedDirect, +triedRoot, +searched}:
-      finalCandidate(Bool.not(triedDirect || triedRoot) && (Bool.not(U32.is_zero(dotsLocal)) || Bool.not(searched) || Bool.not(noTld)), base, dotsLocal, noTld, index, triedRoot, searched)
+    case SearchCursor{+base, dotCount, noTld, True{}, domains, index, _, triedRoot, searched}:
+      Candidate{Initial{}, valid(base), SearchCursor{base, dotCount, noTld, False{}, domains, index, True{}, triedRoot, searched}}
+    case SearchCursor{+base, dotCount, noTld, False{}, +domain <> rest, +index, triedDirect, triedRoot, _}:
+      Candidate{Suffix{index}, domainCandidate(base, domain), SearchCursor{base, dotCount, noTld, False{}, rest, Succ{index}, triedDirect, triedRoot || domainRoot(domain), True{}}}
+    case SearchCursor{base, +dotCount, +noTld, False{}, Nil{}, index, triedDirect, +triedRoot, +searched}:
+      finalCandidate(Bool.not(triedDirect || triedRoot) && (Bool.not(U32.is_zero(dotCount)) || Bool.not(searched) || Bool.not(noTld)), base, dotCount, noTld, index, triedRoot, searched)
 
 # A response policy can stop suffix searching but still attempt the final bare
 # name where allowed. Only actually yielded root suffixes suppress that attempt.
 def stopSearch(cursor: SearchCursor) -> SearchCursor:
   match cursor:
-    case SearchCursor{base, dotsLocal, noTld, first, _, index, triedDirect, triedRoot, searched}: SearchCursor{base, dotsLocal, noTld, first, Nil{}, index, triedDirect, triedRoot, searched}
+    case SearchCursor{base, dotCount, noTld, first, _, index, triedDirect, triedRoot, searched}: SearchCursor{base, dotCount, noTld, first, Nil{}, index, triedDirect, triedRoot, searched}
 
 # Resolver error classes, independent of OS errno and libc integer constants.
 type SearchResponseError is Data:
@@ -1209,7 +1209,7 @@ def candidateSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~reques
 def advance(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, history: History, step: Step) -> IO(Progress<Failure, Value>):
   match step:
     case Exhausted{}: IO.pure(Progress<Failure, Value>, SearchRunFinished{Fail{NoAnswer{exhausted(history)}}})
-    case Candidate{origin, name, nextLocal}: candidateSearchRun(~Environment, ~Failure, ~Value, ~request, environment, origin, nextLocal, history, name)
+    case Candidate{origin, name, following}: candidateSearchRun(~Environment, ~Failure, ~Value, ~request, environment, origin, following, history, name)
 
 # Each advance consumes a suffix or a direct-name phase; response policy can
 # only discard additional suffixes. That finite progress crosses record fields
@@ -1219,8 +1219,8 @@ def advance(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environm
     case SearchRunFinished{result}: IO.pure(Result<&2, &2, SearchRunError<Failure>, Value>, result)
     case Active{cursor, history}:
       do IO<Result<&2, &2, SearchRunError<Failure>, Value>>:
-        nextLocal : Progress<Failure, Value> <- advance(~Environment, ~Failure, ~Value, ~request, environment, history, next(cursor))
-        drive(~Environment, ~Failure, ~Value, ~request, environment, nextLocal)
+        following : Progress<Failure, Value> <- advance(~Environment, ~Failure, ~Value, ~request, environment, history, next(cursor))
+        drive(~Environment, ~Failure, ~Value, ~request, environment, following)
 
 # The request function owns each exchange until it returns. The environment is
 # borrowed and remains caller-owned. SearchHalt preserves non-DNS errors immediately;
@@ -1228,10 +1228,10 @@ def advance(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environm
 def runSearchRun(~Environment: Data, ~Failure: Data, ~Value: Data, ~request: Environment -> SearchRunRequest -> IO(Outcome<Failure, Value>), environment: Environment, cursor: SearchCursor) -> IO(Result<&2, &2, SearchRunError<Failure>, Value>):
   drive(~Environment, ~Failure, ~Value, ~request, environment, Active{cursor, new()})
 
-# The search threshold counts presentation dotsLocal, including the terminal dot.
+# The search threshold counts presentation dots, including the terminal dot.
 # Parsing first bounds the accepted input before conversion to the U32 API.
 type Input is Data:
-  Input{name: Name, dotsLocal: U32, absolute: Bool}
+  Input{name: Name, dots: U32, absolute: Bool}
 
 def countedSearchText(dot: Bool, rest: Nat) -> Nat:
   match dot:

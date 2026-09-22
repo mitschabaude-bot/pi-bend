@@ -6,8 +6,9 @@ import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/f64.bend as F
 import ./message-events.bend as Test
+import ../../runtime/src/schema-value.bend as Schema
 
-def EventValue() -> Data: T.AgentEvent<Unit, String, Unit, String, String, Unit, T.AgentToolResult<String>>
+def EventValue() -> Data: T.AgentEvent<Unit, String, String, Unit, T.AgentToolResult<String>>
 def Outcome() -> Data: Result<&2, &2, String, Unit>
 def Sink() -> Data: C.Callback<EventValue(), Outcome()>
 type State is Data:
@@ -17,14 +18,14 @@ def sink(state: State, event: EventValue()) -> IO(Outcome()):
   match state:
     case State{log, failAt}:
       do IO<Outcome()>:
-        +tag : String = T.eventType(Unit, String, Unit, String, String, Unit, T.AgentToolResult<String>, event)
+        +tag : String = T.eventType(Unit, String, String, Unit, T.AgentToolResult<String>, event)
         R.modify(List<&2, String>, Unit, log, values => (tag <> values, Unit{}))
         return Bool.pick(Outcome(), String.eq(tag, failAt), Fail{tag}, Done{Unit{}})
 
 def afterExecution(emitted: Outcome(), emit: Sink(), message: Ai.ToolResultMessage<String>) -> IO(Outcome()):
   match emitted:
     case Fail{error}: IO.pure(Outcome(), Fail{error})
-    case Done{_}: Loop.emitToolResultMessage(Unit, String, Unit, String, String, Unit, T.AgentToolResult<String>, String, message, emit)
+    case Done{_}: Loop.emitToolResultMessage(Unit, String, String, Unit, T.AgentToolResult<String>, String, message, emit)
 
 def check(result: Outcome(), expected: String) -> IO(Unit):
   match result:
@@ -35,8 +36,8 @@ def run(+failAt: String, expectedTrace: String) -> IO(Unit):
   do IO<Unit>:
     +log : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
     +emit : Sink() <- C.create(~State, ~EventValue(), ~Outcome(), ~sink, State{log, failAt})
-    finalized : Loop.FinalizedToolCallOutcome<String, String> = Loop.FinalizedToolCallOutcome{Ai.ToolCall{"id", "echo", "args", None{}, None{}}, T.AgentToolResult{Nil{}, "details", None{}, None{}}, False{}}
-    result : Outcome() <- Loop.emitToolExecutionEnd(Unit, String, Unit, String, String, Unit, String, finalized, emit)
+    finalized : Loop.FinalizedToolCallOutcome<String> = Loop.FinalizedToolCallOutcome{Ai.ToolCall{"id", "echo", Schema.Text{"args"}, None{}, None{}}, T.AgentToolResult{Nil{}, "details", None{}, None{}}, False{}}
+    result : Outcome() <- Loop.emitToolExecutionEnd(Unit, String, String, Unit, String, finalized, emit)
     outcome : Outcome() <- afterExecution(result, emit, Ai.ToolResultMessage{"id", "echo", Nil{}, Some{"details"}, None{}, False{}, F.fromU32(0)})
     check(outcome, failAt)
     trace : List<&2, String> <- R.read(List<&2, String>, log)

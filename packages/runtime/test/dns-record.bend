@@ -46,7 +46,7 @@ def direct(kind: U32, class: U32, start: U32, length: U32, value: Result<&2, &2,
 
 def arguments(parts: List<&2, String>) -> String:
   match parts:
-    case kind <> class <> start <> length <> wire <> Nil{}: direct(Scalar.decimal(kind, 0), Scalar.decimal(class, 0), Scalar.decimal(start, 0), Scalar.decimal(length, 0), Name.packet(octets(wire)))
+    case kind <> class <> start <> length <> wire <> Nil{}: direct(Scalar.decimal(kind, 0), Scalar.decimal(class, 0), Scalar.decimal(start, 0), Scalar.decimal(length, 0), Name.parsePacket(octets(wire)))
     case _: "bad test input"
 
 def records(+packet: Name.Packet, values: List<&2, Message.Record>, reversed: List<&2, String>) -> String:

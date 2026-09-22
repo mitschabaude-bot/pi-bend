@@ -57,7 +57,7 @@ def packet(value: Result<&2, &2, DNS.DomainNameError, DNS.Packet>, position: U32
 
 def decoding(parts: List<&2, String>) -> String:
   match parts:
-    case offset <> values <> Nil{}: packet(DNS.packet(bytes(values)), Scalar.decimal(offset, 0))
+    case offset <> values <> Nil{}: packet(DNS.parsePacket(bytes(values)), Scalar.decimal(offset, 0))
     case _: "bad test input"
 
 def zeros(fuel: Nat, acc: List<&2, U32>) -> List<&2, U32>:
@@ -69,7 +69,7 @@ def run(input: String) -> String:
   match input:
     case SCon{'e', text}: encoded(DNS.encodeName(name(text)))
     case SCon{'d', text}: decoding(Split.split(text, ':'))
-    case SCon{'l', text}: packet(DNS.packet(zeros(U32.to_nat(Scalar.decimal(text, 0)), Nil{})), 0)
+    case SCon{'l', text}: packet(DNS.parsePacket(zeros(U32.to_nat(Scalar.decimal(text, 0)), Nil{})), 0)
     case _: "bad test mode"
 
 def cases(args: List<String>) -> IO(Unit):

@@ -19,13 +19,13 @@ import ./agent-settings.bend as SettingsTest
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def PayloadInput() -> Data: Ai.PayloadInput<Unit, Ai.Model<Unit>>
-def PayloadResult() -> Data: Result<&2, &2, String, Maybe<&2, Unit>>
-def Payload() -> Data: Ai.PayloadCallback(Unit, Ai.Model<Unit>, String)
-def ResponseInput() -> Data: Ai.ResponseInput<Ai.Model<Unit>>
+def PayloadInput() -> Data: Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>
+def PayloadResult() -> Data: Result<&2, &2, String, Maybe<&2, Ai.JsonValue>>
+def Payload() -> Data: Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, String)
+def ResponseInput() -> Data: Ai.ResponseInput<Ai.Model<Ai.JsonValue>>
 def ResponseResult() -> Data: Result<&2, &2, String, Unit>
-def Response() -> Data: Ai.ResponseCallback(Ai.Model<Unit>, String)
-def model(value: Ai.Model<Unit>) -> Bool:
+def Response() -> Data: Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, String)
+def model(value: Ai.Model<Ai.JsonValue>) -> Bool:
   match value:
     case Ai.Model{"unknown", _, _, "unknown", _, _, _, _, _, _, _, _, _, _}: True{}
     case _: False{}
@@ -42,11 +42,11 @@ def log(value: Logged) -> IO(Unit):
     case Logged{name, trace}: R.modify(String, Unit, trace, old => (old ++ name ++ ";", Unit{}))
 def payload(capture: Logged, input: PayloadInput()) -> IO(PayloadResult()):
   match input:
-    case Ai.PayloadInput{Unit{}, suppliedModel}:
+    case Ai.PayloadInput{_, suppliedModel}:
       do IO<PayloadResult()>:
         Test.assertion(model(suppliedModel), "payload callback receives provider request model")
         log(capture)
-        return Done{Some{Unit{}}}
+        return Done{Some{Ai.JsonNull{}}}
 def observed(capture: Logged, input: ResponseInput()) -> IO(ResponseResult()):
   match input:
     case Ai.ResponseInput{value, suppliedModel}:
@@ -60,12 +60,12 @@ def install(+agent: Owner.Owner(), bindings: Bindings) -> IO(Unit):
   match bindings:
     case Bindings{payload, response}:
       do IO<Unit>:
-        Agent.setOnPayload(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, payload)
-        Agent.setOnResponse(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, response)
+        Agent.setOnPayload(Unit, Unit, String, String, Unit, agent, payload)
+        Agent.setOnResponse(Unit, Unit, String, String, Unit, agent, response)
 def read(+agent: Owner.Owner()) -> IO(Bindings):
   do IO<Bindings>:
-    payload : Maybe<&2, Payload()> <- Agent.getOnPayload(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    response : Maybe<&2, Response()> <- Agent.getOnResponse(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    payload : Maybe<&2, Payload()> <- Agent.getOnPayload(Unit, Unit, String, String, Unit, agent)
+    response : Maybe<&2, Response()> <- Agent.getOnResponse(Unit, Unit, String, String, Unit, agent)
     return Bindings{payload, response}
 def samePayload(left: Maybe<&2, Payload()>, right: Maybe<&2, Payload()>) -> Bool:
   match left right:
@@ -82,30 +82,30 @@ def same(left: Bindings, right: Bindings) -> Bool:
     case Bindings{a, b} Bindings{c, d}: samePayload(a, c) && sameResponse(b, d)
 def config(value: H.Config()) -> Bindings:
   match value:
-    case T.AgentLoopConfig{_, _, _, _, _, payload, response, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: Bindings{payload, response}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, payload, response, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: Bindings{payload, response}
 def payloadSuccess(value: PayloadResult()) -> Bool:
   match value:
-    case Done{Some{Unit{}}}: True{}
+    case Done{Some{Ai.JsonNull{}}}: True{}
     case _: False{}
-def invokePayload(callback: Maybe<&2, Payload()>, suppliedModel: Ai.Model<Unit>) -> IO(Unit):
+def invokePayload(callback: Maybe<&2, Payload()>, suppliedModel: Ai.Model<Ai.JsonValue>) -> IO(Unit):
   match callback:
     case None{}: IO.pure(Unit, Unit{})
     case Some{value}:
       do IO<Unit>:
-        returned : PayloadResult() <- C.call(PayloadInput(), PayloadResult(), value, Ai.PayloadInput{Unit{}, suppliedModel})
+        returned : PayloadResult() <- C.call(PayloadInput(), PayloadResult(), value, Ai.PayloadInput{Ai.JsonNull{}, suppliedModel})
         Test.assertion(payloadSuccess(returned), "provider observes payload callback return")
 def responseSuccess(value: ResponseResult()) -> Bool:
   match value:
     case Done{Unit{}}: True{}
     case _: False{}
-def invokeResponse(callback: Maybe<&2, Response()>, suppliedModel: Ai.Model<Unit>) -> IO(Unit):
+def invokeResponse(callback: Maybe<&2, Response()>, suppliedModel: Ai.Model<Ai.JsonValue>) -> IO(Unit):
   match callback:
     case None{}: IO.pure(Unit, Unit{})
     case Some{value}:
       do IO<Unit>:
         returned : ResponseResult() <- C.call(ResponseInput(), ResponseResult(), value, Ai.ResponseInput{response(), suppliedModel})
         Test.assertion(responseSuccess(returned), "provider awaits response callback completion")
-def invoke(bindings: Bindings, +suppliedModel: Ai.Model<Unit>) -> IO(Unit):
+def invoke(bindings: Bindings, +suppliedModel: Ai.Model<Ai.JsonValue>) -> IO(Unit):
   match bindings:
     case Bindings{payload, response}:
       do IO<Unit>:
@@ -129,19 +129,19 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         R.modify(String, Unit, trace, old => (old ++ "p;", Unit{}))
         +index : U32 <- R.modify(U32, U32, calls, old => SettingsTest.increment(old))
         replaceFirst(index, slot, future)
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         SettingsTest.push(index, stream)
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider options missing")
 def create(capture: Capture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}
 
@@ -190,8 +190,8 @@ def main() -> IO(Unit):
     Test.assertion(String.eq(actual, "pa;ra;p;pa;ra;p;pb;rb;p;p;"), "provider callback order and per-run capture match upstream")
     old : Maybe<&2, Owner.Owner()> <- R.dispose(Maybe<&2, Owner.Owner()>, slot)
     Named.dispose(fixture)
-    invoke(first, State.defaultModel(Unit))
-    invoke(second, State.defaultModel(Unit))
+    invoke(first, State.defaultModel(Ai.JsonValue))
+    invoke(second, State.defaultModel(Ai.JsonValue))
     disposeBindings(first)
     disposeBindings(second)
     old : U32 <- R.dispose(U32, calls)

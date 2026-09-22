@@ -7,18 +7,19 @@ import ../../ai/src/types.bend as Ai
 import ../../ai/test/model-types.bend as Model
 import ../../ai/src/utils/model-api.bend as Api
 import ../../runtime/src/callback.bend as C
+import ../../runtime/src/schema-value.bend as Schema
 
-def Config() -> Data: T.AgentLoopConfig<Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit>
+def Config() -> Data: T.AgentLoopConfig<Unit, String, String, String, Unit>
 def Update() -> Data: H.Update()
-def State() -> Data: Loop.PreparedTurnState<Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit>
-def Output() -> Data: Result<&2, &2, String, List<&2, Ai.Message<Unit, String, Unit, String>>>
+def State() -> Data: Loop.PreparedTurnState<Unit, String, String, String, Unit>
+def Output() -> Data: Result<&2, &2, String, List<&2, Ai.Message<Schema.Value, Schema.Value, Unit, String>>>
 def Converter() -> Data: C.Callback<H.Messages(), Output()>
 
 def forbidden(unused: Unit, input: H.Messages()) -> IO(Output()):
   IO.die(Output(), 1, "turn update must not invoke conversion")
 
-def config(model: Ai.Model<Unit>, reasoning: Maybe<&2, Ai.ThinkingLevel>, convert: Converter()) -> Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{"keep"}, None{}, None{}, None{}, reasoning, None{}, None{}, model, convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+def config(model: Ai.Model<Ai.JsonValue>, reasoning: Maybe<&2, Ai.ThinkingLevel>, convert: Converter()) -> Config():
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{"keep"}, None{}, None{}, None{}, reasoning, None{}, None{}}, model, convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 def thinking(value: Maybe<&2, Ai.ThinkingLevel>) -> String:
   match value:
@@ -35,18 +36,18 @@ def boolean(value: Bool) -> String:
     case True{}: "true"
     case False{}: "false"
 
-def sameModel(left: Ai.Model<Unit>, right: Ai.Model<Unit>) -> Bool:
-  String.eq(Api.name(Api.modelApi(Unit, left)), Api.name(Api.modelApi(Unit, right)))
+def sameModel(left: Ai.Model<Ai.JsonValue>, right: Ai.Model<Ai.JsonValue>) -> Bool:
+  String.eq(Api.name(Api.modelApi(Ai.JsonValue, left)), Api.name(Api.modelApi(Ai.JsonValue, right)))
 
-def view(value: Config(), expectedModel: Ai.Model<Unit>, expectedConvert: Converter()) -> IO(String):
+def view(value: Config(), expectedModel: Ai.Model<Ai.JsonValue>, expectedConvert: Converter()) -> IO(String):
   match value:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{sessionId}, _, _, _, reasoning, _, _, model, convert, _, _, _, _, _, _, _, _, _}:
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{sessionId}, _, _, _, reasoning, _, _}, model, convert, _, _, _, _, _, _, _, _, _}:
       do IO<String>:
         Test.assertion(String.eq(sessionId, "keep") && C.same(H.Messages(), Output(), convert, expectedConvert), "turn update changed unrelated fields/callback")
         return thinking(reasoning) ++ "|" ++ boolean(sameModel(model, expectedModel))
     case _: IO.die(String, 1, "session field omitted by update")
 
-def check(state: State(), originalModel: Ai.Model<Unit>, convert: Converter(), expected: String) -> IO(Unit):
+def check(state: State(), originalModel: Ai.Model<Ai.JsonValue>, convert: Converter(), expected: String) -> IO(Unit):
   match state:
     case Loop.PreparedTurnState{_, configValue, _}:
       do IO<Unit>:
@@ -62,12 +63,12 @@ def run(+previous: Maybe<&2, Ai.ThinkingLevel>, requested: Maybe<&2, T.ThinkingL
   do IO<Unit>:
     +context : H.Context() = T.AgentContext{Nil{}, None{}}
     +replacementContext : H.Context() = T.AgentContext{Nil{}, Some{Nil{}}}
-    +model : Ai.Model<Unit> = Model.model(Ai.CustomModelApi{"old"}, None{})
-    +replacementModel : Ai.Model<Unit> = Model.model(Ai.CustomModelApi{"new"}, None{})
+    +model : Ai.Model<Ai.JsonValue> = Model.model(Ai.CustomModelApi{"old"}, None{})
+    +replacementModel : Ai.Model<Ai.JsonValue> = Model.model(Ai.CustomModelApi{"new"}, None{})
     +convert : Converter() <- C.create(~Unit, ~H.Messages(), ~Output(), ~forbidden, Unit{})
     +originalConfig : Config() = config(model, previous, convert)
-    update : Update() = T.AgentLoopTurnUpdate{selected(H.Context(), bit(mask, 1), replacementContext), selected(H.Messages(), bit(mask, 4), Nil{}), selected(Ai.Model<Unit>, bit(mask, 2), replacementModel), requested}
-    state : State() = Loop.applyTurnUpdate(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, originalConfig, selected(Update(), present, update))
+    update : Update() = T.AgentLoopTurnUpdate{selected(H.Context(), bit(mask, 1), replacementContext), selected(H.Messages(), bit(mask, 4), Nil{}), selected(Ai.Model<Ai.JsonValue>, bit(mask, 2), replacementModel), requested}
+    state : State() = Loop.applyTurnUpdate(Unit, String, String, String, Unit, context, originalConfig, selected(Update(), present, update))
     check(state, model, convert, expected)
     originalView : String <- view(originalConfig, model, convert)
     Test.assertion(String.eq(originalView, thinking(previous) ++ "|true"), "turn update mutated original configuration")

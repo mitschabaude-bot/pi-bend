@@ -20,28 +20,28 @@ import ./agent-settings.bend as SettingsTest
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Turn() -> Data: Options.Turn(Unit, Unit, Unit, String, Unit, String)
-def Update() -> Data: Options.Update(Unit, Unit, Unit, String, Unit, String, Unit)
-def Input() -> Data: T.ToolHookInput<Turn(), Run.RunSignal()>
+def Turn() -> Data: Options.Turn(Unit, Unit, String, String)
+def Update() -> Data: Options.Update(Unit, Unit, String, String)
+def Input() -> Data: T.ToolHookInput<Turn()>
 def Prepared() -> Data: Hooks.PrepareResult(Update(), String)
 def Stop() -> Data: Hooks.StopHook(Turn(), String)
 def Legacy() -> Data: Hooks.LegacyHook(Update(), String)
 def ContextHook() -> Data: Hooks.ContextHook(Turn(), Update(), String)
-def Values() -> Data: Options.TurnHooks(Unit, Unit, Unit, String, Unit, String, Unit)
+def Values() -> Data: Options.TurnHooks(Unit, Unit, String, String)
 type Handlers is Data:
   Handlers{stop: Stop(), legacy: Legacy(), context: ContextHook()}
 def install(+agent: Owner.Owner(), values: Values()) -> IO(Unit):
   match values:
     case Hooks.Hooks{stop, legacy, context}:
       do IO<Unit>:
-        Agent.setShouldStopAfterTurn(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, stop)
-        Agent.setPrepareNextTurn(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, legacy)
-        Agent.setPrepareNextTurnWithContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, context)
+        Agent.setShouldStopAfterTurn(Unit, Unit, String, String, Unit, agent, stop)
+        Agent.setPrepareNextTurn(Unit, Unit, String, String, Unit, agent, legacy)
+        Agent.setPrepareNextTurnWithContext(Unit, Unit, String, String, Unit, agent, context)
 def read(+agent: Owner.Owner()) -> IO(Values()):
   do IO<Values()>:
-    stop : Maybe<&2, Stop()> <- Agent.getShouldStopAfterTurn(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    legacy : Maybe<&2, Legacy()> <- Agent.getPrepareNextTurn(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    context : Maybe<&2, ContextHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    stop : Maybe<&2, Stop()> <- Agent.getShouldStopAfterTurn(Unit, Unit, String, String, Unit, agent)
+    legacy : Maybe<&2, Legacy()> <- Agent.getPrepareNextTurn(Unit, Unit, String, String, Unit, agent)
+    context : Maybe<&2, ContextHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Unit, String, String, Unit, agent)
     return Hooks.Hooks{stop, legacy, context}
 def sameStop(left: Maybe<&2, Stop()>, right: Maybe<&2, Stop()>) -> Bool:
   match left right:
@@ -114,7 +114,7 @@ def context(capture: Capture, input: Input()) -> IO(Prepared()):
         R.modify(String, Unit, trace, old => (old ++ "c" ++ name ++ ";", Unit{}))
         stored : Maybe<&2, Owner.Owner()> <- R.read(Maybe<&2, Owner.Owner()>, slot)
         agent : Owner.Owner() <- SettingsTest.requireAgent(stored)
-        Agent.setPrepareNextTurnWithContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, None{})
+        Agent.setPrepareNextTurnWithContext(Unit, Unit, String, String, Unit, agent, None{})
         return Done{None{}}
     case _ _: IO.die(Prepared(), 1, "unexpected preparation context")
 def handlers(+capture: Capture) -> IO(Handlers):
@@ -136,8 +136,8 @@ def replaceFirst(index: U32, mode: U32, future: Handlers, slot: R.Ref<Maybe<&2, 
 def toolTurn(+index: U32) -> Bool: U32.is_eq(index, 0) || U32.is_eq(index, 1) || U32.is_eq(index, 3) || U32.is_eq(index, 4)
 def push(tool: Bool, stream: H.StreamValue()) -> IO(Unit):
   match tool:
-    case True{}: Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, H.response(True{})})
-    case False{}: Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
+    case True{}: Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, H.response(True{})})
+    case False{}: Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
 def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match capture:
     case ProviderCapture{mode, future, slot, calls, trace, streams}:
@@ -145,18 +145,18 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
         +index : U32 <- R.modify(U32, U32, calls, old => SettingsTest.increment(old))
         R.modify(String, Unit, trace, old => (old ++ "p;", Unit{}))
         replaceFirst(index, mode, future, slot)
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         push(toolTurn(index), stream)
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 def create(capture: ProviderCapture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}
 
