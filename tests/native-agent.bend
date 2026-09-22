@@ -104,7 +104,7 @@ def report(result: Outcome()) -> IO(Unit):
     case Fail{error}: IO.die(Unit, 1, error)
     case Done{messages}: reportMessages(messages)
 
-def runTool(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, tool: T.AgentTool<Unit, String>, maxTokens: U32) -> IO(Outcome()):
+def runTools(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, tools: List<&2, T.AgentTool<Unit, String>>, maxTokens: U32) -> IO(Outcome()):
   do IO<Outcome()>:
     +authorizer : C.Callback<URL.Host, TLS.Authorization> <- Trust.newSAN(Trust.SANPolicy{bundle, 256n})
     +provider : T.StreamFn(Unit, Unit, Config(), String) <- Providers.responses(~Config(), ~Unit, ~Unit, ~Unit, ~String, ~project, ~Native.identity, ~Native.error, Native.config(authorizer))
@@ -112,7 +112,7 @@ def runTool(bundle: List<&2, X509.Certificate>, name: String, base: String, prom
     +validator : Loop.Validator(String) <- Loop.createPlain(~String, ~validationError)
     +cancel : C.Callback<Maybe<&2, Signal()>, Bool> <- C.create(~Unit, ~Maybe<&2, Signal()>, ~Bool, ~isAborted, Unit{})
     key : String <- IO.try(String, IO.get_env("OPENAI_API_KEY"))
-    context : T.AgentContext<Unit, Unit, Unit, String> = T.AgentContext{Nil{}, Some{tool <> Nil{}}}
+    context : T.AgentContext<Unit, Unit, Unit, String> = T.AgentContext{Nil{}, Some{tools}}
     prompts : Messages() = T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{prompt}, F.fromU32(0)}}} <> Nil{}
     +owner : Run() <- Loop.agentLoop(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter, maxTokens), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
     +cursor : Cursor() <- Loop.iterator(Unit, Unit, Unit, String, owner)
@@ -126,6 +126,10 @@ def runTool(bundle: List<&2, X509.Certificate>, name: String, base: String, prom
     C.dispose(Maybe<&2, Signal()>, Bool, cancel)
     C.dispose(URL.Host, TLS.Authorization, authorizer)
     return result
+
+# Compatibility for the existing echo and write integration fixtures.
+def runTool(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, tool: T.AgentTool<Unit, String>, maxTokens: U32) -> IO(Outcome()):
+  runTools(bundle, name, base, prompt, tool <> Nil{}, maxTokens)
 
 def run(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String) -> IO(Unit):
   do IO<Unit>:
