@@ -4,15 +4,54 @@ Gregor authorized agent-authored general specifications on 2026-09-20. Laws must
 
 `LAWS.bend` is the public specification entry point, importing component contracts from `laws/`; `PROOF.bend` imports their implementations and supporting lemmas from `proofs/`. `PROOF.bend` must check with a compiler supplying its imported runtime primitives (see the current command below). The last completed root gate reports `All terms check, with 36 unsafe annotations.` (the gate accepts any `All terms check` summary; the instantiation count is not evidence). The gate audits 21 exact existing source declarations: callback factory, DNS search/address/transport loops, random-index retry, file-fold driver, event-stream/HTTP/SSE drivers, schema comparison, JSON encoding, schema-to-JSON conversion, strict-schema traversal/nullability (now inside `constrained-sampling.bend`), Responses processing and the SSE cursor. The difference between source declarations and the compiler summary includes template instantiation accounting. Laws and proofs contain no `@unsafe`; this does not establish termination or correctness of those imported routines. The summary and exact declarations are retained in the validation record; unexpected declarations or summaries fail the gate. The laws file alone intentionally fails because its obligations are open. The native regression entry point runs `scripts/check-proofs.py` before its executable suites. The compiler is trusted: mutation tests and deliberately broken/open/missing-proof checks have been removed from the workflow at Gregor’s request. Earlier mutation records below are historical evidence, not ongoing requirements.
 
-## Current compiler requirement
+## Coverage summary
 
-The numeric destination scope laws use the existing connection-address type, whose module imports native connection primitives absent from the installed compiler. The complete proof root therefore currently needs the same isolated compiler candidate as native DNS. Earlier proof records used the installed compiler before this dependency entered the root. Do not install the candidate merely to run the gate: its performance changes remain unapproved.
+Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which type-checks `LAWS.bend` and `PROOF.bend` with the installed native toolchain (`build/bend-native-toolchain/bend2/main.ts`, or `BEND` when set) and audits the exact set of `@unsafe` source declarations the closure reaches. Each law file constrains the module it is named after; a proof file of the same name in `proofs/` supplies the proofs, with shared lemmas in `proofs/string-equality.bend`, `proofs/list-reverse.bend` and `proofs/absurd.bend`.
 
-```sh
-BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" python3 scripts/check-proofs.py
-```
+| Law file | Laws | Constrains |
+| --- | ---: | --- |
+| `laws/abort.bend` | 2 | `packages/runtime/src/abort.bend` |
+| `laws/agent-loop.bend` | 21 | `packages/agent/src/agent-loop.bend` (execution mode, termination, hooks, batches, stream lease) |
+| `laws/agent.bend` | 35 | `packages/agent/src/agent.bend` (state, queues, events, owner, continue planning) |
+| `laws/bounded.bend` | 6 | `packages/runtime/src/bounded.bend` |
+| `laws/calendar.bend` | 1 | `packages/runtime/src/calendar.bend` |
+| `laws/connection-driver.bend` | 28 | `packages/runtime/src/connection-driver.bend` |
+| `laws/dns-message.bend` | 25 | `packages/runtime/src/dns-message.bend` |
+| `laws/dns-resolver.bend` | 9 | `packages/runtime/src/dns-resolver.bend` |
+| `laws/dns-transport.bend` | 13 | `packages/runtime/src/dns-transport.bend` |
+| `laws/fetch.bend` | 9 | `packages/runtime/src/fetch.bend` |
+| `laws/fifo.bend` | 3 | `packages/runtime/src/fifo.bend` |
+| `laws/hosts.bend` | 14 | `packages/runtime/src/hosts.bend` |
+| `laws/http-exchange.bend` | 6 | `packages/runtime/src/http-exchange.bend` |
+| `laws/http-message.bend` | 11 | `packages/runtime/src/http-message.bend` |
+| `laws/http-response.bend` | 35 | `packages/runtime/src/http-response.bend` |
+| `laws/json.bend` | 7 | `packages/ai/src/utils/json.bend` |
+| `laws/list-interleave.bend` | 4 | `packages/runtime/src/list-interleave.bend` |
+| `laws/openai-client.bend` | 41 | `packages/ai/src/api/openai-client.bend` |
+| `laws/openai-responses-stream.bend` | 9 | `packages/ai/src/api/openai-responses-stream.bend` |
+| `laws/openai-responses.bend` | 19 | `packages/ai/src/api/openai-responses.bend` |
+| `laws/openai-sse.bend` | 12 | `packages/ai/src/api/openai-sse.bend` |
+| `laws/ordered-map.bend` | 5 | `packages/runtime/src/ordered-map.bend` |
+| `laws/provider-retry.bend` | 18 | `packages/ai/src/utils/provider-retry.bend` |
+| `laws/record.bend` | 7 | `packages/runtime/src/record.bend` |
+| `laws/resolver-config.bend` | 25 | `packages/runtime/src/resolver-config.bend` |
+| `laws/sha256.bend` | 1 | `packages/runtime/src/sha256.bend` |
+| `laws/simple-options.bend` | 7 | `packages/ai/src/api/simple-options.bend` |
+| `laws/sse.bend` | 7 | `packages/runtime/src/sse.bend` |
+| `laws/string.bend` | 6 | `packages/runtime/src/string.bend` |
+| `laws/text.bend` | 5 | `packages/runtime/src/text.bend` |
+| `laws/thinking-levels.bend` | 7 | `packages/ai/src/utils/thinking-levels.bend` |
+| `laws/timer.bend` | 5 | `packages/runtime/src/timer.bend` |
+| `laws/transcript.bend` | 14 | `packages/ai/src/utils/transcript.bend` |
+| `laws/transform-messages.bend` | 20 | `packages/ai/src/api/transform-messages.bend` |
+| `laws/transform-tool-results.bend` | 11 | `packages/ai/src/api/transform-tool-results.bend` |
+| `laws/url.bend` | 32 | `packages/runtime/src/url.bend` |
+| `laws/utf8.bend` | 6 | `packages/runtime/src/utf8.bend` |
+| `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
+| `laws/x509-trust.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
+| **Total** | **494** | |
 
-The scope milestone records hashes for the candidate's checker, base and emitter alongside the proof evidence. This is a toolchain dependency, not an unsafe proof or a replacement for the shared connection-address type.
+The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.
 
 ## FIFO sequence contracts
 
