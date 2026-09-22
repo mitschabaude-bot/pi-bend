@@ -106,34 +106,42 @@ def componentRow(components: List<&2,Component>,previous: List<&2,Bool>,+text: S
     case Segment{pattern} <> rest +above <> tail:
       +next = before && segment(pattern,text,insensitive)
       componentRow(rest,tail,text,insensitive,above,next,next <> reversed)
-def pathRun(+components: List<&2,Component>,path: List<&2,String>,+insensitive: Bool,states: List<&2,Bool>) -> Bool:
-  match path states:
-    case Nil{} _: last(states,False{})
-    case text <> rest before <> tail:
-      pathRun(components,rest,insensitive,componentRow(components,tail,text,insensitive,before,False{},False{} <> Nil{}))
-    case _ Nil{}: False{}
-def pathMatches(+components: List<&2,Component>,path: List<&2,String>,insensitive: Bool) -> Bool:
-  pathRun(components,path,insensitive,componentInitial(components,True{}))
-
-# Rules are stored newest first; the first matching rule decides this entry.
-def decide(rules: List<&2,Rule>,+path: List<&2,String>,+directory: Bool,+insensitive: Bool) -> Decision:
+# Carry each rule's automaton through the path once. Parent checks reuse these
+# states rather than rebuilding and rematching every prefix.
+type Cursor is Data:
+  Cursor{negative: Bool, directoryOnly: Bool, components: List<&2,Component>, states: List<&2,Bool>}
+type WalkState is Data:
+  WalkState{cursors: List<&2,Cursor>, decision: Maybe<&2,Decision>}
+def initialCursors(rules: List<&2,Rule>,reversed: List<&2,Cursor>) -> List<&2,Cursor>:
   match rules:
-    case Nil{}: Decision{False{},False{}}
-    case Rule{+negative,only,components} <> rest:
-      Bool.pick(Unit -> Decision,(Bool.not(only) || directory) && pathMatches(components,path,insensitive),
-        _ => Decision{Bool.not(negative),negative},_ => decide(rest,path,directory,insensitive))(Unit{})
+    case Nil{}: List.reverse(&2,Cursor,reversed)
+    case Rule{negative,only,+components} <> rest:
+      initialCursors(rest,Cursor{negative,only,components,componentInitial(components,True{})} <> reversed)
+def selected(previous: Maybe<&2,Decision>,matches: Bool,+negative: Bool) -> Maybe<&2,Decision>:
+  match previous:
+    case Some{decision}: Some{decision}
+    case None{}: Bool.pick(Maybe<&2,Decision>,matches,Some{Decision{Bool.not(negative),negative}},None{})
+def advanceCursors(cursors: List<&2,Cursor>,+text: String,+directory: Bool,+insensitive: Bool,reversed: List<&2,Cursor>,decision: Maybe<&2,Decision>) -> WalkState:
+  match cursors:
+    case Nil{}: WalkState{List.reverse(&2,Cursor,reversed),decision}
+    case Cursor{+negative,+only,+components,before <> tail} <> rest:
+      +next = componentRow(components,tail,text,insensitive,before,False{},False{} <> Nil{})
+      advanceCursors(rest,text,directory,insensitive,Cursor{negative,only,components,next} <> reversed,
+        selected(decision,(Bool.not(only) || directory) && last(next,False{}),negative))
+    case Cursor{negative,only,components,Nil{}} <> rest:
+      advanceCursors(rest,text,directory,insensitive,Cursor{negative,only,components,Nil{}} <> reversed,decision)
+def walk(parts: List<&2,String>,state: WalkState,+directory: Bool,+insensitive: Bool) -> Decision:
+  match parts state:
+    case Nil{} WalkState{_,decision}: Maybe.default(&2,Decision,decision,Decision{False{},False{}})
+    case _ WalkState{_,Some{Decision{True{},_}}}: Decision{True{},False{}}
+    case part <> Nil{} WalkState{cursors,_}:
+      walk(Nil{},advanceCursors(cursors,part,directory,insensitive,Nil{},None{}),directory,insensitive)
+    case part <> rest WalkState{cursors,_}:
+      walk(rest,advanceCursors(cursors,part,True{},insensitive,Nil{},None{}),directory,insensitive)
 def isIgnored(decision: Decision) -> Bool:
   match decision:
     case Decision{ignored,_}: ignored
 
-def ancestors(+rules: List<&2,Rule>,parts: List<&2,String>,prefix: List<&2,String>,+directory: Bool,+insensitive: Bool) -> Decision:
-  match parts:
-    case Nil{}: Decision{False{},False{}}
-    case part <> Nil{}: decide(rules,List.reverse(&2,String,part <> prefix),directory,insensitive)
-    case part <> rest:
-      +next = {part <> prefix: List<&2,String>}
-      Bool.pick(Unit -> Decision,isIgnored(decide(rules,List.reverse(&2,String,next),True{},insensitive)),
-        _ => Decision{True{},False{}},_ => ancestors(rules,rest,next,directory,insensitive))(Unit{})
 def validParts(parts: List<&2,String>) -> Bool:
   match parts:
     case Nil{}: True{}
@@ -151,7 +159,7 @@ def testParts(matcher: Matcher,+original: String,parts: List<&2,String>,director
     case Matcher{insensitive,rules}:
       +forward = List.reverse(&2,String,parts)
       Bool.pick(Unit -> Result<&2,&2,Error,Decision>,validParts(forward) && Bool.not(S.equal(original,"")) && Bool.not(hasNul(original)),
-        _ => Done{ancestors(rules,forward,Nil{},directory,insensitive)},_ => Fail{InvalidPath{original}})(Unit{})
+        _ => Done{walk(forward,WalkState{initialCursors(rules,Nil{}),None{}},directory,insensitive)},_ => Fail{InvalidPath{original}})(Unit{})
 def testSplit(matcher: Matcher,path: String,parts: List<&2,String>) -> Result<&2,&2,Error,Decision>:
   match parts:
     case "" <> rest: testParts(matcher,path,rest,True{})
