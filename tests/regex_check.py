@@ -1,0 +1,141 @@
+"""Differential scalar-regex checks; byte-required rejection is reported separately."""
+import argparse
+import base64
+import itertools
+import json
+from pathlib import Path
+import random
+import subprocess
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def corpus():
+    patterns = [
+        '', 'a', 'a*', 'a+', 'a?', 'a{2,4}', '(a|b)*c', '((a?)*)*b', '^a$',
+        'a|', '(a|b)c', '[a-z]', '[^a]', '[a&&b]', '[a-z&&[^b]]', '[a-z--b]',
+        '[a-z~~b-z]', '[[:alpha:]]', '[]a]', '[--a]', '[a--]', '[a&&]', '[a-b-c]',
+        '[a-]', '[-a]', r'[a\x62]', r'\d+', r'\s', r'\w', r'\bword\b',
+        '(?i)[^a]', '(?i)[a-z]', '(?i)a', '(?i:a)b', r'(?-u)\w', '(?i-u)[a-z]',
+        '(?m)^a$', '(?mR)^a$', '(?s).', '(?x) a #comment\n b', '(?x)[ a ]',
+        r'\p{Greek}', r'\p{gc:Lu}', r'\p{Alphabetic}', r'\P{ASCII}', r'\x{1F600}',
+        r'\u0041', r'\U00000041', 'a**', 'a++', 'a?+', '(?P<abc>a)', '(?<abc>a)',
+        r'(?i-u)[\x61-\x7a]', r'(?-u)\pL', r'\p{lc}', r'\p{Bidi_Mirrored}',
+        '(?P<a>a)(?P<a>b)', '(?<😀>a)', '(?i-)a', '(?-)a', r'[a-\d]',
+        r'\UFFFFFFFF', r'\x{110000}', '(?x)[ ^a ]', '(?x) a { 2 , 3 }',
+        r'\p{gc!=Lu}', r'\p{scx=Greek}', r'\p{Age=6.0}', r'\p{WB=ALetter}',
+        r'\p{gcb=Extend}', r'\p{sb=Lower}', r'\b{start}a', r'\b{end}a',
+        r'\b{start-half}a', r'\b{end-half}a', r'\<a', r'a\>', r'\B',
+        r'\x{000000000000041}', r'(?x)\x{ 4 1 }', r'(?x)\u 0 0 4 1',
+        r'(?-u)[^\x00-\x7F&&[:ascii:]]', r'\a', r'\f', r'\v', r'\0',
+        r'\1', r'\q', '(', '[', '{2}', 'a{3,1}', '(?=a)', '(?<=a)',
+        '(?<1bad>a)', '(?q)a', '(?i-i)a', '[z-a]', 'a{,3}', 'a{1,2,3}',
+        r'\p{Not_A_Property}', r'\p{^Lu}', r'\b{unknown}', '\\', '--help', '--pre=x',
+    ]
+    texts = ['', 'a', 'b', 'ab', 'abc', 'aaaa', 'aaaab', 'a\na', 'a\r\nb', '\n',
+             '\r', ' ', '\t', '-', ']', 'c', 'xword y', 'word', 'words', 'é', 'É',
+             'α', '😀', 'ſ', 'K', 'A', 'Z', '_', '2', '\0', '\u00a0']
+    random.seed(81270)
+    atoms = ['a', 'b', '.', r'\w', r'\d', r'\s', '[a-c]', '[^a]', '[a-c--b]',
+             r'\p{Greek}', r'\b', '^', '$', '']
+
+    def expression(depth):
+        if not depth or random.randrange(4) == 0:
+            return random.choice(atoms)
+        choice = random.randrange(5)
+        if choice == 0:
+            return '(' + expression(depth-1) + '|' + expression(depth-1) + ')'
+        if choice == 1:
+            return '(?:' + expression(depth-1) + ')' + random.choice(['*', '+', '?', '{1,3}', '{2}', '{0,}'])
+        if choice == 2:
+            return '(' + expression(depth-1) + expression(depth-1) + ')'
+        if choice == 3:
+            return '(?' + random.choice(['i', 'm', 's', 'R', 'im', '-u', 'i-u']) + ':' + expression(depth-1) + ')'
+        return expression(depth-1) + random.choice(atoms)
+
+    patterns += sorted({expression(3) for _ in range(350)})
+    return [(mode, pattern, text) for pattern, text, mode in itertools.product(patterns, texts, ['', 'i'])]
+
+
+def encoded(value):
+    return base64.b64encode(value.encode()).decode()
+
+
+def command(backend, prefix):
+    return ['bun', str(prefix) + '.js', '--', '--'] if backend == 'bun' else [str(prefix), '--threads', backend[-1], '--']
+
+
+def run(backend, prefix, cases, timeout=60):
+    argv = [item for mode, pattern, text in cases for item in [mode, encoded(pattern), encoded(text)]]
+    result = subprocess.run(command(backend, prefix) + argv, capture_output=True, text=True, timeout=timeout)
+    assert result.returncode == 0, (backend, result.returncode, result.stderr[-1200:])
+    lines = result.stdout.splitlines()
+    assert len(lines) == len(cases), (backend, len(lines), len(cases), result.stdout[:200])
+    return lines
+
+
+def reference(cases, executable):
+    result = subprocess.run([str(executable)], input=''.join(json.dumps(case) + '\n' for case in cases), capture_output=True, text=True, check=True)
+    return result.stdout.splitlines()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('backends', nargs='*', default=['bun', 'native-1', 'native-4'])
+    parser.add_argument('--prefix', type=Path, default=ROOT / 'build/regex')
+    parser.add_argument('--reference', type=Path, default=ROOT / 'build/regex-reference/target/release/regex-reference')
+    args = parser.parse_args()
+    cases = corpus()
+    expected = reference(cases, args.reference)
+    required_bytes = [('', r'(?-u).', 'é'), ('', r'(?-u)..', 'é'), ('', r'(?-u)\xC3', 'é'), ('', r'(?-u)[^a]', 'b'), ('', r'(?-u)\W', 'é')]
+    long_cases = [
+        ('', 'a'*12000, 'a'*12000),
+        ('', 'a'*11999+'b', 'a'*24000),
+        ('', '['+'a'*12000+']', 'b'),
+        ('', '|'.join(['a']*12000), 'b'),
+        ('', 'a{20000}', 'a'*20000),
+        ('', '((){65536}){65536}', 'b'),
+        ('', '(a|aa)*b', 'a'*20000),
+        ('', '(a?)*b', 'a'*20000+'b'),
+    ]
+    long_expected = reference(long_cases, args.reference)
+    # Unicode 17 additions, independently identified in the pinned official
+    # UnicodeData/Scripts files. The Rust oracle embeds Unicode 16.
+    unicode17 = [
+        ('', r'\p{Sidetic}', '\U00010940'),
+        ('', r'\p{Sidetic}', 'a'),
+        ('', r'\p{Tolong_Siki}', '\U00011DB0'),
+        ('', r'\p{Tai_Yo}', '\U0001E6C0'),
+        ('', r'\p{Beria_Erfe}', '\U00016EA0'),
+        ('', r'\p{Lu}', '\uA7CE'),
+        ('i', '\uA7CE', '\uA7CF'),
+        ('', r'\w', '\U0001E6C0'),
+    ]
+    unicode_expected = ['true', 'false', 'true', 'true', 'true', 'true', 'true', 'true']
+    for backend in args.backends:
+        compared = rejected = 0
+        for start in range(0, len(cases), 150):
+            chunk = cases[start:start+150]
+            actual = run(backend, args.prefix, chunk)
+            for case, wanted, got in zip(chunk, expected[start:start+150], actual):
+                if got == 'byte-input-required':
+                    assert '-u' in case[1], case
+                    rejected += 1
+                else:
+                    got = 'error' if got.startswith('error:') else got
+                    assert got == wanted, (backend, case, wanted, got)
+                    compared += 1
+        assert run(backend, args.prefix, required_bytes) == ['byte-input-required'] * len(required_bytes)
+        assert run(backend, args.prefix, unicode17) == unicode_expected
+        started = time.monotonic()
+        actual = run(backend, args.prefix, long_cases)
+        assert actual == long_expected, (backend, actual, long_expected)
+        duration = time.monotonic() - started
+        tables = subprocess.run(command(backend, args.prefix) + ['tables'], capture_output=True, text=True, timeout=60)
+        assert tables.returncode == 0 and tables.stdout.strip() == 'true', (backend, tables.stdout, tables.stderr[-1000:])
+        print(f'{backend}: {compared} Rust comparisons, {rejected + len(required_bytes)} explicit byte-input rejections, {len(unicode17)} Unicode 17, {len(long_cases)} long/adversarial checks ({duration:.3f}s) and 131,101 indexed-table checks passed', flush=True)
+
+
+if __name__ == '__main__':
+    main()
