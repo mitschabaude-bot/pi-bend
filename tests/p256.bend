@@ -33,6 +33,11 @@ def multiplied(+selected: P.Curve,scalar: List<&2,U32>, result: Result<&2,&2,P.E
     case Fail{cause}: error(cause)
     case Done{value}: point(selected,P.normalize(selected,P.multiply(selected,scalar,value,P.infinity())))
 
+def jointlyMultiplied(+selected: P.Curve, a: List<&2,U32>, b: List<&2,U32>, result: Result<&2,&2,P.Error,P.Point>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{value}: point(selected,P.normalize(selected,P.joint(selected,a,b,value)))
+
 def verified(result: Result<&2,&2,P.Error,Unit>) -> String:
   match result:
     case Fail{cause}: error(cause)
@@ -59,6 +64,7 @@ def run(+selected: P.Curve,parts: List<&2,String>) -> String:
         Result.bind(&2,&2,P.Error,P.Point,Maybe<&2,P.Point>,P.publicKey(selected,Bytes.bytes(right)), r => Done{added(selected,l,r)})))
     case "k" <> bytes <> Nil{}: key(selected,P.publicKey(selected,Bytes.bytes(bytes)))
     case "m" <> bytes <> scalar <> Nil{}: multiplied(selected,Bytes.bytes(scalar),P.publicKey(selected,Bytes.bytes(bytes)))
+    case "j" <> bytes <> a <> b <> Nil{}: jointlyMultiplied(selected,Bytes.bytes(a),Bytes.bytes(b),P.publicKey(selected,Bytes.bytes(bytes)))
     case "v" <> bytes <> message <> signature <> Nil{}:
       verified(Result.bind(&2,&2,P.Error,P.Point,Unit,P.publicKey(selected,Bytes.bytes(bytes)), public => P.verify(selected,hashAlgorithm(selected),public,Bytes.bytes(message),Bytes.bytes(signature))))
     case _: "invalid"

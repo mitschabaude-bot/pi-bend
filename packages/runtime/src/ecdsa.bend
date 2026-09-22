@@ -244,23 +244,104 @@ def publicKey(+selected: Curve, +bytes: List<&2,U32>) -> Result<&2,&2,Error,Poin
   checked = Bool.pick(Result<&2,&2,Error,Unit>, octets(bytes), Done{Unit{}}, Fail{InvalidKey{}})
   Result.bind(&2,&2,Error,Unit,Point,checked,unused => keyFormat(selected,bytes))
 
-# Joint public multiplication computes u*G + v*Q with one doubling per bit.
-# Scalars are fixed-width byte strings supplied by verification below.
-def jointByte(+selected: Curve, fuel: Nat, +a: U32, +b: U32, +g: Point, +base: Point, acc: Jacobian) -> Jacobian:
-  match fuel:
-    case 0n: acc
-    case 1n+fuel:
-      next = addBit(selected,U32.is_eq(U32.and(b,128),128),addBit(selected,U32.is_eq(U32.and(a,128),128),double(selected,acc),g),base)
-      jointByte(selected,fuel,U32.and(U32.shl(a),255),U32.and(U32.shl(b),255),g,base,next)
+# Width-5 non-adjacent form has odd digits in [-15,15], separated by at
+# least four zero digits. Digits 17..31 encode -15..-1 modulo 32.
+def windowDigit(value: Big.BigNat) -> U32:
+  match value:
+    case Big.BigNat{Nil{}}: 0
+    case Big.BigNat{+head <> _}: Bool.pick(U32,U32.is_eq(U32.and(head,1),1),U32.and(head,31),0)
 
-def jointWithGenerator(+selected: Curve, a: List<&2,U32>, b: List<&2,U32>, +g: Point, +base: Point, acc: Jacobian) -> Jacobian:
+def windowRemainder(negative: Bool, +digit: U32, value: Big.BigNat) -> Big.BigNat:
+  match negative:
+    case True{}: Modular.half(Big.add(value,Big.fromU32((32 - digit : U32))))
+    case False{}: Modular.half(difference(value,Big.fromU32(digit)))
+
+def windowDigits(fuel: Nat, +value: Big.BigNat, digits: List<&2,U32>) -> List<&2,U32>:
+  match fuel:
+    case 0n: digits
+    case 1n+n:
+      +digit = windowDigit(value)
+      windowDigits(n,windowRemainder(U32.is_gt(digit,16),digit,value),digit <> digits)
+
+type Normalization is Data:
+  Normalization{point: Jacobian, prefix: Field.Field}
+
+type Batch is Data:
+  Batch{points: List<&2,Normalization>, product: Field.Field}
+
+# Montgomery's batch inversion: record preceding products, invert the total
+# once, then recover each reciprocal while walking the records backwards.
+def batchProducts(+selected: Curve, points: List<&2,Jacobian>, records: List<&2,Normalization>, +product: Field.Field) -> Batch:
+  match points:
+    case Nil{}: Batch{records,product}
+    case Jacobian{x,y,+z} <> rest: batchProducts(selected,rest,Normalization{Jacobian{x,y,z},product} <> records,mul(selected,product,z))
+
+def batchPoints(+selected: Curve, records: List<&2,Normalization>, +inverse: Field.Field, points: List<&2,Point>) -> List<&2,Point>:
+  match records:
+    case Nil{}: points
+    case Normalization{Jacobian{x,y,+z},prefix} <> rest:
+      +zi = mul(selected,inverse,prefix)
+      +zz = square(selected,zi)
+      affine = {Point{mul(selected,x,zz),mul(selected,y,mul(selected,zz,zi))} : Point}
+      batchPoints(selected,rest,mul(selected,inverse,z),affine <> points)
+
+def batchInverse(+selected: Curve, records: List<&2,Normalization>, inverse: Maybe<&2,Big.BigNat>) -> List<&2,Point>:
+  match inverse:
+    case None{}: Nil{}
+    case Some{n}: batchPoints(selected,records,Field.fromBig(fieldPrime(selected),n),Nil{})
+
+def batchNormalize(+selected: Curve, batch: Batch) -> List<&2,Point>:
+  match batch:
+    case Batch{records,product}: batchInverse(selected,records,Modular.inverse(Field.toBig(product),prime(selected)))
+
+def oddMultiples(+selected: Curve, count: Nat, +step: Point, +point: Jacobian, points: List<&2,Jacobian>) -> List<&2,Jacobian>:
+  match count:
+    case 0n: List.reverse(&2,Jacobian,point <> points)
+    case 1n+n: oddMultiples(selected,n,step,addPoint(selected,point,step),point <> points)
+
+def oddTableStep(+selected: Curve, base: Point, doubled: Maybe<&2,Point>) -> List<&2,Point>:
+  match base doubled:
+    case _ None{}: Nil{}
+    case Point{x,y} Some{doubled}: batchNormalize(selected,batchProducts(selected,oddMultiples(selected,7n,doubled,Jacobian{x,y,Field.one()},Nil{}),Nil{},Field.one()))
+
+def oddTable(+selected: Curve, +base: Point) -> List<&2,Point>:
+  match base:
+    case Point{x,y}: oddTableStep(selected,base,normalize(selected,double(selected,Jacobian{x,y,Field.one()})))
+
+def windowAddAt(+selected: Curve, index: Nat, negative: Bool, points: List<&2,Point>, acc: Jacobian) -> Jacobian:
+  match index points:
+    case _ Nil{}: infinity()
+    case 0n Point{x,+y} <> _:
+      addPoint(selected,acc,Point{x,Bool.pick(Field.Field,negative,sub(selected,Field.zero(),y),y)})
+    case 1n+n _ <> rest: windowAddAt(selected,n,negative,rest,acc)
+
+def windowAddNonzero(+selected: Curve, zero: Bool, +digit: U32, points: List<&2,Point>, acc: Jacobian) -> Jacobian:
+  match zero:
+    case True{}: acc
+    case False{}:
+      +negative = U32.is_gt(digit,16)
+      magnitude = Bool.pick(U32,negative,(32 - digit : U32),digit)
+      windowAddAt(selected,U32.to_nat(U32.shr((magnitude - 1 : U32))),negative,points,acc)
+
+def windowAdd(+selected: Curve, +digit: U32, points: List<&2,Point>, acc: Jacobian) -> Jacobian:
+  windowAddNonzero(selected,U32.is_eq(digit,0),digit,points,acc)
+
+def jointWindows(+selected: Curve, a: List<&2,U32>, b: List<&2,U32>, +g: List<&2,Point>, +base: List<&2,Point>, acc: Jacobian) -> Jacobian:
   match a b:
     case Nil{} Nil{}: acc
-    case x <> xs y <> ys: jointWithGenerator(selected,xs,ys,g,base,jointByte(selected,8n,x,y,g,base,acc))
+    case x <> xs y <> ys:
+      jointWindows(selected,xs,ys,g,base,windowAdd(selected,y,base,windowAdd(selected,x,g,double(selected,acc))))
     case _ _: infinity()
 
-def joint(+selected: Curve, a: List<&2,U32>, b: List<&2,U32>, base: Point, acc: Jacobian) -> Jacobian:
-  jointWithGenerator(selected,a,b,generator(selected),base,acc)
+def jointSized(+selected: Curve, sameWidth: Bool, +a: List<&2,U32>, +b: List<&2,U32>, base: Point) -> Jacobian:
+  match sameWidth:
+    case False{}: infinity()
+    case True{}:
+      +count = List.length(&2,U32,a) * 8n + 1n
+      jointWindows(selected,windowDigits(count,Big.fromBigEndian(a),Nil{}),windowDigits(count,Big.fromBigEndian(b),Nil{}),oddTable(selected,generator(selected)),oddTable(selected,base),infinity())
+
+def joint(+selected: Curve, +a: List<&2,U32>, +b: List<&2,U32>, base: Point) -> Jacobian:
+  jointSized(selected,Nat.is_eq(List.length(&2,U32,a),List.length(&2,U32,b)),a,b,base)
 
 def matchesAlternate(+selected: Curve, allowed: Bool, x: Field.Field, zz: Field.Field, rn: Big.BigNat) -> Bool:
   match allowed:
@@ -286,7 +367,7 @@ def verifyInverse(+selected: Curve, public: Point, hash: List<&2,U32>, +r: Big.B
       +context = scalarContext(selected)
       u = Big.toBigEndian(width(selected),Modular.multiply(context,Big.fromBigEndian(List.take(&2,U32,hash,width(selected))),w))
       v = Big.toBigEndian(width(selected),Modular.multiply(context,r,w))
-      verification(matches(selected,joint(selected,u,v,public,infinity()),r))
+      verification(matches(selected,joint(selected,u,v,public),r))
 
 def verifyNumbers(+selected: Curve, public: Point, hash: List<&2,U32>, +r: Big.BigNat, +s: Big.BigNat) -> Result<&2,&2,Error,Unit>:
   checked = verification(Bool.not(Big.isZero(r)) && Bool.not(Big.isZero(s)) && less(Big.compare(r,order(selected))) && less(Big.compare(s,order(selected))))

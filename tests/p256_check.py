@@ -56,6 +56,15 @@ for a,b in [(1,1),(1,2),(1,N-1),(2,N-1)]:
     cases.append(('a:'+encode(public(a))+':'+encode(public(b)),encode(public(result)) if result else 'infinity'))
 for scalar in [0,1,2,3,N,N+1]:
     cases.append(('m:'+encode(public(1))+':'+encode(scalar.to_bytes(WIDTH,'big')),encode(public(scalar%N)) if scalar%N else 'infinity'))
+# Window recoding boundaries, both signed digits, cancellation, and unrelated
+# public bases. The oracle computes the same linear combination independently.
+for q,a,b in [(1,0,0),(1,1,1),(N-1,1,1),(N-1,N-1,N-1),
+              (2,15,16),(3,31,32),(7,N-1,N-1),(5,N,N),
+              (11,(1 << BITS)-1,(1 << BITS)-1)] + [
+                  (rng.randrange(1,N),rng.randrange(N),rng.randrange(N)) for _ in range(3)]:
+    result = (a+b*q) % N
+    cases.append(('j:'+encode(public(q))+':'+encode(a.to_bytes(WIDTH,'big'))+':'+encode(b.to_bytes(WIDTH,'big')),
+                  encode(public(result)) if result else 'infinity'))
 for scalar,message,compressed in [(1,b'sample',False),(123456789,b'',True),(rng.randrange(1,N),bytes(range(256)),False)]:
     private = ec.derive_private_key(scalar,CURVE)
     signature = private.sign(message,ec.ECDSA(HASH))
