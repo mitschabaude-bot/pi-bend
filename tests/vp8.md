@@ -27,8 +27,10 @@ An early, ignored diagnostic temporarily reproduced the quantizer-zero defect an
 build/bend-native-toolchain/bend2/main.ts tests/vp8.bend -o build/vp8.js
 sh scripts/build-pure.sh tests/vp8.bend build/vp8
 python3 tests/vp8_check.py --cwebp /path/to/cwebp --photon /path/to/photon_rs.js -- bun build/vp8.js
-python3 tests/vp8_check.py --cwebp /path/to/cwebp --photon /path/to/photon_rs.js -- env BEND_THREADS=1 build/vp8
-python3 tests/vp8_check.py --cwebp /path/to/cwebp --photon /path/to/photon_rs.js -- env BEND_THREADS=4 build/vp8
+python3 tests/vp8_check.py --cwebp /path/to/cwebp --photon /path/to/photon_rs.js -- build/vp8 --threads 1
+python3 tests/vp8_check.py --cwebp /path/to/cwebp --photon /path/to/photon_rs.js -- build/vp8 --threads 4
 ```
 
 The focused optimized build took 9.93 seconds and 369 MiB peak RSS on this server. These checks establish the codec's exercised decoding behavior; they do not claim all WebP container or animation behavior is complete. Container/lossless/alpha integration is tracked separately.
+
+The original environment-variable commands did not select the native thread count. The retained optimized artifact was rerun with explicit `--threads 1` and `--threads 4`; both passed all 119 pixel comparisons and 10 rejection cases.
