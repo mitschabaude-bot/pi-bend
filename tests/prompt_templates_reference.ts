@@ -21,9 +21,10 @@ if (process.argv[4] === 'load') {
   process.exit(0);
 }
 const captured: unknown[] = [];
+let origin="original";
 const wrappers = Object.fromEntries(['parseCommandArgs','substituteArgs','expandPromptTemplate'].map(kind => [kind,(...args: unknown[]) => {
   const expected = actual[kind](...args);
-  captured.push({kind,args,expected});
+  captured.push({origin,kind,args,expected});
   return expected;
 }]));
 mock.module(root+'/src/core/prompt-templates.ts',()=>({...actual,...wrappers}));
@@ -32,5 +33,6 @@ mock.module('vitest',()=>({expect,afterAll:()=>{},describe:(name:string,fn:()=>v
   const previous=skip;skip=name.startsWith('loadPromptTemplates');fn();skip=previous;
 },test:(_name:string,fn:()=>void)=>{if(!skip)fn();}}));
 await import(root+'/test/prompt-templates.test.ts');
-for(const c of JSON.parse(readFileSync(process.argv[3],'utf8'))){captured.push({...c,expected:actual[c.kind](...c.args)});}
+origin="generated";
+for(const c of JSON.parse(readFileSync(process.argv[3],'utf8'))){captured.push({origin,...c,expected:actual[c.kind](...c.args)});}
 console.log(JSON.stringify(captured));

@@ -37,5 +37,5 @@ def main():
  commands=['p|'+wire(x) for x in malformed]+['e|'+wire('/test '+x)+'|'+wire('test')+'|'+wire('$@') for x in malformed]
  result=subprocess.check_output([*cmd,'--',*commands],text=True).splitlines();assert result==['error']*len(commands),result
  assert subprocess.check_output([*cmd,'--','long'],text=True,timeout=60).strip()=='long-ok'
- print(f'{len(reference)} pinned public-call comparisons ({len(reference)-len(cases)} from original assertions), {len(commands)} unclosed-quote rejections, 200KB replacement and unfinished-default scans passed')
+ print(f'{len(reference)} pinned public-call comparisons ({sum(c['origin']=='original' for c in reference)} from original assertions), {len(commands)} unclosed-quote rejections, 200KB replacement and unfinished-default scans passed')
 if __name__=='__main__':main()
