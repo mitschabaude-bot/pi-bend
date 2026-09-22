@@ -33,10 +33,14 @@ python3 tests/ansi_layout_check.py -- build/ansi-layout --threads 1
 python3 tests/ansi_layout_check.py -- build/ansi-layout --threads 4
 ```
 
-The reference uses the existing test-only `build/ansi-reference/node_modules/get-east-asian-width/index.js` at version 1.6.0 (setup in `visible-width.md`). No host codecs, locale APIs or regex engine are production dependencies. Word segmentation for editor motions, hit-testing helpers, background callback application and TUI compositing remain outside this milestone.
+The reference uses the existing test-only `build/ansi-reference/node_modules/get-east-asian-width/index.js` at version 1.6.0 (setup in `visible-width.md`). No host codecs, locale APIs or regex engine are production dependencies. Word segmentation for editor motions, hit-testing helpers and TUI compositing remain outside this milestone. `applyBackgroundToLine(line,width,bg)` now pads to the requested width before calling the borrowed native `Callback<String,String>` handle; its callback/component assertions belong to the Text/TruncatedText fixture rather than these pure layout comparisons.
 
 Validation completed on Bun and optimized native with explicit `--threads 1` and `--threads 4`: 34 exact layout results across 30 original named tests, 7,640 differential cases, the full-domain CJK classification digest, three long scans and five explicit control-grammar corrections. Existing display/RGI flag values also remain unchanged across all 1,114,112 codepoint positions. Native logs are retained as `build/ansi-layout-{1,4}.log`; the hosted artifact is `build/ansi-layout-stream.js`.
 
 A bounded development comparison of truncating 200,000 emoji/CJK graphemes to 40 columns measured the complete hosted fixture (including startup and input construction): three-run medians were 3.10 s / 365,316 KiB with an eager grapheme list, versus 0.22 s / 129,492 KiB with the final cursor. This compares two implementations of this module, not Bend against upstream TypeScript, and is not a universal performance claim.
 
 Root integration regenerated the Unicode display data and independently rebuilt hosted/native artifacts with the unchanged shared compiler. All three backends pass the complete original-result, differential, full-domain classification, long-scan and approved-correction checks described above.
+
+The readability follow-up names group-boundary predicates and wrap-state transitions explicitly. It also fixes eager group flushing and makes whitespace/CJK scans use tail continuations; the added 100K unbroken-word and 20K combining-mark wrap cases protect the confirmed library performance/stack defects recorded in `docs/bend-issues.md`. The differential corpus and public results are unchanged.
+
+Final follow-up validation passes on Bun and optimized native one/four threads: the unchanged 34 named-test results, 7,640 comparisons and Unicode/control checks, plus all five long cases. Native logs are `build/ansi-layout-clean-{1,4}.log`; hosted checks used `build/ansi-layout-final.js` (the combining-grapheme case was additionally run directly against the source oracle). No compiler or toolchain changes were made.

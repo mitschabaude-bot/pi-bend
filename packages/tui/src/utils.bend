@@ -1,6 +1,7 @@
 import Base
 import ../../runtime/src/string.bend as Strings
 import ../../runtime/src/grapheme.bend as Grapheme
+import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/unicode-17-display.bend as Display
 
 # Complete terminal controls are distinct from visible text. Offsets count
@@ -471,7 +472,9 @@ def whitespaceScalar(+point: U32) -> Bool:
 def allWhitespace(text: String) -> Bool:
   match text:
     case SNil{}: True{}
-    case SCon{char,rest}: whitespaceScalar(Char.to_u32(char)) && allWhitespace(rest)
+    case SCon{char,rest}:
+      Bool.pick(Unit -> Bool,whitespaceScalar(Char.to_u32(char)),
+        _ => allWhitespace(rest),_ => False{})(Unit{})
 def dropWhitespace(text: String) -> String:
   match text:
     case SNil{}: ""
@@ -480,24 +483,36 @@ def trimEnd(text: String) -> String: reverseInto(dropWhitespace(reverseInto(text
 def cjkBreak(text: String) -> Bool:
   match text:
     case SNil{}: False{}
-    case SCon{char,rest}: U32.is_ne(U32.and(Display.properties(Char.to_u32(char)),256),0) || cjkBreak(rest)
+    case SCon{char,rest}:
+      isCjk = U32.is_ne(U32.and(Display.properties(Char.to_u32(char)),256),0)
+      Bool.pick(Unit -> Bool,isCjk,_ => True{},_ => cjkBreak(rest))(Unit{})
 def flushGroup(+current: String,+done: List<&2,String>) -> List<&2,String>:
   Bool.pick(List<&2,String>,Strings.equal(current,""),done,reverseInto(current,"") <> done)
 def finishGroups(+current: String,+pending: String,done: List<&2,String>) -> List<&2,String>:
   match done:
-    case Nil{}: List.reverse(&2,String,flushGroup((pending ++ current),Nil{}))
+    case Nil{}: List.reverse(&2,String,flushGroup(pending ++ current,Nil{}))
     case +last <> +rest:
-      List.reverse(&2,String,Bool.pick(List<&2,String>,Strings.equal(current,""),(last ++ reverseInto(pending,"")) <> rest,reverseInto((pending ++ current),"") <> (last <> rest)))
-def groupCells(items: List<&2,Token>,+current: String,+pending: String,+space: Bool,+done: List<&2,String>) -> List<&2,String>:
+      trailingControl = {(last ++ reverseInto(pending,"")) <> rest : List<&2,String>}
+      trailingGroup = {reverseInto(pending ++ current,"") <> (last <> rest) : List<&2,String>}
+      groups = Bool.pick(List<&2,String>,Strings.equal(current,""),trailingControl,trailingGroup)
+      List.reverse(&2,String,groups)
+def groupCells(items: List<&2,Token>,+current: String,+pending: String,+currentIsSpace: Bool,+done: List<&2,String>) -> List<&2,String>:
   match items:
     case Nil{}: finishGroups(current,pending,done)
-    case Token{text,True{}} <> rest: groupCells(rest,current,prependReversed(text,pending),space,done)
+    case Token{text,True{}} <> rest: groupCells(rest,current,prependReversed(text,pending),currentIsSpace,done)
     case Token{+text,False{}} <> +rest:
       +isSpace = Strings.equal(text," ")
+      +changesKind = (currentIsSpace && Bool.not(isSpace)) || (Bool.not(currentIsSpace) && isSpace)
+      groupPrefix = Bool.pick(String,changesKind,"",current)
+      precedingGroups = Bool.pick(Unit -> List<&2,String>,changesKind,
+        _ => flushGroup(current,done),_ => done)(Unit{})
+      nextGroup = prependReversed(text,pending ++ groupPrefix)
+      cjkToken = reverseInto(prependReversed(text,pending),"")
       Bool.pick(Unit -> List<&2,String>,Bool.not(isSpace) && cjkBreak(text),
-        _ => groupCells(rest,"","",False{},reverseInto(prependReversed(text,pending),"") <> flushGroup(current,done)),
-        _ => groupCells(rest,prependReversed(text,(pending ++ Bool.pick(String,Bool.not(Bool.pick(Bool,space,isSpace,Bool.not(isSpace))),"",current))),"",isSpace,Bool.pick(List<&2,String>,Bool.not(Bool.pick(Bool,space,isSpace,Bool.not(isSpace))),flushGroup(current,done),done)))(Unit{})
+        _ => groupCells(rest,"","",False{},cjkToken <> flushGroup(current,done)),
+        _ => groupCells(rest,nextGroup,"",isSpace,precedingGroups))(Unit{})
 def splitIntoTokensWithAnsi(text: String) -> List<&2,String>: groupCells(cells(text),"","",False{},Nil{})
+# line and lines are reversed accumulators; tracker describes emitted controls.
 type WrapState is Data: WrapState{line: String,width: Nat,tracker: AnsiCodeTracker,lines: List<&2,String>}
 def breakCells(items: List<&2,Token>,+limit: Nat,state: WrapState) -> WrapState:
   match items:
@@ -507,22 +522,43 @@ def breakCells(items: List<&2,Token>,+limit: Nat,state: WrapState) -> WrapState:
         case WrapState{+line,+width,+tracker,+lines}:
           +size = Bool.pick(Nat,control,0n,visibleWidth(text))
           +overflow = Bool.not(control) && Nat.is_gt(width + size,limit)
-          breakCells(rest,limit,WrapState{prependReversed(text,Bool.pick(String,overflow,prependReversed(getActiveCodes(tracker),""),line)),Bool.pick(Nat,overflow,0n,width) + size,Bool.pick(AnsiCodeTracker,control,process(tracker,text),tracker),Bool.pick(List<&2,String>,overflow,(reverseInto(line,"") ++ getLineEndReset(tracker)) <> lines,lines)})
+          continuation = prependReversed(getActiveCodes(tracker),"")
+          nextLine = prependReversed(text,Bool.pick(String,overflow,continuation,line))
+          nextWidth = Bool.pick(Nat,overflow,0n,width) + size
+          nextTracker = Bool.pick(AnsiCodeTracker,control,process(tracker,text),tracker)
+          completedLine = reverseInto(line,"") ++ getLineEndReset(tracker)
+          completedLines = Bool.pick(List<&2,String>,overflow,completedLine <> lines,lines)
+          breakCells(rest,limit,WrapState{nextLine,nextWidth,nextTracker,completedLines})
 def longWordState(state: WrapState) -> WrapState:
   match state:
-    case WrapState{+line,_,+tracker,+lines}: WrapState{prependReversed(getActiveCodes(tracker),""),0n,tracker,Bool.pick(List<&2,String>,Strings.equal(line,""),lines,(reverseInto(line,"") ++ getLineEndReset(tracker)) <> lines)}
+    case WrapState{+line,_,+tracker,+lines}:
+      completedLine = reverseInto(line,"") ++ getLineEndReset(tracker)
+      completedLines = Bool.pick(List<&2,String>,Strings.equal(line,""),lines,completedLine <> lines)
+      continuation = prependReversed(getActiveCodes(tracker),"")
+      WrapState{continuation,0n,tracker,completedLines}
 def wordState(state: WrapState,+token: String,+size: Nat,+limit: Nat) -> WrapState:
   match state:
     case WrapState{+line,+width,+tracker,+lines}:
       +overflow = Nat.is_gt(width + size,limit) && Nat.is_gt(width,0n)
-      +white = allWhitespace(token)
-      WrapState{Bool.pick(String,overflow,prependReversed(getActiveCodes(tracker) ++ Bool.pick(String,white,"",token),""),prependReversed(token,line)),Bool.pick(Nat,overflow,Bool.pick(Nat,white,0n,size),width + size),updateTrackerFromText(token,tracker),Bool.pick(List<&2,String>,overflow,(trimEnd(reverseInto(line,"")) ++ getLineEndReset(tracker)) <> lines,lines)}
+      +whitespaceToken = allWhitespace(token)
+      continuation = getActiveCodes(tracker) ++ Bool.pick(String,whitespaceToken,"",token)
+      nextLine = Bool.pick(String,overflow,prependReversed(continuation,""),prependReversed(token,line))
+      continuationWidth = Bool.pick(Nat,whitespaceToken,0n,size)
+      nextWidth = Bool.pick(Nat,overflow,continuationWidth,width + size)
+      completedLine = trimEnd(reverseInto(line,"")) ++ getLineEndReset(tracker)
+      completedLines = Bool.pick(List<&2,String>,overflow,completedLine <> lines,lines)
+      nextTracker = updateTrackerFromText(token,tracker)
+      WrapState{nextLine,nextWidth,nextTracker,completedLines}
 def wrapTokens(items: List<&2,String>,+limit: Nat,+state: WrapState) -> WrapState:
   match items:
     case Nil{}: state
     case +token <> rest:
       +size = visibleWidth(token)
-      wrapTokens(rest,limit,Bool.pick(Unit -> WrapState,Nat.is_gt(size,limit) && Bool.not(allWhitespace(token)),_ => breakCells(cells(token),limit,longWordState(state)),_ => wordState(state,token,size,limit))(Unit{}))
+      breakWord = Nat.is_gt(size,limit) && Bool.not(allWhitespace(token))
+      nextState = Bool.pick(Unit -> WrapState,breakWord,
+        _ => breakCells(cells(token),limit,longWordState(state)),
+        _ => wordState(state,token,size,limit))(Unit{})
+      wrapTokens(rest,limit,nextState)
 def trimLines(items: List<&2,String>,result: List<&2,String>) -> List<&2,String>:
   match items:
     case Nil{}: result
@@ -533,7 +569,10 @@ def finishWrap(state: WrapState) -> List<&2,String>:
       +result = flushGroup(line,lines)
       Bool.pick(List<&2,String>,List.is_empty(&2,String,result),"" <> Nil{},trimLines(result,Nil{}))
 def wrapSingleLine(+line: String,+width: Nat) -> List<&2,String>:
-  Bool.pick(Unit -> List<&2,String>,Nat.is_le(visibleWidth(line),width),_ => line <> Nil{},_ => finishWrap(wrapTokens(splitIntoTokensWithAnsi(line),width,WrapState{"",0n,emptyTracker(),Nil{}})))(Unit{})
+  fits = Nat.is_le(visibleWidth(line),width)
+  Bool.pick(Unit -> List<&2,String>,fits,
+    _ => line <> Nil{},
+    _ => finishWrap(wrapTokens(splitIntoTokensWithAnsi(line),width,WrapState{"",0n,emptyTracker(),Nil{}})))(Unit{})
 def physicalLines(text: String,current: String,done: List<&2,String>) -> List<&2,String>:
   match text:
     case SNil{}: List.reverse(&2,String,reverseInto(current,"") <> done)
@@ -548,5 +587,12 @@ def addLines(items: List<&2,String>,done: List<&2,String>) -> List<&2,String>:
 def wrapPhysicalLines(items: List<&2,String>,+width: Nat,+tracker: AnsiCodeTracker,done: List<&2,String>) -> List<&2,String>:
   match items:
     case Nil{}: List.reverse(&2,String,done)
-    case +text <> rest: wrapPhysicalLines(rest,width,updateTrackerFromText(text,tracker),addLines(wrapSingleLine(getActiveCodes(tracker) ++ text,width),done))
+    case +text <> rest:
+      wrapped = wrapSingleLine(getActiveCodes(tracker) ++ text,width)
+      nextTracker = updateTrackerFromText(text,tracker)
+      wrapPhysicalLines(rest,width,nextTracker,addLines(wrapped,done))
 def wrapTextWithAnsi(text: String,width: Nat) -> List<&2,String>: wrapPhysicalLines(physicalLines(text,"",Nil{}),width,emptyTracker(),Nil{})
+
+# The component retains callback ownership; rendering only borrows its handle.
+def applyBackgroundToLine(+line: String,+width: Nat,bg: Callback.Callback<String,String>) -> IO(String):
+  Callback.call(String,String,bg,padResult(line,visibleWidth(line),width,True{}))
