@@ -367,10 +367,14 @@ cases += [('san:' + encode(tlv(48,b'')),'certificate'),
 # construction. OpenSSL is the external oracle for purpose and intermediate
 # constraints; TLS1.3's digitalSignature requirement is stricter than the
 # protocol-independent sslserver purpose (which also permits RSA encipherment).
-def policy_certificate(cert_name, public, issuer_name, signer, basic, usage, eku, extra=None):
+def policy_certificate(cert_name, public, issuer_name, signer, basic, usage, eku, extra=None, identifiers=False, period=None):
     now = datetime.now(timezone.utc)
+    start,end = period or (now-timedelta(days=1),now+timedelta(days=1))
     builder = (x509.CertificateBuilder().subject_name(cert_name).issuer_name(issuer_name).public_key(public)
-               .serial_number(500).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=1)))
+               .serial_number(500).not_valid_before(start).not_valid_after(end))
+    if identifiers:
+        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public),False)
+        builder = builder.add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(signer.public_key()),False)
     if basic is not None:
         builder = builder.add_extension(x509.BasicConstraints(*basic),True)
     if usage is not None:
@@ -514,10 +518,83 @@ for malformed in [tlv(48,tlv(49,b'')),tlv(48,a),dn([tlv(48,tlv(6,b'')+tlv(12,b'a
 cases.append(('dn:'+encode(dn([attribute(26,b'Alice')]))+':'+encode(plain),'name-encoding'))
 cases += [('self:'+encode(root_der),'same'),('self:'+encode(certs[1].public_bytes(serialization.Encoding.DER)),'different')]
 
+# Verify a supplied candidate path against an explicitly configured anchor.
+# OpenSSL partial_chain expresses this explicit trust, independently of future
+# trust-store loading/path discovery and hostname authorization.
+with tempfile.TemporaryDirectory(prefix='pi-bend-x509-path-') as temp:
+    folder = Path(temp)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    stamp = milliseconds(now)
+    high,low = words(stamp).split(',')
+    def chain_cert(cert_name, public, issuer_name, signer, basic, usage, eku=None, **kwargs):
+        return policy_certificate(cert_name,public,issuer_name,signer,basic,usage,eku,identifiers=True,**kwargs)
+    def path_case(anchor,leaf,chain,expected,oracle=True):
+        if oracle:
+            (folder/'anchor.pem').write_bytes(anchor.public_bytes(serialization.Encoding.PEM))
+            (folder/'leaf.pem').write_bytes(leaf.public_bytes(serialization.Encoding.PEM))
+            args = ['openssl','verify','-trusted',str(folder/'anchor.pem'),'-partial_chain','-purpose','sslserver','-attime',str(stamp//1000)]
+            if chain:
+                (folder/'chain.pem').write_bytes(b''.join(c.public_bytes(serialization.Encoding.PEM) for c in chain))
+                args += ['-untrusted',str(folder/'chain.pem')]
+            result = subprocess.run(args+[str(folder/'leaf.pem')],capture_output=True,text=True,timeout=10)
+            assert (result.returncode==0)==(expected=='ok'),(expected,result.stdout,result.stderr)
+        args = ['chain',high,low,encode(cert_wire(anchor)),encode(cert_wire(leaf))]+[encode(cert_wire(c)) for c in chain]
+        cases.append((':'.join(args),expected))
+    middle_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'middle')])
+    anchor = chain_cert(name,issuer.public_key(),name,issuer,(True,2),32)
+    middle = chain_cert(middle_name,other.public_key(),name,issuer,(True,0),32)
+    target = chain_cert(subject,issuer.public_key(),middle_name,other,(False,None),1)
+    direct = chain_cert(subject,other.public_key(),name,issuer,(False,None),1)
+    path_case(anchor,direct,[],'ok')
+    path_case(anchor,target,[middle],'ok')
+    path_case(anchor,target,[middle,anchor],'ok')
+    path_case(direct,direct,[],'ok')
+    path_case(wrong,direct,[],'signature')
+    path_case(anchor,target,[],'issuer')
+    bad_middle = chain_cert(middle_name,other.public_key(),name,other,(True,0),32)
+    path_case(anchor,target,[bad_middle],'signature')
+    for basic,usage,eku,expected in [((False,None),1,None,'ca'),((True,None),1,None,'usage'),((True,None),32,[ExtendedKeyUsageOID.CLIENT_AUTH],'purpose')]:
+        candidate = chain_cert(middle_name,other.public_key(),name,issuer,basic,usage,eku)
+        path_case(anchor,target,[candidate],expected)
+    encipher = chain_cert(subject,other.public_key(),name,issuer,(False,None),4)
+    path_case(anchor,encipher,[],'usage',oracle=False) # TLS1.3 signing requirement.
+    expired_period = (now-timedelta(days=3),now-timedelta(days=2))
+    future_period = (now+timedelta(days=2),now+timedelta(days=3))
+    for period,expected in [(expired_period,'expired'),(future_period,'early')]:
+        invalid_leaf = chain_cert(subject,other.public_key(),name,issuer,(False,None),1,period=period)
+        path_case(anchor,invalid_leaf,[],expected)
+        invalid_middle = chain_cert(middle_name,other.public_key(),name,issuer,(True,0),32,period=period)
+        path_case(anchor,target,[invalid_middle],expected)
+    expired_anchor = chain_cert(name,issuer.public_key(),name,issuer,(True,2),32,period=expired_period)
+    path_case(expired_anchor,direct,[],'expired')
+    zero_anchor = chain_cert(name,issuer.public_key(),name,issuer,(True,0),32)
+    path_case(zero_anchor,target,[middle],'path')
+    rollover = chain_cert(name,other.public_key(),name,issuer,(True,0),32)
+    rollover_leaf = chain_cert(subject,issuer.public_key(),name,other,(False,None),1)
+    path_case(zero_anchor,rollover_leaf,[rollover],'ok')
+    # A configured anchor's own signature is not part of this candidate path.
+    cross_anchor = chain_cert(name,issuer.public_key(),middle_name,other,(True,2),32)
+    path_case(cross_anchor,direct,[],'ok')
+    unknown = (x509.UnrecognizedExtension(x509.ObjectIdentifier('1.2.3.4.5'),b'opaque'),True)
+    invalid_leaf = chain_cert(subject,other.public_key(),name,issuer,(False,None),1,extra=unknown)
+    path_case(anchor,invalid_leaf,[],'critical')
+    for critical in [False,True]:
+        constraints = (x509.NameConstraints([x509.DNSName('example.com')],None),critical)
+        constrained = chain_cert(middle_name,other.public_key(),name,issuer,(True,0),32,extra=constraints)
+        path_case(anchor,target,[constrained],'critical' if critical else 'constraint',oracle=False)
+    # Empty subjects require a critical, nonempty SAN. Empty issuer names fail.
+    empty_name = x509.Name([])
+    for critical,expected in [(True,'ok'),(False,'certificate')]:
+        unnamed = chain_cert(empty_name,other.public_key(),name,issuer,(False,None),1,
+                             extra=(x509.SubjectAlternativeName([x509.DNSName('localhost')]),critical))
+        path_case(anchor,unnamed,[],expected,oracle=critical)
+    unnamed = chain_cert(empty_name,other.public_key(),name,issuer,(False,None),1)
+    path_case(anchor,unnamed,[],'certificate',oracle=False)
+
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),
                       ('bun', ['bun', 'build/x509.js'])]:
-    run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT, capture_output=True, text=True, timeout=300)
+    run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT, capture_output=True, text=True, timeout=600)
     assert run.returncode == 0, (name, run.stderr[-2000:])
     lines = run.stdout.splitlines()
     assert len(lines) == len(cases), (name, len(lines), len(cases))

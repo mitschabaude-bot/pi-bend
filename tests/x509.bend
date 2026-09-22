@@ -26,6 +26,8 @@ def error(cause: X509.Error) -> String:
     case X509.InvalidPurpose{}: "purpose"
     case X509.PathLengthExceeded{}: "path"
     case X509.UnsupportedNameEncoding{_}: "name-encoding"
+    case X509.UnsupportedConstraint{_}: "constraint"
+    case X509.IssuerMismatch{}: "issuer"
 
 def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
   match result:
@@ -157,8 +159,21 @@ def selfIssued(result: Result<&2,&2,X509.Error,X509.CertificateNames>) -> String
     case Fail{cause}: error(cause)
     case Done{X509.CertificateNames{issuer,subject}}: Bool.pick(String,X509.sameName(issuer,subject),"same","different")
 
+def pathCertificates(values: List<&2,String>, reversed: List<&2,X509.Certificate>) -> Result<&2,&2,X509.Error,List<&2,X509.Certificate>>:
+  match values:
+    case Nil{}: Done{List.reverse(&2,X509.Certificate,reversed)}
+    case head <> rest:
+      Result.bind(&2,&2,X509.Error,X509.Certificate,List<&2,X509.Certificate>,X509.parse(Bytes.bytes(head)), parsedCert => pathCertificates(rest,parsedCert <> reversed))
+
+def candidatePath(now: W.U64, trusted: List<&2,U32>, leaf: List<&2,U32>, intermediates: List<&2,String>) -> Result<&2,&2,X509.Error,Unit>:
+  Result.bind(&2,&2,X509.Error,X509.Certificate,Unit,X509.parse(trusted), anchor =>
+    Result.bind(&2,&2,X509.Error,X509.Certificate,Unit,X509.parse(leaf), target =>
+      Result.bind(&2,&2,X509.Error,List<&2,X509.Certificate>,Unit,pathCertificates(intermediates,Nil{}), chain =>
+        Result.bind(&2,&2,X509.Error,X509.PublicKey,Unit,X509.verifyPath(now,target,chain,anchor),unused => Done{Unit{}}))))
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "chain" <> high <> low <> trusted <> leaf <> intermediates: verified(candidatePath(W.U64{Decimal.decimal(high,0),Decimal.decimal(low,0)},Bytes.bytes(trusted),Bytes.bytes(leaf),intermediates))
     case "dn" <> left <> right <> Nil{}: compared(compareNames(Bytes.bytes(left),Bytes.bytes(right)))
     case "self" <> cert <> Nil{}: selfIssued(Result.bind(&2,&2,X509.Error,X509.Certificate,X509.CertificateNames,X509.parse(Bytes.bytes(cert)),X509.certificateNames))
     case "server" <> bytes <> Nil{}: verified(Result.bind(&2,&2,X509.Error,X509.Policy,Unit,policy(Bytes.bytes(bytes)),X509.checkServerPolicy))

@@ -25,6 +25,8 @@ type Error is Data:
   InvalidPurpose{}
   PathLengthExceeded{}
   UnsupportedNameEncoding{tag: U32}
+  UnsupportedConstraint{oid: List<&2,U32>}
+  IssuerMismatch{}
 
 type PublicKey is Data:
   Rsa{key: RSA.PublicKey}
@@ -429,6 +431,16 @@ def subjectAltNames(extension: Extension) -> Result<&2, &2, Error, List<&2, Gene
 type Policy is Data:
   Policy{constraints: BasicConstraints, usage: Maybe<&2, KeyUsage>, eku: Maybe<&2, List<&2, List<&2, U32>>>}
 
+def unsupportedConstraint(oid: List<&2,U32>) -> Bool:
+  match oid:
+    case 85 <> 29 <> +kind <> Nil{}: U32.is_eq(kind,30) || U32.is_eq(kind,33) || U32.is_eq(kind,36) || U32.is_eq(kind,54)
+    case _: False{}
+
+def unhandledExtension(extension: Extension, state: Policy) -> Result<&2,&2,Error,Policy>:
+  match extension:
+    case Extension{oid,True{},_}: Fail{UnsupportedCriticalExtension{oid}}
+    case Extension{+oid,False{},_}: Bool.pick(Result<&2,&2,Error,Policy>,unsupportedConstraint(oid),Fail{UnsupportedConstraint{oid}},Done{state})
+
 def policyExtension(+extension: Extension, state: Policy) -> Result<&2, &2, Error, Policy>:
   match extension state:
     case Extension{85 <> 29 <> 19 <> Nil{},_,_} Policy{_,usage,eku}:
@@ -439,8 +451,7 @@ def policyExtension(+extension: Extension, state: Policy) -> Result<&2, &2, Erro
       Result.bind(&2,&2,Error,List<&2,List<&2,U32>>,Policy,extendedKeyUsage(extension), eku => Done{Policy{basic,usage,Some{eku}}})
     case Extension{85 <> 29 <> 17 <> Nil{},_,_} state:
       Result.bind(&2,&2,Error,List<&2,GeneralName>,Policy,subjectAltNames(extension), unused => Done{state})
-    case Extension{oid,True{},_} _: Fail{UnsupportedCriticalExtension{oid}}
-    case Extension{_,False{},_} state: Done{state}
+    case _ state: unhandledExtension(extension,state)
 
 def policyExtensions(extensions: List<&2, Extension>, state: Policy) -> Result<&2,&2,Error,Policy>:
   match extensions:
@@ -699,3 +710,95 @@ def certificateNameFields(nodes: List<&2,DER.Node>) -> Result<&2,&2,Error,Certif
 def certificateNames(certificate: Certificate) -> Result<&2,&2,Error,CertificateNames>:
   match certificate:
     case Certificate{tbs,_,_}: Result.bind(&2,&2,Error,List<&2,DER.Node>,CertificateNames,fields(tbs),certificateNameFields)
+
+# A decoded path member carries the evidence reused at adjacent links. It is
+# not an authenticated identity: hostname checks and path discovery are separate.
+type PathCertificate is Data:
+  PathCertificate{certificate: Certificate, issuer: DistinguishedName, subject: DistinguishedName, key: PublicKey, policy: Policy}
+
+def pathSerial(nodes: List<&2,DER.Node>) -> Result<&2,&2,Error,Unit>:
+  match nodes:
+    case serial <> _ <> _ <> _ <> _ <> _ <> _:
+      Result.bind(&2,&2,Error,List<&2,U32>,Unit,decoded(List<&2,U32>,DER.unsigned(serial)), bytes =>
+        Bool.pick(Result<&2,&2,Error,Unit>,Bool.not(Big.isZero(Big.fromBigEndian(bytes))),Done{Unit{}},Fail{InvalidCertificate{}}))
+    case _: Fail{InvalidCertificate{}}
+
+def criticalSubjectName(values: List<&2,Extension>) -> Bool:
+  match values:
+    case Nil{}: False{}
+    case Extension{85 <> 29 <> 17 <> Nil{},True{},_} <> _: True{}
+    case _ <> rest: criticalSubjectName(rest)
+
+def nameProfile(names: CertificateNames, values: List<&2,Extension>) -> Result<&2,&2,Error,Unit>:
+  match names:
+    case CertificateNames{DistinguishedName{Nil{}},_}: Fail{InvalidCertificate{}}
+    case CertificateNames{_,DistinguishedName{Nil{}}}:
+      Bool.pick(Result<&2,&2,Error,Unit>,criticalSubjectName(values),Done{Unit{}},Fail{InvalidCertificate{}})
+    case _: Done{Unit{}}
+
+def usageProfile(policy: Policy) -> Result<&2,&2,Error,Unit>:
+  match policy:
+    case Policy{BasicConstraints{False{},_},Some{KeyUsage{_,_,_,_,_,True{},_,_,_}},_}: Fail{InvalidKeyUsage{}}
+    case _: Done{Unit{}}
+
+def pathMember(+certificate: Certificate, names: CertificateNames, key: PublicKey, policy: Policy) -> PathCertificate:
+  match names:
+    case CertificateNames{issuer,subject}: PathCertificate{certificate,issuer,subject,key,policy}
+
+def preparePathCertificate(+now: W.U64, +certificate: Certificate) -> Result<&2,&2,Error,PathCertificate>:
+  match certificate:
+    case Certificate{+tbs,algorithm,signature}:
+      Result.bind(&2,&2,Error,List<&2,DER.Node>,PathCertificate,fields(tbs), nodes =>
+        Result.bind(&2,&2,Error,Unit,PathCertificate,pathSerial(nodes),unused =>
+          Result.bind(&2,&2,Error,Validity,PathCertificate,validity(certificate), period =>
+            Result.bind(&2,&2,Error,Unit,PathCertificate,validAt(now,period),unused =>
+              Result.bind(&2,&2,Error,List<&2,Extension>,PathCertificate,extensions(certificate), +values =>
+                Result.bind(&2,&2,Error,Policy,PathCertificate,policyExtensions(values,Policy{BasicConstraints{False{},None{}},None{},None{}}), +policy =>
+                  Result.bind(&2,&2,Error,Unit,PathCertificate,usageProfile(policy),unused =>
+                    Result.bind(&2,&2,Error,CertificateNames,PathCertificate,certificateNames(certificate), +names =>
+                      Result.bind(&2,&2,Error,Unit,PathCertificate,nameProfile(names,values),unused =>
+                        Result.bind(&2,&2,Error,PublicKey,PathCertificate,publicKey(certificate), key =>
+                          Done{pathMember(certificate,names,key,policy)}))))))))))
+
+def sameCertificate(left: Certificate, right: Certificate) -> Bool:
+  match left right:
+    case Certificate{a,b,c} Certificate{d,e,f}:
+      RSA.equal(DER.encoded(a),DER.encoded(d),0) && RSA.equal(DER.encoded(b),DER.encoded(e),0) && RSA.equal(c,f,0)
+
+def issuerLink(child: PathCertificate, parent: PathCertificate, intermediatesBelow: Big.BigNat) -> Result<&2,&2,Error,Unit>:
+  match child parent:
+    case PathCertificate{certificate,issuer,_,_,_} PathCertificate{_,_,subject,key,policy}:
+      Result.bind(&2,&2,Error,Unit,Unit,checkIssuerPolicy(policy,intermediatesBelow),unused =>
+        Result.bind(&2,&2,Error,Unit,Unit,Bool.pick(Result<&2,&2,Error,Unit>,sameName(issuer,subject),Done{Unit{}},Fail{IssuerMismatch{}}),unused =>
+          verifySignature(key,certificate)))
+
+def belowParent(parent: PathCertificate, +count: Big.BigNat) -> Big.BigNat:
+  match parent:
+    case PathCertificate{_,issuer,subject,_,_}: Bool.pick(Big.BigNat,sameName(issuer,subject),count,Big.add(count,Big.one()))
+
+# The separately supplied anchor is trusted configuration, never a certificate
+# accepted merely because the peer sent it. Exact direct trust skips self-signing
+# and CA requirements, but still checks the target's time/purpose/encoding.
+def pathToAnchor(remaining: List<&2,Certificate>, +now: W.U64, +child: PathCertificate, +anchor: PathCertificate, +count: Big.BigNat) -> Result<&2,&2,Error,Unit>:
+  match remaining:
+    case Nil{}:
+      match child anchor:
+        case PathCertificate{+certificate,issuer,subject,key,policy} PathCertificate{+trusted,ai,as,ak,ap}:
+          Bool.pick(Unit -> Result<&2,&2,Error,Unit>,sameCertificate(certificate,trusted),unused => Done{Unit{}},unused => issuerLink(PathCertificate{certificate,issuer,subject,key,policy},PathCertificate{trusted,ai,as,ak,ap},count))(Unit{})
+    case head <> rest:
+      Result.bind(&2,&2,Error,PathCertificate,Unit,preparePathCertificate(now,head), +parent =>
+        Result.bind(&2,&2,Error,Unit,Unit,issuerLink(child,parent,count),unused =>
+          pathToAnchor(rest,now,parent,anchor,belowParent(parent,count))))
+
+def serverPath(+now: W.U64, intermediates: List<&2,Certificate>, anchor: PathCertificate, leaf: PathCertificate) -> Result<&2,&2,Error,PublicKey>:
+  match leaf:
+    case PathCertificate{certificate,issuer,subject,+key,+policy}:
+      Result.bind(&2,&2,Error,Unit,PublicKey,checkServerPolicy(policy),unused =>
+        Result.bind(&2,&2,Error,Unit,PublicKey,pathToAnchor(intermediates,now,PathCertificate{certificate,issuer,subject,key,policy},anchor,Big.zero()),unused => Done{key}))
+
+# Validate one candidate path ordered leaf -> intermediates -> configured anchor.
+# This is not path discovery, hostname authorization, revocation or a complete
+# policy/name-constraint implementation; unsupported constraints fail closed.
+def verifyPath(+now: W.U64, leaf: Certificate, intermediates: List<&2,Certificate>, trusted: Certificate) -> Result<&2,&2,Error,PublicKey>:
+  Result.bind(&2,&2,Error,PathCertificate,PublicKey,preparePathCertificate(now,trusted), anchor =>
+    Result.bind(&2,&2,Error,PathCertificate,PublicKey,preparePathCertificate(now,leaf), target => serverPath(now,intermediates,anchor,target)))
