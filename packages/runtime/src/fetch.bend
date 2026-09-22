@@ -19,6 +19,7 @@ import ./http-exchange.bend as Route
 import ./hosts.bend as HostsResolve
 import ./connection-driver.bend as Driver
 import ./connection-driver.bend as Connection
+import ./tls-socket.bend as TLS
 import ./socket.bend as Socket
 import ./socket.bend as Upload
 import ./dns-resolver.bend as Resolver
@@ -209,6 +210,7 @@ def socket(-Reason: Data, error: Socket.Error<Deadline.Cause<Reason>>) -> Catego
 def source(-Reason: Data, error: Source.SocketSourceError<Deadline.Cause<Reason>>) -> Category:
   match error:
     case Source.SocketSourceSocketFailure{cause}: socket(Reason, cause)
+    case Source.TLSSourceFailure{TLS.Network{cause}}: socket(Reason, cause)
     case Source.UploadFailure{Upload.WriteFailure{cause, None{}}}: socket(Reason, cause)
     case _: NonRetryable{}
 
@@ -240,6 +242,7 @@ def exchangeCategory(-Reason: Data, error: HTTP.ResolvedExchangeError<Deadline.C
     case HTTP.ResolvedExchangeConnectionFailure{Connection.ProgressAborted{why}}: requestAbort(Reason, why)
     case HTTP.ResolvedExchangeConnectionFailure{_}: NonRetryable{}
     case HTTP.ResolvedExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{Exchange.TLSStartFailure{TLS.Network{cause}}}: socket(Reason, cause)
     case HTTP.ResolvedExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
     case HTTP.ResolvedExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
     case HTTP.ResolvedExchangeFailure{_}: NonRetryable{}
