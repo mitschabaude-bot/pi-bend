@@ -2,7 +2,7 @@ import Base
 import ./image.bend as Image
 
 # Windows/OS2 BMP into straight-alpha RGBA8. The explicit pixel budget applies
-# before palette construction or pixel allocation; offsets use unbounded Nat.
+# before palette construction or pixel allocation; offsets use checked Nat extents.
 type Error is Data:
   Signature{}
   InvalidByte{}
