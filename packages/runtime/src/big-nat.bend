@@ -222,9 +222,36 @@ def remainder(division: Division) -> BigNat:
   match division:
     case Division{_, value}: value
 
+def remainderBitResult(order: Cmp, value: BigNat, divisor: BigNat) -> BigNat:
+  match order value divisor:
+    case LT{} value _: value
+    case _ BigNat{a} BigNat{b}: BigNat{trim(subtractLimbs(a, b, 0))}
+
+def remainderWord(count: Nat, +word: U32, +divisor: BigNat, value: BigNat) -> BigNat:
+  match count:
+    case 0n: value
+    case 1n+n:
+      +next = add(shiftLeft(value, 1n), fromU32(U32.shrn(word, 15n)))
+      remainderWord(n, U32.and(U32.shl(word), 65535), divisor, remainderBitResult(compare(next, divisor), next, divisor))
+
+def remainderLimb(order: Cmp, next: BigNat, word: U32, divisor: BigNat, value: BigNat) -> BigNat:
+  match order:
+    case LT{}: next
+    case _: remainderWord(16n, word, divisor, value)
+
+def remainderLimbs(limbs: List<&2, U32>, +divisor: BigNat, +value: BigNat) -> BigNat:
+  match limbs:
+    case Nil{}: value
+    case +head <> rest:
+      +next = add(shiftLeft(value, 16n), fromU32(head))
+      remainderLimbs(rest, divisor, remainderLimb(compare(next, divisor), next, head, divisor, value))
+
+# Modular arithmetic needs only the remainder. Constructing and shifting the
+# discarded quotient at every input bit adds work to every field multiplication.
+# A whole limb can be appended directly while the prefix is below the modulus.
 def reduce(value: BigNat, modulus: BigNat) -> BigNat:
   match value:
-    case BigNat{limbs}: remainder(divideLimbs(List.reverse(&2, U32, limbs), modulus, Division{zero(), zero()}))
+    case BigNat{limbs}: remainderLimbs(List.reverse(&2, U32, limbs), modulus, zero())
 
 def multiplyBit(set: Bool, squared: BigNat, base: BigNat, modulus: BigNat) -> BigNat:
   match set:
