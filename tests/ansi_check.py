@@ -12,6 +12,10 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');a=p.parse_args()
     command=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
     rng=random.Random(853);cases=['','plain','a'+ESC+'[31mred'+ESC+'[0mz',ESC+'cdone']
+    # Preserve the named upstream regressions, including the exact combined
+    # color/hyperlink assertion, before broader differential inputs.
+    cases += [ESC+chr(c)+'ok' for c in [*range(ord('g'),ord('m')+1),*range(ord('r'),ord('t')+1)]]
+    cases.append('a'+ESC+'[31mred'+ESC+'[0m'+ESC+']8;;https://example.com\x07link'+ESC+']8;;\x07z')
     finals='ABCDEFGHIJKLMNOPRSTZcfghijklmnqrstuy=><~'
     for c in finals:cases.append('x'+ESC+c+'ok')
     for intro in [ESC+'[','\x9b']:

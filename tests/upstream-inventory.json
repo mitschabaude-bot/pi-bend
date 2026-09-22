@@ -1447,8 +1447,9 @@
     },
     {
       "source": "packages/coding-agent/test/ansi-utils.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/ansi.bend", "tests/ansi_check.py"],
+      "notes": "Named RIS, single-byte ESC and combined color/hyperlink assertions pass on native one/four workers. Non-string rejection is static; generated malformed-regex compatibility is deliberately adapted, not claimed identical. See tests/ansi.md.",
       "sha256": "c0deb09e3f927314fbd60a5484d961497826254279398aaadaa3517567053cec"
     },
     {
