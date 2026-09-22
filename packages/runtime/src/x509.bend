@@ -1,7 +1,7 @@
 import Base
 import ./der.bend as DER
 import ./rsa-sha256.bend as RSA
-import ./p256.bend as P256
+import ./ecdsa.bend as EC
 import ./calendar.bend as Calendar
 import ./u64.bend as W
 import ./big-nat.bend as Big
@@ -14,7 +14,7 @@ type Error is Data:
   InvalidCertificate{}
   UnsupportedAlgorithm{}
   Signature{cause: RSA.Error}
-  Curve{cause: P256.Error}
+  Curve{cause: EC.Error}
   InvalidTime{}
   NotYetValid{}
   Expired{}
@@ -30,7 +30,7 @@ type Error is Data:
 
 type PublicKey is Data:
   Rsa{key: RSA.PublicKey}
-  P256{point: P256.Point}
+  Ec{curve: EC.Curve, point: EC.Point}
 
 type Certificate is Data:
   Certificate{tbs: DER.Node, algorithm: DER.Node, signature: List<&2, U32>}
@@ -85,10 +85,15 @@ def rsaKeyBytes(bytes: List<&2, U32>) -> Result<&2, &2, Error, RSA.PublicKey>:
   Result.bind(&2, &2, Error, DER.Node, RSA.PublicKey, decoded(DER.Node, DER.one(bytes)), root =>
     Result.bind(&2, &2, Error, List<&2, DER.Node>, RSA.PublicKey, decoded(List<&2, DER.Node>, DER.sequence(root)), rsaIntegers))
 
-def curveResult(-A: Data, result: Result<&2, &2, P256.Error, A>) -> Result<&2, &2, Error, A>:
+def curveResult(-A: Data, result: Result<&2, &2, EC.Error, A>) -> Result<&2, &2, Error, A>:
   match result:
     case Fail{cause}: Fail{Curve{cause}}
     case Done{value}: Done{value}
+
+def ecSubject(+selected: EC.Curve, key: DER.Node) -> Result<&2,&2,Error,PublicKey>:
+  Result.bind(&2,&2,Error,DER.Bits,PublicKey,decoded(DER.Bits,DER.bits(key)), bitString =>
+    Result.bind(&2,&2,Error,List<&2,U32>,PublicKey,signatureBytes(bitString), bytes =>
+      Result.bind(&2,&2,Error,EC.Point,PublicKey,curveResult(EC.Point,EC.publicKey(selected,bytes)), value => Done{Ec{selected,value}})))
 
 def subjectFields(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, PublicKey>:
   match nodes:
@@ -97,9 +102,9 @@ def subjectFields(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, PublicKey>
         Result.bind(&2, &2, Error, List<&2, U32>, PublicKey, signatureBytes(bitString), bytes =>
           Result.bind(&2, &2, Error, RSA.PublicKey, PublicKey, rsaKeyBytes(bytes), value => Done{Rsa{value}})))
     case DER.Node{DER.Tag{0, True{}, 16}, _, 6 <> 7 <> 42 <> 134 <> 72 <> 206 <> 61 <> 2 <> 1 <> 6 <> 8 <> 42 <> 134 <> 72 <> 206 <> 61 <> 3 <> 1 <> 7 <> Nil{}} <> key <> Nil{}:
-      Result.bind(&2, &2, Error, DER.Bits, PublicKey, decoded(DER.Bits, DER.bits(key)), bitString =>
-        Result.bind(&2, &2, Error, List<&2, U32>, PublicKey, signatureBytes(bitString), bytes =>
-          Result.bind(&2, &2, Error, P256.Point, PublicKey, curveResult(P256.Point, P256.publicKey(bytes)), value => Done{P256{value}})))
+      ecSubject(EC.P256{},key)
+    case DER.Node{DER.Tag{0, True{}, 16}, _, 6 <> 7 <> 42 <> 134 <> 72 <> 206 <> 61 <> 2 <> 1 <> 6 <> 5 <> 43 <> 129 <> 4 <> 0 <> 34 <> Nil{}} <> key <> Nil{}:
+      ecSubject(EC.P384{},key)
     case _: Fail{UnsupportedAlgorithm{}}
 
 def subjectKey(fields: List<&2, DER.Node>) -> Result<&2, &2, Error, PublicKey>:
@@ -124,8 +129,10 @@ def signatureAlgorithm(issuer: PublicKey, body: List<&2, U32>, message: List<&2,
   match issuer body:
     case Rsa{key} 6 <> 9 <> 42 <> 134 <> 72 <> 134 <> 247 <> 13 <> 1 <> 1 <> 11 <> 5 <> 0 <> Nil{}:
       rsaResult(Unit, RSA.verifyPkcs1(key, message, signature))
-    case P256{key} 6 <> 8 <> 42 <> 134 <> 72 <> 206 <> 61 <> 4 <> 3 <> 2 <> Nil{}:
-      curveResult(Unit, P256.verify(key, message, signature))
+    case Ec{selected,key} 6 <> 8 <> 42 <> 134 <> 72 <> 206 <> 61 <> 4 <> 3 <> 2 <> Nil{}:
+      curveResult(Unit,EC.verify(selected,EC.Sha256{},key,message,signature))
+    case Ec{selected,key} 6 <> 8 <> 42 <> 134 <> 72 <> 206 <> 61 <> 4 <> 3 <> 3 <> Nil{}:
+      curveResult(Unit,EC.verify(selected,EC.Sha384{},key,message,signature))
     case _ _: Fail{UnsupportedAlgorithm{}}
 
 # An explicitly supplied issuer key proves a signature, not trust or authority.

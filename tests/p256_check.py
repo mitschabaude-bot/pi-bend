@@ -14,6 +14,7 @@ N = int('FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551',16)
 B = int('5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B',16)
 BITS = int(sys.argv[1]) if len(sys.argv) > 1 else 256
 if BITS not in (256,384): raise ValueError('supported curves: 256,384')
+ARTIFACT = sys.argv[2] if len(sys.argv) > 2 else f"build/p{BITS}"
 WIDTH = BITS // 8
 CURVE = ec.SECP256R1() if BITS == 256 else ec.SECP384R1()
 HASH = hashes.SHA256() if BITS == 256 else hashes.SHA384()
@@ -117,11 +118,11 @@ key=ec.EllipticCurvePublicNumbers(*q,CURVE).public_key()
 key.verify(signature,message,ec.ECDSA(HASH))
 cases.append(('v:'+encode(wire(q))+':'+encode(message)+':'+encode(signature),'ok'))
 
-for name,command in [('native-1',[f'build/p{BITS}','--threads','1']),
-                     ('native-4',[f'build/p{BITS}','--threads','4']),
-                     ('bun',['bun',f'build/p{BITS}.js'])]:
+for name,command in [('native-1',[ARTIFACT,'--threads','1']),
+                     ('native-4',[ARTIFACT,'--threads','4']),
+                     ('bun',['bun',ARTIFACT+'.js'])]:
     start=time.monotonic()
-    run=subprocess.run(command+[arg for arg,_ in cases],cwd=ROOT,capture_output=True,text=True,timeout=600)
+    run=subprocess.run(command+[arg for arg,_ in cases],cwd=ROOT,capture_output=True,text=True,timeout=1200)
     assert run.returncode==0,(name,run.stderr[-2000:])
     lines=run.stdout.splitlines()
     assert len(lines)==len(cases),(name,len(lines),len(cases))

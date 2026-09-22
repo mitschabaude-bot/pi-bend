@@ -111,6 +111,7 @@ def certificateResult(result: Result<&2, &2, TLS.Error, List<&2, List<&2, U32>>>
 def scheme(value: TLS.SignatureScheme) -> String:
   match value:
     case TLS.EcdsaP256Sha256{}: "1027"
+    case TLS.EcdsaP384Sha384{}: "1283"
     case TLS.RsaPssRsaeSha256{}: "2052"
 
 def signatureResult(result: Result<&2, &2, TLS.Error, TLS.CertificateSignature>) -> String:

@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
+import sys
 import random
 import ipaddress
 import tempfile
@@ -13,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 
 ROOT = Path(__file__).resolve().parents[1]
+ARTIFACT = sys.argv[1] if len(sys.argv) > 1 else "build/x509"
 
 
 def encode(data):
@@ -607,9 +609,9 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-x509-path-') as temp:
     unnamed = chain_cert(empty_name,other.public_key(),name,issuer,(False,None),1)
     path_case(anchor,unnamed,[],'certificate',oracle=False)
 
-for name, command in [('native-1', ['build/x509', '--threads', '1']),
-                      ('native-4', ['build/x509', '--threads', '4']),
-                      ('bun', ['bun', 'build/x509.js'])]:
+for name, command in [('native-1', [ARTIFACT, '--threads', '1']),
+                      ('native-4', [ARTIFACT, '--threads', '4']),
+                      ('bun', ['bun', ARTIFACT+'.js'])]:
     run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT, capture_output=True, text=True, timeout=600)
     assert run.returncode == 0, (name, run.stderr[-2000:])
     lines = run.stdout.splitlines()

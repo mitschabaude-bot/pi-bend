@@ -8,7 +8,7 @@ import ./aes128.bend as AES
 import ./aes128-gcm.bend as GCM
 import ./x509.bend as X509
 import ./rsa-sha256.bend as RSA
-import ./p256.bend as P256
+import ./ecdsa.bend as EC
 
 # TLS 1.3 handshake framing and negotiation. Affine states retain key epochs
 # and exact transcripts; none yet represents an authenticated connection.
@@ -75,7 +75,8 @@ def serverName(name: Maybe<&2, String>) -> List<&2, U32>:
 
 def extensions(name: Maybe<&2, String>, publicKey: List<&2, U32>) -> List<&2, U32>:
   groups = extension(10, vector(u16(29)))
-  signatures = extension(13, vector(4 <> 3 <> 8 <> 4 <> Nil{}))
+  # PKCS1/SHA256 is permitted for certificates, never TLS1.3 CertificateVerify.
+  signatures = extension(13, vector(4 <> 3 <> 5 <> 3 <> 8 <> 4 <> 4 <> 1 <> Nil{}))
   versions = extension(43, 2 <> 3 <> 4 <> Nil{})
   share = extension(51, vector(0 <> 29 <> vector(publicKey)))
   alpn = extension(16, vector(8 <> ascii("http/1.1")))
@@ -442,6 +443,7 @@ def certificates(wire: List<&2, U32>) -> Result<&2, &2, Error, List<&2, List<&2,
 
 type SignatureScheme is Data:
   EcdsaP256Sha256{}
+  EcdsaP384Sha384{}
   RsaPssRsaeSha256{}
 
 type CertificateSignature is Data:
@@ -457,6 +459,7 @@ def signatureBytes(scheme: SignatureScheme, signedBytes: List<&2, U32>, bytes: L
 def certificateVerifyBody(signedBytes: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, CertificateSignature>:
   match bytes:
     case 4 <> 3 <> rest: signatureBytes(EcdsaP256Sha256{}, signedBytes, rest)
+    case 5 <> 3 <> rest: signatureBytes(EcdsaP384Sha384{}, signedBytes, rest)
     case 8 <> 4 <> rest: signatureBytes(RsaPssRsaeSha256{}, signedBytes, rest)
     case _: Fail{RejectedParameters{}}
 
@@ -476,8 +479,10 @@ def verifyEvidence(key: X509.PublicKey, evidence: CertificateSignature) -> Resul
   match key evidence:
     case X509.Rsa{key} CertificateSignature{RsaPssRsaeSha256{}, signature, input}:
       certificateResult(Unit, X509.rsaResult(Unit, RSA.verifyPss(key, input, signature, 32n)))
-    case X509.P256{key} CertificateSignature{EcdsaP256Sha256{}, signature, input}:
-      certificateResult(Unit, X509.curveResult(Unit, P256.verify(key, input, signature)))
+    case X509.Ec{EC.P256{},key} CertificateSignature{EcdsaP256Sha256{}, signature, input}:
+      certificateResult(Unit, X509.curveResult(Unit, EC.verify(EC.P256{}, EC.Sha256{}, key, input, signature)))
+    case X509.Ec{EC.P384{},key} CertificateSignature{EcdsaP384Sha384{}, signature, input}:
+      certificateResult(Unit, X509.curveResult(Unit, EC.verify(EC.P384{}, EC.Sha384{}, key, input, signature)))
     case _ _: Fail{RejectedParameters{}}
 
 def verifyCertificateSignature(key: X509.PublicKey, +transcript: SHA.State, +wire: List<&2, U32>) -> Result<&2, &2, Error, SHA.State>:

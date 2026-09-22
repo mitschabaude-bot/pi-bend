@@ -82,7 +82,7 @@ def inspect(line, host, seed):
     cursor.end()
     assert set(ext) == ({10, 13, 43, 51, 16} if host is None else {0, 10, 13, 43, 51, 16})
     assert ext[10] == b'\x00\x02\x00\x1d'
-    assert ext[13] == b'\x00\x04\x04\x03\x08\x04'
+    assert ext[13] == b'\x00\x08\x04\x03\x05\x03\x08\x04\x04\x01'
     assert ext[43] == b'\x02\x03\x04'
     assert ext[16] == b'\x00\x09\x08http/1.1'
     share = Cursor(ext[51])
@@ -108,14 +108,16 @@ def inspect(line, host, seed):
 
 
 def server_context(folder, algorithm):
-    key = ec.generate_private_key(ec.SECP256R1()) if algorithm == 'ecdsa' else rsa.generate_private_key(65537, 2048)
+    key = (ec.generate_private_key(ec.SECP256R1()) if algorithm == 'ecdsa' else
+           ec.generate_private_key(ec.SECP384R1()) if algorithm == 'ecdsa384' else
+           rsa.generate_private_key(65537, 2048))
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'localhost')])
     now = datetime.now(timezone.utc)
     cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject)
             .public_key(key.public_key()).serial_number(1)
             .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=1))
             .add_extension(x509.SubjectAlternativeName([x509.DNSName('localhost')]), False)
-            .sign(key, hashes.SHA256()))
+            .sign(key, hashes.SHA384() if algorithm == 'ecdsa384' else hashes.SHA256()))
     certificate, private = folder / 'certificate.pem', folder / 'key.pem'
     certificate.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     private.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
@@ -376,7 +378,7 @@ def check_certificates(command):
         bad = list(good)
         bad[index] = 256
         cases.append(('cert:' + encode(bad), 'handshake'))
-    for algorithm in [1027, 2052]:
+    for algorithm in [1027, 1283, 2052]:
         for length in [1, 64, 72, 256]:
             signature = rng.randbytes(length)
             transcript = rng.randbytes(111)
@@ -422,8 +424,8 @@ def verify_server_evidence(command, prefix, content, server_secret):
     assert int(algorithm) == int.from_bytes(cv[4:6], 'big') and signature == cv[8:]
     assert signed == bytes([32]) * 64 + b'TLS 1.3, server CertificateVerify\x00' + hashlib.sha256(transcript).digest()
     key = x509.load_der_x509_certificate(certificates[0]).public_key()
-    if algorithm == '1027':
-        key.verify(signature, signed, ec.ECDSA(hashes.SHA256()))
+    if algorithm in ('1027','1283'):
+        key.verify(signature, signed, ec.ECDSA(hashes.SHA256() if algorithm == '1027' else hashes.SHA384()))
     else:
         assert algorithm == '2052'
         key.verify(signature, signed, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32), hashes.SHA256())
@@ -504,7 +506,7 @@ def complete_handshake(command, flight, transcript, handshake_secret, client_sec
 
 
 with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
-    contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa']]
+    contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa', 'ecdsa384']]
     for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
                           ('native-4', ['build/tls13-handshake', '--threads', '4']),
                           ('bun', ['bun', 'build/tls13-handshake.js'])]:
@@ -556,4 +558,4 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
         certificate_count = check_certificates(command)
         extension_count = check_extensions(command)
         count = check_framing(command)
-        print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; completed OpenSSL handshakes and native bidirectional application records PASS', flush=True)
+        print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * len(contexts)} OpenSSL flights; completed OpenSSL handshakes and native bidirectional application records PASS', flush=True)
