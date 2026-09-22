@@ -470,6 +470,9 @@ type TimedNode<-D: Data,-T: Data,-C: Data> is Data:
 def nodeBefore(-D: Data,-T: Data,-C: Data, left: TimedNode<D,T,C>, right: TimedNode<D,T,C>) -> Bool:
   match left right:
     case TimedNode{_,a} TimedNode{_,b}: F64.is_le(a,b)
+# Sort.sort requires static type/comparator arguments; this tree carries erased
+# D/T/C parameters. Keep the dynamic merge here until the shared sorter accepts
+# ordinary comparator closures without changing these public session APIs.
 def mergeNodes(-D: Data,-T: Data,-C: Data, left: List<&2,TimedNode<D,T,C>>, right: List<&2,TimedNode<D,T,C>>, +reversed: List<&2,TimedNode<D,T,C>>) -> List<&2,TimedNode<D,T,C>>:
   match left right:
     case Nil{} right: List.reverse.go(&2,TimedNode<D,T,C>,reversed,right)

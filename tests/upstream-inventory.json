@@ -2355,9 +2355,15 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/labels.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "072829ad416a5c73c1618c8761bb63bcd8d4b80b589f742ef768ee822714234d"
+      "status": "ported",
+      "ports": [
+        "tests/session-state.bend",
+        "tests/session_state_check.py",
+        "tests/session_state_reference.ts"
+      ],
+      "sha256": "072829ad416a5c73c1618c8761bb63bcd8d4b80b589f742ef768ee822714234d",
+      "implementation": "packages/coding-agent/src/core/session-manager.bend",
+      "notes": "All nine original label tests pass, including clear/replace, tree labels/timestamps, missing-target rejection and fork reconnection/filtering. Together the two suites execute 37 original tests and 155 full state comparisons on Bun/native one/four, with atomic rejection checks and 10,001-node wide/deep trees. Immutable transitions take explicit entry IDs/timestamps; persistence and external-entry restoration remain separate work. See tests/session-state.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/load-entries.test.ts",
@@ -2379,9 +2385,15 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/tree-traversal.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3a80de63661cb02f98df3bc1eebece12e8e4a56032bdad3b6ad0583b25f20d8c"
+      "status": "partial",
+      "ports": [
+        "tests/session-state.bend",
+        "tests/session_state_check.py",
+        "tests/session_state_reference.ts"
+      ],
+      "sha256": "3a80de63661cb02f98df3bc1eebece12e8e4a56032bdad3b6ad0583b25f20d8c",
+      "implementation": "packages/coding-agent/src/core/session-manager.bend",
+      "notes": "The original in-memory append/branch/tree/fork tests pass; three named filesystem/reload tests remain pending. Together the two suites execute 37 original tests and 155 full state comparisons on Bun/native one/four, with atomic rejection checks and 10,001-node wide/deep trees. Immutable transitions take explicit entry IDs/timestamps; persistence and external-entry restoration remain separate work. See tests/session-state.md."
     },
     {
       "source": "packages/coding-agent/test/session-selector-path-delete.test.ts",
