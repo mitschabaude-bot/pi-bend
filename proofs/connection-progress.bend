@@ -1,6 +1,6 @@
 import Base
 import ../laws/connection-progress.bend as Laws
-import ../packages/runtime/src/connection-attempt-result.bend as Attempt
+import ../packages/runtime/src/connection-driver.bend as Attempt
 
 def Laws.parent_abort_wins(R, outcome, reason):
   match outcome:

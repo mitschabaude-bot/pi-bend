@@ -1,20 +1,20 @@
 import Base
-import ../packages/runtime/src/dns-address-lookup.bend as Lookup
-import ../packages/runtime/src/dns-address-answer.bend as Answer
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-resolver.bend as Lookup
+import ../packages/runtime/src/dns-resolver.bend as Answer
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ../packages/runtime/test/dns-address-answer.bend as AnswerTest
 import ./dns-tcp-query.bend as QueryTest
 import ./dns-tcp-connection.bend as Test
 
-def outcome(value: Result<&2, &2, Lookup.Error<String>, Answer.Selection>) -> String:
+def outcome(value: Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection>) -> String:
   match value:
     case Done{selection}: AnswerTest.show(Done{selection})
     case Fail{Lookup.InvalidReadSize{}}: "zero"
-    case Fail{Lookup.UnsupportedType{}}: "type"
+    case Fail{Lookup.AddressLookupUnsupportedType{}}: "type"
     case Fail{Lookup.Exchange{error}}: QueryTest.outcome(Fail{error})
-    case Fail{Lookup.Selection{error}}: AnswerTest.show(Fail{error})
+    case Fail{Lookup.AddressLookupSelection{error}}: AnswerTest.show(Fail{error})
     case Fail{Lookup.Truncated{_}}: "truncated"
     case _: "unexpected"
 

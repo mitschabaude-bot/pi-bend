@@ -3,11 +3,12 @@ import ctypes
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import platform
 import random
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-search-text-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-search-text.bend','-o',f'build/dns-search-text.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-text.c','-lpthread','-lm','-o','build/dns-search-text'],cwd=ROOT,check=True)
@@ -46,5 +47,5 @@ for label,command in [('native 1',['build/dns-search-text','--threads','1']),('n
         assert len(got)==len(want),(label,start,len(got),len(want))
         for text,actual,result in zip(batch,got,want):assert actual==result,(label,repr(text),actual,result)
     rows.append(dict(backend=label,presentation_cases=len(values)));print(f'{label}: {len(values)} presentation names PASS',flush=True)
-paths=['packages/runtime/src/dns-presentation.bend','packages/runtime/src/dns-search-text.bend','packages/runtime/src/dns-name.bend','packages/runtime/src/utf8.bend','tests/dns-search-text.bend','tests/dns_search_text_check.py','build/dns-search-text','build/dns-search-text.js']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend','packages/runtime/src/utf8.bend','tests/dns-search-text.bend','tests/dns_search_text_check.py','build/dns-search-text','build/dns-search-text.js']
 (ROOT/'build/dns-search-text-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,libc_version=list(platform.libc_ver()),sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/dns-search-text-{suffix}-build.json').read_text()) for suffix in ['c','js']}),indent=2)+'\n')

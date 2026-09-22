@@ -8,6 +8,7 @@ kernel buffers. Production effect bodies otherwise remain unchanged.
 import concurrent.futures
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shutil
 import shlex
 import socket
@@ -17,7 +18,7 @@ import tempfile
 import threading
 
 ROOT = Path(__file__).resolve().parents[1]
-candidate = Path(sys.argv[1]).resolve()
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve()
 assert sys.platform == 'linux', 'test-only socket options currently target Linux'
 payload = bytes(range(256)) * 256
 

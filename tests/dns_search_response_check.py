@@ -10,12 +10,13 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import struct
 import subprocess
 import threading
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-search-response-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-search-response.bend','-o',f'build/dns-search-response.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-response.c','-lpthread','-lm','-o','build/dns-search-response'],cwd=ROOT,check=True)
@@ -105,5 +106,5 @@ for case in network:
     assert actual==result and seen==expected,(case,actual,result,seen,expected)
     observations.append(dict(input=list(case),queries=[list(q) for q in seen],result=actual))
 print(f'libc: {len(network)} mixed-response loopback sequences PASS',flush=True)
-paths=['packages/runtime/src/dns-search-response.bend','packages/runtime/src/dns-search.bend','tests/dns-search-response.bend','tests/dns_search_response_check.py','tests/dns-search-oracle.c','build/dns-search-response','build/dns-search-response.js']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend','tests/dns-search-response.bend','tests/dns_search_response_check.py','tests/dns-search-oracle.c','build/dns-search-response','build/dns-search-response.js']
 (ROOT/'build/dns-search-response-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,libc_sequences=observations,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/dns-search-response-{suffix}-build.json').read_text()) for suffix in ['c','js']}),indent=2)+'\n')

@@ -1,8 +1,8 @@
 import Base
-import ../packages/runtime/src/dns-tcp-recover.bend as Recover
-import ../packages/runtime/src/dns-tcp-query.bend as Query
-import ../packages/runtime/src/dns-tcp-session.bend as Session
-import ../packages/runtime/src/dns-tcp-connection.bend as TCP
+import ../packages/runtime/src/dns-transport.bend as Recover
+import ../packages/runtime/src/dns-transport.bend as Query
+import ../packages/runtime/src/dns-transport.bend as Session
+import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/abortable-socket.bend as SocketIO
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/socket-interrupt.bend as Interrupt
@@ -16,8 +16,8 @@ def check(name: String, expected: Bool, report: Query.Completed<String>) -> IO(U
     actual : Bool <- Recover.reset(String, report)
     Test.assertTrue(Bool.not(Bool.xor(expected, actual)), name)
 
-def transport(operation: TCP.Operation, error: SocketIO.Error<Deadline.Cause<String>>) -> Query.Error<String>:
-  Query.Terminated{Session.Transport{TCP.Transport{operation, error}}}
+def transport(operation: TCP.Operation, error: SocketIO.Error<Deadline.Cause<String>>) -> Query.TcpQueryError<String>:
+  Query.Terminated{Session.TcpSessionTransport{TCP.Transport{operation, error}}}
 
 def cases(+code: U32) -> IO(Unit):
   do IO<Unit>:
@@ -25,7 +25,7 @@ def cases(+code: U32) -> IO(Unit):
     check("write reset", False{}, Query.Completed{Fail{transport(TCP.Sending{}, SocketIO.SocketError{code, "reset"})}, Done{Unit{}}})
     check("payload reset", False{}, Query.Completed{Fail{transport(TCP.ReadingPayload{}, SocketIO.SocketError{code, "reset"})}, Done{Unit{}}})
     check("cleanup failure", False{}, Query.Completed{Fail{transport(TCP.ReadingLength{}, SocketIO.SocketError{code, "reset"})}, Fail{Interrupt.Error{code, "cleanup must win"}}})
-    check("connect reset", False{}, Query.Completed{Fail{Query.Connection{Connect.SocketError{code, "connect"}}}, Done{Unit{}}})
+    check("connect reset", False{}, Query.Completed{Fail{Query.TcpQueryConnection{Connect.SocketError{code, "connect"}}}, Done{Unit{}}})
     check("other socket code", False{}, Query.Completed{Fail{transport(TCP.ReadingLength{}, SocketIO.SocketError{0, "other"})}, Done{Unit{}}})
     check("parent abort", False{}, Query.Completed{Fail{transport(TCP.ReadingLength{}, SocketIO.Aborted{Abort.Supplied{Deadline.ParentAbort{Abort.Supplied{"stop"}}}})}, Done{Unit{}}})
     check("default abort", False{}, Query.Completed{Fail{transport(TCP.ReadingLength{}, SocketIO.Aborted{Abort.DefaultAbort{}})}, Done{Unit{}}})

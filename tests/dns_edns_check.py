@@ -3,12 +3,13 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import struct
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=Path.home()/'.bend/current/bend2/main.ts'
+compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-edns-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-edns.bend','-o',f'build/dns-edns.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-edns.c','-lpthread','-lm','-o','build/dns-edns'],cwd=ROOT,check=True)
@@ -60,6 +61,6 @@ for backend,command in [('native 1',['build/dns-edns','--threads','1']),('native
         assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,index,case,run.returncode,run.stderr,run.stdout[:200],want[0][:200])
     checks.append(dict(backend=backend,cases=len(cases)))
     print(f'{backend}: {len(cases)} EDNS query cases PASS',flush=True)
-paths=['packages/runtime/src/dns-edns.bend','tests/dns-edns.bend','tests/dns_edns_check.py']
+paths=['packages/runtime/src/dns-message.bend','tests/dns-edns.bend','tests/dns_edns_check.py']
 result=dict(scope=__doc__,reference='https://datatracker.ietf.org/doc/html/rfc6891',checks=checks,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/dns-edns-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/dns-edns-result.json').write_text(json.dumps(result,indent=2)+'\n')

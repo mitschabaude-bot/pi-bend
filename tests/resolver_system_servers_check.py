@@ -4,13 +4,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import subprocess
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=ROOT/'build/bend-interface-index-candidate'
+compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats',f'build/resolver-system-servers-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-system-servers.bend','-o',f'build/resolver-system-servers.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-servers.c','-lpthread','-lm','-o','build/resolver-system-servers'],cwd=ROOT,check=True)
@@ -40,6 +41,6 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-resolver-endpoints-') as temp:
             assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,index,run,want)
         checks.append(dict(backend=backend,cases=len(cases)))
         print(f'{backend}: {len(cases)} system file-to-endpoint cases PASS',flush=True)
-paths=['packages/runtime/src/resolver-system-servers.bend','tests/resolver-system-servers.bend','tests/resolver_system_servers_check.py']
+paths=['packages/runtime/src/dns-resolver.bend','tests/resolver-system-servers.bend','tests/resolver_system_servers_check.py']
 result=dict(scope=__doc__,checks=checks,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/resolver-system-servers-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/resolver-system-servers-result.json').write_text(json.dumps(result,indent=2)+'\n')

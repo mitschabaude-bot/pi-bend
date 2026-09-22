@@ -6,13 +6,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import subprocess
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path);args=parser.parse_args()
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN);args=parser.parse_args()
 compiler=args.candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-system-config-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-system-config.bend','-o',f'build/resolver-system-config.{suffix}'],cwd=ROOT,check=True)

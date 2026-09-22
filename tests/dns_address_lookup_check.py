@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import shlex
 import socket
@@ -17,7 +18,7 @@ import subprocess
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');p.add_argument('--build-limit-gib',type=float,default=16);args=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN);p.add_argument('--no-build',action='store_true');p.add_argument('--build-limit-gib',type=float,default=16);args=p.parse_args()
 candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-lookup-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_build:subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',str(args.build_limit_gib),'--stats','build/dns-address-lookup-build.json','--','sh','scripts/build-pure.sh','tests/dns-address-lookup.bend','build/dns-address-lookup'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
@@ -87,5 +88,5 @@ for label,command in [('native 1',['build/dns-address-lookup','--threads','1']),
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(label,number,kind,mode,run,want)
                 rows.append(dict(backend=label,server_family=number,query_type=kind,mode=mode,questions=asked))
     print(label+': address lookup PASS',flush=True)
-paths=['packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-tcp-query.bend','tests/dns-address-lookup.bend','tests/dns_address_lookup_check.py','build/dns-address-lookup','build/dns-address-lookup.js']
+paths=['packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-transport.bend','tests/dns-address-lookup.bend','tests/dns_address_lookup_check.py','build/dns-address-lookup','build/dns-address-lookup.js']
 (ROOT/'build/dns-address-lookup-result.json').write_text(json.dumps({'scope':__doc__,'cases':rows,'sha256':{p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},'candidate_sha256':{p:hashlib.sha256((candidate/p).read_bytes()).hexdigest() for p in ['base.bend','comp.ts']}},indent=2)+'\n')

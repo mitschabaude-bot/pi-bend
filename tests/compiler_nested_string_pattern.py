@@ -3,12 +3,13 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
-parser.add_argument('--compiler',type=Path,default=ROOT/'build/bend-profiles/dns-transport-teles/bend2/main.ts')
+parser.add_argument('--compiler',type=Path,default=Path(BEND))
 parser.add_argument('--limit-gib',type=float,default=2)
 args=parser.parse_args()
 compiler=args.compiler.resolve()

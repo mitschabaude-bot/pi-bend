@@ -4,11 +4,12 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=Path.home()/'.bend/current/bend2/main.ts'
+compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-search-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-search.bend','-o',f'build/resolver-search.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-search.c','-lpthread','-lm','-o','build/resolver-search'],cwd=ROOT,check=True)
@@ -73,6 +74,6 @@ for backend,command in [('native 1',['build/resolver-search','--threads','1']),(
         assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,index,args,run,want)
     checks.append(dict(backend=backend,cases=len(cases)))
     print(f'{backend}: {len(cases)} settings/options/search cases PASS',flush=True)
-paths=['packages/runtime/src/resolver-search.bend','tests/resolver-search.bend','tests/resolver_search_check.py']
+paths=['packages/runtime/src/resolver-config.bend','tests/resolver-search.bend','tests/resolver_search_check.py']
 result=dict(scope=__doc__,checks=checks,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/resolver-search-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/resolver-search-result.json').write_text(json.dumps(result,indent=2)+'\n')

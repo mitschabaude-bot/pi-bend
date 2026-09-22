@@ -1,9 +1,9 @@
 import Base
-import ../packages/runtime/src/dns-tcp-peer.bend as Peer
-import ../packages/runtime/src/dns-tcp-connection.bend as TCP
-import ../packages/runtime/src/dns-response.bend as Response
+import ../packages/runtime/src/dns-transport.bend as Peer
+import ../packages/runtime/src/dns-transport.bend as TCP
+import ../packages/runtime/src/dns-message.bend as Response
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/abortable-socket.bend as SocketIO
@@ -28,7 +28,7 @@ def report(route: Peer.Route) -> IO(Unit):
 def decision(value: Response.Decision) -> String:
   match value:
     case Response.Matched{Message.Message{_, Message.Header{id, _, _, _, _, _}, _, _, _, _}}: "matched:" ++ U32.show(id)
-    case Response.Truncated{_}: "truncated"
+    case Response.ResponseTruncated{_}: "truncated"
     case Response.Ignore{Response.IdMismatch{}}: "id"
     case Response.Ignore{Response.QuestionMismatch{}}: "question"
     case Response.Ignore{Response.EndpointMismatch{}}: "endpoint"
@@ -51,18 +51,18 @@ def exchange(+route: Peer.Route, connection: TCP.Connection<String>) -> IO(Unit)
     report(route)
     connection : TCP.Connection<String> <- Test.send(connection, 1)
     connection : TCP.Connection<String> <- Test.send(connection, 2)
-    next : TCP.Next<String> <- TCP.receive(String, connection, 3)
+    next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 3)
     connection : TCP.Connection<String> <- frame(route, Peer.transaction(route, 2, 0, Message.Question{Name.Name{Nil{}}, 1, 1}), next)
-    next : TCP.Next<String> <- TCP.receive(String, connection, 3)
+    next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 3)
     connection : TCP.Connection<String> <- frame(route, Peer.transaction(route, 1, 0, Message.Question{Name.Name{Nil{}}, 1, 1}), next)
     Test.finished("eof", connection)
 
-def opened(result: Result<&2, &1, Peer.Error<String>, Peer.Peer<String>>) -> IO(Unit):
+def opened(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
     case Done{Peer.Peer{route, connection}}: exchange(route, connection)
     case Fail{_}: IO.die(Unit, 1, "peer creation failed")
 
-def rejected(result: Result<&2, &1, Peer.Error<String>, Peer.Peer<String>>) -> IO(Unit):
+def rejected(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
     case Fail{Peer.Adoption{SocketIO.Aborted{Abort.Supplied{"stop"}}}}: IO.pure(Unit, Unit{})
     case Done{Peer.Peer{_, connection}}:
@@ -76,11 +76,11 @@ def run(abort: Bool, +controller: Abort.AbortController<String>, socket: Socket)
     case True{}:
       do IO<Unit>:
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
-        result : Result<&2, &1, Peer.Error<String>, Peer.Peer<String>> <- Peer.create(String, socket, Abort.signal(String, controller))
+        result : Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>> <- Peer.createTcpPeer(String, socket, Abort.signal(String, controller))
         rejected(result)
     case False{}:
       do IO<Unit>:
-        result : Result<&2, &1, Peer.Error<String>, Peer.Peer<String>> <- Peer.create(String, socket, Abort.signal(String, controller))
+        result : Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>> <- Peer.createTcpPeer(String, socket, Abort.signal(String, controller))
         opened(result)
 
 def args(values: List<String>) -> IO(Unit):

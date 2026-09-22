@@ -1,8 +1,8 @@
 import Base
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/hosts-file.bend as File
-import ../packages/runtime/src/hosts-family.bend as Family
-import ../packages/runtime/src/hosts-resolve.bend as Resolve
+import ../packages/runtime/src/hosts.bend as File
+import ../packages/runtime/src/hosts.bend as Family
+import ../packages/runtime/src/hosts.bend as Resolve
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./hosts-file.bend as Show
 

@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 
@@ -15,7 +16,7 @@ parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 if not args.no_build:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/dns-name-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/dns-name.bend', 'build/dns-name'], cwd=ROOT, check=True)
-subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/dns-name-js-build.json', '--', str(Path.home()/'.bend/bin/bend'), 'packages/runtime/test/dns-name.bend', '-o', 'build/dns-name.js'], cwd=ROOT, check=True)
+subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/dns-name-js-build.json', '--', str(Path(BEND)), 'packages/runtime/test/dns-name.bend', '-o', 'build/dns-name.js'], cwd=ROOT, check=True)
 rng = random.Random(1035)
 cases = []
 
@@ -109,6 +110,6 @@ for label,command in [('native 1',['build/dns-name','--threads','1']),('native 4
             assert got==want,(label,first+index,arg[:200],got,want)
     print(f'{label}: {len(cases)} DNS name cases PASS',flush=True)
     backends.append(label)
-paths=[ROOT/'packages/runtime/src/dns-name.bend',ROOT/'packages/runtime/test/dns-name.bend',ROOT/'tests/dns_name_check.py',ROOT/'build/dns-name',ROOT/'build/dns-name.js']
+paths=[ROOT/'packages/runtime/src/dns-message.bend',ROOT/'packages/runtime/test/dns-name.bend',ROOT/'tests/dns_name_check.py',ROOT/'build/dns-name',ROOT/'build/dns-name.js']
 report={'scope':__doc__,'cases_per_backend':len(cases),'backends':backends,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
 (ROOT/'build/dns-name-result.json').write_text(json.dumps(report,indent=2)+'\n')

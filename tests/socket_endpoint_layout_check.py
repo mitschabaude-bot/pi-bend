@@ -7,11 +7,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import sys
 import tempfile
 
-ROOT=Path(__file__).resolve().parents[1];candidate=Path(sys.argv[1]).resolve();bun=Path.home()/'.bun/bin/bun'
+ROOT=Path(__file__).resolve().parents[1];candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 c_helper=r'''
 static int endpoint_probe(int fd, struct sockaddr* address, socklen_t* length, int side) {
   int test=atoi(getenv("ENDPOINT_CASE"));

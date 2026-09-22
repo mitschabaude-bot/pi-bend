@@ -4,11 +4,12 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2'
+bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 audit='''\nstatic void __attribute__((destructor)) pair_audit(void) {
  unsigned live=0;
  for(u32 i=0;i<chan_len;i++)live+=chan_rows[i].live;

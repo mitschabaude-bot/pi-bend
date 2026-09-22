@@ -3,12 +3,13 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 BUN=Path.home()/'.bun/bin/bun'
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path,nargs='?',default=ROOT/'build/bend-dns-refused-candidate')
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 CANDIDATE=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','12','--stats',f'build/dns-resolver-owner-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),'tests/dns-resolver-owner.bend','-o',f'build/dns-resolver-owner.{suffix}'],cwd=ROOT,check=True)
@@ -22,6 +23,6 @@ for backend,command in [('native 1',['build/dns-resolver-owner','--threads','1']
     assert run.returncode==0 and run.stdout.splitlines()==want and run.stderr==('LIVE 0\n' if backend!='Bun' else ''),(backend,run)
     checks.append(dict(backend=backend,trace=want,native_live_channels=0 if backend!='Bun' else None))
     print(backend+': resolver replacement PASS',flush=True)
-paths=['packages/runtime/src/dns-tcp-resolver.bend','tests/dns-resolver-owner.bend','tests/dns_resolver_owner_check.py']
+paths=['packages/runtime/src/dns-resolver.bend','tests/dns-resolver-owner.bend','tests/dns_resolver_owner_check.py']
 r=dict(scope=__doc__,checks=checks,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-resolver-owner-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/dns-resolver-owner-result.json').write_text(json.dumps(r,indent=2)+'\n')

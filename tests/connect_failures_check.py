@@ -3,12 +3,13 @@ import errno
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import subprocess
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-candidate=Path(sys.argv[1]).resolve();bun=Path.home()/'.bun/bin/bun'
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 for suffix in ['c','js']:
     subprocess.run([str(bun),str(candidate/'main.ts'),'tests/connect-failures.bend','-o',f'build/connect-failures.{suffix}'],cwd=ROOT,check=True,timeout=60)
 subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1','build/connect-failures.c','-lpthread','-lm','-o','build/connect-failures'],cwd=ROOT,check=True,timeout=60)

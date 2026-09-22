@@ -3,14 +3,15 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import statistics
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 BUN=Path.home()/'.bun/bin/bun'
-BASE=ROOT/'build/bend-dns-refused-candidate'
-CANDIDATE=ROOT/'build/bend-hostname-candidate'
+BASE=TOOLCHAIN
+CANDIDATE=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/hostname-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),'tests/hostname.bend','-o',f'build/hostname.{suffix}'],cwd=ROOT,check=True)
 clang=['clang','-std=c11','-fbracket-depth=2048','-O1','build/hostname.c','-lpthread','-lm']

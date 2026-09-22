@@ -7,12 +7,13 @@ import ctypes
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import socket
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-settings-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-settings.bend','-o',f'build/resolver-settings.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-settings.c','-lpthread','-lm','-o','build/resolver-settings'],cwd=ROOT,check=True)
@@ -80,5 +81,5 @@ for label,command in [('native 1',['build/resolver-settings','--threads','1']),(
         want=model(*case)
         assert got==want,(label,case,got,want)
     rows.append(dict(backend=label,cases=len(cases)));print(f'{label}: {len(cases)} settings cases PASS',flush=True)
-paths=['packages/runtime/src/resolver-settings.bend','packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-address.bend','tests/resolver-settings.bend','tests/resolver_settings_check.py','build/resolver-settings','build/resolver-settings.js']
+paths=['packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-config.bend','tests/resolver-settings.bend','tests/resolver_settings_check.py','build/resolver-settings','build/resolver-settings.js']
 (ROOT/'build/resolver-settings-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/resolver-settings-{suffix}-build.json').read_text()) for suffix in ['c','js']}),indent=2)+'\n')

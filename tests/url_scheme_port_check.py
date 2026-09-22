@@ -1,6 +1,7 @@
 """Scheme tokens and delimited ports, independently checked against Node URLs."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -67,7 +68,7 @@ for index, scheme, port in actual:
 print(f'Node constructor cross-check: {len(eligible)} cases PASS', flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-scheme-port.bend', 'build/url-scheme-port'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'), 'packages/runtime/test/url-scheme-port.bend', '-o', 'build/url-scheme-port.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-scheme-port.bend', '-o', 'build/url-scheme-port.js'], cwd=ROOT, check=True)
 def codes(text):
     return ','.join(str(ord(c)) for c in text)
 arguments = [codes(scheme) + ';' + codes(port) for scheme, port in cases]

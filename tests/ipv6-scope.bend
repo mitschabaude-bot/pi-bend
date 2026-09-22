@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/resolver-scope.bend as Resolver
-import ../packages/runtime/src/resolver-address.bend as Address
+import ../packages/runtime/src/resolver-config.bend as Resolver
+import ../packages/runtime/src/resolver-config.bend as Address
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/ipv6-scope.bend as Scope
 import ../packages/runtime/src/url-ipv6.bend as IPv6
@@ -29,18 +29,18 @@ def report(result: Result<&2, &2, Scope.Error<String>, U32>) -> IO(Unit):
     case Done{index}: IO.print("index:" ++ U32.show(index))
     case Fail{Scope.InvalidScope{scope, failure}}: IO.print("invalid:" ++ scope ++ ":" ++ diagnostic(failure))
 
-def resolution(value: Resolver.Report<String>) -> IO(Unit):
+def resolution(value: Resolver.ScopeReport<String>) -> IO(Unit):
   match value:
-    case Resolver.Report{Connect.V4{_}, _}: IO.print("v4")
-    case Resolver.Report{Connect.V6{_, scope}, None{}}: IO.print("resolved:" ++ U32.show(scope))
-    case Resolver.Report{Connect.V6{_, scope}, Some{_}}: IO.print("defaulted:" ++ U32.show(scope))
+    case Resolver.ScopeReport{Connect.V4{_}, _}: IO.print("v4")
+    case Resolver.ScopeReport{Connect.V6{_, scope}, None{}}: IO.print("resolved:" ++ U32.show(scope))
+    case Resolver.ScopeReport{Connect.V6{_, scope}, Some{_}}: IO.print("defaulted:" ++ U32.show(scope))
 
 def runResolver(source: Source, address: Address.Address) -> IO(Unit):
   do IO<Unit>:
-    value : Resolver.Report<String> <- Resolver.resolveWith(~String, ~Source, ~lookup, source, address)
+    value : Resolver.ScopeReport<String> <- Resolver.resolveWithScope(~String, ~Source, ~lookup, source, address)
     resolution(value)
 
-def raw(result: Result<&2, &2, Address.Error, Address.Address>, source: Source) -> IO(Unit):
+def raw(result: Result<&2, &2, Address.AddressError, Address.Address>, source: Source) -> IO(Unit):
   match result:
     case Fail{_}: IO.die(Unit, 1, "invalid fixture address")
     case Done{address}: runResolver(source, address)
@@ -57,7 +57,7 @@ def parsed(result: Result<&2, &2, IPv6.AddressError, IPv6.Address>, +scope: Stri
 def args(values: List<String>) -> IO(Unit):
   match values:
     case address <> scope <> name <> index <> Nil{}: parsed(IPv6.parse(address), scope, Source{name, Scalar.decimal(index, 0)})
-    case address <> name <> index <> Nil{}: raw(Address.parse(address), Source{name, Scalar.decimal(index, 0)})
+    case address <> name <> index <> Nil{}: raw(Address.parseAddress(address), Source{name, Scalar.decimal(index, 0)})
     case _: IO.die(Unit, 1, "expected address [scope] interface index")
 
 def main() -> IO(Unit):

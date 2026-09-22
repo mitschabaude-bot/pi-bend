@@ -8,11 +8,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate', type=Path)
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 args = parser.parse_args()
 candidate = args.candidate.resolve()
 bun = Path.home() / '.bun/bin/bun'

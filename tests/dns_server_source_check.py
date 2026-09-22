@@ -3,9 +3,10 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-server-source-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-server-source.bend','-o',f'build/dns-server-source.{suffix}'],cwd=ROOT,check=True)
 # Exit-only native instrumentation in a disposable generated file.
@@ -33,6 +34,6 @@ for backend,command in [('native 1',['build/dns-server-source','--threads','1'])
                 assert Counter(lines[:-1])==Counter(expected) and lines[-1]=='next:'+following,(backend,values,enabled,count,lines)
                 rows.append(dict(backend=backend,servers=values,enabled=enabled,tasks=count,next_order=following,live_channels=0 if error else None))
     print(backend+': 70 concurrent selector cases PASS',flush=True)
-paths=['packages/runtime/src/dns-server-source.bend','packages/runtime/src/dns-server-rotation.bend','tests/dns-server-source.bend','tests/dns_server_source_check.py']
+paths=['packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns-server-source.bend','tests/dns_server_source_check.py']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-server-source-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/dns-server-source-result.json').write_text(json.dumps(r,indent=2)+'\n')

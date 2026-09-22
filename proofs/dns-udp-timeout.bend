@@ -1,6 +1,6 @@
 import Base
 import ../laws/dns-udp-timeout.bend as Laws
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/resolver-config.bend as Timeout
 
 def Laws.duration_positive(duration):
   match duration:
@@ -12,7 +12,7 @@ def Laws.first_server_undivided(timeout): {==}
 law two_checked:
   for +valid: Bool
   for +timeout: U32
-  {Timeout.checked(valid, timeout, Timeout.SecondOfTwo{}) == Timeout.checked(valid, timeout, Timeout.First{}) : Result<&2, &2, Timeout.Error, Timeout.Duration>}
+  {Timeout.checked(valid, timeout, Timeout.SecondOfTwo{}) == Timeout.checked(valid, timeout, Timeout.First{}) : Result<&2, &2, Timeout.UdpTimeoutError, Timeout.Duration>}
 
 def two_checked(valid, timeout):
   match valid:

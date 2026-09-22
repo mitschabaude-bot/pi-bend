@@ -1,6 +1,7 @@
 """Long combining runs: check normalized length and order checksum against ICU."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import sys
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,7 +18,7 @@ console.log(JSON.stringify(rows.map(([mode,count])=>{
 expected = json.loads(subprocess.check_output(['node','-e',oracle],input=json.dumps(rows),text=True))
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/unicode-normalization.bend','build/unicode-normalization'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/unicode-normalization.bend','-o','build/unicode-normalization.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/unicode-normalization.bend','-o','build/unicode-normalization.js'],cwd=ROOT,check=True)
 for label, command in [('native 1',['build/unicode-normalization','--threads','1']),('native 4',['build/unicode-normalization','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/unicode-normalization.js'])]:
     for (mode,count),want in zip(rows,expected,strict=True):
         result=subprocess.run([*command,f'{mode};{count}'],cwd=ROOT,text=True,capture_output=True,timeout=60)

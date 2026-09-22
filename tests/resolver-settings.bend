@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/resolver-settings.bend as Settings
+import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Config
-import ../packages/runtime/src/resolver-address.bend as Address
+import ../packages/runtime/src/resolver-config.bend as Address
 import ./resolver-address.bend as AddressTest
 import ./resolver-config.bend as ConfigTest
 

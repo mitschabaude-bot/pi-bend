@@ -2,7 +2,7 @@ import Base
 import ../laws/hosts.bend as Laws
 import ../packages/runtime/src/hosts.bend as Hosts
 import ./string-equality.bend as Equality
-import ../packages/runtime/src/dns-response.bend as Case
+import ../packages/runtime/src/dns-message.bend as Case
 
 law selected_append:
   for -Address: Data

@@ -1,7 +1,8 @@
 """Nested UDP attempt deadlines preserve total/caller reasons and retire every timer/observer."""
 import hashlib,json,re,subprocess,time
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-write-candidate';stem='dns-udp-attempt-scope'
+from bend_toolchain import BEND, TOOLCHAIN
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';candidate=TOOLCHAIN;stem='dns-udp-attempt-scope'
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/{stem}-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),f'tests/{stem}.bend','-o',f'build/{stem}.{suffix}'],cwd=ROOT,check=True)
 source=(ROOT/f'build/{stem}.c').read_text();timer=(candidate/'effs/timer.c').read_text();assert source.count(timer)==1

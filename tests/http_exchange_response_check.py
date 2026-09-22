@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import socket
 import subprocess
@@ -16,7 +17,7 @@ parser.add_argument('--worktree', type=Path, default=ROOT)
 parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 WORK = args.worktree.resolve()
-BEND = Path(os.environ.get('BEND', ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts')).resolve()
+BEND = Path(BEND)
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'tests/http-exchange-response.bend'
 prefix = WORK / 'build/http-exchange-response'

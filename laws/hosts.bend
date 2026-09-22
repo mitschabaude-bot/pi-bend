@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/hosts-file.bend as File
+import ../packages/runtime/src/hosts.bend as File
 
 law lookup_empty:
   for -Address: Data

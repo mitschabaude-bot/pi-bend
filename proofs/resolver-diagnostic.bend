@@ -1,7 +1,7 @@
 import Base
 import ../laws/resolver-diagnostic.bend as Laws
-import ../packages/runtime/src/resolver-diagnostic.bend as D
-import ../packages/runtime/src/resolver-options.bend as Options
+import ../packages/runtime/src/dns-resolver.bend as D
+import ../packages/runtime/src/resolver-config.bend as Options
 
 def Laws.every_invalid_option_has_a_diagnostic(errors):
   match errors:

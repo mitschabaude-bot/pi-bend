@@ -11,6 +11,7 @@ import errno
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import socket
 import struct
@@ -19,7 +20,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('candidate',type=Path)
+p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 p.add_argument('--no-build',action='store_true')
 a=p.parse_args();candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
@@ -116,6 +117,6 @@ for backend,command in [('native 1',['build/dns-tcp-servers','--threads','1']),(
                 assert result.returncode==0 and not result.stderr and result.stdout.splitlines()==want,(backend,number,kind,case,result,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,accepted_server_indices=trace,output=want))
     print(f'{backend}: {len(cases)*4} TCP failover cases PASS',flush=True)
-paths=['packages/runtime/src/dns-query.bend','packages/runtime/src/dns-tcp-session.bend','packages/runtime/src/dns-tcp-servers.bend','packages/runtime/src/dns-tcp-query.bend','packages/runtime/src/dns-tcp-recover.bend','packages/runtime/src/dns-tcp-connection.bend','tests/dns-tcp-servers.bend','tests/dns_tcp_servers_check.py','build/dns-tcp-servers','build/dns-tcp-servers.js']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns-tcp-servers.bend','tests/dns_tcp_servers_check.py','build/dns-tcp-servers','build/dns-tcp-servers.js']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-tcp-servers-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-tcp-servers-result.json').write_text(json.dumps(r,indent=2)+'\n')

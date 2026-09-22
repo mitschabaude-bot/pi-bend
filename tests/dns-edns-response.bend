@@ -1,8 +1,8 @@
 import Base
-import ../packages/runtime/src/dns-edns-response.bend as Response
-import ../packages/runtime/src/dns-edns.bend as Edns
+import ../packages/runtime/src/dns-message.bend as Response
+import ../packages/runtime/src/dns-message.bend as Edns
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def digit(+value: U32) -> U32:
@@ -34,12 +34,12 @@ def lines(values: List<&2, String>) -> IO(Unit):
         IO.print(line)
         lines(rest)
 
-def failure(value: Response.Error) -> String:
+def failure(value: Response.EdnsResponseError) -> String:
   match value:
     case Response.Misplaced{}: "misplaced"
     case Response.Duplicate{}: "duplicate"
     case Response.InvalidOwner{}: "owner"
-    case Response.InvalidField{}: "field"
+    case Response.EdnsResponseInvalidField{}: "field"
     case Response.TruncatedOption{}: "option"
 
 def present(header: Message.Header, +extension: Response.Response) -> IO(Unit):
@@ -49,7 +49,7 @@ def present(header: Message.Header, +extension: Response.Response) -> IO(Unit):
         IO.print(U32.show(payload) ++ ":" ++ U32.show(upper) ++ ":" ++ U32.show(version) ++ ":" ++ U32.show(flags) ++ ":" ++ U32.show(Response.responseCode(header, Some{extension})) ++ ":" ++ Bool.pick(String, Response.dnssecOk(extension), "do", "no"))
         lines(optionLines(values, Nil{}))
 
-def report(header: Message.Header, result: Result<&2, &2, Response.Error, Maybe<&2, Response.Response>>) -> IO(Unit):
+def report(header: Message.Header, result: Result<&2, &2, Response.EdnsResponseError, Maybe<&2, Response.Response>>) -> IO(Unit):
   match result:
     case Fail{error}: IO.print(failure(error))
     case Done{None{}}: IO.print("none:" ++ U32.show(Response.responseCode(header, None{})))
@@ -64,12 +64,12 @@ def parsed(result: Result<&2, &2, Message.Error, Message.Message>) -> IO(Unit):
     case Fail{_}: IO.print("message")
     case Done{+message}: report(messageHeader(message), Response.inspect(message))
 
-def decoded(result: Result<&2, &2, Response.Error, Response.Response>) -> IO(Unit):
+def decoded(result: Result<&2, &2, Response.EdnsResponseError, Response.Response>) -> IO(Unit):
   match result:
     case Fail{error}: IO.print(failure(error))
     case Done{extension}: report(Message.Header{0, 0, 0, 0, 0, 0}, Done{Some{extension}})
 
-def direct(result: Result<&2, &2, Name.Error, Name.Packet>, start: U32, length: U32, kind: U32, class: U32) -> IO(Unit):
+def direct(result: Result<&2, &2, Name.NameErrorOfMessage, Name.Packet>, start: U32, length: U32, kind: U32, class: U32) -> IO(Unit):
   match result:
     case Fail{_}: IO.print("packet")
     case Done{packet}: decoded(Response.decode(packet, Message.Record{Name.Name{Nil{}}, kind, class, 0, start, length}))

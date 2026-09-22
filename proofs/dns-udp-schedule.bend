@@ -1,6 +1,6 @@
 import Base
 import ../laws/dns-udp-schedule.bend as Laws
-import ../packages/runtime/src/dns-udp-schedule.bend as Schedule
+import ../packages/runtime/src/resolver-config.bend as Schedule
 
 law empty_rounds:
   for -Server: Data

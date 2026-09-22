@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/dns-transport-choice.bend as Choice
-import ../packages/runtime/src/dns-edns.bend as Edns
+import ../packages/runtime/src/dns-transport.bend as Choice
+import ../packages/runtime/src/dns-message.bend as Edns
 
 def nonempty(values: List<&2, U32>) -> Bool:
   match values:
@@ -24,5 +24,5 @@ law exact_budget:
 
 law invalid_encoding_stops_selection:
   for forced: Bool
-  for +error: Edns.Error
-  {Choice.encoded(forced, Fail{error}) == Fail{error} : Result<&2, &2, Edns.Error, Choice.Mode>}
+  for +error: Edns.EdnsError
+  {Choice.encodedTransportChoice(forced, Fail{error}) == Fail{error} : Result<&2, &2, Edns.EdnsError, Choice.Mode>}

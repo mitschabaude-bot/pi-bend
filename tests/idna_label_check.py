@@ -4,6 +4,7 @@ from itertools import product
 import importlib.util
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -95,7 +96,7 @@ if '--prepare-only' in sys.argv:
     raise SystemExit(0)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-label.bend','build/idna-label'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/idna-label.bend','-o','build/idna-label.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-label.bend','-o','build/idna-label.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-label','--threads','1']),('native 4',['build/idna-label','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-label.js'])]:
     for start in range(0,len(arguments),64):
         result=subprocess.run([*command,*arguments[start:start+64]],cwd=ROOT,text=True,capture_output=True,timeout=60)

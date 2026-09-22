@@ -1,17 +1,17 @@
 import Base
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ./dns-lookup-options.bend as Options
-import ../packages/runtime/src/dns-query.bend as Query
+import ../packages/runtime/src/dns-message.bend as Query
 import ../packages/runtime/src/dns-resolver.bend as Resolver
-import ../packages/runtime/src/resolver-configuration.bend as Settings
-import ../packages/runtime/src/resolver-search.bend as Configuration
-import ../packages/runtime/src/resolver-options.bend as Policy
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Settings
+import ../packages/runtime/src/resolver-config.bend as Configuration
+import ../packages/runtime/src/resolver-config.bend as Policy
+import ../packages/runtime/src/resolver-config.bend as Plan
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
 import ./dns-udp-plan.bend as PlanTest
-import ../packages/runtime/src/dns-server-source.bend as Source
-import ../packages/runtime/src/dns-tcp-servers.bend as Servers
-import ../packages/runtime/src/dns-search.bend as Search
+import ../packages/runtime/src/dns-transport.bend as Source
+import ../packages/runtime/src/dns-transport.bend as Servers
+import ../packages/runtime/src/dns-message.bend as Search
 import ../packages/runtime/src/random-index.bend as Index
 import ./dns-tcp-servers.bend as ServersTest
 import ./dns-server-rotation.bend as RotationTest
@@ -23,10 +23,10 @@ def seed(value: U32) -> IO(Result<&2, &2, Index.Error, U32>):
 def fail(unused: U32) -> IO(Result<&2, &2, Index.Error, U32>):
   IO.pure(Result<&2, &2, Index.Error, U32>, Fail{Index.SourceFailure{11, "unavailable"}})
 
-def requestLabel(request: Query.Options) -> String:
+def requestLabel(request: Query.QueryOptions) -> String:
   match request:
-    case Query.Options{flags, None{}}: U32.show(flags) ++ ":plain"
-    case Query.Options{flags, Some{_}}: U32.show(flags) ++ ":edns"
+    case Query.QueryOptions{flags, None{}}: U32.show(flags) ++ ":plain"
+    case Query.QueryOptions{flags, Some{_}}: U32.show(flags) ++ ":edns"
 
 def endpoints(servers: List<&2, Servers.Server>) -> List<&2, Endpoint.Endpoint>:
   match servers:
@@ -44,7 +44,7 @@ def selected(pair: Resolver.Owner & Resolver.Resolver) -> IO(Resolver.Owner):
   match pair:
     case (owner, Resolver.Resolver{config, source}):
       do IO<Resolver.Owner>:
-        servers : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Source.choose(Plan.Attempt<Endpoint.Endpoint>, source)
+        servers : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Source.chooseServerSource(Plan.Attempt<Endpoint.Endpoint>, source)
         IO.print(timed(servers))
         IO.print(requestLabel(Configuration.requestOptions(Settings.search(Endpoint.Endpoint, config))))
         return owner
@@ -56,7 +56,7 @@ def validated(value: Result<&2, &2, Plan.Error, Settings.Config<Endpoint.Endpoin
 
 def config(ports: String, rotate: Bool, extended: Bool) -> IO(Settings.Config<Endpoint.Endpoint>):
   features = List.append(&2, Policy.Feature, Bool.pick(List<&2, Policy.Feature>, rotate, Policy.Rotate{} <> Nil{}, Nil{}), Bool.pick(List<&2, Policy.Feature>, extended, Policy.Edns{} <> Policy.TrustAd{} <> Nil{}, Nil{}))
-  validated(Settings.prepare(Endpoint.Endpoint, endpoints(ServersTest.serverInput("4", ports)), 5000, 7, Configuration.prepare(Policy.Options{1, 2, 2, features}, Nil{})))
+  validated(Settings.prepareConfiguration(Endpoint.Endpoint, endpoints(ServersTest.serverInput("4", ports)), 5000, 7, Configuration.prepareSearch(Policy.OptionsOptions{1, 2, 2, features}, Nil{})))
 
 def retained(value: Resolver.Replacement) -> IO(Resolver.Owner):
   match value:

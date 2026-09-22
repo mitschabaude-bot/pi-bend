@@ -5,8 +5,9 @@ Python supplies only the external reference formula and process orchestration.
 """
 import hashlib,json,re,subprocess
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun'
-compiler=Path.home()/'.bend/current/bend2'
+compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-udp-timeout-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-udp-timeout.bend','-o',f'build/dns-udp-timeout.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-timeout.c','-lpthread','-lm','-o','build/dns-udp-timeout'],cwd=ROOT,check=True)

@@ -1,10 +1,11 @@
 """Abortable UDP sends preserve reasons, delivery and socket ownership and clean up watchers/timers."""
 import hashlib,json,os,re,select,socket,subprocess,sys
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 from udp_backpressure import inject
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-candidate=(ROOT/sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'build/bend-udp-write-candidate'
+candidate=(ROOT/sys.argv[1]).resolve() if len(sys.argv)>1 else TOOLCHAIN
 stem='abortable-datagram-send'
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/{stem}-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),f'tests/{stem}.bend','-o',f'build/{stem}.{suffix}'],cwd=ROOT,check=True)

@@ -5,6 +5,7 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import select
 import socket
@@ -14,7 +15,7 @@ import time
 from channel_audit import instrument
 
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('candidate',type=Path);candidate=p.parse_args().candidate.resolve()
+p=argparse.ArgumentParser();p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN);candidate=p.parse_args().candidate.resolve()
 bun=Path.home()/'.bun/bin/bun'
 for suffix in ['c','js']:
  with (ROOT/f'build/http-host-resolver-{suffix}.log').open('w') as log:

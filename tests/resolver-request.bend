@@ -1,15 +1,15 @@
 import Base
-import ../packages/runtime/src/resolver-request.bend as Request
-import ../packages/runtime/src/resolver-options.bend as Resolver
+import ../packages/runtime/src/resolver-config.bend as Request
+import ../packages/runtime/src/resolver-config.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Config
-import ../packages/runtime/src/dns-query.bend as Query
-import ../packages/runtime/src/dns-edns.bend as Edns
+import ../packages/runtime/src/dns-message.bend as Query
+import ../packages/runtime/src/dns-message.bend as Edns
 import ./resolver-options.bend as OptionsTest
 
-def query(options: Query.Options) -> String:
+def query(options: Query.QueryOptions) -> String:
   match options:
-    case Query.Options{flags, None{}}: U32.show(flags) ++ ":none"
-    case Query.Options{flags, Some{Edns.Query{size, dnssec, Nil{}}}}: U32.show(flags) ++ ":" ++ U32.show(size) ++ OptionsTest.bit(dnssec) ++ ":empty"
+    case Query.QueryOptions{flags, None{}}: U32.show(flags) ++ ":none"
+    case Query.QueryOptions{flags, Some{Edns.Query{size, dnssec, Nil{}}}}: U32.show(flags) ++ ":" ++ U32.show(size) ++ OptionsTest.bit(dnssec) ++ ":empty"
     case _: "unexpected-options"
 
 def report(result: Result<&2, &2, List<&2, Resolver.Diagnostic>, Request.Prepared>) -> IO(Unit):

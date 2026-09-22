@@ -1,16 +1,16 @@
 import Base
 import ../packages/runtime/src/dns-resolver.bend as Owner
 import ../packages/runtime/src/random-index.bend as Index
-import ../packages/runtime/src/resolver-system-config.bend as System
-import ../packages/runtime/src/resolver-configuration.bend as Resolver
-import ../packages/runtime/src/resolver-transport.bend as Transport
-import ../packages/runtime/src/resolver-options.bend as Options
-import ../packages/runtime/src/resolver-search.bend as Configuration
+import ../packages/runtime/src/dns-resolver.bend as System
+import ../packages/runtime/src/resolver-config.bend as Resolver
+import ../packages/runtime/src/resolver-config.bend as Transport
+import ../packages/runtime/src/resolver-config.bend as Options
+import ../packages/runtime/src/resolver-config.bend as Configuration
 import ../packages/runtime/src/dns-transport.bend as Network
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Timeout
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
-import ../packages/runtime/src/dns-search.bend as Search
+import ../packages/runtime/src/dns-message.bend as Search
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./resolver-system-servers.bend as SourceTest
 import ./resolver-servers.bend as ServersTest
@@ -28,13 +28,13 @@ def budget(entries: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> String:
     case Nil{}: ""
     case Plan.Attempt{_, _, duration} <> rest: U32.show(U32.from_nat(Timeout.seconds(duration))) ++ "," ++ budget(rest)
 
-def transport(options: Options.Options, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
+def transport(options: Options.OptionsOptions, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
   match options:
-    case Options.Options{ndots, +timeout, +attempts, +features}: IO.print("transport:" ++ U32.show(timeout) ++ ":" ++ U32.show(attempts) ++ ":" ++ budget(servers) ++ ":" ++ OptionsTest.flags(OptionsTest.features(), Options.Options{ndots, timeout, attempts, features}, ""))
+    case Options.OptionsOptions{ndots, +timeout, +attempts, +features}: IO.print("transport:" ++ U32.show(timeout) ++ ":" ++ U32.show(attempts) ++ ":" ++ budget(servers) ++ ":" ++ OptionsTest.flags(OptionsTest.features(), Options.OptionsOptions{ndots, timeout, attempts, features}, ""))
 
 def config(value: Resolver.Config<Endpoint.Endpoint>) -> IO(Unit):
   match value:
-    case Resolver.Config{Transport.Prepared{+options, +servers}, domains, milliseconds, maximum}:
+    case Resolver.Config{Transport.TransportPrepared{+options, +servers}, domains, milliseconds, maximum}:
       do IO<Unit>:
         limits(Configuration.policy(options), Options.enabled(Options.Rotate{}, options), milliseconds, maximum)
         IO.print(RequestTest.query(Configuration.requestOptions(Configuration.Configuration{options, domains})))
@@ -64,7 +64,7 @@ def initialize(+value: Resolver.Config<Endpoint.Endpoint>) -> IO(Unit):
     owner : Result<&2, &1, Index.Error, Owner.Owner> <- Owner.createWith(~Unit, ~seed, Unit{}, value)
     created(owner)
 
-def report(value: Result<&2, &2, System.Error<String>, System.Prepared>) -> IO(Unit):
+def report(value: Result<&2, &2, System.SystemConfigError<String>, System.SystemConfigPrepared>) -> IO(Unit):
   match value:
     case Fail{System.InvalidTransport{source, error}}:
       do IO<Unit>:
@@ -76,7 +76,7 @@ def report(value: Result<&2, &2, System.Error<String>, System.Prepared>) -> IO(U
         SourceTest.report(Done{source})
         IO.print("rejected")
         OptionsTest.diagnostics(errors)
-    case Done{System.Prepared{source, _, resolver}}:
+    case Done{System.SystemConfigPrepared{source, _, resolver}}:
       do IO<Unit>:
         SourceTest.report(Done{source})
         initialize(resolver)
@@ -85,7 +85,7 @@ def args(values: List<String>) -> IO(Unit):
   match values:
     case path <> chunk <> limit <> Nil{}:
       do IO<Unit>:
-        value : Result<&2, &2, System.Error<String>, System.Prepared> <- System.loadWith(~String, ~FileTest.decode, path, Scalar.decimal(chunk, 0), U32.to_nat(Scalar.decimal(limit, 0)), 4321, 17)
+        value : Result<&2, &2, System.SystemConfigError<String>, System.SystemConfigPrepared> <- System.loadWith(~String, ~FileTest.decode, path, Scalar.decimal(chunk, 0), U32.to_nat(Scalar.decimal(limit, 0)), 4321, 17)
         report(value)
     case _: IO.die(Unit, 1, "expected path chunk limit")
 

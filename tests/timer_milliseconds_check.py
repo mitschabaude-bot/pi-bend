@@ -1,8 +1,9 @@
 """Exact native timer conversion against independent binary64 arithmetic."""
 import hashlib, json, math, random, struct, subprocess, sys
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 root = Path(__file__).resolve().parents[1]
-candidate = Path(sys.argv[1]).resolve()
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve()
 bun = Path.home() / '.bun/bin/bun'
 rng = random.Random(8173)
 values = [0., -0., 1., -1., .5, math.inf, -math.inf, math.nan, 5e-324, -5e-324]

@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/dns-address-lookup.bend as Lookup
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-resolver.bend as Lookup
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/test/utf8-runner.bend as Scalar

@@ -10,6 +10,7 @@ import errno
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import shutil
 import socket
@@ -18,7 +19,7 @@ import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path)
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 parser.add_argument('--production',action='store_true',help='Use unchanged effects without exit-audit instrumentation')
 parser.add_argument('--races',action='store_true',help='Audit competing cancellers, cohorts and stale slot reuse')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'

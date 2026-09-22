@@ -5,6 +5,7 @@ payload verification. This does not benchmark cancellation or real backpressure.
 """
 import argparse,hashlib,json,os,random,shutil,statistics,subprocess,time
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--iterations',type=int,default=30000)
@@ -12,8 +13,8 @@ parser.add_argument('--trials',type=int,default=7)
 parser.add_argument('--backend',choices=['native 1','native 4','Bun'],action='append')
 args=parser.parse_args();assert args.iterations>0 and args.trials>=3
 bun=Path.home()/'.bun/bin/bun'
-current=ROOT/'build/bend-udp-write-candidate'
-baseline=ROOT/'build/bend-udp-performance-baseline'
+current=TOOLCHAIN
+baseline=TOOLCHAIN
 revision='8cc63fc'
 effects=['udp_recv_bytes.c','udp_recv_bytes.js','udp_send_bytes.c','udp_send_bytes.js']
 if not baseline.exists():shutil.copytree(current,baseline)

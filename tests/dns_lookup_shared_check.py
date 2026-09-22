@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import socket
 import struct
@@ -16,7 +17,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
-p.add_argument('candidate', type=Path)
+p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 p.add_argument('--no-build', action='store_true')
 a = p.parse_args()
 candidate = a.candidate.resolve()
@@ -99,7 +100,7 @@ for backend, command in [('native 1', ['build/dns-lookup-shared', '--threads', '
                 assert result.returncode == 0 and not result.stderr and result.stdout.splitlines() == expected, (backend, number, kind, mode, result, expected)
                 rows.append(dict(backend=backend, family=number, kind=kind, mode=mode, exchanges=len(owners), draws=draws, output=expected))
     print(backend + ': shared deadline PASS', flush=True)
-paths = ['packages/runtime/src/dns-address-lookup.bend', 'tests/dns-lookup-shared.bend',
+paths = ['packages/runtime/src/dns-resolver.bend', 'tests/dns-lookup-shared.bend',
          'tests/dns_lookup_shared_check.py', 'tests/dns-lookup-ids.bend',
          'build/dns-lookup-shared', 'build/dns-lookup-shared.js']
 record = dict(scope=__doc__, cases=rows,

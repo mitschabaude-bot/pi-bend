@@ -5,6 +5,7 @@ Known Node/Unicode policy differences remain review cases, not parity passes.
 import ipaddress
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -72,7 +73,7 @@ if '--prepare-only' in sys.argv:raise SystemExit(0)
 if '--no-build' not in sys.argv and '--js-only' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-special-host.bend','build/url-special-host'],cwd=ROOT,check=True)
 if '--native-only' not in sys.argv:
-    subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/url-special-host.bend','-o','build/url-special-host.js'],cwd=ROOT,check=True)
+    subprocess.run([str(Path(BEND)),'packages/runtime/test/url-special-host.bend','-o','build/url-special-host.js'],cwd=ROOT,check=True)
 arguments=list(map(codes,texts))
 backends=[('native 1',['build/url-special-host','--threads','1']),('native 4',['build/url-special-host','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/url-special-host.js'])]
 if '--js-only' in sys.argv:backends=backends[2:]

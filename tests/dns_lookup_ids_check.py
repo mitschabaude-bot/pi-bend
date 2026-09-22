@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import socket
 import struct
@@ -17,7 +18,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
-p.add_argument('candidate', type=Path)
+p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 p.add_argument('--no-build', action='store_true')
 a = p.parse_args()
 candidate = a.candidate.resolve()
@@ -157,7 +158,7 @@ for fixture in ['dns-lookup-ids', 'dns-lookup-random', 'dns-lookup-options']:
                                      checked_draw_count=draws if injected else None,
                                      aborted_connections=aborted_connections, outcome=outcome))
         print(f'{fixture} {backend}: PASS', flush=True)
-paths = ['packages/runtime/src/dns-query.bend','tests/dns-lookup-options.bend','build/dns-lookup-options','build/dns-lookup-options.js','packages/runtime/src/dns-address-lookup.bend', 'packages/runtime/src/dns-id.bend',
+paths = ['packages/runtime/src/dns-message.bend','tests/dns-lookup-options.bend','build/dns-lookup-options','build/dns-lookup-options.js','packages/runtime/src/dns-resolver.bend', 'packages/runtime/src/dns-message.bend',
          'tests/dns-lookup-ids.bend', 'tests/dns-lookup-random.bend', 'tests/dns_lookup_ids_check.py',
          'build/dns-lookup-ids', 'build/dns-lookup-ids.js', 'build/dns-lookup-random', 'build/dns-lookup-random.js']
 result = dict(scope=__doc__, candidate=str(candidate), compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['main.ts','bend.ts','comp.ts','base.bend']}, cases=rows, sha256={path:hashlib.sha256((ROOT/path).read_bytes()).hexdigest() for path in paths},

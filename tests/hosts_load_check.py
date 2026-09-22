@@ -6,12 +6,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2'
+bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     with (ROOT/f'build/hosts-load-{suffix}.log').open('w') as log:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/hosts-load-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/hosts-load.bend','-o',f'build/hosts-load.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)

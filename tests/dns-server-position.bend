@@ -1,15 +1,15 @@
 import Base
-import ../packages/runtime/src/dns-server-rotation.bend as Rotation
-import ../packages/runtime/src/dns-server-source.bend as Source
+import ../packages/runtime/src/dns-transport.bend as Rotation
+import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-server-rotation.bend as Test
 import ../packages/runtime/src/string-split.bend as Split
 
-def selected(pair: Source.Owner<U32> & Source.Source<U32>) -> IO(Source.Owner<U32>):
+def selected(pair: Source.Owner<U32> & Source.ServerSourceSource<U32>) -> IO(Source.Owner<U32>):
   match pair:
     case (owner, source):
       do IO<Source.Owner<U32>>:
-        values : List<&2, U32> <- Source.choose(U32, source)
+        values : List<&2, U32> <- Source.chooseServerSource(U32, source)
         IO.print(Test.csv(values, ""))
         return owner
 

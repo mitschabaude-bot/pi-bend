@@ -1,6 +1,7 @@
 """Unicode-scalar Punycode against Node's RFC codec and Python's encoder."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -54,7 +55,7 @@ arguments = [op + ';' + codes(text) for op, text in rows]
 expected = ['+' + codes(value) if isinstance(value, str) else value['error'] for value in reference]
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/punycode.bend', 'build/punycode'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home() / '.bend/bin/bend'), 'packages/runtime/test/punycode.bend', '-o', 'build/punycode.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/punycode.bend', '-o', 'build/punycode.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/punycode', '--threads', '1']), ('native 4', ['build/punycode', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/punycode.js'])]:
     for start in range(0, len(arguments), 16):
         result = subprocess.run([*command, *arguments[start:start+16]], cwd=ROOT, text=True, capture_output=True, timeout=30)

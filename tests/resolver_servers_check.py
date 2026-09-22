@@ -5,12 +5,13 @@ import ipaddress
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=ROOT/'build/bend-interface-index-candidate'
+compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','12','--stats',f'build/resolver-servers-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-servers.bend','-o',f'build/resolver-servers.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-servers.c','-lpthread','-lm','-o','build/resolver-servers'],cwd=ROOT,check=True)
@@ -81,6 +82,6 @@ for backend,command in [('native 1',['build/resolver-servers','--threads','1']),
         assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,index,run.stdout[:1000],run.stderr,want[:12])
     checks.append(dict(backend=backend,cases=len(cases)))
     print(f'{backend}: {len(cases)} ordered settings/server cases PASS',flush=True)
-paths=['packages/runtime/src/resolver-servers.bend','packages/runtime/src/resolver-interface.bend','tests/resolver-servers.bend','tests/resolver_servers_check.py']
+paths=['packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-resolver.bend','tests/resolver-servers.bend','tests/resolver_servers_check.py']
 result=dict(scope=__doc__,checks=checks,maximum_source_server_entries=1024,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/resolver-servers-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/resolver-servers-result.json').write_text(json.dumps(result,indent=2)+'\n')

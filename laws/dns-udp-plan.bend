@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Timeout
 
 def values(-Server: Data, entries: List<&2, Plan.Located<Server>>) -> List<&2, Server>:
   match entries:

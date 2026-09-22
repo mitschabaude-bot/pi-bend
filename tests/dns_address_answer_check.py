@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import struct
 import subprocess
@@ -14,7 +15,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--no-build',action='store_true');args=p.parse_args()
 if not args.no_build:subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-answer-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-address-answer.bend','build/dns-address-answer'],cwd=ROOT,check=True)
-subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-answer-js-build.json','--',str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/dns-address-answer.bend','-o','build/dns-address-answer.js'],cwd=ROOT,check=True)
+subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-answer-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-address-answer.bend','-o','build/dns-address-answer.js'],cwd=ROOT,check=True)
 
 def name(labels):return b''.join(bytes([len(x)])+x for x in labels)+b'\0'
 def fold(labels):return tuple(x.lower() for x in labels)
@@ -136,5 +137,5 @@ for label,command in [('native 1',['build/dns-address-answer','--threads','1']),
         got=run.stdout.splitlines();want=[x[1] for x in batch]
         assert run.returncode==0 and not run.stderr and got==want,(label,start,run.returncode,run.stderr,next(((i,a,b) for i,(a,b) in enumerate(zip(got,want)) if a!=b),('length',len(got),len(want))))
     rows.append(dict(backend=label,cases=len(cases)));print(label,len(cases),'PASS',flush=True)
-paths=['packages/runtime/src/dns-address-answer.bend','packages/runtime/test/dns-address-answer.bend','tests/dns_address_answer_check.py','build/dns-address-answer','build/dns-address-answer.js']
+paths=['packages/runtime/src/dns-resolver.bend','packages/runtime/test/dns-address-answer.bend','tests/dns_address_answer_check.py','build/dns-address-answer','build/dns-address-answer.js']
 (ROOT/'build/dns-address-answer-result.json').write_text(json.dumps({'scope':__doc__,'results':rows,'seed':1034,'sha256':{p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

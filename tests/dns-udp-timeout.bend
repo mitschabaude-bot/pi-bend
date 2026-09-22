@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/resolver-config.bend as Timeout
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def position(code: String) -> Timeout.Position:
@@ -14,9 +14,9 @@ def converted(seconds: Nat, result: Result<&2, &2, Timeout.MillisecondsError, U3
     case Fail{_}: "conversion-failed"
     case Done{milliseconds}: U32.show(U32.from_nat(seconds)) ++ ":" ++ U32.show(milliseconds)
 
-def show(result: Result<&2, &2, Timeout.Error, Timeout.Duration>) -> String:
+def show(result: Result<&2, &2, Timeout.UdpTimeoutError, Timeout.Duration>) -> String:
   match result:
-    case Fail{Timeout.InvalidTimeout{value}}: "invalid:" ++ U32.show(value)
+    case Fail{Timeout.UdpTimeoutInvalidTimeout{value}}: "invalid:" ++ U32.show(value)
     case Done{+duration}: converted(Timeout.seconds(duration), Timeout.milliseconds(duration))
 
 def run(args: List<String>) -> IO(Unit):

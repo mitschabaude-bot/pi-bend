@@ -1,11 +1,12 @@
 """Stress the isolated timer experiment; audit all created timers are retired."""
 import hashlib,json,subprocess,sys,tempfile,shutil,time
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
-candidate=Path(sys.argv[1]).resolve()
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve()
 bun=Path.home()/'.bun/bin/bun'
 source=ROOT/'tests/timer-races.bend'
-baseline=Path.home()/'.bend/current/bend2'
+baseline=TOOLCHAIN
 addition=ROOT/'patches/experimental/timer'
 assert (candidate/'base.bend').read_bytes()==(baseline/'base.bend').read_bytes()+(addition/'base.bend').read_bytes()
 for path in baseline.rglob('*'):

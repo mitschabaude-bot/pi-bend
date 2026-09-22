@@ -8,13 +8,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shlex
 import socket
 import struct
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');p.add_argument('--build-limit-gib',type=float,default=8);args=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN);p.add_argument('--no-build',action='store_true');p.add_argument('--build-limit-gib',type=float,default=8);args=p.parse_args()
 candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-session-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_build:
@@ -79,6 +80,6 @@ for label,command in [('native 1',['build/dns-tcp-session','--threads','1']),('n
                 assert run.returncode==0 and not run.stderr and list(map(normalized,run.stdout.splitlines()))==want,(label,number,mode,run,want)
                 rows.append(dict(backend=label,family=number,mode=mode,events=want))
     print(label+': DNS TCP session PASS',flush=True)
-paths=['packages/runtime/src/dns-tcp-session.bend','packages/runtime/src/dns-pending.bend','tests/dns-tcp-session.bend','tests/dns_tcp_session_check.py','build/dns-tcp-session','build/dns-tcp-session.js']
+paths=['packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns-tcp-session.bend','tests/dns_tcp_session_check.py','build/dns-tcp-session','build/dns-tcp-session.js']
 report={'scope':__doc__,'cases':rows,'sha256':{p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},'candidate_sha256':{p:hashlib.sha256((candidate/p).read_bytes()).hexdigest() for p in ['base.bend','comp.ts']}}
 (ROOT/'build/dns-tcp-session-result.json').write_text(json.dumps(report,indent=2)+'\n')

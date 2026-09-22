@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import socket
 import struct
@@ -19,7 +20,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('candidate',type=Path)
+p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 p.add_argument('--no-build',action='store_true')
 p.add_argument('--configured',action='store_true',help='Parse resolver settings and use the configured search entry point')
 p.add_argument('--build-limit-gib',type=float,default=16)
@@ -142,6 +143,6 @@ for backend,command in [('native 1',[f'build/{fixture}','--threads','1']),('nati
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,output=want))
     print(f'{backend}: {len(cases)*4} live search cases PASS',flush=True)
-paths=['packages/runtime/src/dns-edns-response.bend','packages/runtime/src/dns-address-answer.bend','packages/runtime/src/dns-address-search.bend','packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search-response.bend',f'tests/{fixture}.bend','tests/dns-lookup-options.bend','packages/runtime/src/resolver-search.bend','packages/runtime/src/resolver-request.bend','tests/dns_address_search_check.py',f'build/{fixture}',f'build/{fixture}.js']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend',f'tests/{fixture}.bend','tests/dns-lookup-options.bend','packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-config.bend','tests/dns_address_search_check.py',f'build/{fixture}',f'build/{fixture}.js']
 r=dict(scope=__doc__,configured=a.configured,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/{fixture}-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/f'build/{fixture}-result.json').write_text(json.dumps(r,indent=2)+'\n')

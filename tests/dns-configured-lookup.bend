@@ -1,15 +1,15 @@
 import Base
-import ../packages/runtime/src/dns-address-lookup.bend as Lookup
-import ../packages/runtime/src/dns-address-answer.bend as Answer
-import ../packages/runtime/src/dns-name.bend as Name
-import ../packages/runtime/src/dns-server-source.bend as Selector
-import ../packages/runtime/src/dns-exchange-source.bend as Exchange
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/resolver-transport.bend as Prepare
-import ../packages/runtime/src/resolver-options.bend as Options
-import ../packages/runtime/src/resolver-request.bend as Request
-import ../packages/runtime/src/dns-query.bend as Query
-import ../packages/runtime/src/dns-id.bend as Id
+import ../packages/runtime/src/dns-resolver.bend as Lookup
+import ../packages/runtime/src/dns-resolver.bend as Answer
+import ../packages/runtime/src/dns-message.bend as Name
+import ../packages/runtime/src/dns-transport.bend as Selector
+import ../packages/runtime/src/dns-transport.bend as Exchange
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Prepare
+import ../packages/runtime/src/resolver-config.bend as Options
+import ../packages/runtime/src/resolver-config.bend as Request
+import ../packages/runtime/src/dns-message.bend as Query
+import ../packages/runtime/src/dns-message.bend as Id
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
@@ -20,14 +20,14 @@ import ./dns-lookup-random.bend as LookupTest
 import ./dns-tcp-query.bend as TCPTest
 import ./dns-udp-query.bend as UDPTest
 
-def outcome(result: Result<&2, &2, Lookup.Error<String>, Answer.Selection>) -> String:
+def outcome(result: Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection>) -> String:
   match result:
     case Fail{Lookup.Aborted{why}}: "abort:" ++ TCPTest.cause(why)
     case Fail{Lookup.Identifier{Id.SourceFailure{code, _}}}: "entropy:" ++ U32.show(code)
     case Fail{Lookup.Transport{_}}: "transport"
     case other: LookupTest.outcome(other)
 
-def queryOptions(value: Request.Prepared) -> Query.Options:
+def queryOptions(value: Request.Prepared) -> Query.QueryOptions:
   match value:
     case Request.Prepared{_, options}: options
 
@@ -52,30 +52,30 @@ def abortChild(enabled: Bool, child: Abort.AbortController<Deadline.Cause<String
         won : Bool <- Abort.abort(Deadline.Cause<String>, child, Some{Deadline.ParentAbort{Abort.Supplied{"stop"}}})
         return Unit{}
 
-def draw(value: DrawSource) -> IO(Result<&2, &2, Id.Error, U32>):
+def draw(value: DrawSource) -> IO(Result<&2, &2, Id.IdError, U32>):
   match value:
     case DrawSource{ids, mode, child}:
-      do IO<Result<&2, &2, Id.Error, U32>>:
-        result : Result<&2, &2, Id.Error, U32> <- IDs.draw(ids)
+      do IO<Result<&2, &2, Id.IdError, U32>>:
+        result : Result<&2, &2, Id.IdError, U32> <- IDs.draw(ids)
         abortChild(String.eq(mode, "abort-child"), child)
         return result
 
-def run(+mode: String, ids: IDs.Source, +options: Options.Options, kind: U32, pair: Selector.Owner<Plan.Attempt<Endpoint.Endpoint>> & Selector.Source<Plan.Attempt<Endpoint.Endpoint>>, scopePair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Unit):
+def run(+mode: String, ids: IDs.Source, +options: Options.OptionsOptions, kind: U32, pair: Selector.Owner<Plan.Attempt<Endpoint.Endpoint>> & Selector.ServerSourceSource<Plan.Attempt<Endpoint.Endpoint>>, scopePair: Deadline.Scope<String> & Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Unit):
   match pair, scopePair:
     case (owner, +source), (Deadline.Scope{+child, lifetime}, signal):
       do IO<Unit>:
-        result : Result<&2, &2, Lookup.Error<String>, Answer.Selection> <- Lookup.exchangeTransportOptionsWith(~DrawSource, ~draw, String, DrawSource{ids, mode, child}, Exchange.Configured{source, options}, signal, queryOptions(Request.prepare(options)), kind, Name.Name{(97 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "size"), 0, 7))
+        result : Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection> <- Lookup.exchangeTransportOptionsWith(~DrawSource, ~draw, String, DrawSource{ids, mode, child}, Exchange.Configured{source, options}, signal, queryOptions(Request.prepareRequest(options)), kind, Name.Name{(97 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "size"), 0, 7))
         IO.print(outcome(result))
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, Deadline.Scope{child, lifetime})
         IO.print(TCPTest.retained(reason))
-        next : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Selector.choose(Plan.Attempt<Endpoint.Endpoint>, source)
+        next : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Selector.chooseServerSource(Plan.Attempt<Endpoint.Endpoint>, source)
         IO.print("next:" ++ U32.show(nextPort(next)))
         Selector.close(Plan.Attempt<Endpoint.Endpoint>, owner)
 
-def ready(+mode: String, kind: U32, value: Result<&2, &2, Plan.Error, Prepare.Prepared<Endpoint.Endpoint>>) -> IO(Unit):
+def ready(+mode: String, kind: U32, value: Result<&2, &2, Plan.Error, Prepare.TransportPrepared<Endpoint.Endpoint>>) -> IO(Unit):
   match value:
     case Fail{_}: IO.die(Unit, 1, "invalid test plan")
-    case Done{Prepare.Prepared{+options, servers}}:
+    case Done{Prepare.TransportPrepared{+options, servers}}:
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +count : Ref.Ref<U32> <- Ref.new(U32, 0)
@@ -96,7 +96,7 @@ def features(+mode: String) -> List<&2, Options.Feature>:
 def args(values: List<String>) -> IO(Unit):
   match values:
     case +mode <> +family <> first <> second <> kind <> Nil{}:
-      ready(mode, Scalar.decimal(kind, 0), Prepare.prepare(Endpoint.Endpoint, Options.Options{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 2), features(mode)}, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}))
+      ready(mode, Scalar.decimal(kind, 0), Prepare.prepareTransport(Endpoint.Endpoint, Options.OptionsOptions{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 2), features(mode)}, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}))
     case _: IO.die(Unit, 1, "expected mode family first second kind")
 
 def main() -> IO(Unit):

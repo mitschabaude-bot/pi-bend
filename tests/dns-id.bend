@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/dns-id.bend as Id
+import ../packages/runtime/src/dns-message.bend as Id
 import ../packages/runtime/src/string-split.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
@@ -9,7 +9,7 @@ def bytes(parts: List<&2, String>, reversed: List<&2, U32>) -> List<&2, U32>:
     case SNil{} <> rest: bytes(rest, reversed)
     case part <> rest: bytes(rest, Scalar.decimal(part, 0) <> reversed)
 
-def shown(value: Result<&2, &2, Id.Error, U32>) -> String:
+def shown(value: Result<&2, &2, Id.IdError, U32>) -> String:
   match value:
     case Done{id}: U32.show(id)
     case Fail{Id.SourceFailure{code, message}}: "source:" ++ U32.show(code) ++ ":" ++ message

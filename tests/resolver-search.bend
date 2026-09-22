@@ -1,11 +1,11 @@
 import Base
-import ../packages/runtime/src/resolver-search.bend as Resolver
-import ../packages/runtime/src/resolver-options.bend as Options
+import ../packages/runtime/src/resolver-config.bend as Resolver
+import ../packages/runtime/src/resolver-config.bend as Options
 import ../packages/runtime/src/resolver-config.bend as Config
-import ../packages/runtime/src/resolver-settings.bend as Settings
-import ../packages/runtime/src/dns-search.bend as Search
-import ../packages/runtime/src/dns-search-run.bend as Run
-import ../packages/runtime/src/dns-presentation.bend as Presentation
+import ../packages/runtime/src/resolver-config.bend as Settings
+import ../packages/runtime/src/dns-message.bend as Search
+import ../packages/runtime/src/dns-message.bend as Run
+import ../packages/runtime/src/dns-message.bend as Presentation
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./resolver-options.bend as OptionsTest
 import ./resolver-domains.bend as DomainsTest
@@ -19,11 +19,11 @@ def run(text: String, dots: U32, absolute: Bool, result: Result<&2, &2, List<&2,
         IO.print("rejected")
         OptionsTest.diagnostics(errors)
     case Done{Resolver.Configuration{+options, +domains}}:
-      +cursor = Resolver.start(Resolver.Configuration{options, domains}, SearchTest.parsed(Presentation.parse(text)), dots, absolute)
+      +cursor = Resolver.startSearch(Resolver.Configuration{options, domains}, SearchTest.parsed(Presentation.parsePresentation(text)), dots, absolute)
       do IO<Unit>:
-        OptionsTest.report(Options.Report{options, Nil{}})
+        OptionsTest.report(Options.OptionsReport{options, Nil{}})
         SearchTest.drain(10000n, 4294967295, 0, Search.next(cursor))
-        result : Result<&2, &2, Run.Error<String>, String> <- Run.run(~Unit, ~String, ~String, ~DomainsTest.request, Unit{}, cursor)
+        result : Result<&2, &2, Run.SearchRunError<String>, String> <- Run.runSearchRun(~Unit, ~String, ~String, ~DomainsTest.request, Unit{}, cursor)
         RunTest.report(result)
 
 def args(values: List<String>) -> IO(Unit):

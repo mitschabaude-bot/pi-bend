@@ -5,6 +5,7 @@ and reported separately, not counted as Node compatibility.
 """
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -64,7 +65,7 @@ if '--prepare-only' in sys.argv:raise SystemExit(0)
 if '--no-build' not in sys.argv and '--js-only' not in sys.argv:
     subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','32','--stats','build/url-absolute-check-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/url-absolute.bend','build/url-absolute'],cwd=ROOT,check=True)
 if '--native-only' not in sys.argv and '--no-js-build' not in sys.argv:
-    subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/url-absolute.bend','-o','build/url-absolute.js'],cwd=ROOT,check=True)
+    subprocess.run([str(Path(BEND)),'packages/runtime/test/url-absolute.bend','-o','build/url-absolute.js'],cwd=ROOT,check=True)
 arguments=list(map(codes,texts))
 backends=[('native 1',['build/url-absolute','--threads','1']),('native 4',['build/url-absolute','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/url-absolute.js'])]
 if '--js-only' in sys.argv:backends=backends[2:]

@@ -7,11 +7,12 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 bun = Path.home() / '.bun/bin/bun'
-compiler = Path.home() / '.bend/current/bend2'
+compiler = TOOLCHAIN
 for suffix in ('c', 'js'):
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8',
                     '--stats', f'build/resolver-request-{suffix}-build.json', '--',
@@ -50,7 +51,7 @@ for label, command in [('native 1', ['build/resolver-request', '--threads', '1']
         assert run.stdout.splitlines() == expected, (label, start, run.stdout, expected)
     results.append({'backend': label, 'cases': len(cases)})
     print(f'PASS resolver request: {len(cases)} cases on {label}', flush=True)
-paths = ['packages/runtime/src/resolver-request.bend', 'packages/runtime/src/resolver-options.bend',
+paths = ['packages/runtime/src/resolver-config.bend', 'packages/runtime/src/resolver-config.bend',
          'tests/resolver-request.bend', 'tests/resolver_request_check.py', 'tests/resolver-options.bend',
          'build/resolver-request', 'build/resolver-request.js']
 record = {'scope': __doc__, 'results': results,

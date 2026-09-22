@@ -4,13 +4,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 bun = Path.home() / '.bun/bin/bun'
-compiler = ROOT / 'build/bend-hostname-candidate'
+compiler = TOOLCHAIN
 for suffix in ['c', 'js']:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '16', '--stats', f'build/resolver-system-linux-{suffix}-build.json', '--', str(bun), str(compiler / 'main.ts'), 'tests/resolver-system-linux.bend', '-o', f'build/resolver-system-linux.{suffix}'], cwd=ROOT, check=True)
 # Count only descriptors owned by this test's temporary filesystem tree.
@@ -80,6 +81,6 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-resolver-linux-') as temp:
         checks.append(dict(backend=backend,cases=len(cases),fixture_owned_fds_after=0 if backend!='Bun' else None))
         print(f'{backend}: {len(cases)} Linux resolver fallback cases PASS',flush=True)
     denied.chmod(0o600)
-paths=['packages/runtime/src/resolver-system-linux.bend','tests/resolver-system-linux.bend','tests/resolver_system_linux_check.py']
+paths=['packages/runtime/src/resolver-config.bend','tests/resolver-system-linux.bend','tests/resolver_system_linux_check.py']
 result=dict(scope=__doc__,reference='https://raw.githubusercontent.com/bminor/glibc/glibc-2.39/resolv/res_init.c',checks=checks,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/resolver-system-linux-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/resolver-system-linux-result.json').write_text(json.dumps(result,indent=2)+'\n')

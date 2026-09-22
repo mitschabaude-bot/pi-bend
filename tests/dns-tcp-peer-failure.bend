@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/dns-tcp-peer.bend as Peer
+import ../packages/runtime/src/dns-transport.bend as Peer
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
 import ../packages/runtime/src/abort.bend as Abort
 import ./dns-tcp-connection.bend as Test
@@ -9,7 +9,7 @@ def socket(result: Result<&1, &1, U32 & String, Socket>) -> IO(Socket):
     case Done{owner}: IO.pure(Socket, owner)
     case Fail{_}: IO.die(Socket, 1, "UDP bind failed; inspection may have retained its socket")
 
-def rejected(result: Result<&2, &1, Peer.Error<String>, Peer.Peer<String>>) -> IO(Unit):
+def rejected(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
     case Fail{Peer.Inspection{Endpoint.SocketError{107, _}}}: IO.pure(Unit, Unit{})
     case Done{Peer.Peer{_, connection}}:
@@ -22,7 +22,7 @@ def observed(+signal: Abort.AbortSignal<String>, pair: Socket & Result<&2, &2, E
   match pair:
     case (owner, Done{Endpoint.V4{_, +port}}):
       do IO<Unit>:
-        result : Result<&2, &1, Peer.Error<String>, Peer.Peer<String>> <- Peer.create(String, owner, signal)
+        result : Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>> <- Peer.createTcpPeer(String, owner, signal)
         rejected(result)
         bound : Result<&1, &1, U32 & String, Socket> <- UDP.bind(port)
         rebound : Socket <- socket(bound)

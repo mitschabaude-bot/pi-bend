@@ -273,3 +273,7 @@ Template (`~`) arguments must be closed in a law, so the lifecycle and transport
 ### Agent modules merged (2026-09-22)
 
 `laws/agent-events.bend`, `laws/agent-owner.bend`, `laws/agent-queues.bend` and `laws/pending-queue.bend` now import `packages/agent/src/agent.bend` and `agent-loop.bend` directly; their statements are unchanged apart from the module-suffixed internal names. The audited unsafe set gains the existing recursive drivers those modules already contained (`agent-loop.bend`: `advanceCall`, `advanceLoop`, `consumeAssistantIterations`, `deliverParallel`, `deliverTurn`, `executeParallel`, `prepareParallel`, `sequentialBatch`; `agent.bend`: `dispatch`) and the schema/validation routines they import, which the law closure did not reach before. No unsafe definition was added.
+
+### Runtime name resolution merged (2026-09-22)
+
+The 24 law modules for DNS, resolver configuration, hosts and connection scheduling keep their statements and now import the six merged runtime modules; renamed internal names are the only textual change. The audited unsafe drivers moved with their code: `dns-message.bend drive` (search run), `dns-transport.bend driveTcpConnection`/`read`/`readUdpQuery`, `dns-resolver.bend drive` (address lookup). No unsafe definition was added.

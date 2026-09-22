@@ -9,13 +9,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shlex
 import socket
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path)
+parser.add_argument('candidate',type=Path,help='compiler directory providing TCP.connect_ipv6; the installed toolchain does not yet')
 parser.add_argument('--no-native-build',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve()
 launcher=ROOT/'build/ipv6-http-compiler'

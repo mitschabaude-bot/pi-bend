@@ -1,6 +1,7 @@
 """Hierarchical path-state parsing and UTF-8 query/fragment encoding."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -72,7 +73,7 @@ for index, got in actual:
 print(f'Node path-state cross-check: {len(actual)} cases PASS', flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-path.bend', 'build/url-path'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'), 'packages/runtime/test/url-path.bend', '-o', 'build/url-path.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-path.bend', '-o', 'build/url-path.js'], cwd=ROOT, check=True)
 def codes(text): return ','.join(map(str, map(ord, text)))
 def wire(values):
     path, query, fragment = values

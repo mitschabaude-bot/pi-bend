@@ -1,8 +1,9 @@
 """Native retry effect ownership, seeded jitter, clock and real retry smoke."""
 import hashlib,json,struct,subprocess,sys,tempfile,time
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
-candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else ROOT/'build/bend-native-toolchain/bend2').resolve();bun=Path.home()/'.bun/bin/bun'
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 binary=ROOT/'build/provider-retry-runtime'
 if '--no-build' not in sys.argv:
  subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','40','--',str(bun),str(candidate/'main.ts'),'packages/ai/test/provider-retry-runtime.bend','-o',str(binary)+'.c'],cwd=ROOT,check=True)

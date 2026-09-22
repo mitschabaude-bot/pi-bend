@@ -10,13 +10,14 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shlex
 import socket
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path)
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 parser.add_argument('--no-build',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/endpoint-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)

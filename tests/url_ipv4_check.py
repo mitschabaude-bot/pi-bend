@@ -1,6 +1,7 @@
 """URL IPv4 host classification/normalization against Node's actual URL parser."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -47,7 +48,7 @@ for host, result in zip(hosts, normalized, strict=True):
     expected.append(('numeric;' if numeric else 'domain;') + result)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-ipv4.bend', 'build/url-ipv4'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home() / '.bend/bin/bend'), 'packages/runtime/test/url-ipv4.bend', '-o', 'build/url-ipv4.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-ipv4.bend', '-o', 'build/url-ipv4.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/url-ipv4', '--threads', '1']), ('native 4', ['build/url-ipv4', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/url-ipv4.js'])]:
     for start in range(0, len(hosts), 16):
         result = subprocess.run([*command, *hosts[start:start+16]], cwd=ROOT, text=True, capture_output=True, timeout=30)

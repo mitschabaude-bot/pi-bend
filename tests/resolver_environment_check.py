@@ -4,12 +4,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import socket
 import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=Path.home()/'.bend/current/bend2'
+compiler=TOOLCHAIN
 fixtures=['resolver-environment','resolver-environment-source']
 for fixture in fixtures:
     for suffix in ['c','js']:
@@ -101,6 +102,6 @@ for backend in ['native 1','native 4','Bun']:
         assert run.returncode==0 and not run.stderr and run.stdout==want,(backend,mode,run,want)
     checks.append(dict(backend=backend,capture_and_precedence_cases=len(cases),injected_error_and_order_cases=6))
     print(backend+': '+str(len(cases))+' environment cases and 6 injected-source cases PASS',flush=True)
-paths=['packages/runtime/src/resolver-environment.bend','tests/resolver-environment.bend','tests/resolver-environment-source.bend','tests/resolver-environment-oracle.c','tests/resolver_environment_check.py']
+paths=['packages/runtime/src/resolver-config.bend','tests/resolver-environment.bend','tests/resolver-environment-source.bend','tests/resolver-environment-oracle.c','tests/resolver_environment_check.py']
 r=dict(scope=__doc__,checks=checks,libc=libc_rows,reference='https://raw.githubusercontent.com/bminor/glibc/glibc-2.39/resolv/res_init.c',sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={f'{fixture}-{suffix}':json.loads((ROOT/f'build/{fixture}-{suffix}-build.json').read_text()) for fixture in fixtures for suffix in ['c','js']})
 (ROOT/'build/resolver-environment-result.json').write_text(json.dumps(r,indent=2)+'\n')

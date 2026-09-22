@@ -1,8 +1,8 @@
 import Base
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/hosts-file.bend as File
-import ../packages/runtime/src/hosts-family.bend as Family
-import ../packages/runtime/src/hosts-resolve.bend as Resolve
+import ../packages/runtime/src/hosts.bend as File
+import ../packages/runtime/src/hosts.bend as Family
+import ../packages/runtime/src/hosts.bend as Resolve
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 
@@ -49,4 +49,4 @@ law eligible_rows_are_local:
   for name: String
   for +first: Hosts.Entry<File.Address>
   for +rest: List<&2, Hosts.Entry<File.Address>>
-  {Resolve.selected(Error, family, name, first <> rest) == Resolve.Local{first, rest} : Resolve.Plan<Error>}
+  {Resolve.selectedResolve(Error, family, name, first <> rest) == Resolve.Local{first, rest} : Resolve.Plan<Error>}

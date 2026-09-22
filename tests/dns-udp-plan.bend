@@ -1,8 +1,8 @@
 import Base
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
-import ../packages/runtime/src/dns-udp-schedule.bend as Schedule
-import ../packages/runtime/src/dns-server-rotation.bend as Rotation
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Timeout
+import ../packages/runtime/src/resolver-config.bend as Schedule
+import ../packages/runtime/src/dns-transport.bend as Rotation
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def servers(count: Nat, +index: U32, reversed: List<&2, U32>) -> List<&2, U32>:

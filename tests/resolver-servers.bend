@@ -1,12 +1,12 @@
 import Base
-import ../packages/runtime/src/resolver-servers.bend as Servers
-import ../packages/runtime/src/resolver-interface.bend as System
-import ../packages/runtime/src/resolver-settings.bend as Settings
+import ../packages/runtime/src/dns-resolver.bend as Servers
+import ../packages/runtime/src/dns-resolver.bend as System
+import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Config
-import ../packages/runtime/src/resolver-address.bend as Address
+import ../packages/runtime/src/resolver-config.bend as Address
 import ../packages/runtime/src/network-interface.bend as Interface
 import ../packages/runtime/src/ipv6-scope.bend as Scope
-import ../packages/runtime/src/dns-tcp-servers.bend as TCP
+import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
@@ -46,9 +46,9 @@ def issues(values: List<&2, Servers.Issue<Interface.Error>>) -> IO(Unit):
         IO.print("issue:" ++ Nat.show(position) ++ ":" ++ text ++ ":" ++ sourceError(failure))
         issues(rest)
 
-def report(value: Servers.Report<Interface.Error>) -> IO(Unit):
+def report(value: Servers.ServersReport<Interface.Error>) -> IO(Unit):
   match value:
-    case Servers.Report{values, failures}:
+    case Servers.ServersReport{values, failures}:
       do IO<Unit>:
         servers(values)
         issues(failures)
@@ -63,13 +63,13 @@ def configured(value: Servers.Configuration<Interface.Error>) -> IO(Unit):
 def prepare(real: Bool, settings: Settings.Settings) -> IO(Servers.Configuration<Interface.Error>):
   match real:
     case True{}: System.prepare(settings)
-    case False{}: Servers.prepareWith(~Interface.Error, ~Unit, ~source, Unit{}, settings)
+    case False{}: Servers.prepareWithServers(~Interface.Error, ~Unit, ~source, Unit{}, settings)
 
 def run(empty: Bool, real: Bool, text: String) -> IO(Unit):
   match empty:
     case True{}:
       do IO<Unit>:
-        result : Servers.Report<Interface.Error> <- Servers.resolveWith(~Interface.Error, ~Unit, ~source, Unit{}, Nil{})
+        result : Servers.ServersReport<Interface.Error> <- Servers.resolveWith(~Interface.Error, ~Unit, ~source, Unit{}, Nil{})
         report(result)
     case False{}:
       do IO<Unit>:

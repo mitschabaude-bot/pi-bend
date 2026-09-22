@@ -1,7 +1,7 @@
 import Base
-import ../src/dns-address-answer.bend as Answer
+import ../src/dns-resolver.bend as Answer
 import ../src/dns-message.bend as Message
-import ../src/dns-name.bend as Name
+import ../src/dns-message.bend as Name
 import ../src/url-ipv4.bend as IPv4
 import ../src/url-ipv6.bend as IPv6
 import ../src/string-split.bend as Split
@@ -18,7 +18,7 @@ def csv(bytes: List<&2, U32>, acc: String) -> String:
     case Nil{}: acc
     case byte <> rest: csv(rest, acc ++ U32.show(byte) ++ ",")
 
-def encoded(result: Result<&2, &2, Name.Error, List<&2, U32>>) -> String:
+def encoded(result: Result<&2, &2, Name.NameErrorOfMessage, List<&2, U32>>) -> String:
   match result:
     case Fail{_}: "bad-name"
     case Done{bytes}: csv(bytes, "")
@@ -31,7 +31,7 @@ def addresses(values: List<&2, Answer.Address>, acc: String) -> String:
 
 def show(value: Result<&2, &2, Answer.Error, Answer.Selection>) -> String:
   match value:
-    case Done{Answer.Selection{name, values}}: "ok:" ++ encoded(Name.encode(name)) ++ ":" ++ addresses(values, "")
+    case Done{Answer.Selection{name, values}}: "ok:" ++ encoded(Name.encodeName(name)) ++ ":" ++ addresses(values, "")
     case Fail{Answer.InvalidName{_}}: "name"
     case Fail{Answer.InvalidRecord{_}}: "record"
     case Fail{Answer.InvalidExtension{_}}: "extension"

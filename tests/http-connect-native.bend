@@ -1,33 +1,33 @@
 import Base
-import ../packages/runtime/src/connection-plan.bend as Dispatch
+import ../packages/runtime/src/connection-driver.bend as Dispatch
 import ../packages/runtime/src/http-connect.bend as HTTP
 import ../packages/runtime/src/connection-driver.bend as Driver
-import ../packages/runtime/src/connection-progress.bend as Progress
-import ../packages/runtime/src/connection-order.bend as Order
+import ../packages/runtime/src/connection-driver.bend as Progress
+import ../packages/runtime/src/connection-driver.bend as Order
 import ../packages/runtime/src/http-host-route.bend as Route
-import ../packages/runtime/src/hosts-resolve.bend as HostsResolve
-import ../packages/runtime/src/hosts-file.bend as File
+import ../packages/runtime/src/hosts.bend as HostsResolve
+import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/hosts.bend as Hosts
 import ../packages/runtime/src/url-host.bend as Host
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/src/dns-resolver.bend as Resolver
-import ../packages/runtime/src/resolver-configuration.bend as Settings
-import ../packages/runtime/src/resolver-search.bend as Search
-import ../packages/runtime/src/resolver-options.bend as Options
+import ../packages/runtime/src/resolver-config.bend as Settings
+import ../packages/runtime/src/resolver-config.bend as Search
+import ../packages/runtime/src/resolver-config.bend as Options
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/dns-pair-result.bend as Pair
-import ../packages/runtime/src/dns-id.bend as Id
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/dns-resolver.bend as Pair
+import ../packages/runtime/src/dns-message.bend as Id
 import ../packages/runtime/src/random-index.bend as Index
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./connection-driver.bend as Show
 
-def draw(mode: U32) -> IO(Result<&2, &2, Id.Error, U32>):
+def draw(mode: U32) -> IO(Result<&2, &2, Id.IdError, U32>):
   match mode:
     case 4: Id.random(Unit{})
-    case _: IO.die(Result<&2, &2, Id.Error, U32>, 1, "unexpected DNS")
+    case _: IO.die(Result<&2, &2, Id.IdError, U32>, 1, "unexpected DNS")
 
 def preference(mode: U32, family: Bool) -> Order.Preference:
   match mode family:
@@ -58,7 +58,7 @@ def resolution(value: HTTP.Resolution(String, File.Failure)) -> IO(Unit):
     case Done{Route.Named{HostsResolve.FromNetwork{_}}}: IO.print("dns")
     case _: IO.die(Unit, 1, "unexpected resolution")
 
-def checked(value: Dispatch.Report<HTTP.Resolution(String, File.Failure), String, Socket>) -> IO(Unit):
+def checked(value: Dispatch.PlanReport<HTTP.Resolution(String, File.Failure), String, Socket>) -> IO(Unit):
   match value:
     case Dispatch.Unresolved{original}:
       do IO<Unit>:
@@ -74,7 +74,7 @@ def run(+mode: U32, +family: Bool, port: U32, pair: Resolver.Owner & Resolver.Re
     case (owner, resolver):
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
-        value : Dispatch.Report<HTTP.Resolution(String, File.Failure), String, Socket> <- HTTP.openWith(~U32, ~draw, ~String, ~File.Failure, mode, resolver, Abort.signal(String, parent), Pair.IPv4First{}, preference(mode, family), Driver.Options{port, 30}, host(mode, family), database(mode, family))
+        value : Dispatch.PlanReport<HTTP.Resolution(String, File.Failure), String, Socket> <- HTTP.openWith(~U32, ~draw, ~String, ~File.Failure, mode, resolver, Abort.signal(String, parent), Pair.IPv4First{}, preference(mode, family), Driver.Options{port, 30}, host(mode, family), database(mode, family))
         checked(value)
         Resolver.close(owner)
         Abort.dispose(String, parent)
@@ -96,7 +96,7 @@ def prepared(mode: U32, family: Bool, port: U32, result: Result<&2, &2, Plan.Err
         created(mode, family, port, owner)
 
 def configured(mode: U32, family: Bool, port: U32, dnsPort: U32) -> IO(Unit):
-  prepared(mode, family, port, Settings.prepare(Endpoint.Endpoint, Endpoint.V4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepare(Options.Options{1, 1, 1, Nil{}}, Nil{})))
+  prepared(mode, family, port, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.V4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
 
 def arguments(args: List<String>) -> IO(Unit):
   match args:

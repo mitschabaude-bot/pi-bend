@@ -1,5 +1,6 @@
 """Character splitting with constant-depth recursive control, including long inputs."""
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -19,7 +20,7 @@ for size in [0, 1, 4096, 16384, 65536, 131072]:
         expected.append(f'{size+1};0' if separator == 'x' else f'1;{size}')
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/string-split.bend', 'build/string-split'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home() / '.bend/bin/bend'), 'packages/runtime/test/string-split.bend', '-o', 'build/string-split.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/string-split.bend', '-o', 'build/string-split.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/string-split', '--threads', '1']), ('native 4', ['build/string-split', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/string-split.js'])]:
     for start in range(0, len(args), 16):
         result = subprocess.run([*command, *args[start:start+16]], cwd=ROOT, text=True, capture_output=True, timeout=30)

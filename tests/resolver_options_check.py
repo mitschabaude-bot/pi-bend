@@ -8,12 +8,13 @@ policy is not selected here: the native report retains diagnostics separately.
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import platform
 import random
 import re
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-options-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-options.bend','-o',f'build/resolver-options.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-options.c','-lpthread','-lm','-o','build/resolver-options'],cwd=ROOT,check=True)
@@ -69,7 +70,7 @@ for label,command in [('native 1',['build/resolver-options','--threads','1']),('
             assert run.stdout.splitlines()==want,(label,category,start,run.stdout[:1000],want[:30])
         rows.append(dict(backend=label,category=category,cases=len(inputs)))
     print(f'{label}: {len(differential)} libc sequences and {len(strict)} strict reports PASS',flush=True)
-paths=['packages/runtime/src/resolver-options.bend','tests/resolver-options.bend','tests/resolver-options-oracle.c','tests/resolver_options_check.py','build/resolver-options','build/resolver-options.js']
+paths=['packages/runtime/src/resolver-config.bend','tests/resolver-options.bend','tests/resolver-options-oracle.c','tests/resolver_options_check.py','build/resolver-options','build/resolver-options.js']
 record=dict(scope=__doc__,cases=rows,libc_version=list(platform.libc_ver()),supported_host_flags=bits,
             libc_quirks={text:oracle(reset+' '+text) for text in ['timeout:7junk','ndots:-1','attempts:','rotate-junk','timeout:4294967296']},
             sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},

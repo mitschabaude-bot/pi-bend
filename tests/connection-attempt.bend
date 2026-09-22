@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/connection-attempt.bend as Attempt
-import ../packages/runtime/src/connection-attempt-result.bend as Outcome
+import ../packages/runtime/src/connection-driver.bend as Attempt
+import ../packages/runtime/src/connection-driver.bend as Outcome
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
@@ -33,9 +33,9 @@ def socketResult(mode: U32, expected: U32, result: Result<&2, &1, Outcome.Error<
         Test.assertion(U32.is_eq(mode, 0), "unexpected success")
     case Fail{error}: failure(mode, expected, error)
 
-def checked(+timed: Bool, +mode: U32, expected: U32, report: Attempt.Report<String, Socket>) -> IO(Unit):
+def checked(+timed: Bool, +mode: U32, expected: U32, report: Attempt.AttemptReport<String, Socket>) -> IO(Unit):
   match report:
-    case Attempt.Report{result, reason}:
+    case Attempt.AttemptReport{result, reason}:
       do IO<Unit>:
         diagnostic(timed, mode, reason)
         socketResult(mode, expected, result)
@@ -45,7 +45,7 @@ def duration(short: Bool) -> U32:
     case True{}: 30
     case False{}: 10000
 
-def once(timed: Bool, address: Connect.Address, port: U32, parent: Abort.AbortSignal<String>, mode: U32) -> IO(Attempt.Report<String, Socket>):
+def once(timed: Bool, address: Connect.Address, port: U32, parent: Abort.AbortSignal<String>, mode: U32) -> IO(Attempt.AttemptReport<String, Socket>):
   match timed:
     case False{}: Attempt.final(~String, address, port, parent)
     case True{}: Attempt.timed(~String, address, port, parent, duration(U32.is_eq(mode, 4)))
@@ -55,7 +55,7 @@ def repeat(count: Nat, +timed: Bool, +mode: U32, +address: Connect.Address, +por
     case Zero{}: IO.pure(Unit, Unit{})
     case Succ{rest}:
       do IO<Unit>:
-        result : Attempt.Report<String, Socket> <- once(timed, address, port, signal, mode)
+        result : Attempt.AttemptReport<String, Socket> <- once(timed, address, port, signal, mode)
         checked(timed, mode, code, result)
         repeat(rest, timed, mode, address, port, code, signal)
 
@@ -75,10 +75,10 @@ def run(cancel: Bool, +timed: Bool, +mode: U32, address: Connect.Address, port: 
   match cancel:
     case True{}:
       do IO<Unit>:
-        task : Chan(Attempt.Report<String, Socket>) <- IO.fork(Attempt.Report<String, Socket>, once(timed, address, port, Abort.signal(String, controller), mode))
+        task : Chan(Attempt.AttemptReport<String, Socket>) <- IO.fork(Attempt.AttemptReport<String, Socket>, once(timed, address, port, Abort.signal(String, controller), mode))
         IO.sleep(10)
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
-        result : Attempt.Report<String, Socket> <- IO.join(Attempt.Report<String, Socket>, task)
+        result : Attempt.AttemptReport<String, Socket> <- IO.join(Attempt.AttemptReport<String, Socket>, task)
         checked(timed, mode, code, result)
     case False{}:
       do IO<Unit>:
@@ -96,15 +96,15 @@ def fake(mode: U32, signal: Abort.AbortSignal<Deadline.Cause<String>>) -> IO(Res
     won : Bool <- Abort.abort(Deadline.Cause<String>, Abort.AbortController{signal}, Some{Deadline.Expired{}})
     return fakeResult(U32.is_eq(mode, 6))
 
-def fakeCheck(mode: U32, report: Attempt.Report<String, Unit>) -> IO(Unit):
+def fakeCheck(mode: U32, report: Attempt.AttemptReport<String, Unit>) -> IO(Unit):
   match report:
-    case Attempt.Report{Done{Unit{}}, Some{Abort.Supplied{Deadline.Expired{}}}}: Test.assertion(U32.is_eq(mode, 6), "late success")
-    case Attempt.Report{Fail{Outcome.SocketFailure{code, message}}, Some{Abort.Supplied{Deadline.Expired{}}}}: Test.assertion(U32.is_eq(mode, 7) && U32.is_eq(code, 123) && String.eq(message, "original"), "late failure")
+    case Attempt.AttemptReport{Done{Unit{}}, Some{Abort.Supplied{Deadline.Expired{}}}}: Test.assertion(U32.is_eq(mode, 6), "late success")
+    case Attempt.AttemptReport{Fail{Outcome.SocketFailure{code, message}}, Some{Abort.Supplied{Deadline.Expired{}}}}: Test.assertion(U32.is_eq(mode, 7) && U32.is_eq(code, 123) && String.eq(message, "original"), "late failure")
     case _: IO.die(Unit, 1, "settled result overwritten or diagnostic lost")
 
 def injected(+mode: U32, signal: Abort.AbortSignal<String>) -> IO(Unit):
   do IO<Unit>:
-    report : Attempt.Report<String, Unit> <- Attempt.timedWith(~U32, ~String, ~Unit, ~fake, mode, signal, 10000)
+    report : Attempt.AttemptReport<String, Unit> <- Attempt.timedWith(~U32, ~String, ~Unit, ~fake, mode, signal, 10000)
     fakeCheck(mode, report)
 
 def dispatch(native: Bool, timed: Bool, +mode: U32, family: Bool, port: U32, code: U32, controller: Abort.AbortController<String>) -> IO(Unit):

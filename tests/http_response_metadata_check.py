@@ -7,13 +7,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = 'packages/runtime/test/http-response-metadata.bend'
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/current/bend2/main.ts'))
+BEND = BEND
 BUN = str(Path.home() / '.bun/bin/bun')
 
 def codes(value):

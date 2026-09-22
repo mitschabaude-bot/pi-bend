@@ -1,10 +1,10 @@
 import Base
-import ../packages/runtime/src/dns-address-lookup.bend as Lookup
-import ../packages/runtime/src/dns-query.bend as Request
-import ../packages/runtime/src/dns-edns.bend as Edns
-import ../packages/runtime/src/dns-server-source.bend as Selector
-import ../packages/runtime/src/dns-tcp-servers.bend as Servers
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-resolver.bend as Lookup
+import ../packages/runtime/src/dns-message.bend as Request
+import ../packages/runtime/src/dns-message.bend as Edns
+import ../packages/runtime/src/dns-transport.bend as Selector
+import ../packages/runtime/src/dns-transport.bend as Servers
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/test/utf8-runner.bend as Scalar
@@ -12,8 +12,8 @@ import ./dns-lookup-ids.bend as IDs
 import ./dns-tcp-query.bend as QueryTest
 import ./dns-tcp-connection.bend as Test
 
-def settings() -> Request.Options:
-  Request.Options{288, Some{Edns.Query{1232, True{}, Edns.Option{65001, 0 <> 255 <> Nil{}} <> Edns.Option{65001, Nil{}} <> Nil{}}}}
+def settings() -> Request.QueryOptions:
+  Request.QueryOptions{288, Some{Edns.Query{1232, True{}, Edns.Option{65001, 0 <> 255 <> Nil{}} <> Edns.Option{65001, Nil{}} <> Nil{}}}}
 
 def args(values: List<String>) -> IO(Unit):
   match values:

@@ -3,13 +3,14 @@ import hashlib
 import ipaddress
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import socket
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2'
+bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     with (ROOT/f'build/hosts-file-{suffix}.log').open('w') as log:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/hosts-file-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/hosts-file.bend','-o',f'build/hosts-file.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)

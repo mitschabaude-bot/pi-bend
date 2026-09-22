@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/dns-udp-attempt-scope.bend as Attempt
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/dns-transport.bend as Attempt
+import ../packages/runtime/src/resolver-config.bend as Timeout
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deferred.bend as Deferred
@@ -56,7 +56,7 @@ def borrowed(mode: String, pair: Deadline.Scope<Deadline.Cause<String>> & Abort.
     case (scope, signal):
       do IO<Unit>:
         await(mode, signal)
-        ended : Attempt.End<String> <- Attempt.close(String, scope)
+        ended : Attempt.End<String> <- Attempt.closeUdpAttemptScope(String, scope)
         IO.print("closed:" ++ show(ended))
 
 def created(mode: String, result: Result<&2, &1, Timeout.MillisecondsError, Deadline.Scope<Deadline.Cause<String>>>) -> IO(Unit):
@@ -75,7 +75,7 @@ def loop(count: Nat, +mode: String, +signal: Abort.AbortSignal<Deadline.Cause<St
     case Zero{}: IO.pure(Unit, Unit{})
     case Succ{rest}:
       do IO<Unit>:
-        result : Result<&2, &1, Timeout.MillisecondsError, Deadline.Scope<Deadline.Cause<String>>> <- Attempt.create(String, duration(mode), signal)
+        result : Result<&2, &1, Timeout.MillisecondsError, Deadline.Scope<Deadline.Cause<String>>> <- Attempt.createUdpAttemptScope(String, duration(mode), signal)
         created(mode, result)
         loop(rest, mode, signal)
 

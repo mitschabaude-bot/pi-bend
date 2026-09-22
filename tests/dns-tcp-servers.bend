@@ -1,11 +1,11 @@
 import Base
-import ../packages/runtime/src/dns-tcp-servers.bend as Servers
-import ../packages/runtime/src/dns-tcp-query.bend as Query
+import ../packages/runtime/src/dns-transport.bend as Servers
+import ../packages/runtime/src/dns-transport.bend as Query
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-query.bend as Request
-import ../packages/runtime/src/dns-edns.bend as Edns
-import ../packages/runtime/src/dns-tcp-session.bend as Session
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Request
+import ../packages/runtime/src/dns-message.bend as Edns
+import ../packages/runtime/src/dns-transport.bend as Session
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/string-split.bend as Split
@@ -23,11 +23,11 @@ def serverInput(family: String, values: String) -> List<&2, Servers.Server>:
     case SNil{}: Nil{}
     case other: ports(family, Split.split(other, ','), Nil{})
 
-def outcome(value: Result<&2, &2, Servers.Error<String>, Query.Reply>) -> String:
+def outcome(value: Result<&2, &2, Servers.TcpServersError<String>, Query.Reply>) -> String:
   match value:
-    case Done{Query.Answer{Message.Message{_, Message.Header{_, flags, _, _, _, _}, _, _, _, _}}}: "reply:" ++ U32.show((flags % 16 : U32))
-    case Done{Query.Truncated{_}}: "truncated"
-    case Fail{Servers.Failed{Query.Completed{Fail{Query.Submission{Session.Extension{Edns.InvalidField{}}}}, Done{_}}}}: "extension-field"
+    case Done{Query.TcpQueryAnswer{Message.Message{_, Message.Header{_, flags, _, _, _, _}, _, _, _, _}}}: "reply:" ++ U32.show((flags % 16 : U32))
+    case Done{Query.TcpQueryTruncated{_}}: "truncated"
+    case Fail{Servers.Failed{Query.Completed{Fail{Query.Submission{Session.Extension{Edns.EdnsInvalidField{}}}}, Done{_}}}}: "extension-field"
     case Fail{Servers.NoServers{}}: "no-servers"
     case Fail{Servers.Failed{Query.Completed{result, Done{_}}}}: QueryTest.outcome(result)
     case _: "cleanup"
@@ -41,7 +41,7 @@ def run(mode: String, opt: Maybe<&2, Edns.Query>, servers: List<&2, Servers.Serv
   match pair:
     case (scope, signal):
       do IO<Unit>:
-        result : Result<&2, &2, Servers.Error<String>, Query.Reply> <- Servers.exchangeRequest(String, servers, signal, Request.Request{42, 256, Message.Question{Name.Name{(97 <> Nil{}) <> Nil{}}, kind, 1}, opt}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
+        result : Result<&2, &2, Servers.TcpServersError<String>, Query.Reply> <- Servers.exchangeRequestTcpServers(String, servers, signal, Request.Request{42, 256, Message.Question{Name.Name{(97 <> Nil{}) <> Nil{}}, kind, 1}, opt}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
         IO.print(outcome(result))
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         IO.print(QueryTest.retained(reason))

@@ -1,6 +1,7 @@
 """Opaque path state, including the final-space-before-delimiter rule."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -45,7 +46,7 @@ for index,got in actual:
 print(f'Node opaque path cross-check: {len(actual)} cases PASS',flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-opaque-path.bend','build/url-opaque-path'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/url-opaque-path.bend','-o','build/url-opaque-path.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/url-opaque-path.bend','-o','build/url-opaque-path.js'],cwd=ROOT,check=True)
 def codes(text):return ','.join(map(str,map(ord,text)))
 def wire(values):
     value,query,fragment=values

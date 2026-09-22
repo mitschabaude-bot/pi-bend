@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/dns-server-initialize.bend as Initialize
-import ../packages/runtime/src/dns-server-source.bend as Source
+import ../packages/runtime/src/dns-transport.bend as Initialize
+import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/src/random-index.bend as Index
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/string-split.bend as Split

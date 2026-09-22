@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shlex
 import socket
 import struct
@@ -17,7 +18,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path)
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 parser.add_argument('--no-build',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-tcp-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
@@ -59,5 +60,5 @@ for label,command in [('native 1',['build/dns-tcp-connection','--threads','1']),
                 assert result.returncode==0 and result.stdout=='PASS DNS TCP connection\n' and not result.stderr,(label,number,mode,result)
                 results.append(dict(backend=label,family=number,mode=mode))
     print(label+': DNS TCP connection cases PASS',flush=True)
-paths=[ROOT/'packages/runtime/src/dns-tcp-connection.bend',ROOT/'tests/dns-tcp-connection.bend',ROOT/'tests/dns_tcp_connection_check.py',candidate/'comp.ts',candidate/'base.bend',ROOT/'build/dns-tcp-connection',ROOT/'build/dns-tcp-connection.js']
+paths=[ROOT/'packages/runtime/src/dns-transport.bend',ROOT/'tests/dns-tcp-connection.bend',ROOT/'tests/dns_tcp_connection_check.py',candidate/'comp.ts',candidate/'base.bend',ROOT/'build/dns-tcp-connection',ROOT/'build/dns-tcp-connection.js']
 (ROOT/'build/dns-tcp-connection-result.json').write_text(json.dumps({'scope':__doc__,'cases':results,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

@@ -9,6 +9,7 @@ import errno
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import socket
 import struct
@@ -17,7 +18,7 @@ from channel_audit import instrument
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate', type=Path)
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 parser.add_argument('--no-build', action='store_true')
 parser.add_argument('--reuse-programs', action='store_true', help='Run additional cases only after verifying existing source/compiler/program hashes')
 parser.add_argument('--rss-limit-gib', type=float, default=8)

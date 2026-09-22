@@ -1,5 +1,6 @@
 """Stable ordering of immutable records, including long equal-key runs."""
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import sys
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,7 @@ for count, seed, modulus in rows:
     expected.append(f'{count};{hash_value}')
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/stable-sort.bend','build/stable-sort'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/stable-sort.bend','-o','build/stable-sort.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/stable-sort.bend','-o','build/stable-sort.js'],cwd=ROOT,check=True)
 for label, command in [('native 1',['build/stable-sort','--threads','1']),('native 4',['build/stable-sort','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/stable-sort.js'])]:
     for start in range(0,len(rows),8):
         args = [';'.join(map(str,row)) for row in rows[start:start+8]]

@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import struct
 import subprocess
@@ -17,7 +18,7 @@ parser.add_argument('--baseline-js',type=Path,help='Optional retained nested-dis
 args=parser.parse_args()
 if not args.no_build:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-record-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-record.bend','build/dns-record'],cwd=ROOT,check=True)
-subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-record-js-build.json','--',str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/dns-record.bend','-o','build/dns-record.js'],cwd=ROOT,check=True)
+subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-record-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-record.bend','-o','build/dns-record.js'],cwd=ROOT,check=True)
 rng=random.Random(3596);cases=[]
 def csv(xs): return ','.join(map(str,xs))
 def text(labels): return '/'.join(csv(label) for label in labels)
@@ -119,6 +120,6 @@ for label,command in commands:
         for index,(got,(arg,want)) in enumerate(zip(lines,batch,strict=True)):
             assert got==want,(label,first+index,arg[:150],got,want)
     print(f'{label}: {len(cases)} typed DNS record cases PASS',flush=True);backends.append(label)
-paths=[ROOT/'packages/runtime/src/dns-record.bend',ROOT/'packages/runtime/test/dns-record.bend',ROOT/'tests/dns_record_check.py',ROOT/'build/dns-record',ROOT/'build/dns-record.js']
+paths=[ROOT/'packages/runtime/src/dns-message.bend',ROOT/'packages/runtime/test/dns-record.bend',ROOT/'tests/dns_record_check.py',ROOT/'build/dns-record',ROOT/'build/dns-record.js']
 if args.baseline_js: paths.append(args.baseline_js.resolve())
 (ROOT/'build/dns-record-result.json').write_text(json.dumps({'scope':__doc__,'cases_per_backend':len(cases),'backends':backends,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

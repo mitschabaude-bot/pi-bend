@@ -2,6 +2,7 @@
 from itertools import product
 import importlib.util
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 import sys
@@ -71,7 +72,7 @@ print(f'{len(corpus)} scalar-input official rows, {len(skipped)} ill-formed rows
 if '--prepare-only' in sys.argv: raise SystemExit(0)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-domain.bend','build/idna-domain'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/idna-domain.bend','-o','build/idna-domain.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-domain.bend','-o','build/idna-domain.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-domain','--threads','1']),('native 4',['build/idna-domain','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-domain.js'])]:
     for start,end in batches():
         result=subprocess.run([*command,*arguments[start:end]],cwd=ROOT,text=True,capture_output=True,timeout=60)

@@ -7,11 +7,12 @@ import ctypes
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import platform
 import random
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-presentation-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-presentation.bend','-o',f'build/dns-presentation.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-presentation.c','-lpthread','-lm','-o','build/dns-presentation'],cwd=ROOT,check=True)
@@ -51,5 +52,5 @@ for label,command in [('native 1',['build/dns-presentation','--threads','1']),('
         assert got[:3]==['invalid']*3,(label,'byte boundary',got[:3])
         for text,actual,result in zip(batch,got[3:],want[3:]):assert actual==result,(label,repr(text),actual,result)
     rows.append(dict(backend=label,presentation_cases=len(values),additional_byte_boundaries=3));print(f'{label}: {len(values)} presentation names PASS',flush=True)
-paths=['packages/runtime/src/dns-presentation.bend','packages/runtime/src/dns-name.bend','packages/runtime/src/utf8.bend','tests/dns-presentation.bend','tests/dns_presentation_check.py','build/dns-presentation','build/dns-presentation.js']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend','packages/runtime/src/utf8.bend','tests/dns-presentation.bend','tests/dns_presentation_check.py','build/dns-presentation','build/dns-presentation.js']
 (ROOT/'build/dns-presentation-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,libc_version=list(platform.libc_ver()),sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/dns-presentation-{suffix}-build.json').read_text()) for suffix in ['c','js']}),indent=2)+'\n')

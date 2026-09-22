@@ -6,6 +6,7 @@ No external HTTP requests are made. TLS/DNS/blocked-port policy are not tested.
 import argparse
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 
@@ -15,7 +16,7 @@ parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 if not args.no_build:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-native-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-url.bend', 'build/http-url'], cwd=ROOT, check=True)
-    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-js-build.json', '--', str(Path.home()/'.bend/bin/bend'), 'packages/runtime/test/http-url.bend', '-o', 'build/http-url.js'], cwd=ROOT, check=True)
+    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-js-build.json', '--', str(Path(BEND)), 'packages/runtime/test/http-url.bend', '-o', 'build/http-url.js'], cwd=ROOT, check=True)
 rng = random.Random(20260919)
 hosts = ['example.com', 'EXAMPLE.com', 'bücher.example', '127.1', '0x7f.1', '[::1]', '[2001:0db8::1]', 'localhost.']
 paths = ['/', '/a', '//x', '/a/../b', '/é/%2f', '/x%20y']

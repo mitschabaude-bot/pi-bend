@@ -1,11 +1,11 @@
 import Base
-import ../packages/runtime/src/dns-tcp-query.bend as Query
-import ../packages/runtime/src/dns-tcp-session.bend as Session
-import ../packages/runtime/src/dns-tcp-peer.bend as Peer
-import ../packages/runtime/src/dns-tcp-connection.bend as TCP
-import ../packages/runtime/src/dns-tcp-frame.bend as Frame
+import ../packages/runtime/src/dns-transport.bend as Query
+import ../packages/runtime/src/dns-transport.bend as Session
+import ../packages/runtime/src/dns-transport.bend as Peer
+import ../packages/runtime/src/dns-transport.bend as TCP
+import ../packages/runtime/src/dns-message.bend as Frame
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abortable-socket.bend as SocketIO
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/deadline.bend as Deadline
@@ -26,17 +26,17 @@ def retained(value: Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>>) -> Str
     case None{}: "none"
     case Some{why}: cause(why)
 
-def outcome(value: Result<&2, &2, Query.Error<String>, Query.Reply>) -> String:
+def outcome(value: Result<&2, &2, Query.TcpQueryError<String>, Query.Reply>) -> String:
   match value:
-    case Done{Query.Answer{Message.Message{_, Message.Header{_, flags, _, _, _, _}, _, _, _, _}}}: "answer:" ++ U32.show(flags)
-    case Done{Query.Truncated{_}}: "truncated"
-    case Fail{Query.InvalidReadSize{}}: "zero"
-    case Fail{Query.Connection{Connect.Aborted{why}}}: "connect:" ++ cause(why)
-    case Fail{Query.Connection{Connect.SocketError{code, _}}}: "socket:" ++ U32.show(code)
-    case Fail{Query.Adoption{Peer.Adoption{SocketIO.Aborted{why}}}}: "adopt:" ++ cause(why)
-    case Fail{Query.Terminated{Session.Transport{TCP.Transport{_, SocketIO.Aborted{why}}}}}: "read:" ++ cause(why)
+    case Done{Query.TcpQueryAnswer{Message.Message{_, Message.Header{_, flags, _, _, _, _}, _, _, _, _}}}: "answer:" ++ U32.show(flags)
+    case Done{Query.TcpQueryTruncated{_}}: "truncated"
+    case Fail{Query.TcpQueryInvalidReadSize{}}: "zero"
+    case Fail{Query.TcpQueryConnection{Connect.Aborted{why}}}: "connect:" ++ cause(why)
+    case Fail{Query.TcpQueryConnection{Connect.SocketError{code, _}}}: "socket:" ++ U32.show(code)
+    case Fail{Query.TcpQueryAdoption{Peer.Adoption{SocketIO.Aborted{why}}}}: "adopt:" ++ cause(why)
+    case Fail{Query.Terminated{Session.TcpSessionTransport{TCP.Transport{_, SocketIO.Aborted{why}}}}}: "read:" ++ cause(why)
     case Fail{Query.Terminated{Session.EndOfStream{}}}: "eof"
-    case Fail{Query.Terminated{Session.Transport{TCP.Framing{Frame.IncompleteFrame{}}}}}: "frame"
+    case Fail{Query.Terminated{Session.TcpSessionTransport{TCP.Framing{Frame.IncompleteFrame{}}}}}: "frame"
     case Fail{Query.Submission{Session.Query{_}}}: "query"
     case _: "unexpected"
 

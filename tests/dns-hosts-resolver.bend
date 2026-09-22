@@ -1,46 +1,46 @@
 import Base
-import ../packages/runtime/src/dns-hosts-resolver.bend as HostResolver
-import ../packages/runtime/src/hosts-resolve.bend as HostResolve
-import ../packages/runtime/src/hosts-file.bend as HostFile
+import ../packages/runtime/src/dns-resolver.bend as HostResolver
+import ../packages/runtime/src/hosts.bend as HostResolve
+import ../packages/runtime/src/hosts.bend as HostFile
 import ../packages/runtime/src/hosts.bend as Hosts
 import ./hosts-file.bend as HostShow
 import ../packages/runtime/src/dns-resolver.bend as Resolver
-import ../packages/runtime/src/resolver-configuration.bend as Settings
-import ../packages/runtime/src/resolver-search.bend as Configuration
+import ../packages/runtime/src/resolver-config.bend as Settings
+import ../packages/runtime/src/resolver-config.bend as Configuration
 import ../packages/runtime/src/random-index.bend as Index
-import ../packages/runtime/src/dns-address-lookup.bend as Lookup
-import ../packages/runtime/src/dns-address-answer.bend as Answer
-import ../packages/runtime/src/dns-name.bend as Name
-import ../packages/runtime/src/dns-server-source.bend as Selector
-import ../packages/runtime/src/dns-exchange-source.bend as Exchange
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/resolver-transport.bend as Prepare
-import ../packages/runtime/src/resolver-options.bend as Options
-import ../packages/runtime/src/resolver-request.bend as Request
-import ../packages/runtime/src/dns-query.bend as Query
-import ../packages/runtime/src/dns-id.bend as Id
+import ../packages/runtime/src/dns-resolver.bend as Lookup
+import ../packages/runtime/src/dns-resolver.bend as Answer
+import ../packages/runtime/src/dns-message.bend as Name
+import ../packages/runtime/src/dns-transport.bend as Selector
+import ../packages/runtime/src/dns-transport.bend as Exchange
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Prepare
+import ../packages/runtime/src/resolver-config.bend as Options
+import ../packages/runtime/src/resolver-config.bend as Request
+import ../packages/runtime/src/dns-message.bend as Query
+import ../packages/runtime/src/dns-message.bend as Id
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/test/utf8-runner.bend as Scalar
-import ../packages/runtime/src/dns-address-search.bend as SearchIO
-import ../packages/runtime/src/dns-search.bend as Search
-import ../packages/runtime/src/dns-search-run.bend as Run
+import ../packages/runtime/src/dns-resolver.bend as SearchIO
+import ../packages/runtime/src/dns-message.bend as Search
+import ../packages/runtime/src/dns-message.bend as Run
 import ./dns-search-response.bend as ResponseTest
 import ./dns-lookup-ids.bend as IDs
 import ./dns-lookup-random.bend as LookupTest
 import ./dns-tcp-query.bend as TCPTest
 import ./dns-udp-query.bend as UDPTest
 
-def outcome(result: Result<&2, &2, Lookup.Error<String>, Answer.Selection>) -> String:
+def outcome(result: Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection>) -> String:
   match result:
     case Fail{Lookup.Aborted{why}}: "abort:" ++ TCPTest.cause(why)
     case Fail{Lookup.Identifier{Id.SourceFailure{code, _}}}: "entropy:" ++ U32.show(code)
     case Fail{Lookup.Transport{_}}: "transport"
     case other: LookupTest.outcome(other)
 
-def queryOptions(value: Request.Prepared) -> Query.Options:
+def queryOptions(value: Request.Prepared) -> Query.QueryOptions:
   match value:
     case Request.Prepared{_, options}: options
 
@@ -54,17 +54,17 @@ def nextPort(values: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> U32:
     case Plan.Attempt{endpoint, _, _} <> _: endpointPort(endpoint)
     case Nil{}: 0
 
-def report(value: SearchIO.Report<String>) -> IO(Unit):
+def report(value: SearchIO.AddressSearchReport<String>) -> IO(Unit):
   match value:
-    case SearchIO.Report{Done{selection}, reason}:
+    case SearchIO.AddressSearchReport{Done{selection}, reason}:
       do IO<Unit>:
         IO.print(outcome(Done{selection}))
         IO.print(TCPTest.retained(reason))
-    case SearchIO.Report{Fail{Run.Halted{error}}, reason}:
+    case SearchIO.AddressSearchReport{Fail{Run.Halted{error}}, reason}:
       do IO<Unit>:
         IO.print(outcome(Fail{error}))
         IO.print(TCPTest.retained(reason))
-    case SearchIO.Report{Fail{Run.NoAnswer{error}}, reason}:
+    case SearchIO.AddressSearchReport{Fail{Run.NoAnswer{error}}, reason}:
       do IO<Unit>:
         IO.print("dns:" ++ ResponseTest.error(error))
         IO.print(TCPTest.retained(reason))
@@ -103,7 +103,7 @@ def hostReport(value: HostResolve.Report<HostFile.Failure, HostResolver.DNS<Stri
       do IO<Unit>:
         IO.print("source:" ++ U32.show(U32.from_nat(line)))
         IO.print("none")
-    case HostResolve.FromNetwork{HostResolver.InvalidName{_}}:
+    case HostResolve.FromNetwork{HostResolver.HostsResolverInvalidName{_}}:
       do IO<Unit>:
         IO.print("invalid-name")
         IO.print("none")
@@ -111,7 +111,7 @@ def hostReport(value: HostResolve.Report<HostFile.Failure, HostResolver.DNS<Stri
 
 def once(+mode: String, ids: IDs.Source, resolver: Resolver.Resolver, parent: Abort.AbortSignal<String>, +kind: U32) -> IO(Unit):
   do IO<Unit>:
-    result : HostResolve.Report<HostFile.Failure, HostResolver.DNS<String>> <- HostResolver.lookupWith(~IDs.Source, ~IDs.draw, ~String, ~HostFile.Failure, ids, resolver, parent, chosenFamily(kind), textName(mode), database(mode, kind))
+    result : HostResolve.Report<HostFile.Failure, HostResolver.DNS<String>> <- HostResolver.lookupWithHostsResolver(~IDs.Source, ~IDs.draw, ~String, ~HostFile.Failure, ids, resolver, parent, chosenFamily(kind), textName(mode), database(mode, kind))
     hostReport(result)
 
 def repeat(enabled: Bool, ids: IDs.Source, resolver: Resolver.Resolver, parent: Abort.AbortSignal<String>, kind: U32) -> IO(Unit):
@@ -125,7 +125,7 @@ def run(+mode: String, +ids: IDs.Source, +kind: U32, +parent: Abort.AbortSignal<
       do IO<Unit>:
         once(mode, ids, Resolver.Resolver{config, source}, parent, kind)
         repeat(String.eq(mode, "repeat"), ids, Resolver.Resolver{config, source}, parent, kind)
-        next : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Selector.choose(Plan.Attempt<Endpoint.Endpoint>, source)
+        next : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Selector.chooseServerSource(Plan.Attempt<Endpoint.Endpoint>, source)
         IO.print("next:" ++ U32.show(nextPort(next)))
         Resolver.close(owner)
 
@@ -157,7 +157,7 @@ def features(+mode: String) -> List<&2, Options.Feature>:
 def args(values: List<String>) -> IO(Unit):
   match values:
     case +mode <> +family <> first <> second <> kind <> Nil{}:
-      ready(mode, Scalar.decimal(kind, 0), Settings.prepare(Endpoint.Endpoint, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}, Bool.pick(U32, String.eq(mode, "deadline"), 1200, 7000), Bool.pick(U32, String.eq(mode, "size"), 0, 7), Configuration.prepare(Options.Options{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 1), features(mode)}, "x" <> "y" <> Nil{})))
+      ready(mode, Scalar.decimal(kind, 0), Settings.prepareConfiguration(Endpoint.Endpoint, UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(first, 0)) <> UDPTest.destination(Scalar.decimal(family, 0), Scalar.decimal(second, 0)) <> Nil{}, Bool.pick(U32, String.eq(mode, "deadline"), 1200, 7000), Bool.pick(U32, String.eq(mode, "size"), 0, 7), Configuration.prepareSearch(Options.OptionsOptions{1, 1, Bool.pick(U32, String.eq(mode, "zero-attempts"), 0, 1), features(mode)}, "x" <> "y" <> Nil{})))
     case _: IO.die(Unit, 1, "expected mode family first second kind")
 
 def main() -> IO(Unit):

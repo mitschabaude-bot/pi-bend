@@ -1,7 +1,8 @@
 """Live numeric UDP DNS attempts under nested deadlines; reply filtering, encoding and cleanup."""
 import hashlib,json,re,select,socket,struct,subprocess,threading,time
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-peer-candidate'
+from bend_toolchain import BEND, TOOLCHAIN
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';candidate=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-udp-query-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-udp-query.bend','-o',f'build/dns-udp-query.{suffix}'],cwd=ROOT,check=True)
 source=(ROOT/'build/dns-udp-query.c').read_text()+'''

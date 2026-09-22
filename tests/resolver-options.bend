@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/resolver-options.bend as Options
+import ../packages/runtime/src/resolver-config.bend as Options
 import ../packages/runtime/src/resolver-config.bend as Config
 
 def bit(value: Bool) -> String:
@@ -10,14 +10,14 @@ def bit(value: Bool) -> String:
 def features() -> List<&2, Options.Feature>:
   Options.Rotate{} <> Options.Edns{} <> Options.SingleRequestReopen{} <> Options.SingleRequest{} <> Options.NoTldQuery{} <> Options.NoReload{} <> Options.UseTcp{} <> Options.TrustAd{} <> Options.NoAAAA{} <> Nil{}
 
-def flags(items: List<&2, Options.Feature>, +options: Options.Options, result: String) -> String:
+def flags(items: List<&2, Options.Feature>, +options: Options.OptionsOptions, result: String) -> String:
   match items:
     case Nil{}: result
     case item <> rest: flags(rest, options, result ++ bit(Options.enabled(item, options)))
 
-def numbers(values: Options.Options) -> String:
+def numbers(values: Options.OptionsOptions) -> String:
   match values:
-    case Options.Options{ndots, timeout, attempts, _}: U32.show(ndots) ++ "," ++ U32.show(timeout) ++ "," ++ U32.show(attempts)
+    case Options.OptionsOptions{ndots, timeout, attempts, _}: U32.show(ndots) ++ "," ++ U32.show(timeout) ++ "," ++ U32.show(attempts)
 
 def diagnostics(values: List<&2, Options.Diagnostic>) -> IO(Unit):
   match values:
@@ -26,14 +26,14 @@ def diagnostics(values: List<&2, Options.Diagnostic>) -> IO(Unit):
       do IO<Unit>:
         IO.print("malformed:" ++ token)
         diagnostics(rest)
-    case Options.Unknown{token} <> rest:
+    case Options.OptionsUnknown{token} <> rest:
       do IO<Unit>:
         IO.print("unknown:" ++ token)
         diagnostics(rest)
 
-def report(value: Options.Report) -> IO(Unit):
+def report(value: Options.OptionsReport) -> IO(Unit):
   match value:
-    case Options.Report{+values, issues}:
+    case Options.OptionsReport{+values, issues}:
       do IO<Unit>:
         IO.print(flags(features(), values, numbers(values)))
         diagnostics(issues)

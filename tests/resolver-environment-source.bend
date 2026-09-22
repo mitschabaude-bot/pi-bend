@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/resolver-environment.bend as Environment
+import ../packages/runtime/src/resolver-config.bend as Environment
 import ./resolver-environment.bend as Output
 
 def returned(missing: Bool, failed: Bool, empty: Bool, local: Bool) -> Result<&1, &1, U32 & String, String>:
@@ -22,7 +22,7 @@ def args(values: List<String>) -> IO(Unit):
   match values:
     case mode <> Nil{}:
       do IO<Unit>:
-        result : Result<&2, &2, Environment.Error, Environment.Values> <- Environment.captureWith(~String, ~lookup, mode)
+        result : Result<&2, &2, Environment.EnvironmentError, Environment.Values> <- Environment.captureWith(~String, ~lookup, mode)
         Output.report("search file.test\noptions timeout:2", "host.default", result)
     case _: IO.die(Unit, 1, "expected mode")
 

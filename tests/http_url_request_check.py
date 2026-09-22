@@ -6,6 +6,7 @@ Fetch transport defaults and real Bend socket exchange are separate coverage.
 import argparse
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,7 @@ parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 if not args.no_build:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '12', '--stats', 'build/http-url-request-native-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-url-request.bend', 'build/http-url-request'], cwd=ROOT, check=True)
-    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-request-js-build.json', '--', str(Path.home()/'.bend/bin/bend'), 'packages/runtime/test/http-url-request.bend', '-o', 'build/http-url-request.js'], cwd=ROOT, check=True)
+    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-request-js-build.json', '--', str(Path(BEND)), 'packages/runtime/test/http-url-request.bend', '-o', 'build/http-url-request.js'], cwd=ROOT, check=True)
 script = r'''
 const http=require('node:http');
 (async()=>{

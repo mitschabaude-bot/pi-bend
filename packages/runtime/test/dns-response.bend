@@ -1,5 +1,5 @@
 import Base
-import ../src/dns-response.bend as Response
+import ../src/dns-message.bend as Response
 import ../src/dns-message.bend as Message
 import ../src/url-ipv4.bend as IPv4
 import ../src/url-ipv6.bend as IPv6
@@ -32,7 +32,7 @@ def flags(prefix: String, value: Message.Header) -> String:
 def show(value: Response.Decision) -> String:
   match value:
     case Response.Ignore{why}: "ignore:" ++ reason(why)
-    case Response.Truncated{head}: flags("truncated:", head)
+    case Response.ResponseTruncated{head}: flags("truncated:", head)
     case Response.Matched{Message.Message{_, head, _, _, _, _}}: flags("matched:", head)
 
 def ipv6(+mode: U32, destination: Bool) -> Response.Endpoint:
@@ -45,7 +45,7 @@ def endpoint(v6: Bool, +mode: U32, destination: Bool) -> Response.Endpoint:
 
 def inspect(stream: Bool, transaction: Response.Transaction, source: Response.Endpoint, destination: Response.Endpoint, wire: List<&2, U32>) -> Response.Decision:
   match stream:
-    case False{}: Response.inspect(transaction, source, destination, wire)
+    case False{}: Response.inspectResponse(transaction, source, destination, wire)
     case True{}: Response.inspectStream(transaction, source, destination, wire)
 
 def runMode(stream: Bool, +mode: U32, id: U32, opcode: U32, expected: Message.Question, wire: List<&2, U32>) -> String:

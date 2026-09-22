@@ -9,13 +9,14 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import platform
 import select
 import socket
 import struct
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-server-rotation-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-server-rotation.bend','-o',f'build/dns-server-rotation.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-server-rotation.c','-lpthread','-lm','-o','build/dns-server-rotation'],cwd=ROOT,check=True)
@@ -83,6 +84,6 @@ for count in [1,2,3]:
             assert choices==observed,(backend,count,flags,initial,choices,observed)
         libc.append(dict(servers=count,flags=flags,initial=initial,first_servers=observed))
 print('9 libc loopback sequences / 216 queries PASS',flush=True)
-paths=['packages/runtime/src/dns-server-rotation.bend','tests/dns-server-rotation.bend','tests/dns_server_rotation_check.py','tests/dns-rotation-oracle.c','build/dns-server-rotation','build/dns-server-rotation.js']
+paths=['packages/runtime/src/dns-transport.bend','tests/dns-server-rotation.bend','tests/dns_server_rotation_check.py','tests/dns-rotation-oracle.c','build/dns-server-rotation','build/dns-server-rotation.js']
 r=dict(scope=__doc__,checks=checks,libc=libc,libc_version=platform.libc_ver(),sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-server-rotation-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((compiler/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-server-rotation-result.json').write_text(json.dumps(r,indent=2)+'\n')

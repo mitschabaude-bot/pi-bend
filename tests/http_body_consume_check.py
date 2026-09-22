@@ -8,12 +8,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-BEND = os.environ.get('BEND', str(ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts'))
+BEND = BEND
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'packages/runtime/test/http-body-consume.bend'
 arguments, expected = [], []

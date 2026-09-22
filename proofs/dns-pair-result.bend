@@ -1,6 +1,6 @@
 import Base
 import ../laws/dns-pair-result.bend as Laws
-import ../packages/runtime/src/dns-pair-result.bend as Pair
+import ../packages/runtime/src/dns-resolver.bend as Pair
 
 def Laws.left_terminal_retains_both(Report, priority, left, right, other):
   match priority:

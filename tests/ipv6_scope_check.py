@@ -3,12 +3,13 @@ import hashlib
 import ipaddress
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=ROOT/'build/bend-hostname-candidate'
+compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/ipv6-scope-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/ipv6-scope.bend','-o',f'build/ipv6-scope.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/ipv6-scope.c','-lpthread','-lm','-o','build/ipv6-scope'],cwd=ROOT,check=True)
@@ -61,6 +62,6 @@ for backend,command in [('native 1',['build/ipv6-scope','--threads','1']),('nati
         assert run.returncode==0 and not run.stderr and run.stdout==('\n'.join(want)+'\n').encode(),(backend,index,args,run,want)
     checks.append(dict(backend=backend,cases=len(cases)))
     print(f'{backend}: {len(cases)} IPv6 scope cases PASS',flush=True)
-paths=['packages/runtime/src/ipv6-scope.bend','packages/runtime/src/resolver-scope.bend','tests/ipv6-scope.bend','tests/ipv6_scope_check.py']
+paths=['packages/runtime/src/ipv6-scope.bend','packages/runtime/src/resolver-config.bend','tests/ipv6-scope.bend','tests/ipv6_scope_check.py']
 result=dict(scope=__doc__,checks=checks,libc_numeric_host_cases=oracle,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/ipv6-scope-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/ipv6-scope-result.json').write_text(json.dumps(result,indent=2)+'\n')

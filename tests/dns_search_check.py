@@ -9,12 +9,13 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import struct
 import subprocess
 import threading
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-search-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-search.bend','-o',f'build/dns-search.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search.c','-lpthread','-lm','-o','build/dns-search'],cwd=ROOT,check=True)
@@ -99,5 +100,5 @@ for case in network_cases:
     assert seen==expected,(case,seen,expected)
     observations.append(dict(input=list(case),queries=[list(value) for value in seen]))
 print(f'libc: {len(network_cases)} loopback NXDOMAIN sequences PASS',flush=True)
-paths=['packages/runtime/src/dns-search.bend','tests/dns-search.bend','tests/dns-search-oracle.c','tests/dns_search_check.py','build/dns-search','build/dns-search.js']
+paths=['packages/runtime/src/dns-message.bend','tests/dns-search.bend','tests/dns-search-oracle.c','tests/dns_search_check.py','build/dns-search','build/dns-search.js']
 (ROOT/'build/dns-search-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,libc_sequences=observations,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/dns-search-{suffix}-build.json').read_text()) for suffix in ['c','js']}),indent=2)+'\n')

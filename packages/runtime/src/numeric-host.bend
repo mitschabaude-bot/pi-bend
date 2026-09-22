@@ -1,7 +1,7 @@
 import Base
-import ./hosts-file.bend as Literal
-import ./hosts-family.bend as Family
-import ./resolver-address.bend as Zone
+import ./hosts.bend as Literal
+import ./hosts.bend as Family
+import ./resolver-config.bend as Zone
 import ./url-ipv4.bend as IPv4
 import ./url-ipv6.bend as IPv6
 

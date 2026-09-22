@@ -1,6 +1,6 @@
 # Native resolver diagnostics
 
-`packages/runtime/src/resolver-diagnostic.bend` presents resolver configuration failures without changing their acceptance policy. It retains file operation and OS code/message, environment-variable identity, invalid option tokens, transport-plan causes and UTF-8 byte positions. Option and environment names are JSON-quoted so quotes and line breaks remain unambiguous. The typed source report remains available separately; rendering does not reread files or inspect an environment.
+the resolver diagnostic section of `dns-resolver.bend` presents resolver configuration failures without changing their acceptance policy. It retains file operation and OS code/message, environment-variable identity, invalid option tokens, transport-plan causes and UTF-8 byte positions. Option and environment names are JSON-quoted so quotes and line breaks remain unambiguous. The typed source report remains available separately; rendering does not reread files or inspect an environment.
 
 The public `messages` function returns an immutable data list. Invalid options retain one message per diagnostic in their original order; callers choose how to present a collection. Loading and transport failures produce one message. An explicitly constructed invalid-options value with an empty diagnostic list stays empty, rather than inventing a cause. The system-provider initialization renderer still needs to compose these messages with entropy/owner-initialization failures.
 

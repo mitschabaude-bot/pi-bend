@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import struct
 import subprocess
@@ -14,7 +15,7 @@ ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--no-build',action='store_true');args=p.parse_args()
 if not args.no_build:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-pending-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-pending.bend','build/dns-pending'],cwd=ROOT,check=True)
-subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-pending-js-build.json','--',str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/dns-pending.bend','-o','build/dns-pending.js'],cwd=ROOT,check=True)
+subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-pending-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-pending.bend','-o','build/dns-pending.js'],cwd=ROOT,check=True)
 
 def wire(id,kind=1,flags=0x8180,qd=1,an=0):
     return list(struct.pack('!6H',id,flags,qd,an,0,0)+(b'\0'+struct.pack('!HH',kind,1) if qd else b''))
@@ -97,5 +98,5 @@ for label,command in [('native 1',['build/dns-pending','--threads','1']),('nativ
         assert result.returncode==0 and got==expected and not result.stderr,(label,index,result.returncode,result.stderr,next(((i,commands[i],a,b) for i,(a,b) in enumerate(zip(got,expected)) if a!=b),('length',len(got),len(expected))))
     rows.append(dict(backend=label,sequences=len(sequences),transitions=sum(len(x[0]) for x in sequences)))
     print(label,rows[-1],flush=True)
-paths=['packages/runtime/src/dns-pending.bend','packages/runtime/test/dns-pending.bend','tests/dns_pending_check.py','build/dns-pending','build/dns-pending.js']
+paths=['packages/runtime/src/dns-transport.bend','packages/runtime/test/dns-pending.bend','tests/dns_pending_check.py','build/dns-pending','build/dns-pending.js']
 (ROOT/'build/dns-pending-result.json').write_text(json.dumps({'scope':__doc__,'results':rows,'seed':7766,'sha256':{p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/hosts-file.bend as File
+import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar

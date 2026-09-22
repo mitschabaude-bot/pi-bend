@@ -3,11 +3,12 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 BUN = Path.home()/'.bun/bin/bun'
-COMPILER = Path.home()/'.bend/current/bend2'
+COMPILER = TOOLCHAIN
 for suffix in ['c', 'js']:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', f'build/dns-server-position-{suffix}-build.json', '--', str(BUN), str(COMPILER/'main.ts'), 'tests/dns-server-position.bend', '-o', f'build/dns-server-position.{suffix}'], cwd=ROOT, check=True)
 audit = '\nstatic void __attribute__((destructor)) audit(void) { unsigned live=0; for(u32 i=0;i<chan_len;i++) live+=chan_rows[i].live; fprintf(stderr,"LIVE %u\\n",live); }\n'
@@ -36,6 +37,6 @@ for backend, command in [('native 1', ['build/dns-server-position','--threads','
         assert run.returncode==0 and run.stdout.splitlines()==wanted and run.stderr==('LIVE 0\n' if backend.startswith('native') else ''), (backend,start,run.returncode,run.stderr,run.stdout[:300],[line[:80] for line in wanted[:3]])
     checks.append(dict(backend=backend,sequences=len(cases),api_checks=2*len(cases),native_live_channels=0 if backend.startswith('native') else None))
     print(backend+': '+str(len(cases))+' seeded sequences PASS',flush=True)
-paths = ['packages/runtime/src/dns-server-rotation.bend','packages/runtime/src/dns-server-source.bend','tests/dns-server-position.bend','tests/dns_server_position_check.py']
+paths = ['packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns-server-position.bend','tests/dns_server_position_check.py']
 record = dict(scope=__doc__,checks=checks,case_digest=hashlib.sha256(json.dumps(cases).encode()).hexdigest(),sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-server-position-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/dns-server-position-result.json').write_text(json.dumps(record,indent=2)+'\n')

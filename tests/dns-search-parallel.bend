@@ -1,9 +1,9 @@
 import Base
-import ../packages/runtime/src/dns-search-parallel.bend as Parallel
-import ../packages/runtime/src/dns-search-run.bend as Run
-import ../packages/runtime/src/dns-search.bend as Search
-import ../packages/runtime/src/dns-name.bend as Name
-import ../packages/runtime/src/dns-search-response.bend as Response
+import ../packages/runtime/src/dns-message.bend as Parallel
+import ../packages/runtime/src/dns-message.bend as Run
+import ../packages/runtime/src/dns-message.bend as Search
+import ../packages/runtime/src/dns-message.bend as Name
+import ../packages/runtime/src/dns-message.bend as Response
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/string-split.bend as Split
 import ./io-pair.bend as Gate
@@ -13,9 +13,9 @@ import ./dns-search.bend as Show
 type Environment is Data:
   Environment{leftReady: Chan(Unit), rightReady: Chan(Unit), turn: Chan(Unit), leftFirst: Bool, leftScript: Ref.Ref<Prior.Source>, rightScript: Ref.Ref<Prior.Source>, events: Ref.Ref<String>}
 
-def callback(+isLeft: Bool, request: Run.Request, environment: Environment) -> IO(Run.Outcome<String, String>):
+def callback(+isLeft: Bool, request: Run.SearchRunRequest, environment: Environment) -> IO(Run.Outcome<String, String>):
   match request environment:
-    case Run.Request{origin, name} Environment{+leftReady, +rightReady, +turn, +leftFirst, leftScript, rightScript, events}:
+    case Run.SearchRunRequest{origin, name} Environment{+leftReady, +rightReady, +turn, +leftFirst, leftScript, rightScript, events}:
       +first = Bool.pick(Bool, isLeft, leftFirst, Bool.not(leftFirst))
       label = Bool.pick(String, isLeft, "L:", "R:") ++ Show.origin(origin) ++ ":" ++ Show.name(Done{name}) ++ ";"
       do IO<Run.Outcome<String, String>>:
@@ -28,19 +28,19 @@ def callback(+isLeft: Bool, request: Run.Request, environment: Environment) -> I
         Gate.release(first, turn)
         return Prior.outcome(token)
 
-def left(environment: Environment, request: Run.Request) -> IO(Run.Outcome<String, String>): callback(True{}, request, environment)
-def right(environment: Environment, request: Run.Request) -> IO(Run.Outcome<String, String>): callback(False{}, request, environment)
+def left(environment: Environment, request: Run.SearchRunRequest) -> IO(Run.Outcome<String, String>): callback(True{}, request, environment)
+def right(environment: Environment, request: Run.SearchRunRequest) -> IO(Run.Outcome<String, String>): callback(False{}, request, environment)
 
 # This fixture merge is deliberately simple; it tests scheduling/search
 # ownership, not a production DNS two-response error-precedence policy.
 def merge(left: Run.Outcome<String, String>, right: Run.Outcome<String, String>) -> Run.Outcome<String, String>:
   match left right:
-    case Run.Halt{error} _: Run.Halt{"left:" ++ error}
-    case _ Run.Halt{error}: Run.Halt{"right:" ++ error}
+    case Run.SearchHalt{error} _: Run.SearchHalt{"left:" ++ error}
+    case _ Run.SearchHalt{error}: Run.SearchHalt{"right:" ++ error}
     case Run.Answer{a} Run.Answer{b}: Run.Answer{a ++ "+" ++ b}
     case Run.Answer{value} _: Run.Answer{value}
     case _ Run.Answer{value}: Run.Answer{value}
-    case _ _: Run.Failed{Response.Missing{}}
+    case _ _: Run.SearchRunFailed{Response.Missing{}}
 
 def run(first: String, leftTokens: String, rightTokens: String) -> IO(Unit):
   do IO<Unit>:
@@ -50,7 +50,7 @@ def run(first: String, leftTokens: String, rightTokens: String) -> IO(Unit):
     +leftScript : Ref.Ref<Prior.Source> <- Ref.new(Prior.Source, Prior.Source{Split.split(leftTokens, ','), 0})
     +rightScript : Ref.Ref<Prior.Source> <- Ref.new(Prior.Source, Prior.Source{Split.split(rightTokens, ','), 0})
     +events : Ref.Ref<String> <- Ref.new(String, "")
-    value : Result<&2, &2, Run.Error<String>, String> <- Parallel.run(~Environment, ~Run.Outcome<String, String>, ~Run.Outcome<String, String>, ~String, ~String, ~left, ~right, ~merge, Environment{leftReady, rightReady, turn, String.eq(first, "L"), leftScript, rightScript, events}, Search.start(Name.Name{(97 <> Nil{}) <> Nil{}}, 0, False{}, Show.domainInput("x|y"), Search.Policy{1, True{}, True{}, False{}}))
+    value : Result<&2, &2, Run.SearchRunError<String>, String> <- Parallel.run(~Environment, ~Run.Outcome<String, String>, ~Run.Outcome<String, String>, ~String, ~String, ~left, ~right, ~merge, Environment{leftReady, rightReady, turn, String.eq(first, "L"), leftScript, rightScript, events}, Search.start(Name.Name{(97 <> Nil{}) <> Nil{}}, 0, False{}, Show.domainInput("x|y"), Search.Policy{1, True{}, True{}, False{}}))
     Prior.report(value)
     log : String <- Ref.dispose(String, events)
     IO.print(log)

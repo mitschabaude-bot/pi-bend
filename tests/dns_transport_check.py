@@ -10,10 +10,11 @@ import struct
 import subprocess
 import time
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
-p.add_argument('candidate', type=Path)
+p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 p.add_argument('--c-input', type=Path)
 a = p.parse_args()
 candidate = a.candidate.resolve()

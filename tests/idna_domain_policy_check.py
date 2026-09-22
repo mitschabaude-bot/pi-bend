@@ -2,6 +2,7 @@
 from itertools import product
 import importlib.util
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -67,7 +68,7 @@ for line in data.source('IdnaTestV2.txt').splitlines():
         official+=1
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-domain-policy.bend','build/idna-domain-policy'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/idna-domain-policy.bend','-o','build/idna-domain-policy.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-domain-policy.bend','-o','build/idna-domain-policy.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-domain-policy','--threads','1']),('native 4',['build/idna-domain-policy','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-domain-policy.js'])]:
     for start in range(0,len(arguments),64):
         result=subprocess.run([*command,*arguments[start:start+64]],cwd=ROOT,text=True,capture_output=True,timeout=60)

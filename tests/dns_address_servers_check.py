@@ -6,6 +6,7 @@ import errno
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import select
 import socket
 import struct
@@ -13,7 +14,7 @@ import subprocess
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path);p.add_argument('--no-build',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN);p.add_argument('--no-build',action='store_true');a=p.parse_args()
 candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
     for suffix in ['c','js']:
@@ -102,6 +103,6 @@ for backend,command in [('native 1',['build/dns-address-servers','--threads','1'
                 assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==want,(backend,number,kind,case,run,want)
                 rows.append(dict(backend=backend,family=number,kind=kind,case=case,queries=trace,output=want))
     print(f'{backend}: {len(cases)*4} address failover cases PASS',flush=True)
-paths=['packages/runtime/src/dns-address-lookup.bend','packages/runtime/src/dns-tcp-servers.bend','packages/runtime/src/dns-tcp-recover.bend','tests/dns-address-servers.bend','tests/dns_address_servers_check.py','tests/dns-lookup-ids.bend','tests/dns-address-lookup.bend','tests/dns-tcp-servers.bend','build/dns-address-servers','build/dns-address-servers.js']
+paths=['packages/runtime/src/dns-resolver.bend','packages/runtime/src/dns-transport.bend','packages/runtime/src/dns-transport.bend','tests/dns-address-servers.bend','tests/dns_address_servers_check.py','tests/dns-lookup-ids.bend','tests/dns-address-lookup.bend','tests/dns-tcp-servers.bend','build/dns-address-servers','build/dns-address-servers.js']
 r=dict(scope=__doc__,cases=rows,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/dns-address-servers-{suffix}-build.json').read_text()) for suffix in ['c','js']},compiler_sha256={name:hashlib.sha256((candidate/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/dns-address-servers-result.json').write_text(json.dumps(r,indent=2)+'\n')

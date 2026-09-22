@@ -1,6 +1,7 @@
 """ContextJ against independent per-joiner backward/forward rule evaluation."""
 from itertools import product
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -36,7 +37,7 @@ for count in [1024,16384,65536]:
 expected = [reference(text) for text in texts]
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-contextj.bend','build/idna-contextj'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/idna-contextj.bend','-o','build/idna-contextj.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-contextj.bend','-o','build/idna-contextj.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-contextj','--threads','1']),('native 4',['build/idna-contextj','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-contextj.js'])]:
     for start in range(0,len(texts),128):
         result=subprocess.run([*command,*texts[start:start+128]],cwd=ROOT,text=True,capture_output=True,timeout=60)

@@ -5,6 +5,7 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import struct
 import subprocess
@@ -12,7 +13,7 @@ import threading
 
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=Path.home()/'.bend/current/bend2/main.ts'
+compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-domains-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-domains.bend','-o',f'build/resolver-domains.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-domains.c','-lpthread','-lm','-o','build/resolver-domains'],cwd=ROOT,check=True)
@@ -90,6 +91,6 @@ for base,ndots,notld,domains in cases[:-1]:
     assert run.returncode==0 and not run.stderr and run.stdout==f'-1,{status}\n' and seen==expected,(base,ndots,notld,domains,run,seen,expected)
     observations.append(dict(base=base,ndots=ndots,notld=notld,domains=domains,queries=[list(q) for q in seen],error=status))
 print(f'libc: {len(observations)} loopback query/error sequences PASS',flush=True)
-paths=['packages/runtime/src/dns-search.bend','packages/runtime/src/resolver-domains.bend','tests/resolver-domains.bend','tests/resolver_domains_check.py','tests/dns-search-oracle.c']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/resolver-config.bend','tests/resolver-domains.bend','tests/resolver_domains_check.py','tests/dns-search-oracle.c']
 result=dict(scope=__doc__,checks=checks,libc_sequences=observations,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/resolver-domains-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/resolver-domains-result.json').write_text(json.dumps(result,indent=2)+'\n')

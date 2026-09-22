@@ -1,22 +1,22 @@
 import Base
-import ../packages/runtime/src/dns-search-text.bend as Text
-import ../packages/runtime/src/dns-presentation.bend as Presentation
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Text
+import ../packages/runtime/src/dns-message.bend as Presentation
+import ../packages/runtime/src/dns-message.bend as Name
 
 def csv(bytes: List<&2, U32>, acc: String) -> String:
   match bytes:
     case Nil{}: acc
     case byte <> rest: csv(rest, acc ++ U32.show(byte) ++ ",")
 
-def wire(result: Result<&2, &2, Name.Error, List<&2, U32>>) -> String:
+def wire(result: Result<&2, &2, Name.NameErrorOfMessage, List<&2, U32>>) -> String:
   match result:
     case Fail{_}: "invalid-wire"
     case Done{bytes}: csv(bytes, "")
 
-def show(value: Result<&2, &2, Presentation.Error, Text.Input>) -> String:
+def show(value: Result<&2, &2, Presentation.PresentationError, Text.Input>) -> String:
   match value:
     case Fail{_}: "invalid"
-    case Done{Text.Input{name, dots, absolute}}: U32.show(dots) ++ ":" ++ Bool.pick(String, absolute, "1:", "0:") ++ wire(Name.encode(name))
+    case Done{Text.Input{name, dots, absolute}}: U32.show(dots) ++ ":" ++ Bool.pick(String, absolute, "1:", "0:") ++ wire(Name.encodeName(name))
 
 def run(values: List<String>) -> IO(Unit):
   match values:

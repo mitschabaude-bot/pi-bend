@@ -4,14 +4,15 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import socket
 import statistics
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 BUN=Path.home()/'.bun/bin/bun'
-BASE=ROOT/'build/bend-hostname-candidate'
-CANDIDATE=ROOT/'build/bend-interface-index-candidate'
+BASE=TOOLCHAIN
+CANDIDATE=TOOLCHAIN
 for fixture in ['interface-index','resolver-interface']:
     for suffix in ['c','js']:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/{fixture}-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),f'tests/{fixture}.bend','-o',f'build/{fixture}.{suffix}'],cwd=ROOT,check=True)
@@ -99,6 +100,6 @@ for fixture in ['tests/hostname-control.bend','tests/static-sum-layout.bend']:
     medians={label:{key:statistics.median(row[label][key] for row in samples) for key in ['seconds','peak_rss_kib']} for label in ['base','candidate']}
     controls.append(dict(fixture=fixture,emission_sha256=digests,pairs=samples,medians=medians))
     print(fixture+': identical C/JS; 20 paired compile measurements complete',flush=True)
-paths=['patches/experimental/interface-index/base.bend','patches/experimental/interface-index/interface_index.c','patches/experimental/interface-index/interface_index.js','scripts/prepare-interface-index-candidate.py','packages/runtime/src/network-interface.bend','packages/runtime/src/resolver-interface.bend','tests/interface-index.bend','tests/interface-index-shim.c','tests/resolver-interface.bend','tests/interface_index_check.py']
+paths=['patches/experimental/interface-index/base.bend','patches/experimental/interface-index/interface_index.c','patches/experimental/interface-index/interface_index.js','scripts/prepare-interface-index-candidate.py','packages/runtime/src/network-interface.bend','packages/runtime/src/dns-resolver.bend','tests/interface-index.bend','tests/interface-index-shim.c','tests/resolver-interface.bend','tests/interface_index_check.py']
 r=dict(scope=__doc__,checks=checks,compile_controls=controls,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},compiler_sha256={label:{name:hashlib.sha256((compiler/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']} for label,compiler in [('base',BASE),('candidate',CANDIDATE)]},builds={fixture:{suffix:json.loads((ROOT/f'build/{fixture}-{suffix}-build.json').read_text()) for suffix in ['c','js']} for fixture in ['interface-index','resolver-interface']})
 (ROOT/'build/interface-index-result.json').write_text(json.dumps(r,indent=2)+'\n')

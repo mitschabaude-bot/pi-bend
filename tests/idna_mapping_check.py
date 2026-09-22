@@ -2,6 +2,7 @@
 from bisect import bisect_right
 import importlib.util
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -104,7 +105,7 @@ for mode in ['n','t']:
         expected.append(str(hash_value))
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-mapping.bend','build/idna-mapping'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/idna-mapping.bend','-o','build/idna-mapping.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-mapping.bend','-o','build/idna-mapping.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-mapping','--threads','1']),('native 4',['build/idna-mapping','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-mapping.js'])]:
     for start in range(0,len(arguments),128):
         result=subprocess.run([*command,*arguments[start:start+128]],cwd=ROOT,text=True,capture_output=True,timeout=60)

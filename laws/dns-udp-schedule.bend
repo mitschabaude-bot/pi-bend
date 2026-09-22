@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/dns-udp-schedule.bend as Schedule
+import ../packages/runtime/src/resolver-config.bend as Schedule
 
 # Independent list specification: repeat the entire selected order per round.
 def rounds(-Server: Data, count: Nat, +servers: List<&2, Server>) -> List<&2, Server>:

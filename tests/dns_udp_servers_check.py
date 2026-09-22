@@ -9,10 +9,11 @@ import struct
 import subprocess
 import time
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 
 ROOT = Path(__file__).resolve().parents[1]
 BUN = Path.home() / '.bun/bin/bun'
-CANDIDATE = Path(os.environ.get('BEND_CANDIDATE', ROOT / 'build/bend-udp-peer-candidate'))
+CANDIDATE = Path(os.environ.get('BEND_CANDIDATE', TOOLCHAIN))
 
 for suffix in ['c', 'js']:
     subprocess.run([

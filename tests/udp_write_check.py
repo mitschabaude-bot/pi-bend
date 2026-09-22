@@ -2,9 +2,10 @@
 import argparse
 import errno,hashlib,json,select,socket,subprocess
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path,nargs='?',default=ROOT/'build/bend-udp-write-candidate')
+parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 candidate=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-write-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-write.bend','-o',f'build/udp-write.{suffix}'],cwd=ROOT,check=True)

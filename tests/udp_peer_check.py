@@ -1,7 +1,8 @@
 """Numeric UDP peer association: actual route metadata, peer filtering and reassociation."""
 import hashlib,json,re,select,socket,subprocess
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-peer-candidate'
+from bend_toolchain import BEND, TOOLCHAIN
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';candidate=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-peer-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-peer.bend','-o',f'build/udp-peer.{suffix}'],cwd=ROOT,check=True)
 source=(ROOT/'build/udp-peer.c').read_text()+'''

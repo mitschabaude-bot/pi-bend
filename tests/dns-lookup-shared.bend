@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/dns-address-lookup.bend as Lookup
-import ../packages/runtime/src/dns-address-answer.bend as Answer
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-resolver.bend as Lookup
+import ../packages/runtime/src/dns-resolver.bend as Answer
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/ref.bend as Ref
@@ -20,10 +20,10 @@ def run(+mode: String, +source: IDs.Source, +address: Connect.Address, +port: U3
   match pair:
     case (scope, +signal):
       do IO<Unit>:
-        first : Result<&2, &2, Lookup.Error<String>, Answer.Selection> <- Lookup.exchangeWith(~IDs.Source, ~IDs.draw, String, source, address, port, signal, kind, Name.Name{(97 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
+        first : Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection> <- Lookup.exchangeWith(~IDs.Source, ~IDs.draw, String, source, address, port, signal, kind, Name.Name{(97 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
         IDs.sourceReport(Lookup.Report{first, None{}})
         pause(String.eq(mode, "expiry-before"))
-        second : Result<&2, &2, Lookup.Error<String>, Answer.Selection> <- Lookup.exchangeWith(~IDs.Source, ~IDs.draw, String, source, address, port, signal, kind, Name.Name{(98 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
+        second : Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection> <- Lookup.exchangeWith(~IDs.Source, ~IDs.draw, String, source, address, port, signal, kind, Name.Name{(98 <> Nil{}) <> Nil{}}, Bool.pick(U32, String.eq(mode, "zero"), 0, 7))
         IDs.sourceReport(Lookup.Report{second, None{}})
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         IO.print(QueryTest.retained(reason))

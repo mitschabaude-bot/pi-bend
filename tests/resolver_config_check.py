@@ -6,12 +6,13 @@ import ctypes
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import socket
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-config-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-config.bend','-o',f'build/resolver-config.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-config.c','-lpthread','-lm','-o','build/resolver-config'],cwd=ROOT,check=True)
@@ -82,5 +83,5 @@ for label,command in [('native 1',['build/resolver-config','--threads','1']),('n
         got=run.stdout.decode().split('\n');assert got[-1]=='';got.pop()
         assert got==want,(label,repr(text[:500]),got[:30],want[:30])
     rows.append(dict(backend=label,documents=len(values)));print(f'{label}: {len(values)} configuration documents PASS',flush=True)
-paths=['packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-address.bend','tests/resolver-config.bend','tests/resolver_config_check.py','build/resolver-config','build/resolver-config.js']
+paths=['packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-config.bend','tests/resolver-config.bend','tests/resolver_config_check.py','build/resolver-config','build/resolver-config.js']
 (ROOT/'build/resolver-config-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths}),indent=2)+'\n')

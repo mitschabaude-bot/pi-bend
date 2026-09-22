@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/resolver-address.bend as Address
+import ../packages/runtime/src/resolver-config.bend as Address
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 
@@ -8,7 +8,7 @@ def zone(value: Maybe<&2, String>) -> String:
     case None{}: "none"
     case Some{text}: "some:" ++ text
 
-def show(value: Result<&2, &2, Address.Error, Address.Address>) -> String:
+def show(value: Result<&2, &2, Address.AddressError, Address.Address>) -> String:
   match value:
     case Fail{_}: "invalid"
     case Done{Address.V4{IPv4.Address{word}}}: "4:" ++ U32.show(word)
@@ -19,7 +19,7 @@ def run(values: List<String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case text <> rest:
       do IO<Unit>:
-        IO.print(show(Address.parse(text)))
+        IO.print(show(Address.parseAddress(text)))
         run(rest)
 
 def main() -> IO(Unit):

@@ -1,6 +1,7 @@
 """URL percent encode sets and forgiving byte decoding; no query parser dependency."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import sys
 from urllib.parse import unquote_to_bytes
@@ -46,7 +47,7 @@ for raw in [bytes(range(256)), b'%', b'%A', b'%%41', b'%4%41', b'%2541', b'%zz',
     expected.append(','.join(map(str, unquote_to_bytes(raw))))
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-percent.bend', 'build/url-percent'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home() / '.bend/bin/bend'), 'packages/runtime/test/url-percent.bend', '-o', 'build/url-percent.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-percent.bend', '-o', 'build/url-percent.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/url-percent', '--threads', '1']), ('native 4', ['build/url-percent', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/url-percent.js'])]:
     for start in range(0, len(arguments), 16):
         result = subprocess.run([*command, *arguments[start:start+16]], cwd=ROOT, text=True, capture_output=True, timeout=30)

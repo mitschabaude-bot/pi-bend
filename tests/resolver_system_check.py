@@ -5,13 +5,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import re
 import socket
 import subprocess
 import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun'
-compiler=ROOT/'build/bend-hostname-candidate'
+compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-system-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-system.bend','-o',f'build/resolver-system.{suffix}'],cwd=ROOT,check=True)
 audit='\n#include <unistd.h>\nstatic void __attribute__((destructor)) audit(void) {\n  const char* root=getenv("PI_BEND_FILE_TEST_ROOT");\n  unsigned live=0;\n  if(root) for(int fd=3;fd<512;fd++) {\n    char link[64], target[4096];\n    snprintf(link,sizeof(link),"/proc/self/fd/%d",fd);\n    ssize_t n=readlink(link,target,sizeof(target)-1);\n    if(n>=0) {\n      target[n]=0;\n      size_t len=strlen(root);\n      if(!strncmp(target,root,len) && (target[len]==0 || target[len]==\'/\')) live++;\n    }\n  }\n  fprintf(stderr,"FILES %u\\n",live);\n}\n'
@@ -98,6 +99,6 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-resolver-system-') as temp:
             assert run.returncode==0 and run.stderr==(b'FILES 0\n' if backend!='Bun' else b'') and run.stdout==('\n'.join(want)+'\n').encode(),(backend,index,run,want)
         checks.append(dict(backend=backend,cases=len(cases),native_fixture_fds_after=0 if backend!='Bun' else None))
         print(backend+': '+str(len(cases))+' system settings loads PASS',flush=True)
-paths=['packages/runtime/src/resolver-system.bend','packages/runtime/src/resolver-hostname.bend','tests/resolver-system.bend','tests/resolver_system_check.py']
+paths=['packages/runtime/src/resolver-config.bend','packages/runtime/src/resolver-config.bend','tests/resolver-system.bend','tests/resolver_system_check.py']
 r=dict(scope=__doc__,checks=checks,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},builds={suffix:json.loads((ROOT/f'build/resolver-system-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/resolver-system-result.json').write_text(json.dumps(r,indent=2)+'\n')

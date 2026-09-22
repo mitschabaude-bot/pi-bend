@@ -6,6 +6,7 @@ is never modified. Pass the directory from prepare-socket-candidate.py.
 import concurrent.futures
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shlex
 import shutil
 import socket
@@ -110,7 +111,7 @@ def check(command, label):
 # Additive declarations/effects must not change existing generated runtime code.
 for extension in ['c', 'js']:
     outputs = []
-    for label, compiler in [('baseline', Path.home() / '.bend/current/bend2'), ('candidate', CANDIDATE)]:
+    for label, compiler in [('baseline', TOOLCHAIN), ('candidate', CANDIDATE)]:
         output = ROOT / f'build/socket-control-{label}.{extension}'
         subprocess.run([str(Path.home() / '.bun/bin/bun'), str(compiler / 'main.ts'),
                         'tests/tcp-text-baseline.bend', '-o', str(output)], cwd=ROOT, check=True)

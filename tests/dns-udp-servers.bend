@@ -1,12 +1,12 @@
 import Base
-import ../packages/runtime/src/dns-udp-servers.bend as Servers
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
-import ../packages/runtime/src/dns-server-rotation.bend as Rotation
-import ../packages/runtime/src/dns-udp-query.bend as Query
-import ../packages/runtime/src/dns-query.bend as Request
+import ../packages/runtime/src/dns-transport.bend as Servers
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Timeout
+import ../packages/runtime/src/dns-transport.bend as Rotation
+import ../packages/runtime/src/dns-transport.bend as Query
+import ../packages/runtime/src/dns-message.bend as Request
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-udp-attempt-scope.bend as Attempt
+import ../packages/runtime/src/dns-transport.bend as Attempt
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
@@ -19,20 +19,20 @@ def port(endpoint: Endpoint.Endpoint) -> String:
     case Endpoint.V4{_, value}: U32.show(value)
     case Endpoint.V6{_, value, _}: U32.show(value)
 
-def failure(value: Servers.Failure<String>) -> String:
+def failure(value: Servers.UdpServersFailure<String>) -> String:
   match value:
-    case Servers.Rejected{Message.Header{_, flags, _, _, _, _}, _}: "rejected:" ++ U32.show(flags)
+    case Servers.UdpServersRejected{Message.Header{_, flags, _, _, _, _}, _}: "rejected:" ++ U32.show(flags)
     case Servers.InvalidExtension{_}: "extension"
     case Servers.InvalidDestination{}: "destination"
     case Servers.InvalidBudget{_}: "budget"
     case Servers.Exchange{error}: QueryTest.outcome(Fail{error})
 
-def outcome(result: Result<&2, &2, Servers.Error<String>, Servers.Reply>) -> String:
+def outcome(result: Result<&2, &2, Servers.UdpServersError<String>, Servers.UdpServersReply>) -> String:
   match result:
-    case Done{Servers.Reply{server, value}}: port(server) ++ ":" ++ QueryTest.outcome(Done{value})
+    case Done{Servers.UdpServersReply{server, value}}: port(server) ++ ":" ++ QueryTest.outcome(Done{value})
     case Fail{Servers.NoAttempts{}}: "empty"
     case Fail{Servers.InvalidCursor{}}: "cursor"
-    case Fail{Servers.Failed{Servers.Report{server, value, end}}}: port(server) ++ ":" ++ failure(value) ++ ":" ++ ScopeTest.show(end)
+    case Fail{Servers.UdpServersFailed{Servers.UdpServersReport{server, value, end}}}: port(server) ++ ":" ++ failure(value) ++ ":" ++ ScopeTest.show(end)
 
 def chosen(value: Rotation.Chosen<Plan.Attempt<Endpoint.Endpoint>>) -> List<&2, Plan.Attempt<Endpoint.Endpoint>>:
   match value:
@@ -62,7 +62,7 @@ def total(+mode: String, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, pai
   match pair:
     case (scope, signal):
       do IO<Unit>:
-        result : Result<&2, &2, Servers.Error<String>, Servers.Reply> <- Servers.exchangeRequest(String, Bool.pick(Nat, String.eq(mode, "zero"), 0n, 2n), servers, signal, request(mode))
+        result : Result<&2, &2, Servers.UdpServersError<String>, Servers.UdpServersReply> <- Servers.exchangeRequestUdpServers(String, Bool.pick(Nat, String.eq(mode, "zero"), 0n, 2n), servers, signal, request(mode))
         IO.print(outcome(result))
         ended : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         return Unit{}

@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/dns-server-rotation.bend as Rotation
+import ../packages/runtime/src/dns-transport.bend as Rotation
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ../packages/runtime/src/string-split.bend as Split
 
@@ -18,12 +18,12 @@ def order(choice: Rotation.Chosen<U32>) -> String:
   match choice:
     case Rotation.Chosen{servers, _}: csv(servers, "")
 
-def stateOf(choice: Rotation.Chosen<U32>) -> Rotation.State<U32>:
+def stateOf(choice: Rotation.Chosen<U32>) -> Rotation.ServerRotationState<U32>:
   match choice:
     case Rotation.Chosen{_, value}: value
 
 # Print each selected order, then advance from the returned immutable state.
-def run(flags: String, state: Rotation.State<U32>) -> IO(Unit):
+def run(flags: String, state: Rotation.ServerRotationState<U32>) -> IO(Unit):
   match flags:
     case SNil{}: IO.pure(Unit, Unit{})
     case SCon{flag, rest}:

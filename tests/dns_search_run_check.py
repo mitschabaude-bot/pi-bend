@@ -8,9 +8,10 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-search-run-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-search-run.bend','-o',f'build/dns-search-run.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-run.c','-lpthread','-lm','-o','build/dns-search-run'],cwd=ROOT,check=True)
@@ -93,5 +94,5 @@ for label,command,audited in commands:
         assert run.returncode==0 and run.stderr==('SEARCH_CHANNELS 0\n' if audited else ''),(label,start,run.returncode,run.stderr)
         assert run.stdout.splitlines()==want,(label,start,run.stdout[:1000],want[:30])
     rows.append(dict(backend=label,cases=len(inputs),live_channels_at_exit=0 if audited else None));print(f'{label}: {len(inputs)} async search cases PASS',flush=True)
-paths=['packages/runtime/src/dns-search-run.bend','packages/runtime/src/dns-search.bend','packages/runtime/src/dns-search-response.bend','tests/dns-search-run.bend','tests/dns_search_run_check.py','build/dns-search-run','build/dns-search-run.js']
+paths=['packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend','packages/runtime/src/dns-message.bend','tests/dns-search-run.bend','tests/dns_search_run_check.py','build/dns-search-run','build/dns-search-run.js']
 (ROOT/'build/dns-search-run-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={suffix:json.loads((ROOT/f'build/dns-search-run-{suffix}-build.json').read_text()) for suffix in ['c','js']}),indent=2)+'\n')

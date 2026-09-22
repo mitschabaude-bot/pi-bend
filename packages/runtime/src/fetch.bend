@@ -16,21 +16,21 @@ import ./http-response-progress.bend as Progress
 import ./http-response-reader.bend as Reader
 import ./http-connect.bend as Connect
 import ./http-host-route.bend as Route
-import ./hosts-resolve.bend as HostsResolve
+import ./hosts.bend as HostsResolve
 import ./connection-driver.bend as Driver
-import ./connection-progress.bend as Connection
+import ./connection-driver.bend as Connection
 import ./abortable-socket.bend as Socket
 import ./socket-upload.bend as Upload
 import ./dns-resolver.bend as Resolver
-import ./dns-pair-hosts-resolver.bend as Named
-import ./dns-pair-search.bend as DNS
-import ./dns-pair-setup.bend as Setup
-import ./dns-search-run.bend as Search
-import ./resolver-system-config.bend as System
-import ./resolver-diagnostic.bend as Diagnostic
-import ./hosts-load.bend as HostsFile
+import ./dns-resolver.bend as Named
+import ./dns-resolver.bend as DNS
+import ./dns-resolver.bend as Setup
+import ./dns-message.bend as Search
+import ./dns-resolver.bend as System
+import ./dns-resolver.bend as Diagnostic
+import ./hosts.bend as HostsFile
 import ./hosts.bend as Hosts
-import ./hosts-file.bend as File
+import ./hosts.bend as File
 import ./utf8-strict.bend as UTF8
 import ./random-index.bend as Index
 
@@ -41,7 +41,7 @@ import ./random-index.bend as Index
 
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Deadline.Cause<Reason>>
 def Transport(-Reason: Data) -> Type: Exchange.Exchange<Deadline.Cause<Reason>>
-def SourceError() -> Data: HostsFile.Error<UTF8.Error>
+def SourceError() -> Data: HostsFile.LoadError<UTF8.Error>
 def HostsResult() -> Data: Result<&2, &2, SourceError(), List<&2, Hosts.Entry<File.Address>>>
 
 type Input<-Reason: Data> is Data:
@@ -68,7 +68,7 @@ def linuxFiles() -> Files:
   Files{"/etc/resolv.conf", "/etc/hosts", 4096, 1048576n, 5000, 65535}
 
 type InitError is Data:
-  ConfigurationFailure{cause: System.Error<UTF8.Error>}
+  ConfigurationFailure{cause: System.SystemConfigError<UTF8.Error>}
   EntropyFailure{cause: Index.Error}
 
 # A hosts-file failure only affects named resolution; numeric addresses never
@@ -81,10 +81,10 @@ def created(hosts: HostsResult(), options: HTTP.Options, result: Result<&2, &1, 
     case Fail{cause}: Fail{EntropyFailure{cause}}
     case Done{resolver}: Done{Runtime{resolver, hosts, options}}
 
-def configured(files: Files, options: HTTP.Options, result: Result<&2, &2, System.Error<UTF8.Error>, System.Prepared>) -> IO(Result<&2, &1, InitError, Runtime>):
+def configured(files: Files, options: HTTP.Options, result: Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared>) -> IO(Result<&2, &1, InitError, Runtime>):
   match files result:
     case _ Fail{cause}: IO.pure(Result<&2, &1, InitError, Runtime>, Fail{ConfigurationFailure{cause}})
-    case Files{_, path, chunkSize, byteLimit, _, _} Done{System.Prepared{_, _, config}}:
+    case Files{_, path, chunkSize, byteLimit, _, _} Done{System.SystemConfigPrepared{_, _, config}}:
       do IO<Result<&2, &1, InitError, Runtime>>:
         hosts : HostsResult() <- HostsFile.read(path, chunkSize, byteLimit)
         resolver : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.create(config)
@@ -94,7 +94,7 @@ def create(+files: Files, options: HTTP.Options) -> IO(Result<&2, &1, InitError,
   match files:
     case Files{path, _, chunkSize, byteLimit, milliseconds, maximum}:
       do IO<Result<&2, &1, InitError, Runtime>>:
-        settings : Result<&2, &2, System.Error<UTF8.Error>, System.Prepared> <- System.loadWith(~UTF8.Error, ~UTF8.decode, path, chunkSize, byteLimit, milliseconds, maximum)
+        settings : Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared> <- System.loadWith(~UTF8.Error, ~UTF8.decode, path, chunkSize, byteLimit, milliseconds, maximum)
         configured(files, options, settings)
 
 def dispose(runtime: Runtime) -> IO(Unit):
@@ -177,23 +177,23 @@ def dnsDeadline(-Reason: Data, fallback: Category, reason: Maybe<&2, Abort.Abort
     case None{}: fallback
     case Some{why}: dnsAbort(Reason, why)
 
-def setup(-Reason: Data, error: Setup.Error<Deadline.Cause<Reason>>) -> Category:
+def setup(-Reason: Data, error: Setup.PairSetupError<Deadline.Cause<Reason>>) -> Category:
   match error:
-    case Setup.Aborted{why}: dnsAbort(Reason, why)
+    case Setup.PairSetupAborted{why}: dnsAbort(Reason, why)
     case _: NonRetryable{}
 
 # QueryFailed is the resolver's terminal outcome; ordinary network failures,
 # negative replies and exhausted attempts produce NoAnswer instead.
-def dnsReport(-Reason: Data, report: DNS.Report<Deadline.Cause<Reason>>) -> Category:
+def dnsReport(-Reason: Data, report: DNS.PairSearchReport<Deadline.Cause<Reason>>) -> Category:
   match report:
-    case DNS.Report{Fail{Search.Halted{DNS.SetupFailed{cause}}}, _}: setup(Reason, cause)
-    case DNS.Report{Fail{Search.Halted{DNS.QueryFailed{_}}}, why}: dnsDeadline(Reason, NonRetryable{}, why)
-    case DNS.Report{Fail{Search.NoAnswer{_}}, why}: dnsDeadline(Reason, Connection{}, why)
-    case DNS.Report{Done{_}, why}: dnsDeadline(Reason, Connection{}, why)
+    case DNS.PairSearchReport{Fail{Search.Halted{DNS.SetupFailed{cause}}}, _}: setup(Reason, cause)
+    case DNS.PairSearchReport{Fail{Search.Halted{DNS.QueryFailed{_}}}, why}: dnsDeadline(Reason, NonRetryable{}, why)
+    case DNS.PairSearchReport{Fail{Search.NoAnswer{_}}, why}: dnsDeadline(Reason, Connection{}, why)
+    case DNS.PairSearchReport{Done{_}, why}: dnsDeadline(Reason, Connection{}, why)
 
 def resolutionCategory(-Reason: Data, report: Connect.Resolution(Deadline.Cause<Reason>, SourceError())) -> Category:
   match report:
-    case Done{Route.Named{HostsResolve.FromNetwork{Named.Completed{report}}}}: dnsReport(Reason, report)
+    case Done{Route.Named{HostsResolve.FromNetwork{Named.PairHostsResolverCompleted{report}}}}: dnsReport(Reason, report)
     case _: NonRetryable{}
 
 def socket(-Reason: Data, error: Socket.Error<Deadline.Cause<Reason>>) -> Category:
@@ -232,7 +232,7 @@ def header(-Reason: Data, error: Progress.Error<Exchange.ReadError<Deadline.Caus
 def exchangeCategory(-Reason: Data, error: HTTP.Error<Deadline.Cause<Reason>>) -> Category:
   match error:
     case HTTP.ConnectionFailure{Connection.Exhausted{}}: Connection{}
-    case HTTP.ConnectionFailure{Connection.Aborted{why}}: requestAbort(Reason, why)
+    case HTTP.ConnectionFailure{Connection.ProgressAborted{why}}: requestAbort(Reason, why)
     case HTTP.ConnectionFailure{_}: NonRetryable{}
     case HTTP.ExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
     case HTTP.ExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)

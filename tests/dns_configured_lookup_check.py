@@ -9,10 +9,11 @@ import struct
 import subprocess
 import time
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('candidate',type=Path)
+p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 p.add_argument('--native-built',action='store_true')
 a=p.parse_args();candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 for suffix in ['c','js']:

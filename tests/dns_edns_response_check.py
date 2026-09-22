@@ -3,13 +3,14 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import struct
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 BUN = Path.home() / '.bun/bin/bun'
-COMPILER = Path.home() / '.bend/current/bend2/main.ts'
+COMPILER = Path(BEND)
 if '--no-build' not in sys.argv:
     for suffix in ['c', 'js']:
         subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', f'build/dns-edns-response-{suffix}-build.json', '--', str(BUN), str(COMPILER), 'tests/dns-edns-response.bend', '-o', f'build/dns-edns-response.{suffix}'], cwd=ROOT, check=True)
@@ -77,6 +78,6 @@ for backend, command in [('native 1', ['build/dns-edns-response', '--threads', '
         assert run.returncode == 0 and not run.stderr and run.stdout.splitlines() == want, (backend, index, run.returncode, run.stderr, run.stdout[:200], want[:2])
     checks.append(dict(backend=backend, cases=len(cases)))
     print(f'{backend}: {len(cases)} EDNS response cases PASS', flush=True)
-paths = ['packages/runtime/src/dns-edns-response.bend', 'tests/dns-edns-response.bend', 'tests/dns_edns_response_check.py']
+paths = ['packages/runtime/src/dns-message.bend', 'tests/dns-edns-response.bend', 'tests/dns_edns_response_check.py']
 result = dict(scope=__doc__, reference='https://datatracker.ietf.org/doc/html/rfc6891', checks=checks, sha256={p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}, builds={s: json.loads((ROOT / f'build/dns-edns-response-{s}-build.json').read_text()) for s in ['c', 'js']})
 (ROOT / 'build/dns-edns-response-result.json').write_text(json.dumps(result, indent=2) + '\n')

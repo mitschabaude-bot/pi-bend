@@ -1,6 +1,7 @@
 """Prepared-label syntax and status checks; full IDNA validation is separate."""
 from itertools import product
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -48,7 +49,7 @@ for mode,hyphens,std3 in product('nt',[False,True],[False,True]):
         expected.append(want)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-label-rules.bend','build/idna-label-rules'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/idna-label-rules.bend','-o','build/idna-label-rules.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-label-rules.bend','-o','build/idna-label-rules.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-label-rules','--threads','1']),('native 4',['build/idna-label-rules','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-label-rules.js'])]:
     for start in range(0,len(arguments),64):
         result=subprocess.run([*command,*arguments[start:start+64]],cwd=ROOT,text=True,capture_output=True,timeout=60)

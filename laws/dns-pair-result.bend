@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/dns-pair-result.bend as Pair
-import ../packages/runtime/src/dns-search-run.bend as Run
-import ../packages/runtime/src/dns-search-response.bend as Response
+import ../packages/runtime/src/dns-resolver.bend as Pair
+import ../packages/runtime/src/dns-message.bend as Run
+import ../packages/runtime/src/dns-message.bend as Response
 
 law left_terminal_retains_both:
   for -Report: Data
@@ -9,7 +9,7 @@ law left_terminal_retains_both:
   for +left: Report
   for +right: Report
   for +other: Pair.Disposition
-  {Pair.merge(Report, priority, Pair.Classified{left, Pair.Terminal{}}, Pair.Classified{right, other}) == Run.Halt{Pair.Reports{Pair.Classified{left, Pair.Terminal{}}, Pair.Classified{right, other}}} : Run.Outcome<Pair.Reports<Report>, Pair.Reports<Report>>}
+  {Pair.merge(Report, priority, Pair.Classified{left, Pair.Terminal{}}, Pair.Classified{right, other}) == Run.SearchHalt{Pair.PairResultReports{Pair.Classified{left, Pair.Terminal{}}, Pair.Classified{right, other}}} : Run.Outcome<Pair.PairResultReports<Report>, Pair.PairResultReports<Report>>}
 
 law right_terminal_retains_both:
   for -Report: Data
@@ -17,7 +17,7 @@ law right_terminal_retains_both:
   for +left: Report
   for +right: Report
   for +other: Pair.Disposition
-  {Pair.merge(Report, priority, Pair.Classified{left, other}, Pair.Classified{right, Pair.Terminal{}}) == Run.Halt{Pair.Reports{Pair.Classified{left, other}, Pair.Classified{right, Pair.Terminal{}}}} : Run.Outcome<Pair.Reports<Report>, Pair.Reports<Report>>}
+  {Pair.merge(Report, priority, Pair.Classified{left, other}, Pair.Classified{right, Pair.Terminal{}}) == Run.SearchHalt{Pair.PairResultReports{Pair.Classified{left, other}, Pair.Classified{right, Pair.Terminal{}}}} : Run.Outcome<Pair.PairResultReports<Report>, Pair.PairResultReports<Report>>}
 
 law answer_and_reply_retained:
   for -Report: Data
@@ -25,7 +25,7 @@ law answer_and_reply_retained:
   for +left: Report
   for +right: Report
   for +code: U32
-  {Pair.merge(Report, priority, Pair.Classified{left, Pair.Answer{}}, Pair.Classified{right, Pair.Reply{code}}) == Run.Answer{Pair.Reports{Pair.Classified{left, Pair.Answer{}}, Pair.Classified{right, Pair.Reply{code}}}} : Run.Outcome<Pair.Reports<Report>, Pair.Reports<Report>>}
+  {Pair.merge(Report, priority, Pair.Classified{left, Pair.Answer{}}, Pair.Classified{right, Pair.Reply{code}}) == Run.Answer{Pair.PairResultReports{Pair.Classified{left, Pair.Answer{}}, Pair.Classified{right, Pair.Reply{code}}}} : Run.Outcome<Pair.PairResultReports<Report>, Pair.PairResultReports<Report>>}
 
 law unavailable_and_answer_retained:
   for -Report: Data
@@ -33,7 +33,7 @@ law unavailable_and_answer_retained:
   for +left: Report
   for +right: Report
   for +cause: Response.Cause
-  {Pair.merge(Report, priority, Pair.Classified{left, Pair.Unavailable{cause}}, Pair.Classified{right, Pair.Answer{}}) == Run.Answer{Pair.Reports{Pair.Classified{left, Pair.Unavailable{cause}}, Pair.Classified{right, Pair.Answer{}}}} : Run.Outcome<Pair.Reports<Report>, Pair.Reports<Report>>}
+  {Pair.merge(Report, priority, Pair.Classified{left, Pair.Unavailable{cause}}, Pair.Classified{right, Pair.Answer{}}) == Run.Answer{Pair.PairResultReports{Pair.Classified{left, Pair.Unavailable{cause}}, Pair.Classified{right, Pair.Answer{}}}} : Run.Outcome<Pair.PairResultReports<Report>, Pair.PairResultReports<Report>>}
 
 law empty_reply_defers_to_other_code:
   for +code: U32

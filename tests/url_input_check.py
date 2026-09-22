@@ -1,6 +1,7 @@
 """Constructor input preprocessing and lossless scheme/relative separation."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import re
 import subprocess
@@ -58,7 +59,7 @@ for index,results in enumerate(actual):
 print(f'Node preprocessing: {len(texts)*2} constructor comparisons ({valid} successful parses) PASS',flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-input.bend','build/url-input'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/url-input.bend','-o','build/url-input.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/url-input.bend','-o','build/url-input.js'],cwd=ROOT,check=True)
 arguments=[]
 for text in texts:
     encoded=codes(text)

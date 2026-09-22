@@ -1,6 +1,7 @@
 """Authority tokenization and credential escaping; host validity is a later stage."""
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -82,7 +83,7 @@ for index, scheme, username, password, host, port in actual:
 print(f'Node authority cross-check: {len(actual)} cases PASS', flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-authority.bend', 'build/url-authority'], cwd=ROOT, check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'), 'packages/runtime/test/url-authority.bend', '-o', 'build/url-authority.js'], cwd=ROOT, check=True)
+subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-authority.bend', '-o', 'build/url-authority.js'], cwd=ROOT, check=True)
 arguments = ['t;' + codes(text) for text in texts]
 for special in [False, True]:
     for authority in ['', '@', 'a:b@example.com:80', 'a@b:c@[::1]:443', 'a\\b@host']:

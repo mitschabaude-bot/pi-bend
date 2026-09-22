@@ -1,19 +1,19 @@
 import Base
-import ../packages/runtime/src/dns-edns.bend as Edns
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Edns
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/dns-transport.bend as Transport
-import ../packages/runtime/src/dns-tcp-query.bend as TCP
-import ../packages/runtime/src/dns-tcp-servers.bend as TCPServers
+import ../packages/runtime/src/dns-transport.bend as TCP
+import ../packages/runtime/src/dns-transport.bend as TCPServers
 import ./dns-tcp-query.bend as TCPTest
 import ./dns-udp-servers.bend as UDPTest
-import ../packages/runtime/src/dns-udp-servers.bend as Servers
-import ../packages/runtime/src/dns-udp-plan.bend as Plan
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
-import ../packages/runtime/src/dns-server-rotation.bend as Rotation
-import ../packages/runtime/src/dns-udp-query.bend as Query
-import ../packages/runtime/src/dns-query.bend as Request
+import ../packages/runtime/src/dns-transport.bend as Servers
+import ../packages/runtime/src/resolver-config.bend as Plan
+import ../packages/runtime/src/resolver-config.bend as Timeout
+import ../packages/runtime/src/dns-transport.bend as Rotation
+import ../packages/runtime/src/dns-transport.bend as Query
+import ../packages/runtime/src/dns-message.bend as Request
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-udp-attempt-scope.bend as Attempt
+import ../packages/runtime/src/dns-transport.bend as Attempt
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/socket-endpoint.bend as Endpoint
@@ -26,9 +26,9 @@ def port(endpoint: Endpoint.Endpoint) -> String:
     case Endpoint.V4{_, value}: U32.show(value)
     case Endpoint.V6{_, value, _}: U32.show(value)
 
-def failure(value: Servers.Failure<String>) -> String:
+def failure(value: Servers.UdpServersFailure<String>) -> String:
   match value:
-    case Servers.Rejected{Message.Header{_, flags, _, _, _, _}, _}: "rejected:" ++ U32.show(flags)
+    case Servers.UdpServersRejected{Message.Header{_, flags, _, _, _, _}, _}: "rejected:" ++ U32.show(flags)
     case Servers.InvalidExtension{_}: "extension"
     case Servers.InvalidDestination{}: "destination"
     case Servers.InvalidBudget{_}: "budget"

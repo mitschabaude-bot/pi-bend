@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shlex
 import socket
 import struct
@@ -16,7 +17,7 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path)
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 parser.add_argument('--no-build',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-tcp-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
@@ -74,5 +75,5 @@ for label,command in [('native 1',['build/dns-tcp-peer-failure','--threads','1']
     assert run.returncode==0 and run.stdout=='PASS DNS TCP peer inspection cleanup\n' and not run.stderr,(label,run)
     results.append(dict(backend=label,mode='inspection failure releases bound UDP port',iterations=32))
     print(label+': inspection cleanup PASS',flush=True)
-paths=[ROOT/'tests/dns-tcp-peer-failure.bend',ROOT/'build/dns-tcp-peer-failure',ROOT/'build/dns-tcp-peer-failure.js',ROOT/'packages/runtime/src/dns-tcp-peer.bend',ROOT/'tests/dns-tcp-peer.bend',ROOT/'tests/dns_tcp_peer_check.py',candidate/'comp.ts',candidate/'base.bend',ROOT/'build/dns-tcp-peer',ROOT/'build/dns-tcp-peer.js']
+paths=[ROOT/'tests/dns-tcp-peer-failure.bend',ROOT/'build/dns-tcp-peer-failure',ROOT/'build/dns-tcp-peer-failure.js',ROOT/'packages/runtime/src/dns-transport.bend',ROOT/'tests/dns-tcp-peer.bend',ROOT/'tests/dns_tcp_peer_check.py',candidate/'comp.ts',candidate/'base.bend',ROOT/'build/dns-tcp-peer',ROOT/'build/dns-tcp-peer.js']
 (ROOT/'build/dns-tcp-peer-result.json').write_text(json.dumps({'scope':__doc__,'cases':results,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

@@ -7,11 +7,12 @@ import hashlib
 import ipaddress
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import socket
 import subprocess
 
-ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path.home()/'.bend/current/bend2/main.ts'
+ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-address-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-address.bend','-o',f'build/resolver-address.{suffix}'],cwd=ROOT,check=True)
 subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-address.c','-lpthread','-lm','-o','build/resolver-address'],cwd=ROOT,check=True)
@@ -50,5 +51,5 @@ for label,command in [('native 1',['build/resolver-address','--threads','1']),('
         assert len(got)==len(want),(label,start,len(got),len(want))
         for token,actual,result in zip(batch,got,want):assert actual==result,(label,repr(token),actual,result)
     rows.append(dict(backend=label,cases=len(values)));print(f'{label}: {len(values)} resolver address tokens PASS',flush=True)
-paths=['packages/runtime/src/resolver-address.bend','tests/resolver-address.bend','tests/resolver_address_check.py','build/resolver-address','build/resolver-address.js']
+paths=['packages/runtime/src/resolver-config.bend','tests/resolver-address.bend','tests/resolver_address_check.py','build/resolver-address','build/resolver-address.js']
 (ROOT/'build/resolver-address-result.json').write_text(json.dumps(dict(scope=__doc__,cases=rows,libc_version=list(__import__('platform').libc_ver()),sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths}),indent=2)+'\n')

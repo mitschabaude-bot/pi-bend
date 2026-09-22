@@ -1,8 +1,8 @@
 import Base
-import ../src/dns-pending.bend as Pending
-import ../src/dns-response.bend as Response
+import ../src/dns-transport.bend as Pending
+import ../src/dns-message.bend as Response
 import ../src/dns-message.bend as Message
-import ../src/dns-name.bend as Name
+import ../src/dns-message.bend as Name
 import ../src/string-split.bend as Split
 import ../src/url-ipv4.bend as IPv4
 import ./utf8-runner.bend as Scalar

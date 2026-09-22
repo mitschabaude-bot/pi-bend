@@ -1,7 +1,7 @@
 import Base
 import ./numeric-scope.bend as Scope
 import ./network-interface.bend as Interface
-import ./hosts-family.bend as Family
+import ./hosts.bend as Family
 import ./abortable-connect.bend as Connect
 
 # Resolve a numeric destination through the native interface-index primitive.

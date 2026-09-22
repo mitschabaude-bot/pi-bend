@@ -1,6 +1,6 @@
 import Base
 import ./numeric-host.bend as Host
-import ./hosts-family.bend as Family
+import ./hosts.bend as Family
 import ./ipv6-scope.bend as Scope
 import ./url-ipv6.bend as IPv6
 import ./abortable-connect.bend as Connect

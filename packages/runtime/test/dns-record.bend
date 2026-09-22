@@ -1,7 +1,7 @@
 import Base
-import ../src/dns-record.bend as Record
+import ../src/dns-message.bend as Record
 import ../src/dns-message.bend as Message
-import ../src/dns-name.bend as Name
+import ../src/dns-message.bend as Name
 import ../src/url-ipv4.bend as IPv4
 import ../src/url-ipv6.bend as IPv6
 import ../src/string-split.bend as Split
@@ -28,7 +28,7 @@ def showName(value: Name.Name) -> String:
   match value:
     case Name.Name{labels}: String.join(labelStrings(labels), "/")
 
-def show(value: Result<&2, &2, Record.Error, Record.Value>) -> String:
+def show(value: Result<&2, &2, Record.RecordError, Record.Value>) -> String:
   match value:
     case Fail{_}: "error"
     case Done{Record.A{IPv4.Address{a}}}: "A:" ++ U32.show(a)
@@ -39,10 +39,10 @@ def show(value: Result<&2, &2, Record.Error, Record.Value>) -> String:
     case Done{Record.SOA{primary, mailbox, serial, refresh, retry, expire, minimum}}: "SOA:" ++ showName(primary) ++ ":" ++ showName(mailbox) ++ ":" ++ showNumbers(serial <> refresh <> retry <> expire <> minimum <> Nil{})
     case Done{Record.Opaque{Message.Record{owner, kind, class, ttl, start, length}}}: "opaque:" ++ showName(owner) ++ ":" ++ showNumbers(kind <> class <> ttl <> start <> length <> Nil{})
 
-def direct(kind: U32, class: U32, start: U32, length: U32, value: Result<&2, &2, Name.Error, Name.Packet>) -> String:
+def direct(kind: U32, class: U32, start: U32, length: U32, value: Result<&2, &2, Name.NameErrorOfMessage, Name.Packet>) -> String:
   match value:
     case Fail{_}: "packet-error"
-    case Done{packet}: show(Record.decode(packet, Message.Record{Name.Name{Nil{}}, kind, class, 123, start, length}))
+    case Done{packet}: show(Record.decodeRecord(packet, Message.Record{Name.Name{Nil{}}, kind, class, 123, start, length}))
 
 def arguments(parts: List<&2, String>) -> String:
   match parts:
@@ -52,7 +52,7 @@ def arguments(parts: List<&2, String>) -> String:
 def records(+packet: Name.Packet, values: List<&2, Message.Record>, reversed: List<&2, String>) -> String:
   match values:
     case Nil{}: String.join(List.reverse(&2, String, reversed), "|")
-    case record <> rest: records(packet, rest, show(Record.decode(packet, record)) <> reversed)
+    case record <> rest: records(packet, rest, show(Record.decodeRecord(packet, record)) <> reversed)
 
 def message(value: Result<&2, &2, Message.Error, Message.Message>) -> String:
   match value:

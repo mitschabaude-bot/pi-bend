@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/connection-attempt-result.bend as Result
+import ../packages/runtime/src/connection-driver.bend as Result
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline

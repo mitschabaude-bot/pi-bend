@@ -1,9 +1,9 @@
 import Base
 import ../packages/runtime/src/socket-interrupt.bend as Interrupt
-import ../packages/runtime/src/dns-tcp-connection.bend as TCP
-import ../packages/runtime/src/dns-tcp-frame.bend as Frame
+import ../packages/runtime/src/dns-transport.bend as TCP
+import ../packages/runtime/src/dns-message.bend as Frame
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/abortable-socket.bend as SocketIO
 import ../packages/runtime/src/abort.bend as Abort
@@ -24,7 +24,7 @@ def connected(result: Result<&2, &1, Connect.Error<String>, Socket>) -> IO(Socke
 
 def close(connection: TCP.Connection<String>) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, Interrupt.Error, Unit> <- TCP.close(String, connection)
+    result : Result<&2, &2, Interrupt.Error, Unit> <- TCP.closeTcpConnection(String, connection)
     Test.cleanup(result)
 
 def queryResult(result: Result<&2, &2, Message.Error, List<&2, U32>>) -> IO(List<&2, U32>):
@@ -32,7 +32,7 @@ def queryResult(result: Result<&2, &2, Message.Error, List<&2, U32>>) -> IO(List
     case Done{bytes}: IO.pure(List<&2, U32>, bytes)
     case Fail{_}: IO.die(List<&2, U32>, 1, "query encoding failed")
 
-def sent(pair: TCP.Connection<String> & Result<&2, &2, TCP.Error<String>, Unit>) -> IO(TCP.Connection<String>):
+def sent(pair: TCP.Connection<String> & Result<&2, &2, TCP.TcpConnectionError<String>, Unit>) -> IO(TCP.Connection<String>):
   match pair:
     case (connection, Done{_}): IO.pure(TCP.Connection<String>, connection)
     case (connection, Fail{_}):
@@ -43,7 +43,7 @@ def sent(pair: TCP.Connection<String> & Result<&2, &2, TCP.Error<String>, Unit>)
 def send(connection: TCP.Connection<String>, id: U32) -> IO(TCP.Connection<String>):
   do IO<TCP.Connection<String>>:
     bytes : List<&2, U32> <- queryResult(Message.query(id, 256, Message.Question{Name.Name{Nil{}}, 1, 1}))
-    result : TCP.Connection<String> & Result<&2, &2, TCP.Error<String>, Unit> <- TCP.send(String, connection, bytes)
+    result : TCP.Connection<String> & Result<&2, &2, TCP.TcpConnectionError<String>, Unit> <- TCP.send(String, connection, bytes)
     sent(result)
 
 def valid(id: U32, parsed: Result<&2, &2, Message.Error, Message.Message>) -> Bool:
@@ -72,12 +72,12 @@ def transportError(kind: String, error: SocketIO.Error<String>) -> Bool:
     case SocketIO.Aborted{why}: String.eq(kind, "abort") && abortReason(why)
     case _: False{}
 
-def framingError(kind: String, error: Frame.Error) -> Bool:
+def framingError(kind: String, error: Frame.TcpFrameError) -> Bool:
   match error:
     case Frame.IncompleteFrame{}: String.eq(kind, "cut")
     case _: False{}
 
-def terminalError(kind: String, error: TCP.Error<String>) -> Bool:
+def terminalError(kind: String, error: TCP.TcpConnectionError<String>) -> Bool:
   match error:
     case TCP.Framing{why}: framingError(kind, why)
     case TCP.Transport{_, why}: transportError(kind, why)
@@ -88,7 +88,7 @@ def terminalValue(kind: String, value: Maybe<&2, List<&2, U32>>) -> Bool:
     case None{}: String.eq(kind, "eof")
     case Some{_}: False{}
 
-def terminalResult(kind: String, value: Result<&2, &2, TCP.Error<String>, Maybe<&2, List<&2, U32>>>) -> Bool:
+def terminalResult(kind: String, value: Result<&2, &2, TCP.TcpConnectionError<String>, Maybe<&2, List<&2, U32>>>) -> Bool:
   match value:
     case Fail{why}: terminalError(kind, why)
     case Done{value}: terminalValue(kind, value)
@@ -107,9 +107,9 @@ def terminal(kind: String, next: TCP.Next<String>) -> IO(TCP.Connection<String>)
 
 def finished(+kind: String, connection: TCP.Connection<String>) -> IO(Unit):
   do IO<Unit>:
-    next : TCP.Next<String> <- TCP.receive(String, connection, 7)
+    next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 7)
     connection : TCP.Connection<String> <- terminal(kind, next)
-    next : TCP.Next<String> <- TCP.receive(String, connection, 7)
+    next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 7)
     connection : TCP.Connection<String> <- terminal(kind, next)
     close(connection)
 
@@ -118,7 +118,7 @@ def packets(count: Nat, +id: U32, +maximum: U32, connection: TCP.Connection<Stri
     case Zero{}: finished("eof", connection)
     case Succ{rest}:
       do IO<Unit>:
-        next : TCP.Next<String> <- TCP.receive(String, connection, maximum)
+        next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, maximum)
         connection : TCP.Connection<String> <- packet(id, next)
         packets(rest, (id - 1 : U32), maximum, connection)
 
@@ -126,11 +126,11 @@ def packets(count: Nat, +id: U32, +maximum: U32, connection: TCP.Connection<Stri
 # splits a coalesced write. Only this test constructs a pending input suffix.
 def buffered(connection: TCP.Connection<String>) -> TCP.Connection<String>:
   match connection:
-    case TCP.Connection{socket, _}: TCP.Connection{socket, TCP.Reading{Frame.new(), 0 <> 1 <> 99 <> Nil{}}}
+    case TCP.Connection{socket, _}: TCP.Connection{socket, TCP.Reading{Frame.newTcpFrame(), 0 <> 1 <> 99 <> Nil{}}}
 
-def badWrite(pair: TCP.Connection<String> & Result<&2, &2, TCP.Error<String>, Unit>) -> IO(TCP.Connection<String>):
+def badWrite(pair: TCP.Connection<String> & Result<&2, &2, TCP.TcpConnectionError<String>, Unit>) -> IO(TCP.Connection<String>):
   match pair:
-    case (connection, Fail{TCP.Framing{Frame.InvalidByte{256}}}): IO.pure(TCP.Connection<String>, connection)
+    case (connection, Fail{TCP.Framing{Frame.TcpFrameInvalidByte{256}}}): IO.pure(TCP.Connection<String>, connection)
     case (connection, _):
       do IO<TCP.Connection<String>>:
         close(connection)
@@ -157,7 +157,7 @@ def run(mode: Mode, +controller: Abort.AbortController<String>, connection: TCP.
     case AbortRead{}:
       do IO<Unit>:
         connection : TCP.Connection<String> <- send(connection, 1)
-        task : Chan(TCP.Next<String>) <- IO.fork(TCP.Next<String>, TCP.receive(String, connection, 7))
+        task : Chan(TCP.Next<String>) <- IO.fork(TCP.Next<String>, TCP.receiveTcpConnection(String, connection, 7))
         IO.sleep(10)
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
         next : TCP.Next<String> <- IO.join(TCP.Next<String>, task)
@@ -178,9 +178,9 @@ def run(mode: Mode, +controller: Abort.AbortController<String>, connection: TCP.
         finished("cut", connection)
     case Pipeline{oneByte}:
       do IO<Unit>:
-        rejected : TCP.Connection<String> & Result<&2, &2, TCP.Error<String>, Unit> <- TCP.send(String, connection, 256 <> Nil{})
+        rejected : TCP.Connection<String> & Result<&2, &2, TCP.TcpConnectionError<String>, Unit> <- TCP.send(String, connection, 256 <> Nil{})
         connection : TCP.Connection<String> <- badWrite(rejected)
-        next : TCP.Next<String> <- TCP.receive(String, connection, 0)
+        next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 0)
         connection : TCP.Connection<String> <- terminal("zero", next)
         connection : TCP.Connection<String> <- send(connection, 1)
         connection : TCP.Connection<String> <- send(connection, 2)

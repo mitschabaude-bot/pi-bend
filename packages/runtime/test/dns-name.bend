@@ -1,5 +1,5 @@
 import Base
-import ../src/dns-name.bend as DNS
+import ../src/dns-message.bend as DNS
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Scalar
 
@@ -30,30 +30,30 @@ def showLabels(values: List<&2, List<&2, U32>>) -> List<&2, String>:
     case Nil{}: Nil{}
     case label <> rest: showBytes(label) <> showLabels(rest)
 
-def error(value: DNS.Error) -> String:
+def error(value: DNS.NameErrorOfMessage) -> String:
   match value:
-    case DNS.InvalidByte{}: "InvalidByte"
+    case DNS.NameInvalidByte{}: "InvalidByte"
     case DNS.InvalidLabel{}: "InvalidLabel"
     case DNS.NameTooLong{}: "NameTooLong"
     case DNS.PacketTooLong{}: "PacketTooLong"
-    case DNS.Truncated{}: "Truncated"
+    case DNS.NameTruncated{}: "Truncated"
     case DNS.ReservedLabel{}: "ReservedLabel"
     case DNS.InvalidPointer{}: "InvalidPointer"
 
-def encoded(value: Result<&2, &2, DNS.Error, List<&2, U32>>) -> String:
+def encoded(value: Result<&2, &2, DNS.NameErrorOfMessage, List<&2, U32>>) -> String:
   match value:
     case Fail{why}: "error:" ++ error(why)
     case Done{bytes}: "ok:" ++ showBytes(bytes)
 
-def decoded(value: Result<&2, &2, DNS.Error, DNS.Decoded>) -> String:
+def decoded(value: Result<&2, &2, DNS.NameErrorOfMessage, DNS.Decoded>) -> String:
   match value:
     case Fail{why}: "error:" ++ error(why)
     case Done{DNS.Decoded{DNS.Name{labels}, next}}: "ok:" ++ U32.show(next) ++ ":" ++ String.join(showLabels(labels), "/")
 
-def packet(value: Result<&2, &2, DNS.Error, DNS.Packet>, position: U32) -> String:
+def packet(value: Result<&2, &2, DNS.NameErrorOfMessage, DNS.Packet>, position: U32) -> String:
   match value:
     case Fail{why}: "error:" ++ error(why)
-    case Done{packet}: decoded(DNS.decode(packet, position))
+    case Done{packet}: decoded(DNS.decodeName(packet, position))
 
 def decoding(parts: List<&2, String>) -> String:
   match parts:
@@ -67,7 +67,7 @@ def zeros(fuel: Nat, acc: List<&2, U32>) -> List<&2, U32>:
 
 def run(input: String) -> String:
   match input:
-    case SCon{'e', text}: encoded(DNS.encode(name(text)))
+    case SCon{'e', text}: encoded(DNS.encodeName(name(text)))
     case SCon{'d', text}: decoding(Split.split(text, ':'))
     case SCon{'l', text}: packet(DNS.packet(zeros(U32.to_nat(Scalar.decimal(text, 0)), Nil{})), 0)
     case _: "bad test mode"

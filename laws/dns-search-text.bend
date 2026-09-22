@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/dns-search-text.bend as Text
-import ../packages/runtime/src/dns-presentation.bend as Presentation
-import ../packages/runtime/src/dns-name.bend as Name
+import ../packages/runtime/src/dns-message.bend as Text
+import ../packages/runtime/src/dns-message.bend as Presentation
+import ../packages/runtime/src/dns-message.bend as Name
 
 law dots_append:
   for +left: String
@@ -17,11 +17,11 @@ law dots_empty:
 
 law invalid_input_is_terminal:
   for text: String
-  for +error: Presentation.Error
-  {Text.parsed(text, Fail{error}) == Fail{error} : Result<&2, &2, Presentation.Error, Text.Input>}
+  for +error: Presentation.PresentationError
+  {Text.parsedSearchText(text, Fail{error}) == Fail{error} : Result<&2, &2, Presentation.PresentationError, Text.Input>}
 
 law prepared_fields_retained:
   for +text: String
   for +name: Name.Name
   for +absolute: Bool
-  {Text.parsed(text, Done{Presentation.Parsed{name, absolute}}) == Done{Text.Input{name, U32.from_nat(Text.dots(text)), absolute}} : Result<&2, &2, Presentation.Error, Text.Input>}
+  {Text.parsedSearchText(text, Done{Presentation.PresentationParsed{name, absolute}}) == Done{Text.Input{name, U32.from_nat(Text.dots(text)), absolute}} : Result<&2, &2, Presentation.PresentationError, Text.Input>}

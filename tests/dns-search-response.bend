@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/dns-search.bend as Search
-import ../packages/runtime/src/dns-search-response.bend as Response
-import ../packages/runtime/src/dns-presentation.bend as Presentation
+import ../packages/runtime/src/dns-message.bend as Search
+import ../packages/runtime/src/dns-message.bend as Response
+import ../packages/runtime/src/dns-message.bend as Presentation
 import ../packages/runtime/src/string-split.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-search.bend as SearchTest
@@ -15,7 +15,7 @@ def cause(value: String) -> Response.Cause:
     case SCon{'r', SNil{}}: Response.ConnectionRefused{}
     case _: Response.Missing{}
 
-def error(value: Response.Error) -> String:
+def error(value: Response.SearchResponseError) -> String:
   match value:
     case Response.NotFound{}: "1"
     case Response.TryAgain{}: "2"
@@ -23,15 +23,15 @@ def error(value: Response.Error) -> String:
     case Response.NoData{}: "4"
 
 type Progress is Data:
-  Run{script: List<&2, String>, decision: Response.Decision}
+  Run{script: List<&2, String>, decision: Response.SearchResponseDecision}
   Success{}
 
-def applied(success: Bool, token: String, script: List<&2, String>, origin: Search.Origin, cursor: Search.Cursor, history: Response.History) -> Progress:
+def applied(success: Bool, token: String, script: List<&2, String>, origin: Search.Origin, cursor: Search.SearchCursor, history: Response.History) -> Progress:
   match success:
     case True{}: Success{}
     case False{}: Run{script, Response.failed(origin, cause(token), cursor, history)}
 
-def consume(script: List<&2, String>, origin: Search.Origin, cursor: Search.Cursor, history: Response.History) -> Progress:
+def consume(script: List<&2, String>, origin: Search.Origin, cursor: Search.SearchCursor, history: Response.History) -> Progress:
   match script:
     case Nil{}: Run{Nil{}, Response.failed(origin, Response.Missing{}, cursor, history)}
     case +token <> rest: applied(String.eq(token, "a"), token, rest, origin, cursor, history)
@@ -58,7 +58,7 @@ def drive(fuel: Nat, progress: Progress) -> IO(Unit):
 def argument(parts: List<&2, String>) -> IO(Unit):
   match parts:
     case text <> dots <> absolute <> ndots <> defnames <> search <> notld <> suffixes <> script <> Nil{}:
-      drive(100n, Run{Split.split(script, ','), Response.Continue{Search.start(SearchTest.parsed(Presentation.parse(text)), Scalar.decimal(dots, 0), String.eq(absolute, "1"), SearchTest.domainInput(suffixes), Search.Policy{Scalar.decimal(ndots, 0), String.eq(defnames, "1"), String.eq(search, "1"), String.eq(notld, "1")}), Response.new()}})
+      drive(100n, Run{Split.split(script, ','), Response.Continue{Search.start(SearchTest.parsed(Presentation.parsePresentation(text)), Scalar.decimal(dots, 0), String.eq(absolute, "1"), SearchTest.domainInput(suffixes), Search.Policy{Scalar.decimal(ndots, 0), String.eq(defnames, "1"), String.eq(search, "1"), String.eq(notld, "1")}), Response.new()}})
     case _: IO.die(Unit, 1, "invalid fixture arguments")
 
 def run(args: List<String>) -> IO(Unit):

@@ -1,9 +1,9 @@
 import Base
-import ../packages/runtime/src/dns-udp-policy.bend as Policy
+import ../packages/runtime/src/dns-transport.bend as Policy
 import ../packages/runtime/src/dns-message.bend as Message
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
-def show(value: Policy.Decision) -> String:
+def show(value: Policy.UdpPolicyDecision) -> String:
   match value:
     case Policy.Accept{}: "accept"
     case Policy.UseTCP{}: "tcp"

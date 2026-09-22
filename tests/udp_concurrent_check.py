@@ -5,8 +5,9 @@ unstarted; parked write cancellation is covered by the separate injection suite.
 """
 import hashlib,json,os,re,subprocess
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun'
-candidate=ROOT/'build/bend-udp-write-candidate'
+candidate=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-concurrent-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-concurrent.bend','-o',f'build/udp-concurrent.{suffix}'],cwd=ROOT,check=True)
 source=(ROOT/'build/udp-concurrent.c').read_text()

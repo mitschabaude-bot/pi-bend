@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import struct
 import subprocess
@@ -16,7 +17,7 @@ parser.add_argument('--no-build',action='store_true')
 args=parser.parse_args()
 if not args.no_build:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-response-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-response.bend','build/dns-response'],cwd=ROOT,check=True)
-subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-response-js-build.json','--',str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/dns-response.bend','-o','build/dns-response.js'],cwd=ROOT,check=True)
+subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-response-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-response.bend','-o','build/dns-response.js'],cwd=ROOT,check=True)
 rng=random.Random(5452);cases=[]
 def csv(xs):return ','.join(map(str,xs))
 def name(labels):return bytes([b for label in labels for b in [len(label),*label]]+[0])
@@ -115,5 +116,5 @@ for label,command in [('native 1',['build/dns-response','--threads','1']),('nati
         for index,(got,(arg,want)) in enumerate(zip(actual,batch,strict=True)):
             assert got==want,(label,first+index,arg[:150],got,want)
     print(f'{label}: {len(cases)} DNS response matching cases PASS',flush=True);backends.append(label)
-paths=[ROOT/'packages/runtime/src/dns-response.bend',ROOT/'packages/runtime/test/dns-response.bend',ROOT/'tests/dns_response_check.py',ROOT/'build/dns-response',ROOT/'build/dns-response.js']
+paths=[ROOT/'packages/runtime/src/dns-message.bend',ROOT/'packages/runtime/test/dns-response.bend',ROOT/'tests/dns_response_check.py',ROOT/'build/dns-response',ROOT/'build/dns-response.js']
 (ROOT/'build/dns-response-result.json').write_text(json.dumps({'scope':__doc__,'cases_per_backend':len(cases),'backends':backends,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

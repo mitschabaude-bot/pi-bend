@@ -1,9 +1,9 @@
 import Base
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/hosts-file.bend as File
-import ../packages/runtime/src/dns-address-answer.bend as DNS
+import ../packages/runtime/src/hosts.bend as File
+import ../packages/runtime/src/dns-resolver.bend as DNS
 import ../laws/connection-addresses.bend as Laws
-import ../packages/runtime/src/connection-addresses.bend as Candidates
+import ../packages/runtime/src/connection-driver.bend as Candidates
 import ../packages/runtime/src/abortable-connect.bend as Connect
 
 def Laws.hosts_count(entries):

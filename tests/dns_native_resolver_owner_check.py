@@ -4,12 +4,13 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 BUN=Path.home()/'.bun/bin/bun'
 parser=argparse.ArgumentParser(description=__doc__)
-parser.add_argument('candidate',type=Path,nargs='?',default=ROOT/'build/bend-dns-refused-candidate')
+parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 CANDIDATE=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-native-resolver-owner-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),'tests/dns-native-resolver-owner.bend','-o',f'build/dns-native-resolver-owner.{suffix}'],cwd=ROOT,check=True)

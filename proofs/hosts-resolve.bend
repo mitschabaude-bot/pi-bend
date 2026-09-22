@@ -1,8 +1,8 @@
 import Base
 import ../laws/hosts-resolve.bend as Laws
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/hosts-file.bend as File
-import ../packages/runtime/src/hosts-family.bend as Family
+import ../packages/runtime/src/hosts.bend as File
+import ../packages/runtime/src/hosts.bend as Family
 import ./hosts.bend as Prior
 
 def Laws.any_preserves_database(entries):

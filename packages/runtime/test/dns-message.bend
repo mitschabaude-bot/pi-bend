@@ -1,6 +1,6 @@
 import Base
 import ../src/dns-message.bend as DNS
-import ../src/dns-name.bend as Name
+import ../src/dns-message.bend as Name
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Scalar
 
@@ -31,13 +31,13 @@ def showLabels(values: List<&2, List<&2, U32>>) -> List<&2, String>:
     case Nil{}: Nil{}
     case label <> rest: showBytes(label) <> showLabels(rest)
 
-def nameError(value: Name.Error) -> String:
+def nameError(value: Name.NameErrorOfMessage) -> String:
   match value:
-    case Name.InvalidByte{}: "InvalidByte"
+    case Name.NameInvalidByte{}: "InvalidByte"
     case Name.InvalidLabel{}: "InvalidLabel"
     case Name.NameTooLong{}: "NameTooLong"
     case Name.PacketTooLong{}: "PacketTooLong"
-    case Name.Truncated{}: "Truncated"
+    case Name.NameTruncated{}: "Truncated"
     case Name.ReservedLabel{}: "ReservedLabel"
     case Name.InvalidPointer{}: "InvalidPointer"
 

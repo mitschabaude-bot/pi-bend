@@ -2,6 +2,7 @@
 import ipaddress
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import random
 import subprocess
 import sys
@@ -78,7 +79,7 @@ for index,(got,want) in enumerate(zip(actual,expected,strict=True)):
 print(f'Node serializer cross-check: {len(records)} records PASS',flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-serialize.bend','build/url-serialize'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/url-serialize.bend','-o','build/url-serialize.js'],cwd=ROOT,check=True)
+subprocess.run([str(Path(BEND)),'packages/runtime/test/url-serialize.bend','-o','build/url-serialize.js'],cwd=ROOT,check=True)
 def codes(text):return ','.join(map(str,map(ord,text)))
 def optional(value):return '-' if value is None else codes(value)
 def wire(v):

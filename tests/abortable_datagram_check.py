@@ -1,8 +1,9 @@
 """Abortable UDP receives preserve reasons and retire deadline/observer resources."""
 import hashlib,json,select,socket,subprocess,time,sys
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
-bun=Path.home()/'.bun/bin/bun';candidate=(ROOT/sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'build/bend-udp-cancel-candidate'
+bun=Path.home()/'.bun/bin/bun';candidate=(ROOT/sys.argv[1]).resolve() if len(sys.argv)>1 else TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/abortable-datagram-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/abortable-datagram.bend','-o',f'build/abortable-datagram.{suffix}'],cwd=ROOT,check=True)
 audit='''

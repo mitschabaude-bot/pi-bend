@@ -4,13 +4,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import tempfile
 import threading
 
 ROOT=Path(__file__).resolve().parents[1]
 BUN=Path.home()/'.bun/bin/bun'
-COMPILER=Path.home()/'.bend/current/bend2'
+COMPILER=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/file-fold-{suffix}-build.json','--',str(BUN),str(COMPILER/'main.ts'),'tests/file-fold.bend','-o',f'build/file-fold.{suffix}'],cwd=ROOT,check=True)
 audit = r"""

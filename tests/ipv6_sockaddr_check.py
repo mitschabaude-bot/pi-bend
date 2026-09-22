@@ -6,6 +6,7 @@ No external address is contacted. Real loopback behavior is a separate check.
 import hashlib
 import json
 from pathlib import Path
+from bend_toolchain import BEND, TOOLCHAIN
 import shutil
 import socket
 import subprocess
@@ -13,7 +14,7 @@ import sys
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
-candidate=Path(sys.argv[1]).resolve();bun=Path.home()/'.bun/bin/bun'
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 helper=r'''
 static int ipv6_probe_connect(int fd, const struct sockaddr* address, socklen_t length) {
   (void)fd;

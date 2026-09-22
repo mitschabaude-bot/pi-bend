@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/dns-udp-timeout.bend as Timeout
+import ../packages/runtime/src/resolver-config.bend as Timeout
 
 def isPositive(value: Nat) -> Bool:
   match value:
@@ -23,7 +23,7 @@ law first_server_undivided:
 
 law two_servers_equal_budgets:
   for +timeout: U32
-  {Timeout.budget(timeout, Timeout.SecondOfTwo{}) == Timeout.budget(timeout, Timeout.First{}) : Result<&2, &2, Timeout.Error, Timeout.Duration>}
+  {Timeout.budget(timeout, Timeout.SecondOfTwo{}) == Timeout.budget(timeout, Timeout.First{}) : Result<&2, &2, Timeout.UdpTimeoutError, Timeout.Duration>}
 
 law oversized_duration_rejected:
   for extra: Nat

@@ -1,13 +1,13 @@
 import Base
-import ../packages/runtime/src/connection-progress.bend as Progress
-import ../packages/runtime/src/connection-attempt-result.bend as Attempt
+import ../packages/runtime/src/connection-driver.bend as Progress
+import ../packages/runtime/src/connection-driver.bend as Attempt
 import ../packages/runtime/src/abort.bend as Abort
 
 law parent_abort_wins:
   for -R: Data
   for outcome: Result<&2, &2, Attempt.Error<R>, Unit>
   for +reason: Abort.AbortReason<R>
-  {Progress.decide(R, outcome, Some{reason}) == Progress.Stop{Progress.Aborted{reason}} : Progress.Decision<R>}
+  {Progress.decide(R, outcome, Some{reason}) == Progress.Stop{Progress.ProgressAborted{reason}} : Progress.Decision<R>}
 
 law socket_failure_advances:
   for -R: Data
@@ -22,11 +22,11 @@ law expiry_advances:
 law reported_abort_stops:
   for -R: Data
   for +reason: Abort.AbortReason<R>
-  {Progress.decide(R, Fail{Attempt.Aborted{reason}}, None{}) == Progress.Stop{Progress.Aborted{reason}} : Progress.Decision<R>}
+  {Progress.decide(R, Fail{Attempt.Aborted{reason}}, None{}) == Progress.Stop{Progress.ProgressAborted{reason}} : Progress.Decision<R>}
 
 law unexpected_abort_stops:
   for -R: Data
-  {Progress.decide(R, Fail{Attempt.UnexpectedDefaultAbort{}}, None{}) == Progress.Stop{Progress.UnexpectedDefaultAbort{}} : Progress.Decision<R>}
+  {Progress.decide(R, Fail{Attempt.UnexpectedDefaultAbort{}}, None{}) == Progress.Stop{Progress.ProgressUnexpectedDefaultAbort{}} : Progress.Decision<R>}
 
 law settled_success_accepted:
   for -R: Data

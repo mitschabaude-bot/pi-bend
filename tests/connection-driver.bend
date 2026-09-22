@@ -1,8 +1,8 @@
 import Base
 import ../packages/runtime/src/connection-driver.bend as Driver
-import ../packages/runtime/src/connection-progress.bend as Progress
-import ../packages/runtime/src/connection-attempt.bend as Attempt
-import ../packages/runtime/src/connection-attempt-result.bend as Outcome
+import ../packages/runtime/src/connection-driver.bend as Progress
+import ../packages/runtime/src/connection-driver.bend as Attempt
+import ../packages/runtime/src/connection-driver.bend as Outcome
 import ../packages/runtime/src/abortable-connect.bend as Connect
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
@@ -32,12 +32,12 @@ def outcomeName(outcome: Result<&2, &2, Outcome.Error<String>, Unit>) -> String:
     case Done{_}: "success"
     case Fail{error}: errorName(error)
 
-def finalName(error: Progress.Error<String>) -> String:
+def finalName(error: Progress.ProgressError<String>) -> String:
   match error:
-    case Progress.NoAddresses{}: "empty"
+    case Progress.ProgressNoAddresses{}: "empty"
     case Progress.Exhausted{}: "exhausted"
-    case Progress.Aborted{why}: "abort:" ++ reasonName(why)
-    case Progress.UnexpectedDefaultAbort{}: "unexpected"
+    case Progress.ProgressAborted{why}: "abort:" ++ reasonName(why)
+    case Progress.ProgressUnexpectedDefaultAbort{}: "unexpected"
 
 def diagnostic(reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>>) -> String:
   match reason:
@@ -59,56 +59,56 @@ def history(entries: List<&2, Driver.Entry<String>>) -> IO(Unit):
         IO.print("ENTRY " ++ addressName(address) ++ " " ++ modeName(mode) ++ " " ++ outcomeName(outcome) ++ " " ++ diagnostic(deadline))
         history(rest)
 
-def failure(index: U32) -> Attempt.Report<String, Chan(Unit)>:
-  Attempt.Report{Fail{Outcome.SocketFailure{index, "original"}}, Some{Abort.Supplied{Deadline.Expired{}}}}
+def failure(index: U32) -> Attempt.AttemptReport<String, Chan(Unit)>:
+  Attempt.AttemptReport{Fail{Outcome.SocketFailure{index, "original"}}, Some{Abort.Supplied{Deadline.Expired{}}}}
 
-def success() -> IO(Attempt.Report<String, Chan(Unit)>):
-  do IO<Attempt.Report<String, Chan(Unit)>>:
+def success() -> IO(Attempt.AttemptReport<String, Chan(Unit)>):
+  do IO<Attempt.AttemptReport<String, Chan(Unit)>>:
     resource : Chan(Unit) <- Chan.new(Unit, 1)
-    return Attempt.Report{Done{resource}, Some{Abort.Supplied{Deadline.Expired{}}}}
+    return Attempt.AttemptReport{Done{resource}, Some{Abort.Supplied{Deadline.Expired{}}}}
 
-def choose(scenario: U32, index: U32, controller: Abort.AbortController<String>) -> IO(Attempt.Report<String, Chan(Unit)>):
+def choose(scenario: U32, index: U32, controller: Abort.AbortController<String>) -> IO(Attempt.AttemptReport<String, Chan(Unit)>):
   match scenario:
     case 1: success()
-    case 2: IO.pure(Attempt.Report<String, Chan(Unit)>, Attempt.Report{Fail{Outcome.TimedOut{}}, Some{Abort.Supplied{Deadline.Expired{}}}})
-    case 3: IO.pure(Attempt.Report<String, Chan(Unit)>, Attempt.Report{Fail{Outcome.Aborted{Abort.Supplied{"reported"}}}, Some{Abort.Supplied{Deadline.Expired{}}}})
-    case 4: IO.pure(Attempt.Report<String, Chan(Unit)>, Attempt.Report{Fail{Outcome.UnexpectedDefaultAbort{}}, Some{Abort.Supplied{Deadline.Expired{}}}})
+    case 2: IO.pure(Attempt.AttemptReport<String, Chan(Unit)>, Attempt.AttemptReport{Fail{Outcome.TimedOut{}}, Some{Abort.Supplied{Deadline.Expired{}}}})
+    case 3: IO.pure(Attempt.AttemptReport<String, Chan(Unit)>, Attempt.AttemptReport{Fail{Outcome.Aborted{Abort.Supplied{"reported"}}}, Some{Abort.Supplied{Deadline.Expired{}}}})
+    case 4: IO.pure(Attempt.AttemptReport<String, Chan(Unit)>, Attempt.AttemptReport{Fail{Outcome.UnexpectedDefaultAbort{}}, Some{Abort.Supplied{Deadline.Expired{}}}})
     case 5:
-      do IO<Attempt.Report<String, Chan(Unit)>>:
+      do IO<Attempt.AttemptReport<String, Chan(Unit)>>:
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
         return failure(index)
     case 6:
-      do IO<Attempt.Report<String, Chan(Unit)>>:
+      do IO<Attempt.AttemptReport<String, Chan(Unit)>>:
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
         success()
     case 8:
-      do IO<Attempt.Report<String, Chan(Unit)>>:
+      do IO<Attempt.AttemptReport<String, Chan(Unit)>>:
         won : Bool <- Abort.abort(String, controller, None{})
         success()
-    case _: IO.pure(Attempt.Report<String, Chan(Unit)>, failure(index))
+    case _: IO.pure(Attempt.AttemptReport<String, Chan(Unit)>, failure(index))
 
-def selected(target: Bool, scenario: U32, index: U32, controller: Abort.AbortController<String>) -> IO(Attempt.Report<String, Chan(Unit)>):
+def selected(target: Bool, scenario: U32, index: U32, controller: Abort.AbortController<String>) -> IO(Attempt.AttemptReport<String, Chan(Unit)>):
   match target:
     case True{}: choose(scenario, index, controller)
-    case False{}: IO.pure(Attempt.Report<String, Chan(Unit)>, failure(index))
+    case False{}: IO.pure(Attempt.AttemptReport<String, Chan(Unit)>, failure(index))
 
 type Context is Data:
   Context{scenario: U32, target: U32, controller: Abort.AbortController<String>}
 
-def fake(context: Context, address: Connect.Address, mode: Progress.Mode, signal: Abort.AbortSignal<String>) -> IO(Attempt.Report<String, Chan(Unit)>):
+def fake(context: Context, address: Connect.Address, mode: Progress.Mode, signal: Abort.AbortSignal<String>) -> IO(Attempt.AttemptReport<String, Chan(Unit)>):
   match context address:
     case Context{scenario, target, controller} Connect.V4{IPv4.Address{+index}}:
-      do IO<Attempt.Report<String, Chan(Unit)>>:
+      do IO<Attempt.AttemptReport<String, Chan(Unit)>>:
         IO.print("CALL " ++ U32.show(index) ++ " " ++ modeName(mode))
         selected(U32.is_eq(index, target), scenario, index, controller)
-    case _ _: IO.die(Attempt.Report<String, Chan(Unit)>, 1, "unexpected injected address")
+    case _ _: IO.die(Attempt.AttemptReport<String, Chan(Unit)>, 1, "unexpected injected address")
 
 def release(resource: Chan(Unit)) -> IO(Unit):
   do IO<Unit>:
     Chan.close(Unit, resource)
     IO.print("RELEASE")
 
-def taken(result: Result<&2, &1, Progress.Error<String>, Chan(Unit)>) -> IO(Unit):
+def taken(result: Result<&2, &1, Progress.ProgressError<String>, Chan(Unit)>) -> IO(Unit):
   match result:
     case Done{resource}:
       do IO<Unit>:
@@ -141,7 +141,7 @@ def injected(scenario: U32, target: U32, count: U32, +controller: Abort.AbortCon
     report : Driver.Report<String, Chan(Unit)> <- Driver.runWith(~Context, ~String, ~Chan(Unit), ~fake, ~release, Context{scenario, target, controller}, addresses(U32.to_nat(count), 1), Abort.signal(String, controller))
     checked(report)
 
-def socketResult(result: Result<&2, &1, Progress.Error<String>, Socket>) -> IO(Unit):
+def socketResult(result: Result<&2, &1, Progress.ProgressError<String>, Socket>) -> IO(Unit):
   match result:
     case Done{socket}:
       do IO<Unit>:
