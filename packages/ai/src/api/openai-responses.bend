@@ -50,7 +50,7 @@ import ../../../runtime/src/http-message.bend as Header
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Reason>
 def StreamOptions(-Reason: Data, -Telemetry: Data, -E: Data) -> Data: T.StreamOptions<T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>
 def SimpleStreamOptions(-Reason: Data, -Telemetry: Data, -E: Data) -> Data: T.SimpleStreamOptions<T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>
-def Context(-G: Data, -D: Data) -> Data: T.TranscriptContext<V.Value, R.Record<V.Value>, G, D>
+def Context(-G: Data, -D: Data) -> Data: T.TranscriptContext<V.Value, V.Value, G, D>
 def ReaderError(-Reason: Data) -> Data: Stream.ReaderError<Sse.TransportError(Reason)>
 
 # Options
@@ -389,7 +389,7 @@ def messageOptions(+compat: ResolvedCompat, grammar: R.Record<String>) -> Shared
 
 def requestTools(-G: Data, -D: Data, context: Context(G, D), compat: ResolvedCompat) -> Transcript.TranscriptTools<V.Value>:
   match context compat:
-    case T.TranscriptContext{messages} ResolvedCompat{_, _, _, _, _, _, additional, search, _, _}: Transcript.resolveTranscriptTools(V.Value, R.Record<V.Value>, G, D, messages, additional || search)
+    case T.TranscriptContext{messages} ResolvedCompat{_, _, _, _, _, _, additional, search, _, _}: Transcript.resolveTranscriptTools(V.Value, V.Value, G, D, messages, additional || search)
 
 def convertedTools(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, items: List<&2, Shared.ResponseInputItem>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, compat: ResolvedCompat, retention: T.CacheRetention, tools: Result<&2, &2, Sampling.Error, List<&2, Shared.OpenAITool>>) -> Result<&2, &2, BuildError, T.JsonValue>:
   match tools:
@@ -403,7 +403,7 @@ def convertedParams(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.
 
 def buildParams(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, +model: T.Model<T.JsonValue>, +context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention) -> IO(Result<&2, &2, BuildError, T.JsonValue>):
   do IO<Result<&2, &2, BuildError, T.JsonValue>>:
-    input : Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>> <- Shared.convertResponsesMessages(~G, ~D, ~T.JsonValue, model, context, OPENAI_TOOL_CALL_PROVIDERS(), Some{messageOptions(compat, grammar)})
+    input : Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>> <- Shared.convertResponsesMessagesWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~Shared.parameterValue, ~Shared.parameterValue, ~Shared.conversionClock, model, context, OPENAI_TOOL_CALL_PROVIDERS(), Some{messageOptions(compat, grammar)})
     return convertedParams(Reason, Telemetry, E, model, input, requestTools(G, D, context, compat), options, compat, retention)
 
 # Preparation
@@ -442,7 +442,7 @@ def grammarResult(result: Result<&2, &2, Sampling.Error, R.Record<String>>) -> R
 def grammarProperties(-G: Data, -D: Data, context: Context(G, D), compat: ResolvedCompat) -> Result<&2, &2, PreparationError, R.Record<String>>:
   match context compat:
     case T.TranscriptContext{messages} ResolvedCompat{_, _, _, _, _, enabled, _, _, _, _}:
-      grammarResult(Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, R.Record<V.Value>, G, D, messages)}, enabled))
+      grammarResult(Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, G, D, messages)}, enabled))
 
 def credentialResult(result: Result<&2, &2, String, String>) -> Result<&2, &2, PreparationError, String>:
   match result:
@@ -487,8 +487,8 @@ def preparedWith(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, 
     case ModelSettings{+provider, +baseUrl, modelHeaders, +compat}:
       do IO<Result<&2, &2, PreparationError, Prepared>>:
         +retention : T.CacheRetention <- resolveCacheRetention(optionRetention(Reason, Telemetry, E, options), optionEnv(Reason, Telemetry, E, options))
-        +resolved : Context(G, D) = Transcript.resolveTranscript(V.Value, R.Record<V.Value>, G, D, context, Some{midConversation(compat)})
-        merged : T.ProviderHeaders() = clientHeaders(V.Value, R.Record<V.Value>, G, D, agent, provider, modelHeaders, resolved, affinity(compat), cacheSessionId(retention, optionSession(Reason, Telemetry, E, options)), optionHeaders(Reason, Telemetry, E, options))
+        +resolved : Context(G, D) = Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{midConversation(compat)})
+        merged : T.ProviderHeaders() = clientHeaders(V.Value, V.Value, G, D, agent, provider, modelHeaders, resolved, affinity(compat), cacheSessionId(retention, optionSession(Reason, Telemetry, E, options)), optionHeaders(Reason, Telemetry, E, options))
         payload : Result<&2, &2, BuildError, T.JsonValue> <- buildParams(~Reason, ~Telemetry, ~E, ~G, ~D, model, resolved, options, compat, grammar, retention)
         return finishPreparation(apiKey, baseUrl, merged, compat, grammar, retention, payload)
 
@@ -508,7 +508,7 @@ def withGrammar(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, m
 def withCredential(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, +context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, +configuration: ModelSettings, key: Result<&2, &2, PreparationError, String>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match key:
     case Fail{cause}: IO.pure(Result<&2, &2, PreparationError, Prepared>, Fail{cause})
-    case Done{apiKey}: withGrammar(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, agent, configuration, apiKey, grammarProperties(G, D, Transcript.resolveTranscript(V.Value, R.Record<V.Value>, G, D, context, Some{midConversation(compatOf(configuration))}), compatOf(configuration)))
+    case Done{apiKey}: withGrammar(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, agent, configuration, apiKey, grammarProperties(G, D, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{midConversation(compatOf(configuration))}), compatOf(configuration)))
 
 def preparedSettings(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, resolved: Result<&2, &2, PreparationError, ModelSettings>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match resolved:
@@ -1206,8 +1206,6 @@ def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~rende
     +hooks : Sse.Hooks<Sse.TransportError(Reason)> <- Sse.defaultHooks(~(Sse.TransportError(Reason)))
     streamAt(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, timestamp, Sse.disposeHooks(Sse.TransportError(Reason), hooks))
 
-def encodeArguments(value: R.Record<V.Value>) -> T.JsonValue: Convert.toJson(V.ObjectValue{value})
-
 def choiceValue(value: Maybe<&2, T.ToolChoice>) -> Maybe<&2, T.JsonValue>:
   match value:
     case None{}: None{}
@@ -1237,4 +1235,4 @@ def simpleApiKey(-Reason: Data, -Telemetry: Data, -E: Data, options: Maybe<&2, S
 # streamSimple: base options with the model's defaults and context budget,
 # tool choice, and the reasoning level clamped to the model's support.
 def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, +model: T.Model<T.JsonValue>, +context: Context(G, D), +options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Run<Reason, G, E>):
-  stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~R.Record<V.Value>, ~G, ~D, ~T.JsonValue, ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~encodeArguments, model, context, options, simpleApiKey(Reason, Telemetry, E, options)), simpleSettings(Reason, Telemetry, E, model, options)))
+  stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~Convert.toJson, model, context, options, simpleApiKey(Reason, Telemetry, E, options)), simpleSettings(Reason, Telemetry, E, model, options)))

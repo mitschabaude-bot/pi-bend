@@ -20,16 +20,24 @@ def schema() -> V.Value:
 def tool(name: String, grammar: Bool) -> T.Tool<V.Value>:
   T.Tool{name, "A tool", schema(), Bool.pick(Maybe<&2, T.ToolConstrainedSampling>, grammar, Some{T.SamplingConfigured{T.GrammarSampling{T.GrammarVariants{Some{"start: /[a-z]+/"}, None{}}}}}, None{})}
 
-def Messages() -> Data: List<&2, T.Message<V.Value, R.Record<V.Value>, Unit, Unit>>
+def Messages() -> Data: List<&2, T.Message<V.Value, V.Value, Unit, Unit>>
+
+def toolRoundTrip() -> Messages():
+  +zero = F.fromU32(0)
+  arguments = {V.ObjectValue{R.Record{R.Property{"input", V.Text{"hello"}} <> Nil{}}} : V.Value}
+  call = {T.AssistantToolCall{T.ToolCall{"call_fixture", "tool", arguments, None{}, None{}}} : T.AssistantContent<V.Value>}
+  usage = {T.Usage{zero, zero, zero, zero, None{}, None{}, zero, T.UsageCost{zero, zero, zero, zero, zero}} : T.Usage}
+  T.Assistant{T.AssistantMessage{call <> Nil{}, "openai-responses", "openai", "target", None{}, None{}, None{}, None{}, usage, T.ToolUse{}, None{}, None{}, None{}, None{}, F.fromU32(2)}} <> T.ToolResult{T.ToolResultMessage{"call_fixture", "tool", T.TextImageText{T.TextContent{"done", None{}}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}
 
 def later(mode: U32) -> Messages():
   match mode:
     case 2: T.System{T.SystemMessage{T.SystemText{"updated"}, None{}, Some{tool("later", False{}) <> Nil{}}, None{}, F.fromU32(2)}} <> T.User{T.UserMessage{T.UserText{"again"}, F.fromU32(3)}} <> Nil{}
     case 3: T.System{T.SystemMessage{T.SystemText{"updated"}, None{}, None{}, Some{T.ToolReference{"tool"} <> Nil{}}, F.fromU32(2)}} <> Nil{}
     case 4: T.System{T.SystemMessage{T.SystemText{"updated"}, None{}, Some{T.Tool{"tool", "Redefined", schema(), None{}} <> Nil{}}, None{}, F.fromU32(2)}} <> Nil{}
+    case 6: toolRoundTrip()
     case _: Nil{}
 
-def context(+mode: U32) -> T.TranscriptContext<V.Value, R.Record<V.Value>, Unit, Unit>:
+def context(+mode: U32) -> T.TranscriptContext<V.Value, V.Value, Unit, Unit>:
   tools = Bool.pick(Maybe<&2, List<&2, T.Tool<V.Value>>>, U32.is_eq(mode, 0), None{}, Some{tool("tool", U32.is_eq(mode, 5)) <> Nil{}})
   T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"initial"}, None{}, tools, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"hello"}, F.fromU32(1)}} <> later(mode)}
 
