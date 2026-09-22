@@ -4,8 +4,8 @@ import ../src/api/openai-client.bend as Client
 import ../src/utils/schema-json.bend as Convert
 import ./openai-request-headers.bend as H
 import ./openai-responses-url.bend as U
-import ../../runtime/src/url-absolute.bend as Absolute
-import ../../runtime/src/url-serialize.bend as URL
+import ../../runtime/src/url.bend as Absolute
+import ../../runtime/src/url.bend as URL
 import ../../runtime/src/http-message.bend as Headers
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
@@ -13,9 +13,9 @@ import ../../runtime/src/f64.bend as F
 import ../../runtime/src/json-parse.bend as Parse
 import ../../runtime/src/string-split.bend as Split
 import ../../runtime/test/utf8-runner.bend as Text
-import ../../runtime/src/idna-domain.bend as Domain
-import ../../runtime/src/idna-label.bend as Label
-import ../../runtime/src/idna-mapping.bend as Mapping
+import ../../runtime/src/idna.bend as Domain
+import ../../runtime/src/idna.bend as Label
+import ../../runtime/src/idna.bend as Mapping
 import ../../runtime/src/unicode-17-idna-mapping.bend as MappingData
 import ../../runtime/src/unicode-17-normalization.bend as NormalizationData
 import ../../runtime/src/unicode-17-idna-properties.bend as PropertiesData
@@ -50,7 +50,7 @@ def shown(result: Result<&2, &2, Client.RequestError, Client.Request>) -> V.Valu
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{error(cause)}} <> Nil{}}}
     case Done{Client.Request{url, method, headers, body, timeout}}:
-      V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
+      V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serializeSerialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
 
 def checked(context: Absolute.Context, input: Result<&2, &2, Parse.Error, V.Value>, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
   match input expected:
@@ -74,4 +74,4 @@ def cases(args: List<String>, +context: Absolute.Context) -> IO(Unit):
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
-    cases(args, Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.Options{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}})
+    cases(args, Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}})

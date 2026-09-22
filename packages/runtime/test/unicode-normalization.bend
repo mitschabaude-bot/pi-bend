@@ -1,7 +1,7 @@
 import Base
-import ../src/unicode-normalization.bend as Normalization
+import ../src/unicode.bend as Normalization
 import ../src/unicode-17-normalization.bend as Unicode
-import ../src/unicode-normalization-data.bend as Data
+import ../src/unicode.bend as Data
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 

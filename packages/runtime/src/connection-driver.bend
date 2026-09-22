@@ -4,8 +4,8 @@ import ./abort.bend as Abort
 import ./deadline.bend as Deadline
 import ./hosts.bend as Hosts
 import ./dns-resolver.bend as DNS
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 import ./list-interleave.bend as Interleave
 
 type Error<-Reason: Data> is Data:
@@ -260,7 +260,7 @@ def family(address: Connect.Address) -> Preference:
 def same(left: Connect.Address, right: Connect.Address) -> Bool:
   match left right:
     case Connect.V4{IPv4.Address{a}} Connect.V4{IPv4.Address{b}}: U32.is_eq(a, b)
-    case Connect.V6{IPv6.Address{a, b, c, d}, scope} Connect.V6{IPv6.Address{w, x, y, z}, other}: U32.is_eq(a, w) && U32.is_eq(b, x) && U32.is_eq(c, y) && U32.is_eq(d, z) && U32.is_eq(scope, other)
+    case Connect.V6{IPv6.Ipv6Address{a, b, c, d}, scope} Connect.V6{IPv6.Ipv6Address{w, x, y, z}, other}: U32.is_eq(a, w) && U32.is_eq(b, x) && U32.is_eq(c, y) && U32.is_eq(d, z) && U32.is_eq(scope, other)
     case _ _: False{}
 
 def contains(addresses: List<&2, Connect.Address>, +address: Connect.Address) -> Bool:

@@ -9,8 +9,8 @@ import ./socket.bend as Endpoint
 import ./socket.bend as Connect
 import ./random-index.bend as Index
 import ./network-interface.bend as Interface
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 import ./io-pair.bend as Parallel
 import ./socket.bend as SocketIO
 import ./socket.bend as DatagramIO
@@ -22,7 +22,7 @@ import ./json-string.bend as Quote
 
 type Address is Data:
   V4{value: IPv4.Address, ttl: U32}
-  V6{value: IPv6.Address, ttl: U32}
+  V6{value: IPv6.Ipv6Address, ttl: U32}
 
 type Selection is Data:
   Selection{canonical: Id.Name, addresses: List<&2, Address>}

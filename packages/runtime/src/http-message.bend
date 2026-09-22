@@ -2,13 +2,13 @@ import Base
 import ./u64.bend as W
 import ./big-nat.bend as N
 import ./utf8.bend as Utf8
-import ./url-record.bend as URL
-import ./url-host.bend as Host
+import ./url.bend as URL
+import ./url.bend as Host
 import ./calendar.bend as Calendar
 import ./record.bend as R
-import ./url-scheme.bend as Scheme
-import ./url-serialize.bend as Serialize
-import ./url-search-params.bend as Params
+import ./url.bend as Scheme
+import ./url.bend as Serialize
+import ./url.bend as Params
 
 # HTTP/Fetch header normalization at a typed string boundary. This is not a
 # JavaScript object adapter. Each accepted value represents bytes 0..255.
@@ -1140,14 +1140,14 @@ def portUrl(value: Maybe<&2, U32>, default: U32) -> U32:
 # A present empty query contributes '?'. URL.search alone cannot preserve this
 # distinction. Fragments never belong to an HTTP request targetUrl.
 def targetUrl(parts: List<&2, String>, query: Maybe<&2, String>) -> String:
-  String.reverse(Serialize.component(query, '?', Serialize.segments(parts, "")))
+  String.reverse(Serialize.component(query, '?', Serialize.segmentsSerialize(parts, "")))
 
-def withPath(transport: Transport, +host: Host.Host, +number: Maybe<&2, U32>, default: U32, urlPath: URL.Path, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
+def withPath(transport: Transport, +host: Host.Host, +number: Maybe<&2, U32>, default: U32, urlPath: URL.RecordPath, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
   match urlPath:
-    case URL.Hierarchical{first <> rest}: Done{Endpoint{transport, host, portUrl(number, default), String.reverse(Serialize.port(number, Serialize.append(Host.serialize(host), ""))), targetUrl(first <> rest, query)}}
+    case URL.Hierarchical{first <> rest}: Done{Endpoint{transport, host, portUrl(number, default), String.reverse(Serialize.portSerialize(number, Serialize.appendSerialize(Host.serializeHost(host), ""))), targetUrl(first <> rest, query)}}
     case _: Fail{InvalidPath{}}
 
-def withHost(transport: Transport, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, default: U32, urlPath: URL.Path, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
+def withHost(transport: Transport, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, default: U32, urlPath: URL.RecordPath, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
   match host:
     case None{}: Fail{InvalidHost{}}
     case Some{Host.Empty{}}: Fail{InvalidHost{}}
@@ -1155,12 +1155,12 @@ def withHost(transport: Transport, host: Maybe<&2, Host.Host>, number: Maybe<&2,
     case Some{Host.Domain{SNil{}}}: Fail{InvalidHost{}}
     case Some{value}: withPath(transport, value, number, default, urlPath, query)
 
-def withCredentials(transport: Transport, username: String, password: String, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, default: U32, urlPath: URL.Path, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
+def withCredentials(transport: Transport, username: String, password: String, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, default: U32, urlPath: URL.RecordPath, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
   match username password:
     case SNil{} SNil{}: withHost(transport, host, number, default, urlPath, query)
     case _ _: Fail{Credentials{}}
 
-def withScheme(scheme: Scheme.Scheme, username: String, password: String, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, urlPath: URL.Path, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
+def withScheme(scheme: Scheme.Scheme, username: String, password: String, host: Maybe<&2, Host.Host>, number: Maybe<&2, U32>, urlPath: URL.RecordPath, query: Maybe<&2, String>) -> Result<&2, &2, EndpointError, Endpoint>:
   match scheme:
     case Scheme.Http{}: withCredentials(Plaintext{}, username, password, host, number, 80, urlPath, query)
     case Scheme.Https{}: withCredentials(TLS{}, username, password, host, number, 443, urlPath, query)

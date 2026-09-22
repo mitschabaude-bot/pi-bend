@@ -1,8 +1,8 @@
 import Base
 import ../src/http-message.bend as HTTP
-import ../src/url-record.bend as URL
-import ../src/url-scheme.bend as Scheme
-import ../src/url-host.bend as Host
+import ../src/url.bend as URL
+import ../src/url.bend as Scheme
+import ../src/url.bend as Host
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Scalar
 
@@ -24,7 +24,7 @@ def port(value: String) -> Maybe<&2, U32>:
     case SNil{}: None{}
     case rest: Some{Scalar.decimal(rest, 0)}
 
-def hostResult(value: Result<&2, &2, Host.Error, Host.Host>) -> Host.Host:
+def hostResult(value: Result<&2, &2, Host.HostError, Host.Host>) -> Host.Host:
   match value:
     case Done{parsed}: parsed
     case Fail{_}: Host.Empty{}
@@ -35,10 +35,10 @@ def host(value: String) -> Host.Host:
     case SNil{}: Host.Empty{}
     case rest: hostResult(Host.classifyDomain(rest))
 
-def path(value: String) -> URL.Path:
+def path(value: String) -> URL.RecordPath:
   match value:
     case SCon{'/', rest}: URL.Hierarchical{Split.split(rest, '/')}
-    case rest: URL.Opaque{rest}
+    case rest: URL.RecordOpaque{rest}
 
 def transport(value: HTTP.Transport) -> String:
   match value:
@@ -51,7 +51,7 @@ def show(value: Result<&2, &2, HTTP.EndpointError, HTTP.Endpoint>) -> String:
     case Fail{HTTP.Credentials{}}: "credentials"
     case Fail{HTTP.InvalidHost{}}: "host"
     case Fail{HTTP.InvalidPath{}}: "path"
-    case Done{HTTP.Endpoint{kind, domain, number, authority, target}}: transport(kind) ++ "|" ++ Scalar.showText(Host.serialize(domain)) ++ "|" ++ U32.show(number) ++ "|" ++ Scalar.showText(authority) ++ "|" ++ Scalar.showText(target)
+    case Done{HTTP.Endpoint{kind, domain, number, authority, target}}: transport(kind) ++ "|" ++ Scalar.showText(Host.serializeHost(domain)) ++ "|" ++ U32.show(number) ++ "|" ++ Scalar.showText(authority) ++ "|" ++ Scalar.showText(target)
 
 def cases(args: List<String>) -> IO(Unit):
   match args:

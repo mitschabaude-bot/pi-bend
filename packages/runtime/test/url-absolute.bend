@@ -1,10 +1,10 @@
 import Base
-import ../src/url-absolute.bend as URL
-import ../src/url-record.bend as Record
-import ../src/url-serialize.bend as Serialize
-import ../src/idna-domain.bend as Domain
-import ../src/idna-label.bend as Label
-import ../src/idna-mapping.bend as Mapping
+import ../src/url.bend as URL
+import ../src/url.bend as Record
+import ../src/url.bend as Serialize
+import ../src/idna.bend as Domain
+import ../src/idna.bend as Label
+import ../src/idna.bend as Mapping
 import ../src/unicode-17-idna-mapping.bend as MappingData
 import ../src/unicode-17-normalization.bend as NormalizationData
 import ../src/unicode-17-idna-properties.bend as PropertiesData
@@ -20,7 +20,7 @@ def text(parts: List<&2, String>, reversed: String) -> String:
 def show(value: Result<&2, &2, URL.Error, Record.URL>) -> String:
   match value:
     case Fail{_}: "invalid"
-    case Done{result}: "+" ++ Text.showText(Serialize.serialize(result, False{}))
+    case Done{result}: "+" ++ Text.showText(Serialize.serializeSerialize(result, False{}))
 
 def cases(args: List<String>, +context: URL.Context) -> IO(Unit):
   match args:
@@ -33,4 +33,4 @@ def cases(args: List<String>, +context: URL.Context) -> IO(Unit):
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
-    cases(args, URL.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.Options{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}})
+    cases(args, URL.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}})

@@ -37,7 +37,7 @@ import ../../../runtime/src/random-seed.bend as Seed
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/text-space.bend as Space
-import ../../../runtime/src/url-absolute.bend as URL
+import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/u64.bend as Word
 import ../../../runtime/src/http-message.bend as Header
 

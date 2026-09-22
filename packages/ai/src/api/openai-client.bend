@@ -26,11 +26,11 @@ import ../../../runtime/src/json-parse.bend as Parse
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/timer-milliseconds.bend as Duration
-import ../../../runtime/src/url-absolute.bend as Absolute
-import ../../../runtime/src/url-record.bend as URL
-import ../../../runtime/src/url-form.bend as Form
-import ../../../runtime/src/url-form-strict.bend as Strict
-import ../../../runtime/src/url-query-encode.bend as Encode
+import ../../../runtime/src/url.bend as Absolute
+import ../../../runtime/src/url.bend as URL
+import ../../../runtime/src/url.bend as Form
+import ../../../runtime/src/url.bend as Strict
+import ../../../runtime/src/url.bend as Encode
 
 # The request side of the OpenAI SDK client (openai 6.40.0), as used by pi
 # with retries disabled: header assembly, the fixed Responses resource URL,
@@ -222,7 +222,7 @@ def buildHeaders(configuration: Defaults, apiKey: String, retryCount: Nat, timeo
 
 type URLError is Data:
   InvalidURL{cause: Absolute.Error}
-  InvalidQuery{cause: Strict.Error}
+  InvalidQuery{cause: Strict.FormStrictError}
 
 # Responses uses a fixed SDK resource path, not general relative resolution.
 def suffix(base: String, reversed: String) -> String:
@@ -241,7 +241,7 @@ def collect(tuples: List<&2, Form.Entry>, fields: R.Record<String>) -> R.Record<
 def encoded(properties: List<&2, R.Property<String>>) -> List<&2, String>:
   match properties:
     case Nil{}: Nil{}
-    case R.Property{name, value} <> rest: (Encode.encode(name) ++ "=" ++ Encode.encode(value)) <> encoded(rest)
+    case R.Property{name, value} <> rest: (Encode.encodeQueryEncode(name) ++ "=" ++ Encode.encodeQueryEncode(value)) <> encoded(rest)
 
 def serializeQuery(fields: R.Record<String>) -> String:
   String.join(encoded(R.entries(String, fields)), "&")
@@ -250,7 +250,7 @@ def withQuery(url: URL.URL, query: Maybe<&2, String>) -> URL.URL:
   match url:
     case URL.URL{scheme, username, password, host, port, path, _, fragment}: URL.URL{scheme, username, password, host, port, path, query, fragment}
 
-def normalizedQuery(url: URL.URL, parsed: Result<&2, &2, Strict.Error, List<&2, Form.Entry>>) -> Result<&2, &2, URLError, URL.URL>:
+def normalizedQuery(url: URL.URL, parsed: Result<&2, &2, Strict.FormStrictError, List<&2, Form.Entry>>) -> Result<&2, &2, URLError, URL.URL>:
   match parsed:
     case Fail{cause}: Fail{InvalidQuery{cause}}
     case Done{Nil{}}: Done{url}
@@ -259,7 +259,7 @@ def normalizedQuery(url: URL.URL, parsed: Result<&2, &2, Strict.Error, List<&2, 
 def queried(url: URL.URL, query: Maybe<&2, String>) -> Result<&2, &2, URLError, URL.URL>:
   match query:
     case None{}: Done{url}
-    case Some{text}: normalizedQuery(url, Strict.parse(text))
+    case Some{text}: normalizedQuery(url, Strict.parseFormStrict(text))
 
 def parsedURL(result: Result<&2, &2, Absolute.Error, URL.URL>) -> Result<&2, &2, URLError, URL.URL>:
   match result:

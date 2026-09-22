@@ -1,6 +1,6 @@
 import Base
-import ../src/url-search-params.bend as Params
-import ../src/url-form.bend as Form
+import ../src/url.bend as Params
+import ../src/url.bend as Form
 import ./utf8-runner.bend as Text
 import ../src/string-split.bend as Split
 
@@ -56,7 +56,7 @@ def operation(parts: List<&2, String>, +params: Params.URLSearchParams) -> Param
     case "s" <> name <> value <> Nil{}: updated(params, Params.set(params, text(name), text(value)))
     case "d" <> name <> value <> Nil{}: updated(params, Params.delete(params, text(name), optional(value)))
     case "k" <> Nil{}: (params, values(Params.keys(params)))
-    case "v" <> Nil{}: (params, values(Params.values(params)))
+    case "v" <> Nil{}: (params, values(Params.valuesSearchParams(params)))
     case "r" <> Nil{}: updated(params, Params.sort(params))
     case "g" <> name <> Nil{}: (params, found(Params.get(params, text(name))))
     case "l" <> name <> Nil{}: (params, values(Params.getAll(params, text(name))))
@@ -71,10 +71,10 @@ def operations(parts: List<&2, String>, state: Params.URLSearchParams & String, 
 def run(parts: List<&2, String>) -> String:
   match parts:
     case "q" <> initial <> ops <> Nil{}:
-      +params = Params.parse(text(initial))
+      +params = Params.parseSearchParams(text(initial))
       operations(Split.split(ops, '|'), (params, show(params)), Nil{})
-    case "p" <> value <> Nil{}: show(Params.parse(text(value)))
-    case "f" <> value <> Nil{}: entries(Form.parse(text(value)))
+    case "p" <> value <> Nil{}: show(Params.parseSearchParams(text(value)))
+    case "f" <> value <> Nil{}: entries(Form.parseForm(text(value)))
     case "n" <> name <> value <> Nil{}: show(Params.fromEntries(Form.Entry{text(name), text(value)} <> Nil{}))
     case _: "invalid-case"
 

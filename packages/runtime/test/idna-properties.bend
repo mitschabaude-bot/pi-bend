@@ -1,11 +1,11 @@
 import Base
 import ../src/u32-table.bend as Table
-import ../src/idna-properties.bend as Data
+import ../src/unicode.bend as Data
 import ../src/unicode-17-idna-properties.bend as Unicode
-import ../src/unicode-bidi-class.bend as Bidi
-import ../src/unicode-joining-type.bend as Joining
-import ../src/idna-label-context.bend as Context
-import ../src/idna-bidi.bend as Rule
+import ../src/unicode.bend as Bidi
+import ../src/unicode.bend as Joining
+import ../src/idna.bend as Context
+import ../src/idna.bend as Rule
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -63,7 +63,7 @@ def hashed(value: Maybe<&2, Data.Properties>, hash: U32) -> U32:
     case Some{Data.Properties{bidi, joining, ccc, mark}}:
       mix(mix(mix(mix(hash, bidiCode(bidi)), joiningCode(joining)), ccc), bit(mark))
 
-def range(fuel: Nat, +code: U32, +table: Table.Table<Data.Entry>, hash: U32) -> U32:
+def range(fuel: Nat, +code: U32, +table: Table.Table<Data.PropertiesEntry>, hash: U32) -> U32:
   match fuel:
     case Zero{}: hash
     case Succ{rest}: range(rest, (code + 1 : U32), table, hashed(Data.lookup(table, code), hash))
@@ -74,20 +74,20 @@ def text(parts: List<&2, String>, reversed: String) -> String:
     case SNil{} <> rest: text(rest, reversed)
     case part <> rest: text(rest, SCon{Chr{Text.decimal(part, 0)}, reversed})
 
-def showContext(value: Result<&2, &2, U32, Context.Analysis>) -> String:
+def showContext(value: Result<&2, &2, U32, Context.LabelContextAnalysis>) -> String:
   match value:
     case Fail{code}: "invalid;" ++ U32.show(code)
-    case Done{Context.Analysis{mark, Rule.Analysis{rtl, valid}, joiners}}:
+    case Done{Context.LabelContextAnalysis{mark, Rule.Analysis{rtl, valid}, joiners}}:
       U32.show(bit(mark)) ++ U32.show(bit(rtl)) ++ U32.show(bit(valid)) ++ U32.show(bit(joiners))
 
-def run(parts: List<&2, String>, table: Table.Table<Data.Entry>) -> String:
+def run(parts: List<&2, String>, table: Table.Table<Data.PropertiesEntry>) -> String:
   match parts:
     case "p" <> code <> Nil{}: show(Data.lookup(table, Text.decimal(code, 0)))
     case "r" <> start <> count <> Nil{}: U32.show(range(U32.to_nat(Text.decimal(count, 0)), Text.decimal(start, 0), table, 2166136261))
-    case "s" <> input <> Nil{}: showContext(Context.analyze(table, text(Split.split(input, ','), "")))
+    case "s" <> input <> Nil{}: showContext(Context.analyzeLabelContext(table, text(Split.split(input, ','), "")))
     case _: "invalid-case"
 
-def cases(args: List<String>, +table: Table.Table<Data.Entry>) -> IO(Unit):
+def cases(args: List<String>, +table: Table.Table<Data.PropertiesEntry>) -> IO(Unit):
   match args:
     case Nil{}: IO.pure(Unit, Unit{})
     case head <> rest:

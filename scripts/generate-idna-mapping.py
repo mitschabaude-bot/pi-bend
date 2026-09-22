@@ -58,7 +58,7 @@ def generate():
 # Unicode 17.0.0 UTS #46 data, Unicode License V3; see unicode-LICENSE.txt.
 import Base
 import ./u32-table.bend as Table
-import ./idna-mapping-data.bend as Data
+import ./unicode.bend as Data
 
 def table() -> Table.Table<Data.Entry>:
   ''' + data.table(values).replace('\n','\n  ') + '\n'

@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/url-search-params.bend as P
-import ../packages/runtime/src/url-form.bend as F
+import ../packages/runtime/src/url.bend as P
+import ../packages/runtime/src/url.bend as F
 import ../laws/url-search-params.bend as Laws
 
 def Laws.names_retain_head(name, value, rest): {==}
@@ -34,7 +34,7 @@ def Laws.normalization_partition(left, right):
   match left:
     case Nil{}: {==}
     case entry <> rest:
-      %Laws.normalization_partition(rest, right) : {F.normalize(entry) <> P.normalized(List.append(&2, F.Entry, rest, right)) == F.normalize(entry) <> _ : List<&2, F.Entry>}
+      %Laws.normalization_partition(rest, right) : {F.normalize(entry) <> P.normalizedSearchParams(List.append(&2, F.Entry, rest, right)) == F.normalize(entry) <> _ : List<&2, F.Entry>}
       {==}
 
 law filtered_head_twice:

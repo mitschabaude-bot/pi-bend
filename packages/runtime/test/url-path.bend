@@ -1,6 +1,6 @@
 import Base
-import ../src/url-path.bend as Path
-import ../src/url-scheme.bend as Scheme
+import ../src/url.bend as Path
+import ../src/url.bend as Scheme
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -20,19 +20,19 @@ def pathText(parts: List<&2, String>, reversed: String) -> String:
     case Nil{}: String.reverse(reversed)
     case head <> rest: pathText(rest, String.reverse(head) ++ SCon{'/', reversed})
 
-def show(value: Path.Parsed) -> String:
+def show(value: Path.PathParsed) -> String:
   match value:
-    case Path.Parsed{segments, query, fragment}: Text.showText(pathText(segments, "")) ++ ";" ++ optional(query) ++ ";" ++ optional(fragment)
+    case Path.PathParsed{segments, query, fragment}: Text.showText(pathText(segments, "")) ++ ";" ++ optional(query) ++ ";" ++ optional(fragment)
 
 def run(scheme: Maybe<&2, Scheme.Scheme>, text: String, base: List<&2, String>) -> String:
   match scheme:
     case None{}: "invalid scheme"
-    case Some{value}: show(Path.parse(text, value, base))
+    case Some{value}: show(Path.parsePath(text, value, base))
 
 def start(scheme: Maybe<&2, Scheme.Scheme>, text: String) -> String:
   match scheme:
     case None{}: "invalid scheme"
-    case Some{value}: show(Path.start(text, value, Nil{}))
+    case Some{value}: show(Path.startPath(text, value, Nil{}))
 
 def baseParts(text: String) -> List<&2, String>:
   match text:
@@ -41,8 +41,8 @@ def baseParts(text: String) -> List<&2, String>:
 
 def dispatch(mode: String, base: String, text: String) -> String:
   match mode:
-    case "s": start(Scheme.parse(base), decode(Split.split(text, ','), ""))
-    case scheme: run(Scheme.parse(scheme), decode(Split.split(text, ','), ""), baseParts(base))
+    case "s": start(Scheme.parseScheme(base), decode(Split.split(text, ','), ""))
+    case scheme: run(Scheme.parseScheme(scheme), decode(Split.split(text, ','), ""), baseParts(base))
 
 def entry(parts: List<&2, String>) -> String:
   match parts:

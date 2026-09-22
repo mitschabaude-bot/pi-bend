@@ -3,8 +3,8 @@ import ../packages/runtime/src/hosts.bend as Hosts
 import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/hosts.bend as Family
 import ../packages/runtime/src/hosts.bend as Resolve
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 
 law any_preserves_database:
   for +entries: List<&2, Hosts.Entry<File.Address>>
@@ -17,7 +17,7 @@ law family_append:
   {Family.select(family, List.append(&2, Hosts.Entry<File.Address>, left, right)) == List.append(&2, Hosts.Entry<File.Address>, Family.select(family, left), Family.select(family, right)) : List<&2, Hosts.Entry<File.Address>>}
 
 law ipv4_excludes_ipv6:
-  for address: IPv6.Address
+  for address: IPv6.Ipv6Address
   for canonical: String
   for aliases: List<&2, String>
   for +rest: List<&2, Hosts.Entry<File.Address>>

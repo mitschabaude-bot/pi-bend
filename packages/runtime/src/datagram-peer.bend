@@ -1,7 +1,7 @@
 import Base
 import ./socket.bend as Endpoint
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 
 type Route is Data:
   Route{local: Endpoint.Endpoint, remote: Endpoint.Endpoint}
@@ -22,7 +22,7 @@ def family(destination: Endpoint.Endpoint) -> U32:
 def associate(socket: Socket, destination: Endpoint.Endpoint) -> IO(Socket & Result<&1, &1, U32 & String, Unit>):
   match destination:
     case Endpoint.EndpointV4{IPv4.Address{address}, port}: UDP.connect_peer(socket, 4, address, 0, 0, 0, port, 0)
-    case Endpoint.EndpointV6{IPv6.Address{a,b,c,d}, port, scope}: UDP.connect_peer(socket, 6, a, b, c, d, port, scope)
+    case Endpoint.EndpointV6{IPv6.Ipv6Address{a,b,c,d}, port, scope}: UDP.connect_peer(socket, 6, a, b, c, d, port, scope)
 
 def remote(local: Endpoint.Endpoint, pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Result<&2, &1, Error, Owner>):
   match pair:

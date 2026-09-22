@@ -1,10 +1,10 @@
 import Base
-import ../src/url-record.bend as Record
-import ../src/url-serialize.bend as Serialize
-import ../src/url-scheme.bend as Scheme
-import ../src/url-host.bend as Host
-import ../src/url-ipv4.bend as V4
-import ../src/url-ipv6.bend as V6
+import ../src/url.bend as Record
+import ../src/url.bend as Serialize
+import ../src/url.bend as Scheme
+import ../src/url.bend as Host
+import ../src/url.bend as V4
+import ../src/url.bend as V6
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -33,25 +33,25 @@ def host(kind: String, value: String) -> Maybe<&2, Host.Host>:
     case "d": Some{Host.Domain{text(value)}}
     case "o": Some{Host.Opaque{text(value)}}
     case "4": Some{Host.IPv4{V4.Address{Text.decimal(value, 0)}}}
-    case _: Some{Host.IPv6{V6.Address{0, 0, 0, 1}}}
+    case _: Some{Host.IPv6{V6.Ipv6Address{0, 0, 0, 1}}}
 
 def parts(values: List<&2, String>, reversed: List<&2, String>) -> List<&2, String>:
   match values:
     case Nil{}: List.reverse(&2, String, reversed)
     case value <> rest: parts(rest, text(value) <> reversed)
 
-def hierarchical(value: String) -> Record.Path:
+def hierarchical(value: String) -> Record.RecordPath:
   match value:
     case "-": Record.Hierarchical{Nil{}}
     case other: Record.Hierarchical{parts(Split.split(other, ':'), Nil{})}
 
-def path(kind: String, value: String) -> Record.Path:
+def path(kind: String, value: String) -> Record.RecordPath:
   match kind:
-    case "o": Record.Opaque{text(value)}
+    case "o": Record.RecordOpaque{text(value)}
     case _: hierarchical(value)
 
 def render(+value: Record.URL) -> String:
-  Text.showText(Serialize.serialize(value, False{})) ++ ";" ++ Text.showText(Serialize.serialize(value, True{}))
+  Text.showText(Serialize.serializeSerialize(value, False{})) ++ ";" ++ Text.showText(Serialize.serializeSerialize(value, True{}))
 
 def entry(values: List<&2, String>) -> String:
   match values:

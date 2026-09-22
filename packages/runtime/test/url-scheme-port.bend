@@ -1,6 +1,6 @@
 import Base
-import ../src/url-scheme.bend as Scheme
-import ../src/url-port.bend as Port
+import ../src/url.bend as Scheme
+import ../src/url.bend as Port
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -15,10 +15,10 @@ def optional(port: Maybe<&2, U32>) -> String:
     case None{}: "-"
     case Some{value}: U32.show(value)
 
-def showPort(result: Result<&2, &2, Port.Error, Maybe<&2, U32>>) -> String:
+def showPort(result: Result<&2, &2, Port.PortError, Maybe<&2, U32>>) -> String:
   match result:
     case Fail{Port.InvalidDigit{}}: "digit"
-    case Fail{Port.OutOfRange{}}: "range"
+    case Fail{Port.PortOutOfRange{}}: "range"
     case Done{value}: optional(value)
 
 def special(value: Bool) -> String:
@@ -29,11 +29,11 @@ def special(value: Bool) -> String:
 def show(result: Maybe<&2, Scheme.Scheme>, port: String) -> String:
   match result:
     case None{}: "invalid"
-    case Some{+scheme}: Scheme.serialize(scheme) ++ ";" ++ special(Scheme.isSpecial(scheme)) ++ ";" ++ optional(Scheme.defaultPort(scheme)) ++ ";" ++ showPort(Port.parse(Scheme.defaultPort(scheme), port))
+    case Some{+scheme}: Scheme.serializeScheme(scheme) ++ ";" ++ special(Scheme.isSpecialScheme(scheme)) ++ ";" ++ optional(Scheme.defaultPort(scheme)) ++ ";" ++ showPort(Port.parsePort(Scheme.defaultPort(scheme), port))
 
 def run(parts: List<&2, String>) -> String:
   match parts:
-    case scheme <> port <> Nil{}: show(Scheme.parse(decode(Split.split(scheme, ','), "")), decode(Split.split(port, ','), ""))
+    case scheme <> port <> Nil{}: show(Scheme.parseScheme(decode(Split.split(scheme, ','), "")), decode(Split.split(port, ','), ""))
     case _: "bad fixture"
 
 def cases(args: List<String>) -> IO(Unit):

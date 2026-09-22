@@ -1,8 +1,8 @@
 import Base
 import ./dns-message.bend as Search
 import ./string-split.bend as Split
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 import ./file-fold.bend as FileFold
 import ./ipv6-scope.bend as Scope
 import ./socket.bend as Connect
@@ -13,7 +13,7 @@ import ./bounded-file.bend as Bounded
 # IPv6 scopes remain text until the OS adapter resolves an interface or index.
 type Address is Data:
   V4{value: IPv4.Address}
-  V6{value: IPv6.Address, zone: Maybe<&2, String>}
+  V6{value: IPv6.Ipv6Address, zone: Maybe<&2, String>}
 
 type AddressError is Data:
   InvalidAddress{}
@@ -41,20 +41,20 @@ def validParts(parts: List<&2, String>, valid: Bool) -> Bool:
 def checkedV4(valid: Bool, parts: List<&2, String>) -> Result<&2, &2, IPv4.AddressError, IPv4.Address>:
   match valid:
     case False{}: Fail{IPv4.InvalidPart{}}
-    case True{}: IPv4.scan(parts, Done{IPv4.Prefix{0, 0}})
+    case True{}: IPv4.scanIpv4(parts, Done{IPv4.Ipv4Prefix{0, 0}})
 
 def ipv4(text: String) -> Result<&2, &2, IPv4.AddressError, IPv4.Address>:
   +parts = Split.split(text, '.')
   checkedV4(validParts(parts, True{}), parts)
 
-def withZone(zone: Maybe<&2, String>, parsed: Result<&2, &2, IPv6.AddressError, IPv6.Address>) -> Result<&2, &2, AddressError, Address>:
+def withZone(zone: Maybe<&2, String>, parsed: Result<&2, &2, IPv6.Ipv6AddressError, IPv6.Ipv6Address>) -> Result<&2, &2, AddressError, Address>:
   match parsed:
     case Fail{_}: Fail{InvalidAddress{}}
     case Done{address}: Done{V6{address, zone}}
 
 def ipv6(parts: Zoned) -> Result<&2, &2, AddressError, Address>:
   match parts:
-    case Zoned{host, zone}: withZone(zone, IPv6.parse(host))
+    case Zoned{host, zone}: withZone(zone, IPv6.parseIpv6(host))
 
 def classified(text: String, parsed: Result<&2, &2, IPv4.AddressError, IPv4.Address>) -> Result<&2, &2, AddressError, Address>:
   match parsed:
@@ -303,7 +303,7 @@ type ScopeReport<-LookupError: Data> is Data:
 
 # Resolver configuration follows libc's nonfatal scope policy: an unresolved
 # zone retains its address with scope zero. Keep the failure available to callers.
-def resolved(-LookupError: Data, address: IPv6.Address, result: Result<&2, &2, Scope.Error<LookupError>, U32>) -> ScopeReport<LookupError>:
+def resolved(-LookupError: Data, address: IPv6.Ipv6Address, result: Result<&2, &2, Scope.Error<LookupError>, U32>) -> ScopeReport<LookupError>:
   match result:
     case Done{scope}: ScopeReport{Connect.V6{address, scope}, None{}}
     case Fail{error}: ScopeReport{Connect.V6{address, 0}, Some{error}}

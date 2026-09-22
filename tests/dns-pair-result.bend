@@ -6,8 +6,8 @@ import ../packages/runtime/src/dns-resolver.bend as Answer
 import ../packages/runtime/src/dns-message.bend as Run
 import ../packages/runtime/src/dns-message.bend as Response
 import ../packages/runtime/src/dns-message.bend as Name
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/src/dns-transport.bend as Transport
 import ../packages/runtime/src/dns-transport.bend as UDP
 import ../packages/runtime/src/dns-transport.bend as Policy
@@ -75,7 +75,7 @@ def coded(token: String) -> Result<&2, &2, Lookup.AddressLookupError<String>, An
 def selectedInput(mode: InputMode) -> Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection>:
   match mode:
     case AnswerIPv4{}: Done{Answer.Selection{Name.Name{(97 <> Nil{}) <> Nil{}}, Answer.V4{IPv4.Address{16909060}, 61} <> Nil{}}}
-    case AnswerIPv6{}: Done{Answer.Selection{Name.Name{(98 <> Nil{}) <> Nil{}}, Answer.V6{IPv6.Address{0, 0, 0, 1}, 73} <> Nil{}}}
+    case AnswerIPv6{}: Done{Answer.Selection{Name.Name{(98 <> Nil{}) <> Nil{}}, Answer.V6{IPv6.Ipv6Address{0, 0, 0, 1}, 73} <> Nil{}}}
     case EmptyAnswer{}: Done{Answer.Selection{Name.Name{Nil{}}, Nil{}}}
     case UDPServerFailure{}: rejected(Policy.ServerFailure{}, Scope.Active{})
     case UDPNotImplemented{}: rejected(Policy.NotImplemented{}, Scope.Active{})

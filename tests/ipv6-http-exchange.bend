@@ -1,9 +1,9 @@
 import Base
 import ../packages/runtime/src/ipv6-connect.bend as Connect
-import ../packages/runtime/src/url-ipv6.bend as IPv6
-import ../packages/runtime/src/url-record.bend as URL
-import ../packages/runtime/src/url-scheme.bend as Scheme
-import ../packages/runtime/src/url-host.bend as Host
+import ../packages/runtime/src/url.bend as IPv6
+import ../packages/runtime/src/url.bend as URL
+import ../packages/runtime/src/url.bend as Scheme
+import ../packages/runtime/src/url.bend as Host
 import ../packages/runtime/src/http-message.bend as Endpoint
 import ../packages/runtime/src/http-message.bend as Request
 import ../packages/runtime/src/http-message.bend as Body
@@ -30,7 +30,7 @@ def fields(chunked: Bool) -> Headers.Headers:
   Bool.pick(Headers.Headers, chunked, Headers.appendField(headers, Header.Header{"content-length", "0"}), headers)
 
 def url(port: U32, emptyQuery: Bool) -> URL.URL:
-  URL.URL{Scheme.Http{}, "", "", Some{Host.IPv6{IPv6.Address{0, 0, 0, 1}}}, Some{port}, URL.Hierarchical{"v1" <> "responses" <> Nil{}}, Some{Bool.pick(String, emptyQuery, "", "x=%C3%A9")}, Some{"ignored"}}
+  URL.URL{Scheme.Http{}, "", "", Some{Host.IPv6{IPv6.Ipv6Address{0, 0, 0, 1}}}, Some{port}, URL.Hierarchical{"v1" <> "responses" <> Nil{}}, Some{Bool.pick(String, emptyQuery, "", "x=%C3%A9")}, Some{"ignored"}}
 
 def cases(count: Nat, +port: U32, +chunked: Bool, +emptyQuery: Bool) -> IO(Unit):
   match count:

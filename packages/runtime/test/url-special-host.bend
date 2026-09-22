@@ -1,9 +1,9 @@
 import Base
-import ../src/url-special-host.bend as Special
-import ../src/url-host.bend as Host
-import ../src/idna-domain.bend as Domain
-import ../src/idna-label.bend as Label
-import ../src/idna-mapping.bend as Mapping
+import ../src/url.bend as Special
+import ../src/url.bend as Host
+import ../src/idna.bend as Domain
+import ../src/idna.bend as Label
+import ../src/idna.bend as Mapping
 import ../src/unicode-17-idna-mapping.bend as MappingData
 import ../src/unicode-17-normalization.bend as NormalizationData
 import ../src/unicode-17-idna-properties.bend as PropertiesData
@@ -23,17 +23,17 @@ def kind(value: Host.Host) -> String:
     case Host.IPv6{_}: "ipv6"
     case _: "unexpected"
 
-def show(value: Result<&2, &2, Special.Error, Host.Host>) -> String:
+def show(value: Result<&2, &2, Special.SpecialHostError, Host.Host>) -> String:
   match value:
     case Fail{_}: "invalid"
-    case Done{+host}: kind(host) ++ ";" ++ Text.showText(Host.serialize(host))
+    case Done{+host}: kind(host) ++ ";" ++ Text.showText(Host.serializeHost(host))
 
 def cases(args: List<String>, +context: Label.Context) -> IO(Unit):
   match args:
     case Nil{}: IO.pure(Unit, Unit{})
     case head <> rest:
       do IO<Unit>:
-        IO.print(show(Special.parse(context, Domain.Options{Label.Options{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}, text(Split.split(head, ','), ""))))
+        IO.print(show(Special.parseSpecialHost(context, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}, text(Split.split(head, ','), ""))))
         cases(rest, context)
 
 def main() -> IO(Unit):

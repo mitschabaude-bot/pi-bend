@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/url-search-params.bend as Params
-import ../packages/runtime/src/url-form.bend as Form
+import ../packages/runtime/src/url.bend as Params
+import ../packages/runtime/src/url.bend as Form
 import ../packages/runtime/src/http-message.bend as Request
 import ../packages/runtime/src/http-message.bend as Body
 import ../packages/runtime/src/http-message.bend as H

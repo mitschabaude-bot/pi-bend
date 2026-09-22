@@ -11,15 +11,15 @@ import ../packages/runtime/src/datagram-peer.bend as Peer
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/socket.bend as Endpoint
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-udp-attempt-scope.bend as ScopeTest
 
 def destination(family: U32, port: U32) -> Endpoint.Endpoint:
   match family:
     case 4: Endpoint.EndpointV4{IPv4.Address{2130706433}, port}
-    case _: Endpoint.EndpointV6{IPv6.Address{0,0,0,1}, port, 0}
+    case _: Endpoint.EndpointV6{IPv6.Ipv6Address{0,0,0,1}, port, 0}
 
 def request(+mode: String) -> Request.Request:
   Request.Request{Bool.pick(U32, String.eq(mode, "invalid"), 65536, 42), 256, Message.Question{Name.Name{Nil{}}, 1, 1}, Bool.pick(Maybe<&2, Edns.Query>, String.eq(mode, "edns"), Some{Edns.Query{1232, False{}, Nil{}}}, None{})}

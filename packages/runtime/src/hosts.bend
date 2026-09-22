@@ -1,7 +1,7 @@
 import Base
 import ./dns-message.bend as Case
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 import ./string-split.bend as Split
 import ./utf8-strict.bend as UTF8
 import ./bounded-file.bend as File
@@ -40,7 +40,7 @@ def lookup(-Address: Data, +name: String, entries: List<&2, Entry<Address>>) -> 
 
 type Address is Data:
   V4{value: IPv4.Address}
-  V6{value: IPv6.Address}
+  V6{value: IPv6.Ipv6Address}
 
 type Error is Data:
   InvalidAddress{token: String}
@@ -52,15 +52,15 @@ type Failure is Data:
 
 # Hosts addresses use strict presentation syntax, not URL/inet_aton numbers.
 # No port, brackets, abbreviated IPv4 or interface-zone suffix is accepted.
-def v6(token: String, result: Result<&2, &2, IPv6.AddressError, IPv6.Address>) -> Result<&2, &2, Error, Address>:
+def v6(token: String, result: Result<&2, &2, IPv6.Ipv6AddressError, IPv6.Ipv6Address>) -> Result<&2, &2, Error, Address>:
   match result:
     case Done{value}: Done{V6{value}}
     case Fail{_}: Fail{InvalidAddress{token}}
 
-def v4(+token: String, result: Result<&2, &2, IPv6.AddressError, List<&2, U32>>) -> Result<&2, &2, Error, Address>:
+def v4(+token: String, result: Result<&2, &2, IPv6.Ipv6AddressError, List<&2, U32>>) -> Result<&2, &2, Error, Address>:
   match result:
     case Done{a <> b <> Nil{}}: Done{V4{IPv4.Address{(a * 65536 + b : U32)}}}
-    case _: v6(token, IPv6.parse(token))
+    case _: v6(token, IPv6.parseIpv6(token))
 
 def address(+token: String) -> Result<&2, &2, Error, Address>:
   v4(token, IPv6.embedded(Split.split(token, '.')))

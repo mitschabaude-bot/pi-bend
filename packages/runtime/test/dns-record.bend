@@ -2,8 +2,8 @@ import Base
 import ../src/dns-message.bend as Record
 import ../src/dns-message.bend as Message
 import ../src/dns-message.bend as Name
-import ../src/url-ipv4.bend as IPv4
-import ../src/url-ipv6.bend as IPv6
+import ../src/url.bend as IPv4
+import ../src/url.bend as IPv6
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Scalar
 
@@ -32,7 +32,7 @@ def show(value: Result<&2, &2, Record.RecordError, Record.Value>) -> String:
   match value:
     case Fail{_}: "error"
     case Done{Record.A{IPv4.Address{a}}}: "A:" ++ U32.show(a)
-    case Done{Record.AAAA{IPv6.Address{a, b, c, d}}}: "AAAA:" ++ showNumbers(a <> b <> c <> d <> Nil{})
+    case Done{Record.AAAA{IPv6.Ipv6Address{a, b, c, d}}}: "AAAA:" ++ showNumbers(a <> b <> c <> d <> Nil{})
     case Done{Record.CNAME{target}}: "CNAME:" ++ showName(target)
     case Done{Record.NS{target}}: "NS:" ++ showName(target)
     case Done{Record.PTR{target}}: "PTR:" ++ showName(target)

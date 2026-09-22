@@ -2,8 +2,8 @@ import Base
 import ../src/dns-resolver.bend as Answer
 import ../src/dns-message.bend as Message
 import ../src/dns-message.bend as Name
-import ../src/url-ipv4.bend as IPv4
-import ../src/url-ipv6.bend as IPv6
+import ../src/url.bend as IPv4
+import ../src/url.bend as IPv6
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Scalar
 
@@ -27,7 +27,7 @@ def addresses(values: List<&2, Answer.Address>, acc: String) -> String:
   match values:
     case Nil{}: acc
     case Answer.V4{IPv4.Address{word}, ttl} <> rest: addresses(rest, acc ++ "4," ++ U32.show(word) ++ "," ++ U32.show(ttl) ++ ";")
-    case Answer.V6{IPv6.Address{a,b,c,d}, ttl} <> rest: addresses(rest, acc ++ "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(ttl) ++ ";")
+    case Answer.V6{IPv6.Ipv6Address{a,b,c,d}, ttl} <> rest: addresses(rest, acc ++ "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(ttl) ++ ";")
 
 def show(value: Result<&2, &2, Answer.Error, Answer.Selection>) -> String:
   match value:

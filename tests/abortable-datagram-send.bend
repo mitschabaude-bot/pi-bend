@@ -3,8 +3,8 @@ import ../packages/runtime/src/socket.bend as Datagram
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/socket.bend as Endpoint
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./abortable-datagram.bend as Receive
 import ./udp-write.bend as Write
@@ -12,7 +12,7 @@ import ./udp-write.bend as Write
 def destination(family: U32, port: U32) -> Endpoint.Endpoint:
   match family:
     case 4: Endpoint.EndpointV4{IPv4.Address{2130706433}, port}
-    case _: Endpoint.EndpointV6{IPv6.Address{0, 0, 0, 1}, port, 0}
+    case _: Endpoint.EndpointV6{IPv6.Ipv6Address{0, 0, 0, 1}, port, 0}
 
 def result(pair: Socket & Result<&2, &2, Datagram.DatagramError<Deadline.Cause<String>>, Unit>) -> IO(Socket):
   match pair:

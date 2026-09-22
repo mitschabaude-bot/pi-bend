@@ -1,5 +1,5 @@
 import Base
-import ../src/url-authority.bend as Authority
+import ../src/url.bend as Authority
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -29,7 +29,7 @@ def prefix(value: Authority.Prefix) -> String:
 
 def entry(parts: List<&2, String>) -> String:
   match parts:
-    case "t" <> input <> Nil{}: show(Authority.parse(decode(Split.split(input, ','), ""))) ++ ";"
+    case "t" <> input <> Nil{}: show(Authority.parseAuthority(decode(Split.split(input, ','), ""))) ++ ";"
     case "s" <> input <> Nil{}: prefix(Authority.read(decode(Split.split(input, ','), ""), True{}))
     case "n" <> input <> Nil{}: prefix(Authority.read(decode(Split.split(input, ','), ""), False{}))
     case _: "bad fixture"

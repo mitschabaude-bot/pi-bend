@@ -4,7 +4,7 @@ import ../src/http-message.bend as Headers
 import ../src/http-message.bend as H
 import ./utf8-runner.bend as Text
 import ../src/big-nat.bend as N
-import ../src/url-search-params.bend as Params
+import ../src/url.bend as Params
 
 def zeros(count: Nat) -> List<&2, U32>:
   match count:
@@ -15,7 +15,7 @@ def input(kind: String, value: String) -> Body.Input:
   match kind:
     case "absent": Body.Absent{}
     case "repeat": Body.Bytes{zeros(U32.to_nat(Text.decimal(value, 0)))}
-    case "form": Body.SearchParams{Params.parse(Text.fromScalars(Text.parseNumbers(value)))}
+    case "form": Body.SearchParams{Params.parseSearchParams(Text.fromScalars(Text.parseNumbers(value)))}
     case "text": Body.Text{Text.fromScalars(Text.parseNumbers(value))}
     case _: Body.Bytes{Text.parseNumbers(value)}
 

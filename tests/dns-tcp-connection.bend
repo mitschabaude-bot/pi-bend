@@ -7,14 +7,14 @@ import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/socket.bend as SocketIO
 import ../packages/runtime/src/abort.bend as Abort
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./abortable-socket.bend as Test
 
 def endpoint(family: String) -> Connect.Address:
   match family:
-    case "6": Connect.V6{IPv6.Address{0, 0, 0, 1}, 0}
+    case "6": Connect.V6{IPv6.Ipv6Address{0, 0, 0, 1}, 0}
     case _: Connect.V4{IPv4.Address{2130706433}}
 
 def connected(result: Result<&2, &1, Connect.Error<String>, Socket>) -> IO(Socket):

@@ -1,6 +1,6 @@
 import Base
-import ../src/unicode-bidi-class.bend as Bidi
-import ../src/idna-bidi.bend as Rule
+import ../src/unicode.bend as Bidi
+import ../src/idna.bend as Rule
 
 # Test protocol letters encode the 23 Bidi_Class constructors in declaration order.
 def property(code: U32) -> Bidi.Class:

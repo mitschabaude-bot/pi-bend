@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/url-search-params.bend as P
-import ../packages/runtime/src/url-form.bend as F
+import ../packages/runtime/src/url.bend as P
+import ../packages/runtime/src/url.bend as F
 
 # Ordered tuples, not object properties: duplicates and position are data.
 law names_partition:
@@ -16,7 +16,7 @@ law values_partition:
 law normalization_partition:
   for +left: List<&2, F.Entry>
   for +right: List<&2, F.Entry>
-  {P.normalized(List.append(&2, F.Entry, left, right)) == List.append(&2, F.Entry, P.normalized(left), P.normalized(right)) : List<&2, F.Entry>}
+  {P.normalizedSearchParams(List.append(&2, F.Entry, left, right)) == List.append(&2, F.Entry, P.normalizedSearchParams(left), P.normalizedSearchParams(right)) : List<&2, F.Entry>}
 
 law names_retain_head:
   for name: String

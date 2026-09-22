@@ -1,8 +1,8 @@
 import Base
 import ../packages/runtime/src/http-exchange.bend as Route
-import ../packages/runtime/src/url-host.bend as Host
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as Host
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/src/socket.bend as Connect
 
 law ipv4_bypasses_lookup:
@@ -10,7 +10,7 @@ law ipv4_bypasses_lookup:
   {Route.plan(Host.IPv4{address}) == Route.Numeric{Connect.V4{address}} : Route.Plan}
 
 law ipv6_bypasses_lookup:
-  for +address: IPv6.Address
+  for +address: IPv6.Ipv6Address
   {Route.plan(Host.IPv6{address}) == Route.Numeric{Connect.V6{address, 0}} : Route.Plan}
 
 law domain_spelling_retained:

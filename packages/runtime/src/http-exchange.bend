@@ -6,7 +6,7 @@ import ./hosts.bend as Hosts
 import ./connection-driver.bend as Dispatch
 import ./abort.bend as Abort
 import ./http-message.bend as Request
-import ./url-host.bend as Host
+import ./url.bend as Host
 import ./dns-message.bend as Id
 import ./serial-resource.bend as Resource
 import ./callback.bend as C

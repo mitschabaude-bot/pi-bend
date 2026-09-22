@@ -1,6 +1,6 @@
 import Base
-import ../src/idna-ace.bend as ACE
-import ../src/punycode-core.bend as Core
+import ../src/idna.bend as ACE
+import ../src/punycode.bend as Core
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 

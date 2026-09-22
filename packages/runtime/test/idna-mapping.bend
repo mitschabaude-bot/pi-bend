@@ -1,7 +1,7 @@
 import Base
 import ../src/u32-table.bend as Table
-import ../src/idna-mapping-data.bend as Data
-import ../src/idna-mapping.bend as Mapping
+import ../src/unicode.bend as Data
+import ../src/idna.bend as Mapping
 import ../src/unicode-17-idna-mapping.bend as Unicode
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text

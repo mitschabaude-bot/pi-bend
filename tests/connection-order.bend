@@ -2,15 +2,15 @@ import Base
 import ../packages/runtime/src/connection-driver.bend as Order
 import ../packages/runtime/src/connection-driver.bend as Candidates
 import ../packages/runtime/src/socket.bend as Connect
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/src/string-split.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def address(words: List<&2, U32>) -> Result<&2, &2, Unit, Connect.Address>:
   match words:
     case 4 <> value <> Nil{}: Done{Connect.V4{IPv4.Address{value}}}
-    case 6 <> a <> b <> c <> d <> scope <> Nil{}: Done{Connect.V6{IPv6.Address{a, b, c, d}, scope}}
+    case 6 <> a <> b <> c <> d <> scope <> Nil{}: Done{Connect.V6{IPv6.Ipv6Address{a, b, c, d}, scope}}
     case _: Fail{Unit{}}
 
 def cons(value: Result<&2, &2, Unit, Connect.Address>, rest: Result<&2, &2, Unit, List<&2, Connect.Address>>) -> Result<&2, &2, Unit, List<&2, Connect.Address>>:
@@ -39,7 +39,7 @@ def ordered(paired: Bool, preference: Order.Preference, addresses: List<&2, Conn
 def shown(address: Connect.Address) -> String:
   match address:
     case Connect.V4{IPv4.Address{value}}: "4," ++ U32.show(value) ++ ";"
-    case Connect.V6{IPv6.Address{a, b, c, d}, scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(scope) ++ ";"
+    case Connect.V6{IPv6.Ipv6Address{a, b, c, d}, scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(scope) ++ ";"
 
 def show(addresses: List<&2, Connect.Address>) -> String:
   match addresses:

@@ -1,7 +1,7 @@
 import Base
-import ../src/idna-domain.bend as Domain
-import ../src/idna-label.bend as Label
-import ../src/idna-mapping.bend as Mapping
+import ../src/idna.bend as Domain
+import ../src/idna.bend as Label
+import ../src/idna.bend as Mapping
 import ../src/unicode-17-idna-mapping.bend as MappingData
 import ../src/unicode-17-normalization.bend as NormalizationData
 import ../src/unicode-17-idna-properties.bend as PropertiesData
@@ -19,7 +19,7 @@ def mode(value: String) -> Mapping.Mode:
     case "t": Mapping.Transitional{}
     case _: Mapping.Nontransitional{}
 
-def show(value: Result<&2, &2, Domain.Error, String>) -> String:
+def show(value: Result<&2, &2, Domain.DomainError, String>) -> String:
   match value:
     case Fail{_}: "invalid"
     case Done{result}: "+" ++ Text.showText(result)
@@ -27,7 +27,7 @@ def show(value: Result<&2, &2, Domain.Error, String>) -> String:
 def run(parts: List<&2, String>, context: Label.Context) -> String:
   match parts:
     case processing <> hyphens <> std3 <> joiners <> bidi <> dns <> input <> Nil{}:
-      show(Domain.toASCII(context, Domain.Options{Label.Options{String.eq(hyphens, "1"), String.eq(std3, "1"), String.eq(joiners, "1"), mode(processing)}, String.eq(bidi, "1"), String.eq(dns, "1")}, text(Split.split(input, ','), "")))
+      show(Domain.toASCII(context, Domain.Options{Label.LabelOptions{String.eq(hyphens, "1"), String.eq(std3, "1"), String.eq(joiners, "1"), mode(processing)}, String.eq(bidi, "1"), String.eq(dns, "1")}, text(Split.split(input, ','), "")))
     case _: "invalid-case"
 
 def cases(args: List<String>, +context: Label.Context) -> IO(Unit):

@@ -1,12 +1,12 @@
 # Immutable form/query tuples
 
-`runtime/src/url-form.bend` and `url-search-params.bend` implement UTF-8 form encoding and persistent ordered name/value tuples. Repeated names are intentional protocol data, including repeated OAuth scopes; they are not object properties. Append, replacement and deletion return new values. Replacement retains the first matching position and removes later matches. Optional value-specific deletion removes only matching pairs. Lookups distinguish an absent name from a present empty value.
+`runtime/src/url-form.bend` and the url search params section of `url.bend` implement UTF-8 form encoding and persistent ordered name/value tuples. Repeated names are intentional protocol data, including repeated OAuth scopes; they are not object properties. Append, replacement and deletion return new values. Replacement retains the first matching position and removes later matches. Optional value-specific deletion removes only matching pairs. Lookups distinguish an absent name from a present empty value.
 
 The optional sort operation follows the URLSearchParams API's stable UTF-16 name ordering; it does not sort requests implicitly. No JavaScript object reflection, prototype behavior, property enumeration or mutable iterator aliasing is involved. The encoder is directly useful for native form request bodies. The Responses URL component now uses strict parsing; body preparation and provider integration remain pending.
 
 ## Parsing boundary
 
-The `parse` compatibility entry point implements the [URL Standard form parser](https://url.spec.whatwg.org/#concept-urlencoded-parser), including replacement-mode malformed UTF-8 and literal incomplete percent escapes. This is a compatibility parser, **not an approved strict provider-configuration boundary**. The project favors rejecting malformed configuration; the native provider path now uses `url-form-strict.bend`, which rejects malformed escapes/UTF-8 with typed component and field-position errors. Passing the compatibility corpus does not make its permissive parser the preferred configuration API. No meaningful upstream pi test is promoted by this work.
+The `parse` compatibility entry point implements the [URL Standard form parser](https://url.spec.whatwg.org/#concept-urlencoded-parser), including replacement-mode malformed UTF-8 and literal incomplete percent escapes. This is a compatibility parser, **not an approved strict provider-configuration boundary**. The project favors rejecting malformed configuration; the native provider path now uses the url form strict section of `url.bend`, which rejects malformed escapes/UTF-8 with typed component and field-position errors. Passing the compatibility corpus does not make its permissive parser the preferred configuration API. No meaningful upstream pi test is promoted by this work.
 
 ## Generic laws
 

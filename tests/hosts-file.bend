@@ -1,14 +1,14 @@
 import Base
 import ../packages/runtime/src/hosts.bend as Hosts
 import ../packages/runtime/src/hosts.bend as File
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def address(value: File.Address) -> String:
   match value:
     case File.V4{IPv4.Address{value}}: "4:" ++ U32.show(value)
-    case File.V6{IPv6.Address{a, b, c, d}}: "6:" ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d)
+    case File.V6{IPv6.Ipv6Address{a, b, c, d}}: "6:" ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d)
 
 def aliases(values: List<&2, String>) -> String:
   match values:
