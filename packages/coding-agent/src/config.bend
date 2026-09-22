@@ -7,7 +7,7 @@ import ../../runtime/src/posix-path.bend as Path
 def appName() -> String: "pi"
 def appTitle() -> String: "π"
 def configDirName() -> String: ".pi"
-def version() -> String: "0.66.0"
+def version() -> String: "0.85.1"
 
 # e.g. PI_CODING_AGENT_DIR
 def envAgentDir() -> String: "PI_CODING_AGENT_DIR"

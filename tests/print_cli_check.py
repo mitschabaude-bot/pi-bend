@@ -3,7 +3,7 @@
 
 Build first: BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli
 Live checks run when PI_BEND_LIVE=1 and OPENAI_API_KEY are set."""
-import json, os, pathlib, re, subprocess, sys
+import json, os, pathlib, re, subprocess, sys, tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 UPSTREAM = ROOT.parent / 'pi-mono'
 CLI = ROOT / 'build/pi-cli'
@@ -11,10 +11,10 @@ CLI = ROOT / 'build/pi-cli'
 def source(path):
     return subprocess.check_output(['git', '-C', str(UPSTREAM), 'show', f'46c9de402:packages/coding-agent/{path}'], text=True)
 
-def run(args, stdin=b'', env=None, timeout=120):
+def run(args, stdin=b'', env=None, timeout=120, cwd=ROOT):
     merged = dict(os.environ)
     merged.update(env or {})
-    return subprocess.run([str(CLI), '--', *args], input=stdin, capture_output=True, env=merged, timeout=timeout)
+    return subprocess.run([str(CLI), '--', *args], input=stdin, capture_output=True, env=merged, timeout=timeout, cwd=cwd)
 
 def expected_help():
     text = source('src/cli/args.ts')
@@ -34,7 +34,7 @@ def check(condition, name):
     print(f'PASS {name}', flush=True)
 
 version = run(['--version'])
-check(version.returncode == 0 and version.stdout == b'0.66.0\n' and version.stderr == b'', 'prints the version and exits 0')
+check(version.returncode == 0 and version.stdout == (json.loads(source('package.json'))['version'] + '\n').encode() and version.stderr == b'', 'prints the version and exits 0')
 
 help_ = run(['--help'])
 check(help_.returncode == 0 and help_.stdout.decode() == expected_help() + '\n' and help_.stderr == b'', 'prints the upstream help text')
@@ -73,6 +73,22 @@ if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
     final = [event for event in lines if event['type'] == 'message_end'][-1]['message']
     check(final['role'] == 'assistant' and final['stopReason'] == 'stop' and final['content'][0]['type'] == 'text', 'the final assistant message is complete')
 
+    with tempfile.TemporaryDirectory(prefix='pi-native-cli-tools-') as folder:
+        task = run(['--tools', 'read,write', '--model', 'gpt-4.1-mini', '--mode', 'json', '-p',
+                    'Use the write tool to create result.txt in the current directory with exactly the text native-cli-integration followed by a newline. Then use the read tool to verify its contents.'],
+                   cwd=folder, env={'PI_CODING_AGENT_DIR': str(pathlib.Path(folder) / 'agent')}, timeout=300)
+        check(task.returncode == 0 and task.stderr == b'', 'the native CLI completes a real tool task')
+        check((pathlib.Path(folder) / 'result.txt').read_bytes() == b'native-cli-integration\n', 'the write tool persists the requested contents')
+        task_events = [json.loads(line) for line in task.stdout.decode().splitlines()]
+        completed = [event for event in task_events if event['type'] == 'tool_execution_end']
+        check({'read', 'write'} <= {event['toolName'] for event in completed} and all(not event['isError'] for event in completed), 'read and write complete through the public tool registry')
+        check(task_events[-1]['type'] == 'agent_end', 'the tool loop finishes with agent_end')
+
     wrong = run(['--no-tools', '--model', 'gpt-4.1-mini', '--api-key', 'sk-invalid', '-p', 'hi'], timeout=300)
     check(wrong.returncode == 1 and wrong.stdout == b'' and wrong.stderr.strip() != b'', 'a rejected request exits 1 with the error on stderr')
+if os.environ.get('PI_BEND_CODEX_LIVE') == '1':
+    codex = run(['--no-tools', '--provider', 'openai-codex', '--model', 'gpt-5.5', '-p', 'Reply with exactly the word pong'],
+                env={'OPENAI_API_KEY': ''}, timeout=300)
+    check(codex.returncode == 0 and codex.stdout.decode().strip().lower().rstrip('.') == 'pong' and codex.stderr == b'', 'Codex runs through the existing OAuth login')
+
 print('print_cli_check: all checks passed', flush=True)

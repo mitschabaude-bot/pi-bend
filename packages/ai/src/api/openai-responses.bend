@@ -421,9 +421,14 @@ def instructions(-G: Data, -D: Data, endpoint: Endpoint, context: Context(G, D))
     case ResponsesEndpoint{} _: None{}
     case CodexEndpoint{} T.TranscriptContext{messages}: systemText(Transcript.getInitialSystemMessage(V.Value, V.Value, G, D, messages))
 
-def toolOptions(compat: ResolvedCompat) -> Shared.ConvertResponsesToolsOptions:
+def defaultToolStrict(endpoint: Endpoint) -> Maybe<&2,T.Nullable<Bool>>:
+  match endpoint:
+    case ResponsesEndpoint{}: None{}
+    case CodexEndpoint{}: Some{T.NullValue{}}
+
+def toolOptions(compat: ResolvedCompat, endpoint: Endpoint) -> Shared.ConvertResponsesToolsOptions:
   match compat:
-    case ResolvedCompat{_, _, _, _, strict, grammar, _, _, _, _}: Shared.ConvertResponsesToolsOptions{None{}, Some{strict}, Some{grammar}, None{}}
+    case ResolvedCompat{_, _, _, _, strict, grammar, _, _, _, _}: Shared.ConvertResponsesToolsOptions{defaultToolStrict(endpoint), Some{strict}, Some{grammar}, None{}}
 
 # The Codex backend carries the system prompt as `instructions`, not as input.
 def includeSystemPrompt(endpoint: Endpoint) -> Maybe<&2, Bool>:
@@ -431,10 +436,10 @@ def includeSystemPrompt(endpoint: Endpoint) -> Maybe<&2, Bool>:
     case ResponsesEndpoint{}: None{}
     case CodexEndpoint{}: Some{False{}}
 
-def messageOptions(+compat: ResolvedCompat, grammar: R.Record<String>, systemPrompt: Maybe<&2, Bool>) -> Shared.ConvertResponsesMessagesOptions:
+def messageOptions(+compat: ResolvedCompat, grammar: R.Record<String>, +endpoint: Endpoint) -> Shared.ConvertResponsesMessagesOptions:
   match compat:
     case ResolvedCompat{_, midConvo, _, _, strict, grammarSupport, additional, search, _, _}:
-      Shared.ConvertResponsesMessagesOptions{systemPrompt, Some{grammar}, Some{midConvo}, Some{additional}, Some{search}, Some{Shared.ConvertResponsesToolsOptions{None{}, Some{strict}, Some{grammarSupport}, None{}}}}
+      Shared.ConvertResponsesMessagesOptions{includeSystemPrompt(endpoint), Some{grammar}, Some{midConvo}, Some{additional}, Some{search}, Some{Shared.ConvertResponsesToolsOptions{defaultToolStrict(endpoint), Some{strict}, Some{grammarSupport}, None{}}}}
 
 def requestTools(-G: Data, -D: Data, context: Context(G, D), compat: ResolvedCompat) -> Transcript.TranscriptTools<V.Value>:
   match context compat:
@@ -445,14 +450,14 @@ def convertedTools(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.J
     case Fail{error}: Fail{ToolConversion{error}}
     case Done{converted}: Done{endpointParams(Reason, Telemetry, E, endpoint, instructions, model, inputJson(items), toolsJson(converted), options, compat, retention)}
 
-def convertedParams(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, input: Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>>, tools: Transcript.TranscriptTools<V.Value>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, retention: T.CacheRetention, endpoint: Endpoint, instructions: Maybe<&2, String>) -> Result<&2, &2, BuildError, T.JsonValue>:
+def convertedParams(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, input: Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>>, tools: Transcript.TranscriptTools<V.Value>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, retention: T.CacheRetention, +endpoint: Endpoint, instructions: Maybe<&2, String>) -> Result<&2, &2, BuildError, T.JsonValue>:
   match input tools:
     case Fail{error} _: Fail{MessageConversion{error}}
-    case Done{items} Transcript.TranscriptTools{values, _}: convertedTools(Reason, Telemetry, E, model, items, options, compat, retention, endpoint, instructions, Shared.convertResponsesTools(values, Some{toolOptions(compat)}))
+    case Done{items} Transcript.TranscriptTools{values, _}: convertedTools(Reason, Telemetry, E, model, items, options, compat, retention, endpoint, instructions, Shared.convertResponsesTools(values, Some{toolOptions(compat, endpoint)}))
 
 def buildParams(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, +model: T.Model<T.JsonValue>, +context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention, +endpoint: Endpoint) -> IO(Result<&2, &2, BuildError, T.JsonValue>):
   do IO<Result<&2, &2, BuildError, T.JsonValue>>:
-    input : Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>> <- Shared.convertResponsesMessagesWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~Shared.parameterValue, ~Shared.parameterValue, ~Shared.conversionClock, model, context, OPENAI_TOOL_CALL_PROVIDERS(), Some{messageOptions(compat, grammar, includeSystemPrompt(endpoint))})
+    input : Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>> <- Shared.convertResponsesMessagesWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~Shared.parameterValue, ~Shared.parameterValue, ~Shared.conversionClock, model, context, OPENAI_TOOL_CALL_PROVIDERS(), Some{messageOptions(compat, grammar, endpoint)})
     return convertedParams(Reason, Telemetry, E, model, input, requestTools(G, D, context, compat), options, compat, retention, endpoint, instructions(G, D, endpoint, context))
 
 # Preparation
@@ -473,12 +478,17 @@ type Prepared is Data:
 type ModelSettings is Data:
   ModelSettings{provider: String, baseUrl: String, headers: Maybe<&2, R.Record<String>>, compat: ResolvedCompat, endpoint: Endpoint}
 
-# Azure and Codex have their own provider entry points; a dynamically selected
-# model must still satisfy this provider's API type.
+# Codex assumes strict-mode support unless the model explicitly disables it.
+def getCodexCompat(provider: String, baseUrl: String, compat: Maybe<&2,T.OpenAIResponsesCompat>) -> ResolvedCompat:
+  match compat:
+    case None{}: getCompat(provider,baseUrl,Some{T.OpenAIResponsesCompat{None{},None{},None{},None{},Some{True{}},None{},None{},None{},None{},None{}}})
+    case Some{T.OpenAIResponsesCompat{developer,midConvo,affinity,longCache,strict,grammar,additional,search,explicitCache,maxOutput}}:
+      getCompat(provider,baseUrl,Some{T.OpenAIResponsesCompat{developer,midConvo,affinity,longCache,Some{boolDefault(strict,True{})},grammar,additional,search,explicitCache,maxOutput}})
+
 def compatible(api: T.ModelApi, +provider: String, +baseUrl: String, headers: Maybe<&2, R.Record<String>>, compat: Maybe<&2, T.ModelCompatibility(api)>) -> Result<&2, &2, PreparationError, ModelSettings>:
   match api:
     case T.OpenAIResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, getCompat(provider, baseUrl, compat), ResponsesEndpoint{}}}
-    case T.OpenAICodexResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, getCompat(provider, baseUrl, compat), CodexEndpoint{}}}
+    case T.OpenAICodexResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, getCodexCompat(provider, baseUrl, compat), CodexEndpoint{}}}
     case other: Fail{UnsupportedApi{other}}
 
 def modelSettings(model: T.Model<T.JsonValue>) -> Result<&2, &2, PreparationError, ModelSettings>:

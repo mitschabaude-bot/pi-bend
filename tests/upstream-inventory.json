@@ -1864,9 +1864,14 @@
     },
     {
       "source": "packages/coding-agent/test/frontmatter.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "88309e13d75cec874a1fa43b921c4bb3dbcbce55c6ace5acf9742e81667ad2dd"
+      "status": "ported",
+      "ports": [
+        "tests/frontmatter.bend",
+        "tests/frontmatter_check.py",
+        "tests/frontmatter_reference.ts"
+      ],
+      "sha256": "88309e13d75cec874a1fa43b921c4bb3dbcbce55c6ace5acf9742e81667ad2dd",
+      "notes": "All eight pinned named cases and their nine outputs pass on Bun/native one/four, plus BOM/newline and strict fence/nonmapping adaptations (13 outputs total). 226 supplemental YAML comparisons pass. Typed parser errors preserve the asserted line/column; complete-line fences and mapping metadata reject malformed cases. This suite status does not claim full YAML grammar parity; remaining dependency gaps are explicit in tests/frontmatter.md."
     },
     {
       "source": "packages/coding-agent/test/git-merge-and-resolve-extension.test.ts",
@@ -2167,9 +2172,15 @@
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b926313ab33852fe61bbbfe4813d0806dabe2cdbd9d0a697ebcb913b6aec84c3"
+      "status": "ported",
+      "ports": [
+        "tests/prompt-templates.bend",
+        "tests/prompt_templates_check.py",
+        "tests/prompt_templates_load_check.py",
+        "tests/prompt_templates_reference.ts"
+      ],
+      "sha256": "b926313ab33852fe61bbbfe4813d0806dabe2cdbd9d0a697ebcb913b6aec84c3",
+      "notes": "All pinned pure assertions (119 original-only captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md."
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
@@ -2195,9 +2206,17 @@
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4d7043fbae033b5398db34046feea2ac3e910079e8def6a1d198b7c840190fb0"
+      "status": "partial",
+      "ports": [
+        "tests/project-context.bend",
+        "tests/project_context_check.py",
+        "tests/project_context_reference.ts",
+        "tests/runtime-context.bend",
+        "tests/runtime_context_check.py"
+      ],
+      "sha256": "4d7043fbae033b5398db34046feea2ac3e910079e8def6a1d198b7c840190fb0",
+      "implementation": "packages/coding-agent/src/core/resource-loader.bend",
+      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md."
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",
@@ -2313,9 +2332,14 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/build-context.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e4f1c5ef931609100a5350129151d147f7d58bea4df0d9e1676fe60d06aed6c0"
+      "status": "ported",
+      "ports": [
+        "tests/session-context.bend",
+        "tests/session_context_check.py",
+        "tests/session_context_reference.ts"
+      ],
+      "sha256": "e4f1c5ef931609100a5350129151d147f7d58bea4df0d9e1676fe60d06aed6c0",
+      "notes": "All 16 original cases and 37 captured public calls pass on Bun/native one/four. 505 total context comparisons, 156 raw paths, strict invalid-tree/timestamp checks and 10,000-entry context pass. Full-path settings, branch selection, latest compaction, retained prefix and captured system messages preserved. Duplicate/empty IDs and cycles return typed errors; original missing-leaf fallback and orphan truncation retained. Persistence, migrations and other SessionManager methods remain pending; tests/session-context.md records scope."
     },
     {
       "source": "packages/coding-agent/test/session-manager/custom-session-id.test.ts",
@@ -2331,9 +2355,15 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/labels.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "072829ad416a5c73c1618c8761bb63bcd8d4b80b589f742ef768ee822714234d"
+      "status": "ported",
+      "ports": [
+        "tests/session-state.bend",
+        "tests/session_state_check.py",
+        "tests/session_state_reference.ts"
+      ],
+      "sha256": "072829ad416a5c73c1618c8761bb63bcd8d4b80b589f742ef768ee822714234d",
+      "implementation": "packages/coding-agent/src/core/session-manager.bend",
+      "notes": "All nine original label tests pass, including clear/replace, tree labels/timestamps, missing-target rejection and fork reconnection/filtering. Together the two suites execute 37 original tests and 155 full state comparisons on Bun/native one/four, with atomic rejection checks and 10,001-node wide/deep trees. Immutable transitions take explicit entry IDs/timestamps; persistence and external-entry restoration remain separate work. See tests/session-state.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/load-entries.test.ts",
@@ -2355,9 +2385,15 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/tree-traversal.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3a80de63661cb02f98df3bc1eebece12e8e4a56032bdad3b6ad0583b25f20d8c"
+      "status": "partial",
+      "ports": [
+        "tests/session-state.bend",
+        "tests/session_state_check.py",
+        "tests/session_state_reference.ts"
+      ],
+      "sha256": "3a80de63661cb02f98df3bc1eebece12e8e4a56032bdad3b6ad0583b25f20d8c",
+      "implementation": "packages/coding-agent/src/core/session-manager.bend",
+      "notes": "The original in-memory append/branch/tree/fork tests pass; three named filesystem/reload tests remain pending. Together the two suites execute 37 original tests and 155 full state comparisons on Bun/native one/four, with atomic rejection checks and 10,001-node wide/deep trees. Immutable transitions take explicit entry IDs/timestamps; persistence and external-entry restoration remain separate work. See tests/session-state.md."
     },
     {
       "source": "packages/coding-agent/test/session-selector-path-delete.test.ts",
@@ -2415,8 +2451,17 @@
     },
     {
       "source": "packages/coding-agent/test/skills.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts",
+        "tests/skills.bend",
+        "tests/skills_check.py",
+        "tests/skills_reference.mjs",
+        "tests/skills_reference.ts"
+      ],
+      "notes": "All 28 pinned named assertions are represented: seven formatting cases retain direct system-prompt coverage, and the original loader calls compare complete typed results. Native discovery, metadata validation, ignore precedence, canonical-file deduplication, configured paths and collisions pass 37 complete loader comparisons plus seven explicit native policy cases on Bun/native one/four. Strict metadata and UTF8 rejection, scalar validation lengths, cycle diagnostics and corrected escaped-exclamation ignore handling are documented in tests/skills.md. Resource-loader/CLI wiring and complete YAML dependency grammar remain separate work.",
       "sha256": "f7d5fe8633df112c10c61c4ee17748ad1f7069f76d71fb8357d7e27a17b2a533"
     },
     {
@@ -2975,19 +3020,25 @@
     },
     {
       "source": "packages/coding-agent/test/system-prompt-updates.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
+      ],
+      "notes": "The two pure section-diff and forced-state cases pass; SDK/session prompt-update integration and event behavior remain pending. See tests/system-prompt.md.",
       "sha256": "fdcbb342c29bb3419bd40794781cab92c2f5423908c60bdc7095ae3b434045d0"
     },
     {
       "source": "packages/coding-agent/test/system-prompt.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/system-prompt.bend",
-        "tests/system_prompt_check.py"
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
       ],
-      "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101",
-      "notes": "Ported: empty tools; file paths guideline; exact default/custom prefixes; forced prompt; appended instructions and project context sections; default tool snippets; docs paths; custom snippets present/absent; prompt guideline append/dedupe/trim; custom sections and invalid names; cwd slashes; section diffs. Pending: skills sections (skills prompt formatting not ported)."
+      "notes": "All 16 named pure prompt cases pass through typed section/state/text APIs; exact output and 150KB context checks pass Bun/native one/four. Explicit documentation paths and immutable value adaptation are documented in tests/system-prompt.md.",
+      "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101"
     },
     {
       "source": "packages/coding-agent/test/test-harness.test.ts",
@@ -3069,11 +3120,13 @@
         "tests/bash-tool.bend",
         "tests/bash_tool_check.py",
         "tests/bash-executor.bend",
-        "tests/bash_executor_check.py"
+        "tests/bash_executor_check.py",
+        "tests/ls-public.bend",
+        "tests/ls_public_check.py"
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
       "implementation": "packages/coding-agent/src/core/tools/",
-      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md). Public Bash covers native execution, hooks/context, streaming/truncation, cancellation, late callbacks and owned cleanup (tests/bash-tool.md); renderers, other platforms and the remaining tools stay pending. User Bash executeBashWithOperations now covers the named local sanitization and line-only full-output assertions, with split-stream corrections and checked cleanup (tests/bash-executor.md)."
+      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md). Public Bash covers native execution, hooks/context, streaming/truncation, cancellation, late callbacks and owned cleanup (tests/bash-tool.md); renderers, other platforms and the remaining tools stay pending. User Bash executeBashWithOperations now covers the named local sanitization and line-only full-output assertions, with split-stream corrections and checked cleanup (tests/bash-executor.md). Native ls covers the original dotfile/directory listing and context cwd assertions, native/injected filesystem operations, cancellation, successful-stat limits and byte truncation (tests/ls-public.md). Ordering remains explicitly injected pending the locale-policy decision; canonical default factory and rendering remain pending."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",

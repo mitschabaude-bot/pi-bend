@@ -64,8 +64,8 @@ def echo(counter: Ref.Ref<U32>, input: ToolInput()) -> IO(ToolOutput()):
         return echoValue(R.get(V.Value, fields, "input"))
     case _: IO.pure(ToolOutput(), Fail{"echo expects an object"})
 
-def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callback<Messages(), Converted()>, maxTokens: U32) -> Config():
-  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(0)}, None{}, None{}, None{}, Some{F.fromU32(maxTokens)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callback<Messages(), Converted()>, maxTokens: U32, maxRetries: U32) -> Config():
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(maxRetries)}, None{}, None{}, None{}, Some{F.fromU32(maxTokens)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 # Print the event sequence separately from the tool execution count, so the
 # oracle can check ordering without depending on worker scheduling.
@@ -139,18 +139,25 @@ def openObserved(config: ObservedConfig,input: Providers.Input(Config(),Unit,Uni
         owner : Responses.Run<Unit,Unit,String> <- Responses.streamSimple(~Unit,~Unit,~Unit,~Unit,~String,~Native.identity,config,model,context,Maybe.map(&2,Config(),Responses.SimpleStreamOptions(Unit,Unit,String),project,options))
         return observedLease(enabled,Responses.borrow(Unit,Unit,String,owner))
 
+# Missing environment variables are ordinary disabled settings in this host.
+def optionalFlag(value: Result<&1,&1,U32 & String,String>) -> Bool:
+  match value:
+    case Done{value}: String.eq(value,"1")
+    case Fail{_}: False{}
+
 def runTools(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, tools: List<&2, T.AgentTool<Unit, String>>, maxTokens: U32) -> IO(Outcome()):
   do IO<Outcome()>:
     +authorizer : C.Callback<URL.Host, TLS.Authorization> <- Trust.newSAN(Trust.SANPolicy{bundle, 256n})
-    diagnostics : String <- IO.try(String,IO.get_env("PI_BEND_PROVIDER_DIAGNOSTICS"))
-    +provider : T.StreamFn(Unit, Unit, Config(), String) <- C.create(~ObservedConfig,~Providers.Input(Config(),Unit,Unit),~Providers.Output(Unit,String),~openObserved,ObservedConfig{Native.config(authorizer),String.eq(diagnostics,"1")})
+    diagnostics : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_BEND_PROVIDER_DIAGNOSTICS")
+    +provider : T.StreamFn(Unit, Unit, Config(), String) <- C.create(~ObservedConfig,~Providers.Input(Config(),Unit,Unit),~Providers.Output(Unit,String),~openObserved,ObservedConfig{Native.config(authorizer),optionalFlag(diagnostics)})
     +converter : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~convert, Unit{})
     +validator : Loop.Validator(String) <- Loop.createPlain(~String, ~validationError)
     +cancel : C.Callback<Maybe<&2, Signal()>, Bool> <- C.create(~Unit, ~Maybe<&2, Signal()>, ~Bool, ~isAborted, Unit{})
+    retries : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_BEND_RETRY_REQUESTS")
     key : String <- IO.try(String, IO.get_env("OPENAI_API_KEY"))
     context : T.AgentContext<Unit, Unit, Unit, String> = T.AgentContext{Nil{}, Some{tools}}
     prompts : Messages() = T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{prompt}, F.fromU32(0)}}} <> Nil{}
-    +owner : Run() <- Loop.agentLoop(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter, maxTokens), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
+    +owner : Run() <- Loop.agentLoop(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter, maxTokens, Bool.pick(U32,optionalFlag(retries),2,0)), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
     +cursor : Cursor() <- Loop.iterator(Unit, Unit, Unit, String, owner)
     events(cursor, None{})
     Stream.disposeIterator(EventValue(), Outcome(), cursor)

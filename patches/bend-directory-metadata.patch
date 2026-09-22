@@ -1,0 +1,174 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3276,3 +3276,14 @@
+ def File.is_file(path: String) -> IO(Result<&1, &1, U32 & String, Bool>):
+   import "./effs/file_is_file.c"
+   import "./effs/file_is_file.js"
++
++# Directory snapshot in OS order, excluding dot entries. Names are raw bytes.
++# Kind codes: 0 other, 1 regular file, 2 directory, 3 symbolic link.
++def Directory.read_bytes(path: String) -> IO(Result<&1, &1, U32 & String, List<(List<&2, U32> & U32)>>):
++  import "./effs/directory_read_bytes.c"
++  import "./effs/directory_read_bytes.js"
++
++# Following-symlink metadata only; never open file content. Same kind codes.
++def File.kind(path: String) -> IO(Result<&1, &1, U32 & String, U32>):
++  import "./effs/file_kind.c"
++  import "./effs/file_kind.js"
+--- /dev/null
++++ b/bend2/effs/directory_read_bytes.c
+@@ -0,0 +1,78 @@
++#include <dirent.h>
++#include <sys/stat.h>
++
++// A snapshot is built on the IO worker, then transferred once into Bend values.
++typedef struct {
++  unsigned char* name;
++  size_t size;
++  unsigned kind;
++} DirectoryReadEntry;
++
++static void directory_read_bytes_call(IoWork* w) {
++  DIR* directory = opendir(w->data);
++  if (!directory) { w->code = errno; return; }
++  DirectoryReadEntry* entries = NULL;
++  size_t count = 0, capacity = 0;
++  for (;;) {
++    errno = 0;
++    struct dirent* entry = readdir(directory);
++    if (!entry) { w->code = errno; break; }
++    if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
++    unsigned kind = entry->d_type == DT_REG ? 1 : entry->d_type == DT_DIR ? 2
++      : entry->d_type == DT_LNK ? 3 : 0;
++    if (entry->d_type == DT_UNKNOWN) {
++      struct stat info;
++      if (fstatat(dirfd(directory), entry->d_name, &info, AT_SYMLINK_NOFOLLOW) < 0) {
++        w->code = errno;
++        break;
++      }
++      kind = S_ISREG(info.st_mode) ? 1 : S_ISDIR(info.st_mode) ? 2
++        : S_ISLNK(info.st_mode) ? 3 : 0;
++    }
++    if (count == capacity) {
++      if (capacity > SIZE_MAX / 2 / sizeof(DirectoryReadEntry)) { w->code = EOVERFLOW; break; }
++      capacity = capacity ? capacity * 2 : 32;
++      entries = io_mem(realloc(entries, capacity * sizeof(DirectoryReadEntry)));
++    }
++    size_t size = strlen(entry->d_name);
++    unsigned char* name = io_mem(malloc(size));
++    memcpy(name, entry->d_name, size);
++    entries[count++] = (DirectoryReadEntry){name, size, kind};
++  }
++  if (closedir(directory) < 0 && !w->code) w->code = errno;
++  w->text = (char*)entries;
++  w->word = count;
++}
++
++static Term directory_read_bytes_pack(Env e, IoWork* w) {
++  DirectoryReadEntry* entries = (DirectoryReadEntry*)w->text;
++  Term result = term_pak(CID_NIL, 0);
++  for (size_t i = w->word; i > 0; i--) {
++    DirectoryReadEntry* entry = &entries[i - 1];
++    if (!w->code) {
++      Term name = term_pak(CID_NIL, 0);
++      for (size_t j = entry->size; j > 0; j--)
++        name = io_node(e, CID_CON, entry->name[j - 1], name, IO_HOTS & 16);
++      result = io_node(e, CID_CON, io_tup(e, name, entry->kind), result, IO_HOTS & 16);
++    }
++    free(entry->name);
++  }
++  free(entries);
++  free(w->data);
++  return w->code ? io_fail(e, w->code, NULL) : io_done(e, result);
++}
++
++Term directory_read_bytes_run(Env e, Term* f, IoWork* w) {
++  w->text = NULL;
++  w->word = 0;
++  w->data = io_cstr(e, f[0], &w->size);
++  if (io_nul(w->data, w->size)) {
++    w->code = EILSEQ;
++    return directory_read_bytes_pack(e, w);
++  }
++  return io_work(w, directory_read_bytes_call, directory_read_bytes_pack);
++}
++
++static void __attribute__((constructor)) directory_read_bytes_use(void) {
++  io_eff(CID_DIRECTORY_READ_BYTES, directory_read_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/directory_read_bytes.js
+@@ -0,0 +1,32 @@
++function directory_read_bytes(path) {
++  const bytes = io_bytes(path);
++  if (bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  const fs = require("fs");
++  const target = bytes.length ? Buffer.from(bytes) : "";
++  let directory, error, entries = [];
++  try {
++    directory = fs.opendirSync(target, {encoding: "latin1"});
++    for (;;) {
++      const entry = directory.readSync();
++      if (entry === null) break;
++      // Latin-1 is a reversible byte mapping, including invalid UTF-8 names.
++      const name = Buffer.from(entry.name, "latin1");
++      const info = entry;
++      entries.push([name, info.isFile() ? 1 : info.isDirectory() ? 2 : info.isSymbolicLink() ? 3 : 0]);
++    }
++  } catch (cause) { error = cause; }
++  finally {
++    if (directory) {
++      try { directory.closeSync(); } catch (cause) { error ??= cause; }
++    }
++  }
++  if (error) return io_fail(Math.abs(error.errno ?? 5));
++  let result = {$: "Nil"};
++  for (let i = entries.length; i > 0; i--) {
++    const [name, kind] = entries[i - 1];
++    let encoded = {$: "Nil"};
++    for (let j = name.length; j > 0; j--) encoded = {$: "Con", head: name[j - 1], tail: encoded};
++    result = {$: "Con", head: io_tup(encoded, kind), tail: result};
++  }
++  return io_done(result);
++}
+--- /dev/null
++++ b/bend2/effs/file_kind.c
+@@ -0,0 +1,25 @@
++#include <sys/stat.h>
++
++static void file_kind_call(IoWork* w) {
++  struct stat info;
++  io_sys_end(w, stat(w->data, &info));
++  if (!w->code) w->word = S_ISREG(info.st_mode) ? 1 : S_ISDIR(info.st_mode) ? 2 : 0;
++}
++
++static Term file_kind_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e, w->code, NULL) : io_done(e, w->word);
++}
++
++Term file_kind_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e, f[0], &w->size);
++  if (io_nul(w->data, w->size)) {
++    w->code = EILSEQ;
++    return file_kind_pack(e, w);
++  }
++  return io_work(w, file_kind_call, file_kind_pack);
++}
++
++static void __attribute__((constructor)) file_kind_use(void) {
++  io_eff(CID_FILE_KIND, file_kind_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_kind.js
+@@ -0,0 +1,10 @@
++function file_kind(path) {
++  const bytes = io_bytes(path);
++  if (bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try {
++    const info = require("fs").statSync(bytes.length ? Buffer.from(bytes) : "");
++    return io_done(info.isFile() ? 1 : info.isDirectory() ? 2 : 0);
++  } catch (error) {
++    return io_fail(Math.abs(error.errno ?? 5));
++  }
++}
