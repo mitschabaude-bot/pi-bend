@@ -3470,9 +3470,15 @@
     },
     {
       "source": "packages/tui/test/stdin-buffer.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8"
+      "status": "partial",
+      "ports": [
+        "tests/stdin-buffer.bend",
+        "tests/stdin_buffer_check.py",
+        "tests/stdin_buffer_original.mts",
+        "tests/stdin_buffer_reference.mts"
+      ],
+      "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8",
+      "notes": "All 59 reference tests execute with original assertions; recorded input/flush/clear calls replay as pure Bend transitions. 421 traces plus large control/paste and native Unicode checks pass Bun/native one/four. Owned timer scheduling, cancellation/listener lifecycle, and byte-input conversion remain pending; custom-timeout assertions have not been validated against a Bend driver. See tests/stdin-buffer.md."
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
