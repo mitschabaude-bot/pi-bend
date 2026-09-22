@@ -69,9 +69,10 @@ def final(stream):
 
 def serve(listener,context,directory,scenario):
     first={'path':TARGET,'content':CONTENT}
-    tool='write' if scenario=='schema rejection' else 'edit'
+    tool='write' if scenario in ['schema rejection','boolean rejection'] else 'edit'
     second={'path':TARGET,'edits':[{'oldText':'twice','newText':'triple'},{'oldText':'* 2','newText':'* 3'}]}
     if scenario=='schema rejection': second={'path':TARGET}
+    if scenario=='boolean rejection': second={'path':TARGET,'content':False}
     if scenario=='malformed edit': second={'path':TARGET,'edits':[{'oldText':'twice','newText':False}]}
     expected_disk=UPDATED if scenario=='success' else CONTENT
     for turn in range(3):
@@ -94,13 +95,13 @@ def serve(listener,context,directory,scenario):
                 assert calls[1]['call_id']==results[1]['call_id']=='call-change'
                 assert calls[1]['name']==tool and json.loads(calls[1]['arguments'])==second
                 if scenario=='success': assert results[1]['output']==f'Successfully replaced 2 block(s) in {TARGET}.'
-                elif scenario=='schema rejection': assert 'Validation failed' in results[1]['output']
+                elif scenario in ['schema rejection','boolean rejection']: assert 'Validation failed' in results[1]['output']
                 else: assert 'Edit tool input is invalid' in results[1]['output']
                 final(stream)
 
 def text(points): return ''.join(chr(int(p)) for p in points.split(',')) if points else ''
 
-for scenario in ['success','schema rejection','malformed edit']:
+for scenario in ['success','schema rejection','boolean rejection','malformed edit']:
     with tempfile.TemporaryDirectory(prefix='pi-native-edit-') as folder, ThreadPoolExecutor(max_workers=1) as executor:
         directory=Path(folder)
         context,root=trusted_context(directory,'localhost')
