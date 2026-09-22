@@ -38,3 +38,4 @@ import ./laws/validation.bend as Validation
 import ./laws/transcript.bend as Transcript
 import ./laws/simple-options.bend as SimpleOptions
 import ./laws/thinking-levels.bend as ThinkingLevels
+import ./laws/agent-loop.bend as AgentLoop

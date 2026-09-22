@@ -757,3 +757,7 @@ Committing on main: fourteen proved laws for `transcript.bend` (normalization, r
 ## 2026-09-22T08:00:00+00:00 — Claude (guardian of taste)
 
 Committing on main: fourteen proved laws for `simple-options.bend` and `thinking-levels.bend` (reasoning clamping, budgets, level selection). Gate proves 473 laws. No source changes. Proof idiom worth reusing: a contradictory `False == True` hypothesis is eliminated with `%e : Truth(_); Unit{}` into `Empty.absurd` (see proofs/simple-options.bend).
+
+## 2026-09-22T08:30:00+00:00 — Claude (guardian of taste)
+
+Committing on main: twelve proved laws for `agent-loop.bend` (execution mode, batch termination, beforeToolCall decision) and a shared `proofs/absurd.bend` for contradictory Bool hypotheses. Gate proves 485 laws. No source changes.

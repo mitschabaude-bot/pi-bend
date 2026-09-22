@@ -2,6 +2,7 @@ import Base
 import ../laws/simple-options.bend as Laws
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/api/simple-options.bend as Options
+import ./absurd.bend as Absurd
 
 def Laws.clamped_reasoning_never_exceeds_high(level):
   match level:
@@ -21,23 +22,14 @@ def Laws.clamping_is_idempotent(level):
     case T.XHigh{}: {==}
     case T.Max{}: {==}
 
-# A contradictory Bool hypothesis is eliminated through a type-valued motive.
-def Truth(flag: Bool) -> Type:
-  match flag:
-    case False{}: Unit
-    case True{}: Empty
-
-def contradiction(e: {False{} == True{} : Bool}) -> Empty:
-  %e : Truth(_); Unit{}
-
 def Laws.clamping_keeps_levels_up_to_high(level, low):
   match level:
     case T.Minimal{}: {==}
     case T.Low{}: {==}
     case T.Medium{}: {==}
     case T.High{}: {==}
-    case T.XHigh{}: Empty.absurd({Options.clampLevel(T.XHigh{}) == T.XHigh{} : T.ThinkingLevel}, contradiction(low))
-    case T.Max{}: Empty.absurd({Options.clampLevel(T.Max{}) == T.Max{} : T.ThinkingLevel}, contradiction(low))
+    case T.XHigh{}: Empty.absurd({Options.clampLevel(T.XHigh{}) == T.XHigh{} : T.ThinkingLevel}, Absurd.false_is_not_true(low))
+    case T.Max{}: Empty.absurd({Options.clampLevel(T.Max{}) == T.Max{} : T.ThinkingLevel}, Absurd.false_is_not_true(low))
 
 def Laws.explicit_budgets_are_used(level, minimal, low, medium, high):
   match level:
