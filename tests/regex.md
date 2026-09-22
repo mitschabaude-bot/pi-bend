@@ -21,3 +21,5 @@ python3 tests/regex_check.py bun native-1 native-4
 ```
 
 Integration validation rebuilt this fixture with `build/bend-process-files/bend2/main.ts` and reran the complete corpus on Bun/native one/four. Each passed 23,064 Rust comparisons, 439 explicit byte-input rejections, eight Unicode 17 checks, eight long/adversarial cases, and 131,101 table checks. The long cases took 1.600/0.275/0.288 seconds respectively; these fixture timings are not a general regex performance claim.
+
+The integrated streaming cursor also passes the complete corpus above on the shared compiler’s Bun/native one/four outputs, including 282 chunk-boundary and 84 direct-literal API comparisons. Empty chunks and splits within CRLF/Unicode text do not assert EOF; the explicit finish operation does.
