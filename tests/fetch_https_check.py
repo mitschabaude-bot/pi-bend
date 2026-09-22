@@ -1,6 +1,10 @@
 """Public native fetch: hosts routing, URL authority, TLS authorization and body ownership."""
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import NameOID
 import socket
 import os
 import ssl
@@ -21,7 +25,7 @@ def serve(listener, context, mode):
         raise AssertionError('disabled TLS dialed a socket')
     raw, _ = listener.accept()
     raw.settimeout(180)
-    if mode == 'denied':
+    if mode in ['denied', 'wrong-name', 'untrusted']:
         try:
             stream = context.wrap_socket(raw, server_side=True)
         except (ssl.SSLError, ConnectionResetError):
@@ -42,6 +46,32 @@ def serve(listener, context, mode):
         assert stream.recv(1) == b'', 'response completion did not close transport'
 
 
+def trusted_context(directory, hostname='tls.test'):
+    now = datetime.now(timezone.utc)
+    root_key, leaf_key = (ec.generate_private_key(ec.SECP256R1()) for _ in range(2))
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'fetch test root')])
+    root = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+            .public_key(root_key.public_key()).serial_number(1)
+            .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), True)
+            .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), True)
+            .sign(root_key, hashes.SHA256()))
+    leaf = (x509.CertificateBuilder().subject_name(name).issuer_name(name)
+            .public_key(leaf_key.public_key()).serial_number(2)
+            .not_valid_before(now - timedelta(days=1)).not_valid_after(now + timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), True)
+            .add_extension(x509.KeyUsage(True, False, False, False, False, False, False, False, False), True)
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName(hostname)]), False)
+            .sign(root_key, hashes.SHA256()))
+    cert, key = directory / 'trusted.pem', directory / 'trusted-key.pem'
+    cert.write_bytes(leaf.public_bytes(serialization.Encoding.PEM))
+    key.write_bytes(leaf_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = context.maximum_version = ssl.TLSVersion.TLSv1_3
+    context.load_cert_chain(cert, key)
+    return context, root.public_bytes(serialization.Encoding.DER)
+
+
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='pi-fetch-https-') as temporary, ThreadPoolExecutor(max_workers=1) as executor:
         directory = Path(temporary)
@@ -50,6 +80,10 @@ if __name__ == '__main__':
         names = []
         context.set_servername_callback(lambda socket, name, context: names.append(name))
         certificate = x509.load_pem_x509_certificate((directory / 'certificate.pem').read_bytes()).public_bytes(serialization.Encoding.DER)
+        trust_only = 'trust' in sys.argv[2:]
+        if trust_only:
+            context, certificate = trusted_context(directory)
+            context.set_servername_callback(lambda socket, name, context: names.append(name))
         resolver, hosts = directory / 'resolv.conf', directory / 'hosts'
         resolver.write_text('nameserver 127.0.0.1\n')
         hosts.write_text('127.0.0.1 tls.test\n')
@@ -58,7 +92,8 @@ if __name__ == '__main__':
                                  ('bun', ['bun', os.environ.get('FETCH_HTTPS_JS', 'build/fetch-https.js')])]:
             if len(sys.argv) > 1 and sys.argv[1] != backend:
                 continue
-            for mode in ['domain', 'numeric', 'plain', 'disabled', 'denied', 'unreachable']:
+            modes = ['trusted', 'wrong-name', 'untrusted'] if trust_only else ['domain', 'numeric', 'plain', 'disabled', 'denied', 'unreachable']
+            for mode in modes:
                 names.clear()
                 with socket.socket() as listener:
                     listener.bind(('127.0.0.1', 0))
