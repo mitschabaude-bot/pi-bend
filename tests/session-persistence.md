@@ -16,7 +16,7 @@
 
 ## Primitives
 
-Modification times come from `File.modified_time` (native-tls's `bend-file-lock-effects.patch`, exact seconds and nanoseconds), rounded to milliseconds as Node's `Stats.mtime.getTime()` by `FS.modified`; `FS.appendFile` and `FS.writeFileExclusive` wrap the existing open modes.
+Modification times come from `File.modified_time` (native-tls's `bend-file-lock-effects.patch`, signed seconds and nanoseconds), rounded to milliseconds as Node's `Stats.mtime.getTime()` by `FS.modified`, including pre-epoch times; the file-operations scenario checks sub-millisecond ordering (999.4 ms versus 999.6 ms round apart) and a pre-epoch file against the pinned SessionManager. `FS.appendFile` and `FS.writeFileExclusive` wrap the existing open modes.
 
 ## Validation
 
