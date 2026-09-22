@@ -1801,9 +1801,14 @@
     },
     {
       "source": "packages/coding-agent/test/file-mutation-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d65f903a056b4cbfd33850986b5a5ffec394b8340a1db491737f892d0e2d4462"
+      "status": "partial",
+      "ports": [
+        "tests/file-mutation-queue.bend",
+        "tests/file_mutation_queue_check.py"
+      ],
+      "sha256": "d65f903a056b4cbfd33850986b5a5ffec394b8340a1db491737f892d0e2d4462",
+      "implementation": "packages/coding-agent/src/core/tools/file-mutation-queue.bend",
+      "notes": "First three upstream contracts ported: same-file serialization, different-file parallelism, symlink aliases. Channel gates replace sleeps. Additional coverage checks typed operation failures, registration errors, lexical aliases, ENOENT/ENOTDIR fallback, reuse and disposal. Four edit/write integration contracts, including retaining the lock during aborted in-flight writes, remain pending until the real tools are ported."
     },
     {
       "source": "packages/coding-agent/test/first-time-setup-fork.test.ts",
