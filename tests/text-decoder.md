@@ -9,3 +9,5 @@ The native port deliberately rejects malformed text instead of replacing invalid
 BEND=/path/to/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/text-decoder.bend build/text-decoder
 python3 tests/text_decoder_check.py bun native-1 native-4
 ```
+
+Root integration rebuilt both outputs using `build/bend-process-files/bend2/main.ts`; all 5,063 comparisons pass on Bun and optimized native one/four threads. No new compiler effects were required.
