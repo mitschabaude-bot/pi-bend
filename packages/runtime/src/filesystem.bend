@@ -113,7 +113,7 @@ def consumeBytes(reversed: List<&2, U32>, bytes: List<&2, U32>) -> Fold.Control<
 
 def readResult(outcome: Fold.Outcome<List<&2, U32>>) -> Result<&2, &2, Error, List<&2, U32>>:
   match outcome:
-    case Fold.Outcome{bytes, Done{_}}: Done{List.reverse(&2, U32, bytes)}
+    case Fold.Outcome{bytes, Done{_}}: Done{bytes}
     case Fold.Outcome{_, Fail{Fold.Open{code, message}}}: Fail{System{code, message}}
     case Fold.Outcome{_, Fail{Fold.Read{code, message}}}: Fail{System{code, message}}
     case Fold.Outcome{_, Fail{Fold.Close{code, message}}}: Fail{System{code, message}}
@@ -123,4 +123,14 @@ def readResult(outcome: Fold.Outcome<List<&2, U32>>) -> Result<&2, &2, Error, Li
 def readFile(path: String) -> IO(Result<&2, &2, Error, List<&2, U32>>):
   do IO<Result<&2, &2, Error, List<&2, U32>>>:
     outcome : Fold.Outcome<List<&2, U32>> <- Fold.read(~List<&2, U32>, ~consumeBytes, path, 65536, Nil{})
+    return Result.map(&2, &2, Error, List<&2, U32>, List<&2, U32>, bytes => List.reverse(&2, U32, bytes), readResult(outcome))
+
+def prefixBytes(unused: List<&2, U32>, bytes: List<&2, U32>) -> Fold.Control<List<&2, U32>>:
+  Fold.Stop{bytes}
+
+# Read one prefix chunk, then close. The positive maximum bounds allocation;
+# a short OS read is returned as-is, matching Pi's image header inspection.
+def readPrefix(path: String, maximum: U32) -> IO(Result<&2, &2, Error, List<&2, U32>>):
+  do IO<Result<&2, &2, Error, List<&2, U32>>>:
+    outcome : Fold.Outcome<List<&2, U32>> <- Fold.read(~List<&2, U32>, ~prefixBytes, path, maximum, Nil{})
     return readResult(outcome)

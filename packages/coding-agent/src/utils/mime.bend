@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/filesystem.bend as FS
 
 # File byte primitives use U32 lists. Reject out-of-range values rather than
 # silently wrapping them as a JavaScript Uint8Array constructor would.
@@ -85,3 +86,8 @@ def recognized(bytes: List<&2,U32>) -> Maybe<&2,String>:
 
 def detectSupportedImageMimeType(+buffer: List<&2,U32>) -> Maybe<&2,String>:
   Bool.pick(Unit -> Maybe<&2,String>,validBytes(buffer),unused => recognized(buffer),unused => None{})(Unit{})
+
+def detectSupportedImageMimeTypeFromFile(path: String) -> IO(Result<&2, &2, FS.Error, Maybe<&2, String>>):
+  do IO<Result<&2, &2, FS.Error, Maybe<&2, String>>>:
+    bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readPrefix(path, 4100)
+    return Result.map(&2, &2, FS.Error, List<&2, U32>, Maybe<&2, String>, value => detectSupportedImageMimeType(value), bytes)
