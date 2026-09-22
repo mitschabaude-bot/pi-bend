@@ -23,6 +23,9 @@ import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/f64.bend as F
 import ./tls13-client.bend as TLSTest
+import ../packages/ai/src/api/openai-responses-stream.bend as ResponsesStream
+import ../packages/ai/src/api/openai-sse.bend as SSE
+import ../packages/runtime/src/socket.bend as Socket
 import ../packages/runtime/src/deadline.bend as Deadline
 
 # Live integration runner, not a second CLI implementation. Credentials come
@@ -104,6 +107,115 @@ def error(cause: P.Error<Unit, String>) -> String:
     case P.ProcessingFailure{_}: "stream processing failed"
     case P.RequestAborted{}: "request aborted"
     case _: "provider failed"
+
+# Opt-in test diagnostics use constructor categories and numeric OS codes only.
+# Never render provider messages, JSON paths, payloads, headers or credentials.
+def diagnosticSocket(cause: Socket.Error<Deadline.Cause<Unit>>) -> String:
+  match cause:
+    case Socket.SocketError{code,_}: "socket.os." ++ U32.show(code)
+    case Socket.Aborted{_}: "socket.aborted"
+
+def diagnosticTLS(cause: TLS.Error<Deadline.Cause<Unit>>) -> String:
+  match cause:
+    case TLS.Network{cause}: diagnosticSocket(cause)
+    case TLS.Protocol{cause}: "tls." ++ TLSTest.renderError(cause)
+    case TLS.WriteQueueFull{_}: "tls.write-queue-full"
+    case TLS.Closed{}: "tls.closed"
+    case TLS.ShutdownFailure{_}: "tls.shutdown"
+    case TLS.InvalidOptions{}: "tls.options"
+
+def diagnosticSource(cause: HTTP.SocketSourceError<Deadline.Cause<Unit>>) -> String:
+  match cause:
+    case HTTP.TLSSourceFailure{cause}: diagnosticTLS(cause)
+    case HTTP.TLSWithCleanup{cause,_}: "cleanup+" ++ diagnosticTLS(cause)
+    case HTTP.SocketSourceSocketFailure{_}: "socket.source"
+    case HTTP.CleanupFailure{_}: "socket.cleanup"
+    case HTTP.UploadFailure{_}: "socket.upload"
+    case HTTP.UploadWithCleanup{_,_}: "socket.upload+cleanup"
+    case HTTP.Released{}: "socket.released"
+    case HTTP.SocketSourceInvalidReadSize{}: "socket.read-size"
+
+def diagnosticReadPrimary(cause: Response.ResponseReaderPrimaryError<HTTP.SocketSourceError<Deadline.Cause<Unit>>>) -> String:
+  match cause:
+    case Response.SourceError{cause}: diagnosticSource(cause)
+    case Response.DecodeError{Response.HeadError{_}}: "http.head"
+    case Response.DecodeError{Response.BodyError{_}}: "http.body"
+    case Response.DecodeError{Response.ResponseStreamPolicyError{_}}: "http.policy"
+    case Response.DecodeError{Response.TooManyInformational{}}: "http.informational-limit"
+    case Response.DecodeError{Response.IncompleteResponse{}}: "http.truncated"
+
+def diagnosticRead(cause: Response.ReadError<HTTP.SocketSourceError<Deadline.Cause<Unit>>>) -> String:
+  match cause:
+    case Response.ResponseReaderPrimaryFailure{cause}: diagnosticReadPrimary(cause)
+    case Response.ReleaseFailure{cause}: "release." ++ diagnosticSource(cause)
+    case Response.FailureWithRelease{cause,_}: "release+" ++ diagnosticReadPrimary(cause)
+
+def diagnosticExchange(cause: Client.ReadError(Unit)) -> String:
+  match cause:
+    case HTTP.ResponseFailure{cause}: diagnosticRead(cause)
+    case HTTP.DisposalFailure{cause}: "dispose." ++ diagnosticSource(cause)
+    case HTTP.ResponseWithDisposal{cause,_}: "dispose+" ++ diagnosticRead(cause)
+
+def diagnosticProgressPrimary(cause: Response.ResponseProgressPrimaryError<Client.ReadError(Unit)>) -> String:
+  match cause:
+    case Response.TransportFailure{cause}: diagnosticExchange(cause)
+    case Response.MissingHead{}: "http.missing-head"
+    case Response.MissingCompletion{}: "http.missing-completion"
+    case Response.UnexpectedEvent{_}: "http.unexpected-event"
+
+def diagnosticProgress(cause: Response.ResponseProgressError<Client.ReadError(Unit)>) -> String:
+  match cause:
+    case Response.ResponseProgressPrimaryFailure{cause}: diagnosticProgressPrimary(cause)
+    case Response.ResponseProgressCleanupFailure{cause}: "cleanup." ++ diagnosticExchange(cause)
+    case Response.ResponseProgressFailureWithCleanup{cause,_}: "cleanup+" ++ diagnosticProgressPrimary(cause)
+
+def diagnosticSSE(cause: SSE.Error<SSE.TransportError(Unit)>) -> String:
+  match cause:
+    case SSE.TransportFailure{cause}: diagnosticProgress(cause)
+    case SSE.DiagnosticFailure{cause}: "sse.diagnostic." ++ diagnosticProgress(cause)
+    case SSE.DispatchFailure{SSE.InvalidJson{_,_,_,_}}: "sse.invalid-json"
+    case SSE.DispatchFailure{SSE.ApiErrorPayload{_}}: "sse.api-error"
+
+def diagnosticReader(cause: P.ReaderError(Unit)) -> String:
+  match cause:
+    case ResponsesStream.StreamingFailure{cause}: diagnosticSSE(cause)
+    case ResponsesStream.ProtocolFailure{_}: "responses.event-schema"
+
+def diagnosticProcessing(cause: ResponsesStream.Error<P.ReaderError(Unit)>) -> String:
+  match cause:
+    case ResponsesStream.ReadFailure{cause}: "read." ++ diagnosticReader(cause)
+    case ResponsesStream.EmitFailure{cause}: "emit." ++ diagnosticReader(cause)
+    case ResponsesStream.ContentFailure{_}: "responses.content"
+    case ResponsesStream.TerminalFailure{ResponsesStream.MissingTerminalResponse{}}: "responses.missing-terminal"
+    case ResponsesStream.TerminalFailure{ResponsesStream.ProviderFailure{_}}: "responses.provider-error"
+    case ResponsesStream.TerminalFailure{ResponsesStream.UnhandledStopReason{_}}: "responses.stop-reason"
+    case ResponsesStream.TerminalFailure{ResponsesStream.InvalidReasoningSignature{}}: "responses.reasoning-signature"
+
+def diagnosticAttempt(cause: Client.AttemptError<Unit>) -> String:
+  match cause:
+    case Client.TransportFailure{Client.FetchFailure{Response.DispatchFailure{Fetch.HeaderFailure{_,_,cause},_}}}: "headers." ++ diagnosticProgress(cause)
+    case Client.TransportFailure{Client.FetchFailure{Response.DispatchFailure{Fetch.ExchangeFailure{_,_,HTTP.ResolvedExchangeFailure{HTTP.TLSStartFailure{cause}}},_}}}: "connect." ++ diagnosticTLS(cause)
+    case cause: attemptError(cause)
+
+def diagnosticRequest(cause: Retry.RetryFailure<Client.AttemptError<Unit>>) -> String:
+  match cause:
+    case Retry.RequestFailed{Retry.Provider{Retry.ProviderError{cause,_,_,_,_,_}}}: diagnosticAttempt(cause)
+    case Retry.RequestFailed{Retry.Other{cause}}: diagnosticAttempt(cause)
+    case _: "retry.failed"
+
+def diagnosticError(cause: P.Error<Unit,String>) -> String:
+  match cause:
+    case P.RequestFailure{cause}: "request." ++ diagnosticRequest(cause)
+    case P.ProcessingFailure{cause}: "processing." ++ diagnosticProcessing(cause)
+    case P.ReleaseFailure{cause}: "release." ++ diagnosticProgress(cause)
+    case P.DisposalFailure{SSE.CursorFailure{cause}}: "dispose.cursor." ++ diagnosticSSE(cause)
+    case P.DisposalFailure{_}: "dispose.body"
+    case P.HookFailure{_}: "hook"
+    case P.OutputFailure{_}: "output"
+    case P.MissingStopReason{}: "missing-stop-reason"
+    case P.InvalidRetryOptions{_}: "retry-options"
+    case P.EntropyFailure{_}: "entropy"
+    case cause: error(cause)
 
 def report(result: P.RunResult<Unit, Unit, String>) -> IO(Unit):
   match result:

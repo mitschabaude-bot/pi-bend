@@ -104,10 +104,46 @@ def report(result: Outcome()) -> IO(Unit):
     case Fail{error}: IO.die(Unit, 1, error)
     case Done{messages}: reportMessages(messages)
 
+# Test-host observation only: preserve Providers.released's result and ownership.
+# Enabling this never changes the provider's normalized assistant error.
+def observeCleanup(cause: Maybe<&2,Responses.Error<Unit,String>>) -> IO(Unit):
+  match cause:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{cause}: IO.print("provider-diagnostic|cleanup|" ++ Native.diagnosticError(cause))
+
+def observeResult(result: Responses.RunResult<Unit,Unit,String>) -> IO(Unit):
+  match result:
+    case Responses.RunResult{Responses.Failed{_,_,cause},cleanup}:
+      do IO<Unit>:
+        IO.print("provider-diagnostic|primary|" ++ Native.diagnosticError(cause))
+        observeCleanup(cleanup)
+    case Responses.RunResult{_,cleanup}: observeCleanup(cleanup)
+
+def observedRelease(enabled: Bool,owner: Responses.Run<Unit,Unit,String>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    +result : Responses.RunResult<Unit,Unit,String> <- Responses.dispose(Unit,Unit,String,owner)
+    Bool.pick(Unit -> IO(Unit),enabled,_ => observeResult(result),_ => IO.pure(Unit,Unit{}))(Unit{})
+    return Providers.released(~Unit,~String,~Native.error,result)
+
+def observedLease(enabled: Bool,pair: Responses.Run<Unit,Unit,String> & Stream.AssistantMessageEventStream(V.Value,Unit)) -> Providers.Output(Unit,String):
+  match pair:
+    case (owner,streamEvents): Done{T.StreamLease{streamEvents,observedRelease(enabled,owner)}}
+
+type ObservedConfig is Data:
+  ObservedConfig{config: Responses.Config,enabled: Bool}
+
+def openObserved(config: ObservedConfig,input: Providers.Input(Config(),Unit,Unit)) -> IO(Providers.Output(Unit,String)):
+  match config input:
+    case ObservedConfig{config,enabled} T.StreamInput{model,context,options}:
+      do IO<Providers.Output(Unit,String)>:
+        owner : Responses.Run<Unit,Unit,String> <- Responses.streamSimple(~Unit,~Unit,~Unit,~Unit,~String,~Native.identity,config,model,context,Maybe.map(&2,Config(),Responses.SimpleStreamOptions(Unit,Unit,String),project,options))
+        return observedLease(enabled,Responses.borrow(Unit,Unit,String,owner))
+
 def runTools(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, tools: List<&2, T.AgentTool<Unit, String>>, maxTokens: U32) -> IO(Outcome()):
   do IO<Outcome()>:
     +authorizer : C.Callback<URL.Host, TLS.Authorization> <- Trust.newSAN(Trust.SANPolicy{bundle, 256n})
-    +provider : T.StreamFn(Unit, Unit, Config(), String) <- Providers.responses(~Config(), ~Unit, ~Unit, ~Unit, ~String, ~project, ~Native.identity, ~Native.error, Native.config(authorizer))
+    diagnostics : String <- IO.try(String,IO.get_env("PI_BEND_PROVIDER_DIAGNOSTICS"))
+    +provider : T.StreamFn(Unit, Unit, Config(), String) <- C.create(~ObservedConfig,~Providers.Input(Config(),Unit,Unit),~Providers.Output(Unit,String),~openObserved,ObservedConfig{Native.config(authorizer),String.eq(diagnostics,"1")})
     +converter : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~convert, Unit{})
     +validator : Loop.Validator(String) <- Loop.createPlain(~String, ~validationError)
     +cancel : C.Callback<Maybe<&2, Signal()>, Bool> <- C.create(~Unit, ~Maybe<&2, Signal()>, ~Bool, ~isAborted, Unit{})
