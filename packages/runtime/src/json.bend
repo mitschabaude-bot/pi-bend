@@ -343,10 +343,15 @@ def escapeCode(+code: U32) -> String:
     case 13: "\\r"
     case _: escapeOther(U32.is_lt(code, 32) || Utf16.highSurrogate(code) || Utf16.lowSurrogate(code), code)
 
-def escaped(chars: String) -> String:
+# Accumulate backwards so large prompt/tool strings do not retain one hosted
+# machine-stack frame per scalar. Each escape fragment has at most six scalars.
+def escapeInto(chars: String, reversed: String) -> String:
   match chars:
-    case SNil{}: ""
-    case SCon{Chr{code}, rest}: escapeCode(code) ++ escaped(rest)
+    case SNil{}: String.reverse(reversed)
+    case SCon{Chr{code}, rest}: escapeInto(rest, String.reverse.go(escapeCode(code), reversed))
+
+def escaped(chars: String) -> String:
+  escapeInto(chars, "")
 
 def quote(text: String) -> String:
   "\"" ++ escaped(Utf16.normalize(text)) ++ "\""

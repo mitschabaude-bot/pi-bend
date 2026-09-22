@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import random
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
@@ -41,6 +42,24 @@ values = [['null'], ['boolean', True], ['boolean', False], ['array', []], ['obje
 values += [['number', value] for value in numbers]
 values += [['object', [[[0xd83d, 0xde00], ['boolean', False]], [[0x1f600], ['boolean', True]], [[50], ['null']], [[49, 48], ['array', []]]]]]
 values += [tree(4) for _ in range(96)]
+# The hosted runtime rejects non-scalar Char construction before codec entry.
+# Native runs retain the complete historical surrogate compatibility corpus.
+scalar_only = '--scalar-only' in sys.argv
+def scalar_string(points):
+    return all(not 0xd800 <= point <= 0xdfff for point in points)
+def scalar_tree(value):
+    kind = value[0]
+    if kind == 'string':
+        return scalar_string(value[1])
+    if kind == 'array':
+        return all(scalar_tree(child) for child in value[1])
+    if kind == 'object':
+        return all(scalar_string(key) and scalar_tree(child) for key, child in value[1])
+    return True
+if scalar_only:
+    strings = [value for value in strings if scalar_string(value)]
+    values = [value for value in values if scalar_tree(value)]
+suffix = '-scalar' if scalar_only else ''
 oracle = '''const input = JSON.parse(process.argv[1]);
 const str = points => String.fromCodePoint(...points);
 function encode(item) {
@@ -101,7 +120,17 @@ for index, (points, output) in enumerate(zip(strings, expected['strings'], stric
 for index, (value, output) in enumerate(zip(values, expected['values'], strict=True)):
     source += f'    check(J.stringify({bend(value)}), {json.dumps(output, ensure_ascii=False)}, "JSON {index}")\n'
 source += f'    IO.print("JSON: {len(strings)} quoting and {len(values)} native structured JSON vectors passed")\n'
-entry = BUILD / 'json-stringify-vectors.bend'
+# Keep the test host's main IO expression bounded on the hosted backend.
+prefix, body = source.split('def main() -> IO(Unit):\n  do IO<Unit>:\n', 1)
+checks = body.rstrip('\n').split('\n')
+groups = []
+source = prefix
+for start in range(0, len(checks), 30):
+    name = f'group{start}'
+    groups.append(name)
+    source += f'def {name}() -> IO(Unit):\n  do IO<Unit>:\n' + '\n'.join(checks[start:start+30]) + '\n'
+source += 'def main() -> IO(Unit):\n  do IO<Unit>:\n' + ''.join(f'    {name}()\n' for name in groups)
+entry = BUILD / f'json-stringify-vectors{suffix}.bend'
 entry.write_text(source)
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-json-stringify'], cwd=ROOT, check=True)
-subprocess.run(['build/test-json-stringify', '--threads', '1'], cwd=ROOT, check=True, timeout=240)
+subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), f'build/test-json-stringify{suffix}'], cwd=ROOT, check=True)
+subprocess.run([f'build/test-json-stringify{suffix}', '--threads', '1'], cwd=ROOT, check=True, timeout=240)

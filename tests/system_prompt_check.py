@@ -29,4 +29,6 @@ for start in range(0, len(records), 20):
         assert actual == case['expected'], (case['name'], repr(actual)[:500], repr(case['expected'])[:500])
 large_result = subprocess.run(command + ['--large-context'], text=True, capture_output=True, check=True, timeout=120)
 assert large_result.stdout == large['expected'] + '\n', 'large project-context rendering mismatch'
+large_json = subprocess.run(command + [json.dumps(large['input'])], text=True, capture_output=True, check=True, timeout=120)
+assert json.loads(large_json.stdout) == large['expected'], 'large project-context JSON mismatch'
 print(f"{len(reference['names'])} pinned named assertions; {len(records)+1} exact comparisons including 150KB context: passed")
