@@ -290,11 +290,12 @@ def modelApi(model: Models.Model()) -> Ai.ModelApi:
   match model:
     case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _}: api
 
-# Only the OpenAI Responses API streams through the modular provider so far.
+# The OpenAI Responses and Codex Responses APIs stream through the modular provider.
 def supportedApi(api: Ai.ModelApi, model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
   match api:
     case Ai.OpenAIResponsesApi{}: Done{model}
-    case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet (only openai-responses)."}
+    case Ai.OpenAICodexResponsesApi{}: Done{model}
+    case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet (openai-responses and openai-codex-responses)."}
 
 def supportedModel(+model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
   supportedApi(modelApi(model), model)
