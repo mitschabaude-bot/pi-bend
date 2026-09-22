@@ -1,6 +1,6 @@
 import Base
-import ../src/event-emission.bend as Emission
-import ../src/agent-listeners.bend as L
+import ../src/agent-loop.bend as Emission
+import ../src/agent.bend as L
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
 import ./message-events.bend as Test
@@ -21,12 +21,12 @@ def edit(+registry: Registry(), handles: Handles, mode: U32) -> IO(Unit):
     case Handles{_, middle, _} 2: L.unsubscribe(String, Bool, String, L.Subscription{registry, middle})
     case Handles{_, _, last} 3:
       do IO<Unit>:
-        ignored : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, last)
+        ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, last)
         return Unit{}
     case Handles{_, +middle, _} 4:
       do IO<Unit>:
         L.unsubscribe(String, Bool, String, L.Subscription{registry, middle})
-        ignored : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, middle)
+        ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, middle)
         return Unit{}
     case Handles{first, _, _} 5: L.unsubscribe(String, Bool, String, L.Subscription{registry, first})
     case _ _: IO.pure(Unit, Unit{})
@@ -48,7 +48,7 @@ def body(environment: Environment, input: L.Input<String, Bool>) -> IO(Emission.
         entry : String = label(id) ++ ":" ++ event ++ ":" ++ Bool.pick(String, signal, "1", "0") ++ ";"
         R.modify(String, Unit, log, old => (old ++ entry, Unit{}))
         editIfFirst(id, registry, handles, mode)
-        return Emission.Ready{Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 6) && U32.is_eq(id, 0)) || (U32.is_eq(mode, 7) && U32.is_eq(id, 1)), Fail{"error" ++ label(id)}, Done{Unit{}})}
+        return Emission.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 6) && U32.is_eq(id, 0)) || (U32.is_eq(mode, 7) && U32.is_eq(id, 1)), Fail{"error" ++ label(id)}, Done{Unit{}})}
 
 def resultKey(result: Result<&2, &2, String, Unit>) -> String:
   match result:
@@ -59,33 +59,33 @@ def optional(registry: Registry(), callback: Handler(), add: Bool) -> IO(Unit):
     case False{}: IO.pure(Unit, Unit{})
     case True{}:
       do IO<Unit>:
-        ignored : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, callback)
+        ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, callback)
         return Unit{}
 def scenario(+mode: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
-    +registry : Registry() <- L.new(String, Bool, String)
+    +registry : Registry() <- L.newListeners(String, Bool, String)
     +handles : R.Ref<Maybe<&2, Handles>> <- R.new(Maybe<&2, Handles>, None{})
     +log : R.Ref<String> <- R.new(String, "")
     +first : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{0, mode, registry, handles, log})
     +middle : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{1, mode, registry, handles, log})
     +last : Handler() <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{2, mode, registry, handles, log})
     R.write(Maybe<&2, Handles>, handles, Some{Handles{first, middle, last}})
-    +subscription : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, first)
+    +subscription : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, first)
     optional(registry, first, U32.is_eq(mode, 1))
-    ignored : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, middle)
+    ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, middle)
     optional(registry, last, Bool.not(U32.is_eq(mode, 3)))
     empty : String <- R.read(String, log)
     Test.assertion(String.is_empty(empty), "subscribing must not emit an event")
-    firstResult : Result<&2, &2, String, Unit> <- L.emit(String, Bool, String, registry, "first", False{})
-    secondResult : Result<&2, &2, String, Unit> <- L.emit(String, Bool, String, registry, "second", True{})
+    firstResult : Result<&2, &2, String, Unit> <- L.emitListeners(String, Bool, String, registry, "first", False{})
+    secondResult : Result<&2, &2, String, Unit> <- L.emitListeners(String, Bool, String, registry, "second", True{})
     L.unsubscribe(String, Bool, String, subscription)
-    ignored : L.Subscription<String, Bool, String> <- L.subscribe(String, Bool, String, registry, first)
+    ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, first)
     L.unsubscribe(String, Bool, String, subscription)
     L.unsubscribe(String, Bool, String, subscription)
-    thirdResult : Result<&2, &2, String, Unit> <- L.emit(String, Bool, String, registry, "third", False{})
+    thirdResult : Result<&2, &2, String, Unit> <- L.emitListeners(String, Bool, String, registry, "third", False{})
     trace : String <- R.read(String, log)
     Test.assertion(String.eq(trace ++ "|" ++ resultKey(firstResult) ++ "," ++ resultKey(secondResult) ++ "," ++ resultKey(thirdResult), expected), "ordered listener dispatch differs from upstream")
-    L.dispose(String, Bool, String, registry)
+    L.disposeListeners(String, Bool, String, registry)
     old : Maybe<&2, Handles> <- R.dispose(Maybe<&2, Handles>, handles)
     C.dispose(L.Input<String, Bool>, Emission.Emission<String>, first)
     C.dispose(L.Input<String, Bool>, Emission.Emission<String>, middle)

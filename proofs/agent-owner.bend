@@ -1,8 +1,8 @@
 import Base
-import ../packages/agent/src/agent-state.bend as State
+import ../packages/agent/src/agent.bend as State
 import ../laws/agent-owner.bend as Laws
-import ../packages/agent/src/agent-runtime.bend as Runtime
-import ../packages/agent/src/agent-queues.bend as Q
+import ../packages/agent/src/agent.bend as Runtime
+import ../packages/agent/src/agent.bend as Q
 import ../packages/agent/src/types.bend as T
 
 def Laws.enqueue_preserves_state(P, A, G, D, C, V, S, E, J, owned, kind, message):
@@ -25,7 +25,7 @@ law drained_preserves_state:
   for -J: Data
   for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
   for result: Q.Queues<T.AgentMessage<P, A, G, D, C>> & List<&2, T.AgentMessage<P, A, G, D, C>>
-  {Laws.resultingState(P, A, G, D, C, V, S, E, J, List<&2, T.AgentMessage<P, A, G, D, C>>, Runtime.drained(P, A, G, D, C, V, S, E, J, state, result)) == state : T.AgentState<P, A, G, D, C, V, S, E, J>}
+  {Laws.resultingState(P, A, G, D, C, V, S, E, J, List<&2, T.AgentMessage<P, A, G, D, C>>, Runtime.drainedRuntime(P, A, G, D, C, V, S, E, J, state, result)) == state : T.AgentState<P, A, G, D, C, V, S, E, J>}
 
 def drained_preserves_state(P, A, G, D, C, V, S, E, J, state, result):
   match result:
@@ -33,7 +33,7 @@ def drained_preserves_state(P, A, G, D, C, V, S, E, J, state, result):
 
 def Laws.drain_preserves_state(P, A, G, D, C, V, S, E, J, owned, kind):
   match owned:
-    case Runtime.OwnedState{state, queues}: drained_preserves_state(P, A, G, D, C, V, S, E, J, state, Q.drain(T.AgentMessage<P, A, G, D, C>, queues, kind))
+    case Runtime.OwnedState{state, queues}: drained_preserves_state(P, A, G, D, C, V, S, E, J, state, Q.drainQueues(T.AgentMessage<P, A, G, D, C>, queues, kind))
 
 def Laws.changes_preserve_run_state(P, A, G, D, C, V, S, E, J, state, change):
   match state change:

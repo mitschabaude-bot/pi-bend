@@ -1,10 +1,10 @@
 import Base
 import ../../ai/test/model-types.bend as Model
-import ../src/tool-call.bend as Call
-import ../src/tool-batch.bend as Batch
+import ../src/agent-loop.bend as Call
+import ../src/agent-loop.bend as Batch
 import ../src/agent-loop.bend as Loop
 import ../src/types.bend as T
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as Record
@@ -14,8 +14,8 @@ import ../../runtime/src/f64.bend as F
 import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 
-def Input() -> Data: Call.Input(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit)
-def Output() -> Data: Call.Output(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit)
+def Input() -> Data: Call.CallInput(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit)
+def Output() -> Data: Call.CallOutput(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit)
 def Outcome() -> Data: Result<&2, &2, String, Batch.Batch<H.Context(), Ai.ToolResultMessage<String>>>
 def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>, Unit>
 def BeforeOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<V.Value, H.Context()>>
@@ -45,7 +45,7 @@ def emit(environment: Recording, event: H.EventValue()) -> IO(E.Emission<String>
         R.modify(List<&2, String>, Unit, events, values => (name <> values, Unit{}))
         previous : Bool <- R.read(Bool, signal)
         R.write(Bool, signal, previous || (abortAfter && String.eq(name, "end:call")))
-        return E.Ready{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
+        return E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
 
 def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
   match environment input:
@@ -142,7 +142,7 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    +runner : C.Callback<Input(), Output()> <- Call.create(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, Call.Capture{assistant, configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"})
+    +runner : C.Callback<Input(), Output()> <- Call.create(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, Call.CallCapture{assistant, configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"})
     toolCalls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}} <> Ai.ToolCall{"bad", "echo", H.field(V.Text{"bad"}), None{}, None{}} <> Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}} <> Nil{}
     result : Outcome() <- Batch.executeSequential(H.Context(), Ai.ToolCall<V.Value>, Ai.ToolResultMessage<String>, String, context, toolCalls, runner, batchAbort)
     # Upstream runs the before hook before checking abort; its returned

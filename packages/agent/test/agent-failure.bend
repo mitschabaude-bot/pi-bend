@@ -1,11 +1,11 @@
 import Base
-import ../src/event-emission.bend as Emission
-import ../src/agent-failure.bend as Failure
-import ../src/agent-events.bend as Events
-import ../src/agent-listeners.bend as Listeners
-import ../src/agent-runtime.bend as Runtime
-import ../src/agent-lifecycle.bend as Life
-import ../src/agent-state.bend as State
+import ../src/agent-loop.bend as Emission
+import ../src/agent.bend as Failure
+import ../src/agent.bend as Events
+import ../src/agent.bend as Listeners
+import ../src/agent.bend as Runtime
+import ../src/agent.bend as Life
+import ../src/agent.bend as State
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/abort.bend as Abort
@@ -92,15 +92,15 @@ def body(environment: Environment, input: EventTest.Input()) -> IO(Emission.Emis
         Test.assertion(stable, "all failure events share one timestamp")
         cancelled : Bool <- Abort.aborted(Unit, signal)
         Test.assertion(Bool.not(Bool.xor(cancelled, aborted)), "failure listener gets the active cancellation signal")
-        owned : Fixture.Owned() <- Runtime.snapshot(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        owned : Fixture.Owned() <- Runtime.snapshotRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         +index : U32 = stage(event)
         entry : String = stageName(index) ++ "." ++ Bool.pick(String, U32.is_eq(listener, 0), "0", "1") ++ "@" ++ key(owned) ++ ";"
         R.modify(String, Unit, log, previous => (previous ++ entry, Unit{}))
-        return Emission.Ready{Bool.pick(Result<&2, &2, String, Unit>, U32.is_eq(index, failStage) && U32.is_eq(listener, failListener), Fail{"listener failed"}, Done{Unit{}})}
+        return Emission.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, U32.is_eq(index, failStage) && U32.is_eq(listener, failListener), Fail{"listener failed"}, Done{Unit{}})}
 
 def abortIf(runtime: Fixture.Runtime(), aborted: Bool) -> IO(Unit):
   match aborted:
-    case True{}: Runtime.abort(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    case True{}: Runtime.abortRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     case False{}: IO.pure(Unit, Unit{})
 def execute(+runtime: Fixture.Runtime(), aborted: Bool, error: String, claimed: Life.Claimed<Fixture.Plan()>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
@@ -121,27 +121,27 @@ def model() -> Ai.Model<Unit>:
   Ai.Model{"failure-model", "Failure", Ai.CustomModelApi{"failure-api"}, "failure-provider", "", False{}, None{}, Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
 def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
-    Test.assertion(valid(Failure.message(Unit, Unit, Unit, model(), aborted, error, F.fromU32(42)), aborted, error, F.fromU32(42), F.fromU32(42)), "explicit failure constructor preserves timestamp and complete message shape")
+    Test.assertion(valid(Failure.messageFailure(Unit, Unit, Unit, model(), aborted, error, F.fromU32(42)), aborted, error, F.fromU32(42), F.fromU32(42)), "explicit failure constructor preserves timestamp and complete message shape")
     initial : State.AgentInitialState<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit> = State.AgentInitialState{Some{"base"}, Some{model()}, None{}, None{}, None{}}
-    +runtime : Fixture.Runtime() <- Runtime.new(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
-    +registry : EventTest.Registry() <- Listeners.new(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String)
+    +runtime : Fixture.Runtime() <- Runtime.newRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
+    +registry : EventTest.Registry() <- Listeners.newListeners(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String)
     +log : R.Ref<String> <- R.new(String, "")
     +stamp : R.Ref<Maybe<&2, F.F64>> <- R.new(Maybe<&2, F.F64>, None{})
     +lower : F.F64 <- Date.now()
     +first : Listeners.Handler(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~EventTest.Input(), ~Emission.Emission<String>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 0})
     +second : Listeners.Handler(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~EventTest.Input(), ~Emission.Emission<String>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 1})
-    ignored : Listeners.Subscription<EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, first)
-    ignored : Listeners.Subscription<EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, second)
+    ignored : Listeners.Subscription<EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribeListeners(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, first)
+    ignored : Listeners.Subscription<EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribeListeners(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, second)
     initialClaim : Fixture.Claim() <- Runtime.beginPrompt(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Nil{})
     claimed : Life.Claimed<Fixture.Plan()> <- requireClaim(initialClaim)
-    result : EventTest.Outcome() <- Failure.runClaimed(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, String, Fixture.Plan(), runtime, registry, claimed, claim => execute(runtime, aborted, error, claim), value => value)
-    Runtime.waitForIdle(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
-    final : Fixture.Owned() <- Runtime.snapshot(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    result : EventTest.Outcome() <- Failure.runClaimedFailure(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, String, Fixture.Plan(), runtime, registry, claimed, claim => execute(runtime, aborted, error, claim), value => value)
+    Runtime.waitForIdleRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    final : Fixture.Owned() <- Runtime.snapshotRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     trace : String <- R.read(String, log)
     +actual : String = trace ++ "#" ++ resultKey(result) ++ "#" ++ key(final)
     Test.assertion(String.eq(actual, expected), "failure recovery differs from source: " ++ actual)
-    retired : Fixture.Owned() <- Runtime.dispose(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
-    Listeners.dispose(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry)
+    retired : Fixture.Owned() <- Runtime.disposeRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    Listeners.disposeListeners(EventTest.EmittedEvent(), Abort.AbortSignal<Unit>, String, registry)
     C.dispose(EventTest.Input(), Emission.Emission<String>, first)
     C.dispose(EventTest.Input(), Emission.Emission<String>, second)
     oldLog : String <- R.dispose(String, log)

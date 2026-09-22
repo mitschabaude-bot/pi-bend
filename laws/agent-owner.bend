@@ -1,8 +1,8 @@
 import Base
-import ../packages/agent/src/agent-state.bend as State
+import ../packages/agent/src/agent.bend as State
 import ../packages/runtime/src/string-set.bend as Set
-import ../packages/agent/src/agent-runtime.bend as Runtime
-import ../packages/agent/src/agent-queues.bend as Q
+import ../packages/agent/src/agent.bend as Runtime
+import ../packages/agent/src/agent.bend as Q
 import ../packages/agent/src/types.bend as T
 
 # Observe the complete agent state returned by an owner transition.
@@ -71,7 +71,7 @@ law changes_preserve_run_state:
   for -E: Data
   for -J: Data
   for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  for change: State.Change<P, A, G, D, C, V, S, E, J>
+  for change: State.StateChange<P, A, G, D, C, V, S, E, J>
   {runState(P, A, G, D, C, V, S, E, J, State.applyChange(P, A, G, D, C, V, S, E, J, state, change)) == runState(P, A, G, D, C, V, S, E, J, state) : RunState<P, A, G, D, C>}
 
 law replace_messages:

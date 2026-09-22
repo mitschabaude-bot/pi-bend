@@ -1,5 +1,5 @@
 import Base
-import ../src/tool-batch.bend as B
+import ../src/agent-loop.bend as B
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
 import ./tool-batch-policy.bend as T
@@ -11,7 +11,7 @@ type Observed is Data:
 type Environment is Data:
   Environment{observed: R.Ref<Observed>, stopAfter: U32}
 def Input() -> Data: B.Invocation<U32, Call>
-def Output() -> Data: Result<&2, &2, String, B.Completed<U32, U32>>
+def Output() -> Data: Result<&2, &2, String, B.BatchCompleted<U32, U32>>
 def Outcome() -> Data: Result<&2, &2, String, B.Batch<U32, U32>>
 
 def enter(id: U32, state: Observed) -> Observed & Unit:
@@ -21,7 +21,7 @@ def enter(id: U32, state: Observed) -> Observed & Unit:
 def result(fail: Bool, +state: U32, terminate: Bool) -> Output():
   match fail:
     case True{}: Fail{"delivery failed"}
-    case False{}: Done{B.Completed{state, state, terminate}}
+    case False{}: Done{B.BatchCompleted{state, state, terminate}}
 
 def invoke(environment: Environment, input: Input()) -> IO(Output()):
   match environment input:

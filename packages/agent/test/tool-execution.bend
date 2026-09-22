@@ -1,6 +1,6 @@
 import Base
 import ../src/agent-loop.bend as Loop
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/callback.bend as C
@@ -50,8 +50,8 @@ def listened(gate: Chan(Unit), +error: String) -> IO(Result<&2, &2, String, Unit
 
 def delivery(immediate: Bool, gate: Chan(Unit), +error: String) -> IO(E.Emission<String>):
   match immediate:
-    case True{}: IO.pure(E.Emission<String>, E.Ready{Bool.pick(Result<&2, &2, String, Unit>, String.is_empty(error), Done{Unit{}}, Fail{error})})
-    case False{}: E.start(String, listened(gate, error))
+    case True{}: IO.pure(E.Emission<String>, E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, String.is_empty(error), Done{Unit{}}, Fail{error})})
+    case False{}: E.startEmission(String, listened(gate, error))
 
 def emit(state: EmitState, event: EventValue()) -> IO(E.Emission<String>):
   match state event:

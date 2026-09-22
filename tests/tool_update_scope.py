@@ -18,7 +18,7 @@ for threads in ('1', '4'):
 # Copying a ticket would permit two completions for one accepted update.
 source = BUILD / 'invalid-update-ticket-copy.bend'
 source.write_text('''import Base
-import ../packages/agent/src/tool-update-scope.bend as U
+import ../packages/agent/src/agent-loop.bend as U
 
 def twice(+ticket: U.Ticket<String>) -> IO(Unit):
   do IO<Unit>:

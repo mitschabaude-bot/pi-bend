@@ -1,5 +1,5 @@
 import Base
-import ../src/turn-preparation.bend as Preparation
+import ../src/agent-loop.bend as Preparation
 import ../src/types.bend as T
 import ../src/agent-loop.bend as Loop
 import ../../ai/src/types.bend as Ai
@@ -126,8 +126,8 @@ def configuration(converter: C.Callback<Messages(), Converted()>, hook: C.Callba
 
 def run(initial: Bool, +context: Context(), config: Config(), completed: Turn(), pending: Messages(), sink: C.Callback<EventValue(), Result<&2, &2, String, Unit>>) -> IO(Outcome()):
   match initial:
-    case True{}: Preparation.initial(String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, config, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
-    case False{}: Preparation.next(String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, config, completed, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
+    case True{}: Preparation.initialTurn(String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, config, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
+    case False{}: Preparation.nextTurn(String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, config, completed, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
 
 def equal(left: List<&2, String>, right: List<&2, String>) -> Bool:
   match left right:

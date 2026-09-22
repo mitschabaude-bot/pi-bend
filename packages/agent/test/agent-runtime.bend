@@ -1,10 +1,10 @@
 import Base
-import ../src/agent-runtime.bend as R
-import ../src/agent-lifecycle.bend as L
-import ../src/agent-state.bend as State
-import ../src/agent-continuation.bend as Continue
-import ../src/agent-queues.bend as Q
-import ../src/pending-message-queue.bend as Pending
+import ../src/agent.bend as R
+import ../src/agent.bend as L
+import ../src/agent.bend as State
+import ../src/agent.bend as Continue
+import ../src/agent.bend as Q
+import ../src/agent.bend as Pending
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/string-set.bend as Set
@@ -12,7 +12,7 @@ import ../../runtime/src/f64.bend as F
 import ./agent-queues.bend as Fixture
 import ./message-events.bend as Test
 
-def Runtime() -> Data: R.Runtime<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit>
+def Runtime() -> Data: R.OwnedRuntime<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit>
 def Owned() -> Data: R.OwnedState<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit>
 def Value() -> Data: T.AgentState<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit>
 def Message() -> Data: Fixture.Message()
@@ -36,7 +36,7 @@ def partial(message: Maybe<&2, Message()>) -> String:
     case None{}: "-"
     case Some{value}: role(value)
 def queueKey(+queue: Pending.PendingMessageQueue<Message()>) -> String:
-  Fixture.modeName(Pending.getMode(Message(), queue)) ++ ":" ++ String.join(Fixture.names(Pending.values(Message(), queue)), ",")
+  Fixture.modeName(Pending.getModePending(Message(), queue)) ++ ":" ++ String.join(Fixture.names(Pending.values(Message(), queue)), ",")
 def stateKey(prompt: String, state: Value()) -> String:
   match state:
     case T.AgentState{_, _, _, messages, streaming, message, pending, _}:
@@ -44,7 +44,7 @@ def stateKey(prompt: String, state: Value()) -> String:
 def key(owned: Owned()) -> String:
   match owned:
     case R.OwnedState{+state, Q.Queues{steering, followUp}}:
-      stateKey(State.systemPrompt(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, state), state) ++ "|" ++ queueKey(steering) ++ "|" ++ queueKey(followUp)
+      stateKey(State.systemPromptState(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, state), state) ++ "|" ++ queueKey(steering) ++ "|" ++ queueKey(followUp)
 def planKey(plan: Plan()) -> String:
   match plan:
     case Continue.Continue{}: "continue"
@@ -53,7 +53,7 @@ def claimKey(previous: Maybe<&2, L.ActiveRun>, prompt: Bool, result: Claim()) ->
   match result:
     case Done{L.Claimed{run, plan}}: Step{Some{run}, planKey(plan)}
     case Fail{L.Rejected{error}}: Step{previous, "error:" ++ error}
-    case Fail{L.Busy{}}: Step{previous, Bool.pick(String, prompt, "error:Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.", "error:Agent is already processing. Wait for completion before continuing.")}
+    case Fail{L.LifeBusy{}}: Step{previous, Bool.pick(String, prompt, "error:Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.", "error:Agent is already processing. Wait for completion before continuing.")}
 def resetKey(result: Result<&2, &2, String, Unit>) -> String:
   match result:
     case Done{_}: "ok"
@@ -67,9 +67,9 @@ def finish(+runtime: Runtime(), active: Maybe<&2, L.ActiveRun>) -> IO(Step):
     case None{}: IO.pure(Step, Step{None{}, "idle"})
     case Some{run}:
       do IO<Step>:
-        won : Bool <- R.finishRun(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, run)
+        won : Bool <- R.finishRunRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, run)
         Test.assertion(won, "fixture must finish its current run")
-        R.waitForIdle(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        R.waitForIdleRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         return Step{None{}, "finished"}
 def event(operation: U32) -> T.AgentEvent<Unit, Unit, Unit, Unit, String, Unit, Unit>:
   match operation:
@@ -83,15 +83,15 @@ def step(runtime: Runtime(), active: Maybe<&2, L.ActiveRun>, operation: U32) -> 
   match operation:
     case 0:
       do IO<Step>:
-        result : Result<&2, &2, String, Unit> <- R.reset(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        result : Result<&2, &2, String, Unit> <- R.resetRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         return Step{active, resetKey(result)}
     case 1:
       do IO<Step>:
-        R.steer(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Fixture.user("s"))
+        R.steerRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Fixture.user("s"))
         return Step{active, "ok"}
     case 2:
       do IO<Step>:
-        R.followUp(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Fixture.user("f"))
+        R.followUpRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Fixture.user("f"))
         return Step{active, "ok"}
     case 3:
       do IO<Step>:
@@ -104,7 +104,7 @@ def step(runtime: Runtime(), active: Maybe<&2, L.ActiveRun>, operation: U32) -> 
     case 5: finish(runtime, active)
     case 12:
       do IO<Step>:
-        R.setQueueMode(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.Steering{}, T.All{})
+        R.setQueueMode(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.QueuesSteering{}, T.All{})
         return Step{active, "ok"}
     case 13:
       do IO<Step>:
@@ -112,7 +112,7 @@ def step(runtime: Runtime(), active: Maybe<&2, L.ActiveRun>, operation: U32) -> 
         return Step{active, "ok"}
     case 14:
       do IO<Step>:
-        R.clearQueue(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.Steering{})
+        R.clearQueue(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.QueuesSteering{})
         return Step{active, "ok"}
     case 15:
       do IO<Step>:
@@ -120,15 +120,15 @@ def step(runtime: Runtime(), active: Maybe<&2, L.ActiveRun>, operation: U32) -> 
         return Step{active, "ok"}
     case 16:
       do IO<Step>:
-        R.clearAllQueues(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        R.clearAllRuntimeQueues(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         return Step{active, "ok"}
     case 17:
       do IO<Step>:
-        messages : List<&2, Message()> <- R.drain(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.Steering{})
+        messages : List<&2, Message()> <- R.drainRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.QueuesSteering{})
         return Step{active, "drained:" ++ String.join(Fixture.names(messages), ",")}
     case 18:
       do IO<Step>:
-        messages : List<&2, Message()> <- R.drain(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.FollowUp{})
+        messages : List<&2, Message()> <- R.drainRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, Q.FollowUp{})
         return Step{active, "drained:" ++ String.join(Fixture.names(messages), ",")}
     case other:
       do IO<Step>:
@@ -145,12 +145,12 @@ def verify(value: Step, state: String, +expected: String) -> IO(Unit):
     case Nil{} Nil{} Step{active, _}:
       do IO<Unit>:
         ignored : Step <- finish(runtime, active)
-        final : Owned() <- R.dispose(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        final : Owned() <- R.disposeRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         return Unit{}
     case operation <> rest wanted <> expectedRest Step{active, _}:
       do IO<Unit>:
         +next : Step <- step(runtime, active, operation)
-        owned : Owned() <- R.snapshot(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        owned : Owned() <- R.snapshotRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         verify(next, key(owned), wanted)
         steps(runtime, rest, expectedRest, next)
     case _ _ _: IO.die(Unit, 1, "runtime fixture length mismatch")
@@ -162,5 +162,5 @@ def initialHistory(index: U32) -> List<&2, Message()>:
 def scenario(historyIndex: U32, steering: U32, follow: U32, operations: List<&2, U32>, expected: List<&2, String>) -> IO(Unit):
   do IO<Unit>:
     initial : State.AgentInitialState<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit> = State.AgentInitialState{Some{"base"}, None{}, None{}, None{}, Some{initialHistory(historyIndex)}}
-    runtime : Runtime() <- R.new(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, initial, Fixture.mode(steering), Fixture.mode(follow))
+    runtime : Runtime() <- R.newRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, initial, Fixture.mode(steering), Fixture.mode(follow))
     steps(runtime, operations, expected, Step{None{}, ""})

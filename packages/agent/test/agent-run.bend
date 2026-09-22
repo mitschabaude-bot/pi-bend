@@ -1,15 +1,15 @@
 import Base
-import ../src/agent-run.bend as Run
-import ../src/agent-runtime.bend as Runtime
-import ../src/agent-state.bend as State
-import ../src/agent-lifecycle.bend as Life
-import ../src/agent-continuation.bend as Plan
-import ../src/agent-listeners.bend as Listeners
-import ../src/agent-events.bend as Events
-import ../src/agent-failure.bend as Failure
+import ../src/agent.bend as Run
+import ../src/agent.bend as Runtime
+import ../src/agent.bend as State
+import ../src/agent.bend as Life
+import ../src/agent.bend as Plan
+import ../src/agent.bend as Listeners
+import ../src/agent.bend as Events
+import ../src/agent.bend as Failure
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
-import ../src/event-emission.bend as Emission
+import ../src/agent-loop.bend as Emission
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/event-stream.bend as Stream
@@ -22,10 +22,10 @@ import ../../runtime/src/f64.bend as F
 import ../../runtime/src/abort.bend as Abort
 import ./message-events.bend as Test
 
-def Owner() -> Data: Run.Runtime(Unit, Unit, Unit, String, Unit, String, Unit)
-def Message() -> Data: Run.Message(Unit, Unit, Unit, String)
+def Owner() -> Data: Run.RunRuntime(Unit, Unit, Unit, String, Unit, String, Unit)
+def Message() -> Data: Run.RunMessage(Unit, Unit, Unit, String)
 def Messages() -> Data: List<&2, Message()>
-def EventValue() -> Data: Run.Event(Unit, Unit, Unit, String)
+def EventValue() -> Data: Run.RunEvent(Unit, Unit, Unit, String)
 def Config() -> Data: Run.Config(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit)
 def Converted() -> Data: Result<&2, &2, String, List<&2, Ai.Message<Schema.Value, Unit, Unit, Unit>>>
 def ProviderInput() -> Data: T.StreamInput<Schema.Value, Unit, Unit, Unit, Unit, Config()>
@@ -54,7 +54,7 @@ def partial(message: Maybe<&2, Message()>) -> String:
   match message:
     case None{}: "-"
     case Some{value}: role(value)
-def key(state: T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>) -> String:
+def key(state: T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>) -> String:
   match state:
     case T.AgentState{_, _, _, messages, streaming, current, _, error}: roles(messages) ++ ":" ++ Bool.pick(String, streaming, "1", "0") ++ ":" ++ partial(current) ++ ":" ++ Maybe.default(&2, String, error, "none")
 def eventName(+event: EventValue()) -> String:
@@ -69,21 +69,21 @@ def eventName(+event: EventValue()) -> String:
     case _: T.eventType(Schema.Value, Unit, Unit, Unit, String, T.AgentToolResult<Unit>, T.AgentToolResult<Unit>, event)
 type ListenerCapture is Data:
   ListenerCapture{runtime: Owner(), trace: R.Ref<String>, mode: U32}
-def listener(capture: ListenerCapture, input: Listeners.Input<EventValue(), Run.Signal()>) -> IO(Emission.Emission<String>):
+def listener(capture: ListenerCapture, input: Listeners.Input<EventValue(), Run.RunSignal()>) -> IO(Emission.Emission<String>):
   match capture input:
     case ListenerCapture{runtime, trace, +mode} Listeners.Input{+event, _}:
       do IO<Emission.Emission<String>>:
-        state : T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> <- Runtime.read(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
+        state : T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> <- Runtime.readRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
         R.modify(String, Unit, trace, old => (old ++ eventName(event) ++ "@" ++ key(state) ++ ";", Unit{}))
-        return Emission.Ready{Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 2) && String.eq(eventName(event), "agent_start")) || (U32.is_eq(mode, 8) && String.eq(eventName(event), "start:a")), Fail{"listener failed"}, Done{Unit{}})}
-def converter(unused: Unit, messages: Messages()) -> IO(Converted()): IO.pure(Converted(), Done{State.defaultConvertToLlm(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, messages)})
+        return Emission.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 2) && String.eq(eventName(event), "agent_start")) || (U32.is_eq(mode, 8) && String.eq(eventName(event), "start:a")), Fail{"listener failed"}, Done{Unit{}})}
+def converter(unused: Unit, messages: Messages()) -> IO(Converted()): IO.pure(Converted(), Done{State.defaultConvertToLlm(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, messages)})
 def config(convert: C.Callback<Messages(), Converted()>) -> Config():
   T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, State.defaultModel(Unit), convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def validate(mode: U32, input: Loop.ToolValidationInput<Schema.Value, Unit, Unit>) -> IO(Result<&2, &2, String, Unit>):
   match mode:
     case 9: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
     case _: IO.die(Result<&2, &2, String, Unit>, 1, "no tools should be validated")
-def executeTool(unused: Unit, input: T.ToolExecutionInput<Unit, Run.Signal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
+def executeTool(unused: Unit, input: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   match input:
     case T.ToolExecutionInput{id, _, Some{signal}, _}:
       do IO<Result<&2, &2, String, T.AgentToolResult<Unit>>>:
@@ -91,7 +91,7 @@ def executeTool(unused: Unit, input: T.ToolExecutionInput<Unit, Run.Signal(), Un
         Test.assertion(String.eq(id, "call") && Bool.not(cancelled), "tool receives the call ID and active signal")
         return Done{T.AgentToolResult{Nil{}, Unit{}, None{}, None{}}}
     case _: IO.die(Result<&2, &2, String, T.AgentToolResult<Unit>>, 1, "missing tool signal")
-def tools(mode: U32, execute: C.Callback<T.ToolExecutionInput<Unit, Run.Signal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>) -> Maybe<&2, List<&2, T.AgentTool<Schema.Value, Unit, Unit, Unit, Run.Signal(), String>>>:
+def tools(mode: U32, execute: C.Callback<T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>) -> Maybe<&2, List<&2, T.AgentTool<Schema.Value, Unit, Unit, Unit, Run.RunSignal(), String>>>:
   match mode:
     case 9: Some{T.AgentTool{"echo", "Echo", Schema.ObjectValue{Record.Record{Record.Property{"type", Schema.Text{"object"}} <> Nil{}}}, None{}, "Echo", None{}, execute, None{}, None{}} <> Nil{}}
     case _: None{}
@@ -115,7 +115,7 @@ def opened(mode: U32, +tool: Bool, streams: R.Ref<List<&2, StreamValue()>>) -> I
         return Done{stream}
 def cancelIf(runtime: Owner(), mode: U32) -> IO(Unit):
   match mode:
-    case 3: Runtime.abort(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
+    case 3: Runtime.abortRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
     case _: IO.pure(Unit, Unit{})
 def requestAdded(+old: String, request: String) -> String & Bool:
   (old ++ request ++ ";", String.is_empty(old))
@@ -138,18 +138,18 @@ def initialMessages(mode: U32) -> Maybe<&2, Messages()>:
     case _: None{}
 def queue(+runtime: Owner(), mode: U32) -> IO(Unit):
   match mode:
-    case 4: Runtime.steer(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime, user("steer"))
-    case 5: Runtime.followUp(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime, user("follow"))
+    case 4: Runtime.steerRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime, user("steer"))
+    case 5: Runtime.followUpRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime, user("follow"))
     case 7:
       do IO<Unit>:
-        Runtime.steer(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime, user("first"))
-        Runtime.steer(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime, user("second"))
+        Runtime.steerRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime, user("first"))
+        Runtime.steerRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime, user("second"))
     case _: IO.pure(Unit, Unit{})
 def claim(+runtime: Owner(), mode: U32) -> IO(Claim()):
   match mode:
-    case 6: Runtime.beginContinue(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
-    case 7: Runtime.beginContinue(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
-    case _: Runtime.beginPrompt(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime, user("prompt") <> Nil{})
+    case 6: Runtime.beginContinue(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
+    case 7: Runtime.beginContinue(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
+    case _: Runtime.beginPrompt(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime, user("prompt") <> Nil{})
 def requireClaim(value: Claim()) -> IO(Life.Claimed<Plan.Plan<Message()>>):
   match value:
     case Done{claimed}: IO.pure(Life.Claimed<Plan.Plan<Message()>>, claimed)
@@ -165,7 +165,7 @@ def finish(completed: Completion()) -> IO(String):
   match completed:
     case Run.Completed{outcome, resources}:
       do IO<String>:
-        Run.dispose(Unit, Unit, Unit, String, Unit, String, Unit, resources)
+        Run.runDispose(Unit, Unit, Unit, String, Unit, String, Unit, resources)
         return resultKey(outcome)
 def disposeStreams(streams: List<&2, StreamValue()>) -> IO(Unit):
   match streams:
@@ -176,38 +176,38 @@ def disposeStreams(streams: List<&2, StreamValue()>) -> IO(Unit):
         disposeStreams(rest)
 def scenario(+mode: U32, +expected: String) -> IO(Unit):
   do IO<Unit>:
-    +executor : C.Callback<T.ToolExecutionInput<Unit, Run.Signal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>> <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.Signal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~executeTool, Unit{})
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> = State.AgentInitialState{Some{"base"}, None{}, None{}, tools(mode, executor), initialMessages(mode)}
-    +runtime : Owner() <- Runtime.new(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
-    +listeners : Run.Registry(Unit, Unit, Unit, String, String) <- Listeners.new(EventValue(), Run.Signal(), String)
+    +executor : C.Callback<T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>> <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~executeTool, Unit{})
+    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{Some{"base"}, None{}, None{}, tools(mode, executor), initialMessages(mode)}
+    +runtime : Owner() <- Runtime.newRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
+    +listeners : Run.Registry(Unit, Unit, Unit, String, String) <- Listeners.newListeners(EventValue(), Run.RunSignal(), String)
     +trace : R.Ref<String> <- R.new(String, "")
     +requests : R.Ref<String> <- R.new(String, "")
     +streams : R.Ref<List<&2, StreamValue()>> <- R.new(List<&2, StreamValue()>, Nil{})
-    +observe : Listeners.Handler(EventValue(), Run.Signal(), String) <- C.create(~ListenerCapture, ~Listeners.Input<EventValue(), Run.Signal()>, ~Emission.Emission<String>, ~listener, ListenerCapture{runtime, trace, mode})
-    ignored : Listeners.Subscription<EventValue(), Run.Signal(), String> <- Listeners.subscribe(EventValue(), Run.Signal(), String, listeners, observe)
+    +observe : Listeners.Handler(EventValue(), Run.RunSignal(), String) <- C.create(~ListenerCapture, ~Listeners.Input<EventValue(), Run.RunSignal()>, ~Emission.Emission<String>, ~listener, ListenerCapture{runtime, trace, mode})
+    ignored : Listeners.Subscription<EventValue(), Run.RunSignal(), String> <- Listeners.subscribeListeners(EventValue(), Run.RunSignal(), String, listeners, observe)
     +convert : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~converter, Unit{})
     +validation : C.Callback<Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>> <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~validate, mode)
     +stream : T.StreamFn(Schema.Value, Unit, Unit, Unit, Unit, Config(), String) <- C.create(~ProviderCapture, ~ProviderInput(), ~ProviderOutput(), ~provider, ProviderCapture{runtime, mode, streams, requests})
     queue(runtime, mode)
     prepared : Claim() <- claim(runtime, mode)
     claimed : Life.Claimed<Plan.Plan<Message()>> <- requireClaim(prepared)
-    completed : Completion() <- Run.runClaimed(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~identity, ~identity, ~declaration, runtime, listeners, Run.Options{config(convert), Provider.Explicit{stream}, validation, Unit{}}, claimed)
+    completed : Completion() <- Run.runClaimedRun(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~identity, ~identity, ~declaration, runtime, listeners, Run.Options{config(convert), Provider.Explicit{stream}, validation, Unit{}}, claimed)
     outcome : String <- finish(completed)
-    Runtime.waitForIdle(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
-    state : T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> <- Runtime.read(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
+    Runtime.waitForIdleRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
+    state : T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> <- Runtime.readRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
     events : String <- R.read(String, trace)
     requested : String <- R.read(String, requests)
     +actual : String = events ++ "#" ++ outcome ++ "#" ++ key(state) ++ "#" ++ requested
     Test.assertion(String.eq(actual, expected), "composed Agent run mismatch: " ++ actual ++ " != " ++ expected)
-    Listeners.dispose(EventValue(), Run.Signal(), String, listeners)
-    C.dispose(Listeners.Input<EventValue(), Run.Signal()>, Emission.Emission<String>, observe)
+    Listeners.disposeListeners(EventValue(), Run.RunSignal(), String, listeners)
+    C.dispose(Listeners.Input<EventValue(), Run.RunSignal()>, Emission.Emission<String>, observe)
     C.dispose(Messages(), Converted(), convert)
     C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validation)
     C.dispose(ProviderInput(), ProviderOutput(), stream)
-    C.dispose(T.ToolExecutionInput<Unit, Run.Signal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, executor)
+    C.dispose(T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, executor)
     all : List<&2, StreamValue()> <- R.dispose(List<&2, StreamValue()>, streams)
     disposeStreams(all)
     old : String <- R.dispose(String, trace)
     old : String <- R.dispose(String, requests)
-    old : Runtime.OwnedState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> <- Runtime.dispose(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, runtime)
+    old : Runtime.OwnedState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> <- Runtime.disposeRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
     return Unit{}

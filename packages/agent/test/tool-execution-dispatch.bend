@@ -1,11 +1,11 @@
 import Base
 import ../../ai/test/model-types.bend as Model
-import ../src/tool-call.bend as Call
-import ../src/tool-execution.bend as Execution
-import ../src/tool-batch.bend as Batch
+import ../src/agent-loop.bend as Call
+import ../src/agent-loop.bend as Execution
+import ../src/agent-loop.bend as Batch
 import ../src/agent-loop.bend as Loop
 import ../src/types.bend as T
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as Record
@@ -57,10 +57,10 @@ def scenario(+failAt: String, configured: Maybe<&2, T.ToolExecutionMode>, toolMo
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, toolMode} <> T.AgentTool{"echo", "", schema, None{}, "Duplicate", None{}, executor, None{}, Some{T.Sequential{}}} <> T.AgentTool{"badtool", "", schema, None{}, "Bad", None{}, executor, None{}, lateMode} <> T.AgentTool{"unused", "", schema, None{}, "Unused", None{}, executor, None{}, Some{T.Sequential{}}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{content(empty), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.Capture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.Capture{assistant, configuration(configured, converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
+    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, configuration(configured, converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
     +execution : Execution.Execution<V.Value, V.Value, Unit, String, String, V.Value, Unit, String> <- Execution.executeToolCalls(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context)
-    result : S.Outcome() <- Execution.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
-    Execution.dispose(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
+    result : S.Outcome() <- Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
+    Execution.disposeExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
     S.checkOutcome(result, Bool.not(String.is_empty(failAt)), Bool.not(empty), Bool.pick(List<&2, Bool>, empty, Nil{}, False{} <> True{} <> True{} <> Nil{}), False{})
     saved : Maybe<&2, S.Update()> <- R.read(Maybe<&2, S.Update()>, retained)
     S.late(saved)

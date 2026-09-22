@@ -1,5 +1,5 @@
 import Base
-import ../src/tool-update-scope.bend as U
+import ../src/agent-loop.bend as U
 import ../../runtime/src/deferred.bend as D
 import ./message-events.bend as Test
 
@@ -18,7 +18,7 @@ def rejected(value: Maybe<&1, U.Ticket<String>>) -> IO(Unit):
     case None{}: IO.pure(Unit, Unit{})
     case Some{_}: Test.assertion(False{}, "closed tool accepted late update")
 
-def check(result: U.Outcome(String), expected: String) -> IO(Unit):
+def check(result: U.ScopeOutcome(String), expected: String) -> IO(Unit):
   match result:
     case Done{_}: Test.assertion(String.is_empty(expected), "listener failure disappeared")
     case Fail{error}: Test.assertion(String.eq(error, expected), "wrong listener failure precedence")
@@ -27,8 +27,8 @@ def pending(scope: U.Scope<String>) -> IO(Unit):
   match scope:
     case U.Scope{_, result, _}:
       do IO<Unit>:
-        observed : Maybe<&2, U.Outcome(String)> <- D.peek(U.Outcome(String), result)
-        Test.assertion(Maybe.is_none(&2, U.Outcome(String), observed), "scope settled before accepted updates")
+        observed : Maybe<&2, U.ScopeOutcome(String)> <- D.peek(U.ScopeOutcome(String), result)
+        Test.assertion(Maybe.is_none(&2, U.ScopeOutcome(String), observed), "scope settled before accepted updates")
 
 def notDrained(scope: U.Scope<String>) -> IO(Unit):
   match scope:
@@ -42,11 +42,11 @@ def empty() -> IO(Unit):
     +scope : U.Scope<String> <- U.new(String)
     U.close(String, scope)
     U.close(String, scope)
-    value : U.Outcome(String) <- U.result(String, scope)
+    value : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(value, "")
     late : Maybe<&1, U.Ticket<String>> <- U.begin(String, scope)
     rejected(late)
-    U.dispose(String, scope)
+    U.disposeScope(String, scope)
 
 def successful() -> IO(Unit):
   do IO<Unit>:
@@ -55,12 +55,12 @@ def successful() -> IO(Unit):
     second : U.Ticket<String> <- reserve(scope)
     U.close(String, scope)
     pending(scope)
-    U.complete(String, second, Done{Unit{}})
+    U.completeScope(String, second, Done{Unit{}})
     pending(scope)
-    U.complete(String, first, Done{Unit{}})
-    value : U.Outcome(String) <- U.result(String, scope)
+    U.completeScope(String, first, Done{Unit{}})
+    value : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(value, "")
-    U.dispose(String, scope)
+    U.disposeScope(String, scope)
 
 def failedAfterClose() -> IO(Unit):
   do IO<Unit>:
@@ -68,40 +68,40 @@ def failedAfterClose() -> IO(Unit):
     first : U.Ticket<String> <- reserve(scope)
     second : U.Ticket<String> <- reserve(scope)
     U.close(String, scope)
-    U.complete(String, second, Fail{"second"})
-    value : U.Outcome(String) <- U.result(String, scope)
+    U.completeScope(String, second, Fail{"second"})
+    value : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(value, "second")
     notDrained(scope)
-    U.complete(String, first, Fail{"first"})
-    unchanged : U.Outcome(String) <- U.result(String, scope)
+    U.completeScope(String, first, Fail{"first"})
+    unchanged : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(unchanged, "second")
-    U.dispose(String, scope)
+    U.disposeScope(String, scope)
 
 def failedBeforeClose() -> IO(Unit):
   do IO<Unit>:
     +scope : U.Scope<String> <- U.new(String)
     first : U.Ticket<String> <- reserve(scope)
     second : U.Ticket<String> <- reserve(scope)
-    U.complete(String, second, Fail{"second"})
-    U.complete(String, first, Fail{"first"})
+    U.completeScope(String, second, Fail{"second"})
+    U.completeScope(String, first, Fail{"first"})
     pending(scope)
     U.close(String, scope)
-    value : U.Outcome(String) <- U.result(String, scope)
+    value : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(value, "first")
-    U.dispose(String, scope)
+    U.disposeScope(String, scope)
 
 def failedWithPending() -> IO(Unit):
   do IO<Unit>:
     +scope : U.Scope<String> <- U.new(String)
     first : U.Ticket<String> <- reserve(scope)
     second : U.Ticket<String> <- reserve(scope)
-    U.complete(String, second, Fail{"second"})
+    U.completeScope(String, second, Fail{"second"})
     U.close(String, scope)
-    value : U.Outcome(String) <- U.result(String, scope)
+    value : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(value, "second")
     notDrained(scope)
-    U.complete(String, first, Done{Unit{}})
-    U.dispose(String, scope)
+    U.completeScope(String, first, Done{Unit{}})
+    U.disposeScope(String, scope)
 
 def independentScopes() -> IO(Unit):
   do IO<Unit>:
@@ -113,9 +113,9 @@ def independentScopes() -> IO(Unit):
     accepted : U.Ticket<String> <- reserve(slow)
     U.close(String, slow)
     pending(slow)
-    U.complete(String, accepted, Done{Unit{}})
-    U.dispose(String, fast)
-    U.dispose(String, slow)
+    U.completeScope(String, accepted, Done{Unit{}})
+    U.disposeScope(String, fast)
+    U.disposeScope(String, slow)
 
 def tickets(count: Nat, +scope: U.Scope<String>) -> IO(List<&1, U.Ticket<String>>):
   match count:
@@ -131,7 +131,7 @@ def launch(updates: List<&1, U.Ticket<String>>, +fail: Bool) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case first <> rest:
       do IO<Unit>:
-        IO.spawn(Unit, U.complete(String, first, Bool.pick(U.Outcome(String), fail, Fail{"concurrent"}, Done{Unit{}})))
+        IO.spawn(Unit, U.completeScope(String, first, Bool.pick(U.ScopeOutcome(String), fail, Fail{"concurrent"}, Done{Unit{}})))
         launch(rest, fail)
 
 def concurrent(+fail: Bool) -> IO(Unit):
@@ -140,9 +140,9 @@ def concurrent(+fail: Bool) -> IO(Unit):
     updates : List<&1, U.Ticket<String>> <- tickets(128n, scope)
     U.close(String, scope)
     launch(updates, fail)
-    value : U.Outcome(String) <- U.result(String, scope)
+    value : U.ScopeOutcome(String) <- U.resultScope(String, scope)
     check(value, Bool.pick(String, fail, "concurrent", ""))
-    U.dispose(String, scope)
+    U.disposeScope(String, scope)
 
 def main() -> IO(Unit):
   do IO<Unit>:

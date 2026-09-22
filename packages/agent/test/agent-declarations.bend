@@ -1,7 +1,7 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
@@ -54,15 +54,15 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
         return Done{stream}
-def forbidden(unused: Unit, input: T.ToolExecutionInput<Unit, Run.Signal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
+def forbidden(unused: Unit, input: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   IO.die(Result<&2, &2, String, T.AgentToolResult<Unit>>, 1, "declaration-only test must not execute a tool")
-def initial(mode: U32, executor: Named.Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>>:
+def initial(mode: U32, executor: Named.Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>:
   Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, Bool.pick(Maybe<&2, List<&2, Named.Tool()>>, U32.is_eq(mode, 1), None{}, Some{tool("first", "first tool", executor) <> Nil{}}), None{}}}
 def create(mode: U32, capture: Capture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
     +validate : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +execute : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.Signal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~forbidden, Unit{})
+    +execute : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~forbidden, Unit{})
     +fallback : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
     result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(initial(mode, execute), stream), fallback, validate, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
@@ -111,7 +111,7 @@ def current(message: Maybe<&2, Ai.SystemMessage<Schema.Value>>) -> Bool:
 def checkPending(mode: U32, +messages: H.Messages()) -> Bool:
   match mode:
     case 1: merged(second(messages))
-    case _: rewritten(second(messages)) && current(Transcript.getCurrentSystemMessage(Schema.Value, Unit, Unit, Unit, State.defaultConvertToLlm(Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit, messages)))
+    case _: rewritten(second(messages)) && current(Transcript.getCurrentSystemMessage(Schema.Value, Unit, Unit, Unit, State.defaultConvertToLlm(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, messages)))
 def setEcho(mode: U32, agent: Owner.Owner(), execute: Named.Executor()) -> IO(Unit):
   match mode:
     case 1: Agent.setTools(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, tool("echo", "Echo input", execute) <> Nil{})

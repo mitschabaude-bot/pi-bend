@@ -1,10 +1,10 @@
 import Base
-import ../src/turn-completion.bend as Completion
-import ../src/tool-execution.bend as Execution
-import ../src/tool-call.bend as Call
+import ../src/agent-loop.bend as Completion
+import ../src/agent-loop.bend as Execution
+import ../src/agent-loop.bend as Call
 import ../src/agent-loop.bend as Loop
 import ../src/types.bend as T
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../ai/test/model-types.bend as Model
 import ../../runtime/src/schema-value.bend as V
@@ -90,7 +90,7 @@ def emit(environment: Recording, event: H.EventValue()) -> IO(E.Emission<String>
       do IO<E.Emission<String>>:
         +name : String <- eventName(event, tools)
         log(recording, name)
-        return E.Ready{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
+        return E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
 
 def execute(terminate: Bool, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
   match input:
@@ -110,7 +110,7 @@ def content(tools: Bool) -> List<&2, Ai.AssistantContent<V.Value>>:
 def check(actual: Outcome(), category: U32, tools: Bool, expectedPending: String, expectedError: String) -> IO(Unit):
   match actual category:
     case Done{Completion.Finished{turn}} 0: Test.assertion(snapshot(turn, tools), "finished turn snapshot")
-    case Done{Completion.Continue{turn, pending}} 1: Test.assertion(snapshot(turn, tools) && String.eq(messageNames(pending), expectedPending), "next-turn snapshot and pending messages stay separate")
+    case Done{Completion.CompletionContinue{turn, pending}} 1: Test.assertion(snapshot(turn, tools) && String.eq(messageNames(pending), expectedPending), "next-turn snapshot and pending messages stay separate")
     case Fail{error} 2: Test.assertion(String.eq(error, expectedError), "turn failure propagates unchanged")
     case _ _: Test.assertion(False{}, "unexpected turn transition")
 
@@ -135,13 +135,13 @@ def scenario(+tools: Bool, terminate: Bool, stopMode: U32, steeringMode: U32, fo
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{T.CustomMessage{"old"} <> T.LlmMessage{Ai.Assistant{assistant}} <> Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +config : H.Config() = configuration(converter, stopHook, steering, followUp)
-    capture : Call.Capture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.Capture{assistant, config, Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
+    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, config, Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
     +execution : Execution.Execution<V.Value, V.Value, Unit, String, String, V.Value, Unit, String> <- Execution.executeToolCalls(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context)
-    batch : S.Outcome() <- Execution.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
+    batch : S.Outcome() <- Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
     history : H.Messages() = T.CustomMessage{"prompt"} <> T.LlmMessage{Ai.Assistant{assistant}} <> Nil{}
-    result : Outcome() <- Completion.complete(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit, assistant, history, config, sink, batch)
+    result : Outcome() <- Completion.completeTurn(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit, assistant, history, config, sink, batch)
     check(result, category, tools, expectedPending, expectedError)
-    Execution.dispose(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
+    Execution.disposeExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, execution)
     recorded : List<&2, String> <- R.read(List<&2, String>, recording)
     Test.assertion(S.equal(List.reverse(&2, String, recorded), expectedEvents), "turn completion event/hook/queue order")
     C.dispose(H.ExecuteInput(), H.ExecuteOutput(), executor)

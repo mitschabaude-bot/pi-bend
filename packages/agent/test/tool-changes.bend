@@ -1,6 +1,6 @@
 import Base
 import ../src/types.bend as T
-import ../src/tool-changes.bend as Changes
+import ../src/agent-loop.bend as Changes
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/tool-declaration.bend as D
 import ../../ai/src/utils/transcript.bend as Transcript

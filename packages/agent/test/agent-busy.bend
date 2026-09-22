@@ -1,7 +1,7 @@
 import Base
 import ../src/agent.bend as Agent
 import ../src/agent-loop.bend as Loop
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as Run
 import ../src/stream-fn.bend as Provider
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/event-stream.bend as Stream
@@ -32,7 +32,7 @@ def dispatch(mode: U32, stream: H.StreamValue(), entered: Chan(Unit), release: C
     case 0: IO.spawn(Unit, produce(stream, entered, release, done))
     case _:
       do IO<Unit>:
-        signal : Run.Signal() <- Signal.requestSignal(input)
+        signal : Run.RunSignal() <- Signal.requestSignal(input)
         IO.spawn(Unit, Signal.produce(signal, stream, entered, done))
 def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match capture:

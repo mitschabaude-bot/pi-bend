@@ -12,7 +12,7 @@ for size in range(5):
 expected=json.loads(subprocess.check_output(['node','tests/tool_batch_sequential_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
 def flag(v):return 'True{}' if v else 'False{}'
 def seq(xs):return ''.join(str(x)+' <> ' for x in xs)+'Nil{}'
-lines=['import Base','import ../packages/agent/src/tool-batch.bend as B','import ../packages/agent/test/tool-batch-sequential.bend as T']
+lines=['import Base','import ../packages/agent/src/agent-loop.bend as B','import ../packages/agent/test/tool-batch-sequential.bend as T']
 for i,(c,e) in enumerate(zip(cases,expected,strict=True)):
     calls=seq('T.Call{'+str(v['id'])+', '+flag(v['terminate'])+', '+flag(v['fail'])+'}' for v in c['calls'])
     result='Done{B.Batch{'+str(e['state'])+', '+seq(e['messages'])+', '+flag(e['terminate'])+'}}' if e['ok'] else 'Fail{"delivery failed"}'

@@ -72,6 +72,23 @@ assert unsafe_declarations == {
     ('packages/runtime/src/schema-value.bend', 'compare'),
     ('packages/ai/src/utils/json.bend', 'encode'),
     ('packages/ai/src/utils/schema-json.bend', 'convert'),
+    # Reached since the agent laws import the consolidated agent modules.
+    ('packages/agent/src/agent-loop.bend', 'advanceCall'),
+    ('packages/agent/src/agent-loop.bend', 'advanceLoop'),
+    ('packages/agent/src/agent-loop.bend', 'consumeAssistantIterations'),
+    ('packages/agent/src/agent-loop.bend', 'deliverParallel'),
+    ('packages/agent/src/agent-loop.bend', 'deliverTurn'),
+    ('packages/agent/src/agent-loop.bend', 'executeParallel'),
+    ('packages/agent/src/agent-loop.bend', 'prepareParallel'),
+    ('packages/agent/src/agent-loop.bend', 'sequentialBatch'),
+    ('packages/agent/src/agent.bend', 'dispatch'),
+    ('packages/ai/src/utils/validation-normalize.bend', 'run'),
+    ('packages/ai/src/utils/validation.bend', 'coerceTasks'),
+    ('packages/runtime/src/schema-errors.bend', 'collect'),
+    ('packages/runtime/src/schema-load.bend', 'run'),
+    ('packages/runtime/src/schema-string.bend', 'countFrom'),
+    ('packages/runtime/src/schema-string.bend', 'joined'),
+    ('packages/runtime/src/schema.bend', 'evaluate'),
 }, unsafe_declarations
 
 source_hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in FILES + ['scripts/check-proofs.py']}

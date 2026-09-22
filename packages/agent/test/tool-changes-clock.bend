@@ -1,7 +1,7 @@
 import Base
 import ./tool-changes.bend as Test
 import ./message-events.bend as Assert
-import ../src/tool-changes.bend as Changes
+import ../src/agent-loop.bend as Changes
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/tool-declaration.bend as D

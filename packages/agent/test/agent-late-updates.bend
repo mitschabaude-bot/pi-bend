@@ -1,11 +1,11 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
-import ../src/agent-failure.bend as Failure
-import ../src/agent-listeners.bend as Listeners
-import ../src/event-emission.bend as Emission
+import ../src/agent.bend as Failure
+import ../src/agent.bend as Listeners
+import ../src/agent-loop.bend as Emission
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
@@ -22,7 +22,7 @@ import ./agent-run.bend as H
 import ./message-events.bend as Test
 
 def Update() -> Data: T.AgentToolUpdateCallback(Unit)
-def ExecuteInput() -> Data: T.ToolExecutionInput<Unit, Run.Signal(), Unit>
+def ExecuteInput() -> Data: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>
 def ExecuteResult() -> Data: Result<&2, &2, String, T.AgentToolResult<Unit>>
 def result(text: String, terminate: Bool) -> T.AgentToolResult<Unit>:
   T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Unit{}, None{}, Some{terminate}}
@@ -77,11 +77,11 @@ def create(+mode: U32, capture: ExecuteCapture, streams: R.Ref<List<&2, H.Stream
     +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
     +executor : Named.Executor() <- C.create(~ExecuteCapture, ~ExecuteInput(), ~ExecuteResult(), ~execute, capture)
     +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, Some{tools(mode, executor)}, None{}}
+    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, Some{tools(mode, executor)}, None{}}
     created : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(created)
     return Named.Fixture{agent, stream, validator, executor, registry}
-def Input() -> Data: Listeners.Input<H.EventValue(), Run.Signal()>
+def Input() -> Data: Listeners.Input<H.EventValue(), Run.RunSignal()>
 type ObserveCapture is Data:
   ObserveCapture{events: R.Ref<U32>, updates: R.Ref<U32>, ended: Chan(Unit)}
 def record(event: H.EventValue(), updates: R.Ref<U32>, ended: Chan(Unit)) -> IO(Unit):
@@ -98,7 +98,7 @@ def observe(capture: ObserveCapture, input: Input()) -> IO(Emission.Emission<Str
       do IO<Emission.Emission<String>>:
         R.modify(U32, Unit, events, old => (U32.add(old, 1), Unit{}))
         record(event, updates, ended)
-        return Emission.Ready{Done{Unit{}}}
+        return Emission.EmissionReady{Done{Unit{}}}
 def waitBefore(mode: U32, reply: Chan(Unit), started: Chan(Unit), ended: Chan(Unit)) -> IO(Unit):
   match mode:
     case 0: IO.join(Unit, reply)
@@ -132,8 +132,8 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +fixture : Named.Fixture <- create(mode, ExecuteCapture{mode, saved, started, release}, streams)
     +events : R.Ref<U32> <- R.new(U32, 0)
     +updates : R.Ref<U32> <- R.new(U32, 0)
-    +listener : Listeners.Handler(H.EventValue(), Run.Signal(), String) <- C.create(~ObserveCapture, ~Input(), ~Emission.Emission<String>, ~observe, ObserveCapture{events, updates, ended})
-    ignored : Listeners.Subscription<H.EventValue(), Run.Signal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, Named.getAgent(fixture), listener)
+    +listener : Listeners.Handler(H.EventValue(), Run.RunSignal(), String) <- C.create(~ObserveCapture, ~Input(), ~Emission.Emission<String>, ~observe, ObserveCapture{events, updates, ended})
+    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, Named.getAgent(fixture), listener)
     +reply : Chan(Unit) <- IO.fork(Unit, Behavior.prompt(Named.getAgent(fixture), "run tools"))
     waitBefore(mode, reply, started, ended)
     late(saved, events)

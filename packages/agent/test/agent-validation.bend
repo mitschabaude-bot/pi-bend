@@ -1,10 +1,10 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-options.bend as Options
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as Options
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
-import ../src/tool-validation.bend as Service
+import ../src/agent-loop.bend as Service
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
@@ -21,11 +21,11 @@ import ./message-events.bend as Test
 
 def Owner() -> Data: Agent.Agent<V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit>
 def Config() -> Data: Run.Config(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit)
-def Messages() -> Data: List<&2, Run.Message(V.Value, Unit, String, String)>
+def Messages() -> Data: List<&2, Run.RunMessage(V.Value, Unit, String, String)>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
 def ProviderInput() -> Data: T.StreamInput<V.Value, V.Value, Unit, String, Unit, Config()>
 def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
-def ExecuteInput() -> Data: T.ToolExecutionInput<V.Value, Run.Signal(), String>
+def ExecuteInput() -> Data: T.ToolExecutionInput<V.Value, Run.RunSignal(), String>
 def ExecuteOutput() -> Data: Result<&2, &2, String, T.AgentToolResult<String>>
 def identity(value: String) -> String: value
 def declarationError(error: Declaration.DeclarationError) -> String: "declaration failed"
@@ -90,7 +90,7 @@ def success(result: Result<&2, &2, Agent.AgentError<String>, Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit, Unit{})
     case _: IO.die(Unit, 1, "Agent execution failed")
-def messages(state: T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Run.Signal(), String, Unit>) -> Messages():
+def messages(state: T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Run.RunSignal(), String, Unit>) -> Messages():
   match state:
     case T.AgentState{_, _, _, history, _, _, _, _}: history
 def disposeStreams(streams: List<&2, StreamValue()>) -> IO(Unit):
@@ -109,19 +109,19 @@ def scenario(+valid: Bool) -> IO(Unit):
     +executor : C.Callback<ExecuteInput(), ExecuteOutput()> <- C.create(~R.Ref<U32>, ~ExecuteInput(), ~ExecuteOutput(), ~execute, executions)
     +stream : T.StreamFn(V.Value, V.Value, Unit, String, Unit, Config(), String) <- C.create(~Capture, ~ProviderInput(), ~ProviderOutput(), ~provider, Capture{valid, calls, streams})
     +registry : Provider.Registry(V.Value, V.Value, Unit, String, Unit, Config(), String) <- Provider.create(V.Value, V.Value, Unit, String, Unit, Config(), String)
-    initial : State.AgentInitialState<V.Value, V.Value, Unit, String, String, V.Value, Run.Signal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, Some{T.AgentTool{"echo", "Echo", schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}, None{}}
+    initial : State.AgentInitialState<V.Value, V.Value, Unit, String, String, V.Value, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, Some{T.AgentTool{"echo", "Echo", schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}, None{}}
     options : Options.AgentOptions<V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit> = Options.AgentOptions{Some{initial}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     created : Result<&2, &2, Provider.MissingDefault, Owner()> <- Agent.new(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~String, ~Unit, ~Unit, ~Unit, options, registry, validator, "empty")
     +agent : Owner() <- required(created)
     result : Result<&2, &2, Agent.AgentError<String>, Unit> <- Agent.prompt(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~String, ~Unit, ~Unit, ~Unit, ~identity, ~identity, ~declarationError, agent, Agent.Text{"run tool", Nil{}})
     success(result)
-    snapshot : T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Run.Signal(), String, Unit> <- Agent.state(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit, agent)
+    snapshot : T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Run.RunSignal(), String, Unit> <- Agent.state(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit, agent)
     Test.assertion(original(messages(snapshot), valid), "persisted assistant retains original unnormalized arguments")
     executed : U32 <- R.read(U32, executions)
     requests : U32 <- R.read(U32, calls)
     Test.assertion(U32.is_eq(executed, Bool.pick(U32, valid, 1, 0)) && U32.is_eq(requests, 2), "invalid arguments never execute; Agent continues after either outcome")
     Agent.dispose(V.Value, Unit, String, String, V.Value, String, Unit, Unit, Unit, agent)
-    Service.dispose(String, validator)
+    Service.disposeValidation(String, validator)
     C.dispose(ExecuteInput(), ExecuteOutput(), executor)
     C.dispose(ProviderInput(), ProviderOutput(), stream)
     Provider.dispose(V.Value, V.Value, Unit, String, Unit, Config(), String, registry)
@@ -130,7 +130,7 @@ def scenario(+valid: Bool) -> IO(Unit):
     all : List<&2, StreamValue()> <- R.dispose(List<&2, StreamValue()>, streams)
     disposeStreams(all)
     IO.print("PASS Agent native plain-schema validation integration")
-def invalidSchema(value: Service.Output(Validation.ToolValidationError)) -> Bool:
+def invalidSchema(value: Service.ValidationOutput(Validation.ToolValidationError)) -> Bool:
   match value:
     case Fail{Validation.InvalidToolSchema{"echo", _}}: True{}
     case _: False{}
@@ -139,10 +139,10 @@ def typedFailure() -> IO(Unit):
     +validator : Service.Validator(Validation.ToolValidationError) <- Service.createPlain(~Validation.ToolValidationError, ~typedIdentity)
     +tool : Ai.Tool<V.Value> = Ai.Tool{"echo", "Echo", V.ObjectValue{Record.Record{Record.Property{"$ref", V.Text{"https://fixture.invalid/schema"}} <> Nil{}}}, None{}}
     +call : Ai.ToolCall<V.Value> = Ai.ToolCall{"call", "echo", V.Null{}, None{}, None{}}
-    first : Service.Output(Validation.ToolValidationError) <- C.call(Service.Input(), Service.Output(Validation.ToolValidationError), validator, Loop.ToolValidationInput{tool, Loop.OriginalCall{call}})
-    second : Service.Output(Validation.ToolValidationError) <- C.call(Service.Input(), Service.Output(Validation.ToolValidationError), validator, Loop.ToolValidationInput{tool, Loop.ReplacedCall{call}})
+    first : Service.ValidationOutput(Validation.ToolValidationError) <- C.call(Service.ValidationInput(), Service.ValidationOutput(Validation.ToolValidationError), validator, Loop.ToolValidationInput{tool, Loop.OriginalCall{call}})
+    second : Service.ValidationOutput(Validation.ToolValidationError) <- C.call(Service.ValidationInput(), Service.ValidationOutput(Validation.ToolValidationError), validator, Loop.ToolValidationInput{tool, Loop.ReplacedCall{call}})
     Test.assertion(invalidSchema(first) && invalidSchema(second), "both call paths preserve typed unsupported-schema failures")
-    Service.dispose(Validation.ToolValidationError, validator)
+    Service.disposeValidation(Validation.ToolValidationError, validator)
 def main() -> IO(Unit):
   do IO<Unit>:
     scenario(True{})

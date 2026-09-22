@@ -1,7 +1,7 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
@@ -18,11 +18,11 @@ import ./agent-settings.bend as SettingsTest
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Context() -> Data: T.AgentContext<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String>
-def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String>, Run.Signal()>
+def Context() -> Data: T.AgentContext<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String>
+def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String>, Run.RunSignal()>
 def BeforeResult() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<Unit, Context()>>
 def Before() -> Data: C.Callback<BeforeInput(), BeforeResult()>
-def AfterInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String>, Run.Signal()>
+def AfterInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String>, Run.RunSignal()>
 def AfterResult() -> Data: Result<&2, &2, String, Maybe<&2, T.AfterToolCallResult<Unit>>>
 def After() -> Data: C.Callback<AfterInput(), AfterResult()>
 type Bindings is Data:
@@ -51,7 +51,7 @@ def sameAfter(left: Maybe<&2, After()>, right: Maybe<&2, After()>) -> Bool:
 def same(left: Bindings, right: Bindings) -> Bool:
   match left right:
     case Bindings{a, b} Bindings{c, d}: sameBefore(a, c) && sameAfter(b, d)
-def live(signal: Run.Signal()) -> IO(Unit):
+def live(signal: Run.RunSignal()) -> IO(Unit):
   do IO<Unit>:
     cancelled : Bool <- Abort.aborted(Unit, signal)
     Test.assertion(Bool.not(cancelled), "tool hooks receive the active uncancelled signal")
@@ -83,7 +83,7 @@ def after(capture: Capture, input: AfterInput()) -> IO(AfterResult()):
         R.modify(String, Unit, trace, old => (old ++ "a" ++ name ++ ";", Unit{}))
         return Done{Some{T.AfterToolCallResult{Some{content("patched-" ++ name)}, None{}, None{}, None{}, None{}}}}
     case _ _: IO.die(AfterResult(), 1, "after hook did not receive original successful result")
-def execute(trace: R.Ref<String>, input: T.ToolExecutionInput<Unit, Run.Signal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
+def execute(trace: R.Ref<String>, input: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   do IO<Result<&2, &2, String, T.AgentToolResult<Unit>>>:
     R.modify(String, Unit, trace, old => (old ++ "x;", Unit{}))
     return Done{T.AgentToolResult{content("executed"), Unit{}, None{}, None{}}}
@@ -108,9 +108,9 @@ def create(capture: ProviderCapture, trace: R.Ref<String>) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
     +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~R.Ref<String>, ~T.ToolExecutionInput<Unit, Run.Signal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~execute, trace)
+    +executor : Named.Executor() <- C.create(~R.Ref<String>, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~execute, trace)
     +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
     result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}

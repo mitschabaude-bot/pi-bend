@@ -1,7 +1,7 @@
 import Base
-import ../src/pending-message-queue.bend as Pending
-import ../src/agent-queues.bend as Q
-import ../src/agent-continuation.bend as Continue
+import ../src/agent.bend as Pending
+import ../src/agent.bend as Q
+import ../src/agent.bend as Continue
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/f64.bend as F
@@ -13,15 +13,15 @@ def modeName(value: T.QueueMode) -> String:
     case T.All{}: "all"
     case T.OneAtATime{}: "one"
 def queueKey(+queue: Pending.PendingMessageQueue<String>, output: List<&2, String>) -> String:
-  modeName(Pending.getMode(String, queue)) ++ ";" ++ Bool.pick(String, Pending.hasItems(String, queue), "1", "0") ++ ";" ++ String.join(Pending.values(String, queue), ",") ++ ";" ++ String.join(output, ",")
+  modeName(Pending.getModePending(String, queue)) ++ ";" ++ Bool.pick(String, Pending.hasItems(String, queue), "1", "0") ++ ";" ++ String.join(Pending.values(String, queue), ",") ++ ";" ++ String.join(output, ",")
 def queueStep(queue: Pending.PendingMessageQueue<String>, operation: U32) -> Pending.PendingMessageQueue<String> & List<&2, String>:
   match operation:
-    case 0: (Pending.enqueue(String, queue, "a"), Nil{})
-    case 1: (Pending.enqueue(String, queue, "b"), Nil{})
-    case 2: Pending.drain(String, queue)
-    case 3: (Pending.clear(String, queue), Nil{})
-    case 4: (Pending.setMode(String, queue, T.All{}), Nil{})
-    case _: (Pending.setMode(String, queue, T.OneAtATime{}), Nil{})
+    case 0: (Pending.enqueuePending(String, queue, "a"), Nil{})
+    case 1: (Pending.enqueuePending(String, queue, "b"), Nil{})
+    case 2: Pending.drainPending(String, queue)
+    case 3: (Pending.clearPending(String, queue), Nil{})
+    case 4: (Pending.setModePending(String, queue, T.All{}), Nil{})
+    case _: (Pending.setModePending(String, queue, T.OneAtATime{}), Nil{})
 
 type QueueSnapshot is Data:
   QueueSnapshot{queue: Pending.PendingMessageQueue<String>, output: List<&2, String>}
@@ -35,23 +35,23 @@ def snapshot(value: Pending.PendingMessageQueue<String> & List<&2, String>) -> Q
       do IO<Unit>:
         Test.assertion(String.eq(queueKey(next, output), wanted), "pending queue state/drained batch differs from source")
         queueSteps(next, operations, rest, None{})
-    case operation <> rest expected None{}: queueSteps(Pending.new(String, T.All{}), rest, expected, Some{snapshot(queueStep(queue, operation))})
+    case operation <> rest expected None{}: queueSteps(Pending.newPending(String, T.All{}), rest, expected, Some{snapshot(queueStep(queue, operation))})
     case Nil{} Nil{} None{}: IO.pure(Unit, Unit{})
     case _ _ _: Test.assertion(False{}, "queue fixture length mismatch")
 def queueScenario(initialMode: U32, operations: List<&2, U32>, expected: List<&2, String>) -> IO(Unit):
-  queueSteps(Pending.new(String, T.All{}), operations, expected, Some{QueueSnapshot{Pending.new(String, mode(initialMode)), Nil{}}})
+  queueSteps(Pending.newPending(String, T.All{}), operations, expected, Some{QueueSnapshot{Pending.newPending(String, mode(initialMode)), Nil{}}})
 
 def pairKey(queues: Q.Queues<String>) -> String:
   match queues:
     case Q.Queues{steering, followUp}: queueKey(steering, Nil{}) ++ "|" ++ queueKey(followUp, Nil{})
 def pairScenario() -> IO(Unit):
   do IO<Unit>:
-    +queues : Q.Queues<String> = Q.enqueue(String, Q.enqueue(String, Q.defaults(String), Q.Steering{}, "s"), Q.FollowUp{}, "f")
-    Test.assertion(String.eq(pairKey(Q.setMode(String, queues, Q.Steering{}, T.All{})), "all;1;s;|one;1;f;"), "steering mode keeps follow-up state")
-    Test.assertion(String.eq(pairKey(Q.setMode(String, queues, Q.FollowUp{}, T.All{})), "one;1;s;|all;1;f;"), "follow-up mode keeps steering state")
-    Test.assertion(String.eq(pairKey(Q.clear(String, queues, Q.Steering{})), "one;0;;|one;1;f;"), "clearing steering keeps follow-up")
-    Test.assertion(String.eq(pairKey(Q.clear(String, queues, Q.FollowUp{})), "one;1;s;|one;0;;"), "clearing follow-up keeps steering")
-    Test.assertion(String.eq(pairKey(Q.clearAll(String, Q.setMode(String, queues, Q.Steering{}, T.All{}))), "all;0;;|one;0;;"), "clearing both queues preserves modes")
+    +queues : Q.Queues<String> = Q.enqueueQueues(String, Q.enqueueQueues(String, Q.defaultQueues(String), Q.QueuesSteering{}, "s"), Q.FollowUp{}, "f")
+    Test.assertion(String.eq(pairKey(Q.setModeQueues(String, queues, Q.QueuesSteering{}, T.All{})), "all;1;s;|one;1;f;"), "steering mode keeps follow-up state")
+    Test.assertion(String.eq(pairKey(Q.setModeQueues(String, queues, Q.FollowUp{}, T.All{})), "one;1;s;|all;1;f;"), "follow-up mode keeps steering state")
+    Test.assertion(String.eq(pairKey(Q.clearQueues(String, queues, Q.QueuesSteering{})), "one;0;;|one;1;f;"), "clearing steering keeps follow-up")
+    Test.assertion(String.eq(pairKey(Q.clearQueues(String, queues, Q.FollowUp{})), "one;1;s;|one;0;;"), "clearing follow-up keeps steering")
+    Test.assertion(String.eq(pairKey(Q.clearAll(String, Q.setModeQueues(String, queues, Q.QueuesSteering{}, T.All{}))), "all;0;;|one;0;;"), "clearing both queues preserves modes")
     Test.assertion(String.eq(pairKey(queues), "one;1;s;|one;1;f;"), "queue operations preserve retained snapshots")
 
 def Message() -> Data: T.AgentMessage<Unit, Unit, Unit, Unit, String>
@@ -85,7 +85,7 @@ def queued(count: U32, +prefix: String) -> Messages():
 def fill(messages: Messages(), queues: Q.Queues<Message()>, +kind: Q.QueueKind) -> Q.Queues<Message()>:
   match messages:
     case Nil{}: queues
-    case head <> rest: fill(rest, Q.enqueue(Message(), queues, kind, head), kind)
+    case head <> rest: fill(rest, Q.enqueueQueues(Message(), queues, kind, head), kind)
 def decision(result: Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>>) -> String:
   match result:
     case Fail{error}: "error:" ++ Continue.errorMessage(error)
@@ -94,11 +94,11 @@ def decision(result: Result<&2, &2, Continue.ContinueError, Continue.Plan<Messag
 def planKey(result: Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>>) -> String:
   match result:
     case Tuple{Q.Queues{+steering, +followUp}, planned}:
-      decision(planned) ++ ";" ++ String.join(names(Pending.values(Message(), steering)), ",") ++ ";" ++ String.join(names(Pending.values(Message(), followUp)), ",") ++ ";" ++ Bool.pick(String, Q.hasQueuedMessages(Message(), Q.Queues{steering, followUp}), "1", "0")
+      decision(planned) ++ ";" ++ String.join(names(Pending.values(Message(), steering)), ",") ++ ";" ++ String.join(names(Pending.values(Message(), followUp)), ",") ++ ";" ++ Bool.pick(String, Q.queuesHaveMessages(Message(), Q.Queues{steering, followUp}), "1", "0")
 def continuationScenario(active: Bool, historyIndex: U32, steeringMode: U32, followMode: U32, steeringCount: U32, followCount: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
-    +queues : Q.Queues<Message()> = fill(queued(steeringCount, "s"), fill(queued(followCount, "f"), Q.new(Message(), mode(steeringMode), mode(followMode)), Q.FollowUp{}), Q.Steering{})
+    +queues : Q.Queues<Message()> = fill(queued(steeringCount, "s"), fill(queued(followCount, "f"), Q.newQueues(Message(), mode(steeringMode), mode(followMode)), Q.FollowUp{}), Q.QueuesSteering{})
     before : String = planKey((queues, Done{Continue.Continue{}}))
-    result : Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>> = Continue.plan(Unit, Unit, Unit, Unit, String, active, history(historyIndex), queues)
+    result : Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>> = Continue.planContinue(Unit, Unit, Unit, Unit, String, active, history(historyIndex), queues)
     Test.assertion(String.eq(planKey(result), expected), "Agent continuation decision/remaining queues differ from source")
     Test.assertion(String.eq(planKey((queues, Done{Continue.Continue{}})), before), "earlier queue snapshot stays unchanged")

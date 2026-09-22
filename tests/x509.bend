@@ -2,7 +2,7 @@ import Base
 import ../packages/runtime/src/x509.bend as X509
 import ../packages/runtime/src/der.bend as DER
 import ../packages/runtime/src/rsa-sha256.bend as RSA
-import ../packages/runtime/src/p256.bend as P256
+import ../packages/runtime/src/ecdsa.bend as EC
 import ../packages/runtime/src/big-nat.bend as Big
 import ../packages/runtime/src/string-split.bend as Split
 import ./aes128-gcm.bend as Bytes
@@ -41,7 +41,8 @@ def publicKey(result: Result<&2, &2, X509.Error, X509.PublicKey>) -> String:
     case Done{X509.Rsa{RSA.PublicKey{modulus, exponent, bytes, bits}}}:
       Big.toDecimal(modulus) ++ "|" ++ Bytes.show(exponent) ++ "|" ++ Nat.show(bytes) ++ "|" ++ Nat.show(bits)
 
-    case Done{X509.P256{P256.Point{x,y}}}: "p256:" ++ Bytes.show(DER.append(Big.toBigEndian(32n,x),Big.toBigEndian(32n,y)))
+    case Done{X509.Ec{EC.P256{},EC.Point{x,y}}}: "p256:" ++ Bytes.show(DER.append(Big.toBigEndian(32n,x),Big.toBigEndian(32n,y)))
+    case Done{X509.Ec{EC.P384{},EC.Point{x,y}}}: "p384:" ++ Bytes.show(DER.append(Big.toBigEndian(48n,x),Big.toBigEndian(48n,y)))
 
 def verified(result: Result<&2, &2, X509.Error, Unit>) -> String:
   match result:

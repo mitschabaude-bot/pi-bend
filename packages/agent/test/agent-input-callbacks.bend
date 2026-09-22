@@ -1,8 +1,8 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-options.bend as Options
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as Options
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
@@ -19,7 +19,7 @@ import ./agent-run.bend as H
 import ./message-events.bend as Test
 
 def Converter() -> Data: Options.Converter(Unit, Unit, Unit, String, String)
-def TransformInput() -> Data: T.TransformContextInput<H.Messages(), Run.Signal()>
+def TransformInput() -> Data: T.TransformContextInput<H.Messages(), Run.RunSignal()>
 def Transformed() -> Data: Result<&2, &2, String, H.Messages()>
 def Transform() -> Data: C.Callback<TransformInput(), Transformed()>
 type Logged is Data:
@@ -79,9 +79,9 @@ def create(+slot: R.Ref<Maybe<&2, Owner.Owner()>>, +trace: R.Ref<String>, +calls
     +second : Bindings = Bindings{streamB, convertB, transformB}
     +streamA : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, ProviderCapture{Logged{"pa", trace}, slot, Some{second}, calls, streams})
     +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.Signal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
     +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
     result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, streamA), registry, validator, Unit{})
     +agent : Owner.Owner() <- Owner.requireOwner(result)
     original : Converter() <- Agent.getConvertToLlm(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)

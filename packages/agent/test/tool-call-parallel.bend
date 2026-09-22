@@ -1,11 +1,11 @@
 import Base
 import ../../ai/test/model-types.bend as Model
-import ../src/tool-call.bend as Call
-import ../src/tool-batch-parallel.bend as Parallel
-import ../src/tool-batch.bend as Batch
+import ../src/agent-loop.bend as Call
+import ../src/agent-loop.bend as Parallel
+import ../src/agent-loop.bend as Batch
 import ../src/agent-loop.bend as Loop
 import ../src/types.bend as T
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as Record
@@ -26,15 +26,15 @@ def emit(environment: S.Recording, event: H.EventValue()) -> IO(E.Emission<Strin
         R.modify(List<&2, String>, Unit, events, values => (name <> values, Unit{}))
         previous : Bool <- R.read(Bool, signal)
         R.write(Bool, signal, previous || (abortAfter && (String.eq(name, "end:call") || String.eq(name, "end:bad"))))
-        return E.Ready{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
+        return E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
 
-def finishRun(started: Result<&2, &2, String, Parallel.Run<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>>) -> IO(S.Outcome()):
+def finishRun(started: Result<&2, &2, String, Parallel.ParallelRun<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>>) -> IO(S.Outcome()):
   match started:
     case Fail{error}: IO.pure(S.Outcome(), Fail{error})
     case Done{+run}:
       do IO<S.Outcome()>:
-        result : S.Outcome() <- Parallel.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
-        Parallel.dispose(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        result : S.Outcome() <- Parallel.resultParallel(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Parallel.disposeParallel(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
         return result
 
 def contains(+name: String, events: List<&2, String>) -> Bool:
@@ -62,9 +62,9 @@ def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +zero : F.F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.Capture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.Capture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
+    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
     toolCalls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}} <> Ai.ToolCall{"bad", "echo", H.field(V.Text{"bad"}), None{}, None{}} <> Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}} <> Nil{}
-    started : Result<&2, &2, String, Parallel.Run<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>> <- Parallel.start(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context, toolCalls)
+    started : Result<&2, &2, String, Parallel.ParallelRun<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>> <- Parallel.startParallel(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context, toolCalls)
     result : S.Outcome() <- finishRun(started)
     # Upstream runs the before hook before checking abort; its returned
     # context survives even when the signal was already aborted.

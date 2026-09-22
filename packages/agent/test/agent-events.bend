@@ -1,10 +1,10 @@
 import Base
-import ../src/event-emission.bend as Emission
-import ../src/agent-events.bend as Events
-import ../src/agent-listeners.bend as Listeners
-import ../src/agent-runtime.bend as Runtime
-import ../src/agent-lifecycle.bend as Life
-import ../src/agent-state.bend as State
+import ../src/agent-loop.bend as Emission
+import ../src/agent.bend as Events
+import ../src/agent.bend as Listeners
+import ../src/agent.bend as Runtime
+import ../src/agent.bend as Life
+import ../src/agent.bend as State
 import ../src/types.bend as T
 import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/callback.bend as C
@@ -43,11 +43,11 @@ def body(environment: Environment, input: Input()) -> IO(Emission.Emission<Strin
     case Environment{+first, fail, runtime, entered, release, +log} Listeners.Input{event, signal}:
       do IO<Emission.Emission<String>>:
         Test.assertion(isEnd(event), "subscriber receives the original event")
-        state : Fixture.Owned() <- Runtime.snapshot(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+        state : Fixture.Owned() <- Runtime.snapshotRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
         Test.assertion(String.eq(Fixture.key(state), "base|s|1|-||one:|one:"), "agent_end state commits before listeners without becoming idle")
         name : String = Bool.pick(String, first, "first;", "second;")
         R.modify(String, Unit, log, old => (old ++ name, Unit{}))
-        Emission.start(String, finishBody(first, fail, entered, release, signal))
+        Emission.startEmission(String, finishBody(first, fail, entered, release, signal))
 
 def requireRun(result: Fixture.Claim()) -> IO(Life.ActiveRun):
   match result:
@@ -56,7 +56,7 @@ def requireRun(result: Fixture.Claim()) -> IO(Life.ActiveRun):
 def deliver(+runtime: Fixture.Runtime(), run: Life.ActiveRun, delivery: Emission.Emission<Events.DeliveryError<String>>, reply: Chan(Outcome())) -> IO(Unit):
   do IO<Unit>:
     result : Outcome() <- Emission.wait(Events.DeliveryError<String>, delivery)
-    finished : Bool <- Runtime.finishRun(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, run)
+    finished : Bool <- Runtime.finishRunRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, run)
     Test.assertion(finished, "run finalizes after awaited delivery, including failure")
     sent : Bool <- Chan.send(Outcome(), reply, result)
     R.requireSent(sent)
@@ -85,21 +85,21 @@ def resetBusy(result: Result<&2, &2, String, Unit>) -> Bool:
     case _: False{}
 def idleWorker(runtime: Fixture.Runtime(), reply: Chan(Unit)) -> IO(Unit):
   do IO<Unit>:
-    Runtime.waitForIdle(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    Runtime.waitForIdleRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     sent : Bool <- Chan.send(Unit, reply, Unit{})
     R.requireSent(sent)
 def scenario(+mode: U32) -> IO(Unit):
   do IO<Unit>:
     initial : State.AgentInitialState<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit> = State.AgentInitialState{Some{"base"}, None{}, None{}, None{}, None{}}
-    +runtime : Fixture.Runtime() <- Runtime.new(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
-    +registry : Registry() <- Listeners.new(EmittedEvent(), Abort.AbortSignal<Unit>, String)
+    +runtime : Fixture.Runtime() <- Runtime.newRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, initial, T.OneAtATime{}, T.OneAtATime{})
+    +registry : Registry() <- Listeners.newListeners(EmittedEvent(), Abort.AbortSignal<Unit>, String)
     +entered : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +log : R.Ref<String> <- R.new(String, "")
     +first : Listeners.Handler(EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~Input(), ~Emission.Emission<String>, ~body, Environment{True{}, U32.is_eq(mode, 1), runtime, entered, release, log})
     +second : Listeners.Handler(EmittedEvent(), Abort.AbortSignal<Unit>, String) <- C.create(~Environment, ~Input(), ~Emission.Emission<String>, ~body, Environment{False{}, U32.is_eq(mode, 2), runtime, entered, release, log})
-    ignored : Listeners.Subscription<EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, first)
-    ignored : Listeners.Subscription<EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribe(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, second)
+    ignored : Listeners.Subscription<EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribeListeners(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, first)
+    ignored : Listeners.Subscription<EmittedEvent(), Abort.AbortSignal<Unit>, String> <- Listeners.subscribeListeners(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry, second)
     claimed : Fixture.Claim() <- Runtime.beginPrompt(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime, QueueTest.user("prompt") <> Nil{})
     +run : Life.ActiveRun <- requireRun(claimed)
     active : Result<&2, &2, String, Life.ActiveRun> <- Runtime.recordEvent(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, runtime, T.MessageStart{QueueTest.assistant()})
@@ -111,16 +111,16 @@ def scenario(+mode: U32) -> IO(Unit):
     IO.join(Unit, entered)
     trace : String <- R.read(String, log)
     Test.assertion(String.eq(trace, "first;"), "second subscriber cannot overlap the first")
-    state : Fixture.Owned() <- Runtime.snapshot(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    state : Fixture.Owned() <- Runtime.snapshotRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     Test.assertion(String.eq(Fixture.key(state), "base|s|1|-||one:|one:"), "agent stays streaming during an awaited agent_end listener")
     wait : D.Ticket<Unit> <- observe(run)
     unsettled : Bool <- pending(run)
     Test.assertion(unsettled, "idle completion remains pending while listener is suspended")
     +idle : Chan(Unit) <- Chan.new(Unit, 1)
     IO.spawn(Unit, idleWorker(runtime, idle))
-    reset : Result<&2, &2, String, Unit> <- Runtime.reset(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    reset : Result<&2, &2, String, Unit> <- Runtime.resetRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     Test.assertion(resetBusy(reset), "awaited listener keeps reset guarded without holding the owner lock")
-    Runtime.abort(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    Runtime.abortRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     sent : Bool <- Chan.send(Unit, release, Unit{})
     R.requireSent(sent)
     result : Outcome() <- IO.join(Outcome(), reply)
@@ -133,9 +133,9 @@ def scenario(+mode: U32) -> IO(Unit):
     Test.assertion(outside(invalid), "outside-run event returns the source error")
     unchanged : String <- R.read(String, log)
     Test.assertion(String.eq(trace, unchanged), "outside-run events never reach subscribers")
-    final : Fixture.Owned() <- Runtime.dispose(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
+    final : Fixture.Owned() <- Runtime.disposeRuntime(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, runtime)
     Test.assertion(String.eq(Fixture.key(final), "base|su|0|-||one:|one:"), "finish clears streaming and idle event reduction precedes its error")
-    Listeners.dispose(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry)
+    Listeners.disposeListeners(EmittedEvent(), Abort.AbortSignal<Unit>, String, registry)
     C.dispose(Input(), Emission.Emission<String>, first)
     C.dispose(Input(), Emission.Emission<String>, second)
     old : String <- R.dispose(String, log)

@@ -1,5 +1,5 @@
 import Base
-import ../src/tool-batch.bend as B
+import ../src/agent-loop.bend as B
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
 import ./tool-batch-sequential.bend as S
@@ -17,12 +17,12 @@ def execute(gates: Gates, input: S.Input()) -> IO(S.Output()):
         T.assertion(sent, "start gate remains open")
         released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
         R.write(Bool, finished, True{})
-        return Done{B.Completed{1, 1, True{}}}
+        return Done{B.BatchCompleted{1, 1, True{}}}
     case Gates{_, _, finished} B.Invocation{state, S.Call{2, _, _}}:
       do IO<S.Output()>:
         previousFinished : Bool <- R.read(Bool, finished)
         T.assertion(previousFinished && U32.is_eq(state, 1), "second call waits for first completion and receives returned state")
-        return Done{B.Completed{3, 2, True{}}}
+        return Done{B.BatchCompleted{3, 2, True{}}}
     case _ _: IO.die(S.Output(), 1, "unexpected gated call")
 
 def notAborted(unused: Unit, input: Unit) -> IO(Bool): IO.pure(Bool, False{})

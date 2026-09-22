@@ -1,11 +1,11 @@
 import Base
 import ../../runtime/src/record.bend as Record
 import ../src/agent.bend as Agent
-import ../src/agent-options.bend as Options
-import ../src/agent-run.bend as Run
-import ../src/agent-state.bend as State
-import ../src/agent-listeners.bend as Listeners
-import ../src/event-emission.bend as Emission
+import ../src/agent.bend as Options
+import ../src/agent.bend as Run
+import ../src/agent.bend as State
+import ../src/agent.bend as Listeners
+import ../src/agent-loop.bend as Emission
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
@@ -21,28 +21,28 @@ import ./agent-owner.bend as Owner
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Snapshot() -> Data: T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>
-def Tool() -> Data: T.AgentTool<Schema.Value, Unit, Unit, Unit, Run.Signal(), String>
-def Executor() -> Data: C.Callback<T.ToolExecutionInput<Unit, Run.Signal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>
+def Snapshot() -> Data: T.AgentState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>
+def Tool() -> Data: T.AgentTool<Schema.Value, Unit, Unit, Unit, Run.RunSignal(), String>
+def Executor() -> Data: C.Callback<T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>
 def Validator() -> Data: C.Callback<Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>>
 def StreamFunction() -> Data: T.StreamFn(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
 def Fallback() -> Data: Provider.Registry(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
 type Fixture is Data:
   Fixture{agent: Owner.Owner(), stream: StreamFunction(), validate: Validator(), execute: Executor(), fallback: Fallback()}
 def unused(unused: Unit, input: H.ProviderInput()) -> IO(H.ProviderOutput()): IO.die(H.ProviderOutput(), 1, "state test unexpectedly invoked the provider")
-def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>>:
+def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>:
   match mode:
     case 1: Some{State.AgentInitialState{Some{"You are a helpful assistant."}, Some{Models.model(Ai.OpenAIResponsesApi{}, None{})}, Some{Ai.Thinking{Ai.Low{}}}, None{}, None{}}}
     case 2: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), None{}}}
     case 3: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), Some{H.user("old") <> Nil{}}}}
     case _: None{}
-def options(initial: Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
+def options(initial: Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit>:
   Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def create(mode: U32) -> IO(Fixture):
   do IO<Fixture>:
     +stream : StreamFunction() <- C.create(~Unit, ~H.ProviderInput(), ~H.ProviderOutput(), ~unused, Unit{})
     +validate : Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +execute : Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.Signal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +execute : Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
     +fallback : Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
     created : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, options(initial(mode, execute), stream), fallback, validate, Unit{})
     value : Owner.Owner() <- Owner.requireOwner(created)
@@ -57,7 +57,7 @@ def dispose(fixture: Fixture) -> IO(Unit):
         Agent.dispose(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
         C.dispose(H.ProviderInput(), H.ProviderOutput(), stream)
         C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validate)
-        C.dispose(T.ToolExecutionInput<Unit, Run.Signal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute)
+        C.dispose(T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute)
         Provider.dispose(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String, fallback)
 def comparison(value: Maybe<&2, Cmp>) -> Bool:
   match value:
@@ -98,29 +98,29 @@ def thinking(value: Snapshot(), expected: String) -> Bool:
     case T.AgentState{_, Ai.Thinking{Ai.Low{}}, _, _, _, _, _, _}: String.eq(expected, "low")
     case T.AgentState{_, Ai.Thinking{Ai.High{}}, _, _, _, _, _, _}: String.eq(expected, "high")
     case _: False{}
-def countEvent(count: R.Ref<U32>, input: Listeners.Input<H.EventValue(), Run.Signal()>) -> IO(Emission.Emission<String>):
+def countEvent(count: R.Ref<U32>, input: Listeners.Input<H.EventValue(), Run.RunSignal()>) -> IO(Emission.Emission<String>):
   do IO<Emission.Emission<String>>:
     R.modify(U32, Unit, count, old => (U32.add(old, 1), Unit{}))
-    return Emission.Ready{Done{Unit{}}}
+    return Emission.EmissionReady{Done{Unit{}}}
 def subscription() -> IO(Unit):
   do IO<Unit>:
     +fixture : Fixture <- create(0)
     +agent : Owner.Owner() = getAgent(fixture)
     +count : R.Ref<U32> <- R.new(U32, 0)
-    +callback : Listeners.Handler(H.EventValue(), Run.Signal(), String) <- C.create(~R.Ref<U32>, ~Listeners.Input<H.EventValue(), Run.Signal()>, ~Emission.Emission<String>, ~countEvent, count)
-    token : Listeners.Subscription<H.EventValue(), Run.Signal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, callback)
+    +callback : Listeners.Handler(H.EventValue(), Run.RunSignal(), String) <- C.create(~R.Ref<U32>, ~Listeners.Input<H.EventValue(), Run.RunSignal()>, ~Emission.Emission<String>, ~countEvent, count)
+    token : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, callback)
     calls : U32 <- R.read(U32, count)
     Test.assertion(U32.is_eq(calls, 0), "subscribe emits no initial event")
     Agent.setThinkingLevel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Thinking{Ai.Low{}})
     value : Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
     calls : U32 <- R.read(U32, count)
     Test.assertion(thinking(value, "low") && U32.is_eq(calls, 0), "state update takes effect without emitting")
-    Listeners.unsubscribe(H.EventValue(), Run.Signal(), String, token)
+    Listeners.unsubscribe(H.EventValue(), Run.RunSignal(), String, token)
     Agent.setThinkingLevel(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Thinking{Ai.High{}})
     calls : U32 <- R.read(U32, count)
     Test.assertion(U32.is_eq(calls, 0), "unsubscribe and later mutation emit no event")
     dispose(fixture)
-    C.dispose(Listeners.Input<H.EventValue(), Run.Signal()>, Emission.Emission<String>, callback)
+    C.dispose(Listeners.Input<H.EventValue(), Run.RunSignal()>, Emission.Emission<String>, callback)
     old : U32 <- R.dispose(U32, count)
     IO.print("PASS should subscribe to events")
 def getMessages(value: Snapshot()) -> H.Messages():
@@ -162,7 +162,7 @@ def toolList(execute: Executor()) -> List<&2, Tool()>:
 def exactTools(values: List<&2, Tool()>, expected: Executor()) -> Bool:
   match values:
     case T.AgentTool{"test", "test tool", Schema.ObjectValue{Record.Record{Nil{}}}, None{}, "Test", None{}, execute, None{}, None{}} <> Nil{}:
-      C.same(T.ToolExecutionInput<Unit, Run.Signal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute, expected)
+      C.same(T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>, execute, expected)
     case _: False{}
 def changedTools(value: Snapshot(), expected: Executor()) -> Bool:
   match value:

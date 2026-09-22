@@ -1,12 +1,12 @@
 import Base
-import ../packages/agent/src/pending-message-queue.bend as Queue
+import ../packages/agent/src/agent.bend as Queue
 import ../packages/agent/src/types.bend as T
 
 type Snapshot<-A: Data> is Data:
   Snapshot{mode: T.QueueMode, values: List<&2, A>}
 
 def snapshot(-A: Data, +queue: Queue.PendingMessageQueue<A>) -> Snapshot<A>:
-  Snapshot{Queue.getMode(A, queue), Queue.values(A, queue)}
+  Snapshot{Queue.getModePending(A, queue), Queue.values(A, queue)}
 
 def appended(-A: Data, state: Snapshot<A>, value: A) -> Snapshot<A>:
   match state:
@@ -37,29 +37,29 @@ def delivered(-A: Data, state: Snapshot<A>) -> Delivery<A>:
 law empty:
   for -A: Data
   for mode: T.QueueMode
-  {snapshot(A, Queue.new(A, mode)) == Snapshot{mode, Nil{}} : Snapshot<A>}
+  {snapshot(A, Queue.newPending(A, mode)) == Snapshot{mode, Nil{}} : Snapshot<A>}
 
 law enqueue:
   for -A: Data
   for +queue: Queue.PendingMessageQueue<A>
   for +value: A
-  {snapshot(A, Queue.enqueue(A, queue, value)) == appended(A, snapshot(A, queue), value) : Snapshot<A>}
+  {snapshot(A, Queue.enqueuePending(A, queue, value)) == appended(A, snapshot(A, queue), value) : Snapshot<A>}
 
 law set_mode:
   for -A: Data
   for +queue: Queue.PendingMessageQueue<A>
   for mode: T.QueueMode
-  {snapshot(A, Queue.setMode(A, queue, mode)) == withMode(A, snapshot(A, queue), mode) : Snapshot<A>}
+  {snapshot(A, Queue.setModePending(A, queue, mode)) == withMode(A, snapshot(A, queue), mode) : Snapshot<A>}
 
 law clear:
   for -A: Data
   for +queue: Queue.PendingMessageQueue<A>
-  {snapshot(A, Queue.clear(A, queue)) == cleared(A, snapshot(A, queue)) : Snapshot<A>}
+  {snapshot(A, Queue.clearPending(A, queue)) == cleared(A, snapshot(A, queue)) : Snapshot<A>}
 
 law drain:
   for -A: Data
   for +queue: Queue.PendingMessageQueue<A>
-  {observe(A, Queue.drain(A, queue)) == delivered(A, snapshot(A, queue)) : Delivery<A>}
+  {observe(A, Queue.drainPending(A, queue)) == delivered(A, snapshot(A, queue)) : Delivery<A>}
 
 law has_items:
   for -A: Data

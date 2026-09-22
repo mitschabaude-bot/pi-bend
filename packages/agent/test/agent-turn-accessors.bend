@@ -1,9 +1,9 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-options.bend as Options
-import ../src/agent-hooks.bend as Hooks
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as Options
+import ../src/agent.bend as Hooks
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
@@ -22,7 +22,7 @@ import ./message-events.bend as Test
 
 def Turn() -> Data: Options.Turn(Unit, Unit, Unit, String, Unit, String)
 def Update() -> Data: Options.Update(Unit, Unit, Unit, String, Unit, String, Unit)
-def Input() -> Data: T.ToolHookInput<Turn(), Run.Signal()>
+def Input() -> Data: T.ToolHookInput<Turn(), Run.RunSignal()>
 def Prepared() -> Data: Hooks.PrepareResult(Update(), String)
 def Stop() -> Data: Hooks.StopHook(Turn(), String)
 def Legacy() -> Data: Hooks.LegacyHook(Update(), String)
@@ -51,7 +51,7 @@ def sameStop(left: Maybe<&2, Stop()>, right: Maybe<&2, Stop()>) -> Bool:
 def sameLegacy(left: Maybe<&2, Legacy()>, right: Maybe<&2, Legacy()>) -> Bool:
   match left right:
     case None{} None{}: True{}
-    case Some{a} Some{b}: C.same(Maybe<&2, Run.Signal()>, Prepared(), a, b)
+    case Some{a} Some{b}: C.same(Maybe<&2, Run.RunSignal()>, Prepared(), a, b)
     case _ _: False{}
 def sameContext(left: Maybe<&2, ContextHook()>, right: Maybe<&2, ContextHook()>) -> Bool:
   match left right:
@@ -77,7 +77,7 @@ def expectedCurrent(mode: U32, handlers: Handlers) -> Values():
     case 0 Handlers{stop, legacy, _}: Hooks.Hooks{Some{stop}, Some{legacy}, None{}}
     case 1 Handlers{_, legacy, _}: Hooks.Hooks{None{}, Some{legacy}, None{}}
     case _ _: Hooks.Hooks{None{}, None{}, None{}}
-def live(value: Maybe<&2, Run.Signal()>) -> IO(Unit):
+def live(value: Maybe<&2, Run.RunSignal()>) -> IO(Unit):
   match value:
     case Some{signal}:
       do IO<Unit>:
@@ -93,7 +93,7 @@ def stop(capture: Capture, input: Input()) -> IO(Result<&2, &2, String, Bool>):
         live(signal)
         R.modify(String, Unit, trace, old => (old ++ "s" ++ name ++ ";", Unit{}))
         return Done{String.eq(name, "b")}
-def legacy(capture: Capture, signal: Maybe<&2, Run.Signal()>) -> IO(Prepared()):
+def legacy(capture: Capture, signal: Maybe<&2, Run.RunSignal()>) -> IO(Prepared()):
   match capture:
     case Capture{name, trace, _}:
       do IO<Prepared()>:
@@ -120,7 +120,7 @@ def context(capture: Capture, input: Input()) -> IO(Prepared()):
 def handlers(+capture: Capture) -> IO(Handlers):
   do IO<Handlers>:
     a : Stop() <- C.create(~Capture, ~Input(), ~Result<&2, &2, String, Bool>, ~stop, capture)
-    b : Legacy() <- C.create(~Capture, ~Maybe<&2, Run.Signal()>, ~Prepared(), ~legacy, capture)
+    b : Legacy() <- C.create(~Capture, ~Maybe<&2, Run.RunSignal()>, ~Prepared(), ~legacy, capture)
     c : ContextHook() <- C.create(~Capture, ~Input(), ~Prepared(), ~context, capture)
     return Handlers{a, b, c}
 type ProviderCapture is Data:
@@ -153,9 +153,9 @@ def create(capture: ProviderCapture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
     +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.Signal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
     +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.Signal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
     result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}
@@ -178,7 +178,7 @@ def disposeHandlers(values: Handlers) -> IO(Unit):
     case Handlers{stop, legacy, context}:
       do IO<Unit>:
         C.dispose(Input(), Result<&2, &2, String, Bool>, stop)
-        C.dispose(Maybe<&2, Run.Signal()>, Prepared(), legacy)
+        C.dispose(Maybe<&2, Run.RunSignal()>, Prepared(), legacy)
         C.dispose(Input(), Prepared(), context)
 def scenario(+mode: U32, expected: String) -> IO(Unit):
   do IO<Unit>:

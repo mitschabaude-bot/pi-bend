@@ -1,7 +1,7 @@
 import Base
 import ./agent-owner.bend as Owner
 import ../packages/runtime/src/string-set.bend as Set
-import ../packages/agent/src/agent-state.bend as State
+import ../packages/agent/src/agent.bend as State
 import ../packages/agent/src/types.bend as T
 import ../packages/ai/src/types.bend as Ai
 
@@ -170,7 +170,7 @@ law finish_idle:
   for -E: Data
   for -J: Data
   for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  {Owner.runState(P, A, G, D, C, V, S, E, J, State.finishRun(P, A, G, D, C, V, S, E, J, state)) == Owner.RunState{False{}, None{}, Set.empty(), error(P, A, G, D, C, V, S, E, J, state)} : Owner.RunState<P, A, G, D, C>}
+  {Owner.runState(P, A, G, D, C, V, S, E, J, State.finishRunState(P, A, G, D, C, V, S, E, J, state)) == Owner.RunState{False{}, None{}, Set.empty(), error(P, A, G, D, C, V, S, E, J, state)} : Owner.RunState<P, A, G, D, C>}
 
 law finish_messages:
   for -P: Data
@@ -183,4 +183,4 @@ law finish_messages:
   for -E: Data
   for -J: Data
   for +state: T.AgentState<P, A, G, D, C, V, S, E, J>
-  {messages(P, A, G, D, C, V, S, E, J, State.finishRun(P, A, G, D, C, V, S, E, J, state)) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}
+  {messages(P, A, G, D, C, V, S, E, J, State.finishRunState(P, A, G, D, C, V, S, E, J, state)) == ended(P, A, G, D, C, messages(P, A, G, D, C, V, S, E, J, state)) : Messages<P, A, G, D, C>}

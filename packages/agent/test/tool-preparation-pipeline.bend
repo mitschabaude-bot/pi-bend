@@ -1,7 +1,7 @@
 import Base
 import ../src/agent-loop.bend as Loop
 import ../src/types.bend as T
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../ai/test/model-types.bend as Model
 import ../../runtime/src/callback.bend as C

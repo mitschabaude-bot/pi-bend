@@ -3,12 +3,12 @@ import ./tool-call-sequential.bend as S
 import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 import ../../ai/test/model-types.bend as Model
-import ../src/tool-execution.bend as Execution
-import ../src/tool-call.bend as Call
-import ../src/tool-batch.bend as Batch
+import ../src/agent-loop.bend as Execution
+import ../src/agent-loop.bend as Call
+import ../src/agent-loop.bend as Batch
 import ../src/agent-loop.bend as Loop
 import ../src/types.bend as T
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as Record
@@ -66,7 +66,7 @@ def emit(environment: Recording, event: H.EventValue()) -> IO(E.Emission<String>
         +name : String = S.key(observed)
         R.modify(List<&2, String>, Unit, events, values => (name <> values, Unit{}))
         notifyEnd(ended, observed)
-        return E.Ready{Bool.pick(Result<&2, &2, String, Unit>, failure && String.eq(name, "end:two"), Fail{"delivery failed"}, Done{Unit{}})}
+        return E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, failure && String.eq(name, "end:two"), Fail{"delivery failed"}, Done{Unit{}})}
 
 def fullContext(context: H.Context()) -> Bool:
   match context:
@@ -103,14 +103,14 @@ def finish(failure: Bool, +run: Run(), gates: Gates) -> IO(S.Outcome()):
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         release(first)
-        Execution.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
     case True{} Gates{_, end, first, second, third}:
       do IO<S.Outcome()>:
         release(second)
         secondEnded : Maybe<&1, String> <- Chan.recv(String, end)
         ended("two", secondEnded)
         # First and third remain blocked until the failed batch result arrives.
-        result : S.Outcome() <- Execution.result(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        result : S.Outcome() <- Execution.resultExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
         release(third)
         release(first)
         return result
@@ -163,7 +163,7 @@ def active(+failure: Bool, +run: Run(), +gates: Gates) -> IO(Unit):
         Test.assertion(began(started(a), started(b), started(c)), "all three real tool executors start before any gate opens")
         outcome : S.Outcome() <- finish(failure, run, gates)
         checked(outcome, failure)
-        Execution.dispose(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Execution.disposeExecution(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, run)
     case _ _: Test.assertion(False{}, "parallel preparation unexpectedly failed")
 
 def contents(calls: List<&2, Ai.ToolCall<V.Value>>) -> List<&2, Ai.AssistantContent<V.Value>>:
@@ -198,7 +198,7 @@ def scenario(+failure: Bool) -> IO(Unit):
     +arguments : V.Value = H.field(V.Text{"42"})
     calls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"one", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"two", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"three", "echo", arguments, None{}, None{}} <> Nil{}
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{contents(calls), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
-    capture : Call.Capture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.Capture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
+    capture : Call.CallCapture<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit> = Call.CallCapture{assistant, S.configuration(converter, beforeHook, hook), Some{Unit{}}, validator, abort, emitter, sink, owners, "empty"}
     run : Run() <- Execution.executeToolCalls(~V.Value, ~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~S.render, capture, context)
     active(failure, run, gates)
     saved : List<&2, S.Update()> <- R.read(List<&2, S.Update()>, retained)

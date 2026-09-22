@@ -1,5 +1,5 @@
 import Base
-import ../src/agent-state.bend as State
+import ../src/agent.bend as State
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/transcript.bend as Transcript
@@ -15,7 +15,7 @@ import ./message-events.bend as Test
 
 def Value() -> Data: T.AgentState<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit>
 def Initial() -> Data: State.AgentInitialState<V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit>
-def Event() -> Data: T.AgentEvent<V.Value, V.Value, Unit, String, String, Unit, Unit>
+def StateEvent() -> Data: T.AgentEvent<V.Value, V.Value, Unit, String, String, Unit, Unit>
 def user() -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
   T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"user"}, F.fromU32(0)}}}
 def assistant(error: Maybe<&2, String>) -> H.Assistant():
@@ -49,7 +49,7 @@ def keyFields(prompt: String, state: Value()) -> String:
     case T.AgentState{model, level, tools, +messages, streaming, message, pending, error}:
       modelId(model) ++ ";" ++ thinking(level) ++ ";" ++ String.join(toolNames(tools), ",") ++ ";" ++ prompt ++ ";" ++ H.names(messages) ++ ";" ++ Bool.pick(String, streaming, "1", "0") ++ ";" ++ partial(message) ++ ";" ++ String.join(Set.toList(pending), ",") ++ ";" ++ Maybe.default(&2, String, error, "none") ++ ";" ++ declaredNames(Transcript.getCurrentTools(V.Value, V.Value, Unit, String, H.converted(messages))) ++ ";" ++ H.llmNames(State.defaultConvertToLlm(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, messages))
 def key(+state: Value()) -> String:
-  keyFields(State.systemPrompt(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state), state)
+  keyFields(State.systemPromptState(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state), state)
 
 def messages(mode: U32) -> Maybe<&2, Validation.Messages()>:
   match mode:
@@ -67,7 +67,7 @@ def executor(unused: Unit, input: Validation.ExecuteInput()) -> IO(Validation.Ex
   IO.die(Validation.ExecuteOutput(), 1, "state operations must not execute tools")
 def initial(+mode: U32, callback: C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()>) -> Initial():
   State.AgentInitialState{prompt(mode), Bool.pick(Maybe<&2, Ai.Model<Unit>>, U32.is_eq(mode, 5), Some{Model.model(Ai.CustomModelApi{"custom"}, None{})}, None{}), Bool.pick(Maybe<&2, T.ThinkingLevel()>, U32.is_eq(mode, 5), Some{Ai.Thinking{Ai.Low{}}}, None{}), Bool.pick(Maybe<&2, List<&2, T.AgentTool<V.Value, V.Value, String, V.Value, Unit, String>>>, U32.is_eq(mode, 6), Some{T.AgentTool{"echo", "Echo", V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Nil{}}}, None{}, "Echo", None{}, callback, None{}, None{}} <> Nil{}}, None{}), messages(mode)}
-def event(index: U32) -> Event():
+def event(index: U32) -> StateEvent():
   match index:
     case 0: T.AgentStart{}
     case 1: T.TurnStart{}
@@ -90,10 +90,10 @@ def step(index: U32, state: Value()) -> Value():
   match index:
     case 0: state
     case 1: State.beginRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
-    case 19: State.finishRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
+    case 19: State.finishRunState(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
     case 20: State.beginRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
-    case 21: State.finishRun(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
-    case 22: State.reset(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
+    case 21: State.finishRunState(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
+    case 22: State.stateReset(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, state)
     case other: State.processEvent(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit, state, event((other - 2 : U32)))
 
 @unsafe def checkSteps(+index: U32, +state: Value(), expected: List<&2, String>) -> IO(Unit):
@@ -116,7 +116,7 @@ def scenario(mode: U32, expected: List<&2, String>) -> IO(Unit):
   do IO<Unit>:
     Test.assertion(defaultModelMatches(State.defaultModel(Unit)), "complete upstream unknown-model defaults")
     +callback : C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()> <- C.create(~Unit, ~Validation.ExecuteInput(), ~Validation.ExecuteOutput(), ~executor, Unit{})
-    +start : Value() = State.create(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, initial(mode, callback))
+    +start : Value() = State.createState(V.Value, V.Value, Unit, String, String, V.Value, Unit, String, Unit, initial(mode, callback))
     baseline : String = key(start)
     checkSteps(0, start, expected)
     Test.assertion(String.eq(key(start), baseline), "earlier immutable state snapshot survives all later transitions")

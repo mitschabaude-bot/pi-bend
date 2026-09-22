@@ -44,7 +44,7 @@ def children(data):
     return result
 
 
-def make_certificate(name, public_key, issuer, signing_key, serial):
+def make_certificate(name, public_key, issuer, signing_key, serial, algorithm=None):
     now = datetime.now(timezone.utc)
     return (x509.CertificateBuilder().subject_name(name).issuer_name(issuer).public_key(public_key)
             .serial_number(serial).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=1))
@@ -52,7 +52,7 @@ def make_certificate(name, public_key, issuer, signing_key, serial):
             .add_extension(x509.BasicConstraints(ca=(name == issuer), path_length=2 if name == issuer else None), True)
             .add_extension(x509.KeyUsage(name != issuer, False, False, False, False, name == issuer, name == issuer, False, False), True)
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), False)
-            .sign(signing_key, hashes.SHA256()))
+            .sign(signing_key, algorithm or hashes.SHA256()))
 
 
 issuer = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -102,6 +102,22 @@ for cert in [ec_root, make_certificate(subject, other.public_key(), name, ec_iss
     bad[-1] ^= 1
     cases.append(('v:' + encode(ec_root_der) + ':' + encode(bad), 'curve'))
 cases.append(('v:' + encode(ec_root_der) + ':' + encode(root_der), 'algorithm'))
+# Certificate ECDSA hash and curve are independent: P256 with SHA384
+# truncates the digest; P384 with SHA256 uses the entire shorter digest.
+for curve in [ec.SECP256R1(), ec.SECP384R1()]:
+    signer = ec.generate_private_key(curve)
+    authority = make_certificate(name,signer.public_key(),name,signer,21)
+    authority_der = authority.public_bytes(serialization.Encoding.DER)
+    if curve.key_size == 384:
+        cases.append(('k:'+encode(authority_der),'p384:'+encode(signer.public_key().public_bytes(serialization.Encoding.X962,serialization.PublicFormat.UncompressedPoint)[1:])))
+    for algorithm in [hashes.SHA256(),hashes.SHA384()]:
+        certificate = make_certificate(subject,ec_issuer.public_key(),name,signer,22,algorithm)
+        signer.public_key().verify(certificate.signature,certificate.tbs_certificate_bytes,ec.ECDSA(algorithm))
+        wire = certificate.public_bytes(serialization.Encoding.DER)
+        cases.append(('v:'+encode(authority_der)+':'+encode(wire),'ok'))
+        bad = bytearray(wire); bad[-1] ^= 1
+        cases.append(('v:'+encode(authority_der)+':'+encode(bad),'curve'))
+
 # EC algorithm parameters must identify P256 exactly; compressed points work.
 etbs, ealg, esig = children(ec_root_der)
 efields = children(etbs)

@@ -4,6 +4,7 @@ import hashlib
 import random
 import subprocess
 import time
+import sys
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, utils
 
@@ -11,6 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 P = int('FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF',16)
 N = int('FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551',16)
 B = int('5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B',16)
+BITS = int(sys.argv[1]) if len(sys.argv) > 1 else 256
+if BITS not in (256,384): raise ValueError('supported curves: 256,384')
+WIDTH = BITS // 8
+CURVE = ec.SECP256R1() if BITS == 256 else ec.SECP384R1()
+HASH = hashes.SHA256() if BITS == 256 else hashes.SHA384()
+if BITS == 384:
+    P = int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF0000000000000000FFFFFFFF',16)
+    N = int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC7634D81F4372DDF581A0DB248B0A77AECEC196ACCC52973',16)
+    B = int('B3312FA7E23EE7E4988E056BE3F82D19181D9C6EFE8141120314088F5013875AC656398D8A2ED19D2A85C8EDD3EC2AEF',16)
 rng = random.Random(5903)
 cases = []
 
@@ -20,34 +30,34 @@ def encode(data):
 
 
 def public(scalar, compressed=False):
-    return ec.derive_private_key(scalar,ec.SECP256R1()).public_key().public_bytes(
+    return ec.derive_private_key(scalar,CURVE).public_key().public_bytes(
         serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint if compressed else serialization.PublicFormat.UncompressedPoint)
 
 
 def wire(point):
-    return b'\x04' + point[0].to_bytes(32,'big') + point[1].to_bytes(32,'big')
+    return b'\x04' + point[0].to_bytes(WIDTH,'big') + point[1].to_bytes(WIDTH,'big')
 
 
 for scalar in [1,2,3,N-1] + [rng.randrange(1,N) for _ in range(5)]:
     for compressed in [False,True]:
         cases.append(('k:' + encode(public(scalar,compressed)),encode(public(scalar))))
-for data in [b'',b'\x00',public(1)[:-1],b'\x06'+public(1)[1:],b'\x04'+bytes(64),
-             b'\x02'+P.to_bytes(32,'big'), b'\x04'+P.to_bytes(32,'big')+bytes(32),
-             [4]+[0]*63+[256]]:
+for data in [b'',b'\x00',public(1)[:-1],b'\x06'+public(1)[1:],b'\x04'+bytes(2*WIDTH),
+             b'\x02'+P.to_bytes(WIDTH,'big'), b'\x04'+P.to_bytes(WIDTH,'big')+bytes(WIDTH),
+             [4]+[0]*(2*WIDTH-1)+[256]]:
     cases.append(('k:' + encode(data),'key'))
 for x in range(1,100):
     rhs = (x*x*x-3*x+B)%P
     if pow(rhs,(P-1)//2,P) == P-1:
-        cases.append(('k:' + encode(b'\x02'+x.to_bytes(32,'big')),'key'))
+        cases.append(('k:' + encode(b'\x02'+x.to_bytes(WIDTH,'big')),'key'))
         break
 for a,b in [(1,1),(1,2),(1,N-1),(2,N-1)]:
     result = (a+b)%N
     cases.append(('a:'+encode(public(a))+':'+encode(public(b)),encode(public(result)) if result else 'infinity'))
 for scalar in [0,1,2,3,N,N+1]:
-    cases.append(('m:'+encode(public(1))+':'+encode(scalar.to_bytes(32,'big')),encode(public(scalar%N)) if scalar%N else 'infinity'))
+    cases.append(('m:'+encode(public(1))+':'+encode(scalar.to_bytes(WIDTH,'big')),encode(public(scalar%N)) if scalar%N else 'infinity'))
 for scalar,message,compressed in [(1,b'sample',False),(123456789,b'',True),(rng.randrange(1,N),bytes(range(256)),False)]:
-    private = ec.derive_private_key(scalar,ec.SECP256R1())
-    signature = private.sign(message,ec.ECDSA(hashes.SHA256()))
+    private = ec.derive_private_key(scalar,CURVE)
+    signature = private.sign(message,ec.ECDSA(HASH))
     key = public(scalar,compressed)
     cases.append(('v:'+encode(key)+':'+encode(message)+':'+encode(signature),'ok'))
     if scalar == 1:
@@ -86,10 +96,10 @@ def multiply(k,point):
     return result
 
 
-g = ec.derive_private_key(1,ec.SECP256R1()).public_key().public_numbers()
+g = ec.derive_private_key(1,CURVE).public_key().public_numbers()
 g = (g.x,g.y)
 message = b'projective verification edge'
-z = int.from_bytes(hashlib.sha256(message).digest(),'big')
+z = int.from_bytes(hashlib.new('sha'+str(BITS),message).digest(),'big')
 # u1*G + u2*Q = infinity must reject.
 key = public((-z)%N)
 cases.append(('v:'+encode(key)+':'+encode(message)+':'+encode(utils.encode_dss_signature(1,1)),'signature'))
@@ -103,13 +113,13 @@ while True:
 r=x-N
 q=multiply(pow(r,-1,N),add((x,y),multiply((-z)%N,g)))
 signature=utils.encode_dss_signature(r,1)
-key=ec.EllipticCurvePublicNumbers(*q,ec.SECP256R1()).public_key()
-key.verify(signature,message,ec.ECDSA(hashes.SHA256()))
+key=ec.EllipticCurvePublicNumbers(*q,CURVE).public_key()
+key.verify(signature,message,ec.ECDSA(HASH))
 cases.append(('v:'+encode(wire(q))+':'+encode(message)+':'+encode(signature),'ok'))
 
-for name,command in [('native-1',['build/p256','--threads','1']),
-                     ('native-4',['build/p256','--threads','4']),
-                     ('bun',['bun','build/p256.js'])]:
+for name,command in [('native-1',[f'build/p{BITS}','--threads','1']),
+                     ('native-4',[f'build/p{BITS}','--threads','4']),
+                     ('bun',['bun',f'build/p{BITS}.js'])]:
     start=time.monotonic()
     run=subprocess.run(command+[arg for arg,_ in cases],cwd=ROOT,capture_output=True,text=True,timeout=600)
     assert run.returncode==0,(name,run.stderr[-2000:])
@@ -117,4 +127,4 @@ for name,command in [('native-1',['build/p256','--threads','1']),
     assert len(lines)==len(cases),(name,len(lines),len(cases))
     for i,(actual,(_,expected)) in enumerate(zip(lines,cases)):
         assert actual==expected,(name,i,actual[:100],expected[:100])
-    print(f'{name}: {len(cases)} P256 checks PASS in {time.monotonic()-start:.2f}s',flush=True)
+    print(f'{name}: {len(cases)} P{BITS} checks PASS in {time.monotonic()-start:.2f}s',flush=True)

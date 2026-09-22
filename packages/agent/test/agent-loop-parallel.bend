@@ -1,6 +1,6 @@
 import Base
-import ../src/loop-stream.bend as W
-import ../src/loop-entry.bend as Entry
+import ../src/agent-loop.bend as W
+import ../src/agent-loop.bend as Entry
 import ../src/stream-fn.bend as Defaults
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
@@ -201,10 +201,10 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
     trace : List<&2, String> <- consume(gates, iterator, Nil{}, None{})
     Test.assertion(String.eq(String.join(trace, "|"), Bool.pick(String, sequential(mode), "end:tool-1|message:tool-1|end:tool-2|message:tool-2|turn:tool-1,tool-2", "end:tool-2|end:tool-1|message:tool-1|message:tool-2|turn:tool-1,tool-2")), "execution-end completion order; message-end and turn-end source order")
-    outcome : H.Outcome() <- W.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
     checkOutcome(outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-    W.dispose(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
     count : U32 <- R.dispose(U32, calls)
     Test.assertion(U32.is_eq(count, 2), "tool turn then final response")
     C.dispose(Validation.ExecuteInput(), Validation.ExecuteOutput(), executor)

@@ -1,8 +1,8 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-run.bend as Run
-import ../src/agent-listeners.bend as Listeners
-import ../src/event-emission.bend as Emission
+import ../src/agent.bend as Run
+import ../src/agent.bend as Listeners
+import ../src/agent-loop.bend as Emission
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T
@@ -16,8 +16,8 @@ import ./agent-behavior.bend as Behavior
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Input() -> Data: Listeners.Input<H.EventValue(), Run.Signal()>
-def Handler() -> Data: Listeners.Handler(H.EventValue(), Run.Signal(), String)
+def Input() -> Data: Listeners.Input<H.EventValue(), Run.RunSignal()>
+def Handler() -> Data: Listeners.Handler(H.EventValue(), Run.RunSignal(), String)
 def streaming(value: Named.Snapshot()) -> Bool:
   match value:
     case T.AgentState{_, _, _, _, active, _, _, _}: active
@@ -38,8 +38,8 @@ def delayed(entered: Chan(Unit), release: Chan(Unit), finished: R.Ref<Bool>) -> 
     return Done{Unit{}}
 def chooseListener(block: Bool, entered: Chan(Unit), release: Chan(Unit), finished: R.Ref<Bool>) -> IO(Emission.Emission<String>):
   match block:
-    case True{}: Emission.start(String, delayed(entered, release, finished))
-    case False{}: IO.pure(Emission.Emission<String>, Emission.Ready{Done{Unit{}}})
+    case True{}: Emission.startEmission(String, delayed(entered, release, finished))
+    case False{}: IO.pure(Emission.Emission<String>, Emission.EmissionReady{Done{Unit{}}})
 def listener(gate: Gate, input: Input()) -> IO(Emission.Emission<String>):
   match gate input:
     case Gate{mode, entered, release, finished} Listeners.Input{event, _}:
@@ -81,7 +81,7 @@ def awaitCase(+mode: U32, name: String) -> IO(Unit):
     +prompted : R.Ref<Bool> <- R.new(Bool, False{})
     +idle : R.Ref<Bool> <- R.new(Bool, False{})
     +observe : Handler() <- C.create(~Gate, ~Input(), ~Emission.Emission<String>, ~listener, Gate{mode, entered, release, finished})
-    ignored : Listeners.Subscription<H.EventValue(), Run.Signal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
+    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
     promptReply : Chan(Unit) <- IO.fork(Unit, promptWorker(agent, prompted))
     IO.join(Unit, entered)
     +idleStarted : Chan(Unit) <- Chan.new(Unit, 1)
@@ -128,7 +128,7 @@ def record(trace: R.Ref<String>, input: Input()) -> IO(Emission.Emission<String>
     case Listeners.Input{event, _}:
       do IO<Emission.Emission<String>>:
         R.modify(String, Unit, trace, old => (old ++ H.eventName(event) ++ ";", Unit{}))
-        return Emission.Ready{Done{Unit{}}}
+        return Emission.EmissionReady{Done{Unit{}}}
 def failedAssistant(messages: H.Messages()) -> Bool:
   match messages:
     case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Error{}, _, Some{"provider exploded"}, _, _, _}}} <> Nil{}: True{}
@@ -144,7 +144,7 @@ def failureCase() -> IO(Unit):
     +agent : Owner.Owner() = failureAgent(fixture)
     +trace : R.Ref<String> <- R.new(String, "")
     +observe : Handler() <- C.create(~R.Ref<String>, ~Input(), ~Emission.Emission<String>, ~record, trace)
-    ignored : Listeners.Subscription<H.EventValue(), Run.Signal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
+    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
     Behavior.prompt(agent, "hello")
     events : String <- R.read(String, trace)
     Test.assertion(String.eq(events, "agent_start;turn_start;start:u;end:u;start:a;end:a;turn_end;agent_end;"), "provider failure emits the exact full recovery lifecycle")

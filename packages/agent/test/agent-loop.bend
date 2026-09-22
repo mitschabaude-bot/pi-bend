@@ -1,6 +1,6 @@
 import Base
-import ../src/loop-stream.bend as W
-import ../src/loop-entry.bend as Entry
+import ../src/agent-loop.bend as W
+import ../src/agent-loop.bend as Entry
 import ../src/stream-fn.bend as Defaults
 import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
@@ -70,13 +70,13 @@ def inspect(+mode: U32, created: Result<&2, &2, String, H.StreamRun()>, reply: S
     case Fail{error}: verify(mode, Fail{error}, reply)
     case Done{+run}:
       do IO<Unit>:
-        outcome : H.Outcome() <- W.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
         verify(mode, outcome, reply)
         +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
         events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
         Test.assertion(String.eq(String.join(events, "|"), expectedEvents), "original event types and absence of old user-message events")
         S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-        W.dispose(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
 
 def selected(useDefault: Bool, registry: H.Registry(), provider: H.ProviderFunction()) -> H.Selection():
   match useDefault:
@@ -198,12 +198,12 @@ def transcriptScenario(name: String, +mode: U32, expectedLog: String) -> IO(Unit
     +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
     config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, Bool.pick(Maybe<&2, C.Callback<TransformInput(), TransformResult()>>, U32.is_eq(mode, 2), Some{transformer}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     +run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, transcriptPrompts(mode), transcriptContext(mode), config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
-    outcome : H.Outcome() <- W.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
     transcriptOutcome(mode, outcome)
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
     events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-    W.dispose(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
     entries : List<&2, String> <- R.dispose(List<&2, String>, recording)
     Test.assertion(String.eq(String.join(List.reverse(&2, String, entries), ";"), expectedLog), "transform precedes conversion; converter receives expected messages; provider runs once")
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)

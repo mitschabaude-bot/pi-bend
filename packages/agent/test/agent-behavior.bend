@@ -1,8 +1,8 @@
 import Base
 import ../src/agent.bend as Agent
-import ../src/agent-options.bend as Options
-import ../src/agent-state.bend as State
-import ../src/agent-run.bend as Run
+import ../src/agent.bend as Options
+import ../src/agent.bend as State
+import ../src/agent.bend as Run
 import ../src/agent-loop.bend as Loop
 import ../src/stream-fn.bend as Provider
 import ../src/types.bend as T

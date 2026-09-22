@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parents[1]
 source = (root.parent / 'pi-mono/packages/agent/src/agent.ts').read_text()
 source_options = source.split('export interface AgentOptions {', 1)[1].split('\n}', 1)[0]
 expected_fields = re.findall(r'^\t(\w+)\??:', source_options, re.M)
-native = (root / 'packages/agent/src/agent-options.bend').read_text()
+native = (root / 'packages/agent/src/agent.bend').read_text()
 native_options = re.search(r'^  AgentOptions\{([^\n]+)\}', native, re.M).group(1)
 actual_fields = re.findall(r'(?:^|, )(\w+):', native_options)
 assert actual_fields == expected_fields, (actual_fields, expected_fields)

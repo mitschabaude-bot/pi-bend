@@ -1,12 +1,12 @@
 import Base
-import ../src/main-loop.bend as Main
-import ../src/loop-entry.bend as Entry
+import ../src/agent-loop.bend as Main
+import ../src/agent-loop.bend as Entry
 import ../src/stream-fn.bend as StreamFn
-import ../src/loop-stream.bend as Wrapper
+import ../src/agent-loop.bend as Wrapper
 import ../src/types.bend as T
 import ../src/agent-loop.bend as Loop
-import ../src/tool-call.bend as Call
-import ../src/event-emission.bend as E
+import ../src/agent-loop.bend as Call
+import ../src/agent-loop.bend as E
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/utils/event-stream.bend as Stream
 import ../../ai/src/utils/model-api.bend as Api
@@ -32,7 +32,7 @@ def Outcome() -> Data: Result<&2, &2, String, H.Messages()>
 def ProviderFunction() -> Data: T.StreamFn(V.Value, V.Value, Unit, String, Unit, H.Config(), String)
 def Registry() -> Data: StreamFn.Registry(V.Value, V.Value, Unit, String, Unit, H.Config(), String)
 def Selection() -> Data: StreamFn.Selection<V.Value, V.Value, Unit, String, Unit, H.Config(), String>
-def StreamRun() -> Data: Wrapper.Run<V.Value, Unit, String, String, V.Value, Unit, String>
+def StreamRun() -> Data: Wrapper.StreamRun<V.Value, Unit, String, String, V.Value, Unit, String>
 def StreamOptions() -> Data: Wrapper.Options<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>
 def Log() -> Data: R.Ref<List<&2, String>>
 
@@ -86,9 +86,9 @@ def selection(policy: U32, registry: Registry(), provider: ProviderFunction()) -
     case 7: StreamFn.Explicit{provider}
     case _: StreamFn.Fallback{registry}
 
-def entryCapture(policy: U32, registry: Registry(), capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>) -> Entry.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>:
+def entryCapture(policy: U32, registry: Registry(), capture: Main.LoopCapture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>) -> Entry.EntryCapture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>:
   match capture:
-    case Main.Capture{services, provider}: Entry.Capture{services, selection(policy, registry, provider)}
+    case Main.LoopCapture{services, provider}: Entry.EntryCapture{services, selection(policy, registry, provider)}
 
 def log(reference: Log(), entry: String) -> IO(Unit):
   R.modify(List<&2, String>, Unit, reference, values => (entry <> values, Unit{}))
@@ -268,7 +268,7 @@ def emit(environment: Recording, event: H.EventValue()) -> IO(E.Emission<String>
         +name : String = key(event)
         log(recording, name)
         changeDefault(defaults, name)
-        return E.Ready{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
+        return E.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, String.eq(name, failAt), Fail{"delivery failed"}, Done{Unit{}})}
 
 def abort(unused: Unit, signal: Maybe<&2, Unit>) -> IO(Bool): IO.pure(Bool, False{})
 def render(error: String) -> String: error
@@ -299,7 +299,7 @@ def entryContext(mode: U32, tools: List<&2, T.AgentTool<V.Value, V.Value, String
     case 4: T.AgentContext{T.CustomMessage{"old"} <> T.LlmMessage{Ai.Assistant{assistant(text("previous"), Ai.Stop{})}} <> Nil{}, Some{tools}}
     case _: T.AgentContext{T.CustomMessage{"old"} <> T.CustomMessage{"prompt"} <> Nil{}, Some{tools}}
 
-def invoke(mode: U32, policy: U32, registry: Registry(), capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config()) -> IO(Outcome()):
+def invoke(mode: U32, policy: U32, registry: Registry(), capture: Main.LoopCapture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config()) -> IO(Outcome()):
   match mode:
     case 0: Main.runLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, capture, context, config, T.CustomMessage{"prompt"} <> Nil{})
     case 1: Entry.runAgentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, T.CustomMessage{"prompt"} <> Nil{}, context, config, entryCapture(policy, registry, capture))
@@ -324,14 +324,14 @@ def consumeRun(gate: Maybe<&2, Gates>, created: Result<&2, &2, String, StreamRun
     case Done{+run}:
       do IO<Outcome()>:
         releaseProvider(gate)
-        outcome : Outcome() <- Wrapper.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
-        repeated : Outcome() <- Wrapper.result(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        outcome : Outcome() <- Wrapper.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        repeated : Outcome() <- Wrapper.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
         checked(repeated, expectedHistory, expectedError)
         +iterator : Stream.Iterator<H.EventValue(), Outcome()> <- Wrapper.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
         events : List<&2, String> <- collectEvents(iterator, Nil{}, None{})
         Test.assertion(String.eq(String.join(events, "|"), expectedEvents), "buffered stream events and closure after result settlement")
         Stream.disposeIterator(H.EventValue(), Outcome(), iterator)
-        Wrapper.dispose(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        Wrapper.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
         return outcome
 
 def launchStream(mode: U32, options: StreamOptions(), context: H.Context(), config: H.Config()) -> IO(Result<&2, &2, String, StreamRun()>):
@@ -342,10 +342,10 @@ def launchStream(mode: U32, options: StreamOptions(), context: H.Context(), conf
         return Done{run}
     case _: Wrapper.agentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~render, ~declarationError, ~StreamFn.errorMessage, ~Entry.errorMessage, context, config, options)
 
-def invokeRuntime(streamed: Bool, gate: Maybe<&2, Gates>, mode: U32, policy: U32, registry: Registry(), capture: Main.Capture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config(), expectedEvents: String, expectedHistory: String, expectedError: String) -> IO(Outcome()):
+def invokeRuntime(streamed: Bool, gate: Maybe<&2, Gates>, mode: U32, policy: U32, registry: Registry(), capture: Main.LoopCapture<V.Value, Unit, String, String, V.Value, Unit, String, Unit, Unit, Unit>, context: H.Context(), config: H.Config(), expectedEvents: String, expectedHistory: String, expectedError: String) -> IO(Outcome()):
   match streamed capture:
     case False{} value: invoke(mode, policy, registry, value, context, config)
-    case True{} Main.Capture{Main.Services{signal, validatorFn, aborted, _, _, _, _, emptyDetails}, providerFn}:
+    case True{} Main.LoopCapture{Main.Services{signal, validatorFn, aborted, _, _, _, _, emptyDetails}, providerFn}:
       do IO<Outcome()>:
         created : Result<&2, &2, String, StreamRun()> <- launchStream(mode, Wrapper.Options{signal, validatorFn, aborted, emptyDetails, selection(policy, registry, providerFn)}, context, config)
         consumeRun(gate, created, expectedEvents, expectedHistory, expectedError)
@@ -381,7 +381,7 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = entryContext(mode, T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{})
     config : H.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
-    outcome : Outcome() <- invokeRuntime(streamed, gate, mode, policy, registry, Main.Capture{Main.Services{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config, expectedEvents, expectedHistory, expectedError)
+    outcome : Outcome() <- invokeRuntime(streamed, gate, mode, policy, registry, Main.LoopCapture{Main.Services{Some{Unit{}}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config, expectedEvents, expectedHistory, expectedError)
     checked(outcome, expectedHistory, expectedError)
     Main.disposeBatches(V.Value, Unit, String, String, V.Value, Unit, String, batches)
     Call.disposeOwners(String, String, updates)
