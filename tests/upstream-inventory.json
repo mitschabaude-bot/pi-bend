@@ -1480,9 +1480,13 @@
     },
     {
       "source": "packages/coding-agent/test/auth-storage.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe"
+      "status": "partial",
+      "ports": [
+        "tests/auth-storage.bend",
+        "tests/auth_storage_check.py"
+      ],
+      "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe",
+      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Pending: file-lock contention/compromise, coalesced reloads, cancellation/abort and Models refresh-failure cases; the port takes no cross-process lock."
     },
     {
       "source": "packages/coding-agent/test/bash-close-hang-windows.test.ts",
@@ -2159,9 +2163,12 @@
     },
     {
       "source": "packages/coding-agent/test/print-mode.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7",
+      "notes": "The harness drives the native CLI: help/version/diagnostic exits and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events and non-zero exit on request errors. Pending: session_shutdown events (no session layer), SIGTERM/SIGHUP exits (no signal primitive)."
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
@@ -2189,9 +2196,13 @@
     },
     {
       "source": "packages/coding-agent/test/resolve-config-value.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "da87e84e5a4aae4b671140ad33b19b4438bb3b97e8699acf5c13c97bf403608c"
+      "status": "partial",
+      "ports": [
+        "tests/config-value.bend",
+        "tests/config_value_check.py"
+      ],
+      "sha256": "da87e84e5a4aae4b671140ad33b19b4438bb3b97e8699acf5c13c97bf403608c",
+      "notes": "Ported: literals/environment templates/escapes; credential-scoped env precedence; shell command execution and trimming; command failures; caching until cleared; environment values never cached (per-run env); uncached resolution. Command cases run on native lanes only (no JS process primitive). Pending: the Windows stdin-transport shell case."
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
@@ -2243,9 +2254,13 @@
     },
     {
       "source": "packages/coding-agent/test/runtime-credentials.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409"
+      "status": "partial",
+      "ports": [
+        "tests/auth-storage.bend",
+        "tests/auth_storage_check.py"
+      ],
+      "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409",
+      "notes": "Ported: runtime overrides mask stored credentials without persisting; enumeration merges overrides without exposing keys; delete clears both the override and persisted credential. Pending: forwards operation signals to the persistent store; keeps a runtime override when persistent deletion is cancelled."
     },
     {
       "source": "packages/coding-agent/test/scoped-models-selector.test.ts",

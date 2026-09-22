@@ -97,10 +97,14 @@ def opened(content: String, result: Result<&1,&1,U32 & String,File>) -> IO(Resul
 
 # File.write drains partial writes. The affine handle is closed on success and
 # typed write failure; callers retain mutation ownership until this returns.
-def writeFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
+# Creation permissions apply only to a new file, as Node's writeFile `mode`.
+def writeFileMode(path: String, content: String, permissions: U32) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
-    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"w",438)
+    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"w",permissions)
     opened(content,result)
+
+def writeFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
+  writeFileMode(path,content,438)
 
 # Accumulate chunks in reverse byte order, then reverse once at EOF. Short
 # reads and resource retirement are owned by the shared file fold.

@@ -10,7 +10,7 @@ The modular OpenAI Responses provider runs over native DNS, TLS 1.3, certificate
 
 The coding-agent libraries also include CLI argument parsing, typed messages and [session context reconstruction](tests/session-context.md), system-prompt construction, Bash execution, prompt template loading and expansion, and native image handling. Native [skill discovery](tests/skills.md) includes filesystem metadata, frontmatter parsing, Unicode-aware ignore rules, deduplication and collision diagnostics. The [ls tool](tests/ls-public.md) has native execution with explicit ordering; its default collation policy remains pending. Component records describe exact scope and approved differences: [CLI arguments](tests/cli-args.md), [system prompts](tests/system-prompt.md), [prompt templates](tests/prompt-templates.md), [directory metadata](tests/filesystem-directory.md), and [ignore matching](tests/ignore.md).
 
-The remaining work includes the production modular CLI, session management and persistence, authentication beyond the tested modular API-key path, complete provider coverage, resource-loading integration, native extensions, and terminal/editor parity. Passing the native subagent milestone does not establish those requirements. The prototype's libcurl/ICU adapters remain migration liabilities and are not dependencies of the pure library build.
+The modular CLI now supports noninteractive text and JSON output through the native libraries, with API-key authentication and read/write/edit/Bash tools; see [CLI validation](tests/print-cli.md). Remaining work includes complete CLI modes, session management and persistence, OAuth provider execution, complete provider coverage, resource-loading integration, native extensions, and terminal/editor parity. Passing the native subagent milestone does not establish those requirements. The prototype's libcurl/ICU adapters remain migration liabilities and are not dependencies of the pure library build.
 
 ## Build and validation
 
@@ -26,6 +26,15 @@ python3 tests/glob_check.py build/glob-agent --threads 1
 python3 scripts/test-inventory.py
 python3 scripts/check-proofs.py
 ```
+
+Build and run the modular print CLI with an OpenAI API key already configured in the environment or pi authentication storage:
+
+```sh
+BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli
+./build/pi-cli -- --model gpt-4.1-mini -p "Summarize this directory"
+```
+
+The first `--` passes the remaining arguments through Bend's runtime to pi. Interactive mode and session persistence are still pending.
 
 The legacy `scripts/setup.sh`, `scripts/build.sh` and `scripts/test.sh` target the bootstrap executable and require libcurl/ICU development libraries. They are not the acceptance gate for the modular port. Credentials and private sessions must stay outside the repository.
 
