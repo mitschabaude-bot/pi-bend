@@ -9,18 +9,20 @@ import ./read.bend as Read
 import ./bash.bend as Bash
 import ./edit.bend as Edit
 import ./write.bend as Write
+import ./find.bend as Find
 import ./file-mutation-queue.bend as Queue
 
 # The public coding tools behind one agent-tool type. Upstream erases each
 # tool's details to `any`; here the details and errors are explicit sums, and
 # every tool is bridged into AgentTool<ToolDetails, ToolError> without
-# changing what the model sees. powershell, grep, find and ls are not ported.
+# changing what the model sees. powershell, grep and ls are not registered yet.
 
 type ToolName is Data:
   ReadTool{}
   BashTool{}
   EditTool{}
   WriteTool{}
+  FindTool{}
 
 def allToolNames() -> List<&2, ToolName>: [ReadTool{}, BashTool{}, EditTool{}, WriteTool{}]
 
@@ -30,6 +32,7 @@ def toolName(name: ToolName) -> String:
     case BashTool{}: "bash"
     case EditTool{}: "edit"
     case WriteTool{}: "write"
+    case FindTool{}: "find"
 
 def parseToolName(text: String) -> Maybe<&2, ToolName>:
   match text:
@@ -37,6 +40,7 @@ def parseToolName(text: String) -> Maybe<&2, ToolName>:
     case "bash": Some{BashTool{}}
     case "edit": Some{EditTool{}}
     case "write": Some{WriteTool{}}
+    case "find": Some{FindTool{}}
     case _: None{}
 
 type ToolDetails is Data:
@@ -44,6 +48,7 @@ type ToolDetails is Data:
   BashDetails{value: Maybe<&2, Bash.BashToolDetails>}
   EditDetails{value: Edit.EditToolDetails}
   WriteDetails{}
+  FindDetails{value: Maybe<&2, Find.FindToolDetails>}
 
 # Failure carries loop-level messages (validation, declaration, provider)
 # that upstream raises as plain Errors alongside tool failures.
@@ -52,6 +57,7 @@ type ToolError is Data:
   BashFailed{cause: Bash.Error}
   EditFailed{cause: Edit.Error}
   WriteFailed{cause: Write.Error}
+  FindFailed{cause: Find.Error}
   Failure{message: String}
 
 def fileError(error: FS.Error) -> String:
@@ -75,6 +81,7 @@ def errorMessage(error: ToolError) -> String:
     case BashFailed{cause}: Bash.errorMessage(cause)
     case EditFailed{cause}: Edit.errorMessage(cause)
     case WriteFailed{cause}: writeMessage(cause)
+    case FindFailed{cause}: Find.errorMessage(cause)
     case Failure{message}: message
 
 def failure(message: String) -> ToolError: Failure{message}
@@ -93,6 +100,7 @@ def promptSnippet(name: ToolName) -> String:
     case BashTool{}: "Execute bash commands (ls, grep, find, etc.)"
     case EditTool{}: "Make precise file edits with exact text replacement, including multiple disjoint edits in one call"
     case WriteTool{}: "Create or overwrite files"
+    case FindTool{}: "Find files by glob pattern (respects .gitignore)"
 
 def promptGuidelines(name: ToolName) -> List<&2, String>:
   match name:
@@ -100,6 +108,7 @@ def promptGuidelines(name: ToolName) -> List<&2, String>:
     case BashTool{}: ["You can inspect PI_* environment variables for current model and session details."]
     case EditTool{}: ["Use edit for precise changes (edits[].oldText must match exactly)", "When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls", "Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.", "Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions."]
     case WriteTool{}: ["Use write only for new files or complete rewrites."]
+    case FindTool{}: Nil{}
 
 # Bridges
 # -------
@@ -135,6 +144,18 @@ def invokeRead(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Read.Read
       do IO<Output()>:
         result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2, Read.ReadToolDetails>>, Read.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, None{}})
         return readOutput(result)
+
+def findOutput(value: Find.ToolResult()) -> Output():
+  match value:
+    case Fail{error}: Fail{FindFailed{error}}
+    case Done{Agent.AgentToolResult{content, details, usage, terminate}}: Done{Agent.AgentToolResult{content, FindDetails{details}, usage, terminate}}
+
+def invokeFind(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Find.FindToolDetails>>, Find.ToolResult()>, input: Input()) -> IO(Output()):
+  match input:
+    case Agent.ToolExecutionInput{id, params, signal, _}:
+      do IO<Output()>:
+        result : Find.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2, Find.FindToolDetails>>, Find.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, None{}})
+        return findOutput(result)
 
 def editOutput(value: Edit.ToolResult()) -> Output():
   match value:
@@ -181,6 +202,7 @@ type Owned is Type:
   OwnedBash{owner: Bash.ToolOwner}
   OwnedEdit{owner: Edit.ToolOwner, prepare: Prepare()}
   OwnedWrite{owner: Write.ToolOwner}
+  OwnedFind{owner: Find.ToolOwner}
 
 # The bridged tool borrows the underlying tool's callbacks; dispose retires
 # the bridges before the tool.
@@ -200,6 +222,7 @@ def disposeOwned(owned: Owned) -> IO(Unit):
         C.dispose(V.Value, Result<&2, &2, ToolError, V.Value>, prepare)
         Edit.disposeTool(owner)
     case OwnedWrite{owner}: Write.disposeTool(owner)
+    case OwnedFind{owner}: Find.disposeTool(owner)
 
 def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
@@ -209,9 +232,9 @@ def disposeTool(owner: ToolOwner) -> IO(Unit):
         disposeOwned(owned)
 
 type ToolsOptions is Data:
-  ToolsOptions{read: Maybe<&2, Read.ReadToolOptions>, bash: Maybe<&2, Bash.BashToolOptions>, edit: Maybe<&2, Edit.EditToolOptions>, write: Maybe<&2, Write.WriteToolOptions>}
+  ToolsOptions{read: Maybe<&2, Read.ReadToolOptions>, bash: Maybe<&2, Bash.BashToolOptions>, edit: Maybe<&2, Edit.EditToolOptions>, write: Maybe<&2, Write.WriteToolOptions>, find: Maybe<&2, Find.FindToolOptions>}
 
-def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{}}
+def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{}, None{}}
 
 # What every tool constructor needs besides its own options: the resolved
 # path environment, the working directory, pi's managed bin directory (fd, rg)
@@ -232,6 +255,20 @@ def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOpt
       do IO<ToolOwner>:
         owner : Read.ToolOwner <- Read.createReadTool(paths, cwd, Maybe.default(&2, Read.ReadToolOptions, options, Read.ReadToolOptions{None{}, None{}, None{}}))
         bridgedRead(Read.borrowTool(owner))
+
+def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Maybe<&2, Find.FindToolDetails>, Find.Error>) -> IO(ToolOwner):
+  match pair:
+    case (owner, Agent.AgentTool{name, description, parameters, sampling, label, _, callback, replay, mode}):
+      do IO<ToolOwner>:
+        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Maybe<&2, Find.FindToolDetails>>, Find.ToolResult()>, ~Input(), ~Output(), ~invokeFind, callback)
+        return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, OwnedFind{owner}}
+
+def createFindTool(environment: Environment, options: Maybe<&2, Find.FindToolOptions>) -> IO(ToolOwner):
+  match environment:
+    case Environment{paths, cwd, _, _}:
+      do IO<ToolOwner>:
+        owner : Find.ToolOwner <- Find.createFindTool(paths, cwd, Maybe.default(&2, Find.FindToolOptions, options, Find.FindToolOptions{None{}}))
+        bridgedFind(Find.borrowTool(owner))
 
 def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2, Bash.BashToolDetails>, Bash.Error>) -> IO(ToolOwner):
   match pair:
@@ -283,10 +320,11 @@ def createWriteTool(environment: Environment, options: Maybe<&2, Write.WriteTool
 
 def createTool(name: ToolName, environment: Environment, options: ToolsOptions) -> IO(ToolOwner):
   match name options:
-    case ReadTool{} ToolsOptions{read, _, _, _}: createReadTool(environment, read)
-    case BashTool{} ToolsOptions{_, bash, _, _}: createBashTool(environment, bash)
-    case EditTool{} ToolsOptions{_, _, edit, _}: createEditTool(environment, edit)
-    case WriteTool{} ToolsOptions{_, _, _, write}: createWriteTool(environment, write)
+    case ReadTool{} ToolsOptions{read, _, _, _, _}: createReadTool(environment, read)
+    case BashTool{} ToolsOptions{_, bash, _, _, _}: createBashTool(environment, bash)
+    case EditTool{} ToolsOptions{_, _, edit, _, _}: createEditTool(environment, edit)
+    case WriteTool{} ToolsOptions{_, _, _, write, _}: createWriteTool(environment, write)
+    case FindTool{} ToolsOptions{_, _, _, _, find}: createFindTool(environment, find)
 
 def createTools(names: List<&2, ToolName>, +environment: Environment, +options: ToolsOptions) -> IO(List<&1, ToolOwner>):
   match names:

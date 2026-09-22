@@ -1,0 +1,147 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3292,3 +3292,19 @@
+ def File.kind(path: String) -> IO(Result<&1, &1, U32 & String, U32>):
+   import "./effs/file_kind.c"
+   import "./effs/file_kind.js"
++
++# Exclusive single-directory creation and removal, without recursive policy.
++def Directory.create(path: String) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/directory_create.c"
++  import "./effs/directory_create.js"
++def Directory.remove(path: String) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/directory_remove.c"
++  import "./effs/directory_remove.js"
++# Exact modification time: signed Unix seconds high/low, then nanoseconds.
++def File.modified_time(path: String) -> IO(Result<&1,&1,U32 & String,U32 & U32 & U32>):
++  import "./effs/file_modified_time.c"
++  import "./effs/file_modified_time.js"
++# Set both access and modification times to signed epoch milliseconds.
++def File.set_times_milliseconds(path: String, high: U32, low: U32) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/file_set_times_milliseconds.c"
++  import "./effs/file_set_times_milliseconds.js"
+--- /dev/null
++++ b/bend2/effs/directory_create.c
+@@ -0,0 +1,12 @@
++#include <sys/stat.h>
++static void directory_create_call(IoWork* w) { io_sys_end(w, mkdir(w->data, 0777)); }
++static Term directory_create_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term directory_create_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e,f[0],&w->size);
++  if (io_nul(w->data,w->size)) { w->code=EILSEQ; return directory_create_pack(e,w); }
++  return io_work(w,directory_create_call,directory_create_pack);
++}
++static void __attribute__((constructor)) directory_create_use(void) { io_eff(CID_DIRECTORY_CREATE,directory_create_run,0); }
+--- /dev/null
++++ b/bend2/effs/directory_create.js
+@@ -0,0 +1,6 @@
++function directory_create(path) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try { require("fs").mkdirSync(bytes.length ? Buffer.from(bytes) : ""); return io_done({$: "Unit"}); }
++  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}
+--- /dev/null
++++ b/bend2/effs/directory_remove.c
+@@ -0,0 +1,12 @@
++#include <sys/stat.h>
++static void directory_remove_call(IoWork* w) { io_sys_end(w, rmdir(w->data)); }
++static Term directory_remove_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term directory_remove_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e,f[0],&w->size);
++  if (io_nul(w->data,w->size)) { w->code=EILSEQ; return directory_remove_pack(e,w); }
++  return io_work(w,directory_remove_call,directory_remove_pack);
++}
++static void __attribute__((constructor)) directory_remove_use(void) { io_eff(CID_DIRECTORY_REMOVE,directory_remove_run,0); }
+--- /dev/null
++++ b/bend2/effs/directory_remove.js
+@@ -0,0 +1,6 @@
++function directory_remove(path) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try { require("fs").rmdirSync(bytes.length ? Buffer.from(bytes) : ""); return io_done({$: "Unit"}); }
++  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}
+--- /dev/null
++++ b/bend2/effs/file_modified_time.c
+@@ -0,0 +1,24 @@
++#include <sys/stat.h>
++static void file_modified_time_call(IoWork* w) {
++  struct stat info;
++  io_sys_end(w,stat(w->data,&info));
++  if (!w->code) {
++#ifdef __APPLE__
++    struct timespec time = info.st_mtimespec;
++#else
++    struct timespec time = info.st_mtim;
++#endif
++    w->size=(u64)time.tv_sec;
++    w->word=(u32)time.tv_nsec;
++  }
++}
++static Term file_modified_time_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,io_tup(e,(u32)(w->size>>32),io_tup(e,(u32)w->size,w->word)));
++}
++Term file_modified_time_run(Env e, Term* f, IoWork* w) {
++  w->data=io_cstr(e,f[0],&w->size);
++  if(io_nul(w->data,w->size)) { w->code=EILSEQ; return file_modified_time_pack(e,w); }
++  return io_work(w,file_modified_time_call,file_modified_time_pack);
++}
++static void __attribute__((constructor)) file_modified_time_use(void) { io_eff(CID_FILE_MODIFIED_TIME,file_modified_time_run,0); }
+--- /dev/null
++++ b/bend2/effs/file_modified_time.js
+@@ -0,0 +1,10 @@
++function file_modified_time(path) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try {
++    const ns=require("fs").statSync(bytes.length ? Buffer.from(bytes) : "",{bigint:true}).mtimeNs;
++    const seconds=ns<0n ? (ns-999999999n)/1000000000n : ns/1000000000n;
++    const word=BigInt.asUintN(64,seconds);
++    return io_done(io_tup(Number(word>>32n),io_tup(Number(word&0xffffffffn),Number(ns-seconds*1000000000n))));
++  } catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}
+--- /dev/null
++++ b/bend2/effs/file_set_times_milliseconds.c
+@@ -0,0 +1,23 @@
++#include <sys/stat.h>
++static void file_set_times_milliseconds_call(IoWork* w) {
++  int64_t millis; memcpy(&millis,&w->size,sizeof(millis));
++  if(millis < -8640000000000000LL || millis > 8640000000000000LL) { w->code=EOVERFLOW; return; }
++  int64_t seconds=millis/1000, remainder=millis%1000;
++  if(remainder<0) { seconds--; remainder+=1000; }
++  time_t sec=(time_t)seconds;
++  if((int64_t)sec!=seconds) { w->code=EOVERFLOW; return; }
++  struct timespec times[2]={{sec,(long)remainder*1000000},{sec,(long)remainder*1000000}};
++  io_sys_end(w,utimensat(AT_FDCWD,w->data,times,0));
++}
++static Term file_set_times_milliseconds_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term file_set_times_milliseconds_run(Env e, Term* f, IoWork* w) {
++  u64 length=0;
++  w->data=io_cstr(e,f[0],&length);
++  w->size=((u64)(u32)f[1]<<32)|(u32)f[2];
++  if(io_nul(w->data,length)) { w->code=EILSEQ; return file_set_times_milliseconds_pack(e,w); }
++  return io_work(w,file_set_times_milliseconds_call,file_set_times_milliseconds_pack);
++}
++static void __attribute__((constructor)) file_set_times_milliseconds_use(void) { io_eff(CID_FILE_SET_TIMES_MILLISECONDS,file_set_times_milliseconds_run,0); }
+--- /dev/null
++++ b/bend2/effs/file_set_times_milliseconds.js
+@@ -0,0 +1,8 @@
++function file_set_times_milliseconds(path,high,low) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  const millis=BigInt.asIntN(64,(BigInt(high>>>0)<<32n)|BigInt(low>>>0));
++  if(millis < -8640000000000000n || millis > 8640000000000000n) return io_fail(75);
++  try { const time=new Date(Number(millis)); require("fs").utimesSync(bytes.length ? Buffer.from(bytes) : "",time,time); return io_done({$: "Unit"}); }
++  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}

@@ -10,6 +10,7 @@ import ../core/tools/index.bend as Tools
 import ../core/tools/read.bend as Read
 import ../core/tools/bash.bend as Bash
 import ../core/tools/edit.bend as Edit
+import ../core/tools/find.bend as Find
 import ../core/tools/truncate.bend as Truncate
 
 # Session event shape emitted by the JSON stdout protocol. Cumulative assistant
@@ -59,12 +60,18 @@ def editDetails(value: Edit.EditToolDetails) -> V.Value:
   match value:
     case Edit.EditToolDetails{diff, patch, firstChangedLine}: object(field("diff", text(diff), field("patch", text(patch), Json.optional("firstChangedLine", Maybe.map(&2, Nat, V.Value, natural, firstChangedLine), Nil{}))))
 
+def findDetails(value: Maybe<&2, Find.FindToolDetails>) -> V.Value:
+  match value:
+    case None{}: V.Null{}
+    case Some{Find.FindToolDetails{cut, resultLimit}}: object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncation, cut), Json.optional("resultLimitReached", Maybe.map(&2, Nat, V.Value, natural, resultLimit), Nil{})))
+
 def toolDetails(value: Tools.ToolDetails) -> V.Value:
   match value:
     case Tools.ReadDetails{details}: readDetails(details)
     case Tools.BashDetails{details}: bashDetails(details)
     case Tools.EditDetails{details}: editDetails(details)
     case Tools.WriteDetails{}: object(Nil{})
+    case Tools.FindDetails{details}: findDetails(details)
 
 # Messages
 # --------

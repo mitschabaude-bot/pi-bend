@@ -103,3 +103,14 @@ for pattern,path,want in [
 for pattern,path in [('É','é'),('K','k'),('𐐀','𐐨'),('[A-Z]','K')]:
     assert native(False,[pattern],path)=='included',(pattern,path)
 print('19 Unicode scalar literal/class/width comparisons passed')
+
+for mode,rules,path,want in [
+    ('entry-file',['blocked/'],'blocked/x.txt','included'),
+    ('entry-file',['blocked/','!blocked/x.txt'],'blocked/x.txt','unignored'),
+    ('entry-file',['*.txt'],'blocked/x.txt','ignored'),
+    ('entry-directory',['blocked/'],'blocked','ignored'),
+    ('entry-file',['blocked/'],'blocked','included'),
+]:
+    actual = subprocess.check_output(command+['\x1f'.join([mode,path,*rules])],text=True).strip()
+    assert actual == want, (mode,rules,path,actual,want)
+print('5 entry-only matching contracts passed; ancestor-aware APIs unchanged')

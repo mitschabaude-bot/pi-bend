@@ -1483,10 +1483,12 @@
       "status": "partial",
       "ports": [
         "tests/auth-storage.bend",
-        "tests/auth_storage_check.py"
+        "tests/auth_storage_check.py",
+        "tests/auth-storage-lock.bend",
+        "tests/auth_storage_lock_check.py"
       ],
       "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe",
-      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Pending: file-lock contention/compromise, coalesced reloads, cancellation/abort and Models refresh-failure cases; the port takes no cross-process lock."
+      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Interprocess read/modify/delete leases now cover 24 mixed Node/Bend updates, cancellation before/during callbacks and lock waits, compromise-before-write detection, malformed-file cleanup and unrelated-entry preservation on Bun/native one/four. Coalesced revision-based reloads, complete Models refresh-failure cases and the full auth suite remain pending; see tests/auth-storage-lock.md."
     },
     {
       "source": "packages/coding-agent/test/bash-close-hang-windows.test.ts",
@@ -2628,15 +2630,23 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3302-find-path-glob.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d9bb34b773d7865109e41ac09146fa3c2c670cc594bb5a350e2d8e30230939db"
+      "status": "ported",
+      "ports": [
+        "tests/find-public.bend",
+        "tests/find_public_check.py"
+      ],
+      "sha256": "d9bb34b773d7865109e41ac09146fa3c2c670cc594bb5a350e2d8e30230939db",
+      "notes": "Native public find preserves the original POSIX assertions, including full-path glob matching, independently checked flat/deep ignore scopes, root relativization and injected results. 85 scenarios pass Bun/native one/four. Five Windows path.win32 cases remain pending in the root-relativization suite. Native policies and dependency coverage are documented in tests/find-public.md; CLI registry and JSON details are integrated and exercised through a live native model/tool loop; renderers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3303-find-nested-gitignore.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "40748b486bf64c9feaacb3e0f411ffec5fdc145cca3dad0f62c680e0673b959f"
+      "status": "ported",
+      "ports": [
+        "tests/find-public.bend",
+        "tests/find_public_check.py"
+      ],
+      "sha256": "40748b486bf64c9feaacb3e0f411ffec5fdc145cca3dad0f62c680e0673b959f",
+      "notes": "Native public find preserves the original POSIX assertions, including full-path glob matching, independently checked flat/deep ignore scopes, root relativization and injected results. 85 scenarios pass Bun/native one/four. Five Windows path.win32 cases remain pending in the root-relativization suite. Native policies and dependency coverage are documented in tests/find-public.md; CLI registry and JSON details are integrated and exercised through a live native model/tool loop; renderers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3317-network-connection-lost-retry.test.ts",
@@ -2774,9 +2784,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6104-find-root-relativization.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5868521c64a301d49b018b82749f74b69bbe26c35a68122816398fbf7d33ea63"
+      "status": "partial",
+      "ports": [
+        "tests/find-public.bend",
+        "tests/find_public_check.py"
+      ],
+      "sha256": "5868521c64a301d49b018b82749f74b69bbe26c35a68122816398fbf7d33ea63",
+      "notes": "Native public find preserves the original POSIX assertions, including full-path glob matching, independently checked flat/deep ignore scopes, root relativization and injected results. 85 scenarios pass Bun/native one/four. Five Windows path.win32 cases remain pending in the root-relativization suite. Native policies and dependency coverage are documented in tests/find-public.md; CLI registry and JSON details are integrated and exercised through a live native model/tool loop; renderers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6162-extension-active-tools-next-turn.test.ts",
@@ -3162,7 +3176,7 @@
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
       "implementation": "packages/coding-agent/src/core/tools/",
-      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md). Public Bash covers native execution, hooks/context, streaming/truncation, cancellation, late callbacks and owned cleanup (tests/bash-tool.md); renderers, other platforms and the remaining tools stay pending. User Bash executeBashWithOperations now covers the named local sanitization and line-only full-output assertions, with split-stream corrections and checked cleanup (tests/bash-executor.md). Native ls covers the original dotfile/directory listing and context cwd assertions, native/injected filesystem operations, cancellation, successful-stat limits and byte truncation (tests/ls-public.md). Ordering remains explicitly injected pending the locale-policy decision; canonical default factory and rendering remain pending."
+      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md). Public Bash covers native execution, hooks/context, streaming/truncation, cancellation, late callbacks and owned cleanup (tests/bash-tool.md); renderers, other platforms and the remaining tools stay pending. User Bash executeBashWithOperations now covers the named local sanitization and line-only full-output assertions, with split-stream corrections and checked cleanup (tests/bash-executor.md). Native ls covers the original dotfile/directory listing and context cwd assertions, native/injected filesystem operations, cancellation, successful-stat limits and byte truncation (tests/ls-public.md). Ordering remains explicitly injected pending the locale-policy decision; canonical default factory and rendering remain pending. Native find now covers hidden files, Git ignore scopes, malformed globs, flag-like patterns and context cwd; see tests/find-public.md. Find registry and JSON details are integrated and live-tested with stored Codex OAuth; rendering remains pending."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
@@ -3370,9 +3384,14 @@
     },
     {
       "source": "packages/tui/test/fuzzy.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5945d422c5728860dff14331a69f56a30f781d0343c87ab18b4e1a2454766798"
+      "status": "ported",
+      "ports": [
+        "tests/fuzzy.bend",
+        "tests/fuzzy_check.py",
+        "tests/fuzzy_reference.mts"
+      ],
+      "sha256": "5945d422c5728860dff14331a69f56a30f781d0343c87ab18b4e1a2454766798",
+      "notes": "All 14 original named tests (18 public calls) plus 1,988 total differential comparisons pass Bun/native one/four. Unicode scalar positions and simple folding replace UTF16 positions and JS lowercasing; stable ranking, token conjunction and alphanumeric fallback preserved. See tests/fuzzy.md. No terminal selector or model-listing integration claimed."
     },
     {
       "source": "packages/tui/test/input.test.ts",
@@ -3489,9 +3508,15 @@
     },
     {
       "source": "packages/tui/test/stdin-buffer.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8"
+      "status": "partial",
+      "ports": [
+        "tests/stdin-buffer.bend",
+        "tests/stdin_buffer_check.py",
+        "tests/stdin_buffer_original.mts",
+        "tests/stdin_buffer_reference.mts"
+      ],
+      "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8",
+      "notes": "All 59 reference tests execute with original assertions; recorded input/flush/clear calls replay as pure Bend transitions. 421 traces plus large control/paste and native Unicode checks pass Bun/native one/four. Owned timer scheduling, cancellation/listener lifecycle, and byte-input conversion remain pending; custom-timeout assertions have not been validated against a Bend driver. See tests/stdin-buffer.md."
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
