@@ -25,7 +25,20 @@ def tree(depth):
 for _ in range(80):
     text=json.dumps(tree(3),ensure_ascii=True,separators=(',',':'));cases += [text,text[:-1],text+'x']
 for sign,integer,fraction,exponent in itertools.product(['','-'],['0','1','12'],['','.0','.125'],['','e0','E-10','e+3']):cases.append(sign+integer+fraction+exponent)
+# Native strings contain Unicode scalars; raw isolated UTF-16 units cannot enter this API.
+cases=[text for text in cases if not any(0xD800 <= ord(c) <= 0xDFFF for c in text)]
+cases += ['"\\ud800x"','"\\ud800\\u0041"','"\\ud800\\ud800"','"\\udc00\\ud800"','"\\ud800\\udc00"','"\\udbff\\udfff"']
 expected=json.loads(subprocess.check_output(['node','tests/json_parse_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
+def scalar_text(text):
+    return not any(0xD800 <= ord(c) <= 0xDFFF for c in text)
+def scalar_value(node):
+    if 'text' in node:return scalar_text(node['text'])
+    if 'array' in node:return all(map(scalar_value,node['array']))
+    if 'object' in node:return all(scalar_text(k) and scalar_value(v) for k,v in node['object'])
+    return True
+# Approved strict native adaptation: JSON.parse accepts lone surrogate units;
+# Bend reports a typed InvalidEscape instead of constructing an invalid Char.
+expected=[result if not result['ok'] or scalar_value(result['value']) else {'ok':False} for result in expected]
 def value(node):
     if 'null' in node:return 'V.Null{}'
     if 'number' in node:return 'V.Number{F.fromBits('+', '.join(map(str,node['number']))+')}'

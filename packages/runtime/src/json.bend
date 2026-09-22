@@ -42,16 +42,36 @@ type StringState is Data:
   Plain{}
   Escape{}
   Hex{remaining: Nat, code: U32}
+  LowSlash{high: U32}
+  LowEscape{high: U32}
+  LowHex{high: U32, remaining: Nat, code: U32}
 
 type StringStep is Data:
   More{state: StringState, reversed: String}
   Complete{reversed: String}
   StringError{error: ParseError}
 
+# Decode UTF-16 escape pairs before constructing a native scalar character.
+def escapedUnit(+code: U32,+reversed: String) -> StringStep:
+  Bool.pick(Unit -> StringStep,Utf16.highSurrogate(code),
+    _ => More{LowSlash{code},reversed},
+    _ => Bool.pick(Unit -> StringStep,Utf16.lowSurrogate(code),
+      _ => StringError{InvalidEscape{}},
+      _ => More{Plain{},SCon{Chr{code},reversed}})(Unit{}))(Unit{})
+def lowUnit(high: U32,+code: U32,reversed: String) -> StringStep:
+  Bool.pick(Unit -> StringStep,Utf16.lowSurrogate(code),
+    _ => More{Plain{},SCon{Chr{(65536 + (high - 55296) * 1024 + code - 56320 : U32)},reversed}},
+    _ => StringError{InvalidEscape{}})(Unit{})
+def lowHexStep(value: Maybe<&2,U32>,high: U32,remaining: Nat,code: U32,reversed: String) -> StringStep:
+  match value remaining:
+    case None{} _: StringError{InvalidEscape{}}
+    case Some{digit} 0n: lowUnit(high,(code * 16 + digit : U32),reversed)
+    case Some{digit} 1n+n: More{LowHex{high,n,(code * 16 + digit : U32)},reversed}
+
 def hexStep(value: Maybe<&2,U32>, remaining: Nat, code: U32, reversed: String) -> StringStep:
   match value remaining:
     case None{} _: StringError{InvalidEscape{}}
-    case Some{digit} 0n: More{Plain{}, SCon{Chr{(code * 16 + digit : U32)}, reversed}}
+    case Some{digit} 0n: escapedUnit((code * 16 + digit : U32),reversed)
     case Some{digit} 1n+n: More{Hex{n,(code * 16 + digit : U32)}, reversed}
 
 def stringStep(state: StringState, +code: U32, reversed: String) -> StringStep:
@@ -70,10 +90,14 @@ def stringStep(state: StringState, +code: U32, reversed: String) -> StringStep:
     case Escape{} 117: More{Hex{3n,0},reversed}
     case Escape{} _: StringError{InvalidEscape{}}
     case Hex{remaining,value} _: hexStep(hexDigit(code),remaining,value,reversed)
+    case LowSlash{high} 92: More{LowEscape{high},reversed}
+    case LowEscape{high} 117: More{LowHex{high,3n,0},reversed}
+    case LowHex{high,remaining,value} _: lowHexStep(hexDigit(code),high,remaining,value,reversed)
+    case _ _: StringError{InvalidEscape{}}
 
 def scanString(text: String, step: StringStep) -> Lexeme:
   match text step:
-    case remaining Complete{reversed}: Lexeme{Atom{V.Text{Utf16.normalize(String.reverse(reversed))}},remaining}
+    case remaining Complete{reversed}: Lexeme{Atom{V.Text{String.reverse(reversed)}},remaining}
     case remaining StringError{error}: Lexeme{Invalid{error},remaining}
     case SNil{} More{_,_}: Lexeme{Invalid{UnterminatedString{}},""}
     case SCon{Chr{code},rest} More{state,reversed}: scanString(rest,stringStep(state,code,reversed))
@@ -318,9 +342,7 @@ def list(~A: Data, ~decode: V.Value -> Result<&2, &2, Error, A>, value: V.Value)
     items(~A, ~decode, values, 0n)
 
 
-# Quote a JavaScript-compatible string. Bend may contain Unicode scalars or
-# individual UTF-16 surrogate units. Valid adjacent pairs emit their scalar;
-# unpaired units emit lowercase Unicode escapes, as JSON.stringify does.
+# JSON string quoting; public native strings contain Unicode scalars.
 def hex(+value: U32) -> Char:
   Char.from_u32(Bool.pick(U32, U32.is_lt(value, 10), (48 + value : U32), (87 + value : U32)))
 
