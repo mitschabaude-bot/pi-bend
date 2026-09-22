@@ -56,6 +56,12 @@ def consumed(offset: Nat,result: Result<&2,&2,Unit,Fragment>) -> Result<&2,&2,Er
     case Done{Fragment{mode,point}}: Done{Step{Decoder{mode,Succ{offset}},point}}
 def step(decoder: Decoder,+byte: U32) -> Result<&2,&2,Error,Step>:
   match decoder:
+    # ASCII in a settled UTF-8 stream needs no temporary scalar list or codec
+    # fragments. Non-ASCII input still follows the same strict decoder.
+    case Decoder{UTF8{Utf8.Ready{},+seen},+offset}:
+      Bool.pick(Unit -> Result<&2,&2,Error,Step>,U32.is_lt(byte,128),
+        _ => Done{Step{Decoder{UTF8{Utf8.Ready{},True{}},Succ{offset}},Some{Chr{byte}}}},
+        _ => Bool.pick(Unit -> Result<&2,&2,Error,Step>,U32.is_le(byte,255),_ => consumed(offset,consume(UTF8{Utf8.Ready{},seen},byte)),_ => Fail{InvalidByte{offset,byte}})(Unit{}))(Unit{})
     case Decoder{mode,+offset}: Bool.pick(Unit -> Result<&2,&2,Error,Step>,U32.is_le(byte,255),_ => consumed(offset,consume(mode,byte)),_ => Fail{InvalidByte{offset,byte}})(Unit{})
 
 def finish(decoder: Decoder) -> Result<&2,&2,Error,Unit>:
