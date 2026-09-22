@@ -20,7 +20,7 @@ Generic behavioral contracts live in [LAWS.bend](LAWS.bend), with machine-checke
 
 Requires Bend 2.0.4, Bun for the Bend compiler, Clang, Python 3 for build/test scripts, libcurl, and ICU development libraries (`icu-uc` and `icu-i18n` via pkg-config). The resulting executable uses no JavaScript runtime.
 
-Canonical library tests currently use Bend 2.0.7 with the explicit [compiler patches](patches/README.md) for shared imports, channel identity and exact monotonic clock ticks. Their pure build path does not link the bootstrap's libcurl/ICU adapters. `scripts/build-pure.sh` honours `PI_BEND_OPT` (Clang optimisation, `-O1` by default; `-O0` for development iterations).
+Canonical library tests currently use Bend 2.0.7 with the explicit [compiler patches](patches/README.md) for shared imports, channel identity and exact monotonic clock ticks. Their pure build path does not link the bootstrap's libcurl/ICU adapters. `scripts/build-pure.sh` honours `PI_BEND_OPT` (Clang optimisation, `-O1` by default; `-O0` for development iterations) and `BEND_TUS` (compile the generated C as that many translation units in parallel; the compiler reads the same variable when it emits).
 
 ```sh
 sh scripts/setup.sh

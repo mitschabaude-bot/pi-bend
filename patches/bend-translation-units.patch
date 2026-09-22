@@ -1,0 +1,77 @@
+--- a/comp.ts	2026-09-22 15:32:31.967566700 +0200
++++ b/comp.ts	2026-09-22 15:48:05.954050544 +0200
+@@ -3196,13 +3196,23 @@
+   return defs;
+ }
+ 
++// Host segments are dealt to BEND_TUS translation units by size, each
++// guarded by its unit number, so `clang -DBEND_TU=k` compiles one share;
++// with one unit (the default) every guard is unit 0.
+ function compile_segs(fl: File): string {
++  const units = Math.max(1, Number(process.env.BEND_TUS ?? "1") | 0);
++  const sizes = Array(units).fill(0);
+   return fl.segs.map((seg) => {
+     const out = [`  WL_CASE(${seg.fid})`, "  {",
+       ...seg_take(seg).map((l) => "    " + l),
+       "    WL_OPEN", ...seg.spin ? ["    WL_SPIN"] : [],
+       ...seg.lines, ...seg.spin ? ["    WL_SPUN"] : [], "  }}"];
+-    return (seg.host ? ["#if !DEVICE", ...out, "#endif"] : out).join("\n");
++    if (!seg.host) {
++      return out.join("\n");
++    }
++    const unit = sizes.indexOf(Math.min(...sizes));
++    sizes[unit] += out.reduce((n, l) => n + l.length, 0);
++    return [`#if !DEVICE && BEND_TU == ${unit}`, ...out, "#endif"].join("\n");
+   }).join("\n\n");
+ }
+ 
+@@ -3294,7 +3304,12 @@
+   fills[0][1].push(...desc);
+   const out = fills.reduce((src, [mark, parts]) => src.replace(
+     new RegExp("^// " + mark + "\\n// " + "=".repeat(mark.length) + "$", "m"),
+-    (m) => [m, ...parts].join("\n\n")), TEMPLATE);
++    (m) => [m, ...parts].join("\n\n")), TEMPLATE)
++    // Runtime definitions (not the inline ones) are `static` in a single
++    // unit and weak external symbols across units, where one copy survives;
++    // the external ones (effects, main) are weak there too.
++    .replace(/^static (?!inline\b)/gm, "BEND_STATIC ")
++    .replace(/^(?=(?!static\b|typedef\b|struct\b|union\b|enum\b|INLINE\b|OUTLINE\b|FAR\b|WL_|BEND_|CONSTV\b|PRESERVE\b|#)[A-Za-z_][A-Za-z_0-9 ]*\*?[ *]+[A-Za-z_0-9]+\([^;{]*\{$)/gm, "BEND_WEAK ");
+   if (process.env.BEND_TIMES !== undefined) console.error(`TIME assemble ${((performance.now() - ta) / 1000).toFixed(1)}s rss=${(process.memoryUsage().rss / 2 ** 30).toFixed(2)}GiB`);
+   return out;
+ }
+@@ -3567,6 +3582,26 @@
+ 
+ const TEMPLATE = String.raw`
+ 
++// Units
++// =====
++
++// A program may be compiled as BEND_TUS translation units of one source,
++// each with its own BEND_TU: host segments belong to one unit, and the
++// runtime's definitions are weak in every unit so the linker keeps one.
++#ifndef BEND_TUS
++#define BEND_TUS 1
++#endif
++#ifndef BEND_TU
++#define BEND_TU 0
++#endif
++#if BEND_TUS > 1 && !defined(__METAL_VERSION__) && !defined(__CUDACC_RTC__)
++#define BEND_STATIC __attribute__((weak))
++#define BEND_WEAK   __attribute__((weak))
++#else
++#define BEND_STATIC static
++#define BEND_WEAK
++#endif
++
+ // Imports
+ // =======
+ 
+@@ -3685,7 +3720,7 @@
+ #else
+ #define LOCK(l)    while (__atomic_exchange_n(&(l), 1, __ATOMIC_ACQUIRE)) {}
+ #define UNLOCK(l)  __atomic_store_n(&(l), 0, __ATOMIC_RELEASE)
+-#define WL_FN      static PRESERVE(preserve_none) __attribute__((noinline)) Reply
++#define WL_FN      BEND_STATIC PRESERVE(preserve_none) __attribute__((noinline)) Reply
+ #define WL_CASE(F) WL_FN WL_##F(WL_SIG)
+ #define WL_OPEN    { WL_BANK u32 rn;
+ #define WL_JMP(F)  __attribute__((musttail)) return WL_##F(WL_ALL)

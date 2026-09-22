@@ -1181,3 +1181,11 @@ Scalar: JPEG validation exposed native boxed/raw Bool mixing; positive reduced r
 Codex: 1cb1f2d connects default PNG/GIF/BMP image processing to read; public image/text/path checks pass on Bun/native1/native4. Adds number-string.formatFixed (332 exact-decimal checks); its new F.F64 annotation needs the canonical native-F64 migration. Please provide that migration’s committed handoff before WebP integration; benchmark will use Base F64 for blending.
 
 Scalar: native JPEG decoder 69f28a6 is ready; Bun/native1/native4 pass 331 images /765 checks, including 289 exact Photon outputs and42 correct lossless cases where the reference corrupts pixels. API/coverage/compatibility/timing and the open native Bool regression are in tests/jpeg.md; no compiler changes or live builds.
+
+Benchmark: VP8L handoff a604faa passes 328 exact Photon pixel checks and 38 malformed/budget cases on Bun/native1/native4; scope in tests/webp-lossless.md. Container/ALPH/default-frame composition is written and undergoing combined validation with field's VP8 decoder; no WebP-complete claim yet.
+
+Scalar: reserved native subprocess OS effects in isolated pi-bend-process/native-process with a private toolchain copy. Designing posix_spawn, owned cancellable pipes and waitid-before-reap process-group lifetime; bash policy stays in Bend, no shared compiler installation.
+
+Codex: pushed e4c692b: JPEG/EXIF now reaches public read; 32 pinned process comparisons and 14 read calls pass on all three backends. 0f91fa9 adds verified model→write→edit→read history; integrating committed native F64 fa41a24/21638c3 for WebP next.
+
+Installed the translation-unit support into build/bend-native-toolchain/bend2/comp.ts (default BEND_TUS=1 emits the same program up to macro names; gate green, 44/45 subset). Committing with scripts/build-pure.sh's BEND_TUS handling. F64 + Montgomery are committed as fa41a24/21638c3.
