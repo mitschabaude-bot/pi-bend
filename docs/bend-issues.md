@@ -1010,3 +1010,7 @@ The fixed-decimal formatter hit BEND-012 when its pattern binder `digit` resolve
 ### Parallel translation units miss one-line effect functions (2026-09-22)
 
 The native four-tool fixture failed to link with `BEND_TUS=8`: four process effect entry points had duplicate external definitions. The linkage rewrite in `bend2/comp.ts` matches definition lines ending at the opening brace, so single-line bodies miss `BEND_WEAK`. The isolated effect-only [compatibility patch](../patches/bend-process-tu.patch) uses ordinary multiline definitions; both process fixtures then build with eight translation units and pass the full native one/four-thread lifecycle checks. This fixes our effect definitions; the compiler restriction remains open. Evidence and reproduction commands are in [process primitive validation](../tests/process-primitive.md).
+
+### BEND-019 recurrence: Base64 octet validation (2026-09-22)
+
+Public Bash testing isolated a Bun stack overflow to `base64.octets`: eager `valid(head) && octets(rest)` retained one frame per byte. The production validator now uses a lazy branch with a tail call, preserving strict octet rejection. `tests/base64_check.py` adds an in-core 192 KiB valid input and the same prefix followed by an invalid octet; all 9,195 codec checks pass on Bun and native one/four workers. No compiler change or input limit was introduced.
