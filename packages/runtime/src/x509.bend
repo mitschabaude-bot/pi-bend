@@ -5,6 +5,7 @@ import ./p256.bend as P256
 import ./calendar.bend as Calendar
 import ./u64.bend as W
 import ./big-nat.bend as Big
+import ./utf8-strict.bend as UTF8
 
 # Parsed wire evidence, not an authenticated identity. Trust, validity, names,
 # constraints and extensions must be checked before a TLS connection is usable.
@@ -23,6 +24,7 @@ type Error is Data:
   InvalidKeyUsage{}
   InvalidPurpose{}
   PathLengthExceeded{}
+  UnsupportedNameEncoding{tag: U32}
 
 type PublicKey is Data:
   Rsa{key: RSA.PublicKey}
@@ -499,3 +501,201 @@ def checkIssuerPolicy(policy: Policy, intermediatesBelow: Big.BigNat) -> Result<
     case Policy{BasicConstraints{True{},limit},usage,eku}:
       Result.bind(&2,&2,Error,Unit,Unit,issuingUsage(usage), unused =>
         Result.bind(&2,&2,Error,Unit,Unit,serverPurpose(eku), unused => pathLimit(limit,intermediatesBelow)))
+
+# Ordered RDNs contain unordered multisets of attributes. Values use the
+# OpenSSL comparison form: common string encodings compare as text, with ASCII
+# case/space folding; non-ASCII code points remain exact (no Unicode folding).
+type NameValue is Data:
+  TextNameValue{text: String}
+  EncodedNameValue{node: DER.Node}
+
+type NameAttribute is Data:
+  NameAttribute{oid: List<&2,U32>, value: NameValue}
+
+type DistinguishedName is Data:
+  DistinguishedName{rdns: List<&2,List<&2,NameAttribute>>}
+
+type CertificateNames is Data:
+  CertificateNames{issuer: DistinguishedName, subject: DistinguishedName}
+
+def nameScalar(+code: U32, reversed: String) -> Result<&2,&2,Error,String>:
+  Bool.pick(Unit -> Result<&2,&2,Error,String>,U32.is_le(code,1114111) && Bool.not(U32.is_ge(code,55296) && U32.is_le(code,57343)),unused => Done{SCon{Char.from_u32(code),reversed}},unused => Fail{InvalidCertificate{}})(Unit{})
+
+def wideName(bytes: List<&2,U32>, +width: U32, reversed: String) -> Result<&2,&2,Error,String>:
+  match bytes width:
+    case Nil{} _: Done{String.reverse(reversed)}
+    case a <> b <> rest 2:
+      Result.bind(&2,&2,Error,String,String,nameScalar((a * 256 + b : U32),reversed), next => wideName(rest,width,next))
+    case a <> b <> c <> d <> rest 4:
+      Result.bind(&2,&2,Error,String,String,nameScalar((a * 16777216 + b * 65536 + c * 256 + d : U32),reversed), next => wideName(rest,width,next))
+    case _ _: Fail{InvalidCertificate{}}
+
+def printable(+code: U32) -> Bool:
+  (U32.is_ge(code,65) && U32.is_le(code,90)) || (U32.is_ge(code,97) && U32.is_le(code,122)) || (U32.is_ge(code,48) && U32.is_le(code,57)) || U32.is_eq(code,32) || U32.is_eq(code,39) || (U32.is_ge(code,40) && U32.is_le(code,41)) || (U32.is_ge(code,43) && U32.is_le(code,47)) || U32.is_eq(code,58) || U32.is_eq(code,61) || U32.is_eq(code,63)
+
+def nameByteAllowed(tag: U32, +code: U32) -> Bool:
+  match tag:
+    case 19: printable(code)
+    case 20: U32.is_le(code,255)
+    case 22: U32.is_le(code,127)
+    case _: False{}
+
+def narrowName(bytes: List<&2,U32>, +tag: U32, reversed: String) -> Result<&2,&2,Error,String>:
+  match bytes:
+    case Nil{}: Done{String.reverse(reversed)}
+    case +byte <> rest:
+      checked = Bool.pick(Result<&2,&2,Error,Unit>,nameByteAllowed(tag,byte),Done{Unit{}},Fail{InvalidCertificate{}})
+      Result.bind(&2,&2,Error,Unit,String,checked, unused => narrowName(rest,tag,SCon{Char.from_u32(byte),reversed}))
+
+def nameUtf8(result: Result<&2,&2,UTF8.Error,String>) -> Result<&2,&2,Error,String>:
+  match result:
+    case Fail{_}: Fail{InvalidCertificate{}}
+    case Done{value}: Done{value}
+
+def encodedNameString(+tag: U32, bytes: List<&2,U32>) -> Result<&2,&2,Error,String>:
+  match tag:
+    case 12: nameUtf8(UTF8.decodeWith(UTF8.Preserve{},bytes))
+    case 30: wideName(bytes,2,"")
+    case 28: wideName(bytes,4,"")
+    case _:
+      checked = Bool.pick(Result<&2,&2,Error,Unit>,U32.is_eq(tag,19) || U32.is_eq(tag,20) || U32.is_eq(tag,22),Done{Unit{}},Fail{UnsupportedNameEncoding{tag}})
+      Result.bind(&2,&2,Error,Unit,String,checked,unused => narrowName(bytes,tag,""))
+
+def nameString(node: DER.Node) -> Result<&2,&2,Error,String>:
+  match node:
+    case DER.Node{DER.Tag{0,False{},tag},_,bytes}: encodedNameString(tag,bytes)
+    case _: Fail{InvalidCertificate{}}
+
+def nameSpace(+code: U32) -> Bool:
+  U32.is_eq(code,32) || (U32.is_ge(code,9) && U32.is_le(code,13))
+
+def nameLower(+code: U32) -> U32:
+  Bool.pick(U32,U32.is_ge(code,65) && U32.is_le(code,90),(code + 32 : U32),code)
+
+def pendingSpace(pending: Bool, reversed: String) -> String:
+  match pending reversed:
+    case _ SNil{}: ""
+    case True{} reversed: SCon{Chr{32},reversed}
+    case False{} reversed: reversed
+
+def canonicalNameText(text: String, pending: Bool, +reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{Chr{+code},rest}:
+      +space = nameSpace(code)
+      canonicalNameText(rest,space,Bool.pick(String,space,reversed,SCon{Char.from_u32(nameLower(code)),pendingSpace(pending,reversed)}))
+
+def numericName(bytes: List<&2,U32>) -> Bool:
+  match bytes:
+    case Nil{}: True{}
+    case +head <> rest: (U32.is_eq(head,32) || (U32.is_ge(head,48) && U32.is_le(head,57))) && numericName(rest)
+
+def typedNameValue(+node: DER.Node, tag: U32, bytes: List<&2,U32>) -> Result<&2,&2,Error,NameValue>:
+  match tag:
+    case 18: Bool.pick(Result<&2,&2,Error,NameValue>,numericName(bytes),Done{EncodedNameValue{node}},Fail{InvalidCertificate{}})
+    case 3: Result.bind(&2,&2,Error,DER.Bits,NameValue,decoded(DER.Bits,DER.bits(node)),unused => Done{EncodedNameValue{node}})
+    case _: Result.bind(&2,&2,Error,String,NameValue,nameString(node), text => Done{TextNameValue{canonicalNameText(text,False{},"")}})
+
+def nameValue(+node: DER.Node) -> Result<&2,&2,Error,NameValue>:
+  match node:
+    case DER.Node{DER.Tag{0,False{},tag},_,bytes}: typedNameValue(node,tag,bytes)
+    case DER.Node{DER.Tag{0,True{},16},_,bytes}:
+      Result.bind(&2,&2,Error,List<&2,DER.Node>,NameValue,decoded(List<&2,DER.Node>,DER.all(bytes)),unused => Done{EncodedNameValue{node}})
+    case _: Fail{InvalidCertificate{}}
+
+def nameAttribute(nodes: List<&2,DER.Node>) -> Result<&2,&2,Error,NameAttribute>:
+  match nodes:
+    case DER.Node{DER.Tag{0,False{},6},_,+oid} <> value <> Nil{}:
+      checked = Bool.pick(Result<&2,&2,Error,Unit>,oidGroups(oid,True{}) && Nat.is_gt(DER.length(oid,0n),0n),Done{Unit{}},Fail{InvalidCertificate{}})
+      Result.bind(&2,&2,Error,Unit,NameAttribute,checked,unused =>
+        Result.bind(&2,&2,Error,NameValue,NameAttribute,nameValue(value), text => Done{NameAttribute{oid,text}}))
+    case _: Fail{InvalidCertificate{}}
+
+def firstOrder(head: Cmp, tail: Cmp) -> Cmp:
+  match head:
+    case EQ{}: tail
+    case order: order
+
+def nameByteOrder(left: List<&2,U32>, right: List<&2,U32>) -> Cmp:
+  match left right:
+    case Nil{} Nil{}: EQ{}
+    case Nil{} _ <> _: LT{}
+    case _ <> _ Nil{}: GT{}
+    case a <> xs b <> ys: firstOrder(U32.cmp(a,b),nameByteOrder(xs,ys))
+
+def setOrder(order: Cmp) -> Result<&2,&2,Error,Unit>:
+  match order:
+    case GT{}: Fail{InvalidCertificate{}}
+    case _: Done{Unit{}}
+
+def nameAttributes(nodes: List<&2,DER.Node>, previous: List<&2,U32>, reversed: List<&2,NameAttribute>) -> Result<&2,&2,Error,List<&2,NameAttribute>>:
+  match nodes:
+    case Nil{}: Done{List.reverse(&2,NameAttribute,reversed)}
+    case +head <> rest:
+      +wire = DER.encoded(head)
+      Result.bind(&2,&2,Error,Unit,List<&2,NameAttribute>,setOrder(nameByteOrder(previous,wire)),unused =>
+        Result.bind(&2,&2,Error,List<&2,DER.Node>,List<&2,NameAttribute>,decoded(List<&2,DER.Node>,DER.sequence(head)), nodes =>
+          Result.bind(&2,&2,Error,NameAttribute,List<&2,NameAttribute>,nameAttribute(nodes), attr => nameAttributes(rest,wire,attr <> reversed))))
+
+def nonemptyRdn(nodes: List<&2,DER.Node>) -> Result<&2,&2,Error,List<&2,NameAttribute>>:
+  match nodes:
+    case Nil{}: Fail{InvalidCertificate{}}
+    case head <> rest: nameAttributes(head <> rest,Nil{},Nil{})
+
+def relativeName(node: DER.Node) -> Result<&2,&2,Error,List<&2,NameAttribute>>:
+  match node:
+    case DER.Node{DER.Tag{0,True{},17},_,bytes}:
+      Result.bind(&2,&2,Error,List<&2,DER.Node>,List<&2,NameAttribute>,decoded(List<&2,DER.Node>,DER.all(bytes)),nonemptyRdn)
+    case _: Fail{InvalidCertificate{}}
+
+def relativeNames(nodes: List<&2,DER.Node>, reversed: List<&2,List<&2,NameAttribute>>) -> Result<&2,&2,Error,DistinguishedName>:
+  match nodes:
+    case Nil{}: Done{DistinguishedName{List.reverse(&2,List<&2,NameAttribute>,reversed)}}
+    case head <> rest:
+      Result.bind(&2,&2,Error,List<&2,NameAttribute>,DistinguishedName,relativeName(head), value => relativeNames(rest,value <> reversed))
+
+def distinguishedName(node: DER.Node) -> Result<&2,&2,Error,DistinguishedName>:
+  Result.bind(&2,&2,Error,List<&2,DER.Node>,DistinguishedName,decoded(List<&2,DER.Node>,DER.sequence(node)), nodes => relativeNames(nodes,Nil{}))
+
+def sameNameValue(left: NameValue, right: NameValue) -> Bool:
+  match left right:
+    case TextNameValue{x} TextNameValue{y}: String.eq(x,y)
+    case EncodedNameValue{x} EncodedNameValue{y}: RSA.equal(DER.encoded(x),DER.encoded(y),0)
+    case _ _: False{}
+
+def sameAttribute(left: NameAttribute, right: NameAttribute) -> Bool:
+  match left right:
+    case NameAttribute{a,x} NameAttribute{b,y}: RSA.equal(a,b,0) && sameNameValue(x,y)
+
+def removeAttribute(values: List<&2,NameAttribute>, +wanted: NameAttribute, +reversed: List<&2,NameAttribute>) -> Maybe<&2,List<&2,NameAttribute>>:
+  match values:
+    case Nil{}: None{}
+    case +head <> +rest:
+      Bool.pick(Unit -> Maybe<&2,List<&2,NameAttribute>>,sameAttribute(head,wanted),unused => Some{List.append(&2,NameAttribute,List.reverse(&2,NameAttribute,reversed),rest)},unused => removeAttribute(rest,wanted,head <> reversed))(Unit{})
+
+def sameRdn(left: List<&2,NameAttribute>, right: Maybe<&2,List<&2,NameAttribute>>) -> Bool:
+  match left right:
+    case Nil{} Some{Nil{}}: True{}
+    case head <> rest Some{values}: sameRdn(rest,removeAttribute(values,head,Nil{}))
+    case _ _: False{}
+
+def sameRdns(left: List<&2,List<&2,NameAttribute>>, right: List<&2,List<&2,NameAttribute>>) -> Bool:
+  match left right:
+    case Nil{} Nil{}: True{}
+    case a <> xs b <> ys: sameRdn(a,Some{b}) && sameRdns(xs,ys)
+    case _ _: False{}
+
+def sameName(left: DistinguishedName, right: DistinguishedName) -> Bool:
+  match left right:
+    case DistinguishedName{xs} DistinguishedName{ys}: sameRdns(xs,ys)
+
+def certificateNameFields(nodes: List<&2,DER.Node>) -> Result<&2,&2,Error,CertificateNames>:
+  match nodes:
+    case _ <> _ <> issuer <> _ <> subject <> _:
+      Result.bind(&2,&2,Error,DistinguishedName,CertificateNames,distinguishedName(issuer), issuerName =>
+        Result.bind(&2,&2,Error,DistinguishedName,CertificateNames,distinguishedName(subject), subjectName => Done{CertificateNames{issuerName,subjectName}}))
+    case _: Fail{InvalidCertificate{}}
+
+def certificateNames(certificate: Certificate) -> Result<&2,&2,Error,CertificateNames>:
+  match certificate:
+    case Certificate{tbs,_,_}: Result.bind(&2,&2,Error,List<&2,DER.Node>,CertificateNames,fields(tbs),certificateNameFields)

@@ -5,6 +5,8 @@ import subprocess
 import random
 import ipaddress
 import tempfile
+import ctypes
+import ctypes.util
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
@@ -439,6 +441,78 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-x509-policy-') as temp:
                              (x509.SubjectAlternativeName([x509.DNSName('localhost')]),True))
     assert openssl_accepts(san)
     cases.append(('server:'+encode(cert_wire(san)),'ok'))
+
+# Read-only OpenSSL name comparison is a test oracle, never a production
+# dependency. Keep allocations alive for d2i and free every parsed name.
+crypto = ctypes.CDLL(ctypes.util.find_library('crypto'))
+crypto.d2i_X509_NAME.argtypes = [ctypes.c_void_p,ctypes.POINTER(ctypes.POINTER(ctypes.c_ubyte)),ctypes.c_long]
+crypto.d2i_X509_NAME.restype = ctypes.c_void_p
+crypto.X509_NAME_cmp.argtypes = [ctypes.c_void_p,ctypes.c_void_p]
+crypto.X509_NAME_cmp.restype = ctypes.c_int
+crypto.X509_NAME_free.argtypes = [ctypes.c_void_p]
+
+def openssl_name(wire):
+    buffer = (ctypes.c_ubyte*len(wire)).from_buffer_copy(wire)
+    cursor = ctypes.cast(buffer,ctypes.POINTER(ctypes.c_ubyte))
+    result = crypto.d2i_X509_NAME(None,ctypes.byref(cursor),len(wire))
+    assert result,wire.hex()
+    return result
+
+def name_equal(left,right):
+    a = openssl_name(left)
+    try:
+        b = openssl_name(right)
+        try: return crypto.X509_NAME_cmp(a,b)==0
+        finally: crypto.X509_NAME_free(b)
+    finally: crypto.X509_NAME_free(a)
+
+def attribute(tag,data,oid=b'\x55\x04\x03'):
+    return tlv(48,tlv(6,oid)+tlv(tag,data))
+
+def dn(*rdns):
+    return tlv(48,b''.join(tlv(49,b''.join(sorted(values))) for values in rdns))
+
+def compare_name(left,right,expected):
+    assert name_equal(left,right)==expected,(left.hex(),right.hex(),expected)
+    cases.append(('dn:'+encode(left)+':'+encode(right),'same' if expected else 'different'))
+
+plain = dn([attribute(12,b'alice smith')])
+for tag,data in [(12,b'  ALICE\t \nSmith  '),(19,b' ALICE  Smith '),(20,b'Alice Smith'),
+                 (22,b'ALICE\rSMITH'),(30,'Alice Smith'.encode('utf-16-be')),
+                 (28,'Alice Smith'.encode('utf-32-be'))]:
+    compare_name(plain,dn([attribute(tag,data)]),True)
+for text in ['München','東京','😀','\ufeffAlice','', 'a\x00b']:
+    original = dn([attribute(12,text.encode())])
+    compare_name(original,dn([attribute(28,text.encode('utf-32-be'))]),True)
+    if all(ord(c)<=65535 for c in text):
+        compare_name(original,dn([attribute(30,text.encode('utf-16-be'))]),True)
+compare_name(dn([attribute(20,b'M\xfcnchen')]),dn([attribute(12,'München'.encode())]),True)
+for left,right in [('Ä','ä'),('é','e\u0301'),('alice','\ufeffalice'),('a b','a\u00a0b'),('a\x00b','ab')]:
+    compare_name(dn([attribute(12,left.encode())]),dn([attribute(12,right.encode())]),False)
+a,b = attribute(12,b' Alice '),attribute(12,b'Example',b'\x55\x04\x0a')
+c,d = attribute(19,b'alice'),attribute(12,b' EXAMPLE ',b'\x55\x04\x0a')
+compare_name(dn([a,b]),dn([d,c]),True)
+compare_name(dn([a],[b]),dn([c,d]),False)
+compare_name(dn([a],[b]),dn([d],[c]),False)
+compare_name(dn([a,a]),dn([c]),False)
+compare_name(dn([a,a]),dn([c,c]),True)
+compare_name(dn(),dn(),True)
+for tag,data in [(18,b' 12  3 '),(3,b'\x00\xaa'),(48,b'\x02\x01\x01')]:
+    value = dn([attribute(tag,data)])
+    compare_name(value,value,True)
+compare_name(dn([attribute(18,b' 123 ')]),dn([attribute(18,b'123')]),False)
+compare_name(dn([attribute(18,b'123')]),dn([attribute(19,b'123')]),False)
+# Strict encodings are validated before any canonicalization or comparison.
+for tag,data in [(12,b'\xc0\x80'),(12,b'\xed\xa0\x80'),(19,b'not@printable'),
+                 (19,b'a\tb'),(22,b'\x80'),(30,b'\x00'),(30,b'\xd8\x00'),
+                 (28,b'\x00\x11\x00\x00'),(28,b'\x00\x00\xd8\x00'),(28,b'\x00\x00\x00'),(18,b'abc')]:
+    cases.append(('dn:'+encode(dn([attribute(tag,data)]))+':'+encode(plain),'certificate'))
+for malformed in [tlv(48,tlv(49,b'')),tlv(48,a),dn([tlv(48,tlv(6,b'')+tlv(12,b'a'))]),
+                  dn([tlv(48,tlv(6,b'\x80\x2a')+tlv(12,b'a'))]),dn([tlv(48,tlv(6,b'\x55\x04\x03'))]),
+                  tlv(48,tlv(49,b''.join(sorted([a,b],reverse=True))))]:
+    cases.append(('dn:'+encode(malformed)+':'+encode(plain),'certificate'))
+cases.append(('dn:'+encode(dn([attribute(26,b'Alice')]))+':'+encode(plain),'name-encoding'))
+cases += [('self:'+encode(root_der),'same'),('self:'+encode(certs[1].public_bytes(serialization.Encoding.DER)),'different')]
 
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),

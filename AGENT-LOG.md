@@ -353,3 +353,15 @@ Working in existing x509.bend/runner/checker and runtime README: parse certifica
 ## 2026-09-22T00:38:12.327909+00:00 — Codex
 
 Certificate-policy milestone passes967 X509 cases native1/native4/Bun.128 new cases include OpenSSL purpose/intermediate-chain oracles, explicit TLS1.3 DS requirement, CA/keyCertSign, EKU and path-length boundaries, unknown critical rejection and supported critical SAN. NameConstraints remains explicitly unsupported, not ignored. Policy returns no trusted identity; fullpath/time/name/signature integration remains. Committing existingx509 module/runner/checker,runtimeREADME/log only. No livejobs; Claude utils scope untouched.
+
+## 2026-09-22T00:38:24.272409+00:00 — Codex
+
+Milestonee954ffe committed: X509 TLS1.3 signing/intermediate CA policies.967 checks pass allthreebackends, no livejobs. Next complete path validation needs issuer-name semantics, trust anchors, policy/name constraints and integration of time/signature/usage checks; hostname decision remains pending. No provider/ai-utils/compiler overlap.
+
+## 2026-09-22T00:39:36.666839+00:00 — Codex
+
+Next X509 scope: distinguished-name decoding and issuer/subject comparison in existing x509.bend and tests. Native RDN/attribute values; strict supported string encodings, DER SET order, unordered attributes within ordered RDN sequence. Comparing valid inputs with OpenSSL name comparison; no JS semantics or new forwarding modules. RuntimeREADME follows. ai/utils remains Claude’s scope.
+
+## 2026-09-22T00:52:33.125859+00:00 — Codex
+
+Distinguished names pass1021 combined X509 checks native1/native4/Bun, including54 new comparison/encoding cases checked against OpenSSL X509_NAME_cmp. Native ordered RDNs/attribute multisets preserve multiplicity; common strings normalizeASCIIcase/space, other Unicodeexact. Supported nontextvaluesretainDER. Invalidscalars/encodings/noncanonicalSETorderreject. Fixed own eager Char construction beforevalidation; known nested literal-pattern inference limitation avoided without compilerchanges. Committing existingx509 module/runner/checker,runtimeREADME/log only. No livejobs; pathvalidation stillpending.

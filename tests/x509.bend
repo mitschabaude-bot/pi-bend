@@ -25,6 +25,7 @@ def error(cause: X509.Error) -> String:
     case X509.InvalidKeyUsage{}: "usage"
     case X509.InvalidPurpose{}: "purpose"
     case X509.PathLengthExceeded{}: "path"
+    case X509.UnsupportedNameEncoding{_}: "name-encoding"
 
 def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
   match result:
@@ -139,8 +140,27 @@ def issuerPolicy(count: Maybe<&2,Big.BigNat>, result: Result<&2,&2,X509.Error,X5
     case _ Fail{cause}: error(cause)
     case Some{value} Done{state}: verified(X509.checkIssuerPolicy(state,value))
 
+def nameValue(bytes: List<&2,U32>) -> Result<&2,&2,X509.Error,X509.DistinguishedName>:
+  Result.bind(&2,&2,X509.Error,DER.Node,X509.DistinguishedName,X509.decoded(DER.Node,DER.one(bytes)),X509.distinguishedName)
+
+def compared(result: Result<&2,&2,X509.Error,Bool>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{equal}: Bool.pick(String,equal,"same","different")
+
+def compareNames(left: List<&2,U32>, right: List<&2,U32>) -> Result<&2,&2,X509.Error,Bool>:
+  Result.bind(&2,&2,X509.Error,X509.DistinguishedName,Bool,nameValue(left), a =>
+    Result.bind(&2,&2,X509.Error,X509.DistinguishedName,Bool,nameValue(right), b => Done{X509.sameName(a,b)}))
+
+def selfIssued(result: Result<&2,&2,X509.Error,X509.CertificateNames>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{X509.CertificateNames{issuer,subject}}: Bool.pick(String,X509.sameName(issuer,subject),"same","different")
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "dn" <> left <> right <> Nil{}: compared(compareNames(Bytes.bytes(left),Bytes.bytes(right)))
+    case "self" <> cert <> Nil{}: selfIssued(Result.bind(&2,&2,X509.Error,X509.Certificate,X509.CertificateNames,X509.parse(Bytes.bytes(cert)),X509.certificateNames))
     case "server" <> bytes <> Nil{}: verified(Result.bind(&2,&2,X509.Error,X509.Policy,Unit,policy(Bytes.bytes(bytes)),X509.checkServerPolicy))
     case "issuer" <> count <> bytes <> Nil{}: issuerPolicy(Big.fromDecimal(count),policy(Bytes.bytes(bytes)))
     case "san" <> bytes <> Nil{}: names(X509.subjectAltNames(X509.Extension{85 <> 29 <> 17 <> Nil{},False{},Bytes.bytes(bytes)}))
