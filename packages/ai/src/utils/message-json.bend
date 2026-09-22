@@ -1,8 +1,10 @@
 import Base
 import ../types.bend as T
 import ./diagnostics.bend as Diagnostics
+import ./schema-json.bend as SchemaJson
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
+import ../../../runtime/src/json.bend as Decode
 
 # The JSON shape of pi-ai messages and streaming events, as JSON.stringify
 # renders the upstream objects: literal `type`/`role` discriminators, optional
@@ -257,3 +259,297 @@ def assistantMessageEvent(~Details: Data, ~details: Details -> V.Value, value: T
     case T.ToolcallEnd{index, call, partial}: object(field("type", text("toolcall_end"), field("contentIndex", number(index), field("toolCall", toolCall(call), field("partial", assistantMessage(~Details, ~details, partial), Nil{})))))
     case T.StreamDone{reason, final}: object(field("type", text("done"), field("reason", text(doneReason(reason)), field("message", assistantMessage(~Details, ~details, final), Nil{}))))
     case T.StreamError{reason, failed}: object(field("type", text("error"), field("reason", text(errorReason(reason)), field("error", assistantMessage(~Details, ~details, failed), Nil{}))))
+
+# Decoding
+# --------
+# JSON.parse hands upstream the stored objects unchecked; the port reads the
+# same shapes into the typed messages, reporting the first mismatch by path.
+# Usage token/cost members absent from sessions written before they existed
+# read as zero, as their absence is invisible to upstream's readers.
+
+def Decoded(-A: Data) -> Data: Result<&2, &2, Decode.Error, A>
+
+def decodeBoolean(value: V.Value) -> Decoded(Bool):
+  match value:
+    case V.Boolean{flag}: Done{flag}
+    case _: Fail{Decode.WrongType{Nil{}, "boolean"}}
+
+def tagged(fields: R.Record<V.Value>, +key: String) -> Decoded(String):
+  Decode.required(String, fields, key, Decode.string)
+
+def textContentFields(+fields: R.Record<V.Value>) -> Decoded(T.TextContent):
+  do Result<&2, &2, Decode.Error, T.TextContent>:
+    body : String <- Decode.required(String, fields, "text", Decode.string)
+    signature : Maybe<&2, String> <- Decode.optional(String, fields, "textSignature", Decode.string)
+    return T.TextContent{body, signature}
+
+def decodeTextContent(value: V.Value) -> Decoded(T.TextContent):
+  Result.bind(&2, &2, Decode.Error, R.Record<V.Value>, T.TextContent, Decode.object(value), fields => textContentFields(fields))
+
+def thinkingContentFields(+fields: R.Record<V.Value>) -> Decoded(T.ThinkingContent):
+  do Result<&2, &2, Decode.Error, T.ThinkingContent>:
+    body : String <- Decode.required(String, fields, "thinking", Decode.string)
+    signature : Maybe<&2, String> <- Decode.optional(String, fields, "thinkingSignature", Decode.string)
+    redacted : Maybe<&2, Bool> <- Decode.optional(Bool, fields, "redacted", decodeBoolean)
+    return T.ThinkingContent{body, signature, redacted}
+
+def imageContentFields(+fields: R.Record<V.Value>) -> Decoded(T.ImageContent):
+  do Result<&2, &2, Decode.Error, T.ImageContent>:
+    data : String <- Decode.required(String, fields, "data", Decode.string)
+    mimeType : String <- Decode.required(String, fields, "mimeType", Decode.string)
+    return T.ImageContent{data, mimeType}
+
+def toolCallFields(+fields: R.Record<V.Value>) -> Decoded(T.ToolCall<V.Value>):
+  do Result<&2, &2, Decode.Error, T.ToolCall<V.Value>>:
+    id : String <- Decode.required(String, fields, "id", Decode.string)
+    name : String <- Decode.required(String, fields, "name", Decode.string)
+    arguments : V.Value <- Decode.required(V.Value, fields, "arguments", item => Done{item})
+    thoughtSignature : Maybe<&2, String> <- Decode.optional(String, fields, "thoughtSignature", Decode.string)
+    namespace : Maybe<&2, String> <- Decode.optional(String, fields, "namespace", Decode.string)
+    return T.ToolCall{id, name, arguments, thoughtSignature, namespace}
+
+def assistantContentOf(+kind: String, fields: R.Record<V.Value>) -> Decoded(T.AssistantContent<V.Value>):
+  match kind:
+    case "text": Result.map(&2, &2, Decode.Error, T.TextContent, T.AssistantContent<V.Value>, item => T.AssistantText{item}, textContentFields(fields))
+    case "thinking": Result.map(&2, &2, Decode.Error, T.ThinkingContent, T.AssistantContent<V.Value>, item => T.AssistantThinking{item}, thinkingContentFields(fields))
+    case "toolCall": Result.map(&2, &2, Decode.Error, T.ToolCall<V.Value>, T.AssistantContent<V.Value>, item => T.AssistantToolCall{item}, toolCallFields(fields))
+    case _: Fail{Decode.InvalidValue{Decode.Field{"type"} <> Nil{}, "text, thinking or toolCall"}}
+
+def decodeAssistantContent(value: V.Value) -> Decoded(T.AssistantContent<V.Value>):
+  do Result<&2, &2, Decode.Error, T.AssistantContent<V.Value>>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    kind : String <- tagged(fields, "type")
+    assistantContentOf(kind, fields)
+
+def textImageContentOf(+kind: String, fields: R.Record<V.Value>) -> Decoded(T.TextImageContent):
+  match kind:
+    case "text": Result.map(&2, &2, Decode.Error, T.TextContent, T.TextImageContent, item => T.TextImageText{item}, textContentFields(fields))
+    case "image": Result.map(&2, &2, Decode.Error, T.ImageContent, T.TextImageContent, item => T.TextImageImage{item}, imageContentFields(fields))
+    case _: Fail{Decode.InvalidValue{Decode.Field{"type"} <> Nil{}, "text or image"}}
+
+def decodeTextImageContent(value: V.Value) -> Decoded(T.TextImageContent):
+  do Result<&2, &2, Decode.Error, T.TextImageContent>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    kind : String <- tagged(fields, "type")
+    textImageContentOf(kind, fields)
+
+def decodeUserContent(value: V.Value) -> Decoded(T.UserContent):
+  match value:
+    case V.Text{body}: Done{T.UserText{body}}
+    case V.ArrayValue{values}: Result.map(&2, &2, Decode.Error, List<&2, T.TextImageContent>, T.UserContent, blocks => T.UserBlocks{blocks}, Decode.items(~T.TextImageContent, ~decodeTextImageContent, values, 0n))
+    case _: Fail{Decode.WrongType{Nil{}, "string or array"}}
+
+def decodeSystemContent(value: V.Value) -> Decoded(T.SystemContent):
+  match value:
+    case V.Text{body}: Done{T.SystemText{body}}
+    case V.ArrayValue{values}: Result.map(&2, &2, Decode.Error, List<&2, T.TextContent>, T.SystemContent, blocks => T.SystemBlocks{blocks}, Decode.items(~T.TextContent, ~decodeTextContent, values, 0n))
+    case _: Fail{Decode.WrongType{Nil{}, "string or array"}}
+
+# Usage
+
+def numberOr(fields: R.Record<V.Value>, +key: String, fallback: F64) -> Decoded(F64):
+  Result.map(&2, &2, Decode.Error, Maybe<&2, F64>, F64, found => Maybe.default(&2, F64, found, fallback), Decode.optional(F64, fields, key, Decode.number))
+
+def zeroCost() -> T.UsageCost: T.UsageCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0)}
+
+def decodeUsageCost(value: V.Value) -> Decoded(T.UsageCost):
+  do Result<&2, &2, Decode.Error, T.UsageCost>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    input : F64 <- numberOr(fields, "input", U32.to_f64(0))
+    output : F64 <- numberOr(fields, "output", U32.to_f64(0))
+    cacheRead : F64 <- numberOr(fields, "cacheRead", U32.to_f64(0))
+    cacheWrite : F64 <- numberOr(fields, "cacheWrite", U32.to_f64(0))
+    total : F64 <- numberOr(fields, "total", U32.to_f64(0))
+    return T.UsageCost{input, output, cacheRead, cacheWrite, total}
+
+def decodeUsage(value: V.Value) -> Decoded(T.Usage):
+  do Result<&2, &2, Decode.Error, T.Usage>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    input : F64 <- Decode.required(F64, fields, "input", Decode.number)
+    output : F64 <- Decode.required(F64, fields, "output", Decode.number)
+    cacheRead : F64 <- Decode.required(F64, fields, "cacheRead", Decode.number)
+    cacheWrite : F64 <- Decode.required(F64, fields, "cacheWrite", Decode.number)
+    cacheWrite1h : Maybe<&2, F64> <- Decode.optional(F64, fields, "cacheWrite1h", Decode.number)
+    reasoning : Maybe<&2, F64> <- Decode.optional(F64, fields, "reasoning", Decode.number)
+    totalTokens : F64 <- numberOr(fields, "totalTokens", U32.to_f64(0))
+    cost : Maybe<&2, T.UsageCost> <- Decode.optional(T.UsageCost, fields, "cost", decodeUsageCost)
+    return T.Usage{input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning, totalTokens, Maybe.default(&2, T.UsageCost, cost, zeroCost())}
+
+# Assistant messages
+
+def stopReasonOf(+value: String) -> Decoded(T.StopReason):
+  match value:
+    case "pending": Done{T.Pending{}}
+    case "stop": Done{T.Stop{}}
+    case "length": Done{T.Length{}}
+    case "toolUse": Done{T.ToolUse{}}
+    case "error": Done{T.Error{}}
+    case "aborted": Done{T.Aborted{}}
+    case "deferred": Done{T.Deferred{}}
+    case _: Fail{Decode.InvalidValue{Nil{}, "stop reason"}}
+
+def decodeStopReason(value: V.Value) -> Decoded(T.StopReason):
+  Result.bind(&2, &2, Decode.Error, String, T.StopReason, Decode.string(value), reason => stopReasonOf(reason))
+
+def decodeJsonValue(value: V.Value) -> Decoded(T.JsonValue): Done{SchemaJson.toJson(value)}
+
+def decodeDeferredHandle(value: V.Value) -> Decoded(T.DeferredHandle):
+  do Result<&2, &2, Decode.Error, T.DeferredHandle>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    provider : String <- Decode.required(String, fields, "provider", Decode.string)
+    modelId : String <- Decode.required(String, fields, "modelId", Decode.string)
+    api : String <- Decode.required(String, fields, "api", Decode.string)
+    id : String <- Decode.required(String, fields, "id", Decode.string)
+    expiresAt : Maybe<&2, F64> <- Decode.optional(F64, fields, "expiresAt", Decode.number)
+    pollAfterMs : Maybe<&2, F64> <- Decode.optional(F64, fields, "pollAfterMs", Decode.number)
+    data : Maybe<&2, T.JsonValue> <- Decode.optional(T.JsonValue, fields, "data", decodeJsonValue)
+    return T.DeferredHandle{provider, modelId, api, id, expiresAt, pollAfterMs, data}
+
+def decodeDiagnosticCode(value: V.Value) -> Decoded(Diagnostics.DiagnosticCode):
+  match value:
+    case V.Text{body}: Done{Diagnostics.StringCode{body}}
+    case V.Number{scalar}: Done{Diagnostics.NumberCode{scalar}}
+    case _: Fail{Decode.WrongType{Nil{}, "string or number"}}
+
+def decodeDiagnosticError(value: V.Value) -> Decoded(Diagnostics.DiagnosticErrorInfo):
+  do Result<&2, &2, Decode.Error, Diagnostics.DiagnosticErrorInfo>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    name : Maybe<&2, String> <- Decode.optional(String, fields, "name", Decode.string)
+    description : String <- Decode.required(String, fields, "message", Decode.string)
+    stack : Maybe<&2, String> <- Decode.optional(String, fields, "stack", Decode.string)
+    code : Maybe<&2, Diagnostics.DiagnosticCode> <- Decode.optional(Diagnostics.DiagnosticCode, fields, "code", decodeDiagnosticCode)
+    return Diagnostics.DiagnosticErrorInfo{name, description, stack, code}
+
+def decodeDiagnostic(~Details: Data, ~details: V.Value -> Decoded(Details), value: V.Value) -> Decoded(Diagnostics.AssistantMessageDiagnostic<Details>):
+  do Result<&2, &2, Decode.Error, Diagnostics.AssistantMessageDiagnostic<Details>>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    kind : String <- tagged(fields, "type")
+    timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
+    error : Maybe<&2, Diagnostics.DiagnosticErrorInfo> <- Decode.optional(Diagnostics.DiagnosticErrorInfo, fields, "error", decodeDiagnosticError)
+    extra : Maybe<&2, Details> <- Decode.optional(Details, fields, "details", details)
+    return Diagnostics.AssistantMessageDiagnostic{kind, timestamp, error, extra}
+
+def decodeAssistantMessage(~Details: Data, ~details: V.Value -> Decoded(Details), value: V.Value) -> Decoded(T.AssistantMessage<V.Value, Details>):
+  do Result<&2, &2, Decode.Error, T.AssistantMessage<V.Value, Details>>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    content : List<&2, T.AssistantContent<V.Value>> <- Decode.required(List<&2, T.AssistantContent<V.Value>>, fields, "content", item => Decode.list(~T.AssistantContent<V.Value>, ~decodeAssistantContent, item))
+    api : String <- Decode.required(String, fields, "api", Decode.string)
+    provider : String <- Decode.required(String, fields, "provider", Decode.string)
+    model : String <- Decode.required(String, fields, "model", Decode.string)
+    responseModel : Maybe<&2, String> <- Decode.optional(String, fields, "responseModel", Decode.string)
+    responseId : Maybe<&2, String> <- Decode.optional(String, fields, "responseId", Decode.string)
+    providerThinkingLevel : Maybe<&2, String> <- Decode.optional(String, fields, "providerThinkingLevel", Decode.string)
+    diagnosticList : Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<Details>>> <- Decode.optional(List<&2, Diagnostics.AssistantMessageDiagnostic<Details>>, fields, "diagnostics", item => Decode.list(~Diagnostics.AssistantMessageDiagnostic<Details>, ~(entry => decodeDiagnostic(~Details, ~details, entry)), item))
+    usageValue : T.Usage <- Decode.required(T.Usage, fields, "usage", decodeUsage)
+    stop : T.StopReason <- Decode.required(T.StopReason, fields, "stopReason", decodeStopReason)
+    deferred : Maybe<&2, T.DeferredHandle> <- Decode.optional(T.DeferredHandle, fields, "deferred", decodeDeferredHandle)
+    errorMessage : Maybe<&2, String> <- Decode.optional(String, fields, "errorMessage", Decode.string)
+    rawStopReason : Maybe<&2, String> <- Decode.optional(String, fields, "rawStopReason", Decode.string)
+    endTurn : Maybe<&2, Bool> <- Decode.optional(Bool, fields, "endTurn", decodeBoolean)
+    timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
+    return T.AssistantMessage{content, api, provider, model, responseModel, responseId, providerThinkingLevel, diagnosticList, usageValue, stop, deferred, errorMessage, rawStopReason, endTurn, timestamp}
+
+# Other messages
+
+def decodeUserMessage(value: V.Value) -> Decoded(T.UserMessage):
+  do Result<&2, &2, Decode.Error, T.UserMessage>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    content : T.UserContent <- Decode.required(T.UserContent, fields, "content", decodeUserContent)
+    timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
+    return T.UserMessage{content, timestamp}
+
+def decodeToolResultMessage(~Details: Data, ~details: V.Value -> Decoded(Details), value: V.Value) -> Decoded(T.ToolResultMessage<Details>):
+  do Result<&2, &2, Decode.Error, T.ToolResultMessage<Details>>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    toolCallId : String <- Decode.required(String, fields, "toolCallId", Decode.string)
+    toolName : String <- Decode.required(String, fields, "toolName", Decode.string)
+    content : List<&2, T.TextImageContent> <- Decode.required(List<&2, T.TextImageContent>, fields, "content", item => Decode.list(~T.TextImageContent, ~decodeTextImageContent, item))
+    extra : Maybe<&2, Details> <- Decode.optional(Details, fields, "details", details)
+    usageValue : Maybe<&2, T.Usage> <- Decode.optional(T.Usage, fields, "usage", decodeUsage)
+    isError : Bool <- Decode.required(Bool, fields, "isError", decodeBoolean)
+    timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
+    return T.ToolResultMessage{toolCallId, toolName, content, extra, usageValue, isError, timestamp}
+
+def strictnessOf(+value: String) -> Decoded(T.SamplingStrictness):
+  match value:
+    case "prefer": Done{T.Prefer{}}
+    case "require": Done{T.Require{}}
+    case _: Fail{Decode.InvalidValue{Nil{}, "prefer or require"}}
+
+def samplingConfigOf(+kind: String, fields: R.Record<V.Value>) -> Decoded(T.ConstrainedSamplingConfig):
+  match kind:
+    case "json_schema":
+      Result.map(&2, &2, Decode.Error, T.SamplingStrictness, T.ConstrainedSamplingConfig, strict => T.JsonSchemaSampling{strict}, Decode.required(T.SamplingStrictness, fields, "strict", item => Result.bind(&2, &2, Decode.Error, String, T.SamplingStrictness, Decode.string(item), strict => strictnessOf(strict))))
+    case "grammar":
+      do Result<&2, &2, Decode.Error, T.ConstrainedSamplingConfig>:
+        +variants : R.Record<V.Value> <- Decode.required(R.Record<V.Value>, fields, "variants", Decode.object)
+        lark : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, Decode.optional(String, variants, "openaiLark", Decode.string), Decode.Field{"variants"})
+        regex : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, Decode.optional(String, variants, "openaiRegex", Decode.string), Decode.Field{"variants"})
+        return T.GrammarSampling{T.GrammarVariants{lark, regex}}
+    case _: Fail{Decode.InvalidValue{Decode.Field{"type"} <> Nil{}, "json_schema or grammar"}}
+
+def decodeConstrainedSampling(value: V.Value) -> Decoded(T.ToolConstrainedSampling):
+  match value:
+    case V.Boolean{False{}}: Done{T.SamplingDisabled{}}
+    case V.ObjectValue{+fields}: Result.map(&2, &2, Decode.Error, T.ConstrainedSamplingConfig, T.ToolConstrainedSampling, config => T.SamplingConfigured{config}, Result.bind(&2, &2, Decode.Error, String, T.ConstrainedSamplingConfig, tagged(fields, "type"), kind => samplingConfigOf(kind, fields)))
+    case _: Fail{Decode.WrongType{Nil{}, "false or object"}}
+
+def decodeTool(value: V.Value) -> Decoded(T.Tool<V.Value>):
+  do Result<&2, &2, Decode.Error, T.Tool<V.Value>>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    name : String <- Decode.required(String, fields, "name", Decode.string)
+    description : String <- Decode.required(String, fields, "description", Decode.string)
+    parameters : V.Value <- Decode.required(V.Value, fields, "parameters", item => Done{item})
+    sampling : Maybe<&2, T.ToolConstrainedSampling> <- Decode.optional(T.ToolConstrainedSampling, fields, "constrainedSampling", decodeConstrainedSampling)
+    return T.Tool{name, description, parameters, sampling}
+
+def decodeToolReference(value: V.Value) -> Decoded(T.ToolReference):
+  do Result<&2, &2, Decode.Error, T.ToolReference>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    name : String <- Decode.required(String, fields, "name", Decode.string)
+    return T.ToolReference{name}
+
+def sectionValue(value: V.Value) -> Decoded(Maybe<&2, String>):
+  match value:
+    case V.Null{}: Done{None{}}
+    case V.Text{body}: Done{Some{body}}
+    case _: Fail{Decode.WrongType{Nil{}, "string or null"}}
+
+def sectionProperties(entries: List<&2, R.Property<V.Value>>) -> Decoded(List<&2, R.Property<Maybe<&2, String>>>):
+  match entries:
+    case Nil{}: Done{Nil{}}
+    case R.Property{+name, value} <> rest:
+      do Result<&2, &2, Decode.Error, List<&2, R.Property<Maybe<&2, String>>>>:
+        section : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, sectionValue(value), Decode.Field{name})
+        others : List<&2, R.Property<Maybe<&2, String>>> <- sectionProperties(rest)
+        return R.Property{name, section} <> others
+
+def decodeSections(value: V.Value) -> Decoded(R.Record<Maybe<&2, String>>):
+  match value:
+    case V.ObjectValue{R.Record{entries}}: Result.map(&2, &2, Decode.Error, List<&2, R.Property<Maybe<&2, String>>>, R.Record<Maybe<&2, String>>, properties => R.Record{properties}, sectionProperties(entries))
+    case _: Fail{Decode.WrongType{Nil{}, "object"}}
+
+def decodeSystemMessage(value: V.Value) -> Decoded(T.SystemMessage<V.Value>):
+  do Result<&2, &2, Decode.Error, T.SystemMessage<V.Value>>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    content : T.SystemContent <- Decode.required(T.SystemContent, fields, "content", decodeSystemContent)
+    sectionValues : Maybe<&2, R.Record<Maybe<&2, String>>> <- Decode.optional(R.Record<Maybe<&2, String>>, fields, "sections", decodeSections)
+    toolsAdded : Maybe<&2, List<&2, T.Tool<V.Value>>> <- Decode.optional(List<&2, T.Tool<V.Value>>, fields, "toolsAdded", item => Decode.list(~T.Tool<V.Value>, ~decodeTool, item))
+    toolsRemoved : Maybe<&2, List<&2, T.ToolReference>> <- Decode.optional(List<&2, T.ToolReference>, fields, "toolsRemoved", item => Decode.list(~T.ToolReference, ~decodeToolReference, item))
+    timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
+    return T.SystemMessage{content, sectionValues, toolsAdded, toolsRemoved, timestamp}
+
+def messageOf(~DiagnosticDetails: Data, ~ToolDetails: Data, ~diagnosticDetails: V.Value -> Decoded(DiagnosticDetails), ~toolDetails: V.Value -> Decoded(ToolDetails), +role: String, value: V.Value) -> Decoded(T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>):
+  match role:
+    case "system": Result.map(&2, &2, Decode.Error, T.SystemMessage<V.Value>, T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>, item => T.System{item}, decodeSystemMessage(value))
+    case "user": Result.map(&2, &2, Decode.Error, T.UserMessage, T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>, item => T.User{item}, decodeUserMessage(value))
+    case "assistant": Result.map(&2, &2, Decode.Error, T.AssistantMessage<V.Value, DiagnosticDetails>, T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>, item => T.Assistant{item}, decodeAssistantMessage(~DiagnosticDetails, ~diagnosticDetails, value))
+    case "toolResult": Result.map(&2, &2, Decode.Error, T.ToolResultMessage<ToolDetails>, T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>, item => T.ToolResult{item}, decodeToolResultMessage(~ToolDetails, ~toolDetails, value))
+    case _: Fail{Decode.InvalidValue{Decode.Field{"role"} <> Nil{}, "system, user, assistant or toolResult"}}
+
+# The role of a message object, for callers that dispatch other roles first.
+def messageRole(value: V.Value) -> Decoded(String):
+  Result.bind(&2, &2, Decode.Error, R.Record<V.Value>, String, Decode.object(value), fields => tagged(fields, "role"))
+
+def decodeMessage(~DiagnosticDetails: Data, ~ToolDetails: Data, ~diagnosticDetails: V.Value -> Decoded(DiagnosticDetails), ~toolDetails: V.Value -> Decoded(ToolDetails), +value: V.Value) -> Decoded(T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>):
+  Result.bind(&2, &2, Decode.Error, String, T.Message<V.Value, V.Value, DiagnosticDetails, ToolDetails>, messageRole(value), role => messageOf(~DiagnosticDetails, ~ToolDetails, ~diagnosticDetails, ~toolDetails, role, value))

@@ -106,6 +106,18 @@ def writeFileMode(path: String, content: String, permissions: U32) -> IO(Result<
 def writeFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
   writeFileMode(path,content,438)
 
+# Node's appendFile: create with the default mode or append to the end.
+def appendFile(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"a",438)
+    opened(content,result)
+
+# Node's writeFile with flag "wx": creation fails with EEXIST for an existing path.
+def writeFileExclusive(path: String, content: String) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    result : Result<&1,&1,U32 & String,File> <- File.open_mode(path,"wx",438)
+    opened(content,result)
+
 # Accumulate chunks in reverse byte order, then reverse once at EOF. Short
 # reads and resource retirement are owned by the shared file fold.
 def collectBytes(bytes: List<&2, U32>, reversed: List<&2, U32>) -> List<&2, U32>:
@@ -149,6 +161,12 @@ def fileSize(result: Result<&1,&1,U32 & String,U32 & U32>) -> Result<&2,&2,Error
 def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
   do IO<Result<&2,&2,Error,Word.U64>>:
     result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
+    return fileSize(result)
+
+# Modification time in milliseconds since the epoch, as Node's stat.mtime.
+def modified(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
+  do IO<Result<&2,&2,Error,Word.U64>>:
+    result : Result<&1,&1,U32 & String,U32 & U32> <- File.modified(path)
     return fileSize(result)
 
 # Metadata inspection never opens the contents of FIFOs, devices or sockets.
