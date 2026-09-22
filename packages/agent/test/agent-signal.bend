@@ -29,7 +29,7 @@ def requireSignal(value: Maybe<&2, Run.RunSignal()>) -> IO(Run.RunSignal()):
     case None{}: IO.die(Run.RunSignal(), 1, "active abort signal is missing")
 def requestSignal(input: H.ProviderInput()) -> IO(Run.RunSignal()):
   match input:
-    case T.StreamInput{_, _, Some{T.AgentLoopConfig{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}}: requireSignal(signal)
+    case T.StreamInput{_, _, Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}}}: requireSignal(signal)
     case _: IO.die(Run.RunSignal(), 1, "provider options are missing")
 def awaitAbort(observation: D.Observation<Abort.AbortReason<Unit>>) -> IO(Unit):
   match observation:

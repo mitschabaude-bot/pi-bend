@@ -42,9 +42,9 @@ def key(capture: KeyCapture, provider: String) -> IO(KeyResult()):
         return keyResult(mode)
 def requestKey(config: H.Config()) -> String:
   match config:
-    case T.AgentLoopConfig{_, _, Some{"fixture-a"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: "a"
-    case T.AgentLoopConfig{_, _, Some{"fixture-b"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: "b"
-    case T.AgentLoopConfig{_, _, None{}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: "-"
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, Some{"fixture-a"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: "a"
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, Some{"fixture-b"}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: "b"
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, None{}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: "-"
     case _: "unexpected"
 type ProviderCapture is Data:
   ProviderCapture{slot: R.Ref<Maybe<&2, Owner.Owner()>>, future: KeyCallback(), calls: R.Ref<U32>, trace: R.Ref<String>, streams: R.Ref<List<&2, H.StreamValue()>>}

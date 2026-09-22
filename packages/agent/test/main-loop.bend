@@ -20,6 +20,7 @@ import ../../runtime/src/f64.bend as F
 import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def Assistant() -> Data: Ai.AssistantMessage<V.Value, Unit>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
@@ -381,7 +382,7 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     +batches : Main.Batches(Unit, String, String, String) <- Main.newBatches(Unit, String, String, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = entryContext(mode, T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{})
-    config : H.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
+    config : H.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     outcome : Outcome() <- invokeRuntime(streamed, gate, mode, policy, registry, Main.LoopCapture{Main.Services{Some{Abort.signal(Unit, controller)}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config, expectedEvents, expectedHistory, expectedError)
     checked(outcome, expectedHistory, expectedError)

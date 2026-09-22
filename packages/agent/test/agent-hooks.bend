@@ -110,7 +110,7 @@ def claim(result: Result<&2, &2, Life.ClaimError<String>, Life.Claimed<Unit>>) -
     case _: IO.die(Life.ActiveRun, 1, "fixture could not start run")
 def fromConfig(config: ConfigFixture.Config()) -> Adapters():
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, stop, prepare, _, _, _, _, _}: H.Adapters{stop, prepare}
+    case T.AgentLoopConfig{_, _, _, _, _, stop, prepare, _, _, _, _, _}: H.Adapters{stop, prepare}
 def throughConfig(adapters: Adapters(), converter: C.Callback<ConfigFixture.Messages(), ConfigFixture.Converted()>) -> Adapters():
   fromConfig(Binding.applyHooks(Unit, Unit, String, String, Unit, ConfigFixture.base(converter), adapters))
 def scenario(initial: U32, later: U32, stop: Bool, +fail: Bool, +expected: String) -> IO(Unit):

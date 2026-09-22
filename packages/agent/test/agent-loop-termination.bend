@@ -15,6 +15,7 @@ import ./agent-loop-tools.bend as Tools
 import ./agent-loop-turns.bend as Turns
 import ./message-events.bend as Test
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def BeforeInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Unit, String, String, String>>
 def BeforeOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<Validation.Context()>>
@@ -129,7 +130,7 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
-    config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, T.ToolExecutionMode>, continues(mode), Some{T.Parallel{}}, None{}), Bool.pick(Maybe<&2, C.Callback<BeforeInput(), BeforeOutput()>>, U32.is_eq(mode, 1) || U32.is_eq(mode, 2), Some{beforeCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Tools.HookInput(), Tools.HookOutput()>>, U32.is_eq(mode, 4), Some{afterCallback}, None{})}
+    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, T.ToolExecutionMode>, continues(mode), Some{T.Parallel{}}, None{}), Bool.pick(Maybe<&2, C.Callback<BeforeInput(), BeforeOutput()>>, U32.is_eq(mode, 1) || U32.is_eq(mode, 2), Some{beforeCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Tools.HookInput(), Tools.HookOutput()>>, U32.is_eq(mode, 4), Some{afterCallback}, None{})}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "Echo tool", Tools.schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, Turns.user(Bool.pick(String, continues(mode), "echo both", "echo something")) <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)

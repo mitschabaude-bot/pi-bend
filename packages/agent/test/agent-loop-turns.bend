@@ -15,6 +15,7 @@ import ./validated-tool-execution.bend as Validation
 import ./agent-loop-tools.bend as Tools
 import ./message-events.bend as Test
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 type Preparing is Data:
   Preparing{calls: R.Ref<U32>, log: H.Log()}
@@ -141,7 +142,7 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
-    config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<H.Turn(), Result<&2, &2, String, Bool>>>, stopMode, Some{stopper}, None{}), Bool.pick(Maybe<&2, C.Callback<H.Turn(), H.PrepareOutput()>>, stopMode, None{}, Some{preparer}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{steeringCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{followCallback}, None{}), None{}, None{}, None{}}
+    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<H.Turn(), Result<&2, &2, String, Bool>>>, stopMode, Some{stopper}, None{}), Bool.pick(Maybe<&2, C.Callback<H.Turn(), H.PrepareOutput()>>, stopMode, None{}, Some{preparer}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{steeringCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{followCallback}, None{}), None{}, None{}, None{}}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "Echo tool", Tools.schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, user("echo something") <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)

@@ -402,6 +402,10 @@ type StreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, 
 type SimpleStreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
   SimpleStreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Record.Record<Value>>, toolChoice: Maybe<&2, ToolChoice>, reasoning: Maybe<&2, ThinkingLevel>, deferred: Maybe<&2, DeferredRequest>, thinkingBudgets: Maybe<&2, ThinkingBudgets>}
 
+# Every option unset; callers override individual fields from here.
+def emptySimpleStreamOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data) -> SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>:
+  SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
 # Explicit structural projections preserve every inherited field and shared
 # callback/map handle. They neither apply defaults nor invoke user callbacks.
 def toStreamOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> StreamOptions<Value, Signal, Telemetry, Fetch, Error>:

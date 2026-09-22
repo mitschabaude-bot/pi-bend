@@ -401,7 +401,7 @@ def turnReasoning(previous: Maybe<&2, Ai.ThinkingLevel>, requested: Maybe<&2, T.
 
 def withTurnConfig(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, replacementModel: Maybe<&2, Ai.Model<Ai.JsonValue>>, requestedThinking: Maybe<&2, T.ThinkingLevel()>) -> T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>:
   match config:
-    case T.AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, stopHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, turnReasoning(reasoning, requestedThinking), deferred, thinkingBudgets, choose(Ai.Model<Ai.JsonValue>, model, replacementModel), convertToLlm, transformContext, getApiKey, stopHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}, model, convertToLlm, transformContext, getApiKey, stopHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.SimpleStreamOptions{signal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, turnReasoning(reasoning, requestedThinking), deferred, thinkingBudgets}, choose(Ai.Model<Ai.JsonValue>, model, replacementModel), convertToLlm, transformContext, getApiKey, stopHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 type PreparedTurnState<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data> is Data:
   PreparedTurnState{context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)}
@@ -445,7 +445,7 @@ def invokePrepareNextTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom:
 
 def selectedPrepareNextTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, value: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.PrepareNextTurnContext(DiagnosticDetails, ToolDetails, Custom, ExecutionError), Result<&2, &2, ExecutionError, Maybe<&2, T.AgentLoopTurnUpdate<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>>:
   match value:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, callback, _, _, _, _, _}: callback
+    case T.AgentLoopConfig{_, _, _, _, _, _, callback, _, _, _, _, _}: callback
 
 def prepareNextTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, +config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.PrepareNextTurnContext(DiagnosticDetails, ToolDetails, Custom, ExecutionError)) -> IO(Result<&2, &2, ExecutionError, PreparedTurnState<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>>):
   do IO<Result<&2, &2, ExecutionError, PreparedTurnState<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>>>:
@@ -462,7 +462,7 @@ def readQueuedMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Da
 
 def selectedSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<Unit, Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, selected, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, selected, _, _, _, _}: selected
 
 def pollSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> IO(Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>):
   do IO<Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>:
@@ -471,7 +471,7 @@ def pollSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: 
 
 def selectedFollowUpMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<Unit, Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, selected, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, selected, _, _, _}: selected
 
 def pollFollowUpMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> IO(Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>):
   do IO<Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>:
@@ -499,7 +499,7 @@ def invokeShouldStopAfterTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Cus
 
 def selectedShouldStopAfterTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, Result<&2, &2, ExecutionError, Bool>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, callback, _, _, _, _, _, _}: callback
+    case T.AgentLoopConfig{_, _, _, _, _, callback, _, _, _, _, _, _}: callback
 
 def shouldStopAfterTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>) -> IO(Result<&2, &2, ExecutionError, Bool>):
   do IO<Result<&2, &2, ExecutionError, Bool>>:
@@ -548,11 +548,11 @@ def invokeContextTransform(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom
 
 def selectedContextTransform(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>, Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, selected, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, selected, _, _, _, _, _, _, _, _}: selected
 
 def selectedMessageConverter(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> C.Callback<T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), Result<&2, &2, ExecutionError, List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, ToolDetails>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, selected, _, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, selected, _, _, _, _, _, _, _, _, _}: selected
 
 def convertTransformedMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, transformed: Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>) -> IO(Result<&2, &2, ExecutionError, List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, ToolDetails>>>):
   match transformed:
@@ -571,15 +571,15 @@ def convertContextMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom
 
 def selectedApiKey(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, String>:
   match config:
-    case T.AgentLoopConfig{_, _, selected, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, selected, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: selected
 
 def selectedApiKeyResolver(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<String, Result<&2, &2, ExecutionError, Maybe<&2, String>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, selected, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, _, selected, _, _, _, _, _, _, _}: selected
 
 def selectedRequestModel(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Ai.Model<Ai.JsonValue>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, selected, _, _, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, selected, _, _, _, _, _, _, _, _, _, _}: selected
 
 def requestModelProvider(-Value: Data, model: Ai.Model<Value>) -> String:
   match model:
@@ -637,7 +637,7 @@ def prepareLlmContext(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Dat
 
 def withRequestOverrides(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, resolvedApiKey: Maybe<&2, String>, requestSignal: Maybe<&2, Abort.AbortSignal<Unit>>) -> T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>:
   match config:
-    case T.AgentLoopConfig{_, telemetryContext, _, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, stopCallback, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{requestSignal, telemetryContext, resolvedApiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, stopCallback, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, telemetryContext, _, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}, model, convertToLlm, transformContext, getApiKey, stopCallback, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.SimpleStreamOptions{requestSignal, telemetryContext, resolvedApiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}, model, convertToLlm, transformContext, getApiKey, stopCallback, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 def snapshotRequestConfig(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, requestSignal: Maybe<&2, Abort.AbortSignal<Unit>>, resolved: Result<&2, &2, ExecutionError, Maybe<&2, String>>) -> Result<&2, &2, ExecutionError, T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>>:
   match resolved:
@@ -961,7 +961,7 @@ type PreparedToolCallBatch is Data:
 
 def configuredToolExecution(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, T.ToolExecutionMode>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, configured, _, _}: configured
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, configured, _, _}: configured
 
 def availableContextTools(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>) -> List<&2, T.AgentTool<ToolDetails, ExecutionError>>:
   match context:
@@ -1015,7 +1015,7 @@ def finalizeToolOutcome(-Details: Data, call: Ai.ToolCall<Schema.Value>, execute
 
 def selectedAfterToolCall(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hook}: hook
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, hook}: hook
 
 def invokeAfterToolCall(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, hook: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>>>, input: T.ToolHookInput<T.AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>):
   match hook:
@@ -1180,7 +1180,7 @@ def checkedArgumentPreparation(-Details: Data, -Error: Data, tool: T.AgentTool<D
 
 def selectedBeforeToolCall(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, T.BeforeToolCallUpdate<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hook, _}: hook
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, hook, _}: hook
 
 def invokeBeforeToolCall(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, context: T.AgentContext<DiagnosticDetails, Details, Custom, Error>, assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, call: Ai.ToolCall<Schema.Value>, args: Schema.Value, signal: Maybe<&2, Abort.AbortSignal<Unit>>, hook: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, T.BeforeToolCallUpdate<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>>>>) -> IO(Result<&2, &2, Error, T.BeforeToolCallUpdate<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>>):
   match hook:

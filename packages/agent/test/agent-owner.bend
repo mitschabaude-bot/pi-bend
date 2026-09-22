@@ -39,7 +39,7 @@ type ProviderCapture is Data:
   ProviderCapture{runtime: R.Ref<Maybe<&2, H.Owner()>>, mode: U32, streams: R.Ref<List<&2, H.StreamValue()>>, requests: R.Ref<String>}
 def defaults(config: Maybe<&2, H.Config()>) -> Bool:
   match config:
-    case Some{T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{Ai.AutoTransport{}}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{T.Parallel{}}, _, _}}: True{}
+    case Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{Ai.AutoTransport{}}, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, Some{T.Parallel{}}, _, _}}: True{}
     case _: False{}
 def callProvider(state: Maybe<&2, H.Owner()>, mode: U32, streams: R.Ref<List<&2, H.StreamValue()>>, requests: R.Ref<String>, +input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match state input:

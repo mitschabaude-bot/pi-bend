@@ -16,6 +16,7 @@ import ./validated-tool-execution.bend as H
 import ./message-events.bend as Test
 import ./tool-call-sequential.bend as S
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def Turn() -> Data: T.ShouldStopAfterTurnContext<Unit, String, String, String>
 def Next() -> Data: Completion.NextTurn<Unit, String, String, String>
@@ -116,7 +117,7 @@ def check(actual: Outcome(), category: U32, tools: Bool, expectedPending: String
     case _ _: Test.assertion(False{}, "unexpected turn transition")
 
 def configuration(converter: C.Callback<H.Messages(), H.Converted()>, stopHook: C.Callback<Turn(), Result<&2, &2, String, Bool>>, steering: C.Callback<Unit, QueueOutput()>, followUp: C.Callback<Unit, QueueOutput()>) -> H.Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, Some{stopHook}, None{}, Some{steering}, Some{followUp}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, Some{stopHook}, None{}, Some{steering}, Some{followUp}, None{}, None{}, None{}}
 
 def scenario(+tools: Bool, terminate: Bool, stopMode: U32, steeringMode: U32, followMode: U32, failAt: String, category: U32, expectedPending: String, expectedError: String, expectedEvents: List<&2, String>) -> IO(Unit):
   do IO<Unit>:

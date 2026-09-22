@@ -12,6 +12,7 @@ import ./context.bend as H
 import ./turn-update.bend as ConfigTest
 import ../../runtime/src/schema-value.bend as Schema
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def Config() -> Data: ConfigTest.Config()
 def Input() -> Data: T.ToolHookInput<H.After()>
@@ -54,7 +55,7 @@ def forbidden(unused: Unit, input: ToolInput()) -> IO(ToolOutput()):
   IO.die(ToolOutput(), 1, "finalization must not execute tool twice")
 
 def configuration(converter: ConfigTest.Converter(), after: Maybe<&2, Hook()>) -> Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, after}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, after}
 
 def check(finalized: Loop.FinalizedToolCallOutcome<String>, expectedText: String, expectedDetails: String, expectedError: Bool, expectedTerminate: Bool) -> IO(Unit):
   match finalized:

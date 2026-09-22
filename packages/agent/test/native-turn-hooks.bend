@@ -10,6 +10,8 @@ import ./message-events.bend as Test
 import ./context.bend as H
 import ./turn-update.bend as ConfigTest
 import ../../runtime/src/schema-value.bend as Schema
+import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def Config() -> Data: ConfigTest.Config()
 def QueueResult() -> Data: Result<&2, &2, String, H.Messages()>
@@ -66,7 +68,7 @@ def main() -> IO(Unit):
     +stopped : C.Callback<H.Turn(), StopResult()> <- C.create(~Log(), ~H.Turn(), ~StopResult(), ~stop, logValue)
     +prepared : C.Callback<H.Turn(), PrepareResult()> <- C.create(~Log(), ~H.Turn(), ~PrepareResult(), ~prepare, logValue)
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
-    +config : Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, Some{stopped}, Some{prepared}, Some{queued}, Some{queued}, None{}, None{}, None{}}
+    +config : Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, Some{stopped}, Some{prepared}, Some{queued}, Some{queued}, None{}, None{}, None{}}
     steering : QueueResult() <- Loop.pollSteeringMessages(Unit, String, String, String, Unit, config)
     checkQueue(steering, "queued")
     pending : QueueResult() <- Loop.repollSteeringMessages(Unit, String, String, String, Unit, config, T.CustomMessage{"already pending"} <> Nil{})

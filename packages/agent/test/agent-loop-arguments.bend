@@ -17,6 +17,7 @@ import ./validated-tool-execution.bend as Validation
 import ./agent-loop-tools.bend as Tools
 import ./message-events.bend as Test
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def HookInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Unit, String, String, String>>
 def HookOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<Validation.Context()>>
@@ -125,7 +126,7 @@ def scenario(+prepare: Bool, name: String) -> IO(Unit):
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Capture, ~Validation.Input(), ~Validation.Checked(), ~validate, Capture{prepare, recording})
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
-    config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<HookInput(), HookOutput()>>, prepare, None{}, Some{hook}), None{}}
+    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<HookInput(), HookOutput()>>, prepare, None{}, Some{hook}), None{}}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{toolName(prepare), "Tool", schema(prepare), None{}, "Tool", Bool.pick(Maybe<&2, C.Callback<V.Value, Validation.Checked()>>, prepare, Some{prepareCallback}, None{}), executor, None{}, None{}} <> Nil{}}}
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{Bool.pick(String, prepare, "edit something", "echo something")}, F.fromU32(0)}}} <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)

@@ -19,7 +19,7 @@ def forbidden(unused: Unit, input: H.Messages()) -> IO(Output()):
   IO.die(Output(), 1, "turn update must not invoke conversion")
 
 def config(model: Ai.Model<Ai.JsonValue>, reasoning: Maybe<&2, Ai.ThinkingLevel>, convert: Converter()) -> Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{"keep"}, None{}, None{}, None{}, reasoning, None{}, None{}, model, convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{"keep"}, None{}, None{}, None{}, reasoning, None{}, None{}}, model, convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 def thinking(value: Maybe<&2, Ai.ThinkingLevel>) -> String:
   match value:
@@ -41,7 +41,7 @@ def sameModel(left: Ai.Model<Ai.JsonValue>, right: Ai.Model<Ai.JsonValue>) -> Bo
 
 def view(value: Config(), expectedModel: Ai.Model<Ai.JsonValue>, expectedConvert: Converter()) -> IO(String):
   match value:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{sessionId}, _, _, _, reasoning, _, _, model, convert, _, _, _, _, _, _, _, _, _}:
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{sessionId}, _, _, _, reasoning, _, _}, model, convert, _, _, _, _, _, _, _, _, _}:
       do IO<String>:
         Test.assertion(String.eq(sessionId, "keep") && C.same(H.Messages(), Output(), convert, expectedConvert), "turn update changed unrelated fields/callback")
         return thinking(reasoning) ++ "|" ++ boolean(sameModel(model, expectedModel))

@@ -7,6 +7,8 @@ import ../../ai/test/model-types.bend as Model
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/schema-value.bend as Schema
+import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def Message() -> Data: Ai.AssistantMessage<Schema.Value, Unit>
 def Context() -> Data: T.AgentContext<Unit, Unit, String, String>
@@ -19,7 +21,7 @@ def forbidden(unused: Unit, messages: Messages()) -> IO(ConvertOutput()):
   IO.die(ConvertOutput(), 1, "tool selection must not convert messages")
 
 def config(model: Ai.Model<Ai.JsonValue>, converter: Converter(), configured: Maybe<&2, T.ToolExecutionMode>) -> Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, configured, None{}, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), model, converter, None{}, None{}, None{}, None{}, None{}, None{}, configured, None{}, None{}}
 
 def contents(tags: List<&2, String>, +a: T.AgentToolCall, +b: T.AgentToolCall, +text: Ai.TextContent, +thinking: Ai.ThinkingContent) -> List<&2, Ai.AssistantContent<Schema.Value>>:
   match tags:

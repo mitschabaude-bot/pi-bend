@@ -12,6 +12,7 @@ import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
 import ./message-events.bend as Test
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 def Context() -> Data: T.AgentContext<Unit, String, String, String>
 def Messages() -> Data: List<&2, T.AgentMessage<Unit, String, String>>
@@ -57,7 +58,7 @@ def emit(unused: Unit, event: EventValue()) -> IO(E.Emission<String>):
   IO.die(E.Emission<String>, 1, "this executor emits no updates")
 
 def config(converter: C.Callback<Messages(), Converted()>) -> Config():
-  T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 def executed(result: Result<&2, &2, String, Loop.ExecutedToolCallOutcome<String>>) -> IO(Unit):
   match result:

@@ -15,6 +15,7 @@ import ./main-loop.bend as H
 import ./validated-tool-execution.bend as Validation
 import ./message-events.bend as Test
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/fetch.bend as Fetch
 
 type Provider is Data:
   Provider{reply: String, expectedInput: String, calls: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
@@ -94,7 +95,7 @@ def scenario(name: String, +mode: U32, useDefault: Bool, +reply: String, expecte
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
     +registry : H.Registry() <- Defaults.create(Unit, String, Validation.Config(), String)
     Defaults.setDefaultStreamFn(Unit, String, Validation.Config(), String, registry, Some{providerCallback})
-    config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     created : Result<&2, &2, String, H.StreamRun()> <- run(mode, config, W.Options{None{}, validator, aborted, "empty", selected(useDefault, registry, providerCallback)})
     inspect(mode, created, reply, expectedEvents)
     count : U32 <- R.read(U32, calls)
@@ -197,7 +198,7 @@ def transcriptScenario(name: String, +mode: U32, expectedLog: String) -> IO(Unit
     +transformer : C.Callback<TransformInput(), TransformResult()> <- C.create(~H.Log(), ~TransformInput(), ~TransformResult(), ~transcriptTransform, recording)
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
-    config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, Bool.pick(Maybe<&2, C.Callback<TransformInput(), TransformResult()>>, U32.is_eq(mode, 2), Some{transformer}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, Bool.pick(Maybe<&2, C.Callback<TransformInput(), TransformResult()>>, U32.is_eq(mode, 2), Some{transformer}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, transcriptPrompts(mode), transcriptContext(mode), config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
     outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
     transcriptOutcome(mode, outcome)
