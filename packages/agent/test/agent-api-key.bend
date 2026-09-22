@@ -54,7 +54,7 @@ def replaceFirst(index: U32, slot: R.Ref<Maybe<&2, Owner.Owner()>>, future: KeyC
       do IO<Unit>:
         stored : Maybe<&2, Owner.Owner()> <- R.read(Maybe<&2, Owner.Owner()>, slot)
         agent : Owner.Owner() <- SettingsTest.requireAgent(stored)
-        Agent.setGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{future})
+        Agent.setGetApiKey(Unit, Unit, String, String, Unit, agent, Some{future})
     case _: IO.pure(Unit, Unit{})
 def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match capture input:
@@ -63,19 +63,19 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
         +index : U32 <- R.modify(U32, U32, calls, old => SettingsTest.increment(old))
         R.modify(String, Unit, trace, old => (old ++ "p" ++ requestKey(config) ++ ";", Unit{}))
         replaceFirst(index, slot, future)
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         SettingsTest.push(index, stream)
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider options missing")
 def create(capture: ProviderCapture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(Some{initial}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}
 def same(value: Maybe<&2, KeyCallback()>, expected: KeyCallback()) -> Bool:
@@ -87,30 +87,30 @@ def error(state: Named.Snapshot()) -> String:
     case T.AgentState{_, _, _, _, _, _, _, value}: Maybe.default(&2, String, value, "none")
 def captureRuns(+agent: Owner.Owner(), first: KeyCallback(), +second: KeyCallback()) -> IO(Unit):
   do IO<Unit>:
-    absent : Maybe<&2, KeyCallback()> <- Agent.getGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    absent : Maybe<&2, KeyCallback()> <- Agent.getGetApiKey(Unit, Unit, String, String, Unit, agent)
     Test.assertion(Maybe.is_none(&2, KeyCallback(), absent), "API-key callback is initially absent")
-    Agent.setGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{first})
+    Agent.setGetApiKey(Unit, Unit, String, String, Unit, agent, Some{first})
     Behavior.prompt(agent, "first")
-    current : Maybe<&2, KeyCallback()> <- Agent.getGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    current : Maybe<&2, KeyCallback()> <- Agent.getGetApiKey(Unit, Unit, String, String, Unit, agent)
     Test.assertion(same(current, second), "getter sees replacement while the previous run retained its callback")
     Behavior.prompt(agent, "next")
-    Agent.setGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, None{})
-    cleared : Maybe<&2, KeyCallback()> <- Agent.getGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.setGetApiKey(Unit, Unit, String, String, Unit, agent, None{})
+    cleared : Maybe<&2, KeyCallback()> <- Agent.getGetApiKey(Unit, Unit, String, String, Unit, agent)
     Test.assertion(Maybe.is_none(&2, KeyCallback(), cleared), "API-key callback can be cleared")
     Behavior.prompt(agent, "cleared")
 def failureRuns(+agent: Owner.Owner(), missing: KeyCallback(), failed: KeyCallback(), second: KeyCallback(), +calls: R.Ref<U32>) -> IO(Unit):
   do IO<Unit>:
-    Agent.setGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{missing})
+    Agent.setGetApiKey(Unit, Unit, String, String, Unit, agent, Some{missing})
     Behavior.prompt(agent, "no key")
     before : U32 <- R.read(U32, calls)
-    Agent.setGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{failed})
+    Agent.setGetApiKey(Unit, Unit, String, String, Unit, agent, Some{failed})
     Behavior.prompt(agent, "failure")
     after : U32 <- R.read(U32, calls)
-    failedState : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    failedState : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(U32.is_eq(before, after) && String.eq(error(failedState), "key lookup failed"), "key failure skips provider and reaches Agent failure recovery")
-    Agent.setGetApiKey(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{second})
+    Agent.setGetApiKey(Unit, Unit, String, String, Unit, agent, Some{second})
     Behavior.prompt(agent, "recovered")
-    recovered : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    recovered : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(String.eq(error(recovered), "none"), "later successful prompt clears previous key error")
 def borrowed(value: KeyResult()) -> Bool:
   match value:

@@ -14,6 +14,7 @@ import ../../runtime/src/u64.bend as Bits
 import ./main-loop.bend as H
 import ./validated-tool-execution.bend as Validation
 import ./message-events.bend as Test
+import ../../runtime/src/abort.bend as Abort
 
 type Provider is Data:
   Provider{reply: String, expectedInput: String, calls: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
@@ -35,9 +36,9 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant(H.text(reply), Ai.Stop{})})
-        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 
-def user() -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
+def user() -> T.AgentMessage<Unit, String, String>:
   T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"Hello"}, F.fromU32(0)}}}
 
 def context(mode: U32) -> Validation.Context():
@@ -61,22 +62,22 @@ def run(mode: U32, config: Validation.Config(), options: H.StreamOptions()) -> I
   match mode:
     case 0:
       do IO<Result<&2, &2, String, H.StreamRun()>>:
-        run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, user() <> Nil{}, context(0), config, options)
+        run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, user() <> Nil{}, context(0), config, options)
         return Done{run}
-    case other: W.agentLoopContinue(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, context(other), config, options)
+    case other: W.agentLoopContinue(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, context(other), config, options)
 
 def inspect(+mode: U32, created: Result<&2, &2, String, H.StreamRun()>, reply: String, expectedEvents: String) -> IO(Unit):
   match created:
     case Fail{error}: verify(mode, Fail{error}, reply)
     case Done{+run}:
       do IO<Unit>:
-        outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
         verify(mode, outcome, reply)
-        +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
         events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
         Test.assertion(String.eq(String.join(events, "|"), expectedEvents), "original event types and absence of old user-message events")
         S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-        W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
+        W.disposeStreamRun(Unit, String, String, String, run)
 
 def selected(useDefault: Bool, registry: H.Registry(), provider: H.ProviderFunction()) -> H.Selection():
   match useDefault:
@@ -90,32 +91,32 @@ def scenario(name: String, +mode: U32, useDefault: Bool, +reply: String, expecte
     +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{reply, Bool.pick(String, U32.is_eq(mode, 2), "Hook content", "Hello"), calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
-    +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
-    +registry : H.Registry() <- Defaults.create(V.Value, V.Value, Unit, String, Unit, Validation.Config(), String)
-    Defaults.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, Validation.Config(), String, registry, Some{providerCallback})
+    +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
+    +registry : H.Registry() <- Defaults.create(Unit, String, Validation.Config(), String)
+    Defaults.setDefaultStreamFn(Unit, String, Validation.Config(), String, registry, Some{providerCallback})
     config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     created : Result<&2, &2, String, H.StreamRun()> <- run(mode, config, W.Options{None{}, validator, aborted, "empty", selected(useDefault, registry, providerCallback)})
     inspect(mode, created, reply, expectedEvents)
     count : U32 <- R.read(U32, calls)
     Test.assertion(U32.is_eq(count, Bool.pick(U32, U32.is_eq(mode, 3), 0, 1)), "default provider called once; invalid continuation never calls it")
-    Defaults.setDefaultStreamFn(V.Value, V.Value, Unit, String, Unit, Validation.Config(), String, registry, None{})
-    Defaults.dispose(V.Value, V.Value, Unit, String, Unit, Validation.Config(), String, registry)
+    Defaults.setDefaultStreamFn(Unit, String, Validation.Config(), String, registry, None{})
+    Defaults.dispose(Unit, String, Validation.Config(), String, registry)
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
-    C.dispose(Maybe<&2, Unit>, Bool, aborted)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, aborted)
     owned : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
     H.disposeStreams(owned)
     discarded : U32 <- R.dispose(U32, calls)
     IO.print("PASS " ++ name)
 
-def TransformInput() -> Data: T.TransformContextInput<Validation.Messages(), Unit>
+def TransformInput() -> Data: T.TransformContextInput<Validation.Messages()>
 def TransformResult() -> Data: Result<&2, &2, String, Validation.Messages()>
 
 type TranscriptFixture is Data:
   TranscriptFixture{mode: U32, log: H.Log(), streams: R.Ref<List<&2, H.StreamValue()>>}
 
-def promptText(value: String) -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
+def promptText(value: String) -> T.AgentMessage<Unit, String, String>:
   T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{value}, F.fromU32(0)}}}
 
 def transcriptPrompts(mode: U32) -> Validation.Messages():
@@ -179,7 +180,7 @@ def transcriptProvider(environment: TranscriptFixture, input: H.ProviderInput())
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant(H.text("Response"), Ai.Stop{})})
-        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 
 def transcriptOutcome(+mode: U32, outcome: H.Outcome()) -> IO(Unit):
   match outcome:
@@ -195,22 +196,22 @@ def transcriptScenario(name: String, +mode: U32, expectedLog: String) -> IO(Unit
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~TranscriptFixture, ~Validation.Messages(), ~Validation.Converted(), ~transcriptConvert, TranscriptFixture{mode, recording, streams})
     +transformer : C.Callback<TransformInput(), TransformResult()> <- C.create(~H.Log(), ~TransformInput(), ~TransformResult(), ~transcriptTransform, recording)
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
-    +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
+    +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
     config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, Bool.pick(Maybe<&2, C.Callback<TransformInput(), TransformResult()>>, U32.is_eq(mode, 2), Some{transformer}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
-    +run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, transcriptPrompts(mode), transcriptContext(mode), config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
-    outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, transcriptPrompts(mode), transcriptContext(mode), config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
+    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
     transcriptOutcome(mode, outcome)
-    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     events : List<&2, String> <- H.collectEvents(iterator, Nil{}, None{})
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-    W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    W.disposeStreamRun(Unit, String, String, String, run)
     entries : List<&2, String> <- R.dispose(List<&2, String>, recording)
     Test.assertion(String.eq(String.join(List.reverse(&2, String, entries), ";"), expectedLog), "transform precedes conversion; converter receives expected messages; provider runs once")
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(TransformInput(), TransformResult(), transformer)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
-    C.dispose(Maybe<&2, Unit>, Bool, aborted)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, aborted)
     owned : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
     H.disposeStreams(owned)
     IO.print("PASS " ++ name)

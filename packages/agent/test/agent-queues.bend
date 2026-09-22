@@ -6,6 +6,7 @@ import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../runtime/src/f64.bend as F
 import ./message-events.bend as Test
+import ../../runtime/src/schema-value.bend as Schema
 
 def mode(index: U32) -> T.QueueMode: Bool.pick(T.QueueMode, U32.is_eq(index, 1), T.All{}, T.OneAtATime{})
 def modeName(value: T.QueueMode) -> String:
@@ -54,7 +55,7 @@ def pairScenario() -> IO(Unit):
     Test.assertion(String.eq(pairKey(Q.clearAll(String, Q.setModeQueues(String, queues, Q.QueuesSteering{}, T.All{}))), "all;0;;|one;0;;"), "clearing both queues preserves modes")
     Test.assertion(String.eq(pairKey(queues), "one;1;s;|one;1;f;"), "queue operations preserve retained snapshots")
 
-def Message() -> Data: T.AgentMessage<Unit, Unit, Unit, Unit, String>
+def Message() -> Data: T.AgentMessage<Unit, Unit, String>
 def Messages() -> Data: List<&2, Message()>
 def user(text: String) -> Message(): T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, F.fromU32(0)}}}
 def system() -> Message(): T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"system"}, None{}, None{}, None{}, F.fromU32(0)}}}
@@ -99,6 +100,6 @@ def continuationScenario(active: Bool, historyIndex: U32, steeringMode: U32, fol
   do IO<Unit>:
     +queues : Q.Queues<Message()> = fill(queued(steeringCount, "s"), fill(queued(followCount, "f"), Q.newQueues(Message(), mode(steeringMode), mode(followMode)), Q.FollowUp{}), Q.QueuesSteering{})
     before : String = planKey((queues, Done{Continue.Continue{}}))
-    result : Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>> = Continue.planContinue(Unit, Unit, Unit, Unit, String, active, history(historyIndex), queues)
+    result : Q.Queues<Message()> & Result<&2, &2, Continue.ContinueError, Continue.Plan<Message()>> = Continue.planContinue(Unit, Unit, String, active, history(historyIndex), queues)
     Test.assertion(String.eq(planKey(result), expected), "Agent continuation decision/remaining queues differ from source")
     Test.assertion(String.eq(planKey((queues, Done{Continue.Continue{}})), before), "earlier queue snapshot stays unchanged")

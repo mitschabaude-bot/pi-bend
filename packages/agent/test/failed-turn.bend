@@ -7,8 +7,9 @@ import ../../ai/src/types.bend as Ai
 import ../../runtime/src/ref.bend as R
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/f64.bend as F
+import ../../runtime/src/schema-value.bend as Schema
 
-def EventValue() -> Data: T.AgentEvent<Unit, String, Unit, String, String, Unit, Unit>
+def EventValue() -> Data: T.AgentEvent<Unit, String, String, Unit, Unit>
 def Outcome() -> Data: Result<&2, &2, String, Loop.AssistantCompletion<H.Message()>>
 def Emitted() -> Data: Result<&2, &2, String, Unit>
 type Environment is Data:
@@ -23,7 +24,7 @@ def checkMessages(values: H.Messages()) -> IO(Unit):
 def inspect(event: EventValue()) -> IO(Unit):
   match event:
     case T.TurnEnd{T.LlmMessage{Ai.Assistant{message}}, Nil{}}:
-      Test.assertion(Loop.assistantFailed(String, Unit, message), "failed turn carried successful assistant")
+      Test.assertion(Loop.assistantFailed(Unit, message), "failed turn carried successful assistant")
     case T.AgentEnd{messages}: checkMessages(messages)
     case _: IO.die(Unit, 1, "unexpected failure-branch event or nonempty tool results")
 
@@ -33,7 +34,7 @@ def emit(environment: Environment, event: EventValue()) -> IO(Emitted()):
       do IO<Emitted()>:
         +current : EventValue() = event
         inspect(current)
-        kind : String = T.eventType(Unit, String, Unit, String, String, Unit, Unit, current)
+        kind : String = T.eventType(Unit, String, String, Unit, Unit, current)
         R.modify(String, Unit, trace, old => (old ++ kind ++ "|", Unit{}))
         index : U32 <- R.modify(U32, U32, count, +n => (U32.add(n, 1), n))
         return Bool.pick(Emitted(), U32.is_eq(index, failAt), Fail{"listener failure"}, Done{Unit{}})
@@ -49,12 +50,12 @@ def check(result: Outcome(), expected: String) -> IO(Unit):
 def run(reason: Ai.StopReason, failAt: U32, expected: String, expectedTrace: String, expectedCalls: U32) -> IO(Unit):
   do IO<Unit>:
     +zero : F.F64 = F.fromU32(0)
-    message : Ai.AssistantMessage<String, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), reason)
+    message : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), reason)
     +messages : H.Messages() = T.CustomMessage{"extra"} <> Nil{}
     +trace : R.Ref<String> <- R.new(String, "")
     +count : R.Ref<U32> <- R.new(U32, 0)
-    +sink : Loop.AgentEventSink(Unit, String, Unit, String, String, Unit, Unit, String) <- C.create(~Environment, ~EventValue(), ~Emitted(), ~emit, Environment{count, trace, failAt})
-    result : Outcome() <- Loop.recordAssistantCompletion(Unit, String, Unit, String, String, Unit, Unit, String, message, messages, sink)
+    +sink : Loop.AgentEventSink(Unit, String, String, Unit, Unit, String) <- C.create(~Environment, ~EventValue(), ~Emitted(), ~emit, Environment{count, trace, failAt})
+    result : Outcome() <- Loop.recordAssistantCompletion(Unit, String, String, Unit, Unit, String, message, messages, sink)
     check(result, expected)
     Test.assertion(Nat.is_eq(List.length(&2, H.Message(), messages), 1n), "completion mutated input history")
     observed : String <- R.dispose(String, trace)

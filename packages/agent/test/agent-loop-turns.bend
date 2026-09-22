@@ -14,15 +14,16 @@ import ./main-loop.bend as H
 import ./validated-tool-execution.bend as Validation
 import ./agent-loop-tools.bend as Tools
 import ./message-events.bend as Test
+import ../../runtime/src/abort.bend as Abort
 
 type Preparing is Data:
   Preparing{calls: R.Ref<U32>, log: H.Log()}
 type Provider is Data:
   Provider{stopRun: Bool, calls: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
 
-def user(text: String) -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
+def user(text: String) -> T.AgentMessage<Unit, String, String>:
   T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, F.fromU32(0)}}}
-def guidance() -> T.AgentMessage<V.Value, V.Value, Unit, String, String>:
+def guidance() -> T.AgentMessage<Unit, String, String>:
   T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"updated guidance"}, None{}, None{}, None{}, F.fromU32(1)}}}
 
 def roles(messages: Validation.Messages()) -> String:
@@ -104,7 +105,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, Tools.response(False{}, index))
-        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 
 @unsafe def collect(+iterator: S.Iterator<Validation.EventValue(), H.Outcome()>, reversed: List<&2, String>, step: Maybe<&2, S.Iteration<Validation.EventValue()>>) -> IO(List<&2, String>):
   match step:
@@ -113,7 +114,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         next : S.Iteration<Validation.EventValue()> <- S.nextValue(Validation.EventValue(), H.Outcome(), iterator)
         collect(iterator, reversed, Some{next})
     case Some{S.End{}}: IO.pure(List<&2, String>, List.reverse(&2, String, reversed))
-    case Some{S.Yield{event}}: collect(iterator, T.eventType(V.Value, V.Value, Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>, event) <> reversed, None{})
+    case Some{S.Yield{event}}: collect(iterator, T.eventType(Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>, event) <> reversed, None{})
 
 def checkOutcome(stopRun: Bool, result: H.Outcome()) -> IO(Unit):
   match result:
@@ -139,17 +140,17 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{stopMode, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
-    +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
+    +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
     config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<H.Turn(), Result<&2, &2, String, Bool>>>, stopMode, Some{stopper}, None{}), Bool.pick(Maybe<&2, C.Callback<H.Turn(), H.PrepareOutput()>>, stopMode, None{}, Some{preparer}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{steeringCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{followCallback}, None{}), None{}, None{}, None{}}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "Echo tool", Tools.schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
-    +run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, user("echo something") <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
-    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, user("echo something") <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
+    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     events : List<&2, String> <- collect(iterator, Nil{}, None{})
     checkEvents(stopMode, events)
-    outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
     checkOutcome(stopMode, outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-    W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    W.disposeStreamRun(Unit, String, String, String, run)
     count : U32 <- R.dispose(U32, calls)
     Test.assertion(U32.is_eq(count, Bool.pick(U32, stopMode, 1, 2)), "original provider call count")
     prepareCount : U32 <- R.dispose(U32, prepares)
@@ -164,7 +165,7 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
-    C.dispose(Maybe<&2, Unit>, Bool, aborted)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, aborted)
     owned : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
     H.disposeStreams(owned)
     IO.print("PASS " ++ name)

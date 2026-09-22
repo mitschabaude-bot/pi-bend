@@ -16,11 +16,12 @@ import ../../runtime/src/u64.bend as Bits
 import ./main-loop.bend as H
 import ./validated-tool-execution.bend as Validation
 import ./message-events.bend as Test
+import ../../runtime/src/abort.bend as Abort
 
 def convert(unused: Unit, messages: Validation.Messages()) -> IO(Validation.Converted()):
   IO.pure(Validation.Converted(), Done{H.converted(messages)})
 
-def HookInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<V.Value, V.Value, Unit, String, String, V.Value, Unit, String>, Unit>
+def HookInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Unit, String, String, String>>
 def HookOutput() -> Data: Result<&2, &2, String, Maybe<&2, T.AfterToolCallResult<String>>>
 
 type Provider is Data:
@@ -98,7 +99,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, response(truncated, index))
-        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 
 def checkHistory(+truncated: Bool, messages: Validation.Messages()) -> IO(Unit):
   match messages:
@@ -149,17 +150,17 @@ def scenario(+truncated: Bool, name: String) -> IO(Unit):
     +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{truncated, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
-    +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
+    +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
     config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<HookInput(), HookOutput()>>, truncated, None{}, Some{hook})}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "Echo tool", schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
-    +run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"echo something"}, F.fromU32(0)}}} <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
-    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"echo something"}, F.fromU32(0)}}} <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
+    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     eventCount : U32 <- consume(truncated, iterator, 0, None{})
     Test.assertion(U32.is_eq(eventCount, 11), "one execution start and one execution end")
-    outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
     checkOutcome(truncated, outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-    W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    W.disposeStreamRun(Unit, String, String, String, run)
     count : U32 <- R.dispose(U32, calls)
     Test.assertion(U32.is_eq(count, 2), "loop continues for final assistant after tool result")
     entries : List<&2, String> <- R.dispose(List<&2, String>, recording)
@@ -169,7 +170,7 @@ def scenario(+truncated: Bool, name: String) -> IO(Unit):
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
-    C.dispose(Maybe<&2, Unit>, Bool, aborted)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, aborted)
     owned : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
     H.disposeStreams(owned)
     IO.print("PASS " ++ name)

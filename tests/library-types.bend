@@ -54,6 +54,7 @@ import ../packages/agent/src/agent.bend as AgentQueues
 import ../packages/agent/src/agent.bend as AgentContinuation
 import ../packages/agent/src/agent-loop.bend as Loop
 import ../packages/agent/src/agent-loop.bend as Updates
+import ../packages/runtime/src/schema-value.bend as Schema
 
 def main() -> IO(Unit):
   IO.print("PASS canonical library type check")

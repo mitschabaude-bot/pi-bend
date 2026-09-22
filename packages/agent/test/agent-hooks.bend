@@ -12,9 +12,10 @@ import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
 import ./agent-queues.bend as Fixture
 import ./message-events.bend as Test
+import ../../runtime/src/schema-value.bend as Schema
 
-def Turn() -> Data: T.ShouldStopAfterTurnContext<Unit, Unit, Unit, Unit, String, Unit, Unit, String>
-def Update() -> Data: T.AgentLoopTurnUpdate<Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit>
+def Turn() -> Data: T.ShouldStopAfterTurnContext<Unit, Unit, String, String>
+def Update() -> Data: T.AgentLoopTurnUpdate<Unit, Unit, String, String>
 def Options() -> Data: H.Hooks<Turn(), Update(), String>
 def Adapters() -> Data: H.Adapters<Turn(), Update(), String>
 def PrepareResult() -> Data: H.PrepareResult(Update(), String)
@@ -40,7 +41,7 @@ def record(log: R.Ref<String>, label: String, context: String, signal: Maybe<&2,
   do IO<Unit>:
     state : String <- signalKey(signal)
     R.modify(String, Unit, log, previous => (previous ++ label ++ "@" ++ context ++ "@" ++ state ++ ";", Unit{}))
-def stopBody(environment: Environment, input: T.ToolHookInput<Turn(), H.HooksSignal()>) -> IO(Result<&2, &2, String, Bool>):
+def stopBody(environment: Environment, input: T.ToolHookInput<Turn()>) -> IO(Result<&2, &2, String, Bool>):
   match environment input:
     case Environment{+label, fail, stop, log} T.ToolHookInput{context, signal}:
       do IO<Result<&2, &2, String, Bool>>:
@@ -53,14 +54,14 @@ def preparation(environment: Environment, context: String, signal: Maybe<&2, H.H
         record(log, label, context, signal)
         return Bool.pick(PrepareResult(), fail, Fail{label}, Done{Some{T.AgentLoopTurnUpdate{None{}, Some{T.CustomMessage{label} <> Nil{}}, None{}, Some{Ai.Off{}}}}})
 def legacyBody(environment: Environment, signal: Maybe<&2, H.HooksSignal()>) -> IO(PrepareResult()): preparation(environment, "-", signal)
-def contextBody(environment: Environment, input: T.ToolHookInput<Turn(), H.HooksSignal()>) -> IO(PrepareResult()):
+def contextBody(environment: Environment, input: T.ToolHookInput<Turn()>) -> IO(PrepareResult()):
   match input:
     case T.ToolHookInput{context, signal}: preparation(environment, marker(context), signal)
 def handlers(+version: String, +stop: Bool, +fail: Bool, +log: R.Ref<String>) -> IO(Handlers):
   do IO<Handlers>:
-    stopHook : H.StopHook(Turn(), String) <- C.create(~Environment, ~T.ToolHookInput<Turn(), H.HooksSignal()>, ~Result<&2, &2, String, Bool>, ~stopBody, Environment{"stop" ++ version, fail, stop, log})
+    stopHook : H.StopHook(Turn(), String) <- C.create(~Environment, ~T.ToolHookInput<Turn()>, ~Result<&2, &2, String, Bool>, ~stopBody, Environment{"stop" ++ version, fail, stop, log})
     legacy : H.LegacyHook(Update(), String) <- C.create(~Environment, ~Maybe<&2, H.HooksSignal()>, ~PrepareResult(), ~legacyBody, Environment{"legacy" ++ version, fail, stop, log})
-    context : H.ContextHook(Turn(), Update(), String) <- C.create(~Environment, ~T.ToolHookInput<Turn(), H.HooksSignal()>, ~PrepareResult(), ~contextBody, Environment{"context" ++ version, fail, stop, log})
+    context : H.ContextHook(Turn(), Update(), String) <- C.create(~Environment, ~T.ToolHookInput<Turn()>, ~PrepareResult(), ~contextBody, Environment{"context" ++ version, fail, stop, log})
     return Handlers{stopHook, legacy, context}
 def options(handlers: Handlers, +mode: U32, enabledStop: Bool) -> Options():
   match handlers:
@@ -100,9 +101,9 @@ def disposeHandlers(handlers: Handlers) -> IO(Unit):
   match handlers:
     case Handlers{stop, legacy, context}:
       do IO<Unit>:
-        C.dispose(T.ToolHookInput<Turn(), H.HooksSignal()>, Result<&2, &2, String, Bool>, stop)
+        C.dispose(T.ToolHookInput<Turn()>, Result<&2, &2, String, Bool>, stop)
         C.dispose(Maybe<&2, H.HooksSignal()>, PrepareResult(), legacy)
-        C.dispose(T.ToolHookInput<Turn(), H.HooksSignal()>, PrepareResult(), context)
+        C.dispose(T.ToolHookInput<Turn()>, PrepareResult(), context)
 def claim(result: Result<&2, &2, Life.ClaimError<String>, Life.Claimed<Unit>>) -> IO(Life.ActiveRun):
   match result:
     case Done{Life.Claimed{run, _}}: IO.pure(Life.ActiveRun, run)
@@ -111,7 +112,7 @@ def fromConfig(config: ConfigFixture.Config()) -> Adapters():
   match config:
     case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, stop, prepare, _, _, _, _, _}: H.Adapters{stop, prepare}
 def throughConfig(adapters: Adapters(), converter: C.Callback<ConfigFixture.Messages(), ConfigFixture.Converted()>) -> Adapters():
-  fromConfig(Binding.applyHooks(Unit, Unit, Unit, Unit, String, Unit, Unit, String, Unit, Unit, Unit, ConfigFixture.base(converter), adapters))
+  fromConfig(Binding.applyHooks(Unit, Unit, String, String, Unit, ConfigFixture.base(converter), adapters))
 def scenario(initial: U32, later: U32, stop: Bool, +fail: Bool, +expected: String) -> IO(Unit):
   do IO<Unit>:
     +converter : C.Callback<ConfigFixture.Messages(), ConfigFixture.Converted()> <- C.create(~Unit, ~ConfigFixture.Messages(), ~ConfigFixture.Converted(), ~ConfigFixture.converterBody, Unit{})

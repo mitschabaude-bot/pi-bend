@@ -14,6 +14,7 @@ import ./main-loop.bend as H
 import ./validated-tool-execution.bend as Validation
 import ./agent-loop-tools.bend as Tools
 import ./message-events.bend as Test
+import ../../runtime/src/abort.bend as Abort
 
 type Gates is Data:
   Gates{mode: U32, firstStarted: Chan(Unit), releaseFirst: Chan(Unit), firstResolved: R.Ref<Bool>, starts: R.Ref<U32>, executions: H.Log()}
@@ -102,7 +103,7 @@ def provider(environment: Provider, input: H.ProviderInput()) -> IO(H.ProviderOu
         +stream : H.StreamValue() <- S.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, previous => (stream <> previous, Unit{}))
         S.push(Ai.AssistantMessageEvent<V.Value, Unit>, H.Assistant(), stream, response(mode, index))
-        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 
 def releaseParallel(mode: U32, release: Chan(Unit)) -> IO(Unit):
   match mode:
@@ -174,11 +175,11 @@ def checkOutcome(result: H.Outcome()) -> IO(Unit):
     case Done{messages}: Test.assertion(String.eq(String.join(transcriptIds(H.converted(messages)), ","), "tool-1,tool-2"), "run result persists source order")
     case Fail{_}: Test.assertion(False{}, "parallel loop succeeds")
 
-def tool(+mode: U32, +first: Bool, executor: C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()>) -> T.AgentTool<V.Value, V.Value, String, V.Value, Unit, String>:
+def tool(+mode: U32, +first: Bool, executor: C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()>) -> T.AgentTool<String, String>:
   T.AgentTool{nameFor(mode, first), "Tool", Tools.schema(), None{}, "Tool", None{}, executor, None{}, Bool.pick(Maybe<&2, T.ToolExecutionMode>, U32.is_eq(mode, 3), Some{T.Parallel{}}, Bool.pick(Maybe<&2, T.ToolExecutionMode>, sequential(mode) && first, Some{T.Sequential{}}, None{}))}
 
-def tools(+mode: U32, +executor: C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()>) -> List<&2, T.AgentTool<V.Value, V.Value, String, V.Value, Unit, String>>:
-  Bool.pick(List<&2, T.AgentTool<V.Value, V.Value, String, V.Value, Unit, String>>, U32.is_eq(mode, 2), tool(mode, True{}, executor) <> tool(mode, False{}, executor) <> Nil{}, tool(mode, True{}, executor) <> Nil{})
+def tools(+mode: U32, +executor: C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()>) -> List<&2, T.AgentTool<String, String>>:
+  Bool.pick(List<&2, T.AgentTool<String, String>>, U32.is_eq(mode, 2), tool(mode, True{}, executor) <> tool(mode, False{}, executor) <> Nil{}, tool(mode, True{}, executor) <> Nil{})
 
 def scenario(+mode: U32, name: String) -> IO(Unit):
   do IO<Unit>:
@@ -194,24 +195,24 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{mode, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
-    +aborted : C.Callback<Maybe<&2, Unit>, Bool> <- C.create(~Unit, ~Maybe<&2, Unit>, ~Bool, ~H.abort, Unit{})
+    +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
     config : Validation.Config() = T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, T.ToolExecutionMode>, U32.is_eq(mode, 0), Some{T.Parallel{}}, None{}), None{}, None{}}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{tools(mode, executor)}}
-    +run : H.StreamRun() <- W.agentLoop(~V.Value, ~Unit, ~String, ~String, ~V.Value, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{Bool.pick(String, sequential(mode), "run both", "echo both")}, F.fromU32(0)}}} <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
-    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{Bool.pick(String, sequential(mode), "run both", "echo both")}, F.fromU32(0)}}} <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
+    +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
     trace : List<&2, String> <- consume(gates, iterator, Nil{}, None{})
     Test.assertion(String.eq(String.join(trace, "|"), Bool.pick(String, sequential(mode), "end:tool-1|message:tool-1|end:tool-2|message:tool-2|turn:tool-1,tool-2", "end:tool-2|end:tool-1|message:tool-1|message:tool-2|turn:tool-1,tool-2")), "execution-end completion order; message-end and turn-end source order")
-    outcome : H.Outcome() <- W.resultStream(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    outcome : H.Outcome() <- W.resultStream(Unit, String, String, String, run)
     checkOutcome(outcome)
     S.disposeIterator(Validation.EventValue(), H.Outcome(), iterator)
-    W.disposeStreamRun(V.Value, Unit, String, String, V.Value, Unit, String, run)
+    W.disposeStreamRun(Unit, String, String, String, run)
     count : U32 <- R.dispose(U32, calls)
     Test.assertion(U32.is_eq(count, 2), "tool turn then final response")
     C.dispose(Validation.ExecuteInput(), Validation.ExecuteOutput(), executor)
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
     C.dispose(Validation.Messages(), Validation.Converted(), converter)
     C.dispose(Validation.Input(), Validation.Checked(), validator)
-    C.dispose(Maybe<&2, Unit>, Bool, aborted)
+    C.dispose(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, aborted)
     owned : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
     H.disposeStreams(owned)
     finished : Bool <- R.dispose(Bool, resolved)

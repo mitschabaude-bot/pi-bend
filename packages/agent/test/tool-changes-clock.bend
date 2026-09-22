@@ -20,12 +20,12 @@ def main() -> IO(Unit):
   do IO<Unit>:
     +executor : C.Callback<Test.Input(), Test.Output()> <- C.create(~Unit, ~Test.Input(), ~Test.Output(), ~Test.forbidden, Unit{})
     +tool : Ai.Tool<V.Value> = Ai.Tool{"echo", "Echo", V.Null{}, None{}}
-    +context : T.AgentContext<V.Value, String, Unit, String, String, U32, Unit, String> = T.AgentContext{Nil{}, Some{Test.tools(tool <> Nil{}, executor)}}
-    newMessage : D.DeclarationResult<Test.Messages()> <- Changes.declareToolChanges(String, Unit, String, String, U32, Unit, String, context, T.CustomMessage{"pending"} <> Nil{})
+    +context : T.AgentContext<Unit, String, String, String> = T.AgentContext{Nil{}, Some{Test.tools(tool <> Nil{}, executor)}}
+    newMessage : D.DeclarationResult<Test.Messages()> <- Changes.declareToolChanges(Unit, String, String, String, context, T.CustomMessage{"pending"} <> Nil{})
     created(newMessage, tool)
-    preserved : D.DeclarationResult<Test.Messages()> <- Changes.declareToolChanges(String, Unit, String, String, U32, Unit, String, context, T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"keep"}, None{}, None{}, None{}, F.fromU32(12)}}} <> Nil{})
+    preserved : D.DeclarationResult<Test.Messages()> <- Changes.declareToolChanges(Unit, String, String, String, context, T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"keep"}, None{}, None{}, None{}, F.fromU32(12)}}} <> Nil{})
     Test.checked(preserved, T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"keep"}, None{}, Some{tool <> Nil{}}, None{}, F.fromU32(12)}}} <> Nil{}, "existing system content and timestamp survive IO declaration")
-    empty : D.DeclarationResult<Test.Messages()> <- Changes.declareToolChanges(String, Unit, String, String, U32, Unit, String, T.AgentContext{Nil{}, None{}}, Nil{})
+    empty : D.DeclarationResult<Test.Messages()> <- Changes.declareToolChanges(Unit, String, String, String, T.AgentContext{Nil{}, None{}}, Nil{})
     Test.checked(empty, Nil{}, "absent tool loadout produces no empty declaration")
     left : V.Value = V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"additionalProperties", V.Boolean{True{}}} <> Nil{}}}
     right : V.Value = V.ObjectValue{R.Record{R.Property{"additionalProperties", V.Boolean{True{}}} <> R.Property{"type", V.Text{"object"}} <> Nil{}}}

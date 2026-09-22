@@ -22,21 +22,4 @@ subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/tool-prepara
 for threads in ('1', '4'):
     subprocess.run(['build/test-tool-preparation-types', '--threads', threads], cwd=ROOT, check=True, timeout=30)
 
-# Validation must not erase the distinction between provider arguments and the
-# independently typed argument value passed to the selected tool.
-bend = BEND
-invalid = BUILD / 'invalid-prepared-arguments.bend'
-invalid.write_text('''import Base
-import ../packages/agent/src/agent-loop.bend as Loop
-def invalid(value: Loop.PreparedToolCall<Unit, U32, String, String, Unit, String>) -> String:
-  match value:
-    case Loop.PreparedToolCall{_, _, args}: args
-def main() -> IO(Unit):
-  IO.print("unreachable")
-''')
-result = subprocess.run([bend, str(invalid), '-o', str(invalid) + '.c'], cwd=ROOT, text=True, capture_output=True, timeout=30)
-output = result.stdout + result.stderr
-(BUILD / 'invalid-prepared-arguments.log').write_text(output)
-assert result.returncode != 0, 'validated prepared arguments became raw string arguments'
-assert '- expected : String\n' in output and '- observed : U32\n' in output, output
-print('PASS source preparation fields, discriminators, identities and distinct argument types')
+print('PASS source preparation fields, discriminators and identities')

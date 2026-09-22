@@ -40,13 +40,13 @@ def awaitAbort(observation: D.Observation<Abort.AbortReason<Unit>>) -> IO(Unit):
 def produce(+signal: Run.RunSignal(), +stream: H.StreamValue(), entered: Chan(Unit), done: Chan(Unit)) -> IO(Unit):
   do IO<Unit>:
     observation : D.Observation<Abort.AbortReason<Unit>> <- Abort.observe(Unit, signal)
-    Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.Start{H.assistant()})
+    Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.Start{H.assistant()})
     sent : Bool <- Chan.send(Unit, entered, Unit{})
     R.requireSent(sent)
     awaitAbort(observation)
     cancelled : Bool <- Abort.aborted(Unit, signal)
     Test.assertion(cancelled, "provider observes cancellation through request options")
-    Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamError{Ai.ErrorAborted{}, H.assistant()})
+    Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamError{Ai.ErrorAborted{}, H.assistant()})
     sent : Bool <- Chan.send(Unit, done, Unit{})
     R.requireSent(sent)
 def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
@@ -54,16 +54,16 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
     case Capture{entered, done, streams}:
       do IO<H.ProviderOutput()>:
         signal : Run.RunSignal() <- requestSignal(input)
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         IO.spawn(Unit, produce(signal, stream, entered, done))
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 def create(capture: Capture) -> IO(Fixture):
   do IO<Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Behavior.options(Some{stream}, None{}), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 0)
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Behavior.options(Some{stream}, None{}), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Fixture{agent, stream, validator, registry}
 def getAgent(fixture: Fixture) -> Owner.Owner():
@@ -73,11 +73,11 @@ def dispose(fixture: Fixture) -> IO(Unit):
   match fixture:
     case Fixture{agent, stream, validator, registry}:
       do IO<Unit>:
-        Agent.dispose(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        Agent.dispose(Unit, Unit, String, String, Unit, agent)
         C.dispose(H.ProviderInput(), H.ProviderOutput(), stream)
-        C.dispose(Loop.ToolValidationInput<Schema.Value, Unit, Unit>, Result<&2, &2, String, Unit>, validator)
-        Provider.dispose(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String, registry)
-def Input() -> Data: Listeners.Input<H.EventValue(), Run.RunSignal()>
+        C.dispose(Loop.ToolValidationInput, Result<&2, &2, String, Schema.Value>, validator)
+        Provider.dispose(Unit, Unit, H.Config(), String, registry)
+def Input() -> Data: Listeners.Input<H.EventValue()>
 def captureSignal(slot: R.Ref<Maybe<&2, Run.RunSignal()>>, input: Input()) -> IO(Emission.Emission<String>):
   match input:
     case Listeners.Input{T.AgentStart{}, signal}:
@@ -93,15 +93,15 @@ def main() -> IO(Unit):
     +fixture : Fixture <- create(Capture{entered, done, streams})
     +agent : Owner.Owner() = getAgent(fixture)
     +slot : R.Ref<Maybe<&2, Run.RunSignal()>> <- R.new(Maybe<&2, Run.RunSignal()>, None{})
-    +observe : Listeners.Handler(H.EventValue(), Run.RunSignal(), String) <- C.create(~R.Ref<Maybe<&2, Run.RunSignal()>>, ~Input(), ~Emission.Emission<String>, ~captureSignal, slot)
-    ignored : Listeners.Subscription<H.EventValue(), Run.RunSignal(), String> <- Agent.subscribe(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, observe)
+    +observe : Listeners.Handler(H.EventValue(), String) <- C.create(~R.Ref<Maybe<&2, Run.RunSignal()>>, ~Input(), ~Emission.Emission<String>, ~captureSignal, slot)
+    ignored : Listeners.Subscription<H.EventValue(), String> <- Agent.subscribe(Unit, Unit, String, String, Unit, agent, observe)
     promptReply : Chan(Unit) <- IO.fork(Unit, Behavior.prompt(agent, "hello"))
     IO.join(Unit, entered)
     received : Maybe<&2, Run.RunSignal()> <- R.read(Maybe<&2, Run.RunSignal()>, slot)
     +signal : Run.RunSignal() <- requireSignal(received)
     before : Bool <- Abort.aborted(Unit, signal)
     Test.assertion(Bool.not(before), "subscriber receives a defined, initially un-aborted signal")
-    Agent.abort(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    Agent.abort(Unit, Unit, String, String, Unit, agent)
     IO.join(Unit, promptReply)
     IO.join(Unit, done)
     after : Bool <- Abort.aborted(Unit, signal)

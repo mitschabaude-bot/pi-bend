@@ -4,6 +4,7 @@ import ../src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/test/model-cost.bend as Cost
 import ../../runtime/src/f64.bend as N
+import ../../runtime/src/schema-value.bend as Schema
 
 type Payload is Data:
   NullPayload{}

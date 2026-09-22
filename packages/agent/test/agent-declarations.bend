@@ -38,7 +38,7 @@ def removals(values: Maybe<&2, List<&2, Ai.ToolReference>>) -> String:
     case Some{Nil{}}: ""
     case Some{Ai.ToolReference{name} <> Nil{}}: name
     case Some{Ai.ToolReference{name} <> rest}: name ++ "," ++ removals(Some{rest})
-def declarations(messages: List<&2, Ai.Message<Schema.Value, Unit, Unit, Unit>>) -> String:
+def declarations(messages: List<&2, Ai.Message<Schema.Value, Schema.Value, Unit, Unit>>) -> String:
   match messages:
     case Nil{}: ""
     case Ai.System{Ai.SystemMessage{_, _, added, removed, _}} <> rest: "+" ++ additions(added) ++ ";-" ++ removals(removed) ++ ";" ++ declarations(rest)
@@ -50,21 +50,21 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
     case Capture{requests, streams} T.StreamInput{_, Ai.TranscriptContext{messages}, _}:
       do IO<H.ProviderOutput()>:
         R.modify(String, Unit, requests, old => (old ++ declarations(messages) ++ "|", Unit{}))
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
-        Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
-def forbidden(unused: Unit, input: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
+        return Done{T.borrowedStream(Unit, String, stream)}
+def forbidden(unused: Unit, input: T.ToolExecutionInput<Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   IO.die(Result<&2, &2, String, T.AgentToolResult<Unit>>, 1, "declaration-only test must not execute a tool")
-def initial(mode: U32, executor: Named.Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>:
+def initial(mode: U32, executor: Named.Executor()) -> Maybe<&2, State.AgentInitialState<Unit, Unit, String, String>>:
   Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, Bool.pick(Maybe<&2, List<&2, Named.Tool()>>, U32.is_eq(mode, 1), None{}, Some{tool("first", "first tool", executor) <> Nil{}}), None{}}}
 def create(mode: U32, capture: Capture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validate : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 0)
-    +execute : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~forbidden, Unit{})
-    +fallback : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(initial(mode, execute), stream), fallback, validate, Unit{})
+    +validate : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 0)
+    +execute : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~forbidden, Unit{})
+    +fallback : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(initial(mode, execute), stream), fallback, validate, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validate, execute, fallback}
 def executor(fixture: Named.Fixture) -> Named.Executor():
@@ -80,10 +80,10 @@ def change(+fixture: Named.Fixture) -> IO(Unit):
   do IO<Unit>:
     +agent : Owner.Owner() = Named.getAgent(fixture)
     Behavior.prompt(agent, "one")
-    Agent.setTools(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, tool("second", "second tool", executor(fixture)) <> Nil{})
+    Agent.setTools(Unit, Unit, String, String, Unit, agent, tool("second", "second tool", executor(fixture)) <> Nil{})
     Behavior.prompt(agent, "two")
     Behavior.prompt(agent, "three")
-    state : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    state : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(changedMessage(Named.getMessages(state)), "complete added/removed declaration and timestamp persist in generated system message")
 def sections(key: String, value: String) -> Maybe<&2, Record.Record<Maybe<&2, String>>>:
   Some{Record.Record{Record.Property{key, Some{value}} <> Nil{}}}
@@ -111,19 +111,19 @@ def current(message: Maybe<&2, Ai.SystemMessage<Schema.Value>>) -> Bool:
 def checkPending(mode: U32, +messages: H.Messages()) -> Bool:
   match mode:
     case 1: merged(second(messages))
-    case _: rewritten(second(messages)) && current(Transcript.getCurrentSystemMessage(Schema.Value, Unit, Unit, Unit, State.defaultConvertToLlm(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, messages)))
+    case _: rewritten(second(messages)) && current(Transcript.getCurrentSystemMessage(Schema.Value, Schema.Value, Unit, Unit, State.defaultConvertToLlm(Unit, Unit, String, String, messages)))
 def setEcho(mode: U32, agent: Owner.Owner(), execute: Named.Executor()) -> IO(Unit):
   match mode:
-    case 1: Agent.setTools(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, tool("echo", "Echo input", execute) <> Nil{})
+    case 1: Agent.setTools(Unit, Unit, String, String, Unit, agent, tool("echo", "Echo input", execute) <> Nil{})
     case _: IO.pure(Unit, Unit{})
 def merge(+fixture: Named.Fixture, +mode: U32) -> IO(Unit):
   do IO<Unit>:
     +agent : Owner.Owner() = Named.getAgent(fixture)
     setEcho(mode, agent, executor(fixture))
     user : H.Message() = T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"hi"}, F.fromU32(2)}}}
-    result : Owner.Outcome() <- Agent.prompt(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, ~H.identity, ~H.identity, ~H.declaration, agent, Agent.Messages{pending(mode) <> user <> Nil{}})
+    result : Owner.Outcome() <- Agent.prompt(~Unit, ~Unit, ~String, ~String, ~Unit, ~H.identity, ~H.identity, ~H.declaration, agent, Agent.Messages{pending(mode) <> user <> Nil{}})
     Behavior.success(result)
-    state : Named.Snapshot() <- Agent.state(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    state : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
     Test.assertion(checkPending(mode, Named.getMessages(state)), "pending system sections/timestamp survive and executable declarations win")
 def run(mode: U32, fixture: Named.Fixture) -> IO(Unit):
   match mode:

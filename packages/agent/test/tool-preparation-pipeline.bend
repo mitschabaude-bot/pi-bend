@@ -11,33 +11,35 @@ import ./message-events.bend as Test
 import ./context.bend as H
 import ./turn-update.bend as ConfigTest
 import ./tool-execution.bend as Execute
+import ../../runtime/src/schema-value.bend as Schema
+import ../../runtime/src/abort.bend as Abort
 
-def ValidationInput() -> Data: Loop.ToolValidationInput<Unit, String, U32>
-def ValidationOutput() -> Data: Result<&2, &2, String, U32>
-def HookInput() -> Data: T.ToolHookInput<H.Before(), Unit>
-def HookOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<U32, H.Context()>>
+def ValidationInput() -> Data: Loop.ToolValidationInput
+def ValidationOutput() -> Data: Result<&2, &2, String, Schema.Value>
+def HookInput() -> Data: T.ToolHookInput<H.Before()>
+def HookOutput() -> Data: Result<&2, &2, String, T.BeforeToolCallUpdate<H.Context()>>
 def Hook() -> Data: C.Callback<HookInput(), HookOutput()>
-def State() -> Data: Loop.ToolPreparationState<Unit, String, Unit, String, String, U32, Unit, String>
+def State() -> Data: Loop.ToolPreparationState<Unit, String, String, String>
 type Capture is Data:
   Capture{mode: U32, log: R.Ref<String>}
 
 def record(log: R.Ref<String>, tag: String) -> IO(Unit):
   R.modify(String, Unit, log, old => (old ++ tag, Unit{}))
 
-def adapter(state: Capture, raw: String) -> IO(ValidationOutput()):
+def adapter(state: Capture, raw: Schema.Value) -> IO(ValidationOutput()):
   match state:
     case Capture{+mode, log}:
       do IO<ValidationOutput()>:
         record(log, "a")
-        Test.assertion(String.eq(raw, "raw"), "adapter did not receive original args")
-        return Bool.pick(ValidationOutput(), U32.is_eq(mode, 2), Fail{"adapter failed"}, Done{Bool.pick(U32, U32.is_eq(mode, 10), 999, 42)})
+        Test.assertion(Schema.equal(raw, Schema.Text{"raw"}), "adapter did not receive original args")
+        return Bool.pick(ValidationOutput(), U32.is_eq(mode, 2), Fail{"adapter failed"}, Done{Schema.Number{F.fromU32(Bool.pick(U32, U32.is_eq(mode, 10), 999, 42))}})
 
 # A strict test decoder, not a substitute for the pending schema validator.
 # It accepts only raw="raw" or adapted=42, and must run exactly once.
-def decode(call: Loop.PreparedToolCallArguments<String, U32>) -> ValidationOutput():
+def decode(call: Loop.PreparedToolCallArguments) -> ValidationOutput():
   match call:
-    case Loop.OriginalCall{Ai.ToolCall{_, _, raw, _, _}}: Bool.pick(ValidationOutput(), String.eq(raw, "raw"), Done{42}, Fail{"invalid raw"})
-    case Loop.ReplacedCall{Ai.ToolCall{_, _, args, _, _}}: Bool.pick(ValidationOutput(), U32.is_eq(args, 42), Done{42}, Fail{"invalid adapted"})
+    case Loop.OriginalCall{Ai.ToolCall{_, _, raw, _, _}}: Bool.pick(ValidationOutput(), Schema.equal(raw, Schema.Text{"raw"}), Done{Schema.Number{F.fromU32(42)}}, Fail{"invalid raw"})
+    case Loop.ReplacedCall{Ai.ToolCall{_, _, args, _, _}}: Bool.pick(ValidationOutput(), Schema.equal(args, Schema.Number{F.fromU32(42)}), Done{Schema.Number{F.fromU32(42)}}, Fail{"invalid adapted"})
 
 def validate(state: Capture, input: ValidationInput()) -> IO(ValidationOutput()):
   match state input:
@@ -52,14 +54,14 @@ def decision(+mode: U32) -> Maybe<&2, T.BeforeToolCallResult>:
 
 def before(state: Capture, input: HookInput()) -> IO(HookOutput()):
   match state input:
-    case Capture{+mode, log} T.ToolHookInput{T.BeforeToolCallContext{_, Ai.ToolCall{id, name, raw, _, _}, args, T.AgentContext{_, tools}}, Some{Unit{}}}:
+    case Capture{+mode, log} T.ToolHookInput{T.BeforeToolCallContext{_, Ai.ToolCall{id, name, raw, _, _}, args, T.AgentContext{_, tools}}, Some{_}}:
       do IO<HookOutput()>:
         record(log, "h")
-        Test.assertion(U32.is_eq(args, 42) && String.eq(id, "call") && String.eq(name, "echo") && String.eq(raw, "raw"), "hook must receive original call and validated args")
-        return Bool.pick(HookOutput(), U32.is_eq(mode, 4), Fail{"hook failed"}, Done{T.BeforeToolCallUpdate{123, T.AgentContext{Nil{}, None{}}, decision(mode)}})
+        Test.assertion(Schema.equal(args, Schema.Number{F.fromU32(42)}) && String.eq(id, "call") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw"}), "hook must receive original call and validated args")
+        return Bool.pick(HookOutput(), U32.is_eq(mode, 4), Fail{"hook failed"}, Done{T.BeforeToolCallUpdate{Schema.Number{F.fromU32(123)}, T.AgentContext{Nil{}, None{}}, decision(mode)}})
     case _ _: IO.die(HookOutput(), 1, "before hook lost signal")
 
-def aborted(state: Capture, signal: Maybe<&2, Unit>) -> IO(Bool):
+def aborted(state: Capture, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Bool):
   match state:
     case Capture{mode, log}:
       do IO<Bool>:
@@ -68,10 +70,10 @@ def aborted(state: Capture, signal: Maybe<&2, Unit>) -> IO(Bool):
 
 def execute(state: Capture, input: Execute.Input()) -> IO(Execute.Output()):
   match state input:
-    case Capture{+mode, log} T.ToolExecutionInput{id, args, Some{Unit{}}, Some{_}}:
+    case Capture{+mode, log} T.ToolExecutionInput{id, args, Some{_}, Some{_}}:
       do IO<Execute.Output()>:
         record(log, "e")
-        Test.assertion(String.eq(id, "call") && U32.is_eq(args, Bool.pick(U32, U32.is_eq(mode, 0) || U32.is_eq(mode, 8), 42, 123)), "hook args must reach execution without revalidation")
+        Test.assertion(String.eq(id, "call") && Schema.equal(args, Schema.Number{F.fromU32(Bool.pick(U32, U32.is_eq(mode, 0) || U32.is_eq(mode, 8), 42, 123))}), "hook args must reach execution without revalidation")
         return Done{Execute.partial("done")}
     case _ _: IO.die(Execute.Output(), 1, "execution input differs")
 
@@ -96,12 +98,13 @@ def expectedMessage(mode: U32) -> String:
     case 10: "invalid adapted"
     case _: "unexpected immediate outcome"
 
-def runPrepared(+prepared: Loop.PreparedToolCall<Unit, U32, String, String, Unit, String>, emitter: C.Callback<Execute.EventValue(), E.Emission<String>>) -> IO(Unit):
+def runPrepared(+prepared: Loop.PreparedToolCall<String, String>, emitter: C.Callback<Execute.EventValue(), E.Emission<String>>) -> IO(Unit):
   match prepared:
     case Loop.PreparedToolCall{call, _, _}:
       do IO<Unit>:
-        +updates : Loop.ToolUpdateRun<String, String> <- Loop.createToolUpdateRun(~Unit, ~String, ~Unit, ~String, ~String, ~String, call, emitter)
-        outcome : Execute.Outcome() <- Loop.executePreparedToolCall(Unit, U32, String, String, Unit, String, prepared, Some{Unit{}}, updates, "empty", error => error)
+        +updates : Loop.ToolUpdateRun<String, String> <- Loop.createToolUpdateRun(~Unit, ~String, ~String, ~String, call, emitter)
+        controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        outcome : Execute.Outcome() <- Loop.executePreparedToolCall(String, String, prepared, Some{Abort.signal(Unit, controller)}, updates, "empty", error => error)
         Execute.check(outcome, False{}, False{})
         Loop.disposeToolUpdateRun(String, String, updates)
 
@@ -133,30 +136,31 @@ def expectedLog(mode: U32) -> String:
 def checkContext(+mode: U32, state: State()) -> IO(Unit):
   match state:
     case Loop.ToolPreparationState{T.AgentContext{_, tools}, _}:
-      Test.assertion(Bool.not(Bool.xor(Maybe.is_none(&2, List<&2, T.AgentTool<Unit, U32, String, String, Unit, String>>, tools), U32.is_eq(mode, 1) || U32.is_eq(mode, 5) || U32.is_eq(mode, 6) || U32.is_eq(mode, 11))), "explicit hook context update must survive preparation/block/abort")
+      Test.assertion(Bool.not(Bool.xor(Maybe.is_none(&2, List<&2, T.AgentTool<String, String>>, tools), U32.is_eq(mode, 1) || U32.is_eq(mode, 5) || U32.is_eq(mode, 6) || U32.is_eq(mode, 11))), "explicit hook context update must survive preparation/block/abort")
 
 def run(+mode: U32) -> IO(Unit):
   do IO<Unit>:
     +log : R.Ref<String> <- R.new(String, "")
     +capture : Capture = Capture{mode, log}
-    +adapt : C.Callback<String, ValidationOutput()> <- C.create(~Capture, ~String, ~ValidationOutput(), ~adapter, capture)
+    +adapt : C.Callback<Schema.Value, ValidationOutput()> <- C.create(~Capture, ~Schema.Value, ~ValidationOutput(), ~adapter, capture)
     +validator : C.Callback<ValidationInput(), ValidationOutput()> <- C.create(~Capture, ~ValidationInput(), ~ValidationOutput(), ~validate, capture)
     +hook : Hook() <- C.create(~Capture, ~HookInput(), ~HookOutput(), ~before, capture)
     +executor : C.Callback<Execute.Input(), Execute.Output()> <- C.create(~Capture, ~Execute.Input(), ~Execute.Output(), ~execute, capture)
     +other : C.Callback<Execute.Input(), Execute.Output()> <- C.create(~Unit, ~Execute.Input(), ~Execute.Output(), ~forbidden, Unit{})
     +emitter : C.Callback<Execute.EventValue(), E.Emission<String>> <- C.create(~Unit, ~Execute.EventValue(), ~E.Emission<String>, ~emit, Unit{})
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
-    tools : List<&2, T.AgentTool<Unit, U32, String, String, Unit, String>> = T.AgentTool{"echo", "", Unit{}, None{}, "", ConfigTest.selected(C.Callback<String, ValidationOutput()>, U32.is_eq(mode, 1) || U32.is_eq(mode, 2) || U32.is_eq(mode, 10), adapt), executor, None{}, None{}} <> T.AgentTool{"echo", "", Unit{}, None{}, "", None{}, other, None{}, None{}} <> Nil{}
-    call : Ai.ToolCall<String> = Ai.ToolCall{"call", Bool.pick(String, U32.is_eq(mode, 7), "absent", "echo"), Bool.pick(String, U32.is_eq(mode, 9), "invalid", "raw"), None{}, None{}}
+    tools : List<&2, T.AgentTool<String, String>> = T.AgentTool{"echo", "", Schema.Null{}, None{}, "", ConfigTest.selected(C.Callback<Schema.Value, ValidationOutput()>, U32.is_eq(mode, 1) || U32.is_eq(mode, 2) || U32.is_eq(mode, 10), adapt), executor, None{}, None{}} <> T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, other, None{}, None{}} <> Nil{}
+    call : Ai.ToolCall<Schema.Value> = Ai.ToolCall{"call", Bool.pick(String, U32.is_eq(mode, 7), "absent", "echo"), Bool.pick(Schema.Value, U32.is_eq(mode, 9), Schema.Text{"invalid"}, Schema.Text{"raw"}), None{}, None{}}
     +zero : F.F64 = F.fromU32(0)
-    assistant : Ai.AssistantMessage<String, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
+    assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
     config : ConfigTest.Config() = configuration(converter, ConfigTest.selected(Hook(), Bool.not(U32.is_eq(mode, 0) || U32.is_eq(mode, 8)), hook))
-    +state : State() <- Loop.prepareToolCallWith(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, T.AgentContext{Nil{}, Some{tools}}, assistant, call, config, Some{Unit{}}, validator, aborted(capture), "empty", error => error)
+    controller2 : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +state : State() <- Loop.prepareToolCallWith(Unit, String, String, String, Unit, T.AgentContext{Nil{}, Some{tools}}, assistant, call, config, Some{Abort.signal(Unit, controller2)}, validator, aborted(capture), "empty", error => error)
     checkContext(mode, state)
     check(mode, state, emitter)
     actual : String <- R.read(String, log)
     Test.assertion(String.eq(actual, expectedLog(mode)), "preparation effect order / exactly-once validation")
-    C.dispose(String, ValidationOutput(), adapt)
+    C.dispose(Schema.Value, ValidationOutput(), adapt)
     C.dispose(ValidationInput(), ValidationOutput(), validator)
     C.dispose(HookInput(), HookOutput(), hook)
     C.dispose(Execute.Input(), Execute.Output(), executor)

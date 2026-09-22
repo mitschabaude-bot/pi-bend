@@ -35,26 +35,26 @@ def future(value: Settings.Settings) -> Bool:
     case _: False{}
 def read(+agent: Owner.Owner()) -> IO(Settings.Settings):
   do IO<Settings.Settings>:
-    session : Maybe<&2, String> <- Agent.getSessionId(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    thinking : Maybe<&2, Ai.ThinkingBudgets> <- Agent.getThinkingBudgets(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    transport : Ai.Transport <- Agent.getTransport(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    delay : Maybe<&2, F.F64> <- Agent.getMaxRetryDelayMs(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-    execution : T.ToolExecutionMode <- Agent.getToolExecution(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    session : Maybe<&2, String> <- Agent.getSessionId(Unit, Unit, String, String, Unit, agent)
+    thinking : Maybe<&2, Ai.ThinkingBudgets> <- Agent.getThinkingBudgets(Unit, Unit, String, String, Unit, agent)
+    transport : Ai.Transport <- Agent.getTransport(Unit, Unit, String, String, Unit, agent)
+    delay : Maybe<&2, F.F64> <- Agent.getMaxRetryDelayMs(Unit, Unit, String, String, Unit, agent)
+    execution : T.ToolExecutionMode <- Agent.getToolExecution(Unit, Unit, String, String, Unit, agent)
     return Settings.Settings{session, thinking, transport, delay, execution}
 def configure(+agent: Owner.Owner()) -> IO(Unit):
   do IO<Unit>:
-    Agent.setSessionId(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{"configured"})
-    Agent.setThinkingBudgets(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{budgets()})
-    Agent.setTransport(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.WebSocket{})
-    Agent.setMaxRetryDelayMs(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{F.fromU32(123)})
-    Agent.setToolExecution(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, T.Sequential{})
+    Agent.setSessionId(Unit, Unit, String, String, Unit, agent, Some{"configured"})
+    Agent.setThinkingBudgets(Unit, Unit, String, String, Unit, agent, Some{budgets()})
+    Agent.setTransport(Unit, Unit, String, String, Unit, agent, Ai.WebSocket{})
+    Agent.setMaxRetryDelayMs(Unit, Unit, String, String, Unit, agent, Some{F.fromU32(123)})
+    Agent.setToolExecution(Unit, Unit, String, String, Unit, agent, T.Sequential{})
 def changeFuture(+agent: Owner.Owner()) -> IO(Unit):
   do IO<Unit>:
-    Agent.setSessionId(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, None{})
-    Agent.setThinkingBudgets(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, None{})
-    Agent.setTransport(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Ai.Sse{})
-    Agent.setMaxRetryDelayMs(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, None{})
-    Agent.setToolExecution(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, T.Parallel{})
+    Agent.setSessionId(Unit, Unit, String, String, Unit, agent, None{})
+    Agent.setThinkingBudgets(Unit, Unit, String, String, Unit, agent, None{})
+    Agent.setTransport(Unit, Unit, String, String, Unit, agent, Ai.Sse{})
+    Agent.setMaxRetryDelayMs(Unit, Unit, String, String, Unit, agent, None{})
+    Agent.setToolExecution(Unit, Unit, String, String, Unit, agent, T.Parallel{})
 def requireAgent(value: Maybe<&2, Owner.Owner()>) -> IO(Owner.Owner()):
   match value:
     case Some{agent}: IO.pure(Owner.Owner(), agent)
@@ -78,28 +78,28 @@ def changeOnce(index: U32, slot: R.Ref<Maybe<&2, Owner.Owner()>>) -> IO(Unit):
     case _: IO.pure(Unit, Unit{})
 def push(index: U32, stream: H.StreamValue()) -> IO(Unit):
   match index:
-    case 0: Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, H.response(True{})})
-    case _: Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
+    case 0: Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, H.response(True{})})
+    case _: Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Ai.AssistantMessage<Schema.Value, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
 def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match capture input:
     case Capture{slot, calls, streams} T.StreamInput{_, _, Some{config}}:
       do IO<H.ProviderOutput()>:
         +index : U32 <- R.modify(U32, U32, calls, old => increment(old))
-        checkRequest(index, Agent.configSettings(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, config))
+        checkRequest(index, Agent.configSettings(Unit, Unit, String, String, Unit, config))
         changeOnce(index, slot)
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         push(index, stream)
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider options missing")
 def create(capture: Capture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    init : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{init}, stream), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    init : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(Some{init}, stream), registry, validator, Unit{})
     agent : Owner.Owner() <- Owner.requireOwner(result)
     return Named.Fixture{agent, stream, validator, executor, registry}
 def exercise(+agent: Owner.Owner()) -> IO(Unit):

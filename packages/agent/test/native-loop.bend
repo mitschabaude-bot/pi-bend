@@ -10,15 +10,16 @@ import ../../runtime/src/f64.bend as F
 import ./message-events.bend as Test
 import ./context.bend as H
 import ./turn-update.bend as ConfigTest
+import ../../runtime/src/schema-value.bend as Schema
 
 def Config() -> Data: ConfigTest.Config()
-def Message() -> Data: Ai.AssistantMessage<String, Unit>
-def EventValue() -> Data: T.AgentEvent<Unit, String, Unit, String, String, Unit, Unit>
+def Message() -> Data: Ai.AssistantMessage<Schema.Value, Unit>
+def EventValue() -> Data: T.AgentEvent<Unit, String, String, Unit, Unit>
 def Log() -> Data: R.Ref<List<&2, String>>
-def Input() -> Data: T.StreamInput<Unit, String, Unit, String, Unit, Config()>
-def StreamValue() -> Data: Stream.AssistantMessageEventStream(String, Unit)
-def ConvertResult() -> Data: Result<&2, &2, String, List<&2, Ai.Message<Unit, String, Unit, String>>>
-def TransformInput() -> Data: T.TransformContextInput<H.Messages(), Unit>
+def Input() -> Data: T.StreamInput<Unit, String, Config()>
+def StreamValue() -> Data: Stream.AssistantMessageEventStream(Schema.Value, Unit)
+def ConvertResult() -> Data: Result<&2, &2, String, List<&2, Ai.Message<Schema.Value, Schema.Value, Unit, String>>>
+def TransformInput() -> Data: T.TransformContextInput<H.Messages()>
 def TransformResult() -> Data: Result<&2, &2, String, H.Messages()>
 
 type ProviderState is Data:
@@ -70,15 +71,15 @@ def checkKey(value: Result<&2, &2, String, Maybe<&2, String>>) -> IO(Unit):
 def checkOptions(options: Maybe<&2, Config()>) -> IO(Unit):
   match options:
     case None{}: Test.assertion(False{}, "missing request configuration")
-    case Some{value}: checkKey(Loop.fallbackApiKey(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, value))
+    case Some{value}: checkKey(Loop.fallbackApiKey(Unit, String, String, String, Unit, value))
 
-def checkTranscript(context: Ai.TranscriptContext<Unit, String, Unit, String>) -> IO(Unit):
+def checkTranscript(context: Ai.TranscriptContext<Schema.Value, Schema.Value, Unit, String>) -> IO(Unit):
   match context:
     case Ai.TranscriptContext{Ai.User{Ai.UserMessage{Ai.UserText{text}, _}} <> Nil{}}:
       Test.assertion(String.eq(text, "converted"), "provider must receive converted transcript")
     case _: Test.assertion(False{}, "provider transcript shape")
 
-def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<String, Unit, String>>
+def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<Unit, String>>
 def providerBody(state: ProviderState, input: Input()) -> IO(ProviderOutput()):
   match state input:
     case ProviderState{logValue, +stream} T.StreamInput{_, context, options}:
@@ -86,10 +87,10 @@ def providerBody(state: ProviderState, input: Input()) -> IO(ProviderOutput()):
         log(logValue, "provider")
         checkOptions(options)
         checkTranscript(context)
-        Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.Start{message("first", Ai.Pending{})})
-        Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.TextDelta{F.fromU32(0), "second", message("second", Ai.Pending{})})
-        Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.StreamDone{Ai.DoneStop{}, message("second", Ai.Stop{})})
-        return Done{T.borrowedStream(String, Unit, String, stream)}
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Message(), stream, Ai.Start{message("first", Ai.Pending{})})
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Message(), stream, Ai.TextDelta{F.fromU32(0), "second", message("second", Ai.Pending{})})
+        Stream.push(Ai.AssistantMessageEvent<Schema.Value, Unit>, Message(), stream, Ai.StreamDone{Ai.DoneStop{}, message("second", Ai.Stop{})})
+        return Done{T.borrowedStream(Unit, String, stream)}
 
 def updateEvent(event: EventValue()) -> Bool:
   match event:
@@ -101,7 +102,7 @@ def sinkBody(state: SinkState, event: EventValue()) -> IO(Result<&2, &2, String,
     case SinkState{logValue, events, failUpdate}:
       do IO<Result<&2, &2, String, Unit>>:
         +current : EventValue() = event
-        log(logValue, T.eventType(Unit, String, Unit, String, String, Unit, Unit, current))
+        log(logValue, T.eventType(Unit, String, String, Unit, Unit, current))
         R.modify(List<&2, EventValue()>, Unit, events, values => (current <> values, Unit{}))
         return Bool.pick(Result<&2, &2, String, Unit>, failUpdate && updateEvent(current), Fail{"listener failed"}, Done{Unit{}})
 
@@ -127,14 +128,14 @@ def scenario(+failTransform: Bool, failUpdate: Bool, +failConvert: Bool, +failKe
     +logValue : Log() <- R.new(List<&2, String>, Nil{})
     +events : R.Ref<List<&2, EventValue()>> <- R.new(List<&2, EventValue()>, Nil{})
     +context : R.Ref<H.Context()> <- R.new(H.Context(), T.AgentContext{T.CustomMessage{"original"} <> Nil{}, None{}})
-    +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~String, ~Unit)
+    +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
     +converter : C.Callback<H.Messages(), ConvertResult()> <- C.create(~TransformState, ~H.Messages(), ~ConvertResult(), ~convertBody, TransformState{logValue, failConvert})
     +transformer : C.Callback<TransformInput(), TransformResult()> <- C.create(~TransformState, ~TransformInput(), ~TransformResult(), ~transformBody, TransformState{logValue, failTransform})
     +resolver : C.Callback<String, Result<&2, &2, String, Maybe<&2, String>>> <- C.create(~TransformState, ~String, ~Result<&2, &2, String, Maybe<&2, String>>, ~keyBody, TransformState{logValue, failKey})
     +provider : C.Callback<Input(), ProviderOutput()> <- C.create(~ProviderState, ~Input(), ~ProviderOutput(), ~providerBody, ProviderState{logValue, stream})
     +sink : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~SinkState, ~EventValue(), ~Result<&2, &2, String, Unit>, ~sinkBody, SinkState{logValue, events, failUpdate})
     config : Config() = T.AgentLoopConfig{None{}, None{}, Some{"fallback"}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, Some{transformer}, Some{resolver}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
-    outcome : Result<&2, &2, String, Message()> <- Loop.streamAssistantResponse(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, Unit, Unit, Loop.AssistantRequest{context, config, None{}, sink, provider})
+    outcome : Result<&2, &2, String, Message()> <- Loop.streamAssistantResponse(Unit, String, String, String, Unit, Unit, Unit, Loop.AssistantRequest{context, config, None{}, sink, provider})
     checkOutcome(outcome, expected)
     trace : List<&2, String> <- R.read(List<&2, String>, logValue)
     Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), expectedTrace), "awaited callback/event order or failure short-circuit changed")
@@ -148,7 +149,7 @@ def scenario(+failTransform: Bool, failUpdate: Bool, +failConvert: Bool, +failKe
     C.dispose(String, Result<&2, &2, String, Maybe<&2, String>>, resolver)
     C.dispose(Input(), ProviderOutput(), provider)
     C.dispose(EventValue(), Result<&2, &2, String, Unit>, sink)
-    Stream.disposeAssistantMessageEventStream(String, Unit, stream)
+    Stream.disposeAssistantMessageEventStream(Schema.Value, Unit, stream)
     oldContext : H.Context() <- R.dispose(H.Context(), context)
     oldEvents : List<&2, EventValue()> <- R.dispose(List<&2, EventValue()>, events)
     oldLog : List<&2, String> <- R.dispose(List<&2, String>, logValue)

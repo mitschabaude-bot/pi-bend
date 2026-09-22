@@ -14,15 +14,15 @@ import ./tool-changes.bend as Tools
 import ./message-events.bend as Test
 
 def Messages() -> Data: Tools.Messages()
-def Context() -> Data: T.AgentContext<V.Value, String, Unit, String, String, U32, Unit, String>
-def Config() -> Data: T.AgentLoopConfig<V.Value, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit>
-def Turn() -> Data: T.PrepareNextTurnContext(V.Value, String, Unit, String, String, U32, Unit, String)
-def Update() -> Data: T.AgentLoopTurnUpdate<V.Value, String, Unit, String, String, U32, Unit, String, Unit>
+def Context() -> Data: T.AgentContext<Unit, String, String, String>
+def Config() -> Data: T.AgentLoopConfig<Unit, String, String, String, Unit>
+def Turn() -> Data: T.PrepareNextTurnContext(Unit, String, String, String)
+def Update() -> Data: T.AgentLoopTurnUpdate<Unit, String, String, String>
 def PrepareOutput() -> Data: Result<&2, &2, String, Maybe<&2, Update()>>
 def QueueOutput() -> Data: Result<&2, &2, String, Messages()>
-def Converted() -> Data: Result<&2, &2, String, List<&2, Ai.Message<V.Value, String, Unit, String>>>
-def EventValue() -> Data: T.AgentEvent<V.Value, String, Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>>
-def State() -> Data: Preparation.RequestState<String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit>
+def Converted() -> Data: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, String>>>
+def EventValue() -> Data: T.AgentEvent<Unit, String, String, T.AgentToolResult<String>, T.AgentToolResult<String>>
+def State() -> Data: Preparation.RequestState<Unit, String, String, String, Unit>
 def Outcome() -> Data: Result<&2, &2, String, State()>
 def Log() -> Data: R.Ref<List<&2, String>>
 
@@ -113,7 +113,7 @@ def reasoning(value: Maybe<&2, Ai.ThinkingLevel>, replaced: Bool) -> Bool:
 def configMatches(config: Config(), +replaced: Bool) -> Bool:
   match config:
     case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, thinking, _, _, model, _, _, _, _, _, _, _, _, _, _}:
-      reasoning(thinking, replaced) && String.eq(Api.name(Api.modelApi(Unit, model)), Bool.pick(String, replaced, "replacement", "original"))
+      reasoning(thinking, replaced) && String.eq(Api.name(Api.modelApi(Ai.JsonValue, model)), Bool.pick(String, replaced, "replacement", "original"))
 
 def check(actual: Outcome(), +replaced: Bool, +expectedMessages: String, expectedError: String) -> IO(Unit):
   match actual:
@@ -126,8 +126,8 @@ def configuration(converter: C.Callback<Messages(), Converted()>, hook: C.Callba
 
 def run(initial: Bool, +context: Context(), config: Config(), completed: Turn(), pending: Messages(), sink: C.Callback<EventValue(), Result<&2, &2, String, Unit>>) -> IO(Outcome()):
   match initial:
-    case True{}: Preparation.initialTurn(String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, config, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
-    case False{}: Preparation.nextTurn(String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, context, config, completed, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
+    case True{}: Preparation.initialTurn(Unit, String, String, String, Unit, context, config, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
+    case False{}: Preparation.nextTurn(Unit, String, String, String, Unit, context, config, completed, T.CustomMessage{"generated"} <> Nil{}, pending, sink, declarationError)
 
 def equal(left: List<&2, String>, right: List<&2, String>) -> Bool:
   match left right:
@@ -146,7 +146,7 @@ def scenario(+initial: Bool, +mode: U32, retained: Bool, queueMode: U32, failAt:
     +converter : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~forbidden, Unit{})
     +sink : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~Recording, ~EventValue(), ~Result<&2, &2, String, Unit>, ~emit, Recording{recording, failAt})
     +zero : F.F64 = F.fromU32(0)
-    assistant : Ai.AssistantMessage<String, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}, None{}, None{}, None{}, None{}, zero}
+    assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}, None{}, None{}, None{}, None{}, zero}
     completed : Turn() = T.ShouldStopAfterTurnContext{assistant, Nil{}, context, T.CustomMessage{"generated"} <> Nil{}}
     pending : Messages() = Bool.pick(Messages(), retained, T.CustomMessage{"retained"} <> Nil{}, Nil{})
     result : Outcome() <- run(initial, context, configuration(converter, hook, steering), completed, pending, sink)

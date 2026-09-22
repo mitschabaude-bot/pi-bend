@@ -10,12 +10,14 @@ import ../../runtime/src/deferred.bend as D
 import ./message-events.bend as Test
 import ./context.bend as H
 import ./turn-update.bend as ConfigTest
+import ../../runtime/src/schema-value.bend as Schema
+import ../../runtime/src/abort.bend as Abort
 
 def Config() -> Data: ConfigTest.Config()
-def Input() -> Data: T.ToolHookInput<H.After(), Unit>
+def Input() -> Data: T.ToolHookInput<H.After()>
 def Output() -> Data: Result<&2, &2, String, Maybe<&2, T.AfterToolCallResult<String>>>
 def Hook() -> Data: C.Callback<Input(), Output()>
-def ToolInput() -> Data: T.ToolExecutionInput<U32, Unit, String>
+def ToolInput() -> Data: T.ToolExecutionInput<String>
 def ToolOutput() -> Data: Result<&2, &2, String, T.AgentToolResult<String>>
 type State is Data:
   State{calls: R.Ref<U32>, mode: U32, originallyError: Bool, entered: Chan(Unit), release: Chan(Unit)}
@@ -27,8 +29,8 @@ def text(value: List<&2, Ai.TextImageContent>) -> String:
 
 def inspect(input: Input(), expectedError: Bool) -> IO(Unit):
   match input:
-    case T.ToolHookInput{T.AfterToolCallContext{_, Ai.ToolCall{id, name, raw, _, _}, args, T.AgentToolResult{content, details, _, _}, isError, T.AgentContext{T.CustomMessage{context} <> Nil{}, _}}, Some{Unit{}}}:
-      Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && String.eq(raw, "raw args") && U32.is_eq(args, 123) && String.eq(text(content), "original") && String.eq(details, "original details") && Bool.not(Bool.xor(isError, expectedError)) && String.eq(context, "context"), "after hook input lost execution data")
+    case T.ToolHookInput{T.AfterToolCallContext{_, Ai.ToolCall{id, name, raw, _, _}, args, T.AgentToolResult{content, details, _, _}, isError, T.AgentContext{T.CustomMessage{context} <> Nil{}, _}}, Some{_}}:
+      Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw args"}) && Schema.equal(args, Schema.Number{F.fromU32(123)}) && String.eq(text(content), "original") && String.eq(details, "original details") && Bool.not(Bool.xor(isError, expectedError)) && String.eq(context, "context"), "after hook input lost execution data")
     case _: Test.assertion(False{}, "after hook input or signal shape")
 
 def response(mode: U32) -> Output():
@@ -54,19 +56,19 @@ def forbidden(unused: Unit, input: ToolInput()) -> IO(ToolOutput()):
 def configuration(converter: ConfigTest.Converter(), after: Maybe<&2, Hook()>) -> Config():
   T.AgentLoopConfig{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, after}
 
-def check(finalized: Loop.FinalizedToolCallOutcome<String, String>, expectedText: String, expectedDetails: String, expectedError: Bool, expectedTerminate: Bool) -> IO(Unit):
+def check(finalized: Loop.FinalizedToolCallOutcome<String>, expectedText: String, expectedDetails: String, expectedError: Bool, expectedTerminate: Bool) -> IO(Unit):
   match finalized:
     case Loop.FinalizedToolCallOutcome{Ai.ToolCall{id, name, raw, _, _}, T.AgentToolResult{content, details, _, terminate}, isError}:
-      Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && String.eq(raw, "raw args") && String.eq(text(content), expectedText) && String.eq(details, expectedDetails) && Bool.not(Bool.xor(isError, expectedError)) && Bool.not(Bool.xor(Loop.resultTerminates(String, T.AgentToolResult{Nil{}, "", None{}, terminate}), expectedTerminate)), "finalized fields differ")
+      Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw args"}) && String.eq(text(content), expectedText) && String.eq(details, expectedDetails) && Bool.not(Bool.xor(isError, expectedError)) && Bool.not(Bool.xor(Loop.resultTerminates(String, T.AgentToolResult{Nil{}, "", None{}, terminate}), expectedTerminate)), "finalized fields differ")
 
 def optional(present: Bool, hook: Hook()) -> Maybe<&2, Hook()>:
   match present:
     case True{}: Some{hook}
     case False{}: None{}
 
-def finish(action: IO(Loop.FinalizedToolCallOutcome<String, String>), done: D.Deferred<Unit>) -> IO(Loop.FinalizedToolCallOutcome<String, String>):
-  do IO<Loop.FinalizedToolCallOutcome<String, String>>:
-    result : Loop.FinalizedToolCallOutcome<String, String> <- action
+def finish(action: IO(Loop.FinalizedToolCallOutcome<String>), done: D.Deferred<Unit>) -> IO(Loop.FinalizedToolCallOutcome<String>):
+  do IO<Loop.FinalizedToolCallOutcome<String>>:
+    result : Loop.FinalizedToolCallOutcome<String> <- action
     won : Bool <- D.resolve(Unit, done, Unit{})
     return result
 
@@ -91,12 +93,13 @@ def scenario(+present: Bool, mode: U32, +originallyError: Bool, expectedText: St
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
     +execute : C.Callback<ToolInput(), ToolOutput()> <- C.create(~Unit, ~ToolInput(), ~ToolOutput(), ~forbidden, Unit{})
     +zero : F.F64 = F.fromU32(0)
-    assistant : Ai.AssistantMessage<String, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
-    prepared : Loop.PreparedToolCall<Unit, U32, String, String, Unit, String> = Loop.PreparedToolCall{Ai.ToolCall{"call-id", "echo", "raw args", None{}, None{}}, T.AgentTool{"echo", "", Unit{}, None{}, "", None{}, execute, None{}, None{}}, 123}
+    assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
+    prepared : Loop.PreparedToolCall<String, String> = Loop.PreparedToolCall{Ai.ToolCall{"call-id", "echo", Schema.Text{"raw args"}, None{}, None{}}, T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, execute, None{}, None{}}, Schema.Number{F.fromU32(123)}}
     executed : Loop.ExecutedToolCallOutcome<String> = Loop.ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"original", None{}}} <> Nil{}, "original details", None{}, None{}}, originallyError}
-    running : Chan(Loop.FinalizedToolCallOutcome<String, String>) <- IO.fork(Loop.FinalizedToolCallOutcome<String, String>, finish(Loop.finalizeExecutedToolCall(Unit, String, Unit, String, String, U32, Unit, String, Unit, Unit, Unit, T.AgentContext{T.CustomMessage{"context"} <> Nil{}, None{}}, assistant, prepared, executed, configuration(converter, optional(present, after)), Some{Unit{}}, "empty details", error => error), done))
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    running : Chan(Loop.FinalizedToolCallOutcome<String>) <- IO.fork(Loop.FinalizedToolCallOutcome<String>, finish(Loop.finalizeExecutedToolCall(Unit, String, String, String, Unit, T.AgentContext{T.CustomMessage{"context"} <> Nil{}, None{}}, assistant, prepared, executed, configuration(converter, optional(present, after)), Some{Abort.signal(Unit, controller)}, "empty details", error => error), done))
     releaseHook(present, entered, release, done)
-    finalized : Loop.FinalizedToolCallOutcome<String, String> <- IO.join(Loop.FinalizedToolCallOutcome<String, String>, running)
+    finalized : Loop.FinalizedToolCallOutcome<String> <- IO.join(Loop.FinalizedToolCallOutcome<String>, running)
     check(finalized, expectedText, expectedDetails, expectedError, terminate)
     count : U32 <- R.dispose(U32, calls)
     Test.assertion(U32.is_eq(count, Bool.pick(U32, present, 1, 0)), "hook invocation count differs")

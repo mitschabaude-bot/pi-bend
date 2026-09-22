@@ -10,11 +10,11 @@ import ../../runtime/src/f64.bend as F
 import ../../runtime/src/callback.bend as C
 import ./message-events.bend as Test
 
-def Message() -> Data: T.AgentMessage<V.Value, String, Unit, String, String>
+def Message() -> Data: T.AgentMessage<Unit, String, String>
 def Messages() -> Data: List<&2, Message()>
-def Input() -> Data: T.ToolExecutionInput<U32, Unit, String>
+def Input() -> Data: T.ToolExecutionInput<String>
 def Output() -> Data: Result<&2, &2, String, T.AgentToolResult<String>>
-def Tool() -> Data: T.AgentTool<V.Value, U32, String, String, Unit, String>
+def Tool() -> Data: T.AgentTool<String, String>
 
 def forbidden(unused: Unit, input: Input()) -> IO(Output()):
   IO.die(Output(), 1, "tool declaration must not execute tools")
@@ -104,8 +104,8 @@ def checked(actual: D.DeclarationResult<Messages()>, expected: Messages(), label
 def check(previous: Messages(), +pending: Messages(), available: List<&2, Ai.Tool<V.Value>>, expected: Messages(), timestampNeeded: Bool, label: String) -> IO(Unit):
   do IO<Unit>:
     +executor : C.Callback<Input(), Output()> <- C.create(~Unit, ~Input(), ~Output(), ~forbidden, Unit{})
-    context : T.AgentContext<V.Value, String, Unit, String, String, U32, Unit, String> = T.AgentContext{previous, Some{tools(available, executor)}}
-    +plan : D.DeclarationResult<Changes.ChangePlan<String, Unit, String, String>> = Changes.plan(String, Unit, String, String, U32, Unit, String, context, pending)
-    Test.assertion(Bool.not(Bool.xor(Changes.needsTimestamp(String, Unit, String, String, plan), timestampNeeded)), "timestamp is requested only for a new declaration message")
-    checked(Changes.applyAt(String, Unit, String, String, F.fromU32(777), plan), expected, label)
+    context : T.AgentContext<Unit, String, String, String> = T.AgentContext{previous, Some{tools(available, executor)}}
+    +plan : D.DeclarationResult<Changes.ChangePlan<Unit, String, String>> = Changes.plan(Unit, String, String, String, context, pending)
+    Test.assertion(Bool.not(Bool.xor(Changes.needsTimestamp(Unit, String, String, plan), timestampNeeded)), "timestamp is requested only for a new declaration message")
+    checked(Changes.applyAt(Unit, String, String, F.fromU32(777), plan), expected, label)
     C.dispose(Input(), Output(), executor)

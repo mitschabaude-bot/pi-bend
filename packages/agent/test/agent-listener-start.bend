@@ -4,6 +4,7 @@ import ../src/agent-loop.bend as Emission
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as R
 import ./message-events.bend as Test
+import ../../runtime/src/abort.bend as Abort
 
 type Environment is Data:
   Environment{first: Bool, fail: Bool, release: Chan(Unit), started: R.Ref<U32>, completed: R.Ref<Bool>, later: R.Ref<U32>}
@@ -26,7 +27,7 @@ def firstEvent(environment: Environment, event: String) -> IO(Emission.Emission<
       do IO<Emission.Emission<String>>:
         R.modify(U32, Unit, started, old => (U32.add(old, 1), Unit{}))
         select(event, fail, release, completed)
-def body(environment: Environment, input: L.Input<String, Bool>) -> IO(Emission.Emission<String>):
+def body(environment: Environment, input: L.Input<String>) -> IO(Emission.Emission<String>):
   match environment input:
     case Environment{True{}, fail, release, started, completed, later} L.Input{event, _}:
       firstEvent(Environment{True{}, fail, release, started, completed, later}, event)
@@ -43,21 +44,22 @@ def valid(result: Result<&2, &2, String, Unit>, fail: Bool) -> Bool:
     case _ _: False{}
 def scenario(+fail: Bool) -> IO(Unit):
   do IO<Unit>:
-    +registry : L.Listeners<String, Bool, String> <- L.newListeners(String, Bool, String)
+    +registry : L.Listeners<String, String> <- L.newListeners(String, String)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +started : R.Ref<U32> <- R.new(U32, 0)
     +completed : R.Ref<Bool> <- R.new(Bool, False{})
     +later : R.Ref<U32> <- R.new(U32, 0)
-    +first : L.Handler(String, Bool, String) <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{True{}, fail, release, started, completed, later})
-    +second : L.Handler(String, Bool, String) <- C.create(~Environment, ~L.Input<String, Bool>, ~Emission.Emission<String>, ~body, Environment{False{}, fail, release, started, completed, later})
-    ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, first)
-    ignored : L.Subscription<String, Bool, String> <- L.subscribeListeners(String, Bool, String, registry, second)
-    one : Emission.Emission<String> <- L.start(String, Bool, String, registry, "first", False{})
+    +first : L.Handler(String, String) <- C.create(~Environment, ~L.Input<String>, ~Emission.Emission<String>, ~body, Environment{True{}, fail, release, started, completed, later})
+    +second : L.Handler(String, String) <- C.create(~Environment, ~L.Input<String>, ~Emission.Emission<String>, ~body, Environment{False{}, fail, release, started, completed, later})
+    ignored : L.Subscription<String, String> <- L.subscribeListeners(String, String, registry, first)
+    ignored : L.Subscription<String, String> <- L.subscribeListeners(String, String, registry, second)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    one : Emission.Emission<String> <- L.start(String, String, registry, "first", Abort.signal(Unit, controller))
     starts : U32 <- R.read(U32, started)
     settled : Bool <- R.read(Bool, completed)
     calls : U32 <- R.read(U32, later)
     Test.assertion(U32.is_eq(starts, 1) && Bool.not(settled) && U32.is_eq(calls, 0), "start performs immediate effects and returns before pending completion")
-    two : Emission.Emission<String> <- L.start(String, Bool, String, registry, "second", False{})
+    two : Emission.Emission<String> <- L.start(String, String, registry, "second", Abort.signal(Unit, controller))
     starts : U32 <- R.read(U32, started)
     Test.assertion(U32.is_eq(starts, 2), "another event starts while the previous delivery is pending")
     secondResult : Result<&2, &2, String, Unit> <- Emission.wait(String, two)
@@ -65,9 +67,9 @@ def scenario(+fail: Bool) -> IO(Unit):
     Test.assertion(valid(secondResult, False{}) && valid(firstResult, fail), "each delivery keeps its own completion or first error")
     calls : U32 <- R.read(U32, later)
     Test.assertion(U32.is_eq(calls, Bool.pick(U32, fail, 1, 2)), "pending failure skips remaining subscribers for only its event")
-    L.disposeListeners(String, Bool, String, registry)
-    C.dispose(L.Input<String, Bool>, Emission.Emission<String>, first)
-    C.dispose(L.Input<String, Bool>, Emission.Emission<String>, second)
+    L.disposeListeners(String, String, registry)
+    C.dispose(L.Input<String>, Emission.Emission<String>, first)
+    C.dispose(L.Input<String>, Emission.Emission<String>, second)
     old : U32 <- R.dispose(U32, started)
     old : Bool <- R.dispose(Bool, completed)
     old : U32 <- R.dispose(U32, later)

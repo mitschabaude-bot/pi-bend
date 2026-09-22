@@ -18,8 +18,8 @@ import ./agent-settings.bend as SettingsTest
 import ./agent-run.bend as H
 import ./message-events.bend as Test
 
-def Converter() -> Data: Options.Converter(Unit, Unit, Unit, String, String)
-def TransformInput() -> Data: T.TransformContextInput<H.Messages(), Run.RunSignal()>
+def Converter() -> Data: Options.Converter(Unit, Unit, String, String)
+def TransformInput() -> Data: T.TransformContextInput<H.Messages()>
 def Transformed() -> Data: Result<&2, &2, String, H.Messages()>
 def Transform() -> Data: C.Callback<TransformInput(), Transformed()>
 type Logged is Data:
@@ -43,9 +43,9 @@ def install(+agent: Owner.Owner(), bindings: Bindings) -> IO(Unit):
   match bindings:
     case Bindings{stream, convert, transform}:
       do IO<Unit>:
-        Agent.setStreamFunction(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, stream)
-        Agent.setConvertToLlm(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, convert)
-        Agent.setTransformContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, Some{transform})
+        Agent.setStreamFunction(Unit, Unit, String, String, Unit, agent, stream)
+        Agent.setConvertToLlm(Unit, Unit, String, String, Unit, agent, convert)
+        Agent.setTransformContext(Unit, Unit, String, String, Unit, agent, Some{transform})
 def replaceFirst(index: U32, slot: R.Ref<Maybe<&2, Owner.Owner()>>, future: Maybe<&2, Bindings>) -> IO(Unit):
   match index future:
     case 0 Some{bindings}:
@@ -63,10 +63,10 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
         append(log)
         +index : U32 <- R.modify(U32, U32, calls, old => SettingsTest.increment(old))
         replaceFirst(index, slot, future)
-        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
+        +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Schema.Value, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         SettingsTest.push(index, stream)
-        return Done{T.borrowedStream(Unit, Unit, String, stream)}
+        return Done{T.borrowedStream(Unit, String, stream)}
 type Fixture is Data:
   Fixture{base: Named.Fixture, original: Converter(), first: Bindings, second: Bindings}
 def create(+slot: R.Ref<Maybe<&2, Owner.Owner()>>, +trace: R.Ref<String>, +calls: R.Ref<U32>, +streams: R.Ref<List<&2, H.StreamValue()>>) -> IO(Fixture):
@@ -78,13 +78,13 @@ def create(+slot: R.Ref<Maybe<&2, Owner.Owner()>>, +trace: R.Ref<String>, +calls
     +streamB : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, ProviderCapture{Logged{"pb", trace}, slot, None{}, calls, streams})
     +second : Bindings = Bindings{streamB, convertB, transformB}
     +streamA : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, ProviderCapture{Logged{"pa", trace}, slot, Some{second}, calls, streams})
-    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput<Schema.Value, Unit, Unit>, ~Result<&2, &2, String, Unit>, ~H.validate, 9)
-    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
-    +registry : Named.Fallback() <- Provider.create(Schema.Value, Unit, Unit, Unit, Unit, H.Config(), String)
-    initial : State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
-    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~String, ~Unit, ~Unit, ~Unit, Named.options(Some{initial}, streamA), registry, validator, Unit{})
+    +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
+    +executor : Named.Executor() <- C.create(~Unit, ~T.ToolExecutionInput<Unit>, ~Result<&2, &2, String, T.AgentToolResult<Unit>>, ~H.executeTool, Unit{})
+    +registry : Named.Fallback() <- Provider.create(Unit, Unit, H.Config(), String)
+    initial : State.AgentInitialState<Unit, Unit, String, String> = State.AgentInitialState{None{}, None{}, None{}, H.tools(9, executor), None{}}
+    result : Result<&2, &2, Provider.MissingDefault, Owner.Owner()> <- Agent.new(~Unit, ~Unit, ~String, ~String, ~Unit, Named.options(Some{initial}, streamA), registry, validator, Unit{})
     +agent : Owner.Owner() <- Owner.requireOwner(result)
-    original : Converter() <- Agent.getConvertToLlm(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+    original : Converter() <- Agent.getConvertToLlm(Unit, Unit, String, String, Unit, agent)
     return Fixture{Named.Fixture{agent, streamA, validator, executor, registry}, original, Bindings{streamA, convertA, transformA}, second}
 def sameTransform(value: Maybe<&2, Transform()>, expected: Transform()) -> Bool:
   match value:
@@ -94,9 +94,9 @@ def checkGetters(+agent: Owner.Owner(), bindings: Bindings) -> IO(Unit):
   match bindings:
     case Bindings{stream, convert, transform}:
       do IO<Unit>:
-        actualStream : Named.StreamFunction() <- Agent.getStreamFunction(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-        actualConvert : Converter() <- Agent.getConvertToLlm(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
-        actualTransform : Maybe<&2, Transform()> <- Agent.getTransformContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        actualStream : Named.StreamFunction() <- Agent.getStreamFunction(Unit, Unit, String, String, Unit, agent)
+        actualConvert : Converter() <- Agent.getConvertToLlm(Unit, Unit, String, String, Unit, agent)
+        actualTransform : Maybe<&2, Transform()> <- Agent.getTransformContext(Unit, Unit, String, String, Unit, agent)
         Test.assertion(C.same(H.ProviderInput(), H.ProviderOutput(), actualStream, stream) && C.same(H.Messages(), H.Converted(), actualConvert, convert) && sameTransform(actualTransform, transform), "getters retain the assigned callback handles")
 def emptyConverted(value: H.Converted()) -> Bool:
   match value:
@@ -108,15 +108,15 @@ def exercise(fixture: Fixture, slot: R.Ref<Maybe<&2, Owner.Owner()>>) -> IO(Unit
       do IO<Unit>:
         +agent : Owner.Owner() = Named.getAgent(base)
         R.write(Maybe<&2, Owner.Owner()>, slot, Some{agent})
-        absent : Maybe<&2, Transform()> <- Agent.getTransformContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        absent : Maybe<&2, Transform()> <- Agent.getTransformContext(Unit, Unit, String, String, Unit, agent)
         Test.assertion(Maybe.is_none(&2, Transform(), absent), "transform is initially absent")
         install(agent, first)
         checkGetters(agent, first)
         Behavior.prompt(agent, "first")
         checkGetters(agent, second)
         Behavior.prompt(agent, "next")
-        Agent.setTransformContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent, None{})
-        cleared : Maybe<&2, Transform()> <- Agent.getTransformContext(Unit, Unit, Unit, String, Unit, String, Unit, Unit, Unit, agent)
+        Agent.setTransformContext(Unit, Unit, String, String, Unit, agent, None{})
+        cleared : Maybe<&2, Transform()> <- Agent.getTransformContext(Unit, Unit, String, String, Unit, agent)
         Test.assertion(Maybe.is_none(&2, Transform(), cleared), "transform can be cleared")
         Behavior.prompt(agent, "without transform")
         old : H.Converted() <- C.call(H.Messages(), H.Converted(), original, T.CustomMessage{"filtered"} <> Nil{})
