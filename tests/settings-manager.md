@@ -40,3 +40,5 @@ Setters accept semantic native values: counts are integers, modes are enums, opt
 The canonical manager is implemented here; wiring it into the CLI/session owner is separate work. These fixtures do not claim end-to-end interactive settings UI coverage. IO, migration and differential checks are complementary to the project's laws; no trivial concrete laws or compiler mutation tests were added.
 
 The native C emitter exposed a case-folding name collision during validation: retaining both `getWebsocketConnectTimeoutMs` and upstream's `getWebSocketConnectTimeoutMs` failed with `two names mangle to FID____PACKAGES_CODING_AGENT_SRC_CORE_SETTINGS_MANAGER_GETWEBSOCKETCONNECTTIMEOUTMS`. The unnecessary alternate spelling was removed; only the upstream API remains. No compiler patch was needed.
+
+Root integration rebuilt both fixtures using `build/bend-process-files/bend2/main.ts`, including the shared file-lock effects. The unchanged source above passes the full 203/60/UUID corpus and all 16 real-file checks on Bun and native one/four threads. Inventory entries remain partial pending an assertion-by-assertion audit; these results do not claim CLI settings integration.

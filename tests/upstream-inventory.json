@@ -2429,21 +2429,42 @@
     },
     {
       "source": "packages/coding-agent/test/settings-manager-bug.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e39903068d13ee29f8d235a485829a418b7ca1613b92058fca8a9b3c7f69e546"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "e39903068d13ee29f8d235a485829a418b7ca1613b92058fca8a9b3c7f69e546",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-manager-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ae8aa7c6425592805b45a4f104908052d9a05f832655428beea78591903bb25c"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "ae8aa7c6425592805b45a4f104908052d9a05f832655428beea78591903bb25c",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "76c00c69d710e7d9ef5b62692166db1d73f6ab203a3648a2c43665f24e644ff1"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "76c00c69d710e7d9ef5b62692166db1d73f6ab203a3648a2c43665f24e644ff1",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",
