@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import random
 import shutil
 import subprocess
@@ -9,7 +10,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 BUILD.mkdir(exist_ok=True)
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+BEND = BEND
 MASK = (1 << 64) - 1
 rng = random.Random(0xC10C)
 vectors = []

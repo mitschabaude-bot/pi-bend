@@ -1,8 +1,5 @@
 import Base
 import ../src/api/openai-responses-stream.bend as D
-import ../src/api/openai-responses-stream-state.bend as S
-import ../src/api/openai-responses-stream-content.bend as C
-import ../src/api/openai-responses-terminal.bend as Terminal
 import ../src/types.bend as T
 import ./api/responses-stream.bend as Harness
 import ./api/responses-stream-state.bend as State
@@ -26,23 +23,23 @@ def execute(events: List<&2, D.ResponseStreamEvent>) -> IO(Harness.Execution):
 
 def earlyEvents() -> List<&2, D.ResponseStreamEvent>:
   D.ResponseCreated{"resp_early_eof"} <>
-  D.ContentEvent{S.Added{F.fromU32(0), C.ReasoningItem{R.Record{R.Property{"type", V.Text{"reasoning"}} <> R.Property{"id", V.Text{"rs_early_eof"}} <> R.Property{"summary", V.ArrayValue{Nil{}}} <> Nil{}}}}} <>
-  D.ContentEvent{S.Changed{F.fromU32(0), C.ThinkingDelta{"partial reasoning before the stream ends"}}} <> Nil{}
+  D.ContentEvent{D.Added{F.fromU32(0), D.ReasoningItem{R.Record{R.Property{"type", V.Text{"reasoning"}} <> R.Property{"id", V.Text{"rs_early_eof"}} <> R.Property{"summary", V.ArrayValue{Nil{}}} <> Nil{}}}}} <>
+  D.ContentEvent{D.Changed{F.fromU32(0), D.ThinkingDelta{"partial reasoning before the stream ends"}}} <> Nil{}
 
 def completedEvents() -> List<&2, D.ResponseStreamEvent>:
-  D.ResponseCompleted{Terminal.Response{Some{"resp_completed"}, Some{"completed"}, None{}, Nil{}, Some{Terminal.ResponseUsage{Some{F.fromU32(20)}, Some{F.fromU32(7)}, Some{F.fromU32(2)}, Some{F.fromU32(3)}, None{}, Some{F.fromU32(27)}}}, None{}}} <> Nil{}
+  D.ResponseCompleted{D.Response{Some{"resp_completed"}, Some{"completed"}, None{}, Nil{}, Some{D.ResponseUsage{Some{F.fromU32(20)}, Some{F.fromU32(7)}, Some{F.fromU32(2)}, Some{F.fromU32(3)}, None{}, Some{F.fromU32(27)}}}, None{}}} <> Nil{}
 
 def incompleteEvents(reason: String) -> List<&2, D.ResponseStreamEvent>:
-  D.ResponseIncomplete{Terminal.Response{Some{"resp_incomplete"}, Some{"incomplete"}, Some{reason}, Nil{}, Some{Terminal.ResponseUsage{Some{F.fromU32(30)}, Some{F.fromU32(12)}, Some{F.fromU32(5)}, None{}, None{}, Some{F.fromU32(42)}}}, None{}}} <> Nil{}
+  D.ResponseIncomplete{D.Response{Some{"resp_incomplete"}, Some{"incomplete"}, Some{reason}, Nil{}, Some{D.ResponseUsage{Some{F.fromU32(30)}, Some{F.fromU32(12)}, Some{F.fromU32(5)}, None{}, None{}, Some{F.fromU32(42)}}}, None{}}} <> Nil{}
 
 def phaseTerminal(incomplete: Bool) -> D.ResponseStreamEvent:
   match incomplete:
-    case True{}: D.ResponseIncomplete{Terminal.Response{Some{"resp_phase"}, Some{"incomplete"}, Some{"max_output_tokens"}, Nil{}, None{}, None{}}}
-    case False{}: D.ResponseCompleted{Terminal.Response{Some{"resp_phase"}, Some{"completed"}, None{}, Nil{}, None{}, None{}}}
+    case True{}: D.ResponseIncomplete{D.Response{Some{"resp_phase"}, Some{"incomplete"}, Some{"max_output_tokens"}, Nil{}, None{}, None{}}}
+    case False{}: D.ResponseCompleted{D.Response{Some{"resp_phase"}, Some{"completed"}, None{}, Nil{}, None{}, None{}}}
 
 def phaseEvents(first: T.TextSignaturePhase, last: T.TextSignaturePhase, incomplete: Bool) -> List<&2, D.ResponseStreamEvent>:
-  D.ContentEvent{S.Added{F.fromU32(0), C.MessageItem{"msg_phase", Some{first}, Nil{}}}} <>
-  D.ContentEvent{S.Changed{F.fromU32(0), C.ItemDone{C.MessageItem{"msg_phase", Some{last}, "answer" <> Nil{}}}}} <> phaseTerminal(incomplete) <> Nil{}
+  D.ContentEvent{D.Added{F.fromU32(0), D.MessageItem{"msg_phase", Some{first}, Nil{}}}} <>
+  D.ContentEvent{D.Changed{F.fromU32(0), D.ItemDone{D.MessageItem{"msg_phase", Some{last}, "answer" <> Nil{}}}}} <> phaseTerminal(incomplete) <> Nil{}
 
 def errorIs(execution: Harness.Execution, expected: String) -> Bool:
   match execution:
@@ -103,7 +100,7 @@ def phases(trace: List<&2, V.Value>) -> List<&2, String>:
 
 def phaseResult(execution: Harness.Execution, expected: String, finalStop: String) -> Bool:
   match execution:
-    case Harness.Execution{D.RunResult{T.AssistantMessage{_, _, _, _, _, _, _, _, _, stop, _, _, _, _, _}, None{}}, Harness.Capture{_, _, _, trace}}:
+    case Harness.Execution{D.RunResult{T.AssistantMessage{_, _, _, _, _, _, _, _, _, stop, _, _, _, _, _}, None{}}, Harness.Capture{_, _, _, _, trace}}:
       String.eq(String.join(phases(List.reverse(&2, V.Value, trace)), ","), expected) && String.eq(State.reason(stop), finalStop)
     case _: False{}
 
@@ -155,7 +152,7 @@ def unknownReason() -> IO(Unit):
 
 def failed() -> IO(Unit):
   do IO<Unit>:
-    result : Harness.Execution <- execute(D.ResponseFailed{Some{"failed"}, Some{Terminal.ProviderError{Some{"server_error"}, Some{"boom"}}}, None{}} <> Nil{})
+    result : Harness.Execution <- execute(D.ResponseFailed{Some{"failed"}, Some{D.ProviderError{Some{"server_error"}, Some{"boom"}}}, None{}} <> Nil{})
     A.assertion(failedResult(result), "failed response provider error and raw status")
     IO.print("PASS rejects failed terminal events with the provider error")
 

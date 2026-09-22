@@ -1,7 +1,6 @@
 import Base
 import ../src/types.bend as T
-import ../src/api/openai-responses-envelope.bend as E
-import ../src/api/openai-responses-url.bend as Address
+import ../src/api/openai-client.bend as Client
 import ../src/utils/schema-json.bend as Convert
 import ./openai-request-headers.bend as H
 import ./openai-responses-url.bend as U
@@ -39,24 +38,24 @@ def client(value: Maybe<&2, T.ProviderHeaders()>) -> T.ProviderHeaders():
     case None{}: R.new(T.Nullable<String>)
     case Some{fields}: fields
 
-def error(value: E.Error) -> String:
+def error(value: Client.RequestError) -> String:
   match value:
-    case E.URLFailure{Address.InvalidURL{_}}: "url"
-    case E.URLFailure{Address.InvalidQuery{cause}}: "query-" ++ U.failure(cause)
-    case E.HeaderFailure{cause}: H.errorKind(cause)
-    case E.NonFinitePayload{}: "nonfinite-payload"
-    case E.PayloadEncodingFailure{}: "payload-encoding"
+    case Client.URLFailure{Client.InvalidURL{_}}: "url"
+    case Client.URLFailure{Client.InvalidQuery{cause}}: "query-" ++ U.failure(cause)
+    case Client.HeaderRejected{cause}: H.errorKind(cause)
+    case Client.NonFinitePayload{}: "nonfinite-payload"
+    case Client.PayloadEncodingFailure{}: "payload-encoding"
 
-def shown(result: Result<&2, &2, E.Error, E.Request>) -> V.Value:
+def shown(result: Result<&2, &2, Client.RequestError, Client.Request>) -> V.Value:
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{error(cause)}} <> Nil{}}}
-    case Done{E.Request{url, method, headers, body, timeout}}:
+    case Done{Client.Request{url, method, headers, body, timeout}}:
       V.ObjectValue{R.Record{R.Property{"url", V.Text{URL.serialize(url, False{})}} <> R.Property{"method", V.Text{method}} <> R.Property{"headers", V.ObjectValue{R.Record{H.wireFields(Headers.entries(headers))}}} <> R.Property{"body", V.Text{body}} <> R.Property{"timeout", V.Number{timeout}} <> Nil{}}}
 
 def checked(context: Absolute.Context, input: Result<&2, &2, Parse.Error, V.Value>, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
   match input expected:
     case Done{+value} Done{reference}:
-      actual = shown(E.prepare(context, H.requestDefaults(value), H.textOrEmpty(H.optionField(value, "apiKey")), client(H.headerLayer(H.optionField(value, "client"))), H.textOrEmpty(H.optionField(value, "baseUrl")), H.milliseconds(H.optionField(value, "timeout")), payload(H.textOrEmpty(H.optionField(value, "payloadMode")), H.optionField(value, "payload"))))
+      actual = shown(Client.prepareRequest(context, H.requestDefaults(value), H.textOrEmpty(H.optionField(value, "apiKey")), client(H.headerLayer(H.optionField(value, "client"))), H.textOrEmpty(H.optionField(value, "baseUrl")), H.milliseconds(H.optionField(value, "timeout")), payload(H.textOrEmpty(H.optionField(value, "payloadMode")), H.optionField(value, "payload"))))
       Bool.pick(IO(Unit), V.equal(actual, reference), IO.pure(Unit, Unit{}), IO.die(Unit, 1, "Responses envelope mismatch"))
     case _ _: IO.die(Unit, 1, "invalid envelope fixture JSON")
 

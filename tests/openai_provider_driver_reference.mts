@@ -43,6 +43,8 @@ for(const c of input){
   if(opts.maxRetries!==0)throw Error('SDK retries enabled');
   // The real SDK rejects an already-aborted request before network dispatch.
   if(opts.signal?.aborted)throw Error('Request aborted');
+  // Native transport initialization (resolver configuration) fails at request time.
+  if(c.requestError!==undefined)throw Error(c.requestError);
   trace.push('request:'+(c.structuredPayload?JSON.stringify(payload):String(payload)));sent.push(JSON.stringify(payload));
   const status=c.statuses[attempt++];if(status===undefined)throw Error('unexpected attempt');
   if(status<200||status>=300)throw c.sdkStatusError?StatusError.generate(status,{error:{message:'original'}},undefined,new Headers()):Object.assign(Error('original'),{status,headers:new Headers()});
@@ -52,7 +54,7 @@ for(const c of input){
   if((c.mode===4&&e.type==='start')||(c.mode===5&&e.type==='text_delta')||(c.mode===6&&e.type==='done')||(c.mode===7&&e.type==='error'))throw Error('sink');
   retained.push(structuredClone(e));},end(){trace.push('close');}};
  async function processor(...args){await processStream(...args);if(c.mode===8)signal.aborted=true;if(c.mode===17)output.stopReason='pending';if(c.mode===12)throw Error('cleanup');}
- let unhandled=null;try{await run(c.structuredPayload?c.params:7,model,options,client,retry,headersToRecord,stream,output,processor,{},c.defaultPricing?defaultPricing:x=>x,normalizeProviderError,formatProviderError,c.preparationError);}catch(e){unhandled=e.message;}
+ let unhandled=null;try{await run(c.structuredPayload?c.params:7,model,options,client,retry,headersToRecord,stream,output,processor,new Map(Object.entries(c.grammar??{})),c.defaultPricing?defaultPricing:x=>x,normalizeProviderError,formatProviderError,c.preparationError);}catch(e){unhandled=e.message;}
  if(attempt!==c.statuses.length)throw Error('unused scripted response');
  results.push({mode:c.mode,trace,sent,retained:retained.map(e=>'retained:'+e.type+':'+shownMessage(e.partial??e.message??e.error)),final:'final:'+shownMessage(output),error:output.errorMessage??null,unhandled});
 }

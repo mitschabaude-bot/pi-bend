@@ -1,9 +1,6 @@
 import Base
 import ../../src/types.bend as T
-import ../../src/api/openai-responses-stream.bend as Driver
-import ../../src/api/openai-responses-stream-state.bend as Slots
-import ../../src/api/openai-responses-stream-content.bend as Content
-import ../../src/api/openai-responses-terminal.bend as Terminal
+import ../../src/api/openai-responses-stream.bend as Stream
 import ./responses-stream.bend as Harness
 import ./responses-stream-contracts.bend as Fixture
 import ../../../runtime/src/schema-value.bend as V
@@ -16,12 +13,12 @@ def makeModel() -> T.Model<Unit>:
   +zero = F.fromU32(0)
   T.Model{"gpt-test", "GPT Test", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", False{}, None{}, T.InputText{} <> T.InputImage{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
-def inputs() -> List<&2, Driver.ResponseStreamEvent>:
-  Driver.ContentEvent{Slots.Added{0n, Content.CustomItem{"ctc_1", "call_1", "sample_tool", Some{"a"}, None{}}}} <>
-  Driver.ContentEvent{Slots.Changed{0n, Content.CustomDelta{"b"}}} <>
-  Driver.ContentEvent{Slots.Changed{0n, Content.CustomDone{"abc"}}} <>
-  Driver.ContentEvent{Slots.Changed{0n, Content.ItemDone{Content.CustomItem{"ctc_1", "call_1", "sample_tool", Some{"abc"}, None{}}}}} <>
-  Driver.ResponseCompleted{Terminal.Response{None{}, Some{"completed"}, None{}, Nil{}, Some{Terminal.ResponseUsage{Some{F.fromU32(1)}, Some{F.fromU32(1)}, None{}, None{}, None{}, Some{F.fromU32(2)}}}, None{}}} <> Nil{}
+def inputs() -> List<&2, Stream.ResponseStreamEvent>:
+  Stream.ContentEvent{Stream.Added{F.fromU32(0), Stream.CustomItem{"ctc_1", "call_1", "sample_tool", Some{"a"}, None{}}}} <>
+  Stream.ContentEvent{Stream.Changed{F.fromU32(0), Stream.CustomDelta{"b"}}} <>
+  Stream.ContentEvent{Stream.Changed{F.fromU32(0), Stream.CustomDone{"abc"}}} <>
+  Stream.ContentEvent{Stream.Changed{F.fromU32(0), Stream.ItemDone{Stream.CustomItem{"ctc_1", "call_1", "sample_tool", Some{"abc"}, None{}}}}} <>
+  Stream.ResponseCompleted{Stream.Response{None{}, Some{"completed"}, None{}, Nil{}, Some{Stream.ResponseUsage{Some{F.fromU32(1)}, Some{F.fromU32(1)}, None{}, None{}, None{}, Some{F.fromU32(2)}}}, None{}}} <> Nil{}
 
 def finalMessage(message: T.AssistantMessage<V.Value, Unit>) -> Bool:
   match message:
@@ -76,7 +73,7 @@ def matchesObservation(state: Observation) -> Bool:
 
 def matches(execution: Harness.Execution) -> Bool:
   match execution:
-    case Harness.Execution{Driver.RunResult{output, None{}}, Harness.Capture{_, _, _, trace}}: finalMessage(output) && matchesObservation(observations(trace, Observation{Nil{}, Nil{}}))
+    case Harness.Execution{Stream.RunResult{output, None{}}, Harness.Capture{_, _, _, _, trace}}: finalMessage(output) && matchesObservation(observations(trace, Observation{Nil{}, Nil{}}))
     case _: False{}
 
 def run() -> IO(Unit):

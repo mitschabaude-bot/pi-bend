@@ -1,12 +1,13 @@
 """Compiler regression: module punctuation must form distinct valid JS names."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import shutil
 import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 BUILD=ROOT/'build/js-identifiers'
 BUILD.mkdir(parents=True,exist_ok=True)
-BEND=os.environ.get('BEND',str(Path.home()/'.bend/bin/bend'))
+BEND=BEND
 names=['a-b','a_b','a$2d$b','café']
 lines=['import Base']
 for index,name in enumerate(names):

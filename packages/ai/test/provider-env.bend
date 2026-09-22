@@ -1,6 +1,6 @@
 import Base
 import ../src/utils/provider-env.bend as Env
-import ../src/api/openai-responses-policy.bend as Policy
+import ../src/api/openai-responses.bend as Policy
 import ../src/types.bend as T
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/utf8-runner.bend as H

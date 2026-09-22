@@ -57,7 +57,7 @@ for row,observed in zip(rows,observations,strict=True):
  if want != observed.get('actual',{'error':observed.get('error')}):differences.append(dict(input=row,sdk=observed,native=want))
  expected.append(want)
 if '--no-build' not in sys.argv:
- for suffix,command,limit in [('c',['sh','scripts/build-pure.sh','packages/ai/test/openai-responses-envelope.bend','build/openai-responses-envelope'],'24'),('js',[os.environ.get('BEND',str(Path.home()/'.bend/bin/bend')),'packages/ai/test/openai-responses-envelope.bend','-o','build/openai-responses-envelope.js'],'12')]:
+ for suffix,command,limit in [('c',['sh','scripts/build-pure.sh','packages/ai/test/openai-responses-envelope.bend','build/openai-responses-envelope'],'24'),('js',[os.environ.get('BEND',str(ROOT/'build/bend-native-toolchain/bend2/main.ts') if (ROOT/'build/bend-native-toolchain/bend2/main.ts').is_file() else str(Path.home()/'.bend/bin/bend')),'packages/ai/test/openai-responses-envelope.bend','-o','build/openai-responses-envelope.js'],'12')]:
   subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib',limit,'--stats','build/envelope-rebuild-'+suffix+'.json','--',*command],cwd=ROOT,check=True)
 def codes(value):return ','.join(str(ord(c)) for c in json.dumps(value,ensure_ascii=False,separators=(',',':')))
 args=[part for row,want in zip(rows,expected,strict=True) for part in (codes(row),codes(want))]

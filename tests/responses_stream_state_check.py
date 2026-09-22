@@ -42,16 +42,20 @@ add([added(-0.0,text('zero')),event('output_text.delta',0,delta='same'),done(0,t
 expected=json.loads(subprocess.check_output(['node','tests/responses_stream_state_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
 def native_event(e):
     index=floating(e['output_index'])
-    if e['type']=='response.output_item.added':return 'S.Added{'+index+', '+item(e['item'])+'}'
-    return 'S.Changed{'+index+', '+event_literal(e)+'}'
+    if e['type']=='response.output_item.added':return 'D.Added{'+index+', '+item(e['item'])+'}'
+    return 'D.Changed{'+index+', '+event_literal(e)+'}'
 def initial_text(b):return 'T.AssistantText{T.TextContent{'+string(b['text'])+', Some{'+string(b['textSignature'])+'}}}'
-lines=['import Base','import ../packages/ai/test/api/responses-stream-state.bend as Check','import ../packages/ai/src/api/openai-responses-stream-state.bend as S','import ../packages/ai/src/api/openai-responses-stream-content.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
-for i,(c,r) in enumerate(zip(cases,expected,strict=True)):
-    lines += [f'def case{i}() -> IO(Unit):','  Check.check('+', '.join([seq(map(initial_text,c['initial'])),record(c['properties'],string),seq(map(native_event,c['events'])),string(r),string(f'Responses stream slots {i}')])+')']
-groups=[]
-for start in range(0,len(cases),15):
-    name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+15,len(cases)))]
-lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(cases)} Responses multiplexed stream sequences")']
+lines=['import Base','import ../packages/ai/test/api/responses-stream-state.bend as Check','import ../packages/ai/src/api/openai-responses-stream.bend as D','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+# Expected snapshots reach the program as arguments: multi-kilobyte string
+# literals overflow the compiler's literal expansion (BEND-016).
+lines.insert(1,'import ../packages/runtime/test/utf8-runner.bend as Text')
+for i,c in enumerate(cases):
+    lines += [f'def case{i}(expected: String) -> IO(Unit):','  Check.check('+', '.join([seq(map(initial_text,c['initial'])),record(c['properties'],string),seq(map(native_event,c['events'])),'expected',string(f'Responses stream slots {i}')])+')']
+lines += ['def run(index: U32, expected: String) -> IO(Unit):','  match index:']+[f'    case {i}: case{i}(expected)' for i in range(len(cases))]+['    case _: IO.die(Unit, 1, "unknown case")']
+lines += ['def main() -> IO(Unit):','  do IO<Unit>:','    values : List<String> <- IO.args()','    dispatch(values)']
+lines.insert(len(lines)-4,'def dispatch(values: List<String>) -> IO(Unit):\n  match values:\n    case index <> expected <> Nil{}: run(Text.decimal(index, 0), expected)\n    case _: IO.die(Unit, 1, "expected index expected")')
 source=ROOT/'build/responses-stream-state-check.bend';source.write_text('\n'.join(lines)+'\n');out=ROOT/'build/responses-stream-state-check'
 subprocess.run(['sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
-for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)
+for threads in ['1','4']:
+    for i,r in enumerate(expected):subprocess.run([str(out),'--threads',threads,str(i),r],cwd=ROOT,check=True,timeout=120)
+    print(f'PASS {len(cases)} Responses multiplexed stream sequences on {threads} threads')

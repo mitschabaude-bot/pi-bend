@@ -1,5 +1,6 @@
 """Check request-option inheritance and optionality against pinned TypeScript."""
 from pathlib import Path
+from bend_toolchain import BEND
 import os
 import re
 import subprocess
@@ -72,7 +73,7 @@ subprocess.run(['sh','scripts/build-pure.sh',str(path),'build/test-provider-opti
 for threads in ('1','4'): subprocess.run(['build/test-provider-option-types','--threads',threads],cwd=ROOT,check=True,timeout=30)
 print('PASS three inherited option field sets and provider response field coverage')
 
-bend_compiler=os.environ.get('BEND',str(Path.home()/'.bend/bin/bend'))
+bend_compiler=BEND
 for index,(old,new,expected,observed) in enumerate([
     ('Some{T.Max{}}','Some{T.Off{}}','ThinkingLevel','ModelThinkingLevel'),
     ('Some{T.DeferredBoolean{False{}}}','Some{T.FifteenMinutes{}}','DeferredRequest','DeferredWindow'),

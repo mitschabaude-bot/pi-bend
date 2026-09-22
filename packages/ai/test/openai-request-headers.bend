@@ -1,6 +1,6 @@
 import Base
 import ../src/types.bend as T
-import ../src/api/openai-request-headers.bend as Request
+import ../src/api/openai-client.bend as Client
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json-parse.bend as Parse
 import ../../runtime/src/record.bend as R
@@ -55,23 +55,23 @@ def milliseconds(value: Maybe<&2, V.Value>) -> Maybe<&2, F.F64>:
     case Some{V.Number{number}}: Some{number}
     case _: None{}
 
-def requestDefaults(+value: V.Value) -> Request.Defaults:
-  Request.Defaults{textOrEmpty(optionField(value, "userAgent")), platformFields(optionField(value, "platform")), optionalText(optionField(value, "organization")), optionalText(optionField(value, "project"))}
+def requestDefaults(+value: V.Value) -> Client.Defaults:
+  Client.Defaults{textOrEmpty(optionField(value, "userAgent")), platformFields(optionField(value, "platform")), optionalText(optionField(value, "organization")), optionalText(optionField(value, "project"))}
 
 def wireFields(values: List<&2, H.Header>) -> List<&2, R.Property<V.Value>>:
   match values:
     case Nil{}: Nil{}
     case H.Header{name, value} <> rest: R.Property{name, V.Text{value}} <> wireFields(rest)
 
-def errorKind(value: Request.Error) -> String:
+def errorKind(value: Client.HeaderError) -> String:
   match value:
-    case Request.TimeoutNotInteger{_}: "timeout-integer"
-    case Request.TimeoutNegative{_}: "timeout-negative"
-    case Request.TimeoutEncodingFailure{_}: "encoding"
-    case Request.HeaderFailure{_}: "header"
-    case Request.MissingAuthentication{}: "authentication"
+    case Client.TimeoutNotInteger{_}: "timeout-integer"
+    case Client.TimeoutNegative{_}: "timeout-negative"
+    case Client.TimeoutEncodingFailure{_}: "encoding"
+    case Client.HeaderFailure{_}: "header"
+    case Client.MissingAuthentication{}: "authentication"
 
-def shown(value: Result<&2, &2, Request.Error, Headers.Headers>) -> V.Value:
+def shown(value: Result<&2, &2, Client.HeaderError, Headers.Headers>) -> V.Value:
   match value:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{errorKind(cause)}} <> Nil{}}}
     case Done{fields}: V.ObjectValue{R.Record{R.Property{"headers", V.ObjectValue{R.Record{wireFields(Headers.entries(fields))}}} <> Nil{}}}
@@ -79,7 +79,7 @@ def shown(value: Result<&2, &2, Request.Error, Headers.Headers>) -> V.Value:
 def checked(retries: Nat, input: Result<&2, &2, Parse.Error, V.Value>, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
   match input expected:
     case Done{+value} Done{reference}:
-      actual = shown(Request.build(requestDefaults(value), textOrEmpty(optionField(value, "apiKey")), retries, milliseconds(optionField(value, "timeout")), headerLayer(optionField(value, "client")), headerLayer(optionField(value, "body")), headerLayer(optionField(value, "request"))))
+      actual = shown(Client.buildHeaders(requestDefaults(value), textOrEmpty(optionField(value, "apiKey")), retries, milliseconds(optionField(value, "timeout")), headerLayer(optionField(value, "client")), headerLayer(optionField(value, "body")), headerLayer(optionField(value, "request"))))
       Bool.pick(IO(Unit), V.equal(actual, reference), IO.pure(Unit, Unit{}), IO.die(Unit, 1, "OpenAI request headers mismatch"))
     case _ _: IO.die(Unit, 1, "invalid header fixture JSON")
 

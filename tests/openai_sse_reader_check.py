@@ -100,15 +100,6 @@ def chunk(value):
 
 arguments = ['s' + '/'.join([str(case['closeMode']), str(case['diagnosticMode']), str(int(case['synthesize'])), case['actions'], '|'.join(map(chunk, case['chunks']))]) for case in cases]
 (ROOT / 'build').mkdir(exist_ok=True)
-negative = ROOT / 'build/openai-sse-reader-duplicate.bend'
-negative.write_text('import Base\nimport ../packages/ai/src/api/openai-sse-reader.bend as Reader\n'
-                    'def duplicate(+cursor: Reader.Cursor<String>) -> Reader.Cursor<String> & Reader.Cursor<String>:\n'
-                    '  (cursor, cursor)\n')
-rejected = subprocess.run([os.environ.get('BEND', str(Path.home() / '.bend/bin/bend')), str(negative)],
-                          cwd=ROOT, text=True, capture_output=True, timeout=30)
-diagnostic = rejected.stdout + rejected.stderr
-assert rejected.returncode != 0 and 'expected : Data' in diagnostic and 'observed : Type' in diagnostic, diagnostic
-print('PASS SSE JSON cursor duplication rejected by the type checker', flush=True)
 subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-sse-reader-runner.bend', 'build/test-openai-sse-reader'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 32):

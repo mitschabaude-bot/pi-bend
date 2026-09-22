@@ -2,7 +2,7 @@ import Base
 import ../src/types.bend as T
 import ../src/utils/provider-headers.bend as Provider
 import ../src/utils/headers.bend as Projection
-import ../src/api/openai-responses-headers.bend as Responses
+import ../src/api/openai-responses.bend as Responses
 import ../../runtime/src/headers.bend as Native
 import ../../runtime/src/http-header.bend as Field
 import ../../runtime/src/record.bend as R

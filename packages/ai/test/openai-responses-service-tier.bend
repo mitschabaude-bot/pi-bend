@@ -1,7 +1,5 @@
 import Base
-import ../src/api/openai-responses-stream-pricing.bend as Pricing
-import ../../runtime/src/callback.bend as C
-import ../src/api/openai-responses-service-tier.bend as Tier
+import ../src/api/openai-responses.bend as P
 import ../src/types.bend as T
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/u64.bend as W
@@ -23,19 +21,14 @@ def shown(usage: T.Usage) -> String:
     case T.Usage{_, _, _, _, _, _, _, T.UsageCost{input, output, read, write, total}}:
       shownNumber(input) ++ "," ++ shownNumber(output) ++ "," ++ shownNumber(read) ++ "," ++ shownNumber(write) ++ "," ++ shownNumber(total)
 
-def completed(value: Result<&2, &2, String, T.Usage>) -> IO(Unit):
-  match value:
-    case Done{usage}: IO.print(shown(usage))
-    case Fail{_}: IO.die(Unit, 1, "unexpected pricing error")
+def model(modelId: String) -> T.Model<T.JsonValue>:
+  +zero = F.fromU32(0)
+  T.Model{modelId, "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def values(modelId: String, serviceTier: Maybe<&2, String>, input: Maybe<&2, F.F64>, output: Maybe<&2, F.F64>, read: Maybe<&2, F.F64>, write: Maybe<&2, F.F64>, total: Maybe<&2, F.F64>) -> IO(Unit):
   match input output read write total:
     case Some{a} Some{b} Some{c} Some{d} Some{e}:
-      do IO<Unit>:
-        +callback : C.Callback<Pricing.PricingRequest, Result<&2, &2, String, T.Usage>> <- Tier.create(~String, modelId)
-        usage : Result<&2, &2, String, T.Usage> <- C.call(Pricing.PricingRequest, Result<&2, &2, String, T.Usage>, callback, Pricing.PricingRequest{T.Usage{F.fromU32(13), F.fromU32(17), F.fromU32(19), F.fromU32(23), Some{F.fromU32(29)}, None{}, F.fromU32(31), T.UsageCost{a, b, c, d, e}}, serviceTier})
-        C.dispose(Pricing.PricingRequest, Result<&2, &2, String, T.Usage>, callback)
-        completed(usage)
+      IO.print(shown(P.applyServiceTierPricing(model(modelId), serviceTier, T.Usage{F.fromU32(13), F.fromU32(17), F.fromU32(19), F.fromU32(23), Some{F.fromU32(29)}, None{}, F.fromU32(31), T.UsageCost{a, b, c, d, e}})))
     case _ _ _ _ _: IO.die(Unit, 1, "expected five binary64 pairs")
 
 def serviceTier(value: String) -> Maybe<&2, String>:

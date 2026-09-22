@@ -1,5 +1,5 @@
 import Base
-import ../../src/api/openai-text-signature.bend as S
+import ../../src/api/openai-responses-shared.bend as S
 import ../../src/types.bend as T
 import ../../../runtime/src/utf16.bend as U
 import ../../../runtime/test/schema.bend as A

@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from bend_toolchain import BEND
 
 ROOT = Path(__file__).resolve().parents[1]
 args, expected = [], []
@@ -141,7 +142,7 @@ negative = ROOT / 'build/http-response-reader-duplicate.bend'
 negative.write_text('import Base\nimport ../packages/runtime/src/http-response-reader.bend as Reader\n'
                     'def duplicate(+cursor: Reader.Cursor<String>) -> Reader.Cursor<String> & Reader.Cursor<String>:\n'
                     '  (cursor, cursor)\n')
-rejected = subprocess.run([os.environ.get('BEND', str(Path.home() / '.bend/bin/bend')), str(negative)],
+rejected = subprocess.run([BEND, str(negative)],
                           cwd=ROOT, text=True, capture_output=True, timeout=30)
 diagnostic = rejected.stdout + rejected.stderr
 assert rejected.returncode != 0 and 'expected : Data' in diagnostic and 'observed : Type' in diagnostic, diagnostic

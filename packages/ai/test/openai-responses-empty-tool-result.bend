@@ -1,6 +1,5 @@
 import Base
 import ../src/api/openai-responses-shared.bend as C
-import ../src/api/openai-responses-content.bend as Content
 import ../src/types.bend as T
 import ./api/responses-named.bend as Fixture
 import ../../runtime/test/schema.bend as Assert
@@ -8,7 +7,7 @@ import ../../runtime/test/schema.bend as Assert
 def placeholder(items: List<&2,C.ResponseInputItem>) -> Bool:
   match items:
     case Nil{}: False{}
-    case C.FunctionToolOutput{_,Content.TextOutput{"(no tool output)"}} <> _: True{}
+    case C.FunctionToolOutput{_,C.TextOutput{"(no tool output)"}} <> _: True{}
     case C.FunctionToolOutput{_,_} <> _: False{}
     case _ <> rest: placeholder(rest)
 

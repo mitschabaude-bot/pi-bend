@@ -1,6 +1,7 @@
 """Check model field coverage and API-dependent compatibility constraints."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import re
 import subprocess
 
@@ -32,7 +33,7 @@ assert images == bend_fields('ImagesModel'), (images, bend_fields('ImagesModel')
 subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/ai/test/model-types.bend', 'build/test-model-types'], cwd=ROOT, check=True)
 subprocess.run(['build/test-model-types', '--threads', '1'], cwd=ROOT, check=True, timeout=30)
 
-bend = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+bend = BEND
 for index, api in enumerate(('T.OpenAIResponsesApi{}', 'T.GoogleGenerativeAiApi{}', 'T.CustomModelApi{"custom-example"}')):
     source = BUILD / f'invalid-model-compat-{index}.bend'
     source.write_text('''import Base

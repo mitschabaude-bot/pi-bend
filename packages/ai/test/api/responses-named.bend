@@ -1,6 +1,5 @@
 import Base
 import ../../src/api/openai-responses-shared.bend as C
-import ../../src/api/openai-responses-assistant.bend as Assistant
 import ../../src/types.bend as T
 import ../../src/utils/transcript.bend as Transcript
 import ../../../runtime/src/schema-value.bend as V
@@ -36,14 +35,14 @@ def convert(model: T.Model<Unit>, prompt: Maybe<&2,String>, messages: Fixture.Me
     value : Result<&2,&2,C.MessageError,List<&2,C.ResponseInputItem>> <- C.convertResponsesMessages(~Unit,~Unit,~Unit,model,Transcript.normalizeContext(V.Value,R.Record<V.Value>,Unit,Unit,T.Context{prompt,messages,None{}}),providers,options)
     successful(value)
 
-def findCall(items: List<&2,C.ResponseInputItem>, +custom: Bool) -> Maybe<&2,Assistant.Call>:
+def findCall(items: List<&2,C.ResponseInputItem>, +custom: Bool) -> Maybe<&2,C.Call>:
   match items:
     case Nil{}: None{}
-    case C.AssistantInput{Assistant.FunctionCall{call,_}} <> rest: Bool.pick(Maybe<&2,Assistant.Call>,custom,findCall(rest,custom),Some{call})
-    case C.AssistantInput{Assistant.CustomToolCall{call,_}} <> rest: Bool.pick(Maybe<&2,Assistant.Call>,custom,Some{call},findCall(rest,custom))
+    case C.AssistantInput{C.FunctionCall{call,_}} <> rest: Bool.pick(Maybe<&2,C.Call>,custom,findCall(rest,custom),Some{call})
+    case C.AssistantInput{C.CustomToolCall{call,_}} <> rest: Bool.pick(Maybe<&2,C.Call>,custom,Some{call},findCall(rest,custom))
     case _ <> rest: findCall(rest,custom)
 
-def withoutNamespace(call: Maybe<&2,Assistant.Call>) -> Bool:
+def withoutNamespace(call: Maybe<&2,C.Call>) -> Bool:
   match call:
-    case Some{Assistant.Call{_,_,_,None{}}}: True{}
+    case Some{C.Call{_,_,_,None{}}}: True{}
     case _: False{}

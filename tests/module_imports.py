@@ -1,12 +1,13 @@
 """Regression for Bend's shared-file namespace resolution across sibling packages."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 (ROOT / 'build').mkdir(exist_ok=True)
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+BEND = BEND
 with tempfile.TemporaryDirectory(prefix='module-imports-', dir=ROOT / 'build') as directory:
     tree = Path(directory)
     for subdir in ('a/test', 'a/src', 'b/src'):

@@ -1,5 +1,5 @@
 import Base
-import ../src/api/openai-sse-json.bend as Policy
+import ../src/api/openai-sse.bend as Sse
 import ../../runtime/src/json-parse.bend as Json
 import ../../runtime/src/sse-decoder.bend as SSE
 import ../../runtime/src/schema-value.bend as V
@@ -26,31 +26,31 @@ def showName(value: Maybe<&2, String>) -> String:
     case None{}: "N"
     case Some{value}: "S" ++ H.showText(value)
 
-def showTarget(value: Policy.DiagnosticTarget) -> String:
+def showTarget(value: Sse.DiagnosticTarget) -> String:
   match value:
-    case Policy.ClientLogger{}: "client"
-    case Policy.ConsoleLogger{}: "console"
+    case Sse.ClientLogger{}: "client"
+    case Sse.ConsoleLogger{}: "console"
 
-def matches(step: Policy.Step, expected: List<&2, String>) -> Bool:
+def matches(step: Sse.Step, expected: List<&2, String>) -> Bool:
   match step expected:
-    case Policy.Skip{Policy.DoneMarker{}} "done" <> Nil{}: True{}
-    case Policy.YieldMessage{Policy.JsonMessage{data}} "json" <> payload <> Nil{}: valueMatches(data, payload)
-    case Policy.YieldMessage{Policy.EventMessage{event, data}} "event" <> eventText <> payload <> Nil{}:
+    case Sse.Skip{Sse.DoneMarker{}} "done" <> Nil{}: True{}
+    case Sse.YieldMessage{Sse.JsonMessage{data}} "json" <> payload <> Nil{}: valueMatches(data, payload)
+    case Sse.YieldMessage{Sse.EventMessage{event, data}} "event" <> eventText <> payload <> Nil{}:
       Bool.and(String.eq(showName(event), eventText), valueMatches(data, payload))
-    case Policy.Reject{Policy.ApiErrorPayload{error}} "error" <> payload <> Nil{}: valueMatches(error, payload)
-    case Policy.Reject{Policy.InvalidJson{_, data, raw, target}} "invalid" <> targetText <> dataText <> rawText <> Nil{}:
+    case Sse.Reject{Sse.ApiErrorPayload{error}} "error" <> payload <> Nil{}: valueMatches(error, payload)
+    case Sse.Reject{Sse.InvalidJson{_, data, raw, target}} "invalid" <> targetText <> dataText <> rawText <> Nil{}:
       Bool.and(String.eq(showTarget(target), targetText), Bool.and(String.eq(H.showText(data), dataText), String.eq(String.join(raw, "|"), rawText)))
     case _ _: False{}
 
-def state(value: String) -> Policy.State:
+def state(value: String) -> Sse.State:
   match value:
-    case "1": Policy.DoneMarker{}
-    case _: Policy.Receiving{}
+    case "1": Sse.DoneMarker{}
+    case _: Sse.Receiving{}
 
 def execute(parts: List<&2, String>) -> String:
   match parts:
     case done <> synthesize <> event <> data <> expected <> Nil{}:
-      Bool.pick(String, matches(Policy.step(state(done), String.eq(synthesize, "1"), SSE.ServerSentEvent{name(event), text(data), "diagnostic" <> Nil{}}), String.split(text(expected), '/')), "pass", "FAIL")
+      Bool.pick(String, matches(Sse.step(state(done), String.eq(synthesize, "1"), SSE.ServerSentEvent{name(event), text(data), "diagnostic" <> Nil{}}), String.split(text(expected), '/')), "pass", "FAIL")
     case _: "bad input"
 
 def all(arguments: List<String>) -> IO(Unit):

@@ -50,7 +50,7 @@ for item in [tool(arguments=''),tool('custom_tool_call',input=''),dict(type='mes
 add(dict(type='web_search_call',id='ws'))
 expected=json.loads(subprocess.check_output(['node','tests/responses_stream_content_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
 from responses_stream_literals import item, event_literal, record
-lines=['import Base','import ../packages/ai/test/api/responses-stream-content.bend as Check','import ../packages/ai/src/api/openai-responses-stream-content.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+lines=['import Base','import ../packages/ai/test/api/responses-stream-content.bend as Check','import ../packages/ai/src/api/openai-responses-stream.bend as D','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(c,result) in enumerate(zip(cases,expected,strict=True)):
     lines += [f'def case{i}() -> IO(Unit):','  Check.check('+', '.join([item(c['item']),record(c['properties'],string),seq(map(event_literal,c['events'])),string(result),string(f'Responses content stream {i}')])+')']
 groups=[]

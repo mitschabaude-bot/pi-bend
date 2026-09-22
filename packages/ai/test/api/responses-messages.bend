@@ -1,6 +1,5 @@
 import Base
 import ../../src/api/openai-responses-shared.bend as C
-import ../../src/api/openai-responses-assistant.bend as Assistant
 import ../../src/api/constrained-sampling.bend as Sampling
 import ../../src/types.bend as T
 import ../../src/utils/json.bend as Json
@@ -31,8 +30,8 @@ def assistantJson(content: List<&2,T.AssistantContent<V.Value>>, api: String, pr
 
 def errorMatches(error: C.MessageError, expected: String) -> Bool:
   match error:
-    case C.AssistantConversion{Assistant.InvalidReasoningSignature{_}}: String.eq(expected,"reasoning")
-    case C.AssistantConversion{Assistant.InvalidGrammarInput{error}}: String.eq(Sampling.errorMessage(error),expected)
+    case C.AssistantConversion{C.InvalidReasoningSignature{_}}: String.eq(expected,"reasoning")
+    case C.AssistantConversion{C.InvalidGrammarInput{error}}: String.eq(Sampling.errorMessage(error),expected)
     case C.ToolConversion{error}: String.eq(Sampling.errorMessage(error),expected)
     case _: False{}
 

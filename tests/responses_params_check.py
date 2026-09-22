@@ -20,7 +20,9 @@ for provider,effort,mapped,off in itertools.product(['openai','github-copilot','
     options={'reasoningSummary':None}
     if effort is not None:options['reasoningEffort']=effort
     add(provider=provider,mapping=mapping,options=options)
-for maxTokens,support,temperature,tier in itertools.product([None,-10,-0.0,0,1,15,15.5,16,17,2048,1e100],[None,False,True],[None,0,0.7],[None,'auto','flex','priority','']):
+# The native ServiceTier is upstream's literal union; the empty string is
+# outside that type and cannot be constructed, so it is not a case here.
+for maxTokens,support,temperature,tier in itertools.product([None,-10,-0.0,0,1,15,15.5,16,17,2048,1e100],[None,False,True],[None,0,0.7],[None,'auto','flex','priority']):
     options={}
     for key,value in [('maxTokens',maxTokens),('temperature',temperature),('serviceTier',tier)]:
         if value is not None:options[key]=value

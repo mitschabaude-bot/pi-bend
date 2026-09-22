@@ -1,5 +1,5 @@
 import Base
-import ../src/api/openai-responses-policy.bend as P
+import ../src/api/openai-responses.bend as P
 import ../src/types.bend as T
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/utf8-runner.bend as H

@@ -1,6 +1,7 @@
 """Compare full AgentLoopConfig inheritance and check typed callback boundaries."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import re
 import subprocess
 ROOT=Path(__file__).resolve().parents[1]
@@ -55,7 +56,7 @@ path=BUILD/'loop-config-types.bend'
 path.write_text('\n'.join(lines)+'\n')
 subprocess.run(['sh','scripts/build-pure.sh',str(path),'build/test-loop-config-types'],cwd=ROOT,check=True)
 for threads in ('1','4'): subprocess.run(['build/test-loop-config-types','--threads',threads],cwd=ROOT,check=True,timeout=30)
-bend=os.environ.get('BEND',str(Path.home()/'.bend/bin/bend'))
+bend=BEND
 preamble='\n'.join(lines[:8])+'\n'
 accepted=BUILD/'valid-loop-provider-result.bend'
 accepted.write_text(preamble+f'''def Input() -> Data: T.StreamInput<{stream_params}>

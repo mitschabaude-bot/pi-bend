@@ -1,5 +1,5 @@
 import Base
-import ../../src/api/openai-responses-content.bend as C
+import ../../src/api/openai-responses-shared.bend as C
 import ../../src/api/transform-messages.bend as Transform
 import ../../src/types.bend as T
 import ../../src/utils/json.bend as Json
@@ -12,7 +12,7 @@ def encoded(value: Maybe<&2,String>, expected: String) -> Bool:
     case Some{actual}: U.equal(actual,expected)
     case None{}: False{}
 
-def userJson(value: Maybe<&2,C.UserInput>) -> T.JsonValue:
+def userJson(value: Maybe<&2,List<&2,C.ResponseInputContent>>) -> T.JsonValue:
   match value:
     case None{}: T.JsonNull{}
     case Some{user}: C.userToJson(user)

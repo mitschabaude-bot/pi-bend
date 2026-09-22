@@ -1,7 +1,5 @@
 import Base
-import ../src/api/openai-responses-request.bend as Request
-import ../src/api/openai-responses-params.bend as Params
-import ../src/api/openai-responses-policy.bend as Policy
+import ../src/api/openai-responses.bend as Request
 import ../src/api/constrained-sampling.bend as Sampling
 import ../src/types.bend as T
 import ../../runtime/src/schema-value.bend as V
@@ -12,7 +10,7 @@ import ../../runtime/test/utf8-runner.bend as H
 import ./json-value-data.bend as Data
 import ./openai-responses-policy-runner.bend as P
 
-def model(compat: Maybe<&2, T.OpenAIResponsesCompat>) -> T.Model<Unit>:
+def model(compat: Maybe<&2, T.OpenAIResponsesCompat>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
   T.Model{"target", "Target", T.OpenAIResponsesApi{}, "openai", "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
 
@@ -35,8 +33,8 @@ def context(+mode: U32) -> T.TranscriptContext<V.Value, R.Record<V.Value>, Unit,
   tools = Bool.pick(Maybe<&2, List<&2, T.Tool<V.Value>>>, U32.is_eq(mode, 0), None{}, Some{tool("tool", U32.is_eq(mode, 5)) <> Nil{}})
   T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"initial"}, None{}, tools, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"hello"}, F.fromU32(1)}} <> later(mode)}
 
-def settings() -> Params.RequestOptions<T.JsonValue>:
-  Params.RequestOptions{Some{F.fromU32(1)}, Some{F.fromU32(0)}, Some{T.PresentValue{"priority"}}, Some{T.JsonString{"required"}}, Some{T.High{}}, Some{T.PresentValue{"concise"}}, Some{"session"}, None{}}
+def settings() -> Request.OpenAIResponsesOptions<Unit, Unit, Unit>:
+  Request.fromStreamOptions(Unit, Unit, Unit, T.StreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(0)}, None{}, Some{F.fromU32(1)}, None{}, None{}, Some{"session"}, None{}, None{}}, Request.ResponsesSettings{Some{T.High{}}, Some{T.PresentValue{Request.SummaryConcise{}}}, Some{T.PresentValue{Request.TierPriority{}}}, Some{T.JsonString{"required"}}})
 
 def identity(value: T.JsonValue) -> T.JsonValue: value
 
@@ -53,7 +51,7 @@ def check(actual: V.Value, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO
 
 def run(mode: String, +flags: String, expected: String) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, Request.BuildError, T.JsonValue> <- Request.buildParams(~T.JsonValue, ~identity, ~Unit, ~Unit, ~Unit, model(P.compat(String.split(flags, '.'))), context(H.decimal(mode, 0)), settings(), Policy.getCompat("openai", "https://example.test", P.compat(String.split(flags, '.'))), R.new(String), T.CacheLong{})
+    result : Result<&2, &2, Request.BuildError, T.JsonValue> <- Request.buildParams(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, model(P.compat(String.split(flags, '.'))), context(H.decimal(mode, 0)), settings(), Request.getCompat("openai", "https://example.test", P.compat(String.split(flags, '.'))), R.new(String), T.CacheLong{})
     check(output(result), Parse.parse(H.fromScalars(H.parseNumbers(expected))))
 
 def all(arguments: List<String>) -> IO(Unit):

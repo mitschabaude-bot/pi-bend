@@ -34,8 +34,4 @@ python3 tests/agent_fixture.py
 
 Current implementation: native print-mode agent loop with OpenAI Codex OAuth, streaming responses, bounded retries, read/write/exact-edit/bash tools, and persisted sessions that can be resumed with `--session <file>`. Native sessions use a separate `~/.pi-bend` directory while upstream session compatibility is developed. Interactive terminal parity, additional providers, and Bend extensions are still in progress. The initial tool implementations are tested but do not yet match every upstream edge case.
 
-Native [Responses request preparation](docs/openai-responses-preparation.md) now composes credential/cache policy, transcript and tool conversion, headers and payload construction with complete typed provider options. Final transport/session/authentication assembly and the full port remain underway.
-
-Native [OpenAI request headers](docs/openai-request-headers.md) now preserve layered overrides and explicit removals through authentication validation, with typed timeout/header failures and SDK differential coverage.
-
-Native [Responses request attempts](docs/openai-responses-attempt.md) now connect fetch results, HTTP diagnostics and the provider retry interface, using [reusable Bend transport callbacks](docs/http-transport-callbacks.md) to preserve affine ownership. Native transport-error classification and final provider/session/TLS assembly remain unfinished.
+The native [OpenAI Responses provider](docs/openai-responses.md) is now five modules under `packages/ai/src/api` plus `packages/runtime/src/fetch.bend`: request preparation, the native client (headers, URL, API errors, one attempt), SSE dispatch, stream processing and the provider lifecycle with pi's retry policy. It runs end to end over cleartext HTTP against a loopback server and is compared line by line with the pinned upstream wrapper. Native TLS, authentication flows and the remaining providers are unfinished.

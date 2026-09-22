@@ -1,5 +1,5 @@
 import Base
-import ../../src/api/openai-responses-stream-content.bend as C
+import ../../src/api/openai-responses-stream.bend as C
 import ../../src/api/constrained-sampling.bend as Sampling
 import ../../src/types.bend as T
 import ../../src/utils/json.bend as Json
@@ -31,21 +31,21 @@ def signals(values: List<&2, C.Signal>) -> List<&2, V.Value>:
     case C.Ended{value} <> rest: signal("ended", value, None{}) <> signals(rest)
 
 def result(value: C.Block, emitted: List<&2, C.Signal>, error: Maybe<&2, String>) -> V.Value:
-  V.ObjectValue{optional(R.Record{R.Property{"content", block(C.content(value))} <> R.Property{"signals", V.ArrayValue{signals(emitted)}} <> Nil{}}, "error", error)}
+  V.ObjectValue{optional(R.Record{R.Property{"content", block(C.blockContent(value))} <> R.Property{"signals", V.ArrayValue{signals(emitted)}} <> Nil{}}, "error", error)}
 
-def advance(old: C.Block, previous: List<&2, C.Signal>, next: Result<&2, &2, Sampling.Error, C.Update>) -> Result<&2, &2, V.Value, C.Update>:
+def advance(old: C.Block, previous: List<&2, C.Signal>, next: Result<&2, &2, Sampling.Error, C.BlockUpdate>) -> Result<&2, &2, V.Value, C.BlockUpdate>:
   match next:
     case Fail{error}: Fail{result(old, previous, Some{Sampling.errorMessage(error)})}
-    case Done{C.Update{value, emitted, finished}}: Done{C.Update{value, List.append(&2, C.Signal, previous, emitted), finished}}
+    case Done{C.BlockUpdate{value, emitted, finished}}: Done{C.BlockUpdate{value, List.append(&2, C.Signal, previous, emitted), finished}}
 
-def run(inputs: List<&2, C.Input>, current: Result<&2, &2, V.Value, C.Update>) -> V.Value:
+def run(inputs: List<&2, C.Input>, current: Result<&2, &2, V.Value, C.BlockUpdate>) -> V.Value:
   match inputs current:
     case _ Fail{value}: value
-    case Nil{} Done{C.Update{value, emitted, _}}: result(value, emitted, None{})
-    case _ Done{C.Update{value, emitted, True{}}}: result(value, emitted, None{})
-    case head <> tail Done{C.Update{+value, +emitted, _}}: run(tail, advance(value, emitted, C.step(value, head)))
+    case Nil{} Done{C.BlockUpdate{value, emitted, _}}: result(value, emitted, None{})
+    case _ Done{C.BlockUpdate{value, emitted, True{}}}: result(value, emitted, None{})
+    case head <> tail Done{C.BlockUpdate{+value, +emitted, _}}: run(tail, advance(value, emitted, C.blockStep(value, head)))
 
-def started(inputs: List<&2, C.Input>, value: Maybe<&2, C.Update>) -> V.Value:
+def started(inputs: List<&2, C.Input>, value: Maybe<&2, C.BlockUpdate>) -> V.Value:
   match value:
     case None{}: V.Null{}
     case Some{update}: run(inputs, Done{update})
@@ -56,4 +56,4 @@ def encoded(value: Maybe<&2, String>, expected: String) -> Bool:
     case Some{text}: Utf16.equal(text, expected)
 
 def check(item: C.OutputItem, properties: R.Record<String>, inputs: List<&2, C.Input>, expected: String, label: String) -> IO(Unit):
-  A.assertion(encoded(Json.stringify(SchemaJson.toJson(started(inputs, C.start(item, properties)))), expected), label)
+  A.assertion(encoded(Json.stringify(SchemaJson.toJson(started(inputs, C.startBlock(item, properties)))), expected), label)

@@ -1,14 +1,14 @@
 import Base
-import ../src/api/openai-responses-auth.bend as Auth
+import ../src/api/openai-responses.bend as Auth
 import ../src/types.bend as T
 import ../../runtime/test/utf8-runner.bend as Text
 import ./provider-headers.bend as Input
 import ./request-headers.bend as Request
 
-def result(value: Result<&2, &2, Auth.CredentialError, String>) -> String:
+def result(value: Result<&2, &2, String, String>) -> String:
   match value:
     case Done{key}: "ok:" ++ Text.showText(key)
-    case Fail{error}: "error:" ++ Text.showText(Auth.errorMessage(error))
+    case Fail{provider}: "error:" ++ Text.showText("No API key for provider: " ++ provider)
 
 def optionalHeaders(text: String) -> Maybe<&2, T.ProviderHeaders()>:
   match text:

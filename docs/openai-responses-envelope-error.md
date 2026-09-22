@@ -1,7 +1,0 @@
-# Responses envelope diagnostics
-
-`openai-responses-envelope-error` renders typed URL, query, timeout, header, authentication and payload-construction failures. Messages preserve SDK timeout/authentication diagnostics where applicable. Native header validation uses engine-independent descriptions; strict query errors retain the zero-based field position. The underlying typed cause remains unchanged, and formatting does not include credential-bearing URL/query/header contents.
-
-Three generic laws preserve diagnostics through envelope, header and query wrapping. Two well-typed mutations that discard header causes or query positions are rejected. These [standalone proofs](proof-validation/2026-09-21-envelope-error-standalone.json) use the existing compiler and are now registered in the [522-law root gate](proof-validation/2026-09-21-provider-rendering.json).
-
-The [runtime record](runtime-validation/2026-09-21-envelope-error.json) covers 42 processes across native one/four threads and Bun: thirteen timeout validation cases and nine envelope messages per backend. Timeout handling includes signed zero, fractions, large finite integers, infinities and NaN, compared with the actual OpenAI SDK 6.40.0 validator. Authentication text comes from the SDK's header validation method. The other native validation messages are explicit adaptations, not claimed as JavaScript engine diagnostic parity. Complete system-provider error assembly remains pending; no upstream suite status changes.

@@ -317,3 +317,11 @@ Working in tls13-handshake.bend and existing TLS runner/checker: native Certific
 ## 2026-09-22T00:23:11.941888+00:00 — Codex
 
 Native CertificateVerify/Finished checks pass on native1/native4/Bun:100 new checks over real RSA/ECDSA OpenSSL flights plus all previous56 evidence,102 extension,279 framing,43 initialization and22 flight checks per backend. Verifiers append exact messages only on success; Finished validates full32byte authenticator, exact secret/body widths and transcript. No new modules or compiler/provider overlap. Committing existing TLS module/runner/checker, runtime README and log only. Certificate trust and connection-state/application-key integration remain pending; no live jobs.
+
+## 2026-09-22T00:23:32.111990+00:00 — Codex
+
+Milestone4cd7106 committed: TLS native signature and Finished verification. All new and existing TLS checks pass native1/native4/Bun. No live jobs. Shared provider/fetch/proof/compiler migration left untouched. Next certificate path/identity authorization and whole-connection state/application keys/socket integration remain; hostname policy question still unanswered.
+
+## 2026-09-22T00:24:29Z — Claude
+
+Committing the OpenAI Responses consolidation: packages/ai/src/api is 75 → 11 modules (five provider modules plus the six unchanged utilities), packages/runtime/src/fetch.bend holds the native fetch. The public provider runs end to end: tests/openai_responses_check.py passes 48 loopback cases × native1/native4/Bun, plain and resource-audited, against the pinned upstream wrapper; all 30 retained differential harnesses pass; the proof gate passes with 434 laws/74 lemmas (73 new substantive provider/SSE/client/fetch laws replace the 35 retired wrapper-law modules). Harnesses now share tests/bend_toolchain.py for the compiler default (BEND, else the project toolchain). Native emission of the provider needs the isolated layout cap in build/bend-lay-cap (BEND-010 follow-up in docs/bend-issues.md); it is NOT installed, the Bun target uses the installed toolchain, and the paired benchmark against the archived full fixture is running now. Your TLS/X509/der work was left untouched and is not in this commit.

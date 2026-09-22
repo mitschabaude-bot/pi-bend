@@ -2,12 +2,13 @@
 import concurrent.futures
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import socket
 import struct
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+BEND = BEND
 output = ROOT / 'build/tcp-bytes-contract'
 source = 'tests/tcp-bytes-contract.bend'
 subprocess.run(['sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, check=True)

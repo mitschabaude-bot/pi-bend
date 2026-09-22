@@ -1,5 +1,6 @@
 """Native invocation-scope concurrency and affine-completion ownership checks."""
 from pathlib import Path
+from bend_toolchain import BEND
 import os
 import json
 import subprocess
@@ -27,7 +28,7 @@ def twice(+ticket: U.Ticket<String>) -> IO(Unit):
 def main() -> IO(Unit):
   IO.print("invalid program must not compile")
 ''')
-bend = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+bend = BEND
 result = subprocess.run([bend, str(source), '-o', str(BUILD / 'invalid-update-ticket-copy.c')], cwd=ROOT, text=True, capture_output=True)
 output = result.stdout + result.stderr
 if result.returncode == 0 or 'twice' not in output or not any(word in output.lower() for word in ('duplic', 'data', 'copy', 'affine')):

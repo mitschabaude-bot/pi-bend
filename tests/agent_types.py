@@ -1,6 +1,7 @@
 """Check canonical agent declarations against pinned upstream field contracts."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import re
 import subprocess
 
@@ -41,7 +42,7 @@ assert re.search(r'def PrepareNextTurnContext\([^\n]*\) -> Data:\n  ShouldStopAf
 
 # Distinct source payload fields must stay independently typed, rather than
 # becoming generic JSON or an untyped string envelope.
-bend = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+bend = BEND
 for index, expression in enumerate(('T.ToolExecutionUpdate{"id", "tool", "raw", True{}}', 'T.ToolExecutionEnd{"id", "tool", 42, False{}}')):
     path = BUILD / f'invalid-agent-event-{index}.bend'
     path.write_text('import Base\nimport ../packages/agent/src/types.bend as T\nimport ../packages/agent/test/message-events.bend as H\ndef main() -> IO(Unit):\n  H.check(' + expression + ', "invalid")\n')

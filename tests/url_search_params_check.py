@@ -4,6 +4,7 @@ import os
 import hashlib
 import re
 from pathlib import Path
+from bend_toolchain import BEND
 import random
 import subprocess
 import sys
@@ -132,7 +133,7 @@ for row in rows:
 if '--no-build' not in sys.argv:
     subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-search-params.bend', 'build/url-search-params'], cwd=ROOT, check=True)
 if '--no-build' not in sys.argv:
-    subprocess.run([os.environ.get('BEND', str(Path.home() / '.bend/bin/bend')), 'packages/runtime/test/url-search-params.bend', '-o', 'build/url-search-params.js'], cwd=ROOT, check=True)
+    subprocess.run([BEND, 'packages/runtime/test/url-search-params.bend', '-o', 'build/url-search-params.js'], cwd=ROOT, check=True)
 differences = []
 for label, command in [('native 1', ['build/url-search-params', '--threads', '1']), ('native 4', ['build/url-search-params', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/url-search-params.js'])]:
     for start in range(0, len(arguments), 16):

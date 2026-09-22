@@ -39,7 +39,7 @@ def block(b):
     if b['type']=='text':return 'T.AssistantText{T.TextContent{'+string(b['text'])+', '+optional(b.get('textSignature'))+'}}'
     if b['type']=='thinking':return 'T.AssistantThinking{T.ThinkingContent{"private", '+optional(b.get('thinkingSignature'))+', None{}}}'
     return 'T.AssistantToolCall{T.ToolCall{'+', '.join([string(b['id']),string(b['name']),value(b['arguments']),'None{}',optional(b.get('namespace'))])+'}}'
-lines=['import Base','import ../packages/ai/test/api/responses-assistant.bend as Check','import ../packages/ai/src/api/openai-responses-assistant.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+lines=['import Base','import ../packages/ai/test/api/responses-assistant.bend as Check','import ../packages/ai/src/api/openai-responses-shared.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(c,r) in enumerate(zip(cases,expected,strict=True)):
     # Null has no JS property access, so upstream throws a TypeError before
     # grammar validation. Native JSON reports the same rejection through the

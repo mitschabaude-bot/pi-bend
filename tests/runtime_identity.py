@@ -1,12 +1,13 @@
 """Check the channel-identity compiler primitive and its pure Bend wrappers."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 BUILD.mkdir(exist_ok=True)
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+BEND = BEND
 SOURCE = 'packages/runtime/test/identity.bend'
 
 subprocess.run(['sh', 'scripts/build-pure.sh', SOURCE, 'build/test-identity'], cwd=ROOT, check=True)

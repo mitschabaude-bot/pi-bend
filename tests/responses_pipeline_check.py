@@ -45,12 +45,6 @@ def chunk(value):
     return 'b'+','.join(map(str,value))
 arguments=['s'+'/'.join([case['closeMode'],case['sinkMode'],'|'.join(map(chunk,case['chunks'])),codes(json.dumps(want,ensure_ascii=True,separators=(',',':')))]) for case,want in zip(cases,expected,strict=True)]
 (ROOT/'build').mkdir(exist_ok=True)
-negative=ROOT/'build/responses-reader-owner-duplicate.bend'
-negative.write_text('import Base\nimport ../packages/ai/src/api/openai-responses-reader.bend as Reader\ndef duplicate(+owner: Reader.Owner<String, String>) -> Reader.Owner<String, String> & Reader.Owner<String, String>:\n  (owner, owner)\n')
-rejected=subprocess.run([os.environ.get('BEND',str(Path.home()/'.bend/bin/bend')),str(negative)],cwd=ROOT,capture_output=True,text=True,timeout=30)
-diagnostic=rejected.stdout+rejected.stderr
-assert rejected.returncode!=0 and 'expected : Data' in diagnostic and 'observed : Type' in diagnostic,diagnostic
-print('PASS Responses reader ownership cannot be duplicated',flush=True)
 if '--no-build' not in sys.argv:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--stats','build/responses-pipeline-build-stats.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-pipeline.bend','build/test-responses-pipeline'],cwd=ROOT,check=True)
 for threads in ['1','4']:

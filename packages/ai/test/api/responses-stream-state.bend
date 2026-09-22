@@ -1,5 +1,5 @@
 import Base
-import ../../src/api/openai-responses-stream-state.bend as S
+import ../../src/api/openai-responses-stream.bend as S
 import ../../src/api/constrained-sampling.bend as Sampling
 import ../../src/types.bend as T
 import ../../src/utils/json.bend as Json
@@ -57,16 +57,16 @@ def withError(fields: R.Record<V.Value>, error: Maybe<&2, Sampling.Error>) -> V.
 
 def result(update: S.Update<Unit>) -> V.Value:
   match update:
-    case S.Update{state, emitted, error}: withError(R.Record{R.Property{"output", snapshot(S.output(Unit, state))} <> R.Property{"events", V.ArrayValue{events(emitted)}} <> Nil{}}, error)
+    case S.Update{state, emitted, error}: withError(R.Record{R.Property{"output", snapshot(S.stateOutput(Unit, state))} <> R.Property{"events", V.ArrayValue{events(emitted)}} <> Nil{}}, error)
 
 
 def run(inputs: List<&2, S.ContentEvent>, current: S.Update<Unit>) -> V.Value:
   match inputs current:
     case _ S.Update{state, emitted, Some{error}}: result(S.Update{state, emitted, Some{error}})
     case Nil{} update: result(update)
-    case head <> tail S.Update{state, previous, None{}}: run(tail, S.prependEvents(Unit, previous, S.step(Unit, state, head)))
+    case head <> tail S.Update{state, previous, None{}}: run(tail, S.prependEvents(Unit, previous, S.contentStep(Unit, state, head)))
 
 def check(initial: List<&2, T.AssistantContent<V.Value>>, properties: R.Record<String>, inputs: List<&2, S.ContentEvent>, expected: String, label: String) -> IO(Unit):
   state = S.create(Unit, Fixture.assistantJson(initial, "openai-responses", "openai", "test", T.ToolUse{}), properties)
-  actual = run(inputs, S.unchanged(Unit, state))
+  actual = run(inputs, S.unchangedState(Unit, state))
   A.assertion(Content.encoded(Json.stringify(SchemaJson.toJson(actual)), expected), label)

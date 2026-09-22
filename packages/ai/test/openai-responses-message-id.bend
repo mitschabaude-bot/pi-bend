@@ -1,6 +1,5 @@
 import Base
 import ../src/api/openai-responses-shared.bend as C
-import ../src/api/openai-responses-assistant.bend as Assistant
 import ../src/types.bend as T
 import ./api/responses-named.bend as Fixture
 import ../../runtime/test/schema.bend as Assert
@@ -8,7 +7,7 @@ import ../../runtime/test/schema.bend as Assert
 def ids(items: List<&2,C.ResponseInputItem>) -> List<&2,String>:
   match items:
     case Nil{}: Nil{}
-    case C.AssistantInput{Assistant.OutputMessage{id,_,_}} <> rest: id <> ids(rest)
+    case C.AssistantInput{C.OutputMessage{id,_,_}} <> rest: id <> ids(rest)
     case _ <> rest: ids(rest)
 
 def exact(values: List<&2,String>) -> Bool:

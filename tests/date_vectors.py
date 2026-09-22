@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import random
 import shutil
 import subprocess
@@ -9,7 +10,7 @@ import time
 ROOT=Path(__file__).resolve().parents[1]
 BUILD=ROOT/'build'
 BUILD.mkdir(exist_ok=True)
-BEND=os.environ.get('BEND',str(Path.home()/'.bend/bin/bend'))
+BEND=BEND
 rng=random.Random(0xDA7E)
 values=[0,1,-1,999,-999,1000,-1000,2**32-1,2**32,-2**32,2**53-1,2**53,2**53+1,-2**53-1,2**63-1,-2**63,8640000000000000,-8640000000000000]
 values += [rng.randrange(-2**63,2**63) for _ in range(128)]

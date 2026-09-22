@@ -1,5 +1,5 @@
 import Base
-import ../../src/api/openai-responses-ids.bend as I
+import ../../src/api/openai-responses-shared.bend as I
 import ../../src/api/transform-messages.bend as Transform
 import ../../src/types.bend as T
 import ../../../runtime/src/f64.bend as F

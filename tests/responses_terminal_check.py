@@ -49,23 +49,23 @@ def optional(v,enc=string):return 'None{}' if v is None else 'Some{'+enc(v)+'}'
 def usage(u):
     if u is None:return 'None{}'
     read=u.get('input_tokens_details') or {};write=u.get('output_tokens_details') or {}
-    return 'Some{Terminal.ResponseUsage{'+', '.join(optional(v,number) for v in [u.get('input_tokens'),u.get('output_tokens'),read.get('cached_tokens'),read.get('cache_write_tokens'),write.get('reasoning_tokens'),u.get('total_tokens')])+'}}'
-def response(r):return 'Terminal.Response{'+', '.join([optional(r.get('id')),optional(r.get('status')),optional((r.get('incomplete_details') or {}).get('reason')),seq(item(x) for x in r.get('output',[])),usage(r.get('usage')),optional(r.get('service_tier'))])+'}'
+    return 'Some{D.ResponseUsage{'+', '.join(optional(v,number) for v in [u.get('input_tokens'),u.get('output_tokens'),read.get('cached_tokens'),read.get('cache_write_tokens'),write.get('reasoning_tokens'),u.get('total_tokens')])+'}}'
+def response(r):return 'D.Response{'+', '.join([optional(r.get('id')),optional(r.get('status')),optional((r.get('incomplete_details') or {}).get('reason')),seq(item(x) for x in r.get('output',[])),usage(r.get('usage')),optional(r.get('service_tier'))])+'}'
 def action(e):
     kind=e['type']
     if kind=='response.created':return 'Check.Created{'+string(e['response']['id'])+'}'
     if kind in ['response.completed','response.incomplete']:return 'Check.Completed{'+response(e['response'])+'}'
     if kind=='response.failed':
-        r=e['response'];err=r.get('error');native_error='None{}' if err is None else 'Some{Terminal.ProviderError{'+optional(err.get('code'))+', '+optional(err.get('message'))+'}}'
+        r=e['response'];err=r.get('error');native_error='None{}' if err is None else 'Some{D.ProviderError{'+optional(err.get('code'))+', '+optional(err.get('message'))+'}}'
         return 'Check.Failed{'+', '.join([optional(r.get('status')),native_error,optional((r.get('incomplete_details') or {}).get('reason'))])+'}'
     if kind=='error':return 'Check.WireError{'+optional(e['code'])+', '+string(e['message'])+'}'
     index=number(e['output_index'])
-    native='S.Added{'+index+', '+item(e['item'])+'}' if kind=='response.output_item.added' else 'S.Changed{'+index+', '+event_literal(e)+'}'
+    native='D.Added{'+index+', '+item(e['item'])+'}' if kind=='response.output_item.added' else 'D.Changed{'+index+', '+event_literal(e)+'}'
     return 'Check.ContentEvent{'+native+'}'
 def cost(c):
     tiers=c.get('tiers');encoded='None{}' if tiers is None else 'Some{'+seq('T.ModelCostTier{'+', '.join(number(x[k]) for k in ['input','output','cacheRead','cacheWrite','inputTokensAbove'])+'}' for x in tiers)+'}'
     return 'T.ModelCost{'+', '.join([*(number(c[k]) for k in ['input','output','cacheRead','cacheWrite']),encoded])+'}'
-imports=['import Base','import ../packages/ai/test/api/responses-terminal.bend as Check','import ../packages/ai/src/api/openai-responses-terminal.bend as Terminal','import ../packages/ai/src/api/openai-responses-stream-state.bend as S','import ../packages/ai/src/api/openai-responses-stream-content.bend as C','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+imports=['import Base','import ../packages/ai/test/api/responses-terminal.bend as Check','import ../packages/ai/src/api/openai-responses-stream.bend as D','import ../packages/ai/src/types.bend as T','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 # Keep the compiler's specialization working set bounded. Every case still
 # runs natively on both thread counts; batching only changes build grouping.
 for start in range(0,len(cases),16):

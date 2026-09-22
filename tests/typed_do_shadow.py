@@ -2,12 +2,13 @@
 import argparse
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import shutil
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-BEND = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+BEND = BEND
 (ROOT / 'build').mkdir(exist_ok=True)
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--expect-bug', action='store_true')

@@ -1,7 +1,7 @@
 import Base
 import ../src/types.bend as T
 import ../src/api/github-copilot-headers.bend as Copilot
-import ../src/api/openai-responses-headers.bend as Responses
+import ../src/api/openai-responses.bend as Responses
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F
 import ./request-headers.bend as Output
@@ -58,7 +58,7 @@ def callerHeaders(override: Bool) -> Maybe<&2, T.ProviderHeaders()>:
     case True{}: Some{R.Record{R.Property{"X-Initiator", T.PresentValue{"caller"}} <> R.Property{"Copilot-Vision-Request", T.NullValue{}} <> Nil{}}}
 
 def assembled(provider: String, input: List<&2, Message()>, override: Bool) -> String:
-  String.join(Output.showProperties(R.entries(T.Nullable<String>, Responses.forContext(Unit, Unit, Unit, Unit, "pi/test", provider, modelHeaders(), T.TranscriptContext{input}, T.OpenAISession{}, Some{"session"}, callerHeaders(override)))), "|")
+  String.join(Output.showProperties(R.entries(T.Nullable<String>, Responses.clientHeaders(Unit, Unit, Unit, Unit, "pi/test", provider, modelHeaders(), T.TranscriptContext{input}, T.OpenAISession{}, Some{"session"}, callerHeaders(override)))), "|")
 
 def run(+input: List<&2, Message()>) -> String:
   Copilot.inferCopilotInitiator(Unit, Unit, Unit, Unit, input) ++ "#" ++ showBool(Copilot.hasCopilotVisionInput(Unit, Unit, Unit, Unit, input)) ++ "#" ++ record(R.entries(String, Copilot.buildCopilotDynamicHeaders(Unit, Unit, Unit, Unit, input, False{}))) ++ "#" ++ record(R.entries(String, Copilot.buildCopilotDynamicHeaders(Unit, Unit, Unit, Unit, input, True{}))) ++ "#" ++ assembled("github-copilot", input, False{}) ++ "#" ++ assembled("github-copilot", input, True{}) ++ "#" ++ assembled("openai", input, False{})

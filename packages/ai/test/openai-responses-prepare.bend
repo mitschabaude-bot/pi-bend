@@ -1,8 +1,6 @@
 import Base
 import ../src/types.bend as T
-import ../src/api/openai-responses-prepare.bend as Prepare
-import ../src/api/openai-responses-options.bend as O
-import ../src/api/openai-responses-auth.bend as Auth
+import ../src/api/openai-responses.bend as Prepare
 import ../src/api/constrained-sampling.bend as Sampling
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
@@ -47,17 +45,17 @@ def callerEnvironment(scenario: U32) -> Maybe<&2, T.ProviderEnv()>:
     case 10: None{}
     case _: Some{R.Record{R.Property{"PI_CACHE_RETENTION", "long"} <> Nil{}}}
 
-def preparedTier(scenario: U32) -> Maybe<&2, T.Nullable<O.ServiceTier>>:
+def preparedTier(scenario: U32) -> Maybe<&2, T.Nullable<Prepare.ServiceTier>>:
   match scenario:
     case 11: Some{T.NullValue{}}
-    case 12: Some{T.PresentValue{O.TierAuto{}}}
-    case 13: Some{T.PresentValue{O.TierDefault{}}}
-    case 14: Some{T.PresentValue{O.TierFlex{}}}
-    case 15: Some{T.PresentValue{O.TierScale{}}}
-    case _: Some{T.PresentValue{O.TierPriority{}}}
+    case 12: Some{T.PresentValue{Prepare.TierAuto{}}}
+    case 13: Some{T.PresentValue{Prepare.TierDefault{}}}
+    case 14: Some{T.PresentValue{Prepare.TierFlex{}}}
+    case 15: Some{T.PresentValue{Prepare.TierScale{}}}
+    case _: Some{T.PresentValue{Prepare.TierPriority{}}}
 
-def prepareOptions(+scenario: U32) -> O.OpenAIResponsesOptions<T.JsonValue, T.JsonValue, Unit, Unit, Unit, Unit>:
-  O.fromStreamOptions(T.JsonValue, T.JsonValue, Unit, Unit, Unit, Unit, T.StreamOptions{None{}, None{}, callerKey(scenario), None{}, callerEnvironment(scenario), None{}, None{}, callerHeaders(scenario), None{}, None{}, None{}, Some{F.fromU32(0)}, None{}, Some{F.fromU32(1)}, None{}, callerRetention(scenario), Some{"session"}, None{}, None{}}, O.ResponsesSettings{Some{T.High{}}, Some{T.PresentValue{O.SummaryConcise{}}}, preparedTier(scenario), Some{T.JsonString{"required"}}})
+def prepareOptions(+scenario: U32) -> Prepare.OpenAIResponsesOptions<Unit, Unit, Unit>:
+  Prepare.fromStreamOptions(Unit, Unit, Unit, T.StreamOptions{None{}, None{}, callerKey(scenario), None{}, callerEnvironment(scenario), None{}, None{}, callerHeaders(scenario), None{}, None{}, None{}, Some{F.fromU32(0)}, None{}, Some{F.fromU32(1)}, None{}, callerRetention(scenario), Some{"session"}, None{}, None{}}, Prepare.ResponsesSettings{Some{T.High{}}, Some{T.PresentValue{Prepare.SummaryConcise{}}}, preparedTier(scenario), Some{T.JsonString{"required"}}})
 
 def nullableHeader(value: T.Nullable<String>) -> V.Value:
   match value:
@@ -82,14 +80,14 @@ def stringsValue(values: R.Record<String>) -> V.Value:
   match values:
     case R.Record{entries}: V.ObjectValue{R.Record{stringProperties(entries)}}
 
-def preparationError(cause: Prepare.Error) -> String:
+def preparationError(cause: Prepare.PreparationError) -> String:
   match cause:
-    case Prepare.CredentialFailure{error}: Auth.errorMessage(error)
+    case Prepare.MissingApiKey{provider}: "No API key for provider: " ++ provider
     case Prepare.GrammarFailure{error}: Sampling.errorMessage(error)
     case Prepare.PayloadFailure{_}: "payload conversion failed"
     case Prepare.UnsupportedApi{_}: "unsupported API"
 
-def preparationValue(result: Result<&2, &2, Prepare.Error, Prepare.Prepared>) -> V.Value:
+def preparationValue(result: Result<&2, &2, Prepare.PreparationError, Prepare.Prepared>) -> V.Value:
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{preparationError(cause)}} <> Nil{}}}
     case Done{Prepare.Prepared{apiKey, baseUrl, headers, payload, compat, declarations, retention}}:
@@ -97,7 +95,7 @@ def preparationValue(result: Result<&2, &2, Prepare.Error, Prepare.Prepared>) ->
 
 def prepareCase(mode: String, flags: String, scenario: String, provider: String, expected: String) -> IO(Unit):
   do IO<Unit>:
-    actual : Result<&2, &2, Prepare.Error, Prepare.Prepared> <- Prepare.prepare(~T.JsonValue, ~Fixture.identity, ~Unit, ~Unit, ~Unit, ~Unit, ~Unit, ~Unit, prepareModel(provider, P.compat(String.split(flags, '.'))), Fixture.context(H.decimal(mode, 0)), prepareOptions(H.decimal(scenario, 0)), "test-agent")
+    actual : Result<&2, &2, Prepare.PreparationError, Prepare.Prepared> <- Prepare.prepare(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, prepareModel(provider, P.compat(String.split(flags, '.'))), Fixture.context(H.decimal(mode, 0)), prepareOptions(H.decimal(scenario, 0)), "test-agent")
     Fixture.check(preparationValue(actual), Parse.parse(H.fromScalars(H.parseNumbers(expected))))
 
 def prepareAll(arguments: List<String>) -> IO(Unit):

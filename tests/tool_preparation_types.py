@@ -1,6 +1,7 @@
 """Check internal preparation contracts against pinned upstream records."""
 import os
 from pathlib import Path
+from bend_toolchain import BEND
 import re
 import subprocess
 
@@ -23,7 +24,7 @@ for threads in ('1', '4'):
 
 # Validation must not erase the distinction between provider arguments and the
 # independently typed argument value passed to the selected tool.
-bend = os.environ.get('BEND', str(Path.home() / '.bend/bin/bend'))
+bend = BEND
 invalid = BUILD / 'invalid-prepared-arguments.bend'
 invalid.write_text('''import Base
 import ../packages/agent/src/agent-loop.bend as Loop

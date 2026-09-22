@@ -1,5 +1,5 @@
 import Base
-import ../src/api/openai-responses-url.bend as Request
+import ../src/api/openai-client.bend as Client
 import ../../runtime/src/url-absolute.bend as Absolute
 import ../../runtime/src/url-form-strict.bend as Strict
 import ../../runtime/src/url-form.bend as Form
@@ -35,10 +35,10 @@ def form(result: Result<&2, &2, Strict.Error, List<&2, Form.Entry>>) -> String:
     case Fail{cause}: failure(cause)
     case Done{tuples}: "+" ++ entries(tuples)
 
-def url(result: Result<&2, &2, Request.Error, URL.URL>) -> String:
+def url(result: Result<&2, &2, Client.URLError, URL.URL>) -> String:
   match result:
-    case Fail{Request.InvalidURL{_}}: "invalid-url"
-    case Fail{Request.InvalidQuery{cause}}: failure(cause)
+    case Fail{Client.InvalidURL{_}}: "invalid-url"
+    case Fail{Client.InvalidQuery{cause}}: failure(cause)
     case Done{value}: "+" ++ Text.showText(Serialize.serialize(value, False{}))
 
 def dispatch(context: Absolute.Context, kind: Char, text: String) -> String:
@@ -46,7 +46,7 @@ def dispatch(context: Absolute.Context, kind: Char, text: String) -> String:
     case 'f': form(Strict.parse(text))
     case 'q': form(Strict.query(text))
     case 'e': Text.showText(Encode.encode(text))
-    case _: url(Request.prepare(context, text))
+    case _: url(Client.responsesURL(context, text))
 
 def run(context: Absolute.Context, arg: String) -> String:
   match arg:
