@@ -29,6 +29,9 @@ type Error is Data:
   IssuerMismatch{}
   NoTrustedPath{}
   PathSearchLimit{}
+  InvalidReferenceIdentity{}
+  MissingSubjectAltName{}
+  IdentityMismatch{}
 
 type PublicKey is Data:
   Rsa{key: RSA.PublicKey}

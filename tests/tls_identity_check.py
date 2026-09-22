@@ -2,7 +2,7 @@
 
 Generated certificates exercise the real DER parser. OpenSSL checks the shared
 DNS/IP subset; CN fallback and partial wildcards are intentionally excluded.
-This is name validation only, not a certificate-chain authorization test.
+Composed authorization also requires a valid path to an explicit trust anchor.
 """
 from datetime import datetime, timedelta, timezone
 from ipaddress import ip_address
@@ -18,6 +18,7 @@ from cryptography.x509.oid import NameOID
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--prefix', default='build/tls-identity')
 parser.add_argument('backends', nargs='*', default=['bun', 'native-1', 'native-4'])
 args = parser.parse_args()
 cases = []
@@ -109,10 +110,45 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-identity-') as temp:
     malformed = x509.UnrecognizedExtension(x509.oid.ExtensionOID.SUBJECT_ALTERNATIVE_NAME, b'\x30\x03\x87\x01\x7f')
     check(certificate(malformed), 'v4', '127.0.0.1', 'certificate')
 
+    # Fixed verification time isolates path/time policy from wall-clock changes.
+    epoch = datetime.fromtimestamp(1700000000, timezone.utc)
+    root_key = ec.generate_private_key(ec.SECP256R1())
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'identity root')])
+    root = (x509.CertificateBuilder().subject_name(root_name).issuer_name(root_name)
+            .public_key(root_key.public_key()).serial_number(2)
+            .not_valid_before(epoch - timedelta(days=2)).not_valid_after(epoch + timedelta(days=2))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True)
+            .sign(root_key, hashes.SHA256()))
+
+    def signed_leaf(expired=False):
+        return (x509.CertificateBuilder().subject_name(subject).issuer_name(root_name)
+                .public_key(key.public_key()).serial_number(3)
+                .not_valid_before(epoch - timedelta(days=2))
+                .not_valid_after(epoch + timedelta(days=-1 if expired else 1))
+                .add_extension(x509.SubjectAlternativeName([x509.DNSName('api.example.com')]), critical=False)
+                .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+                .add_extension(x509.KeyUsage(True, False, False, False, False, False, False, False, False), critical=True)
+                .sign(root_key, hashes.SHA256()))
+
+    def encoded(cert):
+        return ','.join(map(str, cert.public_bytes(serialization.Encoding.DER))) if cert else ''
+
+    issued = signed_leaf()
+    for reference, anchor, target, expected in [
+        ('api.example.com', root, issued, 'ok'),
+        ('other.example.com', root, issued, 'mismatch'),
+        ('api.example.com', None, issued, 'untrusted'),
+        ('api.example.com', leaf, issued, 'untrusted'),
+        ('api.example.com', root, signed_leaf(True), 'expired'),
+        ('api.example.com', root, None, 'certificate'),
+    ]:
+        cases.append((f'trust|{reference}|{encoded(anchor)}|{encoded(target)}', expected))
+
     for backend in args.backends:
-        command = {'bun': ['bun', 'build/tls-identity.js'],
-                   'native-1': ['build/tls-identity', '--threads', '1'],
-                   'native-4': ['build/tls-identity', '--threads', '4']}[backend]
+        command = {'bun': ['bun', args.prefix + '.js'],
+                   'native-1': [args.prefix, '--threads', '1'],
+                   'native-4': [args.prefix, '--threads', '4']}[backend]
         run = subprocess.run(command + [value for value, _ in cases], cwd=ROOT,
                              capture_output=True, text=True, timeout=120)
         assert run.returncode == 0, (backend, run.stderr[-2000:])

@@ -6,6 +6,7 @@ import ./utf8.bend as UTF8
 import ./url.bend as URL
 import ./string.bend as Split
 import ./rsa-sha256.bend as RSA
+import ./u64.bend as W
 
 # Configured certificates are distinct from peer evidence. This layer parses
 # explicit configuration; certificate policy and path validity are checked at
@@ -57,12 +58,6 @@ def load(path: String, byteLimit: Nat) -> IO(Result<&2,&2,Error,List<&2,X509.Cer
 # Explicit SAN-only HTTPS identity policy. It does not select a platform policy
 # or validate the certificate chain. Reference DNS names must already be ASCII
 # A-labels from URL normalization; an IP reference matches only an IP SAN.
-type IdentityError is Data:
-  InvalidReference{}
-  InvalidIdentityCertificate{cause: X509.Error}
-  MissingSubjectAltName{}
-  IdentityMismatch{}
-
 def asciiLower(text: String) -> String:
   match text:
     case SNil{}: ""
@@ -147,23 +142,33 @@ def validReference(host: URL.Host) -> Bool:
     case URL.IPv6{_}: True{}
     case _: False{}
 
-def identityNames(host: URL.Host, result: Result<&2, &2, X509.Error, List<&2, X509.GeneralName>>) -> Result<&2, &2, IdentityError, Unit>:
+def identityNames(host: URL.Host, result: Result<&2, &2, X509.Error, List<&2, X509.GeneralName>>) -> Result<&2, &2, X509.Error, Unit>:
   match result:
-    case Fail{cause}: Fail{InvalidIdentityCertificate{cause}}
-    case Done{names}: Bool.pick(Result<&2, &2, IdentityError, Unit>, matchNames(names, host), Done{Unit{}}, Fail{IdentityMismatch{}})
+    case Fail{cause}: Fail{cause}
+    case Done{names}: Bool.pick(Result<&2, &2, X509.Error, Unit>, matchNames(names, host), Done{Unit{}}, Fail{X509.IdentityMismatch{}})
 
-def identityExtension(values: List<&2, X509.Extension>, +host: URL.Host) -> Result<&2, &2, IdentityError, Unit>:
+def identityExtension(values: List<&2, X509.Extension>, +host: URL.Host) -> Result<&2, &2, X509.Error, Unit>:
   match values:
-    case Nil{}: Fail{MissingSubjectAltName{}}
+    case Nil{}: Fail{X509.MissingSubjectAltName{}}
     case X509.Extension{85 <> 29 <> 17 <> Nil{}, critical, bytes} <> _:
       identityNames(host, X509.subjectAltNames(X509.Extension{85 <> 29 <> 17 <> Nil{}, critical, bytes}))
     case _ <> rest: identityExtension(rest, host)
 
-def identityExtensions(valid: Bool, host: URL.Host, result: Result<&2, &2, X509.Error, List<&2, X509.Extension>>) -> Result<&2, &2, IdentityError, Unit>:
+def identityExtensions(valid: Bool, host: URL.Host, result: Result<&2, &2, X509.Error, List<&2, X509.Extension>>) -> Result<&2, &2, X509.Error, Unit>:
   match valid result:
-    case False{} _: Fail{InvalidReference{}}
-    case True{} Fail{cause}: Fail{InvalidIdentityCertificate{cause}}
+    case False{} _: Fail{X509.InvalidReferenceIdentity{}}
+    case True{} Fail{cause}: Fail{cause}
     case True{} Done{values}: identityExtension(values, host)
 
-def checkSAN(+host: URL.Host, leaf: X509.Certificate) -> Result<&2, &2, IdentityError, Unit>:
+def checkSAN(+host: URL.Host, leaf: X509.Certificate) -> Result<&2, &2, X509.Error, Unit>:
   identityExtensions(validReference(host), host, X509.extensions(leaf))
+
+# Explicit SAN-only authorization with bounded path search. The first peer
+# certificate is the leaf; the rest are evidence, never implicit trust anchors.
+# now is Unix epoch milliseconds, matching X509.verifyChain.
+def verifySAN(steps: Nat, now: W.U64, host: URL.Host, chain: List<&2, X509.Certificate>, anchors: List<&2, X509.Certificate>) -> Result<&2, &2, X509.Error, X509.PublicKey>:
+  match chain:
+    case Nil{}: Fail{X509.InvalidCertificate{}}
+    case +leaf <> peers:
+      Result.bind(&2, &2, X509.Error, Unit, X509.PublicKey, checkSAN(host, leaf), unused =>
+        X509.verifyChain(steps, now, leaf, peers, anchors))

@@ -30,6 +30,9 @@ def error(cause: X509.Error) -> String:
     case X509.IssuerMismatch{}: "issuer"
     case X509.NoTrustedPath{}: "untrusted"
     case X509.PathSearchLimit{}: "search-limit"
+    case X509.InvalidReferenceIdentity{}: "reference"
+    case X509.MissingSubjectAltName{}: "missing-san"
+    case X509.IdentityMismatch{}: "identity"
 
 def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
   match result:
