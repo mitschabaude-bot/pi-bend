@@ -5,6 +5,7 @@ import ./native-openai.bend as Native
 import ../packages/coding-agent/src/core/tools/write.bend as Write
 import ../packages/coding-agent/src/core/tools/edit.bend as Edit
 import ../packages/coding-agent/src/core/tools/read.bend as Read
+import ../packages/coding-agent/src/core/tools/bash.bend as Bash
 import ../packages/coding-agent/src/core/tools/file-mutation-queue.bend as Queue
 import ../packages/coding-agent/src/utils/paths.bend as Paths
 import ../packages/agent/src/types.bend as Agent
@@ -21,6 +22,35 @@ type EditExecution is Data:
 
 type ReadExecution is Data:
   ReadExecution{callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>, Read.ToolResult()>, counter: Ref.Ref<U32>}
+
+type BashExecution is Data:
+  BashExecution{callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>,Bash.ToolResult()>, counter: Ref.Ref<U32>}
+
+# Details erasure is confined to this heterogeneous integration harness.
+# Forward real streaming updates into the canonical loop before final results.
+def bashContent(value: Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>) -> Agent.AgentToolResult<Unit>:
+  match value:
+    case Agent.AgentToolResult{content,_,mutation,refresh}: Agent.AgentToolResult{content,Unit{},mutation,refresh}
+
+def bashUpdate(callback: Maybe<&2,Agent.AgentToolUpdateCallback(Unit)>, value: Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: C.call(Agent.AgentToolResult<Unit>,Unit,callback,bashContent(value))
+
+def bashResult(value: Bash.ToolResult()) -> Runner.ToolOutput():
+  match value:
+    case Fail{error}: Fail{Bash.errorMessage(error)}
+    case Done{result}: Done{bashContent(result)}
+
+def invokeBash(environment: BashExecution, input: Runner.ToolInput()) -> IO(Runner.ToolOutput()):
+  match environment input:
+    case BashExecution{callback,counter} Agent.ToolExecutionInput{id,params,signal,update}:
+      do IO<Runner.ToolOutput()>:
+        Ref.modify(U32,Unit,counter,value => ((value + 1 : U32),Unit{}))
+        +bridge : Agent.AgentToolUpdateCallback(Maybe<&2,Bash.BashToolDetails>) <- C.create(~Maybe<&2,Agent.AgentToolUpdateCallback(Unit)>,~Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>,~Unit,~bashUpdate,update)
+        result : Bash.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>,Bash.ToolResult(),callback,Agent.ToolExecutionInput{id,params,signal,Some{bridge}})
+        C.dispose(Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>,Unit,bridge)
+        return bashResult(result)
 
 def readResult(value: Read.ToolResult()) -> Runner.ToolOutput():
   match value:
@@ -68,10 +98,12 @@ def prepareEdit(callback: C.Callback<V.Value, Edit.ResultOf(V.Value)>, input: V.
     result : Edit.ResultOf(V.Value) <- C.call(V.Value, Edit.ResultOf(V.Value), callback, input)
     return prepared(result)
 
-def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, write: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>, edit: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edit.Error>, read: Read.ToolOwner & Agent.AgentTool<Maybe<&2,Read.ReadToolDetails>,Read.Error>) -> IO(Runner.Outcome()):
-  match write edit read:
-    case Tuple{writeOwner, Agent.AgentTool{wn, wd, wp, ws, wl, None{}, wc, wr, wm}} Tuple{editOwner, Agent.AgentTool{en, ed, ep, es, el, Some{prepare}, ec, er, em}} Tuple{readOwner,Agent.AgentTool{rn,rd,rp,rs,rl,None{},rc,rr,rm}}:
+def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, write: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>, edit: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edit.Error>, read: Read.ToolOwner & Agent.AgentTool<Maybe<&2,Read.ReadToolDetails>,Read.Error>, bash: Bash.ToolOwner & Agent.AgentTool<Maybe<&2,Bash.BashToolDetails>,Bash.Error>) -> IO(Runner.Outcome()):
+  match write edit read bash:
+    case Tuple{writeOwner, Agent.AgentTool{wn, wd, wp, ws, wl, None{}, wc, wr, wm}} Tuple{editOwner, Agent.AgentTool{en, ed, ep, es, el, Some{prepare}, ec, er, em}} Tuple{readOwner,Agent.AgentTool{rn,rd,rp,rs,rl,None{},rc,rr,rm}} Tuple{bashOwner,Agent.AgentTool{bn,bd,bp,bs,bl,None{},bc,br,bm}}:
       do IO<Runner.Outcome()>:
+        +bashes : Ref.Ref<U32> <- Ref.new(U32,0)
+        +bashBridge : C.Callback<Runner.ToolInput(),Runner.ToolOutput()> <- C.create(~BashExecution,~Runner.ToolInput(),~Runner.ToolOutput(),~invokeBash,BashExecution{bc,bashes})
         +reads : Ref.Ref<U32> <- Ref.new(U32,0)
         +readBridge : C.Callback<Runner.ToolInput(),Runner.ToolOutput()> <- C.create(~ReadExecution,~Runner.ToolInput(),~Runner.ToolOutput(),~invokeRead,ReadExecution{rc,reads})
         +writes : Ref.Ref<U32> <- Ref.new(U32, 0)
@@ -79,8 +111,11 @@ def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
         +writeBridge : C.Callback<Runner.ToolInput(), Runner.ToolOutput()> <- C.create(~Writer.Execution, ~Runner.ToolInput(), ~Runner.ToolOutput(), ~Writer.invoke, Writer.Execution{wc, writes})
         +editBridge : C.Callback<Runner.ToolInput(), Runner.ToolOutput()> <- C.create(~EditExecution, ~Runner.ToolInput(), ~Runner.ToolOutput(), ~invokeEdit, EditExecution{ec, edits})
         +prepareBridge : C.Callback<V.Value, Result<&2, &2, String, V.Value>> <- C.create(~C.Callback<V.Value, Edit.ResultOf(V.Value)>, ~V.Value, ~Result<&2, &2, String, V.Value>, ~prepareEdit, prepare)
-        tools : List<&2, Agent.AgentTool<Unit, String>> = Agent.AgentTool{wn, wd, wp, ws, wl, None{}, writeBridge, wr, wm} <> Agent.AgentTool{en, ed, ep, es, el, Some{prepareBridge}, editBridge, er, em} <> Agent.AgentTool{rn,rd,rp,rs,rl,None{},readBridge,rr,rm} <> Nil{}
+        tools : List<&2, Agent.AgentTool<Unit, String>> = Agent.AgentTool{wn, wd, wp, ws, wl, None{}, writeBridge, wr, wm} <> Agent.AgentTool{en, ed, ep, es, el, Some{prepareBridge}, editBridge, er, em} <> Agent.AgentTool{rn,rd,rp,rs,rl,None{},readBridge,rr,rm} <> Agent.AgentTool{bn,bd,bp,bs,bl,None{},bashBridge,br,bm} <> Nil{}
         result : Runner.Outcome() <- Runner.runTools(bundle, name, base, prompt, tools, 4096)
+        C.dispose(Runner.ToolInput(),Runner.ToolOutput(),bashBridge)
+        Bash.disposeTool(bashOwner)
+        bashCount : U32 <- Ref.dispose(U32,bashes)
         C.dispose(Runner.ToolInput(),Runner.ToolOutput(),readBridge)
         Read.disposeTool(readOwner)
         readCount : U32 <- Ref.dispose(U32,reads)
@@ -91,9 +126,9 @@ def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
         Edit.disposeTool(editOwner)
         writeCount : U32 <- Ref.dispose(U32, writes)
         editCount : U32 <- Ref.dispose(U32, edits)
-        IO.print("executions write=" ++ U32.show(writeCount) ++ " edit=" ++ U32.show(editCount) ++ " read=" ++ U32.show(readCount))
+        IO.print("executions write=" ++ U32.show(writeCount) ++ " edit=" ++ U32.show(editCount) ++ " read=" ++ U32.show(readCount) ++ " bash=" ++ U32.show(bashCount))
         return result
-    case _ _ _: IO.die(Runner.Outcome(), 1, "unexpected native tool metadata")
+    case _ _ _ _: IO.die(Runner.Outcome(), 1, "unexpected native tool metadata")
 
 def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, +cwd: String, +environment: Paths.Environment, queue: Queue.Owner & Queue.Queue) -> IO(Unit):
   match queue:
@@ -102,7 +137,8 @@ def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
         write : Write.ToolOwner <- Write.createWriteTool(environment, handle, cwd, Write.WriteToolOptions{None{}})
         edit : Edit.ToolOwner <- Edit.createEditTool(environment, handle, cwd, Edit.EditToolOptions{None{}})
         read : Read.ToolOwner <- Read.createReadTool(environment,cwd,Read.ReadToolOptions{None{},None{},None{}})
-        result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(write), Edit.borrowTool(edit),Read.borrowTool(read))
+        bash : Bash.ToolOwner <- Bash.createBashTool(cwd ++ "/.pi/bin",cwd,Bash.defaults())
+        result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(write), Edit.borrowTool(edit),Read.borrowTool(read),Bash.borrowTool(bash))
         Queue.dispose(owner)
         Runner.report(result)
 
