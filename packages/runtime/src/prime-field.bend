@@ -14,6 +14,9 @@ type Field is Data:
 type Carried is Data:
   Carried{value: Field, carry: U32}
 
+type WideProduct is Data:
+  WideProduct{low: Field, high: Field}
+
 type Row is Data:
   Row{low: U32, rest: Field}
 
@@ -40,11 +43,6 @@ def fromBig(selected: Prime, value: Big.BigNat) -> Field:
 def toBig(value: Field) -> Big.BigNat:
   match value:
     case Field{+x0, +x1, +x2, +x3, +x4, +x5, +x6, +x7, +x8, +x9, +x10, +x11, +x12, +x13, +x14, +x15, +x16, +x17, +x18, +x19, +x20, +x21, +x22, +x23}: Big.BigNat{Big.trim(x0 <> x1 <> x2 <> x3 <> x4 <> x5 <> x6 <> x7 <> x8 <> x9 <> x10 <> x11 <> x12 <> x13 <> x14 <> x15 <> x16 <> x17 <> x18 <> x19 <> x20 <> x21 <> x22 <> x23 <> Nil{})}
-
-def limbs(+selected: Prime, value: Field) -> List<&2,U32>:
-  match selected value:
-    case P256{} Field{+x0, +x1, +x2, +x3, +x4, +x5, +x6, +x7, +x8, +x9, +x10, +x11, +x12, +x13, +x14, +x15, _, _, _, _, _, _, _, _}: x0 <> x1 <> x2 <> x3 <> x4 <> x5 <> x6 <> x7 <> x8 <> x9 <> x10 <> x11 <> x12 <> x13 <> x14 <> x15 <> Nil{}
-    case P384{} Field{+x0, +x1, +x2, +x3, +x4, +x5, +x6, +x7, +x8, +x9, +x10, +x11, +x12, +x13, +x14, +x15, +x16, +x17, +x18, +x19, +x20, +x21, +x22, +x23}: x0 <> x1 <> x2 <> x3 <> x4 <> x5 <> x6 <> x7 <> x8 <> x9 <> x10 <> x11 <> x12 <> x13 <> x14 <> x15 <> x16 <> x17 <> x18 <> x19 <> x20 <> x21 <> x22 <> x23 <> Nil{}
 
 def equal(a: Field, b: Field) -> Bool:
   match a b:
@@ -188,9 +186,9 @@ def row256(+a: U32, b: Field, acc: Field) -> Row:
       +t15 = (a * b15 + c15 + U32.shrn(t14,16n) : U32)
       Row{U32.and(t0,65535),Field{U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.shrn(t15,16n), 0, 0, 0, 0, 0, 0, 0, 0}}
 
-def reduce256(product: List<&2,U32>) -> Field:
+def reduce256(product: WideProduct) -> Field:
   match product:
-    case +x0 <> +x1 <> +x2 <> +x3 <> +x4 <> +x5 <> +x6 <> +x7 <> +x8 <> +x9 <> +x10 <> +x11 <> +x12 <> +x13 <> +x14 <> +x15 <> +x16 <> +x17 <> +x18 <> +x19 <> +x20 <> +x21 <> +x22 <> +x23 <> +x24 <> +x25 <> +x26 <> +x27 <> +x28 <> +x29 <> +x30 <> +x31 <> Nil{}:
+    case WideProduct{Field{+x0,+x1,+x2,+x3,+x4,+x5,+x6,+x7,+x8,+x9,+x10,+x11,+x12,+x13,+x14,+x15,_,_,_,_,_,_,_,_},Field{+x16,+x17,+x18,+x19,+x20,+x21,+x22,+x23,+x24,+x25,+x26,+x27,+x28,+x29,+x30,+x31,_,_,_,_,_,_,_,_}}:
       +t0 = (1048560 + x0 + x16 + x18 - x22 - x24 - x26 - x28 : U32)
       +t1 = (1048560 + x1 + x17 + x19 - x23 - x25 - x27 - x29 + U32.shrn(t0,16n) - U32.shln(U32.shrn(t0,31n),16n) : U32)
       +t2 = (1048560 + x2 + x18 + x20 - x24 - x26 - x28 - x30 + U32.shrn(t1,16n) - U32.shln(U32.shrn(t1,31n),16n) : U32)
@@ -208,7 +206,6 @@ def reduce256(product: List<&2,U32>) -> Field:
       +t14 = (1048560 + x14 + x16 - x20 - x22 - x24 - x26 + x30 * 3 + U32.shrn(t13,16n) - U32.shln(U32.shrn(t13,31n),16n) : U32)
       +t15 = (1048560 + x15 + x17 - x21 - x23 - x25 - x27 + x31 * 3 + U32.shrn(t14,16n) - U32.shln(U32.shrn(t14,31n),16n) : U32)
       finish256(fold256(fold256(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), 0, 0, 0, 0, 0, 0, 0, 0}, (U32.shrn(t15,16n) - U32.shln(U32.shrn(t15,31n),16n) : U32)})))
-    case _: zero()
 
 def choose384(negative: Bool, candidate: Field, original: Field) -> Field:
   match negative:
@@ -394,9 +391,9 @@ def row384(+a: U32, b: Field, acc: Field) -> Row:
       +t23 = (a * b23 + c23 + U32.shrn(t22,16n) : U32)
       Row{U32.and(t0,65535),Field{U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535), U32.shrn(t23,16n)}}
 
-def reduce384(product: List<&2,U32>) -> Field:
+def reduce384(product: WideProduct) -> Field:
   match product:
-    case +x0 <> +x1 <> +x2 <> +x3 <> +x4 <> +x5 <> +x6 <> +x7 <> +x8 <> +x9 <> +x10 <> +x11 <> +x12 <> +x13 <> +x14 <> +x15 <> +x16 <> +x17 <> +x18 <> +x19 <> +x20 <> +x21 <> +x22 <> +x23 <> +x24 <> +x25 <> +x26 <> +x27 <> +x28 <> +x29 <> +x30 <> +x31 <> +x32 <> +x33 <> +x34 <> +x35 <> +x36 <> +x37 <> +x38 <> +x39 <> +x40 <> +x41 <> +x42 <> +x43 <> +x44 <> +x45 <> +x46 <> +x47 <> Nil{}:
+    case WideProduct{Field{+x0,+x1,+x2,+x3,+x4,+x5,+x6,+x7,+x8,+x9,+x10,+x11,+x12,+x13,+x14,+x15,+x16,+x17,+x18,+x19,+x20,+x21,+x22,+x23},Field{+x24,+x25,+x26,+x27,+x28,+x29,+x30,+x31,+x32,+x33,+x34,+x35,+x36,+x37,+x38,+x39,+x40,+x41,+x42,+x43,+x44,+x45,+x46,+x47}}:
       +t0 = (1048560 + x0 + x24 + x40 + x42 - x46 : U32)
       +t1 = (1048560 + x1 + x25 + x41 + x43 - x47 + U32.shrn(t0,16n) - U32.shln(U32.shrn(t0,31n),16n) : U32)
       +t2 = (0 + x2 - x24 + x26 - x40 + x44 + x46 + U32.shrn(t1,16n) - U32.shln(U32.shrn(t1,31n),16n) : U32)
@@ -422,24 +419,67 @@ def reduce384(product: List<&2,U32>) -> Field:
       +t22 = (1048560 + x22 + x38 + x40 - x44 + x46 + U32.shrn(t21,16n) - U32.shln(U32.shrn(t21,31n),16n) : U32)
       +t23 = (1048560 + x23 + x39 + x41 - x45 + x47 + U32.shrn(t22,16n) - U32.shln(U32.shrn(t22,31n),16n) : U32)
       finish384(fold384(fold384(Carried{Field{U32.and(t0,65535), U32.and(t1,65535), U32.and(t2,65535), U32.and(t3,65535), U32.and(t4,65535), U32.and(t5,65535), U32.and(t6,65535), U32.and(t7,65535), U32.and(t8,65535), U32.and(t9,65535), U32.and(t10,65535), U32.and(t11,65535), U32.and(t12,65535), U32.and(t13,65535), U32.and(t14,65535), U32.and(t15,65535), U32.and(t16,65535), U32.and(t17,65535), U32.and(t18,65535), U32.and(t19,65535), U32.and(t20,65535), U32.and(t21,65535), U32.and(t22,65535), U32.and(t23,65535)}, (U32.shrn(t23,16n) - U32.shln(U32.shrn(t23,31n),16n) : U32)})))
-    case _: zero()
 
-# Each multiply-accumulate is <= (2^16-1)^2 + 2*(2^16-1), hence fits
-# U32 exactly. One record is allocated per row, rather than per limb product.
-def row(selected: Prime, a: U32, b: Field, acc: Field) -> Row:
-  match selected:
-    case P256{}: row256(a,b,acc)
-    case P384{}: row384(a,b,acc)
+# The fixed-width row sequence keeps the complete product in two records.
+# Explicit rows avoid heap-allocated input/output lists and recursive
+# continuations in this hot path; the arithmetic remains in row256/row384.
+def rowLow(value: Row) -> U32:
+  match value:
+    case Row{low,_}: low
 
-def product(+selected: Prime, values: List<&2,U32>, +b: Field, state: Row) -> List<&2,U32>:
-  match values state:
-    case Nil{} Row{low,acc}: low <> limbs(selected,acc)
-    case a <> rest Row{low,acc}: low <> product(selected,rest,b,row(selected,a,b,acc))
+def rowRest(value: Row) -> Field:
+  match value:
+    case Row{_,rest}: rest
 
-def tail(values: List<&2,U32>) -> List<&2,U32>:
-  match values:
-    case Nil{}: Nil{}
-    case _ <> rest: rest
+def mul256(a: Field, +b: Field) -> Field:
+  match a:
+    case Field{a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,_,_,_,_,_,_,_,_}:
+      +r0 = row256(a0,b,zero())
+      +r1 = row256(a1,b,rowRest(r0))
+      +r2 = row256(a2,b,rowRest(r1))
+      +r3 = row256(a3,b,rowRest(r2))
+      +r4 = row256(a4,b,rowRest(r3))
+      +r5 = row256(a5,b,rowRest(r4))
+      +r6 = row256(a6,b,rowRest(r5))
+      +r7 = row256(a7,b,rowRest(r6))
+      +r8 = row256(a8,b,rowRest(r7))
+      +r9 = row256(a9,b,rowRest(r8))
+      +r10 = row256(a10,b,rowRest(r9))
+      +r11 = row256(a11,b,rowRest(r10))
+      +r12 = row256(a12,b,rowRest(r11))
+      +r13 = row256(a13,b,rowRest(r12))
+      +r14 = row256(a14,b,rowRest(r13))
+      +r15 = row256(a15,b,rowRest(r14))
+      reduce256(WideProduct{Field{rowLow(r0),rowLow(r1),rowLow(r2),rowLow(r3),rowLow(r4),rowLow(r5),rowLow(r6),rowLow(r7),rowLow(r8),rowLow(r9),rowLow(r10),rowLow(r11),rowLow(r12),rowLow(r13),rowLow(r14),rowLow(r15),0,0,0,0,0,0,0,0},rowRest(r15)})
+
+def mul384(a: Field, +b: Field) -> Field:
+  match a:
+    case Field{a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16,a17,a18,a19,a20,a21,a22,a23}:
+      +r0 = row384(a0,b,zero())
+      +r1 = row384(a1,b,rowRest(r0))
+      +r2 = row384(a2,b,rowRest(r1))
+      +r3 = row384(a3,b,rowRest(r2))
+      +r4 = row384(a4,b,rowRest(r3))
+      +r5 = row384(a5,b,rowRest(r4))
+      +r6 = row384(a6,b,rowRest(r5))
+      +r7 = row384(a7,b,rowRest(r6))
+      +r8 = row384(a8,b,rowRest(r7))
+      +r9 = row384(a9,b,rowRest(r8))
+      +r10 = row384(a10,b,rowRest(r9))
+      +r11 = row384(a11,b,rowRest(r10))
+      +r12 = row384(a12,b,rowRest(r11))
+      +r13 = row384(a13,b,rowRest(r12))
+      +r14 = row384(a14,b,rowRest(r13))
+      +r15 = row384(a15,b,rowRest(r14))
+      +r16 = row384(a16,b,rowRest(r15))
+      +r17 = row384(a17,b,rowRest(r16))
+      +r18 = row384(a18,b,rowRest(r17))
+      +r19 = row384(a19,b,rowRest(r18))
+      +r20 = row384(a20,b,rowRest(r19))
+      +r21 = row384(a21,b,rowRest(r20))
+      +r22 = row384(a22,b,rowRest(r21))
+      +r23 = row384(a23,b,rowRest(r22))
+      reduce384(WideProduct{Field{rowLow(r0),rowLow(r1),rowLow(r2),rowLow(r3),rowLow(r4),rowLow(r5),rowLow(r6),rowLow(r7),rowLow(r8),rowLow(r9),rowLow(r10),rowLow(r11),rowLow(r12),rowLow(r13),rowLow(r14),rowLow(r15),rowLow(r16),rowLow(r17),rowLow(r18),rowLow(r19),rowLow(r20),rowLow(r21),rowLow(r22),rowLow(r23)},rowRest(r23)})
 
 # Addition/subtraction stay below 2*p: their carry participates directly in
 # conditional subtraction. Products/scales first fold into this same range.
@@ -454,13 +494,10 @@ def tail(values: List<&2,U32>) -> List<&2,U32>:
 # A second fold cannot overflow, and one subtraction gives a canonical residue.
 # The same two folds handle addition/subtraction and factors <=65535: even
 # 65535*(R-p) is much smaller than p. No division or per-bit reduction.
-def reduce(selected: Prime, wide: List<&2,U32>) -> Field:
+def mul(selected: Prime, a: Field, b: Field) -> Field:
   match selected:
-    case P256{}: reduce256(wide)
-    case P384{}: reduce384(wide)
-
-def mul(+selected: Prime, a: Field, b: Field) -> Field:
-  reduce(selected,tail(product(selected,limbs(selected,a),b,Row{0,zero()})))
+    case P256{}: mul256(a,b)
+    case P384{}: mul384(a,b)
 
 def square(selected: Prime, +a: Field) -> Field: mul(selected,a,a)
 
