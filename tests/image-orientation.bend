@@ -2,10 +2,10 @@ import Base
 import ../packages/runtime/src/image.bend as Image
 import ../packages/runtime/src/string.bend as Strings
 
-def pixels(count: Nat, +index: U32, reversed: List<&2,U32>) -> List<&2,U32>:
+def makePixels(count: Nat, +index: U32, reversed: List<&2,U32>) -> List<&2,U32>:
   match count:
     case 0n: List.reverse(&2,U32,reversed)
-    case 1n+n: pixels(n,(index + 1 : U32),(index * 2654435761 : U32) <> reversed)
+    case 1n+n: makePixels(n,(index + 1 : U32),(index * 2654435761 : U32) <> reversed)
 
 def error(cause: Image.Error) -> String:
   match cause:
@@ -33,7 +33,7 @@ def oriented(orientation: U32, value: Result<&2,&1,Image.Error,Image.Raster>) ->
 def number(text: String) -> U32: U32.from_nat(Maybe.default(&2,Nat,Nat.read(text),0n))
 
 def sized(+width: U32, +height: U32, orientation: U32) -> String:
-  oriented(orientation,Image.fromPixels(width,height,pixels(U32.to_nat(width) * U32.to_nat(height),0,Nil{})))
+  oriented(orientation,Image.fromPixels(width,height,makePixels(U32.to_nat(width) * U32.to_nat(height),0,Nil{})))
 
 def digest(values: List<U32>, hash: U32) -> U32:
   match values:
@@ -53,7 +53,7 @@ def large(value: Result<&2,&1,Image.Error,Image.Raster>) -> String:
 
 def run(parts: List<&2,String>) -> String:
   match parts:
-    case "large" <> Nil{}: large(Image.fromPixels(300,257,pixels(77100n,0,Nil{})))
+    case "large" <> Nil{}: large(Image.fromPixels(300,257,makePixels(77100n,0,Nil{})))
     case "short" <> Nil{}: result(Image.fromPixels(2,2,0 <> Nil{}))
     case "overflow" <> Nil{}: result(Image.fromPixels(4294967295,4294967295,Nil{}))
     case "capacity" <> Nil{}: result(Image.orient(6,Image.Raster{3,3,Array.new(U32,0n,0)}))
