@@ -1,0 +1,7 @@
+# Coding agent
+
+Canonical port of `pi-mono/packages/coding-agent`. This package is under construction; the executable in the repository's `src/` remains the earlier bootstrap prototype.
+
+`src/core/tools/truncate.bend` implements shared head/tail output truncation, grep line truncation and byte-size formatting. It preserves Pi's result fields, default limits, trailing-newline counting, line-limit precedence and UTF-8 suffix boundaries. Limits are natural numbers, with explicit optional overrides. `truncateLine` retains the UTF-16 budget but preserves whole native characters instead of producing an isolated surrogate at a split supplementary character. Native characters cannot contain isolated surrogates.
+
+`python3 tests/tool_truncate_check.py` compares the implementation directly with the pinned TypeScript module, including both limits, zero budgets, default boundaries, terminal newlines, multibyte text and BOM retention. The whole-character grep policy is the only expected-output adaptation. All 1,152 comparisons pass on Bun and native one/four threads. The proved `fitting_text_is_preserved` law establishes exact preservation, including metadata, for every text and either direction whenever both limits are satisfied. Bounds and idempotence for truncated output still lack general proofs; the differential checks do not substitute for those proofs or establish that the read/bash/grep tools themselves are ported. Tool execution, extensions, session management and terminal integration remain unfinished.

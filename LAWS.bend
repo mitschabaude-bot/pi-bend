@@ -40,3 +40,4 @@ import ./laws/simple-options.bend as SimpleOptions
 import ./laws/thinking-levels.bend as ThinkingLevels
 import ./laws/agent-loop.bend as AgentLoop
 import ./laws/f64.bend as F64Laws
+import ./laws/tool-truncate.bend as ToolTruncate
