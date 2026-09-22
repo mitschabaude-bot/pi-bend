@@ -2,6 +2,7 @@
 import argparse
 import base64
 import json
+import re
 from pathlib import Path
 import struct
 import subprocess
@@ -13,6 +14,7 @@ PIN = '46c9de402bddf46b03c3b9f46487b777aaa41861'
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends', nargs='*', default=['bun', 'native-1', 'native-4'])
 p.add_argument('--photon', required=True)
+p.add_argument('--prefix', default='build/image-process')
 p.add_argument('--read-prefix', default='build/read-public-images')
 a = p.parse_args()
 photon = Path(a.photon).resolve()
@@ -35,6 +37,13 @@ gif = b'GIF89a'+struct.pack('<HHBBB', 1, 1, 128, 0, 0)+bytes([20,40,60,255,255,2
 bmp = b'BM'+struct.pack('<IHHI',58,0,0,54)+struct.pack('<IiiHHIIiiII',40,1,1,1,24,0,4,0,0,0,0)+bytes([0,0,255,0])
 files = [('small.png', png(7,9), 'image/png'), ('large.png', png(2010,3), 'image/png'),
          ('tiny.gif', gif, 'image/gif'), ('opaque-image', bmp, 'image/bmp'), ('broken.gif', b'GIF89a', 'image/gif')]
+upstream_tests = subprocess.check_output(['git','-C',str(ROOT.parent/'pi-mono'),'show',
+    f'{PIN}:packages/coding-agent/test/image-processing.test.ts'],text=True)
+jpeg = base64.b64decode(re.search(r'const TINY_JPEG_2X1\s*=\s*"([^"]+)"',upstream_tests)[1])
+def app1(payload): return b'\xff\xe1'+struct.pack('>H',len(payload)+2)+payload
+xmp = app1(b'http://ns.adobe.com/xap/1.0/\0<x:xmpmeta xmlns:x="adobe:ns:meta/"/>')
+exif = app1(b'Exif\0\0'+bytes.fromhex('49492a0008000000010012010300010000000600000000000000'))
+files += [('tiny.jpg',jpeg,'image/jpeg'),('oriented.jpg',jpeg[:2]+xmp+exif+jpeg[2:],'image/jpeg')]
 cases = []
 for _, data, mime in files:
     for resize in [True, False]:
@@ -92,7 +101,7 @@ for (const c of JSON.parse(fs.readFileSync(process.argv[2], 'utf8')))
     expected = [json.loads(line) for line in reference.stdout.splitlines()]
     assert len(expected)==len(requests)
     for backend in a.backends:
-        actual = execute(runner(backend,'build/image-process'),list(map(command,cases))+[f'note:{n["originalWidth"]}:9:{n["width"]}:3' for n in notes])
+        actual = execute(runner(backend,a.prefix),list(map(command,cases))+[f'note:{n["originalWidth"]}:9:{n["width"]}:3' for n in notes])
         pairs=[]
         for i,(got,want) in enumerate(zip(actual,expected)):
             if i>=len(cases) or not want['ok']:
@@ -122,4 +131,4 @@ for (const c of JSON.parse(fs.readFileSync(process.argv[2], 'utf8')))
                     content=[['text',text],['image',processed['data'],processed['mimeType']]]
                 else: content=[['text','Read image file ['+mime+']\n'+processed['message']]]
                 assert result=={'content':content,'truncated':False},(backend,i,mode,result,content)
-        print(f'{backend}: {len(cases)} Pi image-process comparisons, {len(notes)} dimension notes, and 10 public read image calls PASS',flush=True)
+        print(f'{backend}: {len(cases)} Pi image-process comparisons, {len(notes)} dimension notes, and {2*len(files)} public read image calls PASS',flush=True)

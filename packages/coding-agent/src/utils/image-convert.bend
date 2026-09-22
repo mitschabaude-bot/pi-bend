@@ -3,6 +3,7 @@ import ../../../runtime/src/image.bend as Image
 import ../../../runtime/src/png.bend as Png
 import ../../../runtime/src/bmp.bend as Bmp
 import ../../../runtime/src/gif.bend as Gif
+import ../../../runtime/src/jpeg.bend as Jpeg
 import ../../../runtime/src/base64.bend as Base64
 import ./exif-orientation.bend as Exif
 
@@ -10,7 +11,7 @@ type ConvertedImage is Data:
   ConvertedImage{data: String, mimeType: String}
 
 # Dispatch on bytes, not a caller-supplied MIME label, as Photon does.
-# PNG, BMP and GIF are integrated; JPEG and WebP decoding remain pending.
+# PNG, BMP, GIF and JPEG are integrated; WebP decoding remains pending.
 def decoded(-E: Data, value: Result<&2,&1,E,Image.Raster>) -> Maybe<&1,Image.Raster>:
   match value:
     case Fail{_}: None{}
@@ -21,6 +22,7 @@ def decodeImage(+bytes: List<&2,U32>, pixelLimit: Nat) -> Maybe<&1,Image.Raster>
     case 137 <> 80 <> 78 <> 71 <> rest: decoded(Png.Error,Png.decode(137 <> 80 <> 78 <> 71 <> rest,pixelLimit))
     case 66 <> 77 <> rest: decoded(Bmp.Error,Bmp.decode(66 <> 77 <> rest,pixelLimit))
     case 71 <> 73 <> 70 <> rest: decoded(Gif.Error,Gif.decode(71 <> 73 <> 70 <> rest,pixelLimit))
+    case 255 <> 216 <> rest: decoded(Jpeg.Error,Jpeg.decode(255 <> 216 <> rest,pixelLimit))
     case _: None{}
 
 def encoded(pair: Image.Raster & Result<&2,&2,Png.Error,List<&2,U32>>) -> Maybe<&2,List<&2,U32>>:

@@ -1901,7 +1901,7 @@
         "tests/image_process_check.py"
       ],
       "sha256": "70609067f3771b306e928d7763227f778aff98065876f6d959391100b6584d4f",
-      "notes": "Native conversion, original-byte preservation, dimension/byte-limit resizing, inability to fit, and dimension notes have pinned-source differential coverage on Bun/native1/native4. JPEG input/EXIF pipeline cases and async worker behavior remain pending; broader codecs are incomplete."
+      "notes": "Native conversion, original-byte preservation, dimension/byte-limit resizing, inability to fit, and dimension notes have pinned-source differential coverage on Bun/native1/native4. JPEG input and the upstream XMP-before-EXIF orientation pipeline case also pass through public read. Async worker behavior remains pending; WebP decoding is incomplete."
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
