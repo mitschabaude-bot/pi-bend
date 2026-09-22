@@ -3410,9 +3410,13 @@
     },
     {
       "source": "packages/tui/test/autocomplete.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a2fb7cd38b95666955439b3f9207321c35e42be235935a12fa150eb54c02cb35"
+      "status": "partial",
+      "ports": [
+        "tests/autocomplete.bend",
+        "tests/autocomplete_check.py"
+      ],
+      "sha256": "a2fb7cd38b95666955439b3f9207321c35e42be235935a12fa150eb54c02cb35",
+      "notes": "All 27 original test bodies execute through the native provider on Bun/native one/four, supplemented by live-source calls and native-policy checks. Locale-default ordering remains pending; source item-set comparisons deliberately ignore ordering while original ranking assertions remain unchanged. Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md. Generic editor-provider integration and Windows behavior remain pending."
     },
     {
       "source": "packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts",
@@ -3535,13 +3539,15 @@
     },
     {
       "source": "packages/tui/test/regression-overlay-cjk-boundary.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/ansi-layout.bend",
-        "tests/ansi_layout_check.py"
+        "tests/ansi_layout_check.py",
+        "tests/tui-composite.bend",
+        "tests/tui_composite_check.py"
       ],
       "sha256": "51438c36784bb4ffb6304e1d179eb9daa046b8b93c80582c87c41f6415449b20",
-      "notes": "Native slice/extract helper assertions are covered by tests/ansi-layout.md; the two compositeTuiLine cases remain pending."
+      "notes": "All four original named cases are covered: helper assertions through ANSI layout and both full compositor results through the native TUI compositor, with hash-checked source execution and exact output comparisons on Bun/native one/four. Interactive overlay lifecycle remains outside this regression suite; see tests/tui-composite.md."
     },
     {
       "source": "packages/tui/test/regression-regional-indicator-width.test.ts",

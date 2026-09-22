@@ -8,7 +8,7 @@ Recursive search checks cancellation before filesystem work, during traversal an
 
 ## Evidence
 
-`autocomplete_original.mts` loads the actual pinned TypeScript implementation and all 27 original tests with Node's TypeScript stripping, used solely as a test oracle. The assertions run through the Bend adapter against live temporary trees, including quoted paths, direct-child flooding, symlinks and exact cursor edits. Every source call also compares complete item content/membership on that same tree, except the flooding case where the original assertions check the meaningful bounded-search guarantee. Because locale ordering is explicitly unresolved, those item comparisons ignore order; the original ranking assertions still execute unchanged. Ten additional slash/callback source comparisons, six edit comparisons, and 314 prefix cases (including a 50,000-character line) cover the remaining pure/callback paths.
+`autocomplete_original.mts` hash-checks and loads the actual pinned TypeScript implementation and all 27 original tests with Node's TypeScript stripping, used solely as a test oracle. The assertions run through the Bend adapter against live temporary trees, including quoted paths, direct-child flooding, symlinks and exact cursor edits. Every source call also compares complete item content/membership on that same tree, except the flooding case where the original assertions check the meaningful bounded-search guarantee. Because locale ordering is explicitly unresolved, those item comparisons ignore order; the original ranking assertions still execute unchanged. Ten additional slash/callback source comparisons, six edit comparisons, and 314 prefix cases (including a 50,000-character line) cover the remaining pure/callback paths.
 
 `autocomplete_check.py` adds 33 explicit native-policy checks: both ordering choices, quoted directories, cancellation, callback failure, scalar cursor coordinates, invalid ranges/prefixes, literal backslashes and regex punctuation, tilde filenames versus home expansion, newline/whitespace filenames, symlink cycles/aliases/broken links, FIFO exclusion, repository/global ignore behavior and invalid UTF-8 rejection. Bun and native one/four-thread execution are checked. The shared traversal extension also preserves all 85 public Find and 109 public Grep cases on all three backends.
 
@@ -29,3 +29,5 @@ build/bend-native-toolchain/bend2/main.ts tests/autocomplete.bend -o build/autoc
 BEND_TUS=8 sh scripts/build-pure.sh tests/autocomplete.bend build/autocomplete
 python3 tests/autocomplete_check.py
 ```
+
+Root integration independently rebuilt hosted/native artifacts with the shared compiler and passed the full autocomplete runner on all three backends. The same integrated traversal also passed all 85 Find and 109 Grep scenarios on each backend.

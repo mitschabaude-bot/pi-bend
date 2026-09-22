@@ -4,11 +4,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawn,spawnSync} from 'node:child_process';
 import {stripTypeScriptTypes} from 'node:module';
 const root=process.env.PI_MONO || '/home/agent/code/pi-mono';
 const source=path.join(root,'packages/tui');
-const strip=file=>stripTypeScriptTypes(fs.readFileSync(path.join(source,file),'utf8')).replace(/^import[\s\S]*?;\s*$/gm,'').replace(/^export /gm,'');
+const hashes={
+ 'src/autocomplete.ts':'5c3ac87b437dd38772611fd0b011e9609fa420e1b1f9b76428bf9a5ebd331da8',
+ 'src/fuzzy.ts':'8286a6feb16672e52114df5300369d20f48e27c9e87da2dc87294ea3b1223b8e',
+ 'test/autocomplete.test.ts':'a2fb7cd38b95666955439b3f9207321c35e42be235935a12fa150eb54c02cb35',
+};
+function pinned(file){const text=fs.readFileSync(path.join(source,file),'utf8');assert.equal(createHash('sha256').update(text).digest('hex'),hashes[file],file);return text;}
+const strip=file=>stripTypeScriptTypes(pinned(file)).replace(/^import[\s\S]*?;\s*$/gm,'').replace(/^export /gm,'');
 const fuzzy=new Function(strip('src/fuzzy.ts')+';return fuzzyFilter')();
 const Reference=new Function('spawn','readdirSync','statSync','homedir','basename','dirname','join','fuzzyFilter',strip('src/autocomplete.ts')+';return CombinedAutocompleteProvider')(spawn,fs.readdirSync,fs.statSync,os.homedir,path.basename,path.dirname,path.join,fuzzy);
 const fd=process.env.PI_TEST_FD || '/home/agent/.pi/agent/bin/fd';
