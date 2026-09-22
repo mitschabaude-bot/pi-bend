@@ -14,8 +14,10 @@ All 381 cases pass the exact same source on Bun and optimized native one/four th
 build/bend-native-toolchain/bend2/main.ts tests/jpeg-encode.bend -o build/jpeg-encode.js
 sh scripts/build-pure.sh tests/jpeg-encode.bend build/jpeg-encode
 python3 tests/jpeg_encode_check.py --photon /path/to/photon_rs.js -- bun build/jpeg-encode.js
-python3 tests/jpeg_encode_check.py --photon /path/to/photon_rs.js -- env BEND_THREADS=1 build/jpeg-encode
-python3 tests/jpeg_encode_check.py --photon /path/to/photon_rs.js -- env BEND_THREADS=4 build/jpeg-encode
+python3 tests/jpeg_encode_check.py --photon /path/to/photon_rs.js -- build/jpeg-encode --threads 1
+python3 tests/jpeg_encode_check.py --photon /path/to/photon_rs.js -- build/jpeg-encode --threads 4
 ```
 
 On this server the focused optimized build took about 3.4 seconds and 190 MiB peak RSS. A single generated 256×256 quality-90 fixture took 0.11 seconds/18 MiB native and 1.36 seconds/172 MiB Bun, including random image generation, retained-raster comparison, and decimal output serialization; these are not isolated encoder benchmarks. Larger decimal-input testing re-encountered the documented Base `String.split` hosted stack limit, so the fixture uses the existing tail-recursive runtime splitter. No compiler patch or reduced image size was used to hide that problem.
+
+The original environment-variable commands did not select native thread counts. The retained optimized artifact was rerun using explicit `--threads 1` and `--threads 4`; each passed all 359 exact Photon encodings and 22 budget/validation cases.
