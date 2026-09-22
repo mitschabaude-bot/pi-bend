@@ -30,6 +30,11 @@ def cwd() -> IO(Result<&2,&2,Error,String>):
     result : Result<&1,&1,U32 & String,List<&2,U32>> <- Directory.current_bytes()
     return pathBytes(result)
 
+def homedir() -> IO(Result<&2,&2,Error,String>):
+  do IO<Result<&2,&2,Error,String>>:
+    result : Result<&1,&1,U32 & String,List<&2,U32>> <- Directory.home_bytes()
+    return pathBytes(result)
+
 def child(parent: String, name: String) -> String:
   match parent:
     case "": name

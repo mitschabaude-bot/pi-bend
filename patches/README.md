@@ -98,3 +98,14 @@ python3 tests/filesystem_write_check.py
 ```
 
 The candidate passes both suites on Bun and native one/four threads: umask 002/027, explicit 0600, existing permission preservation, read/write/append modes, invalid modes, ordinary OS failures, and 128 repeated close EIO/EINTR or combined write ENOSPC/close EIO failures. Test-only hooks close actual descriptors before reporting failure and audit handle retirement under a 64-descriptor limit. The unchanged AES fixture emits byte-identical C under the baseline and candidate; this is a codegen non-regression check, not a claim about filesystem throughput. After isolated validation, the patch was installed on 2026-09-22 in the ordinary, native and cap-hot toolchains. Both suites were rebuilt and passed again through the installed toolchains. Base backups and installation hashes are retained in `build/before-file-mode-close/` and `build/file-mode-close-installation.json`.
+
+`bend-home-directory.patch` adds `Directory.home_bytes()` and the pure Bend `FS.homedir()` decoder. It follows [libuv's POSIX home lookup](https://github.com/libuv/libuv/blob/v1.x/src/unix/core.c): present `HOME` wins, including an empty value; otherwise `getpwuid_r(geteuid())` supplies the directory, retrying EINTR and enlarging the buffer on ERANGE. No normalization, existence check or Unicode replacement happens in the OS effect. The native effect uses POSIX libc. The hosted effect uses the existing small Bun FFI pattern and explicitly supports the Linux LP64 passwd layout on x64/arm64; other hosted platforms return ENOSYS. Node/Bun string APIs replace malformed HOME bytes, and Bun's `userInfo({encoding: "buffer"})` returns a string, so neither is used as a byte source.
+
+```sh
+patch --forward -p1 -d "$BEND_ROOT" < patches/bend-home-directory.patch
+BEND="$BEND_ROOT/bend2/main.ts" sh scripts/build-pure.sh tests/filesystem-paths.bend build/filesystem-paths
+"$BEND_ROOT/bend2/main.ts" tests/filesystem-paths.bend -o build/filesystem-paths.js
+python3 tests/filesystem_home_check.py
+```
+
+Validated Bun/native one/four threads with empty, relative, nonexistent, Unicode, literal U+FFFD, malformed UTF-8 and absent HOME; passwd EIO/no-entry errors and ERANGE retry; environment precedence over passwd errors. Native also preserves an 8197-byte HOME. Bun 1.4.0 (34cbb9a40) crashes while parsing this generated fixture when launched with that long HOME (`range end index ... out of range for slice of length 4095`), before the effect runs; that hosted case is explicitly omitted, and no workaround or compiler change is included. A trivial Bun script does not reproduce the crash, so this is not claimed to affect every Bun invocation. Existing filesystem path/write checks pass, and the unchanged AES fixture emits byte-identical C. Candidate validation did not modify shared toolchains.

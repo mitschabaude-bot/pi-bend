@@ -63,6 +63,14 @@ def run(arguments: List<String>) -> IO(Unit):
       do IO<Unit>:
         result : Result<&1,&1,U32 & String,List<&2,U32>> <- File.realpath_bytes(path)
         IO.print(bytes(result))
+    case "home-bytes" <> Nil{}:
+      do IO<Unit>:
+        result : Result<&1,&1,U32 & String,List<&2,U32>> <- Directory.home_bytes()
+        IO.print(bytes(result))
+    case "home" <> Nil{}:
+      do IO<Unit>:
+        result : Result<&2,&2,FS.Error,String> <- FS.homedir()
+        IO.print(text(result))
     case "cwd" <> Nil{}:
       do IO<Unit>:
         result : Result<&2,&2,FS.Error,String> <- FS.cwd()

@@ -1,0 +1,112 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3060,3 +3060,9 @@
+ def File.close_checked(file: File) -> IO(Result<&1, &1, U32 & String, Unit>):
+   import "./effs/file_close_checked.c"
+   import "./effs/file_close_checked.js"
++
++# HOME when present (including empty), otherwise the effective user's passwd home.
++# Return raw bytes; text decoding and path normalization belong to the caller.
++def Directory.home_bytes() -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
++  import "./effs/directory_home_bytes.c"
++  import "./effs/directory_home_bytes.js"
+--- /dev/null
++++ b/bend2/effs/directory_home_bytes.c
+@@ -0,0 +1,50 @@
++#include <pwd.h>
++
++static void directory_home_bytes_call(IoWork* w) {
++  const char* home = getenv("HOME");
++  if (home) {
++    w->text = strdup(home);
++    w->code = w->text ? 0 : ENOMEM;
++    return;
++  }
++  for (size_t size = 2048;; size *= 2) {
++    char* buffer = malloc(size);
++    if (!buffer) { w->code = ENOMEM; return; }
++    struct passwd entry, *found = NULL;
++    int code;
++    do { code = getpwuid_r(geteuid(), &entry, buffer, size, &found); }
++    while (code == EINTR);
++    if (!code && found) {
++      w->text = strdup(entry.pw_dir);
++      w->code = w->text ? 0 : ENOMEM;
++    } else {
++      w->code = code ? code : ENOENT;
++    }
++    free(buffer);
++    if (code != ERANGE) return;
++    if (size > SIZE_MAX / 2) { w->code = ENOMEM; return; }
++  }
++}
++
++static Term directory_home_bytes_pack(Env e, IoWork* w) {
++  Term result;
++  if (w->code) {
++    result = io_fail(e, w->code, NULL);
++  } else {
++    Term bytes = term_pak(CID_NIL, 0);
++    for (size_t i = strlen(w->text); i > 0; i -= 1)
++      bytes = io_node(e, CID_CON, (uint8_t)w->text[i - 1], bytes, IO_HOTS & 16);
++    result = io_done(e, bytes);
++  }
++  free(w->text);
++  return result;
++}
++
++Term directory_home_bytes_run(Env e, Term* f, IoWork* w) {
++  w->text = NULL;
++  return io_work(w, directory_home_bytes_call, directory_home_bytes_pack);
++}
++
++static void __attribute__((constructor)) directory_home_bytes_use(void) {
++  io_eff(CID_DIRECTORY_HOME_BYTES, directory_home_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/directory_home_bytes.js
+@@ -0,0 +1,44 @@
++let io_home_library;
++function directory_home_bytes() {
++  // The passwd layout below is the Linux LP64 ABI (x86_64 and aarch64).
++  if (process.platform !== "linux" || !["x64", "arm64"].includes(process.arch))
++    return io_fail(38);
++  try {
++    const ffi = require("bun:ffi");
++    if (!io_home_library) io_home_library = ffi.dlopen("libc.so.6", {
++      getenv: {args: ["ptr"], returns: "ptr"},
++      geteuid: {args: [], returns: "u32"},
++      getpwuid_r: {args: ["u32", "ptr", "ptr", "u64", "ptr"], returns: "i32"},
++      strlen: {args: ["ptr"], returns: "u64"},
++    });
++    const os = io_home_library.symbols;
++    let pointer = os.getenv(ffi.ptr(Buffer.from("HOME\0")));
++    let storage;
++    if (!pointer) {
++      const entry = new BigUint64Array(6), found = new BigUint64Array(1);
++      for (let size = 2048;; size *= 2) {
++        storage = Buffer.alloc(size);
++        let code;
++        do {
++          code = os.getpwuid_r(os.geteuid(), ffi.ptr(entry), ffi.ptr(storage), size, ffi.ptr(found));
++        } while (code === 4);
++        if (code === 34) continue;
++        if (code) return io_fail(code);
++        if (found[0] === 0n) return io_fail(2);
++        pointer = Number(entry[4]); // offsetof(struct passwd, pw_dir) == 32
++        break;
++      }
++    }
++    const size = Number(os.strlen(pointer));
++    const bytes = size ? new Uint8Array(ffi.toArrayBuffer(pointer, 0, size)) : [];
++    let result = {$: "Nil"};
++    for (let i = bytes.length; i > 0; i -= 1)
++      result = {$: "Con", head: bytes[i - 1], tail: result};
++    // Keep the passwd backing buffer alive until all pointed-to bytes are copied.
++    if (storage) ffi.ptr(storage);
++    return io_done(result);
++  } catch (error) {
++    const code = error.errno ?? error.info?.errno;
++    return io_fail(Number.isInteger(code) && code !== 0 ? Math.abs(code) : 5);
++  }
++}
