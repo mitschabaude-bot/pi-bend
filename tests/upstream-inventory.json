@@ -2599,9 +2599,10 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5303-bash-output-truncation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d38754f1abadb955553f0d2ce3276f580fb07ca9b937e0d4abe3b6226d2e3b87"
+      "status": "partial",
+      "ports": ["tests/child-process.bend", "tests/child_process_check.py"],
+      "sha256": "d38754f1abadb955553f0d2ce3276f580fb07ca9b937e0d4abe3b6226d2e3b87",
+      "notes": "Native child-process draining covers sustained post-exit output and quiet inherited pipes on explicit one/four threads. Virtual-clock 99ms/100ms assertions and hosted process execution remain pending; scope in tests/child-process.md."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5433-extension-oauth-prompt-input.test.ts",
