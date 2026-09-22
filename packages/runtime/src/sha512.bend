@@ -19,8 +19,11 @@ type Error is Data:
   MessageTooLong{}
   InvalidState{}
 
+type Words is Data:
+  Words{w0: W.U64, w1: W.U64, w2: W.U64, w3: W.U64, w4: W.U64, w5: W.U64, w6: W.U64, w7: W.U64, w8: W.U64, w9: W.U64, w10: W.U64, w11: W.U64, w12: W.U64, w13: W.U64, w14: W.U64, w15: W.U64}
+
 type Loaded is Data:
-  Loaded{words: List<&2,W.U64>, rest: List<&2,U32>}
+  Loaded{words: Words, rest: List<&2,U32>}
 
 # Initial words are the fractional square roots of primes1..8 (SHA512)
 # and9..16 (SHA384). Round constants are fractional cube roots of primes1..80.
@@ -142,20 +145,21 @@ def big1(+x: W.U64) -> W.U64: W.bitXor(W.bitXor(rotate(x,14n),rotate(x,18n)),rot
 def choose(+x: W.U64, y: W.U64, z: W.U64) -> W.U64: W.bitXor(W.bitAnd(x,y),W.bitAnd(W.bitNot(x),z))
 def majority(+x: W.U64, +y: W.U64, +z: W.U64) -> W.U64: W.bitXor(W.bitXor(W.bitAnd(x,y),W.bitAnd(x,z)),W.bitAnd(y,z))
 
-# Keep the schedule in reverse order while extending it, then stream the80
-# words through compression. Indexed reads are bounded by15 prior words.
-def wordAt(index: Nat, words: List<&2,W.U64>) -> W.U64:
-  match index words:
-    case 0n head <> _: head
-    case 1n+rest _ <> tail: wordAt(rest,tail)
-    case _ _: W.zero()
+# A rolling window holds the next sixteen words. Advancing computes one
+# schedule word directly from offsets 0, 1, 9 and 14, without indexed lists.
+def shift(words: Words, value: W.U64) -> Words:
+  match words:
+    case Words{_,w1,w2,w3,w4,w5,w6,w7,w8,w9,w10,w11,w12,w13,w14,w15}:
+      Words{w1,w2,w3,w4,w5,w6,w7,w8,w9,w10,w11,w12,w13,w14,w15,value}
 
-def schedule(fuel: Nat, +reversed: List<&2,W.U64>) -> List<&2,W.U64>:
-  match fuel:
-    case 0n: List.reverse(&2,W.U64,reversed)
-    case 1n+rest:
-      value = W.add(W.add(small1(wordAt(1n,reversed)),wordAt(6n,reversed)),W.add(small0(wordAt(14n,reversed)),wordAt(15n,reversed)))
-      schedule(rest,value <> reversed)
+def scheduled(words: Words) -> W.U64:
+  match words:
+    case Words{w0,w1,_,_,_,_,_,_,_,w9,_,_,_,_,w14,_}:
+      W.add(W.add(small1(w14),w9),W.add(small0(w1),w0))
+
+def first(words: Words) -> W.U64:
+  match words:
+    case Words{w0,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: w0
 
 def round(work: Hash, k: W.U64, w: W.U64) -> Hash:
   match work:
@@ -164,25 +168,35 @@ def round(work: Hash, k: W.U64, w: W.U64) -> Hash:
       t2 = W.add(big0(a),majority(a,b,c))
       Hash{W.add(t1,t2),a,b,c,W.add(d,t1),e,f,g}
 
-def rounds(keys: List<&2,W.U64>, words: List<&2,W.U64>, work: Hash) -> Hash:
-  match keys words:
-    case k <> rest w <> tail: rounds(rest,tail,round(work,k,w))
-    case _ _: work
+# After 64 extensions, the last sixteen words are already in the window.
+def finalRounds(keys: List<&2,W.U64>, +words: Words, work: Hash) -> Hash:
+  match keys:
+    case Nil{}: work
+    case k <> rest: finalRounds(rest,shift(words,W.zero()),round(work,k,first(words)))
+
+def rounds(count: Nat, keys: List<&2,W.U64>, +words: Words, work: Hash) -> Hash:
+  match count keys:
+    case 0n keys: finalRounds(keys,words,work)
+    case 1n+n k <> rest: rounds(n,rest,shift(words,scheduled(words)),round(work,k,first(words)))
+    case _ Nil{}: work
 
 def add(left: Hash, right: Hash) -> Hash:
   match left right:
     case Hash{a,b,c,d,e,f,g,h} Hash{i,j,k,l,m,n,o,p}: Hash{W.add(a,i),W.add(b,j),W.add(c,k),W.add(d,l),W.add(e,m),W.add(f,n),W.add(g,o),W.add(h,p)}
 
-def compress(+hash: Hash, words: List<&2,W.U64>) -> Hash:
-  add(hash,rounds(constants(),schedule(64n,List.reverse(&2,W.U64,words)),hash))
+def compress(+hash: Hash, words: Words) -> Hash:
+  add(hash,rounds(64n,constants(),words,hash))
+
+def emptyWords() -> Words:
+  Words{W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero(),W.zero()}
 
 def pack(a: U32,b: U32,c: U32,d: U32) -> U32: (a * 16777216 + b * 65536 + c * 256 + d : U32)
 
-def load(bytes: List<&2,U32>, count: Nat, words: List<&2,W.U64>) -> Result<&2,&2,Error,Loaded>:
+def load(bytes: List<&2,U32>, count: Nat, words: Words) -> Result<&2,&2,Error,Loaded>:
   match bytes count:
-    case rest 0n: Done{Loaded{List.reverse(&2,W.U64,words),rest}}
+    case rest 0n: Done{Loaded{words,rest}}
     case a <> b <> c <> d <> e <> f <> g <> h <> rest 1n+left:
-      load(rest,left,W.U64{pack(a,b,c,d),pack(e,f,g,h)} <> words)
+      load(rest,left,shift(words,W.U64{pack(a,b,c,d),pack(e,f,g,h)}))
     case _ _: Fail{InvalidState{}}
 
 def loadedBlock(hash: Hash, loaded: Loaded) -> Result<&2,&2,Error,Hash>:
@@ -191,7 +205,7 @@ def loadedBlock(hash: Hash, loaded: Loaded) -> Result<&2,&2,Error,Hash>:
     case _: Fail{InvalidState{}}
 
 def block(hash: Hash, bytes: List<&2,U32>) -> Result<&2,&2,Error,Hash>:
-  Result.bind(&2,&2,Error,Loaded,Hash,load(bytes,16n,Nil{}), loaded => loadedBlock(hash,loaded))
+  Result.bind(&2,&2,Error,Loaded,Hash,load(bytes,16n,emptyWords()), loaded => loadedBlock(hash,loaded))
 
 def buffered(variant: Variant, hash: Hash, reversed: List<&2,U32>, used: U32, high: W.U64, low: W.U64) -> Result<&2,&2,Error,State>:
   match used:
@@ -259,7 +273,7 @@ def finishValid(valid: Bool, variant: Variant, hash: Hash, reversed: List<&2,U32
       pad = (Bool.pick(U32,U32.is_lt(used,112),111,239) - used : U32)
       length = List.append(&2,U32,bytes64(W.bitOr(W.shiftLeft(high,3n),W.shiftRight(low,61n))),bytes64(W.shiftLeft(low,3n)))
       bytes = List.append(&2,U32,List.reverse(&2,U32,reversed),128 <> zeros(U32.to_nat(pad),length))
-      Result.bind(&2,&2,Error,Loaded,List<&2,U32>,load(bytes,16n,Nil{}), loaded =>
+      Result.bind(&2,&2,Error,Loaded,List<&2,U32>,load(bytes,16n,emptyWords()), loaded =>
         Result.bind(&2,&2,Error,Hash,List<&2,U32>,finalBlock(hash,loaded), final => Done{output(variant,final)}))
 
 def finish(state: State) -> Result<&2,&2,Error,List<&2,U32>>:
