@@ -1,0 +1,15 @@
+The certificate benchmark measures fresh chain verification and its two certificate signatures against a test-only OpenSSL oracle. It does not contact a server, read credentials, or use the system trust store.
+
+```sh
+sh scripts/build-pure.sh tests/certificate-benchmark.bend build/certificate-benchmark
+cc -O2 -Wall -Wextra tests/certificate-benchmark-openssl.c -lcrypto -o build/certificate-benchmark-openssl
+python3 tests/certificate_benchmark.py build/live-certificate-benchmark.json --output build/certificate-times.json
+```
+
+The input JSON contains `argument`, the existing X509 runner's `limited:budget:epochHigh:epochLow:leafDER:peerDERs:anchorDERs` command, with decimal comma-separated bytes and `|` between certificates. This benchmark expects one anchor and an intermediate that signs the leaf and is signed by that anchor. It checks all verification results before reporting times.
+
+Both implementations use the saved validation time, explicit anchor, SSL server purpose, and no hostname check. OpenSSL uses strict verification and partial-chain trust; its validation policy is not claimed to be identical on arbitrary malformed certificates. OpenSSL takes whole-second times, while Bend preserves milliseconds. The saved accepted chain must be away from a validity boundary for an equivalent comparison.
+
+The reported body ratio is the performance criterion. The body timer excludes initial DER parsing and includes key and policy preparation, chain search, and signature verification. Bend includes writing one `ok` line to a pipe inside this interval. The separate process times also include startup and input parsing, so they are useful for end-to-end cost but cannot establish a cryptographic speed ratio. Each OpenSSL iteration reparses fresh certificate objects before starting its timer, preventing cached successful certificate signatures from producing an artificially fast result. Warm library state is allowed; cached verification results are not.
+
+Keep sample arrays, binary hashes, and fixture hash with results. Compare matching single-thread native artifacts and avoid drawing conclusions from one sample or concurrent CPU-heavy builds. On Linux, `--cpu N` pins both implementations to one logical CPU; leave its sibling core free too. Oracle batches are interleaved with Bend samples. A successful TLS request alone does not satisfy the target of less than ten times OpenSSL's verification cost.
