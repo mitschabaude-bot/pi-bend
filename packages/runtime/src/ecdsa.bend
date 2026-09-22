@@ -101,7 +101,7 @@ def doubleFormula(+selected: Curve, point: Jacobian) -> Jacobian:
       +alpha = scale(selected,mul(selected,sub(selected,x,delta),add(selected,x,delta)),3)
       +nx = sub(selected,square(selected,alpha),scale(selected,beta,8))
       ny = sub(selected,mul(selected,alpha,sub(selected,scale(selected,beta,4),nx)),scale(selected,square(selected,gamma),8))
-      nz = sub(selected,sub(selected,square(selected,add(selected,y,z)),gamma),delta)
+      nz = scale(selected,mul(selected,y,z),2)
       Jacobian{nx,ny,nz}
 
 def double(+selected: Curve, point: Jacobian) -> Jacobian:
@@ -118,7 +118,7 @@ def addDistinct(+selected: Curve, point: Jacobian, +h: Field.Field, +r: Field.Fi
       +v = mul(selected,x,i)
       +nx = sub(selected,sub(selected,square(selected,r),j),scale(selected,v,2))
       ny = sub(selected,mul(selected,r,sub(selected,v,nx)),scale(selected,mul(selected,y,j),2))
-      nz = sub(selected,sub(selected,square(selected,add(selected,z,h)),square(selected,z)),hh)
+      nz = scale(selected,mul(selected,z,h),2)
       Jacobian{nx,ny,nz}
 
 def addCases(+selected: Curve, zero: Bool, sameX: Bool, sameY: Bool, point: Jacobian, other: Point, h: Field.Field, r: Field.Field) -> Jacobian:
