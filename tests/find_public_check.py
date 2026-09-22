@@ -66,9 +66,15 @@ for backend in a.backends:
         # #3302 path globs: slash matching includes the full absolute candidate.
         write(root/'some/parent/child/file.ext');write(root/'some/parent/child/test.spec.ts');write(root/'src/foo/bar/example.spec.ts')
         for pattern in ['*.spec.ts','some/parent/child/**','**/parent/child/*','src/**/*.spec.ts',str(root/'src')+'/**/*.ts','**/src/**','src/*/*.ts','src/**/bar/?.spec.ts']:
-            compare(pattern)
+            actual,_=compare(pattern)
+            if pattern=='*.spec.ts':assert sorted(actual)==['some/parent/child/test.spec.ts','src/foo/bar/example.spec.ts']
+            elif pattern in ['some/parent/child/**','**/parent/child/*']:assert {'some/parent/child/file.ext','some/parent/child/test.spec.ts'} <= set(actual)
+            elif pattern=='src/**/*.spec.ts':assert actual==['src/foo/bar/example.spec.ts']
         # #3303 scoped nested rules, with and without a repository boundary.
-        scoped=root/'scoped';write(scoped/'a/.gitignore','ignored.txt\n');write(scoped/'a/deep/.gitignore','secret.txt\n')
+        scoped=root/'scoped';write(scoped/'a/.gitignore','ignored.txt\n')
+        for name in ['a/ignored.txt','a/kept.txt','b/ignored.txt','b/kept.txt','root.txt']:write(scoped/name)
+        actual,_=compare('**/*.txt',scoped);assert sorted(actual)==['a/kept.txt','b/ignored.txt','b/kept.txt','root.txt']
+        write(scoped/'a/deep/.gitignore','secret.txt\n')
         for name in ['a/ignored.txt','a/kept.txt','a/deep/ignored.txt','a/deep/secret.txt','a/deep/kept.txt','b/ignored.txt','b/kept.txt','root.txt']:write(scoped/name)
         actual,_=compare('**/*.txt',scoped);assert sorted(actual)==['a/deep/kept.txt','a/kept.txt','b/ignored.txt','b/kept.txt','root.txt']
         repo=root/'repo';(repo/'.git').mkdir(parents=True)

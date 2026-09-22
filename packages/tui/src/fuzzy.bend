@@ -29,7 +29,7 @@ def advanced(hit: Bool, nextBoundary: Bool, state: Scan) -> Scan:
 
 def scan(text: String, query: String, state: Scan) -> FuzzyMatch:
   match text query:
-    case _ SNil{}: 
+    case _ SNil{}:
       match state:
         case Scan{_,_,_,score,_}: FuzzyMatch{True{},score}
     case SNil{} _: FuzzyMatch{False{},U32.to_f64(0)}
