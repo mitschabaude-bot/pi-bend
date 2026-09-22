@@ -58,14 +58,14 @@ type UdpQueryError<-Reason: Data> is Data:
 def encode(request: Message.Request) -> Result<&2, &2, Message.EdnsError, List<&2, U32>>:
   Message.encodeQuery(request)
 
-def endpointUdpQuery(value: Endpoint.Endpoint) -> Message.Endpoint:
+def messageEndpoint(value: Endpoint.Endpoint) -> Message.Endpoint:
   match value:
     case Endpoint.EndpointV4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
     case Endpoint.EndpointV6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
 
 def transactionUdpQuery(route: Peer.Route, request: Message.Request) -> Message.Transaction:
   match route request:
-    case Peer.Route{local, remote} Message.Request{id, flags, question, _}: Message.Transaction{endpointUdpQuery(local), endpointUdpQuery(remote), id, (flags / 2048 % 16 : U32), question}
+    case Peer.Route{local, remote} Message.Request{id, flags, question, _}: Message.Transaction{messageEndpoint(local), messageEndpoint(remote), id, (flags / 2048 % 16 : U32), question}
 
 type UdpQueryReading<-Reason: Data> is Type:
   UdpQueryContinue{socket: Socket}
@@ -83,7 +83,7 @@ def receivedUdpQuery(-Reason: Data, expected: Message.Transaction, local: Endpoi
     # DNS messages are bounded at 65535 bytes. A larger truncated datagram is
     # ignored, never parsed as a complete message or trusted for TCP fallback.
     case (socket, Done{Datagram.Packet{_, True{}, _}}): UdpQueryContinue{socket}
-    case (socket, Done{Datagram.Packet{peer, False{}, bytes}}): inspectedUdpQuery(Reason, socket, Message.inspectResponse(expected, endpointUdpQuery(peer), endpointUdpQuery(local), bytes))
+    case (socket, Done{Datagram.Packet{peer, False{}, bytes}}): inspectedUdpQuery(Reason, socket, Message.inspectResponse(expected, messageEndpoint(peer), messageEndpoint(local), bytes))
 
 # Each iteration awaits abort-aware IO under the same borrowed signal. Noise
 # cannot reset the deadline, and rejected packets are not retained in a list.
@@ -140,7 +140,7 @@ def exchangeRequestUdpQuery(-Reason: Data, destination: Endpoint.Endpoint, signa
   preparedUdpQuery(Reason, destination, signal, request, encode(request))
 
 # This policy runs only after transactionLocal matching. A retryable RCODE takes
-# precedence over truncation. Complete messages use validated EDNS statusUdpPolicy.
+# precedence over truncation. Complete messages use validated EDNS status.
 type Status is Data:
   Success{}
   FailureCode{}
@@ -192,8 +192,8 @@ def headerCode(code: U32, value: Message.Header, ignoreTruncation: Bool) -> UdpP
     case Message.Header{_, +flags, _, answers, _, additional}:
       decide(statusUdpPolicy(code), U32.is_eq(answers, 0) && U32.is_eq(U32.and(flags, 1152), 0) && U32.is_eq(additional, 0), U32.is_ne(U32.and(flags, 512), 0), ignoreTruncation)
 
-# Only a validated truncated headerLocal is available on the incomplete-messageUdpPolicy
-# path. Complete responses instead enter messageUdpPolicy() to validate the OPT record.
+# Only a validated truncated headerLocal is available on the incomplete-message
+# path. Complete responses instead enter message() to validate the OPT record.
 def header(+value: Message.Header, ignoreTruncation: Bool) -> UdpPolicyDecision:
   headerCode(Message.responseCode(value, None{}), value, ignoreTruncation)
 
@@ -344,10 +344,10 @@ def driveUdpServers(-Reason: Data, fuel: Nat, step: Plan.Step<Plan.Attempt<Endpo
         driveUdpServers(Reason, rest, Plan.next(Plan.Attempt<Endpoint.Endpoint>, next), signal, request, result)
 
 # Entries are already positioned/timed/rotated. Borrow one total deadline and
-# reuse the identical request through every attempt. Return the selectedUdpServers server
+# reuse the identical request through every attempt. Return the selected server
 # with a reply so a later TCP fallback can target that same endpoint.
 # Retryable response codes advance this same cursor. Truncation retains the
-# selectedUdpServers endpoint for TCP fallback; EDNS negotiation remains above this layer.
+# selected endpoint for TCP fallback; EDNS negotiation remains above this layer.
 def exchangeRequestUdpServers(-Reason: Data, +attempts: Nat, +servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Message.Request) -> IO(Result<&2, &2, UdpServersError<Reason>, UdpServersReply>):
   driveUdpServers(Reason, Nat.mul(attempts, List.length(&2, Plan.Attempt<Endpoint.Endpoint>, servers)), Plan.next(Plan.Attempt<Endpoint.Endpoint>, Plan.start(Plan.Attempt<Endpoint.Endpoint>, attempts, servers)), signal, request, UdpServersNext{None{}})
 
@@ -432,7 +432,7 @@ def pendingTcpConnection(-Reason: Data, connection: Connection<Reason>) -> IO(St
     case Connection{socket, Ended{error}}: IO.pure(Step<Reason>, endedTcpConnection(Reason, socket, error))
 
 # Check retained abort state even when a complete frame is already buffered.
-# Terminal read results repeat without further IO. The caller must still closeTcpConnection
+# Terminal read results repeat without further IO. The caller must still close
 # the affine connection, including after EOF or failure, to join its watcher.
 def receiveTcpConnection(-Reason: Data, connection: Connection<Reason>, maximum: U32) -> IO(Next<Reason>):
   match maximum:
@@ -456,8 +456,8 @@ def sendFrame(-Reason: Data, connection: Connection<Reason>, result: Result<&2, 
         return sent(Reason, position, result)
 
 # Encoding failure leaves the connection untouched. A transport write failure
-# may follow a partial write; the caller must closeTcpConnection rather than retry that frame.
-# Multiple sends before receiveTcpConnection support pipelining; transactionLocal IDs are managed
+# may follow a partial write; the caller must close rather than retry that frame.
+# Multiple sends before receive support pipelining; transactionLocal IDs are managed
 # above this layer, and frames are returned in their actual arrival order.
 def send(-Reason: Data, connection: Connection<Reason>, bytes: List<&2, U32>) -> IO(Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>):
   sendFrame(Reason, connection, Message.encodeTcpFrame(bytes))
@@ -466,8 +466,8 @@ def closeTcpConnection(-Reason: Data, connection: Connection<Reason>) -> IO(Resu
   match connection:
     case Connection{socket, _}: SocketIO.close(Reason, socket)
 
-# A snapshot of a connected socket's endpoints. No wildcard/requested addressTcpPeer
-# is substituted for the addressTcpPeer actually selected by the operating system.
+# A snapshot of a connected socket's endpoints. No wildcard/requested messageEndpoint
+# is substituted for the messageEndpoint actually selected by the operating system.
 type Route is Data:
   Route{localTcpPeer: Message.Endpoint, remoteTcpPeer: Message.Endpoint}
 
@@ -477,11 +477,6 @@ type Peer<-Reason: Data> is Type:
 type TcpPeerError<-Reason: Data> is Data:
   Inspection{error: Endpoint.EndpointError}
   Adoption{error: SocketIO.Error<Reason>}
-
-def addressTcpPeer(value: Endpoint.Endpoint) -> Message.Endpoint:
-  match value:
-    case Endpoint.EndpointV4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
-    case Endpoint.EndpointV6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
 
 def adopted(-Reason: Data, route: Route, result: Result<&2, &1, SocketIO.Error<Reason>, SocketIO.Owner<Reason>>) -> Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>:
   match result:
@@ -497,7 +492,7 @@ def remoteTcpPeer(-Reason: Data, localTcpPeer: Message.Endpoint, signal: Abort.A
     case (socket, Done{at}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
         result : Result<&2, &1, SocketIO.Error<Reason>, SocketIO.Owner<Reason>> <- SocketIO.create(Reason, socket, signal)
-        return adopted(Reason, Route{localTcpPeer, addressTcpPeer(at)}, result)
+        return adopted(Reason, Route{localTcpPeer, messageEndpoint(at)}, result)
 
 def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
   match pair:
@@ -508,7 +503,7 @@ def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket 
     case (socket, Done{at}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
         result : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
-        remoteTcpPeer(Reason, addressTcpPeer(at), signal, result)
+        remoteTcpPeer(Reason, messageEndpoint(at), signal, result)
 
 # Consumes the connected socket, including on failure. Adoption checks retained
 # abort after endpoint inspection and installs the connection's single watcher.
@@ -710,7 +705,7 @@ def encoded(-Reason: Data, -Token: Data, +route: Route, connection: Connection<R
     case Done{wire}: registered(Reason, Token, route, connection, wire, register(Token, pending, transaction(route, id, (flags / 2048 % 16 : U32), question), token))
 
 # The affine session serializes operations. Several queries can be submitted
-# before receiving; registration precedes the first byte written. A failedTcpSession
+# before receiving; registration precedes the first byte written. A failed
 # write may be partial, so it permanently ends this session and settles all
 # pending requests, including the attempted submission. No frame is retried.
 def submit(-Reason: Data, -Token: Data, session: Session<Reason, Token>, +id: U32, +flags: U32, +question: Message.Question, token: Token) -> IO(TcpSessionStep<Reason, Token>):
@@ -916,7 +911,7 @@ def finishTcpRecover(-Reason: Data, retry: Bool, report: Completed<Reason>, addr
     case False{}: IO.pure(Completed<Reason>, report)
     case True{}: exchangeRequestTcpQuery(Reason, address, port, signal, request, maximum)
 
-# A closed failed exchangeTcpRecover may be retried once against the same server. The
+# A closed failed exchange may be retried once against the same server. The
 # second result is returned unchanged, so another reset cannot loop. Preserve
 # query bytes/ID and borrow the same deadline across both connections.
 def exchangeRequestTcpRecover(-Reason: Data, +address: Connect.Address, +port: U32, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Message.Request, +maximum: U32) -> IO(Completed<Reason>):
@@ -964,7 +959,7 @@ def completedTcpServers(-Reason: Data, report: Completed<Reason>) -> Decision<Re
     case other: Stop{other}
 
 # One pass through the supplied order. The borrowed deadline and unchanged
-# query span every attempt. exchangeTcpRecover returns only after closing its
+# query span every attempt. exchange returns only after closing its
 # resources; no detached attempt overlaps the following server.
 def driveTcpServers(-Reason: Data, servers: List<&2, Server>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Message.Request, +maximum: U32, decision: Decision<Reason>) -> IO(Result<&2, &2, TcpServersError<Reason>, Reply>):
   match servers decision:
@@ -1060,7 +1055,7 @@ def streamed(-Reason: Data, result: Result<&2, &2, TcpServersError<Reason>, Repl
     case Done{reply}: Done{reply}
     case Fail{error}: Fail{Stream{error}}
 
-# A UDP TC response switches to one TCP pass starting with that exact entryTransport.
+# A UDP TC response switches to one TCP pass starting with that exact entry.
 # TCP failures may advance only through the rest of this selected pass, never
 # wrapping or restarting UDP. Recoverable TCP resets stay in Stream's owner.
 def drive(-Reason: Data, fuel: Nat, step: Plan.Step<Plan.Attempt<Endpoint.Endpoint>>, +signal: Abort.AbortSignal<Deadline.Cause<Reason>>, +request: Message.Request, +maximum: U32, state: State<Reason>) -> IO(Result<&2, &2, Error<Reason>, Reply>):
@@ -1223,7 +1218,7 @@ def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
   counted(~Environment, ~draw, Server, environment, servers, countServers(Server, servers, 0n))
 
 # Empty and singleton lists need no entropy. Larger lists receive a uniformly
-# selectedServerInitialize initial position, while disabled choices retain configured order.
+# selected initial position, while disabled choices retain configured order.
 def random(-Server: Data, servers: List<&2, Server>) -> IO(Result<&2, &1, Index.Error, Owner<Server>>):
   createWith(~Unit, ~Index.wordIndex, Server, Unit{}, servers)
 

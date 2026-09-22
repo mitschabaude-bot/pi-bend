@@ -872,9 +872,6 @@ type LoadTask is Data:
 
 def Scheduled() -> Data: Result<&2, &2, LoadError, List<&2, LoadTask>>
 
-def childLoad(path: List<&2, String>, key: String) -> List<&2, String>:
-  List.append(&2, String, path, key <> Nil{})
-
 def invalid(-A: Data, path: List<&2, String>, expected: String) -> Result<&2, &2, LoadError, A>:
   Fail{LoadError{path, InvalidSchema{expected}}}
 
@@ -884,7 +881,7 @@ def parentReversed(path: List<&2, String>) -> List<&2, String>:
     case _ <> rest: List.reverse(&2, String, rest)
 
 def sibling(path: List<&2, String>, name: String) -> List<&2, String>:
-  childLoad(parentReversed(List.reverse(&2, String, path)), name)
+  child(parentReversed(List.reverse(&2, String, path)), name)
 
 def conditional(value: V.Value, +whole: R.Record<V.Value>, +path: List<&2, String>) -> Scheduled():
   consequent = Maybe.default(&2, V.Value, R.get(V.Value, whole, "then"), V.Boolean{True{}})
@@ -923,7 +920,7 @@ def typed(value: V.Value, +path: List<&2, String>) -> Scheduled():
 def childReads(values: List<&2, V.Value>, +path: List<&2, String>, +index: Nat) -> List<&2, LoadTask>:
   match values:
     case Nil{}: Nil{}
-    case value <> tail: Read{value, childLoad(path, Nat.show(index))} <> childReads(tail, path, index + 1n)
+    case value <> tail: Read{value, child(path, Nat.show(index))} <> childReads(tail, path, index + 1n)
 
 def group(constructor: Constructor, value: V.Value, path: List<&2, String>) -> Scheduled():
   match value:
@@ -938,7 +935,7 @@ def fieldKeys(fields: List<&2, R.Property<V.Value>>) -> List<&2, String>:
 def fieldReads(fields: List<&2, R.Property<V.Value>>, +path: List<&2, String>) -> List<&2, LoadTask>:
   match fields:
     case Nil{}: Nil{}
-    case R.Property{key, value} <> tail: Read{value, childLoad(path, key)} <> fieldReads(tail, path)
+    case R.Property{key, value} <> tail: Read{value, child(path, key)} <> fieldReads(tail, path)
 
 def propertiesLoad(value: V.Value, path: List<&2, String>) -> Scheduled():
   match value:
@@ -1066,7 +1063,7 @@ def containsBound(lower: Bool, value: Result<&2, &2, LoadError, B.BigNat>, inner
   match value inner:
     case Fail{error} _: Fail{error}
     case Done{_} None{}: Done{Push{Accept{}} <> Nil{}}
-    case Done{limit} Some{schema}: Done{Read{schema, childLoad(parentPath(path), "contains")} <> Build{Containing{boundedCount(lower, limit)}, 1n} <> Nil{}}
+    case Done{limit} Some{schema}: Done{Read{schema, child(parentPath(path), "contains")} <> Build{Containing{boundedCount(lower, limit)}, 1n} <> Nil{}}
 
 def reference(value: V.Value, path: List<&2, String>) -> Scheduled():
   match value:
@@ -1226,7 +1223,7 @@ def orderedKeywords(fields: List<&2, R.Property<V.Value>>) -> List<&2, R.Propert
 def keywordTasks(fields: List<&2, R.Property<V.Value>>, +whole: R.Record<V.Value>, +path: List<&2, String>) -> List<&2, LoadTask>:
   match fields:
     case Nil{}: Nil{}
-    case R.Property{+key, value} <> tail: Keyword{key, value, whole, childLoad(path, key)} <> keywordTasks(tail, whole, path)
+    case R.Property{+key, value} <> tail: Keyword{key, value, whole, child(path, key)} <> keywordTasks(tail, whole, path)
 
 def read(value: V.Value, path: List<&2, String>) -> Scheduled():
   match value:

@@ -89,7 +89,7 @@ def processEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, 
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} _: T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error}
 
 # Replays the transcript baseline, retaining model/thinking and executable tools.
-# The synchronized owner rejects stateReset during a run and clears both queues.
+# The synchronized owner rejects reset during a run and clears both queues.
 def stateReset(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, stateLocal: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
   match stateLocal:
     case T.AgentState{model, thinking, tools, messages, _, _, _, _}:
@@ -310,7 +310,7 @@ def modified(-State: Data, -Value: Type, active: Maybe<&2, ActiveRun>, retired: 
 def modifyState(-State: Data, -Value: Type, cell: Cell<State>, transform: State -> Maybe<&2, ActiveRun> -> State & Value) -> Cell<State> & Value:
   match cell:
     case Cell{stateLocal, +active, retired}: modified(State, Value, active, retired, transform(stateLocal, active))
-# Event reductions, queue updates and reset share the run-claimLife transaction.
+# Event reductions, queue updates and reset share the run-claim transaction.
 def modify(-State: Data, -Value: Type, owner: Lifecycle<State>, transform: State -> Maybe<&2, ActiveRun> -> State & Value) -> IO(Value):
   match owner:
     case Lifecycle{cell}: R.modify(Cell<State>, Value, cell, current => modifyState(State, Value, current, transform))
@@ -418,7 +418,7 @@ def disposed(-State: Data, cell: Cell<State>) -> IO(State):
         disposeRunsLife(retired)
         return value
     case Cell{_, Some{_}, _}: IO.die(State, 1, "Agent lifecycle disposed during an active run")
-# Retire owner/run/signalLife aliases and drain waiters before final disposal.
+# Retire owner/run/signal aliases and drain waiters before final disposal.
 # Completed signals remain inspectable throughout the owner's lifetime.
 def disposeLife(-State: Data, owner: Lifecycle<State>) -> IO(State):
   match owner:
@@ -622,7 +622,7 @@ def selectedListeners(-Event: Data, -Signal: Data, -Error: Data, stateLocal: Sta
         dispatch(Event, Signal, Error, Listeners{stateLocal}, input, Some{position}, outcome, None{}, True{})
     case Listeners{_} Done{_} None{} False{}: IO.pure(Result<&2, &2, Error, Unit>, Done{Unit{}})
 # The first callback starts inline, before returning ownership of pending
-# delivery. Subsequent callbacks remain live-selectedListeners after each completion.
+# delivery. Subsequent callbacks remain live-selected after each completion.
 def resume(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, input: Input<Event, Signal>, position: N.BigNat, delivery: Loop.Emission<Error>) -> IO(Result<&2, &2, Error, Unit>):
   do IO<Result<&2, &2, Error, Unit>>:
     outcome : Result<&2, &2, Error, Unit> <- Loop.wait(Error, delivery)
@@ -855,7 +855,7 @@ def context(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data
   match stateLocal:
     case T.AgentState{_, _, tools, messages, _, _, _, _}: T.AgentContext{messages, Some{tools}}
 # Keep the configured options/hooks while taking model/thinking and transcript
-# from one immutable Agent snapshotBinding. The public options adapter builds the base.
+# from one immutable Agent snapshot. The public options adapter builds the base.
 def bind(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, stateLocal: T.AgentState<P, A, G, D, M, V, S, E, J>, base: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>, readers: BindingPollers<P, A, G, D, M, V, S, E, J>) -> T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>:
   match stateLocal base readers:
     case T.AgentState{currentModel, thinking, _, _, _, _, _, _} T.AgentLoopConfig{signalLocal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} BindingPollers{steering, followUpLocal, _}:
@@ -892,7 +892,7 @@ def Outcome(-A: Data, -G: Data, -D: Data, -M: Data, -E: Data) -> Data: Result<&2
 type Options<-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data> is Data:
   Options{config: Config(A, G, D, M, V, E, J, Telemetry, Fetch), provider: Provider.Selection<Schema.Value, A, G, D, J, Config(A, G, D, M, V, E, J, Telemetry, Fetch), E>, validate: C.Callback<Loop.ToolValidationInput<Schema.Value, A, V>, Result<&2, &2, E, V>>, emptyDetails: D}
 # A completed run can still own tool-held callback aliases or sibling work.
-# Retain these resources until aliases retire; runDispose drains batches first.
+# Retain these resources until aliases retire; dispose drains batches first.
 type Resources<-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data> is Data:
   Resources{pollers: RunPollers(A, G, D, M, V, E, J), emit: C.Callback<RunEvent(A, G, D, M), Loop.Emission<E>>, sink: C.Callback<RunEvent(A, G, D, M), Result<&2, &2, E, Unit>>, isAborted: C.Callback<Maybe<&2, RunSignal()>, Bool>, updates: Loop.Owners(D, E), batches: Loop.Batches(A, G, D, M, V, RunSignal(), E)}
 type Completed<-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data> is Data:

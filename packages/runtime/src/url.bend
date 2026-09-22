@@ -19,7 +19,7 @@ type AddressError is Data:
   TooManyParts{}
   OutOfRange{}
 
-# Continue checking digits after overflow: a huge valid numberIpv4 must trigger
+# Continue checking digits after overflow: a huge valid number must trigger
 # numeric-host parsing, whereas a suffix with a non-digit can still be a domain.
 def accumulated(fits: Bool, value: U32, radix: U32, digit: U32) -> Result<&2, &2, NumberError, U32>:
   match fits:
@@ -111,18 +111,13 @@ def partIpv4(last: Bool, count: U32, prefix: U32, result: Result<&2, &2, NumberE
     case True{} Done{value}: finalPart(count, prefix, value)
     case False{} Done{+value}: prefixPart(U32.is_le(value, 255), count, prefix, value)
 
-def emptyIpv4(parts: List<&2, String>) -> Bool:
-  match parts:
-    case Nil{}: True{}
-    case _: False{}
-
 def scanIpv4(parts: List<&2, String>, state: Result<&2, &2, AddressError, State>) -> Result<&2, &2, AddressError, Address>:
   match parts state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{Complete{address}}: Done{address}
     case Nil{} _: Fail{InvalidPart{}}
     case _ Done{Ipv4Prefix{4, _}}: Fail{TooManyParts{}}
-    case value <> +rest Done{Ipv4Prefix{count, prefix}}: scanIpv4(rest, partIpv4(emptyIpv4(rest), count, prefix, numberIpv4(value)))
+    case value <> +rest Done{Ipv4Prefix{count, prefix}}: scanIpv4(rest, partIpv4(List.is_empty(&2, String, rest), count, prefix, numberIpv4(value)))
     case _ _: Fail{TooManyParts{}}
 
 def parseIpv4(text: String) -> Result<&2, &2, AddressError, Address>:
@@ -133,7 +128,7 @@ def serializeIpv4(address: Address) -> String:
     case Address{+value}: U32.show((value / 16777216 : U32)) ++ "." ++ U32.show((value / 65536 % 256 : U32)) ++ "." ++ U32.show((value / 256 % 256 : U32)) ++ "." ++ U32.show((value % 256 : U32))
 
 
-# Four 32-bit words in network order. Every value is a valid 128-bit addressIpv6.
+# Four 32-bit words in network order. Every value is a valid 128-bit address.
 type Ipv6Address is Data:
   Ipv6Address{a: U32, b: U32, c: U32, d: U32}
 
@@ -209,8 +204,8 @@ def piece(dotted: Bool, final: Bool, text: String) -> Result<&2, &2, Ipv6Address
     case True{} False{}: Fail{InvalidEmbeddedIPv4{}}
     case False{} _: single(hexPiece(text))
 
-# Remove only the boundary emptyIpv6 token belonging to a double colon. Interior
-# emptyIpv6 tokens are compression markers; a lone boundary colon is an error.
+# Remove only the boundary empty token belonging to a double colon. Interior
+# empty tokens are compression markers; a lone boundary colon is an error.
 def trimEnd(reversed: List<&2, String>) -> Result<&2, &2, Ipv6AddressError, List<&2, String>>:
   match reversed:
     case SNil{} <> SNil{} <> rest: Done{List.reverse(&2, String, SNil{} <> rest)}
@@ -260,17 +255,12 @@ def finishIpv6(state: Ipv6State) -> Result<&2, &2, Ipv6AddressError, Ipv6Address
     case Ipv6State{count, reversed, Some{index}}: addressIpv6(expand(List.reverse(&2, U32, reversed), index, (8 - count : U32)))
     case _: Fail{WrongPieceCount{}}
 
-def emptyIpv6(parts: List<&2, String>) -> Bool:
-  match parts:
-    case Nil{}: True{}
-    case _: False{}
-
 def scanIpv6(parts: List<&2, String>, state: Result<&2, &2, Ipv6AddressError, Ipv6State>) -> Result<&2, &2, Ipv6AddressError, Ipv6Address>:
   match parts state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{state}: finishIpv6(state)
     case SNil{} <> rest Done{state}: scanIpv6(rest, markCompression(state))
-    case +text <> +rest Done{state}: scanIpv6(rest, appendResult(piece(hasDot(text), emptyIpv6(rest), text), state))
+    case +text <> +rest Done{state}: scanIpv6(rest, appendResult(piece(hasDot(text), List.is_empty(&2, String, rest), text), state))
 
 def parsedTokens(result: Result<&2, &2, Ipv6AddressError, List<&2, String>>) -> Result<&2, &2, Ipv6AddressError, Ipv6Address>:
   match result:
@@ -534,7 +524,7 @@ def defaultPort(scheme: Scheme) -> Maybe<&2, U32>:
 
 
 # Tokens from an already-delimited non-file authority. Host normalization and
-# port validation are separate stages. Some{empty credentialsAuthority/port} preserves
+# port validation are separate stages. Some{empty credentials/port} preserves
 # syntax needed by the enclosing parser's empty-host and scheme checks.
 type Credentials is Data:
   Credentials{username: String, password: String}
@@ -648,8 +638,8 @@ def encodeEntries(entries: List<&2, Entry>) -> List<&2, String>:
 def serializeSearchParams(entries: List<&2, Entry>) -> String:
   String.join(encodeEntries(entries), "&")
 
-# Web URL inputs are scalarForm-value strings, preserving BOM and replacing only
-# invalid scalarForm representations. This is not Unicode NFC/case normalization.
+# Web URL inputs are scalar-value strings, preserving BOM and replacing only
+# invalid scalar representations. This is not Unicode NFC/case normalization.
 def scalarForm(text: String) -> String:
   Utf8.complete(Utf8.decode(Utf8.Decoder{Utf8.Ready{}, True{}}, Utf8.encode(text)))
 
@@ -889,7 +879,7 @@ type InputPrefix is Data:
   Relative{input: String}
 
 # A failed candidate must not consume or lowercase a relative path. Keep the
-# original immutable input only at the outer boundary, not in every scanInput frame.
+# original immutable input only at the outer boundary, not in every scan frame.
 def schemeChar(colon: Bool, code: U32, reversed: String) -> String:
   match colon:
     case True{}: reversed
@@ -1103,12 +1093,12 @@ def isFilePath(scheme: Scheme) -> Bool:
     case _: False{}
 
 # Enter the hierarchical path state, after any leading slash was consumed by
-# path-startPath/relative handling. Existing segments are normalized base segments;
+# path-start/relative handling. Existing segments are normalized base segments;
 # the caller applies relative-path shortening/reset before entering this state.
 def parsePath(text: String, +scheme: Scheme, base: List<&2, String>) -> PathParsed:
   scanPath(text, isSpecialScheme(scheme), isFilePath(scheme), "", List.reverse(&2, String, base))
 
-# Path-startPath entry after authority parsing. Special schemes always have a path;
+# Path-start entry after authority parsing. Special schemes always have a path;
 # non-special schemes retain an empty segment list until path input occurs.
 def startSpecial(text: String, +file: Bool, segments: List<&2, String>) -> PathParsed:
   match text:
@@ -1143,7 +1133,7 @@ type URL is Data:
   URL{scheme: Scheme, username: String, password: String, host: Maybe<&2, Host>, port: Maybe<&2, U32>, path: RecordPath, query: Maybe<&2, String>, fragment: Maybe<&2, String>}
 
 
-# Persistent ordered name/value tuples. Operations return new valuesSearchParams; retaining
+# Persistent ordered name/value tuples. Operations return new values; retaining
 # a prior value or its entries never observes later changes.
 type URLSearchParams is Data:
   URLSearchParams{tuples: List<&2, Entry>}
@@ -1295,7 +1285,7 @@ def unkeyed(tuples: List<&2, SortEntry>) -> List<&2, Entry>:
     case SortEntry{_, entry} <> rest: entry <> unkeyed(rest)
 
 # The URL wire standard specifies stable UTF-16 name ordering. Cache each key
-# once and use Base's stable merge sort; valuesSearchParams never decide tie order.
+# once and use Base's stable merge sort; values never decide tie order.
 def sort(params: URLSearchParams) -> URLSearchParams:
   URLSearchParams{unkeyed(List.sort(~SortEntry, ~before, keyed(entries(params))))}
 
@@ -1320,7 +1310,7 @@ def pathOutput(pathSerialize: RecordPath, reversed: String) -> String:
 def pathSerialize(pathSerialize: RecordPath) -> String:
   String.reverse(pathOutput(pathSerialize, ""))
 
-# Prevent a hostless pathSerialize beginning '//' from reparsing as an authority.
+# Prevent a hostless path beginning '//' from reparsing as an authority.
 def hostless(pathSerialize: RecordPath, reversed: String) -> String:
   match pathSerialize:
     case Hierarchical{SNil{} <> next <> rest}: segmentsSerialize("" <> next <> rest, appendSerialize("/.", reversed))
@@ -1506,7 +1496,7 @@ def fileAuthority(context: Context, prefix: RawPrefix) -> Result<&2, &2, Error, 
     case RawPrefix{+text, remainder}: fileAuthorityDrive(drive(text), context, text, remainder)
 
 # The first file slash has been consumed. Either kind of second slash enters
-# the file-hostAbsolute state; a single slash enters the path state with an empty hostAbsolute.
+# the file-host state; a single slash enters the path state with an empty host.
 def fileSlash(context: Context, text: String) -> Result<&2, &2, Error, URL>:
   match text:
     case SCon{'/', rest}: fileAuthority(context, rawAuthority(rest, True{}))
@@ -1519,7 +1509,7 @@ def file(context: Context, text: String) -> Result<&2, &2, Error, URL>:
     case SCon{'\\', rest}: fileSlash(context, rest)
     case otherAbsolute: Done{hierarchical(File{}, "", "", Some{Empty{}}, None{}, parsePath(otherAbsolute, File{}, Nil{}))}
 
-# Non-special schemes only recognize forward slashes as authorityAbsolute delimiters.
+# Non-special schemes only recognize forward slashes as authority delimiters.
 def otherSlash(context: Context, +schemeAbsolute: Scheme, text: String) -> Result<&2, &2, Error, URL>:
   match text:
     case SCon{'/', rest}: authorityAbsolute(context, schemeAbsolute, read(rest, False{}))
@@ -1561,7 +1551,7 @@ def absoluteResult(result: Result<&2, &2, Error, URL>) -> Result<&2, &2, Resolve
     case Done{value}: Done{value}
 
 # Inheritance copies immutable normalized components. Every reference replaces
-# the fragmentResolve, including an empty reference (which removes it).
+# the fragment, including an empty reference (which removes it).
 def fragmentResolve(base: URL, value: Maybe<&2, String>) -> URL:
   match base:
     case URL{schemeResolve, user, password, host, port, urlPath, queryResolve, _}: URL{schemeResolve, user, password, host, port, urlPath, queryResolve, value}

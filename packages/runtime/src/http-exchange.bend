@@ -390,7 +390,7 @@ def connectedSocketExchange(~Reason: Data, request: Request.BufferedRequestPrepa
         result : Connect.Owner<Reason> & Result<&2, &1, Connect.Error<Reason>, Connect.UploadOwner<Reason>> <- Connect.startUpload(Reason, owner, head, Request.wireBody(body))
         uploading(~Reason, method, maximum, limits, result)
 
-# Takes ownership on every path. The readSocketExchange-size guard precedes any request IO.
+# Takes ownership on every path. The read-size guard precedes any request IO.
 # Writes share the connection-wide AbortSignal observation with response reads.
 def startSocketExchange(~Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match maximum:
@@ -464,7 +464,7 @@ def readSocketExchange(-Reason: Data, owner: Owner<Reason>, result: Response.Res
     case Response.ResponseReaderNext{cursor, Done{Some{event}}}: IO.pure(Next<Reason>, Next{Open{owner, cursor}, Done{Some{event}}})
 
 # EOF/errors retire callback factories as well as the socket. Early consumers
-# must closeSocketExchange explicitly; merely dropping an affine Bend value is not disposal.
+# must close explicitly; merely dropping an affine Bend value is not disposal.
 def nextSocketExchange(-Reason: Data, exchange: Exchange<Reason>) -> IO(Next<Reason>):
   match exchange:
     case Closed{}: IO.pure(Next<Reason>, Next{Closed{}, Done{None{}}})

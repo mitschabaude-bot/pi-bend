@@ -379,7 +379,7 @@ def startAddressLookup(~Environment: Data, ~draw: Environment -> IO(Result<&2, &
 def exchangeServersWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, servers: List<&2, Source.Server>, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, kind: U32, name: Id.Name, maximum: U32) -> IO(Result<&2, &2, AddressLookupError<Reason>, Selection>):
   exchangeSourceWith(~Environment, ~draw, Reason, environment, Source.Fixed{servers}, signal, kind, name, maximum)
 
-# The caller owns the selection source and retains it across lookupAddressLookup calls.
+# The caller owns the selection source and retains it across lookup calls.
 def lookupSourceOptionsWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), -Reason: Data, environment: Environment, +source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, optionsLocal: Id.QueryOptions, +kind: U32, name: Id.Name, maximum: U32) -> IO(Report<Reason>):
   startAddressLookup(~Environment, ~draw, Reason, U32.is_eq(kind, 1) || U32.is_eq(kind, 28), Source.availableServerSource(Source.Server, source), environment, source, milliseconds, parent, optionsLocal, kind, name, maximum)
 
@@ -550,7 +550,7 @@ def searchRandom(~Reason: Data, address: Connect.Address, port: U32, millisecond
   searchWith(~Unit, ~Id.random, ~Reason, Unit{}, address, port, milliseconds, parent, kind, maximum, cursor)
 
 # Resolved server ownership and the total deadline remain explicit. This layer
-# consumes search/requestAddressSearch policy, not timeout/attempt scheduling or reload.
+# consumes search/request policy, not timeout/attempt scheduling or reload.
 def plannedAddressSearch(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, source: Source.ServerSource<Source.Server>, milliseconds: U32, parent: Abort.AbortSignal<Reason>, kind: U32, maximum: U32, plan: Configuration.Plan) -> IO(AddressSearchReport<Reason>):
   match plan:
     case Configuration.Plan{optionsLocal, cursor}: searchSourceOptionsWith(~Environment, ~draw, ~Reason, environment, source, milliseconds, parent, optionsLocal, kind, maximum, cursor)
@@ -876,7 +876,7 @@ def borrowTcpResolver(owner: TcpResolverOwner) -> TcpResolverOwner & TcpResolver
     case TcpResolverOwner{Config{servers, domains, policy, request, milliseconds, maximum, +rotate}, selector}:
       borrowedTcpResolver(Config{servers, domains, policy, request, milliseconds, maximum, rotate}, Source.borrow(Source.Server, rotate, selector))
 
-# Finish all borrowedTcpResolver operations before closeTcpResolver or replacement. Configuration
+# Finish all borrowed operations before close or replacement. Configuration
 # snapshots are immutable; a replacement never mutates an active snapshot.
 def closeTcpResolver(owner: TcpResolverOwner) -> IO(Unit):
   match owner:
@@ -901,7 +901,7 @@ def replaceTcpResolver(previous: TcpResolverOwner, config: Config) -> IO(TcpReso
   replaceWithTcpResolver(~Unit, ~Index.wordIndex, Unit{}, previous, config)
 
 # Rotation survives across calls; each search owns one deadline spanning all
-# its candidate, alias and server attempts. The supplied parent stays borrowedTcpResolver.
+# its candidate, alias and server attempts. The supplied parent stays borrowed.
 def lookupWithTcpResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, environment: Environment, resolver: TcpResolver, parent: Abort.AbortSignal<Reason>, kind: U32, name: Id.Name, dots: U32, absolute: Bool) -> IO(AddressSearchReport<Reason>):
   match resolver:
     case TcpResolver{source, domains, policy, request, milliseconds, maximum}:
@@ -1043,9 +1043,9 @@ def requested(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdE
   match context:
     case PairHostsResolverContext{environment, resolver, parent, priority}: networkPairHostsResolver(~Environment, ~draw, ~Reason, environment, resolver, parent, priority, Id.prepare(text))
 
-# Any local family satisfies files-first lookupPairHostsResolver. Preserve source order and
-# duplicates; do not query PairHostsResolverDNS to fill in an absent family. Only a complete
-# local miss starts paired PairHostsResolverDNS. Source failures and local hits bypass PairHostsResolverDNS text
+# Any local family satisfies files-first lookup. Preserve source order and
+# duplicates; do not query DNS to fill in an absent family. Only a complete
+# local miss starts paired DNS. Source failures and local hits bypass DNS text
 # parsing, identifier draws, server rotation and deadline allocation.
 def lookupWithPairHostsResolver(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~Error: Data, environment: Environment, resolver: Resolver, parent: Abort.AbortSignal<Reason>, priority: Priority, name: String, source: Result<&2, &2, Error, List<&2, Hosts.Entry<Hosts.Address>>>) -> IO(Hosts.Report<Error, PairHostsResolverDNS<Reason>>):
   Hosts.resolveWith(~PairHostsResolverContext<Environment, Reason>, ~Error, ~PairHostsResolverDNS<Reason>, ~requested(~Environment, ~draw, ~Reason), PairHostsResolverContext{environment, resolver, parent, priority}, Hosts.Any{}, name, source)
@@ -1137,7 +1137,7 @@ type SystemConfigError<-DecodeError: Data> is Data:
   Loading{error: Configuration.LoadError<DecodeError>}
   InvalidOptions{source: SystemServersReport, diagnostics: List<&2, Configuration.Diagnostic>}
 
-# Preserve numeric IPv6 scope IDs and configuredSystemConfig occurrence order.
+# Preserve numeric IPv6 scope IDs and configured occurrence order.
 def endpoint(server: Source.Server) -> Endpoint.Endpoint:
   match server:
     case Source.Server{Connect.V4{ip}, port}: Endpoint.EndpointV4{ip, port}

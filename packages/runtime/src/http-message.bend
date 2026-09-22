@@ -350,13 +350,10 @@ type SyntaxError is Data:
 
 def digitStatus(+byte: U32) -> Bool: U32.is_ge(byte, 48) && U32.is_le(byte, 57)
 
-def reasonByte(+byte: U32) -> Bool:
-  U32.is_eq(byte, 9) || (U32.is_ge(byte, 32) && U32.is_le(byte, 126)) || (U32.is_ge(byte, 128) && U32.is_le(byte, 255))
-
 def validReason(bytes: List<&2, U32>) -> Bool:
   match bytes:
     case Nil{}: True{}
-    case byte <> rest: reasonByte(byte) && validReason(rest)
+    case byte <> rest: valueByte(byte) && validReason(rest)
 
 # Node Fetch exposes UTF-8 decoded statusText; keep wire octets separately.
 def statusText(line: StatusLine) -> String:
@@ -611,7 +608,7 @@ def requested(method: Result<&2, &2, RequestMethodError, String>, +target: Strin
     case Fail{error}: Fail{RequestHeadMethodError{error}}
     case Done{normalized}: targeted(normalized, target, headers, validTarget(target))
 
-# Serialize validated bytes without adding, sorting or coalescing fieldsRequestHead.
+# Serialize validated bytes without adding, sorting or coalescing fields.
 # The request builder supplies Host and consistent framing headers.
 def encodeRequestHead(method: String, target: String, headers: List<&2, Header>) -> Result<&2, &2, RequestHeadError, Head>:
   requested(normalizeRequestMethod(method), target, headers)
@@ -645,7 +642,7 @@ def digitStep(state: ContentLengthState, digit: U32) -> Result<&2, &2, LengthErr
     case Trailing{_}: Fail{ContentLengthInvalidLength{}}
 
 # Node's received Content-Length parser permits SP after digits, but not HTAB.
-# Leading OWS is accepted by its fieldContentLength parser before numeric interpretation.
+# Leading OWS is accepted by its field parser before numeric interpretation.
 def whitespaceStep(state: ContentLengthState, byte: U32) -> Result<&2, &2, LengthError, ContentLengthState>:
   match state byte:
     case Leading{} 32: Done{Leading{}}
@@ -1138,7 +1135,7 @@ def portUrl(value: Maybe<&2, U32>, default: U32) -> U32:
     case Some{number}: number
 
 # A present empty query contributes '?'. URL.search alone cannot preserve this
-# distinction. Fragments never belong to an HTTP request targetUrl.
+# distinction. Fragments never belong to an HTTP request target.
 def targetUrl(parts: List<&2, String>, query: Maybe<&2, String>) -> String:
   String.reverse(Serialize.component(query, '?', Serialize.segmentsSerialize(parts, "")))
 
@@ -1168,8 +1165,8 @@ def withScheme(scheme: Scheme.Scheme, username: String, password: String, host: 
 
 # Input is a normalized URL record produced by the URL parsers. Keep the host
 # typed for later DNS/socket selection; authority includes IPv6 brackets and
-# only a non-default portUrl. This projection does not open sockets, apply Fetch's
-# blocked-portUrl policy, choose proxy routing, or replace caller-supplied headers.
+# only a non-default port. This projection does not open sockets, apply Fetch's
+# blocked-port policy, choose proxy routing, or replace caller-supplied headers.
 def urlPrepare(value: URL.URL) -> Result<&2, &2, EndpointError, Endpoint>:
   match value:
     case URL.URL{scheme, username, password, host, number, urlPath, query, _}: withScheme(scheme, username, password, host, number, urlPath, query)
@@ -1466,7 +1463,7 @@ def normalizedBufferedBody(method: Result<&2, &2, RequestMethodError, String>, h
     case Done{+name}: permitted(name, headers, input, String.eq(name, "GET") || String.eq(name, "HEAD"))
 
 # Empty text/bytes are present bodies, so GET/HEAD reject them too. Keep absent
-# content distinct from a zero-length bodyBufferedBody; wire framing is a later step.
+# content distinct from a zero-length body; wire framing is a later step.
 def prepare(method: String, headers: Headers, input: Input) -> Result<&2, &2, BufferedBodyError, Prepared>:
   normalizedBufferedBody(normalizeRequestMethod(method), headers, input)
 
@@ -1598,9 +1595,9 @@ def transfer(request: Prepared, provided: Result<&2, &2, HeaderSyntaxError, Bool
     case _ Done{True{}}: Fail{UnsupportedTransferEncoding{}}
     case Prepared{method, +headers, content} Done{False{}}: lengths(Prepared{method, headers, content}, declared(get(headers, "content-length")))
 
-# A supplied zero length can select chunkedBufferedFraming framing for methods without
+# A supplied zero length can select chunked framing for methods without
 # payload semantics, matching the transport. The encoding is explicit so the
-# sender cannot mistake entity bytes for an already framed chunkedBufferedFraming body.
+# sender cannot mistake entity bytes for an already framed chunked body.
 # Validate a supplied length even with absent content; the transport then
 # canonicalizes absent-body framing independently of its numeric value.
 def prepareBufferedFraming(request: Prepared) -> Result<&2, &2, FramingError, BufferedFramingPrepared>:
