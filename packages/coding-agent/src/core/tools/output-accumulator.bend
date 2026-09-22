@@ -19,7 +19,7 @@ type Error is Data:
   System{operation: String, code: U32, message: String}
   WriteAndClose{writeCode: U32, writeMessage: String, closeCode: U32, closeMessage: String}
 
-type Limits is Data: Limits{lines: Nat, bytes: Nat, rolling: Nat, prefix: String}
+type Limits is Data: Limits{lines: Nat, bytes: Nat, rolling: Nat, prefix: String, automaticSpill: Bool}
 type Counts is Data: Counts{raw: Nat, decoded: Nat, completedLines: Nat, lastLineBytes: Nat, openLine: Bool}
 type Tail is Data: Tail{reversed: String, bytes: Nat, lineBoundary: Bool}
 type State is Data:
@@ -32,11 +32,20 @@ type OutputAccumulator is Type: OutputAccumulator{state: State, storage: Storage
 type Outcome<-A: Data> is Type: Outcome{accumulator: OutputAccumulator, result: Result<&2,&2,Error,A>}
 
 def defaults() -> OutputAccumulatorOptions: OutputAccumulatorOptions{None{},None{},None{}}
-def create(options: OutputAccumulatorOptions) -> OutputAccumulator:
+def createWithDecoder(options: OutputAccumulatorOptions, decoder: Utf8.Decoder, automaticSpill: Bool) -> OutputAccumulator:
   match options:
     case OutputAccumulatorOptions{lines,bytes,prefix}:
       +maximum = Maybe.default(&2,Nat,bytes,Truncate.DEFAULT_MAX_BYTES())
-      OutputAccumulator{State{Limits{Maybe.default(&2,Nat,lines,Truncate.DEFAULT_MAX_LINES()),maximum,Nat.max(2n * maximum,1n),Maybe.default(&2,String,prefix,"pi-output")},Utf8.create(),Counts{0n,0n,0n,0n,False{}},Tail{"",0n,True{}},False{},False{},None{},None{}},Memory{Nil{}}}
+      OutputAccumulator{State{Limits{Maybe.default(&2,Nat,lines,Truncate.DEFAULT_MAX_LINES()),maximum,Nat.max(2n * maximum,1n),Maybe.default(&2,String,prefix,"pi-output"),automaticSpill},decoder,Counts{0n,0n,0n,0n,False{}},Tail{"",0n,True{}},False{},False{},None{},None{}},Memory{Nil{}}}
+
+def create(options: OutputAccumulatorOptions) -> OutputAccumulator: createWithDecoder(options,Utf8.create(),True{})
+
+# Use when bytes encode text already decoded by the caller. An initial U+FEFF
+# is then text, not a new byte-order mark; replacement decoding is unchanged.
+# Explicit spilling lets a caller use its original-byte threshold, then request
+# snapshot(True) only when a successful/cancelled result needs a full file.
+def createPreservingBom(options: OutputAccumulatorOptions, automaticSpill: Bool) -> OutputAccumulator:
+  createWithDecoder(options,Utf8.Decoder{Utf8.Ready{},True{}},automaticSpill)
 
 def totalLines(counts: Counts) -> Nat:
   match counts:
@@ -78,8 +87,8 @@ def decodedText(text: String, counts: Counts, tail: Tail) -> Counts & Tail:
 
 def decodedState(limits: Limits, decoder: Utf8.Decoder, finished: Bool, closed: Bool, path: Maybe<&2,String>, failure: Maybe<&2,Error>, value: Counts & Tail) -> State:
   match limits value:
-    case Limits{+lines,+bytes,+rolling,+prefix} Tuple{counts,tail}:
-      State{Limits{lines,bytes,rolling,prefix},decoder,counts,trimmed(rolling,tail),finished,closed,path,failure}
+    case Limits{+lines,+bytes,+rolling,+prefix,automatic} Tuple{counts,tail}:
+      State{Limits{lines,bytes,rolling,prefix,automatic},decoder,counts,trimmed(rolling,tail),finished,closed,path,failure}
 
 def acceptDecoded(state: State, rawSize: Nat, decoded: Utf8.Decoded) -> State:
   match state decoded:
@@ -102,8 +111,8 @@ def exceeds(+bytes: Nat, lines: Nat, counts: Counts) -> Bool:
 
 def shouldUseTempFile(state: State) -> Bool:
   match state:
-    case State{Limits{lines,+bytes,_,_},_,+counts,_,_,_,_,_}:
-      exceeds(bytes,lines,counts)
+    case State{Limits{lines,+bytes,_,_,automatic},_,+counts,_,_,_,_,_}:
+      automatic && exceeds(bytes,lines,counts)
 
 def afterNewline(text: String, fallback: String) -> String:
   match text:
@@ -127,7 +136,7 @@ def snapshotResult(+counts: Counts, path: Maybe<&2,String>, result: Truncate.Tru
 
 def peek(state: State) -> OutputSnapshot:
   match state:
-    case State{Limits{lines,bytes,_,_},_,counts,tail,_,_,path,_}:
+    case State{Limits{lines,bytes,_,_,_},_,counts,tail,_,_,path,_}:
       snapshotResult(counts,path,Truncate.truncateTail(snapshotText(tail),Truncate.TruncationOptions{Some{lines},Some{bytes}}))
 
 def failed(state: State, cause: Error) -> State:
@@ -218,7 +227,7 @@ def openNamed(state: State, chunks: List<&2,List<&2,U32>>, path: Result<&2,&2,Er
 
 def prefixOf(state: State) -> String:
   match state:
-    case State{Limits{_,_,_,prefix},_,_,_,_,_,_,_}: prefix
+    case State{Limits{_,_,_,prefix,_},_,_,_,_,_,_,_}: prefix
 
 def ensureChecked(+state: State, storage: Storage, checked: Result<&2,&2,Error,Unit>) -> IO(Outcome<Unit>):
   match storage checked:
@@ -360,10 +369,6 @@ def publication(accumulator: OutputAccumulator, accepting: Bool, dirty: Bool, +w
     case OutputAccumulator{+state,storage}:
       (StreamState{OutputAccumulator{state,storage},accepting,False{},wake,timer},Publication{Bool.pick(Maybe<&2,OutputSnapshot>,dirty,Some{peek(state)},None{}),wake})
 
-def persistedPublication(accepting: Bool, dirty: Bool, wake: Maybe<&2,Deferred.Deferred<Unit>>, timer: Maybe<&2,TimerCancel>, outcome: Outcome<OutputSnapshot>) -> StreamState & Publication:
-  match outcome:
-    case Outcome{accumulator,_}: publication(accumulator,accepting,dirty,wake,timer)
-
 # The worker has consumed the old observation. The lock prevents a producer
 # from resolving an old wake after it is replaced and disposed.
 def publishLocked(stream: StreamState) -> IO(StreamState & Publication):
@@ -375,8 +380,7 @@ def publishLocked(stream: StreamState) -> IO(StreamState & Publication):
           _ => do IO<Maybe<&2,Deferred.Deferred<Unit>>>:
             signal : Deferred.Deferred<Unit> <- Deferred.new(Unit)
             return Some{signal},_ => IO.pure(Maybe<&2,Deferred.Deferred<Unit>>,None{}))(Unit{})
-        persisted : Outcome<OutputSnapshot> <- snapshot(True{},accumulator)
-        return persistedPublication(accepting,dirty,next,timer,persisted)
+        return publication(accumulator,accepting,dirty,next,timer)
     case stream: IO.pure(StreamState & Publication,(stream,Publication{None{},None{}}))
 
 def timerStarted(accumulator: OutputAccumulator, accepting: Bool, dirty: Bool, wake: Maybe<&2,Deferred.Deferred<Unit>>, pair: Timer & TimerCancel) -> StreamState & Maybe<&1,Timer>:
@@ -494,26 +498,12 @@ def streamResult(view: OutputSnapshot, last: Nat, previous: Result<&2,&2,Error,U
     case Fail{cause} Outcome{_,Done{Unit{}}}: Fail{cause}
     case Done{Unit{}} Outcome{_,Done{Unit{}}}: Done{(view,last)}
 
-def persistedStatus(previous: Result<&2,&2,Error,Unit>, result: Result<&2,&2,Error,OutputSnapshot>) -> Result<&2,&2,Error,Unit>:
-  match previous result:
-    case Fail{cause} _: Fail{cause}
-    case Done{Unit{}} Fail{cause}: Fail{cause}
-    case Done{Unit{}} Done{_}: Done{Unit{}}
-
-def closeSnapshot(previous: Result<&2,&2,Error,Unit>, outcome: Outcome<OutputSnapshot>) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
-  match outcome:
-    case Outcome{OutputAccumulator{+state,storage},result}:
-      +checked = persistedStatus(previous,result)
-      do IO<Result<&2,&1,Error,OutputSnapshot & Nat>>:
-        closed : Outcome<Unit> <- closeTempFile(OutputAccumulator{state,storage})
-        return streamResult(peek(state),lastLineBytes(state),checked,closed)
-
 def closeStream(previous: Result<&2,&2,Error,Unit>, stream: StreamState) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
   match stream:
-    case StreamState{accumulator,_,_,_,_}:
+    case StreamState{OutputAccumulator{+state,storage},_,_,_,_}:
       do IO<Result<&2,&1,Error,OutputSnapshot & Nat>>:
-        persisted : Outcome<OutputSnapshot> <- snapshot(True{},accumulator)
-        closeSnapshot(previous,persisted)
+        closed : Outcome<Unit> <- closeTempFile(OutputAccumulator{state,storage})
+        return streamResult(peek(state),lastLineBytes(state),previous,closed)
 
 def finishBorrowed(done: Maybe<&2,Chan(Unit)>, pair: Serial.Owner<StreamState> & Serial.Handle<StreamState>) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
   match pair:

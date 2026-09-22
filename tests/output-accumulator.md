@@ -40,3 +40,5 @@ python3 tests/output_stream_check.py --runner build/output-stream --threads 4
 ```
 
 Streaming snapshots persist line-truncated output even below the raw-byte spill threshold, matching Bash’s `snapshot(true)` policy. The stream harness checks 2,500-line / 5 KB output with and without an observer, verifies the callback and final result share one path, and compares all saved bytes.
+
+Correction: automatic spilling already included line count in the original accumulator. Explicit persistence calls added to stream publication/finalization were redundant, not a fix for missing line-only persistence; they have been removed while retaining checked-close and sticky-error handling. The line-heavy stream fixture remains useful coverage of the original automatic policy.
