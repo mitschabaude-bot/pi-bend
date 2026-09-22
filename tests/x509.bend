@@ -2,6 +2,7 @@ import Base
 import ../packages/runtime/src/x509.bend as X509
 import ../packages/runtime/src/der.bend as DER
 import ../packages/runtime/src/rsa-sha256.bend as RSA
+import ../packages/runtime/src/p256.bend as P256
 import ../packages/runtime/src/big-nat.bend as Big
 import ../packages/runtime/src/string-split.bend as Split
 import ./aes128-gcm.bend as Bytes
@@ -14,6 +15,7 @@ def error(cause: X509.Error) -> String:
     case X509.InvalidCertificate{}: "certificate"
     case X509.UnsupportedAlgorithm{}: "algorithm"
     case X509.Signature{_}: "signature"
+    case X509.Curve{_}: "curve"
     case X509.InvalidTime{}: "time"
     case X509.NotYetValid{}: "early"
     case X509.Expired{}: "expired"
@@ -25,11 +27,13 @@ def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
     case Done{X509.Certificate{tbs, algorithm, signature}}:
       Bytes.show(DER.encoded(tbs)) ++ "|" ++ Bytes.show(DER.encoded(algorithm)) ++ "|" ++ Bytes.show(signature)
 
-def publicKey(result: Result<&2, &2, X509.Error, RSA.PublicKey>) -> String:
+def publicKey(result: Result<&2, &2, X509.Error, X509.PublicKey>) -> String:
   match result:
     case Fail{cause}: error(cause)
-    case Done{RSA.PublicKey{modulus, exponent, bytes, bits}}:
+    case Done{X509.Rsa{RSA.PublicKey{modulus, exponent, bytes, bits}}}:
       Big.toDecimal(modulus) ++ "|" ++ Bytes.show(exponent) ++ "|" ++ Nat.show(bytes) ++ "|" ++ Nat.show(bits)
+
+    case Done{X509.P256{P256.Point{x,y}}}: "p256:" ++ Bytes.show(DER.append(Big.toBigEndian(32n,x),Big.toBigEndian(32n,y)))
 
 def verified(result: Result<&2, &2, X509.Error, Unit>) -> String:
   match result:
@@ -38,8 +42,8 @@ def verified(result: Result<&2, &2, X509.Error, Unit>) -> String:
 
 def verify(issuer: List<&2, U32>, certificate: List<&2, U32>) -> Result<&2, &2, X509.Error, Unit>:
   Result.bind(&2, &2, X509.Error, X509.Certificate, Unit, X509.parse(issuer), issuerCertificate =>
-    Result.bind(&2, &2, X509.Error, RSA.PublicKey, Unit, X509.rsaPublicKey(issuerCertificate), key =>
-      Result.bind(&2, &2, X509.Error, X509.Certificate, Unit, X509.parse(certificate), subject => X509.verifyRsaSha256(key, subject))))
+    Result.bind(&2, &2, X509.Error, X509.PublicKey, Unit, X509.publicKey(issuerCertificate), key =>
+      Result.bind(&2, &2, X509.Error, X509.Certificate, Unit, X509.parse(certificate), subject => X509.verifySignature(key, subject))))
 
 def words(value: W.U64) -> String:
   match value:
@@ -134,7 +138,7 @@ def run(parts: List<&2, String>) -> String:
         Result.bind(&2, &2, X509.Error, List<&2, DER.Node>, X509.Validity, X509.decoded(List<&2, DER.Node>, DER.sequence(root)), X509.validityTimes)))
     case "a" <> bytes <> high <> low <> Nil{}: verified(at(high,low,Bytes.bytes(bytes)))
     case "p" <> bytes <> Nil{}: parsed(X509.parse(Bytes.bytes(bytes)))
-    case "k" <> bytes <> Nil{}: publicKey(Result.bind(&2, &2, X509.Error, X509.Certificate, RSA.PublicKey, X509.parse(Bytes.bytes(bytes)), X509.rsaPublicKey))
+    case "k" <> bytes <> Nil{}: publicKey(Result.bind(&2, &2, X509.Error, X509.Certificate, X509.PublicKey, X509.parse(Bytes.bytes(bytes)), X509.publicKey))
     case "v" <> issuer <> certificate <> Nil{}: verified(verify(Bytes.bytes(issuer), Bytes.bytes(certificate)))
     case _: "invalid"
 

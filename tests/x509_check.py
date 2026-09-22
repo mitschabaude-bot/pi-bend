@@ -1,4 +1,4 @@
-"""X509 wire extraction and native RSA signatures, not certificate trust."""
+"""X509 wire extraction and native RSA/ECDSA signatures, not certificate trust."""
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
@@ -74,12 +74,54 @@ for certificate in certs:
         exponent = numbers.e.to_bytes((numbers.e.bit_length()+7)//8, 'big')
         cases.append(('k:' + encode(wire), str(numbers.n) + '|' + encode(exponent) + '|' + str((numbers.n.bit_length()+7)//8) + '|' + str(numbers.n.bit_length())))
     else:
-        cases.append(('k:' + encode(wire), 'algorithm'))
+        cases.append(('k:' + encode(wire), 'p256:' + encode(key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)[1:])))
     cases.append(('v:' + encode(root_der) + ':' + encode(wire), 'ok'))
     cases.append(('v:' + encode(wrong_der) + ':' + encode(wire), 'signature'))
     bad = bytearray(wire)
     bad[-1] ^= 1
     cases.append(('v:' + encode(root_der) + ':' + encode(bad), 'signature'))
+
+# ECDSA issuer signs both RSA and P256 subject keys. Verification dispatches
+# on the issuer key and signature algorithm, not the subject key algorithm.
+ec_issuer = ec.generate_private_key(ec.SECP256R1())
+ec_other = ec.generate_private_key(ec.SECP256R1())
+ec_root = make_certificate(name, ec_issuer.public_key(), name, ec_issuer, 10)
+ec_wrong = make_certificate(name, ec_other.public_key(), name, ec_other, 11)
+ec_root_der = ec_root.public_bytes(serialization.Encoding.DER)
+ec_wrong_der = ec_wrong.public_bytes(serialization.Encoding.DER)
+for cert in [ec_root, make_certificate(subject, other.public_key(), name, ec_issuer, 12)]:
+    wire = cert.public_bytes(serialization.Encoding.DER)
+    ec_issuer.public_key().verify(cert.signature, cert.tbs_certificate_bytes, ec.ECDSA(hashes.SHA256()))
+    cases.append(('v:' + encode(ec_root_der) + ':' + encode(wire), 'ok'))
+    cases.append(('v:' + encode(ec_wrong_der) + ':' + encode(wire), 'curve'))
+    cases.append(('v:' + encode(root_der) + ':' + encode(wire), 'algorithm'))
+    bad = bytearray(wire)
+    bad[-1] ^= 1
+    cases.append(('v:' + encode(ec_root_der) + ':' + encode(bad), 'curve'))
+cases.append(('v:' + encode(ec_root_der) + ':' + encode(root_der), 'algorithm'))
+# EC algorithm parameters must identify P256 exactly; compressed points work.
+etbs, ealg, esig = children(ec_root_der)
+efields = children(etbs)
+espki = children(efields[6])
+public = ec_issuer.public_key()
+for point_format in [serialization.PublicFormat.CompressedPoint, serialization.PublicFormat.UncompressedPoint]:
+    point = public.public_bytes(serialization.Encoding.X962, point_format)
+    replacement = tlv(48, espki[0] + tlv(3, b'\x00' + point))
+    wire = tlv(48, tlv(48, b''.join(efields[:6] + [replacement] + efields[7:])) + ealg + esig)
+    expected = 'p256:' + encode(public.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)[1:])
+    cases.append(('k:' + encode(wire), expected))
+for alg, point, expected in [(espki[0][:-1] + b'\x08', b'\x04' + bytes(64), 'algorithm'),
+                              (espki[0], b'\x04' + bytes(64), 'curve'),
+                              (espki[0], b'\x00', 'curve')]:
+    replacement = tlv(48, alg + tlv(3, b'\x00' + point))
+    wire = tlv(48, tlv(48, b''.join(efields[:6] + [replacement] + efields[7:])) + ealg + esig)
+    cases.append(('k:' + encode(wire), expected))
+# Explicit NULL is not legal for ecdsa-with-SHA256. Keep inner/outer identical
+# so this tests algorithm selection rather than the consistency check.
+invalid_alg = tlv(48, split(ealg)[1] + b'\x05\x00')
+bad_fields = efields[:2] + [invalid_alg] + efields[3:]
+wire = tlv(48, tlv(48,b''.join(bad_fields)) + invalid_alg + esig)
+cases.append(('v:' + encode(ec_root_der) + ':' + encode(wire), 'algorithm'))
 
 # Signature algorithm consistency is checked even before RSA verification.
 tbs, algorithm, signature = children(root_der)
@@ -92,7 +134,7 @@ changed_fields[2] = changed_algorithm
 bad = tlv(48, tlv(48, b''.join(changed_fields)) + algorithm + signature)
 cases.append(('v:' + encode(root_der) + ':' + encode(bad), 'certificate'))
 bad = tlv(48, tbs + changed_algorithm + signature)
-cases.append(('v:' + encode(root_der) + ':' + encode(bad), 'algorithm'))
+cases.append(('v:' + encode(root_der) + ':' + encode(bad), 'certificate'))
 
 # A v1 certificate omits the DEFAULT version and contains no v3 extensions.
 v1_tbs = tlv(48, b''.join(fields[1:7]))
@@ -321,7 +363,7 @@ cases += [('san:' + encode(tlv(48,b'')),'certificate'),
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),
                       ('bun', ['bun', 'build/x509.js'])]:
-    run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT, capture_output=True, text=True, timeout=180)
+    run = subprocess.run(command + [arg for arg, _ in cases], cwd=ROOT, capture_output=True, text=True, timeout=300)
     assert run.returncode == 0, (name, run.stderr[-2000:])
     lines = run.stdout.splitlines()
     assert len(lines) == len(cases), (name, len(lines), len(cases))

@@ -1,6 +1,7 @@
 import Base
 import ./der.bend as DER
 import ./rsa-sha256.bend as RSA
+import ./p256.bend as P256
 import ./calendar.bend as Calendar
 import ./u64.bend as W
 import ./big-nat.bend as Big
@@ -12,10 +13,15 @@ type Error is Data:
   InvalidCertificate{}
   UnsupportedAlgorithm{}
   Signature{cause: RSA.Error}
+  Curve{cause: P256.Error}
   InvalidTime{}
   NotYetValid{}
   Expired{}
   DuplicateExtension{oid: List<&2, U32>}
+
+type PublicKey is Data:
+  Rsa{key: RSA.PublicKey}
+  P256{point: P256.Point}
 
 type Certificate is Data:
   Certificate{tbs: DER.Node, algorithm: DER.Node, signature: List<&2, U32>}
@@ -70,24 +76,32 @@ def rsaKeyBytes(bytes: List<&2, U32>) -> Result<&2, &2, Error, RSA.PublicKey>:
   Result.bind(&2, &2, Error, DER.Node, RSA.PublicKey, decoded(DER.Node, DER.one(bytes)), root =>
     Result.bind(&2, &2, Error, List<&2, DER.Node>, RSA.PublicKey, decoded(List<&2, DER.Node>, DER.sequence(root)), rsaIntegers))
 
-def rsaSubjectFields(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, RSA.PublicKey>:
+def curveResult(-A: Data, result: Result<&2, &2, P256.Error, A>) -> Result<&2, &2, Error, A>:
+  match result:
+    case Fail{cause}: Fail{Curve{cause}}
+    case Done{value}: Done{value}
+
+def subjectFields(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, PublicKey>:
   match nodes:
     case DER.Node{DER.Tag{0, True{}, 16}, _, 6 <> 9 <> 42 <> 134 <> 72 <> 134 <> 247 <> 13 <> 1 <> 1 <> 1 <> 5 <> 0 <> Nil{}} <> key <> Nil{}:
-      Result.bind(&2, &2, Error, DER.Bits, RSA.PublicKey, decoded(DER.Bits, DER.bits(key)), bitString =>
-        Result.bind(&2, &2, Error, List<&2, U32>, RSA.PublicKey, signatureBytes(bitString), rsaKeyBytes))
+      Result.bind(&2, &2, Error, DER.Bits, PublicKey, decoded(DER.Bits, DER.bits(key)), bitString =>
+        Result.bind(&2, &2, Error, List<&2, U32>, PublicKey, signatureBytes(bitString), bytes =>
+          Result.bind(&2, &2, Error, RSA.PublicKey, PublicKey, rsaKeyBytes(bytes), value => Done{Rsa{value}})))
+    case DER.Node{DER.Tag{0, True{}, 16}, _, 6 <> 7 <> 42 <> 134 <> 72 <> 206 <> 61 <> 2 <> 1 <> 6 <> 8 <> 42 <> 134 <> 72 <> 206 <> 61 <> 3 <> 1 <> 7 <> Nil{}} <> key <> Nil{}:
+      Result.bind(&2, &2, Error, DER.Bits, PublicKey, decoded(DER.Bits, DER.bits(key)), bitString =>
+        Result.bind(&2, &2, Error, List<&2, U32>, PublicKey, signatureBytes(bitString), bytes =>
+          Result.bind(&2, &2, Error, P256.Point, PublicKey, curveResult(P256.Point, P256.publicKey(bytes)), value => Done{P256{value}})))
     case _: Fail{UnsupportedAlgorithm{}}
 
-def rsaSubjectPublicKeyInfo(node: DER.Node) -> Result<&2, &2, Error, RSA.PublicKey>:
-  Result.bind(&2, &2, Error, List<&2, DER.Node>, RSA.PublicKey, decoded(List<&2, DER.Node>, DER.sequence(node)), rsaSubjectFields)
-
-def subjectKey(fields: List<&2, DER.Node>) -> Result<&2, &2, Error, RSA.PublicKey>:
+def subjectKey(fields: List<&2, DER.Node>) -> Result<&2, &2, Error, PublicKey>:
   match fields:
-    case _ <> _ <> _ <> _ <> _ <> key <> _: rsaSubjectPublicKeyInfo(key)
+    case _ <> _ <> _ <> _ <> _ <> key <> _:
+      Result.bind(&2, &2, Error, List<&2, DER.Node>, PublicKey, decoded(List<&2, DER.Node>, DER.sequence(key)), subjectFields)
     case _: Fail{InvalidCertificate{}}
 
-def rsaPublicKey(certificate: Certificate) -> Result<&2, &2, Error, RSA.PublicKey>:
+def publicKey(certificate: Certificate) -> Result<&2, &2, Error, PublicKey>:
   match certificate:
-    case Certificate{tbs, _, _}: Result.bind(&2, &2, Error, List<&2, DER.Node>, RSA.PublicKey, fields(tbs), subjectKey)
+    case Certificate{tbs, _, _}: Result.bind(&2, &2, Error, List<&2, DER.Node>, PublicKey, fields(tbs), subjectKey)
 
 def matchingAlgorithm(nodes: List<&2, DER.Node>, +algorithm: DER.Node) -> Result<&2, &2, Error, Unit>:
   match nodes:
@@ -95,17 +109,24 @@ def matchingAlgorithm(nodes: List<&2, DER.Node>, +algorithm: DER.Node) -> Result
       Bool.pick(Result<&2, &2, Error, Unit>, RSA.equal(DER.encoded(inner), DER.encoded(algorithm), 0), Done{Unit{}}, Fail{InvalidCertificate{}})
     case _: Fail{InvalidCertificate{}}
 
-# Cryptographic signature verification with an explicitly supplied issuer key.
-# This does not establish that the issuer is trusted or allowed to issue a cert.
-def verifyRsaSha256(issuer: RSA.PublicKey, certificate: Certificate) -> Result<&2, &2, Error, Unit>:
+# The key type and exact AlgorithmIdentifier jointly select verification.
+# ECDSA parameters must be absent; rsaEncryption/SHA256 use explicit NULL.
+def signatureAlgorithm(issuer: PublicKey, body: List<&2, U32>, message: List<&2, U32>, signature: List<&2, U32>) -> Result<&2, &2, Error, Unit>:
+  match issuer body:
+    case Rsa{key} 6 <> 9 <> 42 <> 134 <> 72 <> 134 <> 247 <> 13 <> 1 <> 1 <> 11 <> 5 <> 0 <> Nil{}:
+      rsaResult(Unit, RSA.verifyPkcs1(key, message, signature))
+    case P256{key} 6 <> 8 <> 42 <> 134 <> 72 <> 206 <> 61 <> 4 <> 3 <> 2 <> Nil{}:
+      curveResult(Unit, P256.verify(key, message, signature))
+    case _ _: Fail{UnsupportedAlgorithm{}}
+
+# An explicitly supplied issuer key proves a signature, not trust or authority.
+def verifySignature(issuer: PublicKey, certificate: Certificate) -> Result<&2, &2, Error, Unit>:
   match certificate:
     case Certificate{+tbs, DER.Node{DER.Tag{0, True{}, 16}, +header, +body}, signature}:
       algorithm = {DER.Node{DER.Tag{0, True{}, 16}, header, body} : DER.Node}
-      allowed = Bool.pick(Result<&2, &2, Error, Unit>, RSA.equal(body, 6 <> 9 <> 42 <> 134 <> 72 <> 134 <> 247 <> 13 <> 1 <> 1 <> 11 <> 5 <> 0 <> Nil{}, 0), Done{Unit{}}, Fail{UnsupportedAlgorithm{}})
-      Result.bind(&2, &2, Error, Unit, Unit, allowed, unused =>
-        Result.bind(&2, &2, Error, List<&2, DER.Node>, Unit, fields(tbs), nodes =>
-          Result.bind(&2, &2, Error, Unit, Unit, matchingAlgorithm(nodes, algorithm), unused =>
-            rsaResult(Unit, RSA.verifyPkcs1(issuer, DER.encoded(tbs), signature)))))
+      Result.bind(&2, &2, Error, List<&2, DER.Node>, Unit, fields(tbs), nodes =>
+        Result.bind(&2, &2, Error, Unit, Unit, matchingAlgorithm(nodes, algorithm), unused =>
+          signatureAlgorithm(issuer, body, DER.encoded(tbs), signature)))
     case _: Fail{UnsupportedAlgorithm{}}
 
 # RFC 5280 times require seconds and a literal Z, without offsets/fractions.
@@ -278,7 +299,7 @@ def basicFields(nodes: List<&2, DER.Node>) -> Result<&2, &2, Error, BasicConstra
     case DER.Node{DER.Tag{0,False{},1},_,255 <> Nil{}} <> Nil{}: Done{BasicConstraints{True{},None{}}}
     case DER.Node{DER.Tag{0,False{},1},_,255 <> Nil{}} <> path <> Nil{}:
       Result.bind(&2, &2, Error, List<&2, U32>, BasicConstraints, decoded(List<&2, U32>,DER.unsigned(path)), bytes =>
-        Done{BasicConstraints{True{},Some{RSA.number(bytes,Big.zero())}}})
+        Done{BasicConstraints{True{},Some{Big.fromBigEndian(bytes)}}})
     case _: Fail{InvalidCertificate{}}
 
 def basicConstraints(extension: Extension) -> Result<&2, &2, Error, BasicConstraints>:

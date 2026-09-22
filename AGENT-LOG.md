@@ -281,3 +281,27 @@ Continuing x509.bend and runner/checker with SubjectAlternativeName decoding (DN
 ## 2026-09-21T23:55:03.791200+00:00 — Codex
 
 SAN decoder passes824 combined X509 cases native1/native4; Bun running9474. DNS/IP/mail/URI/registered-ID are distinct, structured forms retain DER and still need their full schema/name-constraint handling. Cryptography SAN oracle includes IPv4/IPv6 and exact IA5 byte preservation, without treating a parsed string as a valid identity. Hostname compatibility question remains unanswered; no matching policy selected. Adding runtime README and committing owned x509/test/log paths after Bun.
+
+## 2026-09-21T23:55:22.244663+00:00 — Codex
+
+SAN decoding milestone committed/pushed;824 X509 checks pass allbackends. No live jobs. Gregor has not answered the hostname policy question (SAN-only/whole-label wildcard vs Node CN fallback/partial wildcard); leave acceptance policy pending and continue independent trust/ECDSA work. Provider/fetch/proof/compiler untouched.
+
+## 2026-09-21T23:57:31.807437+00:00 — Codex
+
+Starting native P256/ECDSA in packages/runtime/src/p256.bend and tests/p256.bend, tests/p256_check.py. Moving existing RSA public modular arithmetic/byte conversion into big-nat.bend for real reuse, updating rsa-sha256.bend and the one X509 integer conversion call; RSA regressions will run. No new forwarding modules. Hostname-policy question remains pending; provider/fetch/proof/compiler paths untouched.
+
+## 2026-09-22T00:10:38.777143+00:00 — Codex
+
+Coordination check after Gregor’s reminder: continuing only P256/ECDSA and shared BigNat/RSA arithmetic scope announced above. P256 differential suite remains running (session64275); RSA regression completed successfully. Provider/fetch/proof/compiler migration remains the other agent’s scope; no edits or commits to those paths. Will record validation and explicit owned-path commit handoff here.
+
+## 2026-09-22T00:10:47.372165+00:00 — Codex
+
+P256 suite now finished:56 checks pass native1/native4/Bun (31.02/62.00/154.52 seconds). Shared arithmetic refactor RSA regression:212 checks pass all three backends (25.27/47.48/77.69 seconds). Changes remain uncommitted pending review/docs and X509 regression; no live P256 test process.
+
+## 2026-09-22T00:11:58.888691+00:00 — Codex
+
+Expanding current X509 edit to integrate P256: one PublicKey sum and algorithm-dispatched certificate signature verification, replacing the RSA-only extraction/verification entry points (currently used only by our X509 runner). Editing x509.bend and its two existing test files plus runtime README. No provider/fetch/proof/compiler overlap. Hostname policy remains pending.
+
+## 2026-09-22T00:17:10.712832+00:00 — Codex
+
+P256 plus X509 integration ready:56 P256,212 RSA and839 combined X509 checks pass native1/native4/Bun. Shared BigNat arithmetic replaces duplicate RSA helpers; X509 PublicKey/verifySignature dispatch RSA PKCS1-SHA256 and P256 ECDSA-SHA256. Tests include wrong issuers, altered signatures, compressed keys and exact algorithm parameters. Consolidated runtime README. Committing only big-nat/rsa-sha256/p256/x509 modules, their P256/X509 tests, runtime README and this log. No live jobs. No chain trust or authenticated HTTPS claim. Provider/fetch/proof/compiler files untouched.

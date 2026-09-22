@@ -34,11 +34,6 @@ def odd(bytes: List<&2, U32>) -> Bool:
     case _ <> rest: odd(rest)
     case Nil{}: False{}
 
-def number(bytes: List<&2, U32>, value: Big.BigNat) -> Big.BigNat:
-  match bytes:
-    case Nil{}: value
-    case byte <> rest: number(rest, Big.add(Big.multiplyU32(value, 256), Big.fromU32(byte)))
-
 def less(order: Cmp) -> Bool:
   match order:
     case LT{}: True{}
@@ -61,48 +56,19 @@ def checkedKey(allowed: Bool, modulus: Big.BigNat, exponent: List<&2, U32>, size
     case True{}: Done{PublicKey{modulus, exponent, size, bits}}
 
 def key(+modulus: List<&2, U32>, +exponent: List<&2, U32>) -> Result<&2, &2, Error, PublicKey>:
-  +n = number(modulus, Big.zero())
-  +e = number(exponent, Big.zero())
+  +n = Big.fromBigEndian(modulus)
+  +e = Big.fromBigEndian(exponent)
   checkedKey(canonical(modulus) && canonical(exponent) && odd(modulus) && odd(exponent) && less(Big.compare(Big.one(), e)) && less(Big.compare(e, n)), n, exponent, length(modulus, 0n), bitLength(modulus))
-
-def remainder(division: Big.Division) -> Big.BigNat:
-  match division:
-    case Big.Division{_, value}: value
-
-def reduce(value: Big.BigNat, modulus: Big.BigNat) -> Big.BigNat:
-  match value:
-    case Big.BigNat{limbs}: remainder(Big.divideLimbs(List.reverse(&2, U32, limbs), modulus, Big.Division{Big.zero(), Big.zero()}))
-
-def multiplyBit(set: Bool, squared: Big.BigNat, base: Big.BigNat, modulus: Big.BigNat) -> Big.BigNat:
-  match set:
-    case False{}: squared
-    case True{}: reduce(Big.multiply(squared, base), modulus)
-
-def powerByte(fuel: Nat, +byte: U32, +base: Big.BigNat, +modulus: Big.BigNat, +value: Big.BigNat) -> Big.BigNat:
-  match fuel:
-    case 0n: value
-    case 1n+fuel:
-      powerByte(fuel, U32.and(U32.shl(byte), 255), base, modulus, multiplyBit(U32.is_eq(U32.and(byte, 128), 128), reduce(Big.multiply(value, value), modulus), base, modulus))
-
-def power(exponent: List<&2, U32>, +base: Big.BigNat, +modulus: Big.BigNat, value: Big.BigNat) -> Big.BigNat:
-  match exponent:
-    case Nil{}: value
-    case byte <> rest: power(rest, base, modulus, powerByte(8n, byte, base, modulus, value))
-
-def output(count: Nat, step: Big.SmallDivision, bytes: List<&2, U32>) -> List<&2, U32>:
-  match count step:
-    case 0n _: bytes
-    case 1n+count Big.SmallDivision{quotient, byte}: output(count, Big.divideSmallRaw(quotient, 256), byte <> bytes)
 
 def recovered(allowed: Bool, modulus: Big.BigNat, exponent: List<&2, U32>, size: Nat, signature: Big.BigNat) -> Result<&2, &2, Error, List<&2, U32>>:
   match allowed:
     case False{}: Fail{InvalidSignature{}}
-    case True{}: Done{output(size, Big.divideSmallRaw(power(exponent, signature, modulus, Big.one()), 256), Nil{})}
+    case True{}: Done{Big.toBigEndian(size, Big.powerMod(exponent, signature, modulus))}
 
 def recover(public: PublicKey, +signature: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
   match public:
     case PublicKey{+modulus, exponent, +size, _}:
-      +value = number(signature, Big.zero())
+      +value = Big.fromBigEndian(signature)
       recovered(valid(signature) && Nat.is_eq(length(signature, 0n), size) && less(Big.compare(value, modulus)), modulus, exponent, size, value)
 
 def append(left: List<&2, U32>, right: List<&2, U32>) -> List<&2, U32>:

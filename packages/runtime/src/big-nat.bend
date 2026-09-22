@@ -206,3 +206,49 @@ def toDecimal(value: BigNat) -> String:
       # Each 16-bit limb contributes less than five decimal digits. This is a
       # proven input-size bound for termination, not a fixed precision limit.
       showDigits(List.length(&2, U32, limbs) * 5n, divideSmallRaw(BigNat{limbs}, 10), "")
+
+# Big-endian octet conversion; callers validate byte ranges. Fixed-width
+# output requires that the number fits in the requested width.
+def readBigEndian(bytes: List<&2, U32>, value: BigNat) -> BigNat:
+  match bytes:
+    case Nil{}: value
+    case byte <> rest: readBigEndian(rest, add(multiplyU32(value, 256), fromU32(byte)))
+
+def fromBigEndian(bytes: List<&2, U32>) -> BigNat:
+  readBigEndian(bytes, zero())
+
+# Public modular arithmetic. The modulus must be nonzero.
+def remainder(division: Division) -> BigNat:
+  match division:
+    case Division{_, value}: value
+
+def reduce(value: BigNat, modulus: BigNat) -> BigNat:
+  match value:
+    case BigNat{limbs}: remainder(divideLimbs(List.reverse(&2, U32, limbs), modulus, Division{zero(), zero()}))
+
+def multiplyBit(set: Bool, squared: BigNat, base: BigNat, modulus: BigNat) -> BigNat:
+  match set:
+    case False{}: squared
+    case True{}: reduce(multiply(squared, base), modulus)
+
+def powerByte(fuel: Nat, +byte: U32, +base: BigNat, +modulus: BigNat, +value: BigNat) -> BigNat:
+  match fuel:
+    case 0n: value
+    case 1n+fuel:
+      powerByte(fuel, U32.and(U32.shl(byte), 255), base, modulus, multiplyBit(U32.is_eq(U32.and(byte, 128), 128), reduce(multiply(value, value), modulus), base, modulus))
+
+def modularPower(exponent: List<&2, U32>, +base: BigNat, +modulus: BigNat, value: BigNat) -> BigNat:
+  match exponent:
+    case Nil{}: value
+    case byte <> rest: modularPower(rest, base, modulus, powerByte(8n, byte, base, modulus, value))
+
+def writeBigEndian(count: Nat, step: SmallDivision, bytes: List<&2, U32>) -> List<&2, U32>:
+  match count step:
+    case 0n _: bytes
+    case 1n+count SmallDivision{quotient, byte}: writeBigEndian(count, divideSmallRaw(quotient, 256), byte <> bytes)
+
+def powerMod(exponent: List<&2, U32>, base: BigNat, +modulus: BigNat) -> BigNat:
+  modularPower(exponent, base, modulus, reduce(one(), modulus))
+
+def toBigEndian(width: Nat, value: BigNat) -> List<&2, U32>:
+  writeBigEndian(width, divideSmallRaw(value, 256), Nil{})
