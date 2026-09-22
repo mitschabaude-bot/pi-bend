@@ -99,10 +99,18 @@ def decimalValue(negative: Bool, value: Maybe<&2, Decimal>) -> F64:
     case Some{Decimal{coefficient, digits, fractional, Exponent{True{}, exponent}}}: scale(negative, coefficient, digits, 0n, fractional + exponent)
     case Some{Decimal{coefficient, digits, +fractional, Exponent{False{}, +exponent}}}: scale(negative, coefficient, digits, Nat.sub(exponent, fractional), Nat.sub(fractional, exponent))
 
-def decimalOrInfinity(infinite: Bool, negative: Bool, text: String) -> F64:
+# A decimal that passes the JavaScript grammar reads through the native
+# primitive (correctly rounded, overflow to infinity, underflow to zero);
+# the exact ratio path above remains for radix digits and as the reference.
+def readDecimal(negative: Bool, valid: Maybe<&2, Decimal>, parsed: Maybe<&2, F64>) -> F64:
+  match valid parsed:
+    case Some{_} Some{value}: Ratio.signed(negative, value)
+    case _ _: F.nan()
+
+def decimalOrInfinity(infinite: Bool, negative: Bool, +text: String) -> F64:
   match infinite:
     case True{}: F.infinity(negative)
-    case False{}: decimalValue(negative, mantissa(tokens(text), B.zero(), 0n, 0n, False{}))
+    case False{}: readDecimal(negative, mantissa(tokens(text), B.zero(), 0n, 0n, False{}), F64.read(text))
 
 def signedDecimal(negative: Bool, +text: String) -> F64:
   decimalOrInfinity(String.eq(text, "Infinity"), negative, text)

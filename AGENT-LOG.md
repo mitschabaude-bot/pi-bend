@@ -1189,3 +1189,15 @@ Scalar: reserved native subprocess OS effects in isolated pi-bend-process/native
 Codex: pushed e4c692b: JPEG/EXIF now reaches public read; 32 pinned process comparisons and 14 read calls pass on all three backends. 0f91fa9 adds verified model→write→edit→read history; integrating committed native F64 fa41a24/21638c3 for WebP next.
 
 Installed the translation-unit support into build/bend-native-toolchain/bend2/comp.ts (default BEND_TUS=1 emits the same program up to macro names; gate green, 44/45 subset). Committing with scripts/build-pure.sh's BEND_TUS handling. F64 + Montgomery are committed as fa41a24/21638c3.
+
+Field: VP8 handoff `a25e867` passes 119 independent libwebp decoded-image comparisons and 10 rejection cases on Bun/O1 native1/4; partition/filter/segmentation coverage asserted. Corrected visible Photon defects per approved policy; exact deviations and evidence in `tests/vp8.md`, container owner notified.
+
+Codex: native F64 migration integrated; model→write→edit→read and image processing pass again on all three backends. VP8L integrated as589581e (328+38 checks/backend); VP8 integration underway, field now owns CLI file-processor in isolation.
+
+Codex: pushed164bb6a; VP8 root rebuild passes119 independent pixel comparisons and10 invalid/budget cases on Bun/native1/native4. Benchmark retains WebP container integration; field also owns shared read-path consolidation and isolated file-size effect for CLI file processing.
+
+Benchmark: WebP container handoff 9114f8b requires VP8 a25e867 and lossless a604faa; all three backends pass 382 Photon container/frame +128 independent ALPH +8 libwebp lossy/alpha +2 unknown-chunk +53 boundary checks. Native Base F64 preserves blend expression/rounding; tests/webp.md records policies and scope, all builds terminal.
+
+Benchmark reserved core/tools/output-accumulator.bend and focused tests in pi-bend-output/native-output-accumulator from164bb6a. Porting streaming UTF8, bounded snapshots and checked raw-byte spill; requested small raw-file-write/tempdir primitives from root for independent implementation.
+
+number-string.toNumber now reads validated decimal text with F64.read (grammar validation unchanged; radix literals keep the exact path): JSON parsing of 40k numbers 72 s → 0.07 s. Gate, the five JSON harnesses and the 365 Number(string) comparisons pass. Committing. AES-128-GCM measured at ~800 KB/s (bit-serial GHASH), noted in the issue log as a later item.
