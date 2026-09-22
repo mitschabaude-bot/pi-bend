@@ -110,9 +110,15 @@ def readIgnore(+path: String) -> IO(ResultOf(Ignore.Matcher)):
 # Ignore sources are ordered by source kind, then nearest containing directory.
 # Git-only sources stop at a repository boundary when the search starts in Git.
 type Scope is Data:
-  Scope{root: String, fd: Ignore.Matcher, ordinary: Ignore.Matcher, git: Ignore.Matcher, exclude: Ignore.Matcher, boundary: Bool}
+  Scope{root: String, custom: Ignore.Matcher, ordinary: Ignore.Matcher, git: Ignore.Matcher, exclude: Ignore.Matcher, boundary: Bool}
+type Override is Data:
+  Override{pattern: Glob.Pattern,negative: Bool}
+type Mode is Data:
+  Find{}
+  Grep{root: String,glob: Maybe<&2,Override>}
+
 type Configuration is Data:
-  Configuration{requireGit: Bool, globalGit: Ignore.Matcher, globalFd: Ignore.Matcher}
+  Configuration{requireGit: Bool, mode: Mode, globalGit: Ignore.Matcher, globalCustom: Ignore.Matcher}
 
 def firstLine(text: String) -> String:
   Maybe.default(&2,String,List.head(&2,String,Strings.split(text,'\n')) ,"")
@@ -139,14 +145,31 @@ def gitExclude(value: Maybe<&2,String>) -> IO(ResultOf(Ignore.Matcher)):
   match value:
     case None{}: IO.pure(ResultOf(Ignore.Matcher),Done{Ignore.new(False{})})
     case Some{path}: readIgnore(Path.join(path,"info/exclude"))
-def loadScope(+root: String,+requireGit: Bool) -> IO(ResultOf(Scope)):
+def hasRepository(scopes: List<&2,Scope>) -> Bool:
+  match scopes:
+    case Nil{}: False{}
+    case Scope{_,_,_,_,_,True{}} <> _: True{}
+    case _ <> rest: hasRepository(rest)
+def isFind(mode: Mode) -> Bool:
+  match mode:
+    case Find{}: True{}
+    case _: False{}
+def customName(mode: Mode) -> String:
+  match mode:
+    case Find{}: ".fdignore"
+    case _: ".rgignore"
+def conditionalIgnore(enabled: Bool,path: String) -> IO(ResultOf(Ignore.Matcher)):
+  match enabled:
+    case True{}: readIgnore(path)
+    case False{}: IO.pure(ResultOf(Ignore.Matcher),Done{Ignore.new(False{})})
+def loadScope(+root: String,+requireGit: Bool,+mode: Mode,ancestors: List<&2,Scope>) -> IO(ResultOf(Scope)):
   do IO<ResultOf(Scope)>:
     +kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(Path.join(root,".git"))
-    then(Ignore.Matcher,Scope,readIgnore(Path.join(root,".fdignore")),fd =>
+    then(Ignore.Matcher,Scope,readIgnore(Path.join(root,customName(mode))),custom =>
       then(Ignore.Matcher,Scope,readIgnore(Path.join(root,".ignore")),ordinary =>
-        then(Ignore.Matcher,Scope,readIgnore(Path.join(root,".gitignore")),git =>
+        then(Ignore.Matcher,Scope,conditionalIgnore(isFind(mode) || hasRepository(ancestors) || Result.is_done(&2,&2,FS.Error,FS.FileKind,kind),Path.join(root,".gitignore")),git =>
           then(Maybe<&2,String>,Scope,gitDirectory(root,kind,requireGit),directory =>
-            then(Ignore.Matcher,Scope,gitExclude(directory),exclude => IO.pure(ResultOf(Scope),Done{Scope{root,fd,ordinary,git,exclude,requireGit && Result.is_done(&2,&2,FS.Error,FS.FileKind,kind)}}))))))
+            then(Ignore.Matcher,Scope,gitExclude(directory),exclude => IO.pure(ResultOf(Scope),Done{Scope{root,custom,ordinary,git,exclude,requireGit && Result.is_done(&2,&2,FS.Error,FS.FileKind,kind)}}))))))
 
 def source(scope: Scope,priority: U32) -> Ignore.Matcher:
   match scope priority:
@@ -181,13 +204,13 @@ def selectedIgnore(priorities: List<&2,U32>,+scopes: List<&2,Scope>,+path: Strin
     case priority <> rest:
       +value = scoped(scopes,priority,path,directory)
       Bool.pick(Unit -> Maybe<&2,Bool>,Maybe.is_none(&2,Bool,value),_ => selectedIgnore(rest,scopes,path,directory),_ => value)(Unit{})
-def globalIgnored(config: Configuration,+path: String,+directory: Bool,local: Maybe<&2,Bool>) -> Bool:
+def globalIgnored(config: Configuration,scopes: List<&2,Scope>,+path: String,+directory: Bool,local: Maybe<&2,Bool>) -> Bool:
   match config local:
     case _ Some{value}: value
-    case Configuration{_,git,fd} None{}:
-      Maybe.default(&2,Bool,Maybe.or(&2,Bool,matchAt(git,"/",path,directory),matchAt(fd,"/",path,directory)),False{})
-def ignored(config: Configuration,scopes: List<&2,Scope>,+path: String,+directory: Bool) -> Bool:
-  globalIgnored(config,path,directory,selectedIgnore(0 <> 1 <> 2 <> 3 <> Nil{},scopes,path,directory))
+    case Configuration{_,mode,git,fd} None{}:
+      Maybe.default(&2,Bool,Maybe.or(&2,Bool,Bool.pick(Unit -> Maybe<&2,Bool>,isFind(mode) || hasRepository(scopes),_ => matchAt(git,"/",path,directory),_ => None{})(Unit{}),matchAt(fd,"/",path,directory)),False{})
+def ignored(config: Configuration,+scopes: List<&2,Scope>,+path: String,+directory: Bool) -> Bool:
+  globalIgnored(config,scopes,path,directory,selectedIgnore(0 <> 1 <> 2 <> 3 <> Nil{},scopes,path,directory))
 
 # Global exclude configuration is parsed as configuration, not a regex over
 # arbitrary sections. Quoted paths may contain whitespace; malformed values fail.
@@ -228,11 +251,11 @@ def expandHome(+home: String,path: String) -> String:
     case SCon{'~',SCon{'/',rest}}: Path.join(home,rest)
     case value: value
 
-def loadScopes(paths: List<&2,String>,+requireGit: Bool,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,scopes: List<&2,Scope>) -> IO(ResultOf(List<&2,Scope>)):
+def loadScopes(paths: List<&2,String>,+requireGit: Bool,+mode: Mode,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,+scopes: List<&2,Scope>) -> IO(ResultOf(List<&2,Scope>)):
   match paths:
     case Nil{}: IO.pure(ResultOf(List<&2,Scope>),Done{scopes})
     case path <> rest:
-      then(Unit,List<&2,Scope>,check(signal),_ => then(Scope,List<&2,Scope>,loadScope(path,requireGit),scope => loadScopes(rest,requireGit,signal,scope <> scopes)))
+      then(Unit,List<&2,Scope>,check(signal),_ => then(Scope,List<&2,Scope>,loadScope(path,requireGit,mode,scopes),scope => loadScopes(rest,requireGit,mode,signal,scope <> scopes)))
 def insideGit(paths: List<&2,String>,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Bool)):
   match paths:
     case Nil{}: IO.pure(ResultOf(Bool),Done{False{}})
@@ -271,15 +294,27 @@ def visits(entries: List<&2,FS.DirectoryEntry>,+path: String,+scopes: List<&2,Sc
 def enterResult(path: String,scopes: List<&2,Scope>,state: Cursor,value: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>) -> ResultOf(Cursor):
   match state value:
     case Cursor{work,config,signal} Done{entries}: Done{Cursor{visits(List.reverse(&2,FS.DirectoryEntry,Sort.sort(~FS.DirectoryEntry,~entryOrder,entries)),path,scopes,work),config,signal}}
+    case Cursor{_,Configuration{_,Grep{_,_},_,_},_} Fail{cause}: Fail{Filesystem{cause}}
     case state Fail{FS.System{_,_}}: Done{state}
     case _ Fail{cause}: Fail{Filesystem{cause}}
 def enter(+path: String,+scopes: List<&2,Scope>,state: Cursor,config: Configuration) -> IO(ResultOf(Cursor)):
   match config:
-    case Configuration{requireGit,_,_}:
-      then(Scope,Cursor,loadScope(path,requireGit),scope =>
+    case Configuration{requireGit,mode,_,_}:
+      then(Scope,Cursor,loadScope(path,requireGit,mode,scopes),scope =>
         do IO<ResultOf(Cursor)>:
           entries : Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>> <- FS.readDirectory(path)
           return enterResult(path,scope <> scopes,state,entries))
+
+def overrideDecision(mode: Mode,+path: String,+directory: Bool) -> Maybe<&2,Bool>:
+  match mode:
+    case Grep{root,Some{Override{+pattern,+negative}}}:
+      +relativePath = relative(root,path)
+      +matched = Glob.matches(pattern,relativePath) || (directory && Glob.matches(pattern,relativePath ++ "/"))
+      Bool.pick(Maybe<&2,Bool>,matched,Some{negative},Bool.pick(Maybe<&2,Bool>,Bool.not(negative) && Bool.not(directory),Some{True{}},None{}))
+    case _: None{}
+def excluded(+config: Configuration,+scopes: List<&2,Scope>,+path: String,+directory: Bool) -> Bool:
+  match config:
+    case Configuration{_,mode,_,_}: Maybe.default(&2,Bool,overrideDecision(mode,path,directory),ignored(config,scopes,path,directory))
 
 # The cursor owns only immutable work snapshots, not open directory handles.
 # Each call checks cancellation and yields one accepted entry. Directory links
@@ -292,7 +327,7 @@ def enter(+path: String,+scopes: List<&2,Scope>,state: Cursor,config: Configurat
     case Cursor{Visit{parent,FS.DirectoryEntry{+name,+kind},+scopes} <> +rest,+config,+signal}:
       +path = Path.join(parent,name)
       +directory = isDirectory(kind)
-      then(Unit,Step,check(signal),_ => Bool.pick(Unit -> IO(ResultOf(Step)),ignored(config,scopes,path,directory),
+      then(Unit,Step,check(signal),_ => Bool.pick(Unit -> IO(ResultOf(Step)),excluded(config,scopes,path,directory),
         _ => next(Cursor{rest,config,signal}),
         _ => IO.pure(ResultOf(Step),Done{Yield{Entry{path,name,kind},Cursor{Bool.pick(List<&2,Work>,directory,Enter{path,scopes} <> rest,rest),config,signal}}}))(Unit{}))
 
@@ -321,12 +356,12 @@ def patternResult(value: Result<&2,&2,Glob.Error,Glob.Pattern>) -> ResultOf(Glob
   match value:
     case Fail{cause}: Fail{InvalidPattern{cause}}
     case Done{pattern}: Done{pattern}
-def create(+path: String,+home: String,+xdg: String,+requireGit: Bool,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Cursor)):
+def create(+path: String,+home: String,+xdg: String,+requireGit: Bool,+mode: Mode,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Cursor)):
   then(Maybe<&2,String>,Cursor,configFile(Path.join(home,".gitconfig")),homeConfig =>
     then(Maybe<&2,String>,Cursor,configFile(Path.join(xdg,"git/config")),xdgConfig =>
       then(Ignore.Matcher,Cursor,readIgnore(expandHome(home,nonempty(Maybe.or(&2,String,homeConfig,xdgConfig),Path.join(xdg,"git/ignore")))),globalGit =>
-        then(Ignore.Matcher,Cursor,readIgnore(Path.join(xdg,"fd/ignore")),globalFd =>
-          then(List<&2,Scope>,Cursor,loadScopes(Bool.pick(List<&2,String>,Strings.equal(path,"/"),Nil{},ancestors(dirname(path))),requireGit,signal,Nil{}),scopes => IO.pure(ResultOf(Cursor),Done{Cursor{Enter{path,scopes} <> Nil{},Configuration{requireGit,globalGit,globalFd},signal}}))))))
+        then(Ignore.Matcher,Cursor,conditionalIgnore(isFind(mode),Path.join(xdg,"fd/ignore")),globalFd =>
+          then(List<&2,Scope>,Cursor,loadScopes(Bool.pick(List<&2,String>,Strings.equal(path,"/"),Nil{},ancestors(dirname(path))),requireGit,mode,signal,Nil{}),scopes => IO.pure(ResultOf(Cursor),Done{Cursor{Enter{path,scopes} <> Nil{},Configuration{requireGit,mode,globalGit,globalFd},signal}}))))))
 def searchDirectory(path: String,value: Result<&2,&2,FS.Error,FS.FileKind>) -> ResultOf(Unit):
   match value:
     case Done{FS.Directory{}}: Done{Unit{}}
@@ -340,5 +375,19 @@ def nativeSearch(environment: Paths.Environment,+pattern: String,+path: String,l
         do IO<ResultOf(List<&2,String>)>:
           xdg : Result<&1,&1,U32 & String,String> <- IO.get_env("XDG_CONFIG_HOME")
           kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
-          continued(Unit,List<&2,String>,searchDirectory(path,kind),_ => then(Bool,List<&2,String>,insideGit(ancestors(path),signal),requireGit => then(Cursor,List<&2,String>,create(path,home,nonempty(optionalEnvironment(xdg),Path.join(home,".config")),requireGit,signal),cursor => then(Step,List<&2,String>,next(cursor),step => findEntries(step,compiled,hasSlash(pattern),limit,0n,Nil{}))))))
+          continued(Unit,List<&2,String>,searchDirectory(path,kind),_ => then(Bool,List<&2,String>,insideGit(ancestors(path),signal),requireGit => then(Cursor,List<&2,String>,create(path,home,nonempty(optionalEnvironment(xdg),Path.join(home,".config")),requireGit,Find{},signal),cursor => then(Step,List<&2,String>,next(cursor),step => findEntries(step,compiled,hasSlash(pattern),limit,0n,Nil{}))))))
 
+
+def overrideCompiled(negative: Bool,result: Result<&2,&2,Glob.Error,Glob.Pattern>) -> ResultOf(Maybe<&2,Override>):
+  match result:
+    case Fail{cause}: Fail{InvalidPattern{cause}}
+    case Done{Glob.Pattern{tokens,_}}: Done{Some{Override{Glob.Pattern{tokens,False{}},negative}}}
+def overrideText(+text: String,negative: Bool) -> ResultOf(Maybe<&2,Override>):
+  +pattern = Bool.pick(String,String.starts_with(text,"/"),String.drop(text,1n),Bool.pick(String,hasSlash(text),text,"**/" ++ text))
+  overrideCompiled(negative,Glob.compile(pattern))
+def compileOverride(value: Maybe<&2,String>) -> ResultOf(Maybe<&2,Override>):
+  match value:
+    case None{}: Done{None{}}
+    case Some{SNil{}}: Done{None{}}
+    case Some{SCon{'!',rest}}: overrideText(rest,True{})
+    case Some{text}: overrideText(text,False{})

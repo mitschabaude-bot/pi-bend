@@ -34,6 +34,11 @@ def expression(value: Result<&2,&2,R.Error,R.Expression>) -> Result<&2,&2,R.Erro
 def compile(pattern: String,insensitive: Bool) -> Result<&2,&2,R.Error,Regex>:
   expression(R.parsePattern(pattern,insensitive,True{}))
 
+# Line-oriented search excludes LF from the haystack and rejects explicit LF
+# literals, while classes such as \s may still contain LF without matching it.
+def compileLine(pattern: String,insensitive: Bool) -> Result<&2,&2,R.Error,Regex>:
+  expression(R.parseWithFlags(pattern,Bool.pick(U32,insensitive,1571,1570)))
+
 type Scalar is Data:
   Scalar{char: Char,width: U32}
 
@@ -193,6 +198,14 @@ def feed(bytes: List<&2,U32>,cursor: Cursor) -> Cursor:
     case _ Matched{}: Matched{}
     case Nil{} cursor: cursor
     case byte <> rest cursor: feed(rest,buffered(appendByte(byte,cursor)))
+
+# Equivalent to feeding the UTF-8 encoding of one already-decoded scalar.
+# A pending byte fragment still follows the ordinary byte API semantics.
+def feedScalar(+char: Char,cursor: Cursor) -> Cursor:
+  match cursor:
+    case Matched{}: Matched{}
+    case LiteralCursor{regex,Utf8.Ready{},state}: literalState(regex,Utf8.Ready{},R.feedChar(state,char))
+    case cursor: feed(Utf8.encodeScalar(Char.to_u32(char)),cursor)
 
 def finalFrontier(state: Frontier) -> Bool:
   match state:

@@ -506,7 +506,7 @@ def regexWhitespace(char: Char) -> Bool:
   match char:
     case Chr{+point}: (U32.is_ge(point,9) && U32.is_le(point,13)) || U32.is_eq(point,32) || U32.is_eq(point,133) || U32.is_eq(point,160) || U32.is_eq(point,5760) || (U32.is_ge(point,8192) && U32.is_le(point,8202)) || U32.is_eq(point,8232) || U32.is_eq(point,8233) || U32.is_eq(point,8239) || U32.is_eq(point,8287) || U32.is_eq(point,12288)
 
-def escapedPoint(+point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
+def escapedScalar(+point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
   +raw = Bool.not(enabled(flags,32)) && enabled(flags,256)
   +nonAsciiClass = Bool.not(enabled(flags,32)) && enabled(flags,128) && U32.is_ge(point,128) && Bool.not(raw)
   Bool.pick(Unit -> Result<&2,&2,Error,Atom>,nonAsciiClass,
@@ -516,6 +516,9 @@ def escapedPoint(+point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,At
       _ => Bool.pick(Unit -> Result<&2,&2,Error,Atom>,U32.is_le(point,1114111) && Bool.not(U32.is_ge(point,55296) && U32.is_le(point,57343)),
         _ => Done{Atom{Bool.pick(Unit -> Expression,raw && enabled(flags,512) && Bool.not(enabled(flags,128)),_ => byteCharacter(Range{point,point},flags),_ => character(Range{point,point},flags))(Unit{}),rest}},
         _ => Fail{Syntax{"Invalid Unicode scalar escape"}})(Unit{}))(Unit{}))(Unit{})
+
+def escapedPoint(+point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
+  Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,1024) && Bool.not(enabled(flags,128)) && U32.is_eq(point,10),_ => Fail{Syntax{"Newline literals require multiline search"}},_ => escapedScalar(point,flags,rest))(Unit{})
 
 def hexDigit(+point: U32) -> Maybe<&2,U32>:
   Bool.pick(Maybe<&2,U32>,U32.is_ge(point,48) && U32.is_le(point,57),Some{(point - 48 : U32)},Bool.pick(Maybe<&2,U32>,U32.is_ge(point,65) && U32.is_le(point,70),Some{(point - 55 : U32)},Bool.pick(Maybe<&2,U32>,U32.is_ge(point,97) && U32.is_le(point,102),Some{(point - 87 : U32)},None{})))
@@ -772,6 +775,7 @@ def classStep(state: ClassParsing,+flags: U32) -> ClassParsing:
 def readClass(fuel: Nat,state: ClassParsing,+flags: U32) -> Result<&2,&2,Error,Atom>:
   match fuel state:
     case _ BadClass{error}: Fail{error}
+    case _ EndClass{Range{10,10},rest}: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,enabled(flags,1024),_ => Fail{Syntax{"Newline literals require multiline search"}},_ => scalarClass(Range{10,10},flags,rest))(Unit{})
     case _ EndClass{value,rest}: scalarClass(value,flags,rest)
     case Zero{} _: Fail{SizeLimit{}}
     case Succ{fuel} state: readClass(fuel,classStep(state,flags),flags)
@@ -940,6 +944,8 @@ def parserStep(state: Parsing) -> Parsing:
     case Parsing{SCon{'.',rest},+frame,parents,depth}: appendAtom(Bool.pick(Result<&2,&2,Error,Atom>,enabled(flagsOf(frame),32) || enabled(flagsOf(frame),512),Done{Atom{dot(flagsOf(frame)),rest}},Fail{RequiresByteInput{}}),frame,parents,depth)
     case Parsing{SCon{'^',rest},+frame,parents,depth}: appendAtom(Done{Atom{Assert{Bool.pick(Assertion,enabled(flagsOf(frame),2),LineStart{enabled(flagsOf(frame),8)},Start{})},rest}},frame,parents,depth)
     case Parsing{SCon{'$',rest},+frame,parents,depth}: appendAtom(Done{Atom{Assert{Bool.pick(Assertion,enabled(flagsOf(frame),2),LineEnd{enabled(flagsOf(frame),8)},End{})},rest}},frame,parents,depth)
+    case Parsing{SCon{'\n',+rest},+frame,+parents,+depth}:
+      Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),64),_ => Parsing{rest,frame,parents,depth},_ => Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),1024),_ => ParseError{Syntax{"Newline literals require multiline search"}},_ => appendAtom(Done{Atom{literal('\n',flagsOf(frame)),rest}},frame,parents,depth))(Unit{}))(Unit{})
     case Parsing{SCon{'#',+rest},+frame,+parents,+depth}: Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),64),_ => Parsing{skipComment(rest),frame,parents,depth},_ => appendAtom(Done{Atom{literal('#',flagsOf(frame)),rest}},frame,parents,depth))(Unit{})
     case Parsing{SCon{char,rest},frame,parents,depth}:
       +char = {char : Char}
@@ -962,8 +968,11 @@ def parsedExpression(result: Result<&2,&2,Error,Expression>) -> Result<&2,&2,Err
     case Fail{error}: Fail{error}
     case Done{expression}: compileExpression(expression)
 
-def parsePattern(+pattern: String,insensitive: Bool,bytes: Bool) -> Result<&2,&2,Error,Expression>:
-  parse(textLength(pattern,Zero{}) + 2n,Parsing{pattern,Frame{U32.or(Bool.pick(U32,insensitive,33,32),Bool.pick(U32,bytes,512,0)),Nil{},Nil{},Nil{}},Nil{},Zero{}})
+def parseWithFlags(+pattern: String,flags: U32) -> Result<&2,&2,Error,Expression>:
+  parse(textLength(pattern,Zero{}) + 2n,Parsing{pattern,Frame{flags,Nil{},Nil{},Nil{}},Nil{},Zero{}})
+
+def parsePattern(pattern: String,insensitive: Bool,bytes: Bool) -> Result<&2,&2,Error,Expression>:
+  parseWithFlags(pattern,U32.or(Bool.pick(U32,insensitive,33,32),Bool.pick(U32,bytes,512,0)))
 
 def compile(pattern: String,insensitive: Bool) -> Result<&2,&2,Error,Regex>:
   parsedExpression(parsePattern(pattern,insensitive,False{}))
