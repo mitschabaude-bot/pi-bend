@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import random
 import ipaddress
+import tempfile
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, padding
@@ -359,6 +360,85 @@ for tag in [128,131,132,133,137,162,167,168,169]:
 cases += [('san:' + encode(tlv(48,b'')),'certificate'),
           ('san:' + encode(tlv(48,tlv(164,b'\x30\x01'))),'encoding'),
           ('san:' + encode(tlv(48,tlv(130,b'example.com')) + b'\x00'),'encoding')]
+
+# Certificate policy is checked independently of signature/name/time/path
+# construction. OpenSSL is the external oracle for purpose and intermediate
+# constraints; TLS1.3's digitalSignature requirement is stricter than the
+# protocol-independent sslserver purpose (which also permits RSA encipherment).
+def policy_certificate(cert_name, public, issuer_name, signer, basic, usage, eku, extra=None):
+    now = datetime.now(timezone.utc)
+    builder = (x509.CertificateBuilder().subject_name(cert_name).issuer_name(issuer_name).public_key(public)
+               .serial_number(500).not_valid_before(now-timedelta(days=1)).not_valid_after(now+timedelta(days=1)))
+    if basic is not None:
+        builder = builder.add_extension(x509.BasicConstraints(*basic),True)
+    if usage is not None:
+        builder = builder.add_extension(x509.KeyUsage(bool(usage&1),False,bool(usage&4),False,False,bool(usage&32),False,False,False),True)
+    if eku is not None:
+        builder = builder.add_extension(x509.ExtendedKeyUsage(eku),False)
+    if extra is not None:
+        builder = builder.add_extension(*extra)
+    return builder.sign(signer,hashes.SHA256())
+
+
+def cert_wire(cert):
+    return cert.public_bytes(serialization.Encoding.DER)
+
+
+with tempfile.TemporaryDirectory(prefix='pi-bend-x509-policy-') as temp:
+    folder = Path(temp)
+    (folder/'root.pem').write_bytes(root.public_bytes(serialization.Encoding.PEM))
+    def openssl_accepts(leaf, intermediates=()):
+        (folder/'leaf.pem').write_bytes(leaf.public_bytes(serialization.Encoding.PEM))
+        args = ['openssl','verify','-CAfile',str(folder/'root.pem'),'-purpose','sslserver']
+        if intermediates:
+            (folder/'chain.pem').write_bytes(b''.join(cert.public_bytes(serialization.Encoding.PEM) for cert in intermediates))
+            args += ['-untrusted',str(folder/'chain.pem')]
+        result = subprocess.run(args+[str(folder/'leaf.pem')],capture_output=True,text=True,timeout=10)
+        return result.returncode == 0
+    server_oid, client_oid, any_oid = ExtendedKeyUsageOID.SERVER_AUTH, ExtendedKeyUsageOID.CLIENT_AUTH, ExtendedKeyUsageOID.ANY_EXTENDED_KEY_USAGE
+    for eku in [None,[server_oid],[client_oid],[any_oid],[any_oid,server_oid],[ExtendedKeyUsageOID.CODE_SIGNING]]:
+        for usage in [None,1,4,5]:
+            cert = policy_certificate(subject,other.public_key(),name,issuer,(False,None),usage,eku)
+            purpose_ok = eku is None or server_oid in eku
+            assert openssl_accepts(cert) == purpose_ok,(eku,usage)
+            expected = 'purpose' if not purpose_ok else ('usage' if usage==4 else 'ok')
+            cases.append(('server:'+encode(cert_wire(cert)),expected))
+    for critical in [False,True]:
+        extra = (x509.UnrecognizedExtension(x509.ObjectIdentifier('1.2.3.4.5'),b'opaque'),critical)
+        cert = policy_certificate(subject,other.public_key(),name,issuer,(False,None),1,None,extra)
+        assert openssl_accepts(cert) == (not critical)
+        cases.append(('server:'+encode(cert_wire(cert)),'critical' if critical else 'ok'))
+    intermediate_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'intermediate')])
+    leaf = policy_certificate(subject,issuer.public_key(),intermediate_name,other,(False,None),1,None)
+    for basic in [None,(False,None),(True,None),(True,0),(True,1)]:
+        for usage in [None,1,32,33]:
+            for eku in [None,[server_oid],[client_oid],[any_oid]]:
+                ca = basic is not None and basic[0]
+                allowed_usage = usage is None or usage&32
+                allowed_purpose = eku is None or server_oid in eku
+                intermediate = policy_certificate(intermediate_name,other.public_key(),name,issuer,basic,usage,eku)
+                accepted = openssl_accepts(leaf,[intermediate])
+                assert accepted == bool(ca and allowed_usage and allowed_purpose),(basic,usage,eku,accepted)
+                expected = 'ca' if not ca else ('usage' if not allowed_usage else ('purpose' if not allowed_purpose else 'ok'))
+                cases.append(('issuer:0:'+encode(cert_wire(intermediate)),expected))
+    child_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'child CA')])
+    child = policy_certificate(child_name,other.public_key(),intermediate_name,other,(True,0),32,None)
+    child_leaf = policy_certificate(subject,issuer.public_key(),child_name,other,(False,None),1,None)
+    for maximum in [0,1,2,None]:
+        intermediate = policy_certificate(intermediate_name,other.public_key(),name,issuer,(True,maximum),32,None)
+        assert openssl_accepts(child_leaf,[child,intermediate]) == (maximum is None or maximum>=1)
+        for count in [0,1,2,3,2**80]:
+            expected = 'ok' if maximum is None or count<=maximum else 'path'
+            cases.append(('issuer:'+str(count)+':'+encode(cert_wire(intermediate)),expected))
+    # A critical name constraint cannot be ignored while that implementation
+    # remains pending, even though OpenSSL can process it.
+    constrained = policy_certificate(intermediate_name,other.public_key(),name,issuer,(True,None),32,None,
+                                     (x509.NameConstraints([x509.DNSName('example.com')],None),True))
+    cases.append(('issuer:0:'+encode(cert_wire(constrained)),'critical'))
+    san = policy_certificate(subject,other.public_key(),name,issuer,(False,None),1,None,
+                             (x509.SubjectAlternativeName([x509.DNSName('localhost')]),True))
+    assert openssl_accepts(san)
+    cases.append(('server:'+encode(cert_wire(san)),'ok'))
 
 for name, command in [('native-1', ['build/x509', '--threads', '1']),
                       ('native-4', ['build/x509', '--threads', '4']),

@@ -20,6 +20,11 @@ def error(cause: X509.Error) -> String:
     case X509.NotYetValid{}: "early"
     case X509.Expired{}: "expired"
     case X509.DuplicateExtension{_}: "duplicate"
+    case X509.UnsupportedCriticalExtension{_}: "critical"
+    case X509.NotCertificateAuthority{}: "ca"
+    case X509.InvalidKeyUsage{}: "usage"
+    case X509.InvalidPurpose{}: "purpose"
+    case X509.PathLengthExceeded{}: "path"
 
 def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
   match result:
@@ -125,8 +130,19 @@ def names(result: Result<&2,&2,X509.Error,List<&2,X509.GeneralName>>) -> String:
     case Fail{cause}: error(cause)
     case Done{values}: "names" ++ nameList(values,"")
 
+def policy(bytes: List<&2,U32>) -> Result<&2,&2,X509.Error,X509.Policy>:
+  Result.bind(&2,&2,X509.Error,X509.Certificate,X509.Policy,X509.parse(bytes),X509.certificatePolicy)
+
+def issuerPolicy(count: Maybe<&2,Big.BigNat>, result: Result<&2,&2,X509.Error,X509.Policy>) -> String:
+  match count result:
+    case None{} _: "count"
+    case _ Fail{cause}: error(cause)
+    case Some{value} Done{state}: verified(X509.checkIssuerPolicy(state,value))
+
 def run(parts: List<&2, String>) -> String:
   match parts:
+    case "server" <> bytes <> Nil{}: verified(Result.bind(&2,&2,X509.Error,X509.Policy,Unit,policy(Bytes.bytes(bytes)),X509.checkServerPolicy))
+    case "issuer" <> count <> bytes <> Nil{}: issuerPolicy(Big.fromDecimal(count),policy(Bytes.bytes(bytes)))
     case "san" <> bytes <> Nil{}: names(X509.subjectAltNames(X509.Extension{85 <> 29 <> 17 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "ku" <> bytes <> Nil{}: usage(X509.keyUsage(X509.Extension{85 <> 29 <> 15 <> Nil{},False{},Bytes.bytes(bytes)}))
     case "eku" <> bytes <> Nil{}: purposeResult(X509.extendedKeyUsage(X509.Extension{85 <> 29 <> 37 <> Nil{},False{},Bytes.bytes(bytes)}))

@@ -18,6 +18,11 @@ type Error is Data:
   NotYetValid{}
   Expired{}
   DuplicateExtension{oid: List<&2, U32>}
+  UnsupportedCriticalExtension{oid: List<&2, U32>}
+  NotCertificateAuthority{}
+  InvalidKeyUsage{}
+  InvalidPurpose{}
+  PathLengthExceeded{}
 
 type PublicKey is Data:
   Rsa{key: RSA.PublicKey}
@@ -415,3 +420,82 @@ def subjectAltNames(extension: Extension) -> Result<&2, &2, Error, List<&2, Gene
       Result.bind(&2, &2, Error, DER.Node, List<&2, GeneralName>, decoded(DER.Node,DER.one(value)), node =>
         Result.bind(&2, &2, Error, List<&2, DER.Node>, List<&2, GeneralName>, decoded(List<&2, DER.Node>,DER.sequence(node)), nonemptyNames))
     case _: Fail{InvalidCertificate{}}
+
+# Policy is decoded evidence. Signature/path/name/time checks remain separate.
+# An absent usage extension imposes no restriction; an absent CA constraint
+# never grants authority to an intermediate certificate.
+type Policy is Data:
+  Policy{constraints: BasicConstraints, usage: Maybe<&2, KeyUsage>, eku: Maybe<&2, List<&2, List<&2, U32>>>}
+
+def policyExtension(+extension: Extension, state: Policy) -> Result<&2, &2, Error, Policy>:
+  match extension state:
+    case Extension{85 <> 29 <> 19 <> Nil{},_,_} Policy{_,usage,eku}:
+      Result.bind(&2,&2,Error,BasicConstraints,Policy,basicConstraints(extension), basic => Done{Policy{basic,usage,eku}})
+    case Extension{85 <> 29 <> 15 <> Nil{},_,_} Policy{basic,_,eku}:
+      Result.bind(&2,&2,Error,KeyUsage,Policy,keyUsage(extension), usage => Done{Policy{basic,Some{usage},eku}})
+    case Extension{85 <> 29 <> 37 <> Nil{},_,_} Policy{basic,usage,_}:
+      Result.bind(&2,&2,Error,List<&2,List<&2,U32>>,Policy,extendedKeyUsage(extension), eku => Done{Policy{basic,usage,Some{eku}}})
+    case Extension{85 <> 29 <> 17 <> Nil{},_,_} state:
+      Result.bind(&2,&2,Error,List<&2,GeneralName>,Policy,subjectAltNames(extension), unused => Done{state})
+    case Extension{oid,True{},_} _: Fail{UnsupportedCriticalExtension{oid}}
+    case Extension{_,False{},_} state: Done{state}
+
+def policyExtensions(extensions: List<&2, Extension>, state: Policy) -> Result<&2,&2,Error,Policy>:
+  match extensions:
+    case Nil{}: Done{state}
+    case head <> rest:
+      Result.bind(&2,&2,Error,Policy,Policy,policyExtension(head,state), next => policyExtensions(rest,next))
+
+def certificatePolicy(certificate: Certificate) -> Result<&2,&2,Error,Policy>:
+  Result.bind(&2,&2,Error,List<&2,Extension>,Policy,extensions(certificate), values =>
+    policyExtensions(values,Policy{BasicConstraints{False{},None{}},None{},None{}}))
+
+def hasServerPurpose(values: List<&2,List<&2,U32>>) -> Bool:
+  match values:
+    case Nil{}: False{}
+    case (43 <> 6 <> 1 <> 5 <> 5 <> 7 <> 3 <> 1 <> Nil{}) <> _: True{}
+    case _ <> rest: hasServerPurpose(rest)
+
+# Like OpenSSL's sslserver purpose, an EKU extension must explicitly contain
+# serverAuth; anyExtendedKeyUsage alone does not grant this purpose.
+def serverPurpose(eku: Maybe<&2,List<&2,List<&2,U32>>>) -> Result<&2,&2,Error,Unit>:
+  match eku:
+    case None{}: Done{Unit{}}
+    case Some{values}: Bool.pick(Result<&2,&2,Error,Unit>,hasServerPurpose(values),Done{Unit{}},Fail{InvalidPurpose{}})
+
+def signingUsage(usage: Maybe<&2,KeyUsage>) -> Result<&2,&2,Error,Unit>:
+  match usage:
+    case None{}: Done{Unit{}}
+    case Some{KeyUsage{True{},_,_,_,_,_,_,_,_}}: Done{Unit{}}
+    case _: Fail{InvalidKeyUsage{}}
+
+def issuingUsage(usage: Maybe<&2,KeyUsage>) -> Result<&2,&2,Error,Unit>:
+  match usage:
+    case None{}: Done{Unit{}}
+    case Some{KeyUsage{_,_,_,_,_,True{},_,_,_}}: Done{Unit{}}
+    case _: Fail{InvalidKeyUsage{}}
+
+# TLS1.3 signs CertificateVerify; keyEncipherment alone is insufficient.
+def checkServerPolicy(policy: Policy) -> Result<&2,&2,Error,Unit>:
+  match policy:
+    case Policy{_,usage,eku}:
+      Result.bind(&2,&2,Error,Unit,Unit,serverPurpose(eku), unused => signingUsage(usage))
+
+def withinPathLimit(order: Cmp) -> Result<&2,&2,Error,Unit>:
+  match order:
+    case GT{}: Fail{PathLengthExceeded{}}
+    case _: Done{Unit{}}
+
+def pathLimit(limit: Maybe<&2,Big.BigNat>, count: Big.BigNat) -> Result<&2,&2,Error,Unit>:
+  match limit:
+    case None{}: Done{Unit{}}
+    case Some{maximum}: withinPathLimit(Big.compare(count,maximum))
+
+# For intermediate CAs, not trust anchors. Count only non-self-issued
+# intermediate certificates below this issuer, excluding the target leaf.
+def checkIssuerPolicy(policy: Policy, intermediatesBelow: Big.BigNat) -> Result<&2,&2,Error,Unit>:
+  match policy:
+    case Policy{BasicConstraints{False{},_},_,_}: Fail{NotCertificateAuthority{}}
+    case Policy{BasicConstraints{True{},limit},usage,eku}:
+      Result.bind(&2,&2,Error,Unit,Unit,issuingUsage(usage), unused =>
+        Result.bind(&2,&2,Error,Unit,Unit,serverPurpose(eku), unused => pathLimit(limit,intermediatesBelow)))

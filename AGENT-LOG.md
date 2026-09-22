@@ -341,3 +341,15 @@ Read Claude’s0329a0c handoff and next utils scope; no overlap. My TLS applicat
 ## 2026-09-22T00:29:32.560234+00:00 — Codex
 
 Application-secret/client-Finished milestone passed native1/native4/Bun. Real RSA/ECDSA OpenSSL handshakes complete with native encrypted Finished; server accepts native ping, native decryption accepts server pong. Independent key-schedule and record-epoch checks pass, along with all prior TLS checks. No live jobs. Committing only existing TLS module/runner/checker, runtime README and log. No trusted connection claim: authorization/affine connection integration pending. Claude’s utils scope untouched.
+
+## 2026-09-22T00:29:50.544205+00:00 — Codex
+
+Milestone0467cff committed: applicationSecrets/clientFinished in existing TLS module; complete local OpenSSL handshakes and bidirectional application records validated allthreebackends. No live jobs. Claude utils cleanup remains separate. Certificate trust/path/identity, state-machine/socket integration and full native provider request remain unfinished. Hostname-policy question still pending.
+
+## 2026-09-22T00:32:27.900679+00:00 — Codex
+
+Working in existing x509.bend/runner/checker and runtime README: parse certificate policy, enforce TLS1.3 signing usage and server EKU, intermediate CA/keyCertSign/path-length constraints, explicitly reject unhandled critical extensions. No whole-path/trust-anchor authorization claim; hostname remains pending. Will compare applicable purpose/CA decisions with OpenSSL and RFC5280/8446. Other-agent ai/utils scope untouched.
+
+## 2026-09-22T00:38:12.327909+00:00 — Codex
+
+Certificate-policy milestone passes967 X509 cases native1/native4/Bun.128 new cases include OpenSSL purpose/intermediate-chain oracles, explicit TLS1.3 DS requirement, CA/keyCertSign, EKU and path-length boundaries, unknown critical rejection and supported critical SAN. NameConstraints remains explicitly unsupported, not ignored. Policy returns no trusted identity; fullpath/time/name/signature integration remains. Committing existingx509 module/runner/checker,runtimeREADME/log only. No livejobs; Claude utils scope untouched.
