@@ -20,7 +20,9 @@ import time
 
 def execute(command):
     start = time.perf_counter_ns()
-    result = subprocess.run(command, check=True, text=True, capture_output=True, timeout=180)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=180)
+    if result.returncode:
+        raise RuntimeError(f"{command[0]} exited {result.returncode}: {result.stderr.strip()}")
     return result.stdout.splitlines(), time.perf_counter_ns() - start
 
 

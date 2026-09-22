@@ -759,18 +759,20 @@ def pathMember(+certificate: Certificate, names: CertificateNames, key: PublicKe
 
 def preparePathCertificate(+now: W.U64, +certificate: Certificate) -> Result<&2,&2,Error,PathCertificate>:
   match certificate:
-    case Certificate{+tbs,algorithm,signature}:
-      Result.bind(&2,&2,Error,List<&2,DER.Node>,PathCertificate,fields(tbs), nodes =>
-        Result.bind(&2,&2,Error,Unit,PathCertificate,pathSerial(nodes),unused =>
-          Result.bind(&2,&2,Error,Validity,PathCertificate,validity(certificate), period =>
-            Result.bind(&2,&2,Error,Unit,PathCertificate,validAt(now,period),unused =>
-              Result.bind(&2,&2,Error,List<&2,Extension>,PathCertificate,extensions(certificate), +values =>
-                Result.bind(&2,&2,Error,Policy,PathCertificate,policyExtensions(values,Policy{BasicConstraints{False{},None{}},None{},None{}}), +policy =>
-                  Result.bind(&2,&2,Error,Unit,PathCertificate,usageProfile(policy),unused =>
-                    Result.bind(&2,&2,Error,CertificateNames,PathCertificate,certificateNames(certificate), +names =>
-                      Result.bind(&2,&2,Error,Unit,PathCertificate,nameProfile(names,values),unused =>
-                        Result.bind(&2,&2,Error,PublicKey,PathCertificate,publicKey(certificate), key =>
-                          Done{pathMember(certificate,names,key,policy)}))))))))))
+    case Certificate{tbs,_,_}:
+      do Result<&2,&2,Error,PathCertificate>:
+        +raw : List<&2,DER.Node> <- decoded(List<&2,DER.Node>,DER.sequence(tbs))
+        +nodes : List<&2,DER.Node> <- tbsFields(raw)
+        pathSerial(nodes)
+        period : Validity <- validityFields(nodes)
+        validAt(now,period)
+        +values : List<&2,Extension> <- extensionsFromTbs(raw)
+        +policy : Policy <- policyExtensions(values,Policy{BasicConstraints{False{},None{}},None{},None{}})
+        usageProfile(policy)
+        +names : CertificateNames <- certificateNameFields(nodes)
+        nameProfile(names,values)
+        key : PublicKey <- subjectKey(nodes)
+        return pathMember(certificate,names,key,policy)
 
 def sameCertificate(left: Certificate, right: Certificate) -> Bool:
   match left right:

@@ -348,12 +348,17 @@ def wideFinished(state: WideInversion) -> Bool:
   match state:
     case WideInversion{+u,+v,_,_}: wideEqual(u,wideOne()) || wideEqual(v,wideOne()) || wideEqual(u,wideZero()) || wideEqual(v,wideZero())
 
-def wideResult(state: WideInversion) -> Maybe<&2,Wide>:
-  match state:
-    case WideInversion{u,+v,x,y}:
-      Bool.pick(Maybe<&2,Wide>,wideEqual(u,wideOne()),Some{x},Bool.pick(Maybe<&2,Wide>,wideEqual(v,wideOne()),Some{y},None{}))
+def wideResultCases(unitU: Bool, unitV: Bool, x: Wide, y: Wide) -> Maybe<&2,Big.BigNat>:
+  match unitU unitV:
+    case True{} _: Some{wideTo(x)}
+    case False{} True{}: Some{wideTo(y)}
+    case False{} False{}: None{}
 
-def wideLoop(fuel: Nat, done: Bool, +modulus: Wide, state: WideInversion) -> Maybe<&2,Wide>:
+def wideResult(state: WideInversion) -> Maybe<&2,Big.BigNat>:
+  match state:
+    case WideInversion{u,v,x,y}: wideResultCases(wideEqual(u,wideOne()),wideEqual(v,wideOne()),x,y)
+
+def wideLoop(fuel: Nat, done: Bool, +modulus: Wide, state: WideInversion) -> Maybe<&2,Big.BigNat>:
   match fuel done:
     case _ True{}: wideResult(state)
     case 0n False{}: None{}
@@ -361,15 +366,9 @@ def wideLoop(fuel: Nat, done: Bool, +modulus: Wide, state: WideInversion) -> May
       +next = wideStep(modulus,state)
       wideLoop(n,wideFinished(next),modulus,next)
 
-
-def wideMaybe(value: Maybe<&2,Wide>) -> Maybe<&2,Big.BigNat>:
-  match value:
-    case None{}: None{}
-    case Some{n}: Some{wideTo(n)}
-
 def wideInverse(value: Big.BigNat, +modulus: Big.BigNat) -> Maybe<&2,Big.BigNat>:
   +state = {WideInversion{wideFrom(value),wideFrom(modulus),wideOne(),wideZero()} : WideInversion}
-  wideMaybe(wideLoop(1537n,wideFinished(state),wideFrom(modulus),state))
+  wideLoop(1537n,wideFinished(state),wideFrom(modulus),state)
 
 def inverseSize(fits: Bool, value: Big.BigNat, modulus: Big.BigNat) -> Maybe<&2,Big.BigNat>:
   match fits:
