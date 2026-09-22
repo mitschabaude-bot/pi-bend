@@ -4,7 +4,7 @@ import ../packages/runtime/src/tls13-client.bend as Client
 import ../packages/runtime/src/tls13-record.bend as Record
 import ../packages/runtime/src/socket.bend as Socket
 import ../packages/runtime/src/abort.bend as Abort
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/test/utf8-runner.bend as Decimal
 import ./tls13-client.bend as Session
 import ./aes128-gcm.bend as Bytes
@@ -81,10 +81,43 @@ def cancelRead(connection: TLS.Connection<String>, controller: Abort.AbortContro
     cancelled(part)
     IO.print("PASS")
 
-def established(connection: TLS.Connection<String>, controller: Abort.AbortController<String>, mode: String, cancel: Bool) -> IO(Unit):
-  match cancel:
-    case True{}: cancelRead(connection, controller)
-    case False{}: transfer(TLS.borrowWriter(String, connection), String.eq(mode, "abrupt"))
+def upload(writer: TLS.Writer<String>, flag: Ref.Ref<Bool>) -> IO(Result<&2, &2, TLS.Error<String>, Unit>):
+  do IO<Result<&2, &2, TLS.Error<String>, Unit>>:
+    result : Result<&2, &2, TLS.Error<String>, Unit> <- TLS.send(String, writer, Payload.payload(256n, Nil{}))
+    Ref.write(Bool, flag, True{})
+    return result
+
+def uploadCancelled(result: Result<&2, &2, TLS.Error<String>, Unit>) -> IO(Unit):
+  match result:
+    case Fail{TLS.Network{Socket.SocketAborted{Abort.Supplied{why}}}}:
+      Check.require(String.eq(why, "stop"), "TLS upload lost cancellation reason")
+    case _: IO.die(Unit, 1, "TLS upload did not fail with cancellation")
+
+def concurrent(pair: TLS.Connection<String> & TLS.Writer<String>, controller: Abort.AbortController<String>) -> IO(Unit):
+  match pair:
+    case (connection, writer):
+      do IO<Unit>:
+        +flag : Ref.Ref<Bool> <- Ref.new(Bool, False{})
+        task : Chan(Result<&2, &2, TLS.Error<String>, Unit>) <- IO.fork(Result<&2, &2, TLS.Error<String>, Unit>, upload(writer, flag))
+        part : TLS.Connection<String> & Result<&2, &2, TLS.Error<String>, List<&2, U32>> <- TLS.recv(String, connection, 1)
+        connection : TLS.Connection<String> <- received(part, 82)
+        done : Bool <- Ref.read(Bool, flag)
+        Check.require(Bool.not(done), "TLS upload finished before early response")
+        won : Bool <- Abort.abort(String, controller, Some{"stop"})
+        Check.require(won, "abort already settled")
+        result : Result<&2, &2, TLS.Error<String>, Unit> <- IO.join(Result<&2, &2, TLS.Error<String>, Unit>, task)
+        uploadCancelled(result)
+        done : Bool <- Ref.dispose(Bool, flag)
+        Check.require(done, "TLS uploader not joined")
+        result : Result<&2, &2, TLS.Error<String>, Unit> <- TLS.dispose(String, connection)
+        checked(result)
+        IO.print("PASS")
+
+def established(connection: TLS.Connection<String>, controller: Abort.AbortController<String>, mode: String, cancel: Bool, backpressure: Bool) -> IO(Unit):
+  match cancel backpressure:
+    case _ True{}: concurrent(TLS.borrowWriter(String, connection), controller)
+    case True{} False{}: cancelRead(connection, controller)
+    case False{} False{}: transfer(TLS.borrowWriter(String, connection), String.eq(mode, "abrupt"))
 
 def opened(initial: Result<&2, &1, TLS.Error<String>, TLS.Connection<String>>, controller: Abort.AbortController<String>, +mode: String) -> IO(Unit):
   match initial:
@@ -98,7 +131,7 @@ def opened(initial: Result<&2, &1, TLS.Error<String>, TLS.Connection<String>>, c
         connection : TLS.Connection<String> <- connected(initial)
         negotiated : Result<&2, &1, TLS.Error<String>, TLS.Connection<String>> <- TLS.awaitHandshake(String, connection)
         connection : TLS.Connection<String> <- connected(negotiated)
-        established(connection, controller, mode, String.eq(mode, "cancel"))
+        established(connection, controller, mode, String.eq(mode, "cancel"), String.eq(mode, "backpressure"))
 
 def options(limited: Bool) -> TLS.Options:
   match limited:
