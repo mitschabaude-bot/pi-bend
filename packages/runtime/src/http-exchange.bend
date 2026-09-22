@@ -1,5 +1,6 @@
 import Base
 import ./tls-socket.bend as TLS
+import ./tls13-client.bend as TLSClient
 import ./dns-resolver.bend as Pair
 import ./http-response.bend as Response
 import ./socket.bend as Connect
@@ -566,24 +567,68 @@ def startedResolvedExchange(-Reason: Data, result: Result<&2, &1, StartError<Rea
     case Fail{error}: Fail{ResolvedExchangeExchangeFailure{error}}
     case Done{exchange}: Done{exchange}
 
-# Socket adoption consumes the socket on all paths and rechecks the same
-# retained parent signal before request IO. The full connection log survives.
-def connectedResolvedExchange(~Reason: Data, ~SourceError: Data, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, report: Dispatch.PlanReport<Resolution(Reason, SourceError), Reason, Socket>) -> IO(Report<Reason, SourceError>):
+# The authorizer factory is borrowed. It receives the normalized URL host,
+# never a resolver-selected address, and returns one verifier per connection.
+type Security is Data:
+  NoTLS{}
+  WithTLS{authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options}
+
+type Protocol is Data:
+  Cleartext{}
+  Encrypted{host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options}
+
+def serverName(host: Host.Host) -> Maybe<&2, String>:
+  match host:
+    case Host.Domain{name}: Some{name}
+    case _: None{}
+
+def protocol(security: Security, transport: Request.Transport, host: Host.Host) -> Result<&2, &2, Request.ExchangePlanError, Protocol>:
+  match security transport:
+    case _ Request.Plaintext{}: Done{Cleartext{}}
+    case NoTLS{} Request.TLS{}: Fail{Request.TLSRequired{}}
+    case WithTLS{authorize, options} Request.TLS{}: Done{Encrypted{host, authorize, options}}
+
+def openedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, initial: Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match initial:
+    case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{TLSStartFailure{error}})
+    case Done{connection}: startTLSExchange(~Reason, connection, request, maximum, limits)
+
+def adoptedTLS(~Reason: Data, +host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, adoption: Result<&2, &1, Connect.SocketErrorOfSocket<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match adoption:
+    case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{SocketFailure{error}})
+    case Done{owner}:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        authorization : TLSClient.Authorization <- C.call(Host.Host, TLSClient.Authorization, authorize, host)
+        initial : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.start(Reason, owner, serverName(host), authorization, options)
+        openedTLS(~Reason, request, maximum, limits, initial)
+
+def startProtocol(~Reason: Data, selected: Protocol, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match selected:
+    case Cleartext{}: startSocketExchange(~Reason, socket, signal, request, maximum, limits)
+    case Encrypted{host, authorize, options}:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        adoption : Result<&2, &1, Connect.SocketErrorOfSocket<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
+        adoptedTLS(~Reason, host, authorize, options, request, maximum, limits, adoption)
+
+# Socket adoption consumes the socket on all paths and rechecks the retained
+# signal. Only then create the verifier, so time-dependent policy is fresh
+# after DNS and connection attempts. The full connection log survives.
+def connectedResolvedExchange(~Reason: Data, ~SourceError: Data, selected: Protocol, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, report: Dispatch.PlanReport<Resolution(Reason, SourceError), Reason, Socket>) -> IO(Report<Reason, SourceError>):
   match report:
     case Dispatch.Unresolved{resolution}: IO.pure(Report<Reason, SourceError>, Unresolved{resolution})
     case Dispatch.Attempted{resolution, Dispatch.Report{Fail{error}, attempts}}: IO.pure(Report<Reason, SourceError>, Attempted{resolution, attempts, Fail{ResolvedExchangeConnectionFailure{error}}})
     case Dispatch.Attempted{resolution, Dispatch.Report{Done{socket}, attempts}}:
       do IO<Report<Reason, SourceError>>:
-        result : Result<&2, &1, StartError<Reason>, Exchange<Reason>> <- startSocketExchange(~Reason, socket, signal, request, maximum, limits)
+        result : Result<&2, &1, StartError<Reason>, Exchange<Reason>> <- startProtocol(~Reason, selected, socket, signal, request, maximum, limits)
         return Attempted{resolution, attempts, startedResolvedExchange(Reason, result)}
 
-def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~SourceError: Data, environment: Environment, resolver: Pair.Resolver, +signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, plan: Request.Plan<Request.BufferedRequestPrepared>) -> IO(Report<Reason, SourceError>):
+def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~SourceError: Data, selected: Protocol, environment: Environment, resolver: Pair.Resolver, +signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, plan: Request.Plan<Request.BufferedRequestPrepared>) -> IO(Report<Reason, SourceError>):
   match options plan:
     case _ Request.Rejected{error}: IO.pure(Report<Reason, SourceError>, Rejected{error})
     case Options{priority, preference, duration, _, limits} Request.Start{host, port, +request, +maximum}:
       do IO<Report<Reason, SourceError>>:
         report : Dispatch.PlanReport<Resolution(Reason, SourceError), Reason, Socket> <- openWith(~Environment, ~draw, ~Reason, ~SourceError, environment, resolver, signal, priority, preference, Dispatch.Options{port, duration}, host, hosts)
-        connectedResolvedExchange(~Reason, ~SourceError, signal, request, maximum, limits, report)
+        connectedResolvedExchange(~Reason, ~SourceError, selected, signal, request, maximum, limits, report)
 
 # A caller retains resolver and signal ownership. On success it must consume
 # or close the exchange before disposing the signal; upload/read tasks belong
@@ -591,7 +636,24 @@ def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdErr
 def startWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~SourceError: Data, environment: Environment, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   match options request:
     case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{endpoint, prepared}:
-      planned(~Environment, ~draw, ~Reason, ~SourceError, environment, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, Request.prepareExchangePlan(Request.BufferedRequestPrepared, endpoint, prepared, maximum))
+      planned(~Environment, ~draw, ~Reason, ~SourceError, Cleartext{}, environment, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, Request.prepareExchangePlan(Request.BufferedRequestPrepared, endpoint, prepared, maximum))
 
 def startResolvedExchange(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   startWith(~Unit, ~Id.random, ~Reason, ~SourceError, Unit{}, resolver, signal, hosts, options, request)
+
+# Security-aware routing retains the same resolution and connection-attempt
+# report as cleartext. TLS rejection or zero read size happens before dialing.
+def routedPlan(host: Host.Host, port: U32, request: Request.BufferedRequestPrepared, maximum: U32) -> Request.Plan<Request.BufferedRequestPrepared>:
+  match maximum:
+    case 0: Request.Rejected{Request.InvalidReadSize{}}
+    case size: Request.Start{host, port, request, size}
+
+def configuredRoute(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, plan: Request.Plan<Request.BufferedRequestPrepared>, selected: Result<&2, &2, Request.ExchangePlanError, Protocol>) -> IO(Report<Reason, SourceError>):
+  match selected:
+    case Fail{error}: IO.pure(Report<Reason, SourceError>, Rejected{error})
+    case Done{selected}: planned(~Unit, ~Id.random, ~Reason, ~SourceError, selected, Unit{}, resolver, signal, hosts, options, plan)
+
+def startResolvedWithSecurity(~Reason: Data, ~SourceError: Data, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+  match options request:
+    case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, prepared}:
+      configuredRoute(~Reason, ~SourceError, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, routedPlan(host, port, prepared, maximum), protocol(security, transport, host))

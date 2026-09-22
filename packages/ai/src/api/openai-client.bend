@@ -518,7 +518,7 @@ def Outcome(-Reason: Data) -> Type: Result<&2, &1, Retry.RequestFailure<AttemptE
 
 def input(-Reason: Data, request: Request, signal: Fetch.Signal(Reason)) -> Fetch.Input<Reason>:
   match request:
-    case Request{url, method, headers, body, _}: Fetch.Input{url, String.to_upper(method), headers, body, signal}
+    case Request{url, method, headers, body, _}: Fetch.Input{url, String.to_upper(method), headers, H.Text{body}, signal}
 
 def timeout(request: Request) -> Result<&2, &2, Duration.MillisecondsError, U32>:
   match request:
