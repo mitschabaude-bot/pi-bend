@@ -1881,21 +1881,37 @@
     },
     {
       "source": "packages/coding-agent/test/image-process.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f224c8f9d567594d7013f0ea158d2c2863cfddce0e346cff7e0b0e16bf7583dd"
+      "status": "ported",
+      "ports": [
+        "tests/image-process.bend",
+        "tests/image_process_check.py"
+      ],
+      "sha256": "f224c8f9d567594d7013f0ea158d2c2863cfddce0e346cff7e0b0e16bf7583dd",
+      "notes": "All three original BMP assertions are covered with the upstream red 1x1 BMP bytes: magic detection through the public read tool, PNG attachment/conversion hint without resizing, and conversion before default resizing. The harness runs pinned process-image source as its oracle and checks PNG magic explicitly. All three backends pass; this suite does not establish complete image codec or async-worker coverage."
     },
     {
       "source": "packages/coding-agent/test/image-processing.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "70609067f3771b306e928d7763227f778aff98065876f6d959391100b6584d4f"
+      "status": "partial",
+      "ports": [
+        "tests/image-convert.bend",
+        "tests/image_convert_check.py",
+        "tests/image-resize-policy.bend",
+        "tests/image_resize_policy_check.py",
+        "tests/image-process.bend",
+        "tests/image_process_check.py"
+      ],
+      "sha256": "70609067f3771b306e928d7763227f778aff98065876f6d959391100b6584d4f",
+      "notes": "Native conversion, original-byte preservation, dimension/byte-limit resizing, inability to fit, and dimension notes have pinned-source differential coverage on Bun/native1/native4. JPEG input/EXIF pipeline cases and async worker behavior remain pending; broader codecs are incomplete."
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f77a92109158e558cc26430a80f82351bd1ef4884d494ab643c29652c00bc25c"
+      "status": "partial",
+      "ports": [
+        "tests/read-public.bend",
+        "tests/image_process_check.py"
+      ],
+      "sha256": "f77a92109158e558cc26430a80f82351bd1ef4884d494ab643c29652c00bc25c",
+      "notes": "Public read with default native processing returns text-only omission when image processing fails. File-processor caller integration remains pending. Native public read uses isolated O0 correctness builds; focused image functions additionally pass O1."
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",

@@ -4,6 +4,8 @@ import ../../../runtime/src/image-resize.bend as Resample
 import ../../../runtime/src/png.bend as Png
 import ../../../runtime/src/jpeg-encode.bend as Jpeg
 import ../../../runtime/src/base64.bend as Base64
+import ../../../runtime/src/f64.bend as Number
+import ../../../runtime/src/number-string.bend as Numbers
 import ./image-convert.bend as Convert
 import ./exif-orientation.bend as Exif
 
@@ -143,3 +145,14 @@ def resizeOptions(bytes: List<&2,U32>, +mimeType: String, +limits: Limits) -> Ma
 
 def resizeImageInProcess(bytes: List<&2,U32>, mimeType: String, value: ImageResizeOptions) -> Maybe<&2,ResizedImage>:
   resizeOptions(bytes,mimeType,options(value))
+
+def dimensionNote(ow: U32, oh: U32, width: U32, height: U32, scale: Maybe<&2,String>) -> Maybe<&2,String>:
+  match scale:
+    case None{}: None{}
+    case Some{value}: Some{"[Image: original " ++ U32.show(ow) ++ "x" ++ U32.show(oh) ++ ", displayed at " ++ U32.show(width) ++ "x" ++ U32.show(height) ++ ". Multiply coordinates by " ++ value ++ " to map to original image.]"}
+
+def formatDimensionNote(result: ResizedImage) -> Maybe<&2,String>:
+  match result:
+    case ResizedImage{_,_,_,_,_,_,False{}}: None{}
+    case ResizedImage{_,_,+ow,oh,+width,height,True{}}:
+      dimensionNote(ow,oh,width,height,Numbers.formatFixed(Number.divide(Number.fromU32(ow),Number.fromU32(width)),2n))

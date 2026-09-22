@@ -950,3 +950,7 @@ The edit algorithm instead builds its output in a forward pass with a reversed a
 ### BEND-019 recurrence: DEFLATE validation and benchmark counting
 
 The initial DEFLATE octet validator used `valid(head) && validBytes(rest)` and overflowed the Bun backend stack on a 32,774-byte stored-block fixture. The benchmark runner separately hit the existing non-tail `List.length` limitation while counting a 65,536-byte decoded result. Explicit tail recursion fixes both call sites without changing the compiler or reducing either fixture. The decoder's maximum-distance fixture and 1 MiB output benchmark now complete in Bun as well as native code. These are recurrences of the already-reduced eager-boolean and list-length limitations, not new compiler defects.
+
+### Existing issue recurrences during image integration (2026-09-22)
+
+The fixed-decimal formatter hit BEND-012 when its pattern binder `digit` resolved to the existing `number-string.digit` global; using `numeral` avoids the collision without fixing the compiler. The JPEG encoder fixture re-encountered BEND-019 through Base `String.split` on a 44 KB decimal input; it now uses the existing tail-recursive runtime splitter. Neither recurrence introduced a compiler patch or a reduced production input limit.

@@ -1,6 +1,7 @@
 import Base
 import ../../utils/paths.bend as Paths
 import ../../utils/mime.bend as Mime
+import ../../utils/image-process.bend as Images
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value
@@ -32,7 +33,6 @@ type Error is Data:
   InvalidEncoding{cause: Utf8.Error}
   InvalidPath{cause: Paths.Error}
   InvalidArguments{}
-  ImageProcessingUnavailable{}
   Aborted{}
 
 def filesystemMessage(cause: FS.Error) -> String:
@@ -51,7 +51,6 @@ def errorMessage(error: Error) -> String:
     case InvalidEncoding{_}: "File contains invalid UTF-8"
     case InvalidPath{_}: "Invalid file path"
     case InvalidArguments{}: "Read tool input is invalid. Expected a path and optional natural offset/limit."
-    case ImageProcessingUnavailable{}: "Native image processing is not available; supply an image processor."
     case Aborted{}: "Operation aborted"
 
 def continuation(cause: Maybe<&2, Truncate.Limit>) -> String:
@@ -222,9 +221,14 @@ def textContent(input: ReadToolInput, decoded: Result<&2,&2,Utf8.Error,String>) 
     case Fail{cause}: Fail{InvalidEncoding{cause}}
     case Done{text}: textResult(readText(input,text))
 
+def defaultProcessed(value: Images.ProcessImageResult) -> ResultOf(ProcessedImage):
+  match value:
+    case Images.Processed{data,mime,hints}: Done{Processed{data,mime,hints}}
+    case Images.Unsupported{message}: Done{Unsupported{message}}
+
 def processed(processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, bytes: List<&2,U32>, mime: String, resize: Bool) -> IO(ResultOf(ProcessedImage)):
   match processor:
-    case None{}: IO.pure(ResultOf(ProcessedImage),Fail{ImageProcessingUnavailable{}})
+    case None{}: IO.pure(ResultOf(ProcessedImage),defaultProcessed(Images.processImage(bytes,mime,Images.ProcessImageOptions{Some{resize},None{}})))
     case Some{callback}: Callback.call(ImageInput,ResultOf(ProcessedImage),callback,ImageInput{bytes,mime,resize})
 
 def content(input: ReadToolInput, bytes: List<&2,U32>, mime: Maybe<&2,String>, resize: Bool, processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, note: Maybe<&2,Bool>) -> IO(ToolResult()):

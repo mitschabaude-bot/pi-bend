@@ -89,7 +89,7 @@ for backend, command in [('bun', ['bun', str(prefix)+'.js']),
         result = run([{'path':'many'}])[0]
         assert result['truncated'] and result['content'][0][1].endswith('[Showing lines 1-2000 of 2006. Use offset=2001 to continue.]')
         (cwd/'image').write_bytes(b'GIF89a')
-        assert run([{'path':'image'}]) == [{'error':'Native image processing is not available; supply an image processor.'}]
+        assert run([{'path':'image'}]) == [text('Read image file [image/gif]\n[Image omitted: could not be resized below the inline image size limit.]')]
         assert run([{'path':'image'}], 'processed') == [{'content':[['text','Read image file [image/png]\nresized'],['image','AQID','image/png']], 'truncated':False}]
         assert run([{'path':'image'}], 'noresize') == [{'content':[['text','Read image file [image/png]'],['image','AQID','image/png']], 'truncated':False}]
         assert run([{'path':'image'}], 'unsupported') == [text('Read image file [image/gif]\nUnsupported test image')]

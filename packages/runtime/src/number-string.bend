@@ -136,3 +136,48 @@ def fromTrimmed(text: String) -> F.F64:
     case text: signedDecimal(False{}, text)
 
 def toNumber(text: String) -> F.F64: fromTrimmed(trim(text))
+
+# Fixed decimal formatting rounds the exact stored binary64 value, once.
+# Multiplying in floating point before rounding can change a halfway result.
+def decimalScale(count: Nat, value: B.BigNat) -> B.BigNat:
+  match count:
+    case 0n: value
+    case 1n+n: decimalScale(n,B.multiplyU32(value,10))
+
+def fixedFraction(count: Nat, reversed: String, fraction: String) -> String:
+  match count reversed:
+    case 0n SNil{}: "0." ++ fraction
+    case 0n rest: reverseInto(rest,"") ++ "." ++ fraction
+    case 1n+n SNil{}: fixedFraction(n,"",SCon{'0',fraction})
+    case 1n+n SCon{numeral,rest}: fixedFraction(n,rest,SCon{numeral,fraction})
+
+def fixedDigits(digits: Nat, text: String) -> String:
+  match digits:
+    case 0n: text
+    case count: fixedFraction(count,reverseInto(text,""),"")
+
+def fixedInteger(negative: Bool, digits: Nat, value: B.BigNat) -> Maybe<&2,String>:
+  Some{Bool.pick(String,negative,"-","") ++ fixedDigits(digits,B.toDecimal(value))}
+
+def fixedQuotient(negative: Bool, digits: Nat, denominator: B.BigNat, value: Maybe<&2,B.Division>) -> Maybe<&2,String>:
+  match value:
+    case None{}: None{}
+    case Some{B.Division{+quotient,remainder}}:
+      fixedInteger(negative,digits,Bool.pick(B.BigNat,Cmp.is_lt(B.compare(B.multiplyU32(remainder,2),denominator)),quotient,B.add(quotient,B.one())))
+
+def fixedScaled(+negative: Bool, +digits: Nat, +exponent: U32, +value: B.BigNat) -> Maybe<&2,String>:
+  Bool.pick(Unit -> Maybe<&2,String>,U32.is_ge(exponent,1075),
+    _ => fixedInteger(negative,digits,B.shiftLeft(value,U32.to_nat((exponent - 1075 : U32)))),
+    _ => fixedQuotient(negative,digits,B.shiftLeft(B.one(),U32.to_nat((1075 - exponent : U32))),B.divide(value,B.shiftLeft(B.one(),U32.to_nat((1075 - exponent : U32))))))(Unit{})
+
+def fixedDecoded(+digits: Nat, value: F.Decoded) -> Maybe<&2,String>:
+  match value:
+    case F.Finite{negative,exponent,significand}:
+      +integer = F.fromWord(significand)
+      fixedScaled(negative && Bool.not(B.isZero(integer)),digits,exponent,decimalScale(digits,integer))
+    case _: None{}
+
+# Nonfinite values and excessive precision are rejected. Finite values always
+# use fixed notation, including magnitudes for which JS switches to exponent form.
+def formatFixed(value: F.F64, +digits: Nat) -> Maybe<&2,String>:
+  Bool.pick(Unit -> Maybe<&2,String>,Nat.is_le(digits,100n),_ => fixedDecoded(digits,F.decode(value)),_ => None{})(Unit{})

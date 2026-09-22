@@ -65,7 +65,7 @@ def run(args: List<String>) -> IO(Unit):
     case +cwd <> home <> +mode <> rest:
       do IO<Unit>:
         +processor : C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)> <- C.create(~String,~Read.ImageInput,~Read.ResultOf(Read.ProcessedImage),~process,mode)
-        tool : Read.ToolOwner <- Read.createReadTool(environment(cwd,home),cwd,Read.ReadToolOptions{Some{Bool.not(String.eq(mode,"noresize"))},None{},Bool.pick(Maybe<&2,C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)>>,String.eq(mode,"default"),None{},Some{processor})})
+        tool : Read.ToolOwner <- Read.createReadTool(environment(cwd,home),cwd,Read.ReadToolOptions{Some{Bool.not(String.eq(mode,"noresize") || String.eq(mode,"native-noresize"))},None{},Bool.pick(Maybe<&2,C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)>>,String.eq(mode,"default") || String.eq(mode,"native-noresize"),None{},Some{processor})})
         runOwner(Read.borrowTool(tool),rest)
         C.dispose(Read.ImageInput,Read.ResultOf(Read.ProcessedImage),processor)
     case _: IO.die(Unit,1,"expected cwd, home, processor mode, JSON inputs")
