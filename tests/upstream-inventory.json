@@ -2993,11 +2993,12 @@
         "tests/write-tool.bend",
         "tests/write_tool_check.py",
         "tests/write-public.bend",
-        "tests/write_public_check.py"
+        "tests/write_public_check.py",
+        "tests/edit-diff.bend"
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
-      "implementation": "packages/coding-agent/src/core/tools/write.bend",
-      "notes": "The two write-tool cases (file contents/exact result details and parent creation) are covered through createWriteTool on Bun/native1/native4. Additional tests cover path normalization, overwrite and cancellation in the execution core. Extension createWriteToolDefinition/context overrides, rendering, and all other tools remain pending."
+      "implementation": "packages/coding-agent/src/core/tools/",
+      "notes": "The two write-tool cases (file contents/exact result details and parent creation) are covered through createWriteTool on Bun/native1/native4. Additional tests cover path normalization, overwrite and cancellation in the execution core. Extension createWriteToolDefinition/context overrides, rendering, and all other tools remain pending. Pure edit content assertions ported for exact/fuzzy matching, original-snapshot multi-edits, uniqueness, overlap, no-change and untouched-line preservation; tests/edit_diff_check.py compares the pinned upstream pure source directly, plus generated cases. Unicode17 NFKC conformance is checked independently. This does not port edit IO/cancellation/rendering, patch application or the other tools in this suite. Empty fuzzy needles are rejected and exact whitespace-only needles are counted literally, by explicit user-approved invalid-case policy. Native positions count characters; the oracle translates UTF16 offsets."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
