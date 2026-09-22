@@ -1,6 +1,6 @@
 import Base
-import ../src/url-input.bend as Input
-import ../src/url-scheme.bend as Scheme
+import ../src/url.bend as Input
+import ../src/url.bend as Scheme
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -10,15 +10,15 @@ def decode(parts: List<&2, String>, reversed: String) -> String:
     case SNil{} <> rest: decode(rest, reversed)
     case part <> rest: decode(rest, SCon{Chr{Text.decimal(part, 0)}, reversed})
 
-def show(value: Input.Prefix) -> String:
+def show(value: Input.InputPrefix) -> String:
   match value:
     case Input.Relative{input}: "relative;;" ++ Text.showText(input)
-    case Input.Absolute{scheme, remainder}: "absolute;" ++ Text.showText(Scheme.serialize(scheme)) ++ ";" ++ Text.showText(remainder)
+    case Input.Absolute{scheme, remainder}: "absolute;" ++ Text.showText(Scheme.serializeScheme(scheme)) ++ ";" ++ Text.showText(remainder)
 
 def report(+input: String, +prepared: String) -> String:
-  Text.showText(prepared) ++ ";" ++ Text.showText(Input.removeTabsAndNewlines(input)) ++ ";" ++ show(Input.prefix(prepared))
+  Text.showText(prepared) ++ ";" ++ Text.showText(Input.removeTabsAndNewlines(input)) ++ ";" ++ show(Input.prefixInput(prepared))
 
-def run(+input: String) -> String: report(input, Input.prepare(input))
+def run(+input: String) -> String: report(input, Input.prepareInput(input))
 
 # Compact fixture expansion keeps long inputs below the OS per-argument limit.
 def repeated(count: Nat, +block: String, reversed: String) -> String:

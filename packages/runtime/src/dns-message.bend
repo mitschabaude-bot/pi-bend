@@ -1,6 +1,6 @@
 import Base
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 import ./utf8.bend as UTF8
 import ./io-pair.bend as Pair
 
@@ -437,7 +437,7 @@ def parsePresentation(text: String) -> Result<&2, &2, PresentationError, Present
 # their original record/span, rather than interpreting class-specific bytes.
 type Value is Data:
   A{address: IPv4.Address}
-  AAAA{address: IPv6.Address}
+  AAAA{address: IPv6.Ipv6Address}
   CNAME{target: Name}
   NS{target: Name}
   PTR{target: Name}
@@ -460,7 +460,7 @@ def address4(valid: Bool, packetLocal: Packet, startLocal: U32) -> Result<&2, &2
 def address6(valid: Bool, +packetLocal: Packet, +startLocal: U32) -> Result<&2, &2, RecordError, Value>:
   match valid:
     case False{}: Fail{InvalidLength{}}
-    case True{}: Done{AAAA{IPv6.Address{integer(packetLocal, startLocal), integer(packetLocal, (startLocal + 4 : U32)), integer(packetLocal, (startLocal + 8 : U32)), integer(packetLocal, (startLocal + 12 : U32))}}}
+    case True{}: Done{AAAA{IPv6.Ipv6Address{integer(packetLocal, startLocal), integer(packetLocal, (startLocal + 4 : U32)), integer(packetLocal, (startLocal + 8 : U32)), integer(packetLocal, (startLocal + 12 : U32))}}}
 
 def named(kind: U32, target: Name) -> Value:
   match kind:
@@ -530,7 +530,7 @@ def decodeRecord(+packetLocal: Packet, record: Record) -> Result<&2, &2, RecordE
 
 type Address is Data:
   V4{value: IPv4.Address}
-  V6{value: IPv6.Address, scope: U32}
+  V6{value: IPv6.Ipv6Address, scope: U32}
 
 type Endpoint is Data:
   Endpoint{address: Address, port: U32}
@@ -557,7 +557,7 @@ type Decision is Data:
 def sameAddress(left: Address, right: Address) -> Bool:
   match left right:
     case V4{IPv4.Address{a}} V4{IPv4.Address{b}}: U32.is_eq(a, b)
-    case V6{IPv6.Address{a, b, c, d}, scope} V6{IPv6.Address{e, f, g, h}, otherScope}: U32.is_eq(a, e) && U32.is_eq(b, f) && U32.is_eq(c, g) && U32.is_eq(d, h) && U32.is_eq(scope, otherScope)
+    case V6{IPv6.Ipv6Address{a, b, c, d}, scope} V6{IPv6.Ipv6Address{e, f, g, h}, otherScope}: U32.is_eq(a, e) && U32.is_eq(b, f) && U32.is_eq(c, g) && U32.is_eq(d, h) && U32.is_eq(scope, otherScope)
     case _ _: False{}
 
 def sameEndpoint(left: Endpoint, right: Endpoint) -> Bool:

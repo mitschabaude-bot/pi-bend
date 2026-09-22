@@ -3,7 +3,7 @@ import ../packages/runtime/src/resolver-config.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Address
 import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/ipv6-scope.bend as Scope
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 type Source is Data:
@@ -45,7 +45,7 @@ def raw(result: Result<&2, &2, Address.AddressError, Address.Address>, source: S
     case Fail{_}: IO.die(Unit, 1, "invalid fixture address")
     case Done{address}: runResolver(source, address)
 
-def parsed(result: Result<&2, &2, IPv6.AddressError, IPv6.Address>, +scope: String, +source: Source) -> IO(Unit):
+def parsed(result: Result<&2, &2, IPv6.Ipv6AddressError, IPv6.Ipv6Address>, +scope: String, +source: Source) -> IO(Unit):
   match result:
     case Fail{_}: IO.die(Unit, 1, "invalid fixture address")
     case Done{+address}:
@@ -56,7 +56,7 @@ def parsed(result: Result<&2, &2, IPv6.AddressError, IPv6.Address>, +scope: Stri
 
 def args(values: List<String>) -> IO(Unit):
   match values:
-    case address <> scope <> name <> index <> Nil{}: parsed(IPv6.parse(address), scope, Source{name, Scalar.decimal(index, 0)})
+    case address <> scope <> name <> index <> Nil{}: parsed(IPv6.parseIpv6(address), scope, Source{name, Scalar.decimal(index, 0)})
     case address <> name <> index <> Nil{}: raw(Address.parseAddress(address), Source{name, Scalar.decimal(index, 0)})
     case _: IO.die(Unit, 1, "expected address [scope] interface index")
 

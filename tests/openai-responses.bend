@@ -13,10 +13,10 @@ import ../packages/runtime/src/u64.bend as W
 import ../packages/runtime/src/fetch.bend as Fetch
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
-import ../packages/runtime/src/url-absolute.bend as Absolute
-import ../packages/runtime/src/idna-domain.bend as Domain
-import ../packages/runtime/src/idna-label.bend as Label
-import ../packages/runtime/src/idna-mapping.bend as Mapping
+import ../packages/runtime/src/url.bend as Absolute
+import ../packages/runtime/src/idna.bend as Domain
+import ../packages/runtime/src/idna.bend as Label
+import ../packages/runtime/src/idna.bend as Mapping
 import ../packages/runtime/src/unicode-17-idna-mapping.bend as MappingData
 import ../packages/runtime/src/unicode-17-normalization.bend as NormalizationData
 import ../packages/runtime/src/unicode-17-idna-properties.bend as PropertiesData
@@ -260,7 +260,7 @@ def context() -> P.Context(Unit, Unit):
   T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"initial"}, None{}, Some{grammarTool() <> Nil{}}, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"hello"}, F.fromU32(1)}} <> Nil{}}
 
 def config(files: Fetch.Files) -> P.Config:
-  P.Config{Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.Options{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}}, Client.Defaults{"pi-bend-test", R.new(String), None{}, None{}}, files, Setup.options(0, False{}), 65536n, False{}}
+  P.Config{Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}}, Client.Defaults{"pi-bend-test", R.new(String), None{}, None{}}, files, Setup.options(0, False{}), 65536n, False{}}
 
 def options(+mode: U32, supplied: Bool, parent: Abort.AbortSignal<String>, payloadHook: T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String), responseHook: T.ResponseCallback(T.Model<T.JsonValue>, String)) -> P.OpenAIResponsesOptions<String, Unit, String>:
   P.fromStreamOptions(String, Unit, String, T.StreamOptions{Bool.pick(Maybe<&2, Abort.AbortSignal<String>>, supplied, Some{parent}, None{}), None{}, Some{Bool.pick(String, U32.is_eq(mode, 30), "", "fixture-key")}, None{}, Some{R.new(String)}, Some{payloadHook}, Some{responseHook}, None{}, Some{F.fromU32(1000)}, Some{Bool.pick(F.F64, U32.is_eq(mode, 22), F.nan(), F.fromU32(2))}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, P.ResponsesSettings{None{}, None{}, tier(mode), None{}})

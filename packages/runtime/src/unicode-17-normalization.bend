@@ -2,7 +2,7 @@
 # Unicode 17.0.0 data, Unicode License V3; see unicode-LICENSE.txt.
 import Base
 import ./u32-table.bend as Table
-import ./unicode-normalization-data.bend as Data
+import ./unicode.bend as Data
 
 def properties() -> Table.Table<Data.Property>:
   Table.Table{12n, Table.Branch{8769, Data.Property{0, Data.Point{8764, 0} <> Data.Point{824, 1} <> Nil{}},

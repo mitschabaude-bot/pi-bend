@@ -1,10 +1,10 @@
 import Base
-import ../src/idna-label.bend as Label
-import ../src/idna-label-rules.bend as Rules
-import ../src/idna-ace.bend as ACE
-import ../src/idna-bidi.bend as Bidi
-import ../src/punycode-core.bend as Core
-import ../src/idna-mapping.bend as Mapping
+import ../src/idna.bend as Label
+import ../src/idna.bend as Rules
+import ../src/idna.bend as ACE
+import ../src/idna.bend as Bidi
+import ../src/punycode.bend as Core
+import ../src/idna.bend as Mapping
 import ../src/unicode-17-idna-mapping.bend as MappingData
 import ../src/unicode-17-normalization.bend as NormalizationData
 import ../src/unicode-17-idna-properties.bend as PropertiesData
@@ -27,7 +27,7 @@ def bit(value: Bool) -> String:
     case True{}: "1"
     case False{}: "0"
 
-def show(value: Result<&2, &2, Label.Error, Label.Label>) -> String:
+def show(value: Result<&2, &2, Label.LabelError, Label.LabelLabel>) -> String:
   match value:
     case Fail{Label.ACEError{ACE.NonASCIIEncoding{}}}: "non-ascii"
     case Fail{Label.ACEError{ACE.ASCIIOnlyDecodedLabel{}}}: "ascii-only"
@@ -43,13 +43,13 @@ def show(value: Result<&2, &2, Label.Error, Label.Label>) -> String:
     case Fail{Label.LabelRule{Rules.Dot{}}}: "dot"
     case Fail{Label.LabelRule{Rules.InvalidASCII{code}}}: "ascii;" ++ U32.show(code)
     case Fail{Label.LabelRule{Rules.InvalidStatus{code}}}: "status;" ++ U32.show(code)
-    case Done{Label.Label{input, empty, Bidi.Analysis{rtl, valid}}}:
+    case Done{Label.LabelLabel{input, empty, Bidi.Analysis{rtl, valid}}}:
       "ok;" ++ bit(empty) ++ bit(rtl) ++ bit(valid) ++ ";" ++ Text.showText(input)
 
 def run(parts: List<&2, String>, context: Label.Context) -> String:
   match parts:
     case processing <> hyphens <> std3 <> joiners <> input <> Nil{}:
-      show(Label.process(context, Label.Options{String.eq(hyphens, "1"), String.eq(std3, "1"), String.eq(joiners, "1"), mode(processing)}, text(Split.split(input, ','), "")))
+      show(Label.process(context, Label.LabelOptions{String.eq(hyphens, "1"), String.eq(std3, "1"), String.eq(joiners, "1"), mode(processing)}, text(Split.split(input, ','), "")))
     case _: "invalid-case"
 
 def cases(args: List<String>, +context: Label.Context) -> IO(Unit):

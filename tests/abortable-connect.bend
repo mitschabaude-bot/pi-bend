@@ -1,15 +1,15 @@
 import Base
 import ../packages/runtime/src/socket.bend as Client
 import ../packages/runtime/src/abort.bend as Abort
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ./connect-owned.bend as Test
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def address(ipv6: Bool) -> Client.Address:
   match ipv6:
     case False{}: Client.V4{IPv4.Address{2130706433}}
-    case True{}: Client.V6{IPv6.Address{0, 0, 0, 1}, 0}
+    case True{}: Client.V6{IPv6.Ipv6Address{0, 0, 0, 1}, 0}
 
 def expect(+kind: String, expectedCode: U32, result: Result<&2, &1, Client.Error<String>, Socket>) -> IO(Unit):
   match result:

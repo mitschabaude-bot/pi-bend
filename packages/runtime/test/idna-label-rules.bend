@@ -1,8 +1,8 @@
 import Base
-import ../src/idna-label-rules.bend as Rules
+import ../src/idna.bend as Rules
 import ../src/u32-table.bend as Table
-import ../src/idna-mapping.bend as Mapping
-import ../src/idna-mapping-data.bend as Data
+import ../src/idna.bend as Mapping
+import ../src/unicode.bend as Data
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -31,7 +31,7 @@ def bit(value: Bool) -> String:
     case True{}: "1"
     case False{}: "0"
 
-def show(value: Maybe<&2, Rules.Error>) -> String:
+def show(value: Maybe<&2, Rules.LabelRulesError>) -> String:
   match value:
     case None{}: "ok"
     case Some{Rules.HyphenPositions{}}: "hyphen-positions"
@@ -56,7 +56,7 @@ def run(parts: List<&2, String>) -> String:
     case "s" <> hyphens <> std3 <> input <> Nil{}:
       show(Rules.syntax(text(Split.split(input, ','), ""), String.eq(hyphens, "1"), String.eq(std3, "1")))
     case "c" <> processing <> hyphens <> std3 <> input <> Nil{}:
-      show(Rules.check(table(), Rules.Options{String.eq(hyphens, "1"), String.eq(std3, "1"), mode(processing)}, text(Split.split(input, ','), "")))
+      show(Rules.check(table(), Rules.LabelRulesOptions{String.eq(hyphens, "1"), String.eq(std3, "1"), mode(processing)}, text(Split.split(input, ','), "")))
     case "v" <> processing <> value <> Nil{}: bit(Rules.statusAllowed(mode(processing), status(value)))
     case _: "invalid-case"
 

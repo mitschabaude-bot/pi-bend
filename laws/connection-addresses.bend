@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/src/connection-driver.bend as Candidates
 import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/hosts.bend as Hosts
@@ -64,7 +64,7 @@ law ipv4_host_address_retained:
   {Candidates.host(Hosts.Entry{File.V4{address}, canonical, aliases}) == Connect.V4{address} : Connect.Address}
 
 law ipv6_host_address_retained:
-  for +address: IPv6.Address
+  for +address: IPv6.Ipv6Address
   for canonical: String
   for aliases: List<&2, String>
   {Candidates.host(Hosts.Entry{File.V6{address}, canonical, aliases}) == Connect.V6{address, 0} : Connect.Address}
@@ -75,6 +75,6 @@ law ipv4_answer_address_retained:
   {Candidates.answer(DNS.V4{address, ttl}) == Connect.V4{address} : Connect.Address}
 
 law ipv6_answer_address_retained:
-  for +address: IPv6.Address
+  for +address: IPv6.Ipv6Address
   for ttl: U32
   {Candidates.answer(DNS.V6{address, ttl}) == Connect.V6{address, 0} : Connect.Address}

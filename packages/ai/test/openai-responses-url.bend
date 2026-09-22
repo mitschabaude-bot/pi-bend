@@ -1,14 +1,14 @@
 import Base
 import ../src/api/openai-client.bend as Client
-import ../../runtime/src/url-absolute.bend as Absolute
-import ../../runtime/src/url-form-strict.bend as Strict
-import ../../runtime/src/url-form.bend as Form
-import ../../runtime/src/url-record.bend as URL
-import ../../runtime/src/url-serialize.bend as Serialize
-import ../../runtime/src/url-query-encode.bend as Encode
-import ../../runtime/src/idna-domain.bend as Domain
-import ../../runtime/src/idna-label.bend as Label
-import ../../runtime/src/idna-mapping.bend as Mapping
+import ../../runtime/src/url.bend as Absolute
+import ../../runtime/src/url.bend as Strict
+import ../../runtime/src/url.bend as Form
+import ../../runtime/src/url.bend as URL
+import ../../runtime/src/url.bend as Serialize
+import ../../runtime/src/url.bend as Encode
+import ../../runtime/src/idna.bend as Domain
+import ../../runtime/src/idna.bend as Label
+import ../../runtime/src/idna.bend as Mapping
 import ../../runtime/src/unicode-17-idna-mapping.bend as MappingData
 import ../../runtime/src/unicode-17-normalization.bend as NormalizationData
 import ../../runtime/src/unicode-17-idna-properties.bend as PropertiesData
@@ -20,7 +20,7 @@ def index(value: Nat) -> U32:
     case Zero{}: 0
     case Succ{rest}: (1 + index(rest) : U32)
 
-def failure(cause: Strict.Error) -> String:
+def failure(cause: Strict.FormStrictError) -> String:
   match cause:
     case Strict.InvalidName{field}: "name:" ++ U32.show(index(field))
     case Strict.InvalidValue{field}: "value:" ++ U32.show(index(field))
@@ -30,7 +30,7 @@ def entries(tuples: List<&2, Form.Entry>) -> String:
     case Nil{}: ""
     case Form.Entry{name, value} <> rest: Text.showText(name) ++ ":" ++ Text.showText(value) ++ "/" ++ entries(rest)
 
-def form(result: Result<&2, &2, Strict.Error, List<&2, Form.Entry>>) -> String:
+def form(result: Result<&2, &2, Strict.FormStrictError, List<&2, Form.Entry>>) -> String:
   match result:
     case Fail{cause}: failure(cause)
     case Done{tuples}: "+" ++ entries(tuples)
@@ -39,13 +39,13 @@ def url(result: Result<&2, &2, Client.URLError, URL.URL>) -> String:
   match result:
     case Fail{Client.InvalidURL{_}}: "invalid-url"
     case Fail{Client.InvalidQuery{cause}}: failure(cause)
-    case Done{value}: "+" ++ Text.showText(Serialize.serialize(value, False{}))
+    case Done{value}: "+" ++ Text.showText(Serialize.serializeSerialize(value, False{}))
 
 def dispatch(context: Absolute.Context, kind: Char, text: String) -> String:
   match kind:
-    case 'f': form(Strict.parse(text))
-    case 'q': form(Strict.query(text))
-    case 'e': Text.showText(Encode.encode(text))
+    case 'f': form(Strict.parseFormStrict(text))
+    case 'q': form(Strict.queryFormStrict(text))
+    case 'e': Text.showText(Encode.encodeQueryEncode(text))
     case _: url(Client.responsesURL(context, text))
 
 def run(context: Absolute.Context, arg: String) -> String:
@@ -64,4 +64,4 @@ def cases(args: List<String>, +context: Absolute.Context) -> IO(Unit):
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
-    cases(args, Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.Options{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}})
+    cases(args, Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}})

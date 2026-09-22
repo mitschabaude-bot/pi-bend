@@ -1,5 +1,5 @@
 import Base
-import ../src/url-opaque-path.bend as Path
+import ../src/url.bend as Path
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -23,7 +23,7 @@ def cases(args: List<String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case head <> rest:
       do IO<Unit>:
-        IO.print(show(Path.parse(decode(Split.split(head, ','), ""))))
+        IO.print(show(Path.parseOpaquePath(decode(Split.split(head, ','), ""))))
         cases(rest)
 
 def main() -> IO(Unit):

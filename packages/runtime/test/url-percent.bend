@@ -1,5 +1,5 @@
 import Base
-import ../src/url-percent.bend as Percent
+import ../src/url.bend as Percent
 import ./utf8-runner.bend as Text
 import ../src/string-split.bend as Split
 
@@ -32,7 +32,7 @@ def encoding(code: String) -> Percent.EncodeSet:
 def run(parts: List<&2, String>) -> String:
   match parts:
     case "e" <> mode <> value <> Nil{}: Text.showText(Percent.encode(encoding(mode), text(value)))
-    case "d" <> value <> Nil{}: String.join(Text.showNumbers(Percent.decode(parseNumbers(value))), ",")
+    case "d" <> value <> Nil{}: String.join(Text.showNumbers(Percent.decodePercent(parseNumbers(value))), ",")
     case _: "invalid-case"
 
 def cases(args: List<String>) -> IO(Unit):

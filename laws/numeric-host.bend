@@ -1,8 +1,8 @@
 import Base
 import ../packages/runtime/src/numeric-host.bend as Host
 import ../packages/runtime/src/hosts.bend as Family
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 
 law unrestricted_preserves_input:
   for +input: Host.Input
@@ -13,12 +13,12 @@ law ipv4_preserves_address:
   {Host.selected(Family.IPv4Only{}, Host.V4{address}) == Done{Host.V4{address}} : Result<&2, &2, Host.Error, Host.Input>}
 
 law ipv6_preserves_address_and_zone:
-  for +address: IPv6.Address
+  for +address: IPv6.Ipv6Address
   for +zone: Maybe<&2, String>
   {Host.selected(Family.IPv6Only{}, Host.V6{address, zone}) == Done{Host.V6{address, zone}} : Result<&2, &2, Host.Error, Host.Input>}
 
 law ipv4_rejects_ipv6:
-  for address: IPv6.Address
+  for address: IPv6.Ipv6Address
   for zone: Maybe<&2, String>
   {Host.selected(Family.IPv4Only{}, Host.V6{address, zone}) == Fail{Host.FamilyMismatch{}} : Result<&2, &2, Host.Error, Host.Input>}
 

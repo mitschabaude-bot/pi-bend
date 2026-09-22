@@ -8,8 +8,8 @@ import ../packages/runtime/src/network-interface.bend as Interface
 import ../packages/runtime/src/ipv6-scope.bend as Scope
 import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/socket.bend as Connect
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ./resolver-settings.bend as SettingsTest
 
 # A trace exposes order and exact call count, including duplicate interfaces.
@@ -28,7 +28,7 @@ def servers(values: List<&2, TCP.Server>) -> IO(Unit):
       do IO<Unit>:
         IO.print("server:4:" ++ U32.show(value) ++ ":" ++ U32.show(port))
         servers(rest)
-    case TCP.Server{Connect.V6{IPv6.Address{a,b,c,d}, scope}, port} <> rest:
+    case TCP.Server{Connect.V6{IPv6.Ipv6Address{a,b,c,d}, scope}, port} <> rest:
       do IO<Unit>:
         IO.print("server:6:" ++ U32.show(a) ++ ":" ++ U32.show(b) ++ ":" ++ U32.show(c) ++ ":" ++ U32.show(d) ++ ":" ++ U32.show(scope) ++ ":" ++ U32.show(port))
         servers(rest)

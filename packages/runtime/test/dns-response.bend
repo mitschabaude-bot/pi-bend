@@ -1,8 +1,8 @@
 import Base
 import ../src/dns-message.bend as Response
 import ../src/dns-message.bend as Message
-import ../src/url-ipv4.bend as IPv4
-import ../src/url-ipv6.bend as IPv6
+import ../src/url.bend as IPv4
+import ../src/url.bend as IPv6
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Scalar
 
@@ -36,7 +36,7 @@ def show(value: Response.Decision) -> String:
     case Response.Matched{Message.Message{_, head, _, _, _, _}}: flags("matched:", head)
 
 def ipv6(+mode: U32, destination: Bool) -> Response.Endpoint:
-  Response.Endpoint{Response.V6{IPv6.Address{Bool.pick(U32, U32.is_eq(mode, 6), 2, 1), Bool.pick(U32, U32.is_eq(mode, 7), 3, 2), Bool.pick(U32, U32.is_eq(mode, 8), 4, 3), Bool.pick(U32, U32.is_eq(mode, 9), 5, 4)}, Bool.pick(U32, U32.is_eq(mode, 10) || U32.is_eq(mode, 12), 8, 7)}, Bool.pick(U32, destination, 40000, 53)}
+  Response.Endpoint{Response.V6{IPv6.Ipv6Address{Bool.pick(U32, U32.is_eq(mode, 6), 2, 1), Bool.pick(U32, U32.is_eq(mode, 7), 3, 2), Bool.pick(U32, U32.is_eq(mode, 8), 4, 3), Bool.pick(U32, U32.is_eq(mode, 9), 5, 4)}, Bool.pick(U32, U32.is_eq(mode, 10) || U32.is_eq(mode, 12), 8, 7)}, Bool.pick(U32, destination, 40000, 53)}
 
 def endpoint(v6: Bool, +mode: U32, destination: Bool) -> Response.Endpoint:
   match v6:

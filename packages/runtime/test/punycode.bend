@@ -1,6 +1,6 @@
 import Base
 import ../src/punycode.bend as Punycode
-import ../src/punycode-core.bend as Core
+import ../src/punycode.bend as Core
 import ./utf8-runner.bend as Text
 import ../src/string-split.bend as Split
 

@@ -1,17 +1,17 @@
 import Base
-import ../src/url-ipv6.bend as IPv6
+import ../src/url.bend as IPv6
 
-def show(result: Result<&2, &2, IPv6.AddressError, IPv6.Address>) -> String:
+def show(result: Result<&2, &2, IPv6.Ipv6AddressError, IPv6.Ipv6Address>) -> String:
   match result:
     case Fail{_}: "invalid"
-    case Done{address}: IPv6.serialize(address)
+    case Done{address}: IPv6.serializeIpv6(address)
 
 def cases(args: List<String>) -> IO(Unit):
   match args:
     case Nil{}: IO.pure(Unit, Unit{})
     case text <> rest:
       do IO<Unit>:
-        IO.print(show(IPv6.parse(text)))
+        IO.print(show(IPv6.parseIpv6(text)))
         cases(rest)
 
 def main() -> IO(Unit):

@@ -3,9 +3,9 @@ import ../packages/runtime/src/http-exchange.bend as Addresses
 import ../packages/runtime/src/connection-driver.bend as Candidates
 import ../packages/runtime/src/http-exchange.bend as HTTP
 import ../packages/runtime/src/http-exchange.bend as Route
-import ../packages/runtime/src/url-host.bend as URLHost
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as URLHost
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/dns-resolver.bend as HostResolver
 import ../packages/runtime/src/hosts.bend as HostResolve
@@ -96,19 +96,19 @@ def hostReport(value: HostResolve.Report<HostFile.Failure, HostResolver.PairHost
     case HostResolve.FromNetwork{HostResolver.PairHostsResolverCompleted{value}}: report(value)
 
 def host(+mode: String) -> URLHost.Host:
-  Bool.pick(URLHost.Host, String.eq(mode, "numeric4"), URLHost.IPv4{IPv4.Address{2130706433}}, Bool.pick(URLHost.Host, String.eq(mode, "numeric6"), URLHost.IPv6{IPv6.Address{0, 0, 0, 1}}, Bool.pick(URLHost.Host, String.eq(mode, "numeric-mapped"), URLHost.IPv6{IPv6.Address{0, 0, 65535, 2130706433}}, Bool.pick(URLHost.Host, String.eq(mode, "empty-host"), URLHost.Empty{}, Bool.pick(URLHost.Host, String.eq(mode, "empty-domain"), URLHost.Domain{""}, Bool.pick(URLHost.Host, String.eq(mode, "opaque-host"), URLHost.Opaque{"a"}, URLHost.Domain{textName(mode)}))))))
+  Bool.pick(URLHost.Host, String.eq(mode, "numeric4"), URLHost.IPv4{IPv4.Address{2130706433}}, Bool.pick(URLHost.Host, String.eq(mode, "numeric6"), URLHost.IPv6{IPv6.Ipv6Address{0, 0, 0, 1}}, Bool.pick(URLHost.Host, String.eq(mode, "numeric-mapped"), URLHost.IPv6{IPv6.Ipv6Address{0, 0, 65535, 2130706433}}, Bool.pick(URLHost.Host, String.eq(mode, "empty-host"), URLHost.Empty{}, Bool.pick(URLHost.Host, String.eq(mode, "empty-domain"), URLHost.Domain{""}, Bool.pick(URLHost.Host, String.eq(mode, "opaque-host"), URLHost.Opaque{"a"}, URLHost.Domain{textName(mode)}))))))
 
 def routed(value: Result<&2, &2, Route.HostRouteError, Route.HostRouteResolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>>) -> IO(Unit):
   match value:
     case Fail{Route.InvalidHost{}}: IO.print("invalid-http-host")
     case Done{Route.NumericAddress{Connect.V4{IPv4.Address{address}}}}: IO.print("numeric4:" ++ U32.show(address))
-    case Done{Route.NumericAddress{Connect.V6{IPv6.Address{a, b, c, d}, scope}}}: IO.print("numeric6:" ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ ":" ++ U32.show(scope))
+    case Done{Route.NumericAddress{Connect.V6{IPv6.Ipv6Address{a, b, c, d}, scope}}}: IO.print("numeric6:" ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ ":" ++ U32.show(scope))
     case Done{Route.Named{report}}: hostReport(report)
 
 def showAddress(address: Connect.Address) -> String:
   match address:
     case Connect.V4{IPv4.Address{value}}: "4," ++ U32.show(value) ++ ";"
-    case Connect.V6{IPv6.Address{a, b, c, d}, scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(scope) ++ ";"
+    case Connect.V6{IPv6.Ipv6Address{a, b, c, d}, scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(scope) ++ ";"
 
 def showAddresses(addresses: List<&2, Connect.Address>) -> String:
   match addresses:

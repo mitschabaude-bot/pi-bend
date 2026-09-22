@@ -1,6 +1,6 @@
 import Base
-import ../src/url-host-input.bend as Input
-import ../src/url-host.bend as Host
+import ../src/url.bend as Input
+import ../src/url.bend as Host
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -10,10 +10,10 @@ def text(parts: List<&2, String>, reversed: String) -> String:
     case SNil{} <> rest: text(rest, reversed)
     case part <> rest: text(rest, SCon{Chr{Text.decimal(part, 0)}, reversed})
 
-def show(value: Result<&2, &2, Host.Error, Input.Prepared>) -> String:
+def show(value: Result<&2, &2, Host.HostError, Input.Prepared>) -> String:
   match value:
     case Fail{_}: "invalid"
-    case Done{Input.Literal{host}}: "literal;" ++ Text.showText(Host.serialize(host))
+    case Done{Input.Literal{host}}: "literal;" ++ Text.showText(Host.serializeHost(host))
     case Done{Input.DomainInput{value}}: "domain;" ++ Text.showText(value)
 
 def cases(args: List<String>) -> IO(Unit):

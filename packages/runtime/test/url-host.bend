@@ -1,5 +1,5 @@
 import Base
-import ../src/url-host.bend as Host
+import ../src/url.bend as Host
 import ../src/string-split.bend as Split
 import ./utf8-runner.bend as Text
 
@@ -17,10 +17,10 @@ def kind(host: Host.Host) -> String:
     case Host.Opaque{_}: "opaque"
     case Host.Empty{}: "empty"
 
-def show(result: Result<&2, &2, Host.Error, Host.Host>) -> String:
+def show(result: Result<&2, &2, Host.HostError, Host.Host>) -> String:
   match result:
     case Fail{_}: "invalid"
-    case Done{+host}: kind(host) ++ ";" ++ Text.showText(Host.serialize(host))
+    case Done{+host}: kind(host) ++ ";" ++ Text.showText(Host.serializeHost(host))
 
 def run(parts: List<&2, String>) -> String:
   match parts:

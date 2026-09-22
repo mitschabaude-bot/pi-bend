@@ -1,8 +1,8 @@
 import Base
 import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/socket.bend as Connect
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def assertTrue(valid: Bool) -> IO(Unit):
@@ -13,7 +13,7 @@ def assertTrue(valid: Bool) -> IO(Unit):
 def show(value: Endpoint.Endpoint) -> String:
   match value:
     case Endpoint.EndpointV4{IPv4.Address{a}, port}: "4," ++ U32.show(a) ++ ",0,0,0," ++ U32.show(port) ++ ",0"
-    case Endpoint.EndpointV6{IPv6.Address{a,b,c,d},port,scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(port) ++ "," ++ U32.show(scope)
+    case Endpoint.EndpointV6{IPv6.Ipv6Address{a,b,c,d},port,scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(port) ++ "," ++ U32.show(scope)
 
 def observed(pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Socket):
   match pair:
@@ -99,8 +99,8 @@ def udp(code: U32) -> IO(Unit):
 def address(mode: String) -> Connect.Address:
   match mode:
     case "4": Connect.V4{IPv4.Address{2130706433}}
-    case "mapped": Connect.V6{IPv6.Address{0,0,65535,2130706433},0}
-    case _: Connect.V6{IPv6.Address{0,0,0,1},0}
+    case "mapped": Connect.V6{IPv6.Ipv6Address{0,0,65535,2130706433},0}
+    case _: Connect.V6{IPv6.Ipv6Address{0,0,0,1},0}
 
 def connected(pair: Connect & ConnectCancel) -> IO(Unit):
   match pair:

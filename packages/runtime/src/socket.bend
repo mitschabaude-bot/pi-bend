@@ -1,8 +1,8 @@
 import Base
 import ./abort.bend as A
 import ./deferred.bend as D
-import ./url-ipv4.bend as IPv4
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv4
+import ./url.bend as IPv6
 import ./serial-resource.bend as Resource
 import ./abort-outcome.bend as Outcome
 import ./ref.bend as R
@@ -13,7 +13,7 @@ type Side is Data:
 
 type Endpoint is Data:
   EndpointV4{address: IPv4.Address, port: U32}
-  EndpointV6{address: IPv6.Address, port: U32, scope: U32}
+  EndpointV6{address: IPv6.Ipv6Address, port: U32, scope: U32}
 
 type EndpointError is Data:
   EndpointSocketError{code: U32, message: String}
@@ -27,7 +27,7 @@ def selector(side: Side) -> U32:
 def endpoint(family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32) -> Result<&2, &2, EndpointError, Endpoint>:
   match family:
     case 4: Done{EndpointV4{IPv4.Address{a}, port}}
-    case 6: Done{EndpointV6{IPv6.Address{a, b, c, d}, port, scope}}
+    case 6: Done{EndpointV6{IPv6.Ipv6Address{a, b, c, d}, port, scope}}
     case valueEndpoint: Fail{InvalidFamily{valueEndpoint}}
 
 def valueEndpoint(result: Result<&1, &1, U32 & String, U32 & U32 & U32 & U32 & U32 & U32 & U32>) -> Result<&2, &2, EndpointError, Endpoint>:
@@ -238,7 +238,7 @@ def close(-Reason: Data, owner: Owner<Reason>) -> IO(Result<&2, &2, InterruptErr
 
 type Address is Data:
   V4{value: IPv4.Address}
-  V6{value: IPv6.Address, scope: U32}
+  V6{value: IPv6.Ipv6Address, scope: U32}
 
 type Error<-Reason: Data> is Data:
   Aborted{reason: A.AbortReason<Reason>}
@@ -247,7 +247,7 @@ type Error<-Reason: Data> is Data:
 def begin(address: Address, port: U32) -> IO(Result<&1, &1, U32 & String, Connect & ConnectCancel>):
   match address:
     case V4{IPv4.Address{value}}: Connect.ipv4(value, port)
-    case V6{IPv6.Address{a, b, c, d}, scope}: Connect.ipv6(a, b, c, d, port, scope)
+    case V6{IPv6.Ipv6Address{a, b, c, d}, scope}: Connect.ipv6(a, b, c, d, port, scope)
 
 def cancel(-Reason: Data, handle: ConnectCancel, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Unit):
   match reason:
@@ -454,7 +454,7 @@ def recv(-Reason: Data, socket: Socket, maximum: U32, +signal: A.AbortSignal<Rea
 def writeOperation(socket: Socket, destination: Endpoint, bytes: List<&2, U32>) -> IO(UDPWrite & UDPWriteCancel):
   match destination:
     case EndpointV4{IPv4.Address{address}, port}: UDPWrite.new(socket, 4, address, 0, 0, 0, port, 0, bytes)
-    case EndpointV6{IPv6.Address{a, b, c, d}, port, scope}: UDPWrite.new(socket, 6, a, b, c, d, port, scope, bytes)
+    case EndpointV6{IPv6.Ipv6Address{a, b, c, d}, port, scope}: UDPWrite.new(socket, 6, a, b, c, d, port, scope, bytes)
 
 def writeConverted(-Reason: Data, value: Maybe<&1, Result<&1, &1, U32 & String, Unit>>) -> Maybe<&2, Result<&2, &2, DatagramError<Reason>, Unit>>:
   match value:

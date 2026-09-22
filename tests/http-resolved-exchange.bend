@@ -9,8 +9,8 @@ import ../packages/runtime/src/http-exchange.bend as Exchange
 import ../packages/runtime/src/socket.bend as SocketIO
 import ../packages/runtime/src/http-message.bend as Headers
 import ../packages/runtime/src/http-message.bend as Header
-import ../packages/runtime/src/url-record.bend as URL
-import ../packages/runtime/src/url-scheme.bend as Scheme
+import ../packages/runtime/src/url.bend as URL
+import ../packages/runtime/src/url.bend as Scheme
 import ../packages/runtime/src/http-response.bend as Reader
 import ../packages/runtime/src/http-exchange.bend as Source
 import ../packages/runtime/src/http-response.bend as Response
@@ -23,9 +23,9 @@ import ../packages/runtime/src/http-exchange.bend as Route
 import ../packages/runtime/src/hosts.bend as HostsResolve
 import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/url-host.bend as Host
-import ../packages/runtime/src/url-ipv4.bend as IPv4
-import ../packages/runtime/src/url-ipv6.bend as IPv6
+import ../packages/runtime/src/url.bend as Host
+import ../packages/runtime/src/url.bend as IPv4
+import ../packages/runtime/src/url.bend as IPv6
 import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Search
@@ -52,7 +52,7 @@ def preference(mode: U32, family: Bool) -> Order.Preference:
 def host(mode: U32, family: Bool) -> Host.Host:
   match mode family:
     case 0 False{}: Host.IPv4{IPv4.Address{2130706433}}
-    case 0 True{}: Host.IPv6{IPv6.Address{0, 0, 0, 1}}
+    case 0 True{}: Host.IPv6{IPv6.Ipv6Address{0, 0, 0, 1}}
     case _ _: Host.Domain{"unit"}
 
 def database(mode: U32, family: Bool) -> Result<&2, &2, File.Failure, List<&2, Hosts.Entry<File.Address>>>:

@@ -1,11 +1,11 @@
 import Base
-import ./url-ipv6.bend as IPv6
+import ./url.bend as IPv6
 
 # Interface names apply only to link-local unicast or node/link-local
 # multicast addresses. Decimal indices remain valid for any IPv6 address.
-def permitsInterface(address: IPv6.Address) -> Bool:
+def permitsInterface(address: IPv6.Ipv6Address) -> Bool:
   match address:
-    case IPv6.Address{+word, _, _, _}:
+    case IPv6.Ipv6Address{+word, _, _, _}:
       U32.is_eq((word / 4194304 : U32), 1018) ||
         (U32.is_eq((word / 16777216 : U32), 255) &&
           (U32.is_eq((word / 65536 % 16 : U32), 1) || U32.is_eq((word / 65536 % 16 : U32), 2)))
@@ -58,5 +58,5 @@ def permittedWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String
         result : Result<&2, &2, LookupError, U32> <- lookup(context, scope)
         return lookedUp(LookupError, scope, result)
 
-def resolveWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, address: IPv6.Address, scope: String) -> IO(Result<&2, &2, Error<LookupError>, U32>):
+def resolveWith(~LookupError: Data, ~Context: Data, ~lookup: Context -> String -> IO(Result<&2, &2, LookupError, U32>), context: Context, address: IPv6.Ipv6Address, scope: String) -> IO(Result<&2, &2, Error<LookupError>, U32>):
   permittedWith(~LookupError, ~Context, ~lookup, context, permitsInterface(address), scope)

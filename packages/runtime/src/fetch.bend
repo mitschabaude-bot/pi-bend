@@ -2,7 +2,7 @@ import Base
 import ./abort.bend as Abort
 import ./deadline.bend as Deadline
 import ./callback.bend as C
-import ./url-record.bend as URL
+import ./url.bend as URL
 import ./http-message.bend as Headers
 import ./http-message.bend as Request
 import ./http-message.bend as Body

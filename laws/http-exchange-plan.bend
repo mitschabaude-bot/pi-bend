@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/http-message.bend as Plan
 import ../packages/runtime/src/http-message.bend as URL
-import ../packages/runtime/src/url-host.bend as Host
+import ../packages/runtime/src/url.bend as Host
 
 law tls_cannot_start_cleartext:
   for -R: Data
