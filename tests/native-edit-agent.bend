@@ -4,6 +4,7 @@ import ./native-write-agent.bend as Writer
 import ./native-openai.bend as Native
 import ../packages/coding-agent/src/core/tools/write.bend as Write
 import ../packages/coding-agent/src/core/tools/edit.bend as Edit
+import ../packages/coding-agent/src/core/tools/read.bend as Read
 import ../packages/coding-agent/src/core/tools/file-mutation-queue.bend as Queue
 import ../packages/coding-agent/src/utils/paths.bend as Paths
 import ../packages/agent/src/types.bend as Agent
@@ -17,6 +18,22 @@ import ../packages/runtime/test/utf8-runner.bend as Wire
 
 type EditExecution is Data:
   EditExecution{callback: C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, counter: Ref.Ref<U32>}
+
+type ReadExecution is Data:
+  ReadExecution{callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>, Read.ToolResult()>, counter: Ref.Ref<U32>}
+
+def readResult(value: Read.ToolResult()) -> Runner.ToolOutput():
+  match value:
+    case Fail{error}: Fail{Read.errorMessage(error)}
+    case Done{Agent.AgentToolResult{content,_,mutation,refresh}}: Done{Agent.AgentToolResult{content,Unit{},mutation,refresh}}
+
+def invokeRead(environment: ReadExecution, input: Runner.ToolInput()) -> IO(Runner.ToolOutput()):
+  match environment input:
+    case ReadExecution{callback,counter} Agent.ToolExecutionInput{id,params,signal,_}:
+      do IO<Runner.ToolOutput()>:
+        Ref.modify(U32,Unit,counter,value => ((value + 1 : U32),Unit{}))
+        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>,Read.ToolResult(),callback,Agent.ToolExecutionInput{id,params,signal,None{}})
+        return readResult(result)
 
 def firstLine(value: Maybe<&2, Nat>) -> String:
   match value:
@@ -51,17 +68,22 @@ def prepareEdit(callback: C.Callback<V.Value, Edit.ResultOf(V.Value)>, input: V.
     result : Edit.ResultOf(V.Value) <- C.call(V.Value, Edit.ResultOf(V.Value), callback, input)
     return prepared(result)
 
-def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, write: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>, edit: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edit.Error>) -> IO(Runner.Outcome()):
-  match write edit:
-    case Tuple{writeOwner, Agent.AgentTool{wn, wd, wp, ws, wl, None{}, wc, wr, wm}} Tuple{editOwner, Agent.AgentTool{en, ed, ep, es, el, Some{prepare}, ec, er, em}}:
+def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, write: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>, edit: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edit.Error>, read: Read.ToolOwner & Agent.AgentTool<Maybe<&2,Read.ReadToolDetails>,Read.Error>) -> IO(Runner.Outcome()):
+  match write edit read:
+    case Tuple{writeOwner, Agent.AgentTool{wn, wd, wp, ws, wl, None{}, wc, wr, wm}} Tuple{editOwner, Agent.AgentTool{en, ed, ep, es, el, Some{prepare}, ec, er, em}} Tuple{readOwner,Agent.AgentTool{rn,rd,rp,rs,rl,None{},rc,rr,rm}}:
       do IO<Runner.Outcome()>:
+        +reads : Ref.Ref<U32> <- Ref.new(U32,0)
+        +readBridge : C.Callback<Runner.ToolInput(),Runner.ToolOutput()> <- C.create(~ReadExecution,~Runner.ToolInput(),~Runner.ToolOutput(),~invokeRead,ReadExecution{rc,reads})
         +writes : Ref.Ref<U32> <- Ref.new(U32, 0)
         +edits : Ref.Ref<U32> <- Ref.new(U32, 0)
         +writeBridge : C.Callback<Runner.ToolInput(), Runner.ToolOutput()> <- C.create(~Writer.Execution, ~Runner.ToolInput(), ~Runner.ToolOutput(), ~Writer.invoke, Writer.Execution{wc, writes})
         +editBridge : C.Callback<Runner.ToolInput(), Runner.ToolOutput()> <- C.create(~EditExecution, ~Runner.ToolInput(), ~Runner.ToolOutput(), ~invokeEdit, EditExecution{ec, edits})
         +prepareBridge : C.Callback<V.Value, Result<&2, &2, String, V.Value>> <- C.create(~C.Callback<V.Value, Edit.ResultOf(V.Value)>, ~V.Value, ~Result<&2, &2, String, V.Value>, ~prepareEdit, prepare)
-        tools : List<&2, Agent.AgentTool<Unit, String>> = Agent.AgentTool{wn, wd, wp, ws, wl, None{}, writeBridge, wr, wm} <> Agent.AgentTool{en, ed, ep, es, el, Some{prepareBridge}, editBridge, er, em} <> Nil{}
+        tools : List<&2, Agent.AgentTool<Unit, String>> = Agent.AgentTool{wn, wd, wp, ws, wl, None{}, writeBridge, wr, wm} <> Agent.AgentTool{en, ed, ep, es, el, Some{prepareBridge}, editBridge, er, em} <> Agent.AgentTool{rn,rd,rp,rs,rl,None{},readBridge,rr,rm} <> Nil{}
         result : Runner.Outcome() <- Runner.runTools(bundle, name, base, prompt, tools, 4096)
+        C.dispose(Runner.ToolInput(),Runner.ToolOutput(),readBridge)
+        Read.disposeTool(readOwner)
+        readCount : U32 <- Ref.dispose(U32,reads)
         C.dispose(Runner.ToolInput(), Runner.ToolOutput(), writeBridge)
         C.dispose(Runner.ToolInput(), Runner.ToolOutput(), editBridge)
         C.dispose(V.Value, Result<&2, &2, String, V.Value>, prepareBridge)
@@ -69,9 +91,9 @@ def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
         Edit.disposeTool(editOwner)
         writeCount : U32 <- Ref.dispose(U32, writes)
         editCount : U32 <- Ref.dispose(U32, edits)
-        IO.print("executions write=" ++ U32.show(writeCount) ++ " edit=" ++ U32.show(editCount))
+        IO.print("executions write=" ++ U32.show(writeCount) ++ " edit=" ++ U32.show(editCount) ++ " read=" ++ U32.show(readCount))
         return result
-    case _ _: IO.die(Runner.Outcome(), 1, "unexpected native tool metadata")
+    case _ _ _: IO.die(Runner.Outcome(), 1, "unexpected native tool metadata")
 
 def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, +cwd: String, +environment: Paths.Environment, queue: Queue.Owner & Queue.Queue) -> IO(Unit):
   match queue:
@@ -79,7 +101,8 @@ def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
       do IO<Unit>:
         write : Write.ToolOwner <- Write.createWriteTool(environment, handle, cwd, Write.WriteToolOptions{None{}})
         edit : Edit.ToolOwner <- Edit.createEditTool(environment, handle, cwd, Edit.EditToolOptions{None{}})
-        result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(write), Edit.borrowTool(edit))
+        read : Read.ToolOwner <- Read.createReadTool(environment,cwd,Read.ReadToolOptions{None{},None{},None{}})
+        result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(write), Edit.borrowTool(edit),Read.borrowTool(read))
         Queue.dispose(owner)
         Runner.report(result)
 

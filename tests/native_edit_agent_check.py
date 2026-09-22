@@ -1,4 +1,4 @@
-"""Local HTTPS model -> real write -> real edit -> final model response."""
+"""Local HTTPS model -> real write -> real edit -> real read -> final model response."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
@@ -41,10 +41,11 @@ def request(stream):
     value=json.loads(body)
     assert value['model']=='fixture-model' and value['stream'] is True and value['store'] is False
     tools=value['tools']
-    assert [t['name'] for t in tools]==['write','edit']
+    assert [t['name'] for t in tools]==['write','edit','read']
     assert tools[0]['parameters']['required']==['path','content']
     assert tools[1]['parameters']['required']==['path','edits']
     assert tools[1]['parameters']['properties']['edits']['items']['required']==['oldText','newText']
+    assert tools[2]['parameters']['required']==['path']
     return value
 
 def call(stream,name,parameters,identifier):
@@ -75,7 +76,7 @@ def serve(listener,context,directory,scenario):
     if scenario=='boolean rejection': second={'path':TARGET,'content':False}
     if scenario=='malformed edit': second={'path':TARGET,'edits':[{'oldText':'twice','newText':False}]}
     expected_disk=UPDATED if scenario=='success' else CONTENT
-    for turn in range(3):
+    for turn in range(4):
         raw,_=listener.accept()
         raw.settimeout(180)
         with context.wrap_socket(raw,server_side=True) as stream:
@@ -97,7 +98,13 @@ def serve(listener,context,directory,scenario):
                 if scenario=='success': assert results[1]['output']==f'Successfully replaced 2 block(s) in {TARGET}.'
                 elif scenario in ['schema rejection','boolean rejection']: assert 'Validation failed' in results[1]['output']
                 else: assert 'Edit tool input is invalid' in results[1]['output']
-                final(stream)
+                if turn==2:
+                    call(stream,'read',{'path':TARGET},'read')
+                else:
+                    assert calls[2]['call_id']==results[2]['call_id']=='call-read'
+                    assert calls[2]['name']=='read' and json.loads(calls[2]['arguments'])=={'path':TARGET}
+                    assert results[2]['output']==expected_disk,(scenario,results[2])
+                    final(stream)
 
 def text(points): return ''.join(chr(int(p)) for p in points.split(',')) if points else ''
 
@@ -108,7 +115,7 @@ for scenario in ['success','schema rejection','boolean rejection','malformed edi
         trust=directory/'root.pem'
         trust.write_bytes(x509.load_der_x509_certificate(root).public_bytes(serialization.Encoding.PEM))
         with socket.socket() as listener:
-            listener.bind(('127.0.0.1',0));listener.listen(3);listener.settimeout(180)
+            listener.bind(('127.0.0.1',0));listener.listen(4);listener.settimeout(180)
             server=executor.submit(serve,listener,context,directory,scenario)
             prefix=ROOT/args.prefix
             command=['bun',str(prefix)+'.js'] if args.backend=='bun' else [str(prefix),'--threads',args.backend[-1]]
@@ -116,11 +123,11 @@ for scenario in ['success','schema rejection','boolean rejection','malformed edi
             server.result(timeout=10)
             assert run.returncode==0,(run.stdout[-4000:],run.stderr[-2000:])
             lines=run.stdout.splitlines()
-            assert f'executions write=1 edit={int(scenario=="success")}' in lines
+            assert f'executions write=1 edit={int(scenario=="success")} read=1' in lines
             assert lines[-1]=='answer done'
             events=[line.removeprefix('event ') for line in lines if line.startswith('event ')]
             assert events[0]=='agent_start' and events[-1]=='agent_end'
-            assert events.count('turn_start')==events.count('turn_end')==3
+            assert events.count('turn_start')==events.count('turn_end')==4
             starts=[i for i,e in enumerate(events) if e=='turn_start']
             for start,end in zip(starts,starts[1:]):
                 segment=events[start:end]
@@ -134,4 +141,4 @@ for scenario in ['success','schema rejection','boolean rejection','malformed edi
                 assert patch.startswith(f'--- {TARGET}\n+++ {TARGET}\n')
                 assert '-def twice' in patch and '+def triple' in patch
             else: assert not details
-        print(f'{args.backend}: model/write/edit/history/{scenario} PASS',flush=True)
+        print(f'{args.backend}: model/write/edit/read/history/{scenario} PASS',flush=True)
