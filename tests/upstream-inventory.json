@@ -1448,14 +1448,21 @@
     {
       "source": "packages/coding-agent/test/ansi-utils.test.ts",
       "status": "partial",
-      "ports": ["tests/ansi.bend", "tests/ansi_check.py"],
+      "ports": [
+        "tests/ansi.bend",
+        "tests/ansi_check.py"
+      ],
       "notes": "Named RIS, single-byte ESC and combined color/hyperlink assertions pass on native one/four workers. Non-string rejection is static; generated malformed-regex compatibility is deliberately adapted, not claimed identical. See tests/ansi.md.",
       "sha256": "c0deb09e3f927314fbd60a5484d961497826254279398aaadaa3517567053cec"
     },
     {
       "source": "packages/coding-agent/test/args.test.ts",
       "status": "ported",
-      "ports": ["tests/cli-args.bend", "tests/cli_args_check.py", "tests/cli_args_reference.ts"],
+      "ports": [
+        "tests/cli-args.bend",
+        "tests/cli_args_check.py",
+        "tests/cli_args_reference.ts"
+      ],
       "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md.",
       "sha256": "55660408eaa82498adfcf5b91df15658796919797dba9472922e5805ede575b0"
     },
@@ -2153,9 +2160,14 @@
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b926313ab33852fe61bbbfe4813d0806dabe2cdbd9d0a697ebcb913b6aec84c3"
+      "status": "partial",
+      "ports": [
+        "tests/prompt-templates.bend",
+        "tests/prompt_templates_check.py",
+        "tests/prompt_templates_reference.ts"
+      ],
+      "sha256": "b926313ab33852fe61bbbfe4813d0806dabe2cdbd9d0a697ebcb913b6aec84c3",
+      "notes": "Pure parseCommandArgs/substituteArgs/expandPromptTemplate assertions ported: 127 captured upstream calls and 436 supplemental comparisons pass Bun/native one/four. Typed errors reject unfinished quotes; replacement values/defaults never rescan. 200KB replacement and unfinished-default cases pass. Template filesystem loading/frontmatter assertions remain pending; see tests/prompt-templates.md."
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
@@ -2394,7 +2406,11 @@
     {
       "source": "packages/coding-agent/test/skills.test.ts",
       "status": "partial",
-      "ports": ["tests/system-prompt.bend", "tests/system_prompt_check.py", "tests/system_prompt_reference.ts"],
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
+      ],
       "notes": "All seven formatSkillsForPrompt cases pass with typed Skill/SourceInfo, XML escaping, filtering and read/Bash instructions. Discovery, validation, frontmatter and loading remain pending. See tests/system-prompt.md.",
       "sha256": "f7d5fe8633df112c10c61c4ee17748ad1f7069f76d71fb8357d7e27a17b2a533"
     },
@@ -2593,7 +2609,10 @@
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
       "status": "ported",
-      "ports": ["tests/bash-tool.bend", "tests/bash_tool_check.py"],
+      "ports": [
+        "tests/bash-tool.bend",
+        "tests/bash_tool_check.py"
+      ],
       "notes": "Retained injected onData is called after public execution returns and before ToolOwner disposal; it is ignored without changing output or emitting another update. Passes Bun and native one/four workers; see tests/bash-tool.md.",
       "sha256": "9d6fc0d457e6d7470246d821deec9937d428e86fdad6858d05e7d5c956802f8c"
     },
@@ -2606,7 +2625,10 @@
     {
       "source": "packages/coding-agent/test/suite/regressions/5303-bash-output-truncation.test.ts",
       "status": "partial",
-      "ports": ["tests/child-process.bend", "tests/child_process_check.py"],
+      "ports": [
+        "tests/child-process.bend",
+        "tests/child_process_check.py"
+      ],
       "sha256": "d38754f1abadb955553f0d2ce3276f580fb07ca9b937e0d4abe3b6226d2e3b87",
       "notes": "Native child-process draining covers sustained post-exit output and quiet inherited pipes on explicit one/four threads. Virtual-clock 99ms/100ms assertions and hosted process execution remain pending; scope in tests/child-process.md."
     },
@@ -2949,14 +2971,22 @@
     {
       "source": "packages/coding-agent/test/system-prompt-updates.test.ts",
       "status": "partial",
-      "ports": ["tests/system-prompt.bend", "tests/system_prompt_check.py", "tests/system_prompt_reference.ts"],
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
+      ],
       "notes": "The two pure section-diff and forced-state cases pass; SDK/session prompt-update integration and event behavior remain pending. See tests/system-prompt.md.",
       "sha256": "fdcbb342c29bb3419bd40794781cab92c2f5423908c60bdc7095ae3b434045d0"
     },
     {
       "source": "packages/coding-agent/test/system-prompt.test.ts",
       "status": "ported",
-      "ports": ["tests/system-prompt.bend", "tests/system_prompt_check.py", "tests/system_prompt_reference.ts"],
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
+      ],
       "notes": "All 16 named pure prompt cases pass through typed section/state/text APIs; exact output and 150KB context checks pass Bun/native one/four. Explicit documentation paths and immutable value adaptation are documented in tests/system-prompt.md.",
       "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101"
     },
