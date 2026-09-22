@@ -23,8 +23,8 @@ The same module now exposes `createAsync(options, observer)`, `borrowAsync`, `pr
 `tests/stdin_buffer_async_check.py` exercises **21 actual timer and ownership scenarios** on Bun and O1 native one/four workers. The timer cases correspond to upstream lone-Escape, configurable Escape versus sequence timeout, explicit flush, timeout emission and destroy cancellation assertions, with broad waits suitable for a shared build server. Additional checks cover deadline reset, paste inactivity, reset bursts, ordered mixed input, Kitty suppression, reentrant callbacks, clear/reuse, prompt cancellation of a ten-second timer, joining a slow callback and absence of callbacks after disposal. These timing assertions use lower bounds and generous waits, not a real-time upper-latency guarantee. The additional byte-boundary checks are described below; a synchronous listener wrapper is not covered.
 
 ```sh
-build/bend-native-toolchain/bend2/main.ts tests/stdin-buffer-async.bend -o build/stdin-buffer-async.js
-sh scripts/build-pure.sh tests/stdin-buffer-async.bend build/stdin-buffer-async
+build/bend-process-files/bend2/main.ts tests/stdin-buffer-async.bend -o build/stdin-buffer-async.js
+BEND=build/bend-process-files/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/stdin-buffer-async.bend build/stdin-buffer-async
 python3 tests/stdin_buffer_async_check.py
 python3 tests/stdin_buffer_async_check.py --command build/stdin-buffer-async --threads 1
 python3 tests/stdin_buffer_async_check.py --command build/stdin-buffer-async --threads 4
