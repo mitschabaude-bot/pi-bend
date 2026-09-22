@@ -73,7 +73,7 @@ def response(result: Fetch.Result_(String), +mode: String) -> IO(Unit):
     case Fail{_}: IO.die(Unit, 1, "fetch failed")
     case Done{Response.Response{metadata, body}}:
       do IO<Unit>:
-        Check.require(U32.is_eq(Response.statusResponseMetadata(metadata), 200), "wrong HTTP status")
+        Check.require(U32.is_eq(Response.metadataStatus(metadata), 200), "wrong HTTP status")
         result : Result<&2, &2, Response.TextError<HTTP.ReadError<Deadline.Cause<String>>>, String> <- HTTP.text(~Deadline.Cause<String>, 64n, body)
         consumed(result)
 

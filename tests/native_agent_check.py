@@ -16,13 +16,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from fetch_https_check import trusted_context, ROOT
 
-parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--prefix', default='build/native-agent')
-parser.add_argument('backend', choices=['bun', 'native-1', 'native-4'])
-args = parser.parse_args()
-
-
-def request(stream):
+def request(stream, tool="echo"):
     data = bytearray()
     while b'\r\n\r\n' not in data:
         part = stream.recv(16384)
@@ -42,7 +36,7 @@ def request(stream):
     value = json.loads(body)
     assert value['model'] == 'fixture-model' and value['stream'] is True
     assert value['store'] is False
-    assert [tool['name'] for tool in value['tools']] == ['echo'], value['tools']
+    assert [declaration['name'] for declaration in value['tools']] == [tool], value['tools']
     return value
 
 
@@ -97,32 +91,42 @@ def serve(listener, context, valid, answer):
                 ])
 
 
-for valid in [True, False]:
-    answer = 'Native model/tool loop ✓' if valid else 'Invalid tool arguments rejected ✓'
-    with tempfile.TemporaryDirectory(prefix='pi-native-agent-') as temporary, ThreadPoolExecutor(max_workers=1) as executor:
-        directory = Path(temporary)
-        context, root = trusted_context(directory, 'localhost')
-        root_path = directory / 'root.pem'
-        root_path.write_bytes(x509.load_der_x509_certificate(root).public_bytes(serialization.Encoding.PEM))
-        with socket.socket() as listener:
-            listener.bind(('127.0.0.1', 0))
-            listener.listen(2)
-            listener.settimeout(180)
-            server = executor.submit(serve, listener, context, valid, answer)
-            command = ['bun', args.prefix + '.js'] if args.backend == 'bun' else [args.prefix, '--threads', args.backend[-1]]
-            run = subprocess.run(command + [str(root_path), 'fixture-model', f'https://localhost:{listener.getsockname()[1]}/v1', 'Call echo once, then report the result.'],
-                                 cwd=ROOT, env={**os.environ, 'OPENAI_API_KEY': 'fixture-key'},
-                                 capture_output=True, text=True, timeout=360)
-            server.result(timeout=10)
-            assert run.returncode == 0, (run.returncode, run.stdout[-3000:], run.stderr[-2000:])
-            lines = run.stdout.splitlines()
-            assert f'executions {int(valid)}' in lines, lines
-            assert lines[-1] == 'answer ' + answer, lines
-            events = [line.removeprefix('event ') for line in lines if line.startswith('event ')]
-            assert events[0] == 'agent_start' and events[-1] == 'agent_end', events
-            assert events.count('turn_start') == events.count('turn_end') == 2, events
-            second_turn = events.index('turn_start', events.index('turn_start') + 1)
-            if valid:
-                assert events.index('tool_execution_start') < events.index('tool_execution_end') < second_turn, events
-            assert events.count('message_update') >= 2, events
-        print(f'{args.backend}: native agent HTTPS/tool/{"success" if valid else "validation rejection"} PASS', flush=True)
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--prefix', default='build/native-agent')
+    parser.add_argument('backend', choices=['bun', 'native-1', 'native-4'])
+    args = parser.parse_args()
+
+    for valid in [True, False]:
+        answer = 'Native model/tool loop ✓' if valid else 'Invalid tool arguments rejected ✓'
+        with tempfile.TemporaryDirectory(prefix='pi-native-agent-') as temporary, ThreadPoolExecutor(max_workers=1) as executor:
+            directory = Path(temporary)
+            context, root = trusted_context(directory, 'localhost')
+            root_path = directory / 'root.pem'
+            root_path.write_bytes(x509.load_der_x509_certificate(root).public_bytes(serialization.Encoding.PEM))
+            with socket.socket() as listener:
+                listener.bind(('127.0.0.1', 0))
+                listener.listen(2)
+                listener.settimeout(180)
+                server = executor.submit(serve, listener, context, valid, answer)
+                command = ['bun', args.prefix + '.js'] if args.backend == 'bun' else [args.prefix, '--threads', args.backend[-1]]
+                run = subprocess.run(command + [str(root_path), 'fixture-model', f'https://localhost:{listener.getsockname()[1]}/v1', 'Call echo once, then report the result.'],
+                                     cwd=ROOT, env={**os.environ, 'OPENAI_API_KEY': 'fixture-key'},
+                                     capture_output=True, text=True, timeout=360)
+                server.result(timeout=10)
+                assert run.returncode == 0, (run.returncode, run.stdout[-3000:], run.stderr[-2000:])
+                lines = run.stdout.splitlines()
+                assert f'executions {int(valid)}' in lines, lines
+                assert lines[-1] == 'answer ' + answer, lines
+                events = [line.removeprefix('event ') for line in lines if line.startswith('event ')]
+                assert events[0] == 'agent_start' and events[-1] == 'agent_end', events
+                assert events.count('turn_start') == events.count('turn_end') == 2, events
+                second_turn = events.index('turn_start', events.index('turn_start') + 1)
+                if valid:
+                    assert events.index('tool_execution_start') < events.index('tool_execution_end') < second_turn, events
+                assert events.count('message_update') >= 2, events
+            print(f'{args.backend}: native agent HTTPS/tool/{"success" if valid else "validation rejection"} PASS', flush=True)
+
+
+if __name__ == "__main__":
+    main()

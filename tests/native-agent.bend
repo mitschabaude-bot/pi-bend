@@ -64,8 +64,8 @@ def echo(counter: Ref.Ref<U32>, input: ToolInput()) -> IO(ToolOutput()):
         return echoValue(R.get(V.Value, fields, "input"))
     case _: IO.pure(ToolOutput(), Fail{"echo expects an object"})
 
-def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callback<Messages(), Converted()>) -> Config():
-  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(0)}, None{}, None{}, None{}, Some{F.fromU32(128)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callback<Messages(), Converted()>, maxTokens: U32) -> Config():
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(0)}, None{}, None{}, None{}, Some{F.fromU32(maxTokens)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 # Print the event sequence separately from the tool execution count, so the
 # oracle can check ordering without depending on worker scheduling.
@@ -81,12 +81,21 @@ def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callb
         IO.print("event " ++ T.eventType(Unit, Unit, Unit, T.AgentToolResult<Unit>, T.AgentToolResult<Unit>, value))
         events(cursor, None{})
 
+def reportAssistant(message: Ai.AssistantMessage<V.Value, Unit>) -> IO(Unit):
+  match message:
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Error{}, _, error, _, _, _}:
+      IO.die(Unit, 1, Maybe.default(&2, String, error, "Model request failed"))
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Aborted{}, _, error, _, _, _}:
+      IO.die(Unit, 1, Maybe.default(&2, String, error, "Model request aborted"))
+    case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      IO.print("answer " ++ Native.text(content))
+
 def reportMessages(messages: Messages()) -> IO(Unit):
   match messages:
     case Nil{}: IO.pure(Unit, Unit{})
     case T.LlmMessage{Ai.Assistant{message}} <> rest:
       do IO<Unit>:
-        IO.print("answer " ++ Native.message(message))
+        reportAssistant(message)
         reportMessages(rest)
     case _ <> rest: reportMessages(rest)
 
@@ -95,32 +104,37 @@ def report(result: Outcome()) -> IO(Unit):
     case Fail{error}: IO.die(Unit, 1, error)
     case Done{messages}: reportMessages(messages)
 
-def run(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String) -> IO(Unit):
-  do IO<Unit>:
+def runTool(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, tool: T.AgentTool<Unit, String>, maxTokens: U32) -> IO(Outcome()):
+  do IO<Outcome()>:
     +authorizer : C.Callback<URL.Host, TLS.Authorization> <- Trust.newSAN(Trust.SANPolicy{bundle, 256n})
     +provider : T.StreamFn(Unit, Unit, Config(), String) <- Providers.responses(~Config(), ~Unit, ~Unit, ~Unit, ~String, ~project, ~Native.identity, ~Native.error, Native.config(authorizer))
     +converter : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~convert, Unit{})
     +validator : Loop.Validator(String) <- Loop.createPlain(~String, ~validationError)
     +cancel : C.Callback<Maybe<&2, Signal()>, Bool> <- C.create(~Unit, ~Maybe<&2, Signal()>, ~Bool, ~isAborted, Unit{})
-    +counter : Ref.Ref<U32> <- Ref.new(U32, 0)
-    +execute : C.Callback<ToolInput(), ToolOutput()> <- C.create(~Ref.Ref<U32>, ~ToolInput(), ~ToolOutput(), ~echo, counter)
     key : String <- IO.try(String, IO.get_env("OPENAI_API_KEY"))
-    tool : T.AgentTool<Unit, String> = T.AgentTool{"echo", "Return the input text unchanged", schema(), None{}, "Echo", None{}, execute, None{}, None{}}
     context : T.AgentContext<Unit, Unit, Unit, String> = T.AgentContext{Nil{}, Some{tool <> Nil{}}}
     prompts : Messages() = T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{prompt}, F.fromU32(0)}}} <> Nil{}
-    +owner : Run() <- Loop.agentLoop(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
+    +owner : Run() <- Loop.agentLoop(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter, maxTokens), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
     +cursor : Cursor() <- Loop.iterator(Unit, Unit, Unit, String, owner)
     events(cursor, None{})
     Stream.disposeIterator(EventValue(), Outcome(), cursor)
-    result : Outcome() <- Loop.resultStream(Unit, Unit, Unit, String, owner)
+    result : Outcome() <- Loop.streamOutcome(Unit, Unit, Unit, String, owner)
     Loop.disposeStreamRun(Unit, Unit, Unit, String, owner)
     C.dispose(Providers.Input(Config(), Unit, Unit), Providers.Output(Unit, String), provider)
     C.dispose(Messages(), Converted(), converter)
     Loop.disposeValidation(String, validator)
     C.dispose(Maybe<&2, Signal()>, Bool, cancel)
-    C.dispose(ToolInput(), ToolOutput(), execute)
-    count : U32 <- Ref.dispose(U32, counter)
     C.dispose(URL.Host, TLS.Authorization, authorizer)
+    return result
+
+def run(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String) -> IO(Unit):
+  do IO<Unit>:
+    +counter : Ref.Ref<U32> <- Ref.new(U32, 0)
+    +callback : C.Callback<ToolInput(), ToolOutput()> <- C.create(~Ref.Ref<U32>, ~ToolInput(), ~ToolOutput(), ~echo, counter)
+    tool : T.AgentTool<Unit, String> = T.AgentTool{"echo", "Return the input text unchanged", schema(), None{}, "Echo", None{}, callback, None{}, None{}}
+    result : Outcome() <- runTool(bundle, name, base, prompt, tool, 128)
+    C.dispose(ToolInput(), ToolOutput(), callback)
+    count : U32 <- Ref.dispose(U32, counter)
     IO.print("executions " ++ U32.show(count))
     report(result)
 

@@ -70,7 +70,7 @@ def pathname(+path: String) -> Result<&2, &2, Error, String>:
 def fileURL(result: Result<&2, &2, URL.Error, URL.URL>) -> Result<&2, &2, Error, String>:
   match result:
     case Fail{cause}: Fail{InvalidURL{cause}}
-    case Done{URL.URL{URL.File{}, _, _, Some{URL.Empty{}}, _, path, _, _}}: pathname(URL.pathSerialize(path))
+    case Done{URL.URL{URL.File{}, _, _, Some{URL.Empty{}}, _, path, _, _}}: pathname(URL.serializePath(path))
     case _: Fail{NonLocalFileURL{}}
 
 def maybeURL(context: URL.Context, +text: String) -> Result<&2, &2, Error, String>:

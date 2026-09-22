@@ -30,16 +30,19 @@ import ../packages/runtime/src/deadline.bend as Deadline
 # Model cost metadata is deliberately zero in this smoke fixture.
 def identity(value: String) -> String: value
 
+def urlContext() -> URL.Context:
+  URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}}
+
 def config(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> P.Config:
   P.Config{
-    URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}},
+    urlContext(),
     Client.Defaults{"pi-bend-native-integration", R.new(String), None{}, None{}},
     Fetch.Files{"/etc/resolv.conf", "/etc/hosts", 4096, 1048576n, 5000, 65535},
     HTTP.Options{DNS.IPv4First{}, Connect.IPv4First{}, 10000, 16384, Response.Limits{8192n, 65536n, 100n, 8n, Message.Limits{8192n, 8192n, 65536n, 100n}}},
     HTTP.WithTLS{authorizer, TLS.defaults()}, 65536n, False{}}
 
 def model(name: String, base: String) -> T.Model<T.JsonValue>:
-  T.Model{name, "Live integration", T.OpenAIResponsesApi{}, "openai", base, False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, F.fromU32(128000), F.fromU32(128), None{}, None{}, None{}}
+  T.Model{name, "Live integration", T.OpenAIResponsesApi{}, "openai", base, False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def options(key: String) -> P.OpenAIResponsesOptions<Unit, Unit, String>:
   P.fromStreamOptions(Unit, Unit, String,
@@ -83,7 +86,7 @@ def transportError(cause: Client.FetchError<Unit>) -> String:
 def attemptError(cause: Client.AttemptError<Unit>) -> String:
   match cause:
     case Client.TransportFailure{detail}: transportError(detail)
-    case Client.HTTPFailure{Client.APIError{metadata, _, _}}: "HTTP " ++ U32.show(Response.statusResponseMetadata(metadata))
+    case Client.HTTPFailure{Client.APIError{metadata, _, _}}: "HTTP " ++ U32.show(Response.metadataStatus(metadata))
     case _: "error-response decoding failed"
 
 def requestError(cause: Retry.RetryFailure<Client.AttemptError<Unit>>) -> String:
