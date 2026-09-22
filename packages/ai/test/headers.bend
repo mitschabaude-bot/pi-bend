@@ -1,6 +1,6 @@
 import Base
-import ../../runtime/src/headers.bend as Native
-import ../../runtime/src/http-header.bend as H
+import ../../runtime/src/http-message.bend as Native
+import ../../runtime/src/http-message.bend as H
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/utf8-runner.bend as T
 import ../src/utils/headers.bend as AI
@@ -28,18 +28,18 @@ def snapshot(+headers: Native.Headers) -> String:
 type Step is Data:
   Step{headers: Native.Headers, result: String}
 
-def updated(original: Native.Headers, result: Result<&2, &2, H.HeaderError, Native.Headers>) -> Step:
+def updated(original: Native.Headers, result: Result<&2, &2, H.HeaderHeaderError, Native.Headers>) -> Step:
   match result:
     case Fail{_}: Step{original, "error"}
     case Done{headers}: Step{headers, "ok"}
 
-def showGet(result: Result<&2, &2, H.HeaderError, Maybe<&2, String>>) -> String:
+def showGet(result: Result<&2, &2, H.HeaderHeaderError, Maybe<&2, String>>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{None{}}: "none"
     case Done{Some{value}}: "some:" ++ T.showText(value)
 
-def showHas(result: Result<&2, &2, H.HeaderError, Bool>) -> String:
+def showHas(result: Result<&2, &2, H.HeaderHeaderError, Bool>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{True{}}: "true"

@@ -1,11 +1,11 @@
 import Base
-import ../packages/runtime/src/socket-interrupt.bend as Interrupt
+import ../packages/runtime/src/socket.bend as Interrupt
 import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/dns-message.bend as Frame
 import ../packages/runtime/src/dns-message.bend as Message
 import ../packages/runtime/src/dns-message.bend as Name
-import ../packages/runtime/src/abortable-connect.bend as Connect
-import ../packages/runtime/src/abortable-socket.bend as SocketIO
+import ../packages/runtime/src/socket.bend as Connect
+import ../packages/runtime/src/socket.bend as SocketIO
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
@@ -24,7 +24,7 @@ def connected(result: Result<&2, &1, Connect.Error<String>, Socket>) -> IO(Socke
 
 def close(connection: TCP.Connection<String>) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, Interrupt.Error, Unit> <- TCP.closeTcpConnection(String, connection)
+    result : Result<&2, &2, Interrupt.InterruptError, Unit> <- TCP.closeTcpConnection(String, connection)
     Test.cleanup(result)
 
 def queryResult(result: Result<&2, &2, Message.Error, List<&2, U32>>) -> IO(List<&2, U32>):
@@ -67,9 +67,9 @@ def abortReason(reason: Abort.AbortReason<String>) -> Bool:
     case Abort.Supplied{why}: String.eq(why, "stop")
     case _: False{}
 
-def transportError(kind: String, error: SocketIO.Error<String>) -> Bool:
+def transportError(kind: String, error: SocketIO.SocketErrorOfSocket<String>) -> Bool:
   match error:
-    case SocketIO.Aborted{why}: String.eq(kind, "abort") && abortReason(why)
+    case SocketIO.SocketAborted{why}: String.eq(kind, "abort") && abortReason(why)
     case _: False{}
 
 def framingError(kind: String, error: Frame.TcpFrameError) -> Bool:
@@ -194,7 +194,7 @@ def args(values: List<String>) -> IO(Unit):
         +controller : Abort.AbortController<String> <- Abort.new(String)
         result : Result<&2, &1, Connect.Error<String>, Socket> <- Connect.connect(String, endpoint(family), Scalar.decimal(port, 0), Abort.signal(String, controller))
         socket : Socket <- connected(result)
-        adopted : Result<&2, &1, SocketIO.Error<String>, SocketIO.Owner<String>> <- SocketIO.create(String, socket, Abort.signal(String, controller))
+        adopted : Result<&2, &1, SocketIO.SocketErrorOfSocket<String>, SocketIO.Owner<String>> <- SocketIO.create(String, socket, Abort.signal(String, controller))
         socket : SocketIO.Owner<String> <- Test.opened(adopted)
         run(parseMode(mode), controller, TCP.adopt(String, socket))
         Abort.dispose(String, controller)

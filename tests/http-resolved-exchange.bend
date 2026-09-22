@@ -1,25 +1,25 @@
 import Base
 import ../packages/runtime/src/connection-driver.bend as Dispatch
-import ../packages/runtime/src/http-connect.bend as ConnectHTTP
-import ../packages/runtime/src/http-resolved-exchange.bend as HTTP
-import ../packages/runtime/src/http-exchange-plan.bend as Guard
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/http-socket-exchange.bend as Exchange
-import ../packages/runtime/src/abortable-socket.bend as SocketIO
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-header.bend as Header
+import ../packages/runtime/src/http-exchange.bend as ConnectHTTP
+import ../packages/runtime/src/http-exchange.bend as HTTP
+import ../packages/runtime/src/http-message.bend as Guard
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-exchange.bend as Exchange
+import ../packages/runtime/src/socket.bend as SocketIO
+import ../packages/runtime/src/http-message.bend as Headers
+import ../packages/runtime/src/http-message.bend as Header
 import ../packages/runtime/src/url-record.bend as URL
 import ../packages/runtime/src/url-scheme.bend as Scheme
-import ../packages/runtime/src/http-response-reader.bend as Reader
-import ../packages/runtime/src/http-socket-source.bend as Source
-import ../packages/runtime/src/http-response-stream.bend as Response
-import ../packages/runtime/src/http-chunked-body.bend as Chunked
+import ../packages/runtime/src/http-response.bend as Reader
+import ../packages/runtime/src/http-exchange.bend as Source
+import ../packages/runtime/src/http-response.bend as Response
+import ../packages/runtime/src/http-message.bend as Chunked
 import ./http-request-exchange.bend as Consume
 import ../packages/runtime/src/connection-driver.bend as Driver
 import ../packages/runtime/src/connection-driver.bend as Progress
 import ../packages/runtime/src/connection-driver.bend as Order
-import ../packages/runtime/src/http-host-route.bend as Route
+import ../packages/runtime/src/http-exchange.bend as Route
 import ../packages/runtime/src/hosts.bend as HostsResolve
 import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/hosts.bend as Hosts
@@ -30,7 +30,7 @@ import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Search
 import ../packages/runtime/src/resolver-config.bend as Options
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/resolver-config.bend as Plan
 import ../packages/runtime/src/dns-resolver.bend as Pair
 import ../packages/runtime/src/dns-message.bend as Id
@@ -82,7 +82,7 @@ def assertReason(valid: Bool) -> IO(Unit):
 
 def failed(next: Exchange.Next<String>) -> IO(Unit):
   match next:
-    case Exchange.Next{exchange, Fail{Exchange.ResponseFailure{Reader.PrimaryFailure{Reader.SourceError{Source.SocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}}}}:
+    case Exchange.Next{exchange, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}}}}:
       do IO<Unit>:
         Consume.close(exchange)
         assertReason(String.eq(reason, "stop"))
@@ -97,14 +97,14 @@ def head(fuel: Nat, +controller: Abort.AbortController<String>, next: Exchange.N
   match fuel next:
     case _ Exchange.Next{exchange, Done{Some{Response.FinalHead{_, _}}}}:
       do IO<Unit>:
-        task : Chan(Exchange.Next<String>) <- IO.fork(Exchange.Next<String>, Exchange.next(String, exchange))
+        task : Chan(Exchange.Next<String>) <- IO.fork(Exchange.Next<String>, Exchange.nextSocketExchange(String, exchange))
         IO.sleep(10)
         won : Bool <- Abort.abort(String, controller, Some{"stop"})
         result : Exchange.Next<String> <- IO.join(Exchange.Next<String>, task)
         failed(result)
     case Succ{rest} Exchange.Next{exchange, Done{Some{_}}}:
       do IO<Unit>:
-        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
         head(rest, controller, next)
     case _ Exchange.Next{exchange, _}:
       do IO<Unit>:
@@ -115,17 +115,17 @@ def respond(read: Bool, controller: Abort.AbortController<String>, exchange: Exc
   match read:
     case False{}:
       do IO<Unit>:
-        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
         Consume.loop(128n, next, Nil{})
     case True{}:
       do IO<Unit>:
-        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
         head(128n, controller, next)
 
-def consumed(flow: U32, controller: Abort.AbortController<String>, outcome: Result<&2, &1, HTTP.Error<String>, Exchange.Exchange<String>>) -> IO(Unit):
+def consumed(flow: U32, controller: Abort.AbortController<String>, outcome: Result<&2, &1, HTTP.ResolvedExchangeError<String>, Exchange.Exchange<String>>) -> IO(Unit):
   match outcome:
-    case Fail{HTTP.ConnectionFailure{error}}: IO.print("connection:" ++ Show.finalName(error))
-    case Fail{HTTP.ExchangeFailure{Exchange.SocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}: IO.print("handoff:" ++ reason)
+    case Fail{HTTP.ResolvedExchangeConnectionFailure{error}}: IO.print("connection:" ++ Show.finalName(error))
+    case Fail{HTTP.ResolvedExchangeExchangeFailure{Exchange.SocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}: IO.print("handoff:" ++ reason)
     case Fail{_}: IO.die(Unit, 1, "unexpected exchange start error")
     case Done{exchange}:
       do IO<Unit>:
@@ -191,7 +191,7 @@ def configuredResult(mode: U32, family: Bool, port: U32, flow: U32, result: Resu
         created(mode, family, port, flow, owner)
 
 def configured(mode: U32, family: Bool, port: U32, dnsPort: U32, flow: U32) -> IO(Unit):
-  configuredResult(mode, family, port, flow, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.V4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
+  configuredResult(mode, family, port, flow, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.EndpointV4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
 
 def arguments(args: List<String>) -> IO(Unit):
   match args:

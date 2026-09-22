@@ -12,7 +12,7 @@ import ./api/responses-messages.bend as Fixture
 import ./openai-sse-reader-support.bend as Raw
 import ./openai-sse-reader-runner.bend as RawParser
 import ./openai-responses-wire-runner.bend as WireTest
-import ../../runtime/src/sse-reader.bend as Bytes
+import ../../runtime/src/sse.bend as Bytes
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/json-parse.bend as Parse

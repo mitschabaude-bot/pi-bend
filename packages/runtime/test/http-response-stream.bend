@@ -1,9 +1,9 @@
 import Base
-import ../src/http-header.bend as H
-import ../src/http-response-stream.bend as Stream
-import ../src/http-head.bend as Head
-import ../src/http-status.bend as Status
-import ../src/http-chunked-body.bend as Chunked
+import ../src/http-message.bend as H
+import ../src/http-response.bend as Stream
+import ../src/http-message.bend as Head
+import ../src/http-message.bend as Status
+import ../src/http-message.bend as Chunked
 import ./utf8-runner.bend as Text
 
 def code(head: Head.ResponseHead) -> String:
@@ -20,34 +20,34 @@ def completed(fields: List<&2, H.Header>) -> String:
     case Nil{}: "done"
     case head <> rest: "done:" ++ String.join(trailers(head <> rest), "/")
 
-def event(value: Stream.Event) -> String:
+def event(value: Stream.StreamEvent) -> String:
   match value:
     case Stream.InformationalHead{head}: "info:" ++ code(head)
     case Stream.FinalHead{head, expose}: "head:" ++ code(head) ++ ":" ++ Bool.pick(String, expose, "body", "null")
     case Stream.BodyData{bytes}: "data:" ++ String.join(Text.showNumbers(bytes), ",")
     case Stream.Completed{fields}: completed(fields)
 
-def events(values: List<&2, Stream.Event>) -> List<&2, String>:
+def events(values: List<&2, Stream.StreamEvent>) -> List<&2, String>:
   match values:
     case Nil{}: Nil{}
     case head <> rest: event(head) <> events(rest)
 
-def summary(status: String, values: List<&2, Stream.Event>, rest: List<&2, U32>) -> String:
+def summary(status: String, values: List<&2, Stream.StreamEvent>, rest: List<&2, U32>) -> String:
   status ++ "|" ++ String.join(events(values), "~") ++ "|" ++ String.join(Text.showNumbers(rest), ",")
 
-def terminal(result: Stream.ReadResult) -> String:
+def terminal(result: Stream.ResponseStreamReadResult) -> String:
   match result:
-    case Stream.Complete{values, rest}: summary("complete", values, rest)
-    case Stream.Failed{_, values}: summary("error", values, Nil{})
+    case Stream.ResponseStreamComplete{values, rest}: summary("complete", values, rest)
+    case Stream.ResponseStreamFailed{_, values}: summary("error", values, Nil{})
     case Stream.More{_, values}: summary("more", values, Nil{})
 
-def run(chunks: List<&2, String>, result: Stream.ReadResult) -> List<&2, String>:
+def run(chunks: List<&2, String>, result: Stream.ResponseStreamReadResult) -> List<&2, String>:
   match chunks result:
-    case _ Stream.Complete{values, rest}: summary("complete", values, rest) <> Nil{}
-    case _ Stream.Failed{_, values}: summary("error", values, Nil{}) <> Nil{}
+    case _ Stream.ResponseStreamComplete{values, rest}: summary("complete", values, rest) <> Nil{}
+    case _ Stream.ResponseStreamFailed{_, values}: summary("error", values, Nil{}) <> Nil{}
     case Nil{} Stream.More{reader, values}: summary("more", values, Nil{}) <> terminal(Stream.finish(reader)) <> Nil{}
     case head <> tail Stream.More{reader, values}:
-      summary("more", values, Nil{}) <> run(tail, Stream.read(reader, Text.parseNumbers(head)))
+      summary("more", values, Nil{}) <> run(tail, Stream.readResponseStream(reader, Text.parseNumbers(head)))
 
 def start(parts: List<&2, String>) -> IO(Unit):
   match parts:

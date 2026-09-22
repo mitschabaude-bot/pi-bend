@@ -1,5 +1,5 @@
 import Base
-import ../src/http-date-syntax.bend as S
+import ../src/http-message.bend as S
 
 def format(value: S.Format) -> String:
   match value:
@@ -22,7 +22,7 @@ def cases(arguments: List<String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case text <> rest:
       do IO<Unit>:
-        IO.print(shown(S.parse(text)))
+        IO.print(shown(S.parseDateSyntax(text)))
         cases(rest)
 
 def main() -> IO(Unit):

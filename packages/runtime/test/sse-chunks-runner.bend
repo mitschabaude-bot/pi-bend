@@ -1,5 +1,5 @@
 import Base
-import ../src/sse-chunks.bend as Chunks
+import ../src/sse.bend as Chunks
 import ./utf8-runner.bend as H
 
 def showChunks(chunks: List<&2, List<&2, U32>>) -> List<&2, String>:
@@ -7,25 +7,25 @@ def showChunks(chunks: List<&2, List<&2, U32>>) -> List<&2, String>:
     case Nil{}: Nil{}
     case head <> tail: ("[" ++ String.join(H.showNumbers(head), ",") ++ "]") <> showChunks(tail)
 
-def showResult(result: Chunks.Decoded) -> String:
+def showResult(result: Chunks.ChunksDecoded) -> String:
   match result:
-    case Chunks.Decoded{_, chunks}: String.join(showChunks(chunks), ";")
+    case Chunks.ChunksDecoded{_, chunks}: String.join(showChunks(chunks), ";")
 
-def instruction(decoder: Chunks.ChunkDecoder, operation: String) -> Chunks.Decoded:
+def instruction(decoder: Chunks.ChunkDecoder, operation: String) -> Chunks.ChunksDecoded:
   match operation:
-    case SCon{Chr{98}, bytes}: Chunks.decode(decoder, H.parseNumbers(bytes))
-    case SCon{Chr{116}, scalars}: Chunks.decodeText(decoder, H.fromScalars(H.parseNumbers(scalars)))
-    case _: Chunks.decodeOptional(decoder, None{})
+    case SCon{Chr{98}, bytes}: Chunks.decodeChunks(decoder, H.parseNumbers(bytes))
+    case SCon{Chr{116}, scalars}: Chunks.decodeTextChunks(decoder, H.fromScalars(H.parseNumbers(scalars)))
+    case _: Chunks.decodeOptionalChunks(decoder, None{})
 
-def execute(operations: List<&2, String>, result: Chunks.Decoded) -> List<&2, String>:
+def execute(operations: List<&2, String>, result: Chunks.ChunksDecoded) -> List<&2, String>:
   match operations result:
-    case Nil{} Chunks.Decoded{decoder, chunks}: String.join(showChunks(chunks), ";") <> showResult(Chunks.finish(decoder)) <> Nil{}
-    case operation <> rest Chunks.Decoded{decoder, chunks}: String.join(showChunks(chunks), ";") <> execute(rest, instruction(decoder, operation))
+    case Nil{} Chunks.ChunksDecoded{decoder, chunks}: String.join(showChunks(chunks), ";") <> showResult(Chunks.finish(decoder)) <> Nil{}
+    case operation <> rest Chunks.ChunksDecoded{decoder, chunks}: String.join(showChunks(chunks), ";") <> execute(rest, instruction(decoder, operation))
 
 def start(operations: List<&2, String>) -> String:
   match operations:
-    case Nil{}: showResult(Chunks.finish(Chunks.create()))
-    case operation <> rest: String.join(execute(rest, instruction(Chunks.create(), operation)), "|")
+    case Nil{}: showResult(Chunks.finish(Chunks.createChunks()))
+    case operation <> rest: String.join(execute(rest, instruction(Chunks.createChunks(), operation)), "|")
 
 def run(argument: String) -> IO(Unit):
   match argument:

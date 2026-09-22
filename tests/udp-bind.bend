@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./socket-endpoint.bend as Test
 
@@ -8,7 +8,7 @@ def result(value: Result<&1, &1, U32 & String, Socket>) -> IO(Unit):
     case Fail{(code, _)}: IO.print("error:" ++ U32.show(code))
     case Done{socket}:
       do IO<Unit>:
-        local : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+        local : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
         socket : Socket <- Test.observed(local)
         Socket.close(socket)
 

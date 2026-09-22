@@ -1,5 +1,5 @@
 import Base
-import ../src/http-url.bend as HTTP
+import ../src/http-message.bend as HTTP
 import ../src/url-record.bend as URL
 import ../src/url-scheme.bend as Scheme
 import ../src/url-host.bend as Host
@@ -45,7 +45,7 @@ def transport(value: HTTP.Transport) -> String:
     case HTTP.Plaintext{}: "plain"
     case HTTP.TLS{}: "tls"
 
-def show(value: Result<&2, &2, HTTP.Error, HTTP.Endpoint>) -> String:
+def show(value: Result<&2, &2, HTTP.EndpointError, HTTP.Endpoint>) -> String:
   match value:
     case Fail{HTTP.UnsupportedScheme{}}: "scheme"
     case Fail{HTTP.Credentials{}}: "credentials"
@@ -58,7 +58,7 @@ def cases(args: List<String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case scheme <> username <> password <> hostname <> number <> pathname <> query <> hash <> rest:
       do IO<Unit>:
-        IO.print(show(HTTP.prepare(URL.URL{Scheme.classify(scheme), text(username), text(password), Some{host(text(hostname))}, port(number), path(text(pathname)), optional(query), optional(hash)})))
+        IO.print(show(HTTP.urlPrepare(URL.URL{Scheme.classify(scheme), text(username), text(password), Some{host(text(hostname))}, port(number), path(text(pathname)), optional(query), optional(hash)})))
         cases(rest)
     case _: IO.die(Unit, 1, "expected eight normalized URL fields")
 

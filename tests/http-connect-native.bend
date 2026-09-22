@@ -1,10 +1,10 @@
 import Base
 import ../packages/runtime/src/connection-driver.bend as Dispatch
-import ../packages/runtime/src/http-connect.bend as HTTP
+import ../packages/runtime/src/http-exchange.bend as HTTP
 import ../packages/runtime/src/connection-driver.bend as Driver
 import ../packages/runtime/src/connection-driver.bend as Progress
 import ../packages/runtime/src/connection-driver.bend as Order
-import ../packages/runtime/src/http-host-route.bend as Route
+import ../packages/runtime/src/http-exchange.bend as Route
 import ../packages/runtime/src/hosts.bend as HostsResolve
 import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/hosts.bend as Hosts
@@ -15,7 +15,7 @@ import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Search
 import ../packages/runtime/src/resolver-config.bend as Options
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/resolver-config.bend as Plan
 import ../packages/runtime/src/dns-resolver.bend as Pair
 import ../packages/runtime/src/dns-message.bend as Id
@@ -96,7 +96,7 @@ def prepared(mode: U32, family: Bool, port: U32, result: Result<&2, &2, Plan.Err
         created(mode, family, port, owner)
 
 def configured(mode: U32, family: Bool, port: U32, dnsPort: U32) -> IO(Unit):
-  prepared(mode, family, port, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.V4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
+  prepared(mode, family, port, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.EndpointV4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
 
 def arguments(args: List<String>) -> IO(Unit):
   match args:

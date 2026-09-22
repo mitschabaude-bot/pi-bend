@@ -1,5 +1,5 @@
 import Base
-import ../src/line-decoder.bend as Lines
+import ../src/sse.bend as Lines
 import ./utf8-runner.bend as H
 
 def showLines(lines: List<&2, String>) -> List<&2, String>:

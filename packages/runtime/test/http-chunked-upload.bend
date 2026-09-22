@@ -1,7 +1,7 @@
 import Base
-import ../src/http-chunked-upload.bend as Upload
-import ../src/http-buffered-body.bend as Body
-import ../src/headers.bend as Headers
+import ../src/http-message.bend as Upload
+import ../src/http-message.bend as Body
+import ../src/http-message.bend as Headers
 import ../src/big-nat.bend as N
 import ./utf8-runner.bend as Text
 
@@ -15,7 +15,7 @@ def hexadecimal(value: Maybe<&2, N.BigNat>) -> String:
     case None{}: "error"
     case Some{length}: Text.fromScalars(Upload.hexadecimal(length))
 
-def show(value: Result<&2, &2, Body.BodyError, Body.Prepared>) -> String:
+def show(value: Result<&2, &2, Body.BufferedBodyBodyError, Body.Prepared>) -> String:
   match value:
     case Done{Body.Prepared{_, _, Some{content}}}: String.join(Text.showNumbers(Upload.encode(content)), ",")
     case _: "error"

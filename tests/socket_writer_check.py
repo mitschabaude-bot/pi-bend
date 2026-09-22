@@ -144,7 +144,7 @@ with tempfile.TemporaryDirectory(prefix='socket-writer-', dir=ROOT / 'build') as
     launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(str(Path.home() / '.bun/bin/bun')) + ' ' + shlex.quote(str(compiler / 'main.ts')) + ' "$@"\n')
     launcher.chmod(0o755)
     negative = ROOT / 'build/socket-writer-duplicate.bend'
-    negative.write_text('import Base\nimport ../packages/runtime/src/socket-writer.bend as W\ndef duplicate(+writer: W.Writer<String>) -> W.Writer<String> & W.Writer<String>:\n  (writer, writer)\n')
+    negative.write_text('import Base\nimport ../packages/runtime/src/socket.bend as W\ndef duplicate(+writer: W.Writer<String>) -> W.Writer<String> & W.Writer<String>:\n  (writer, writer)\n')
     rejected = subprocess.run([str(launcher), str(negative)], cwd=ROOT, text=True, capture_output=True, timeout=30)
     diagnostic = rejected.stdout + rejected.stderr
     assert rejected.returncode != 0 and 'expected : Data' in diagnostic and 'observed : Type' in diagnostic, diagnostic

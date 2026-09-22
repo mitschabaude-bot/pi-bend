@@ -1,15 +1,15 @@
 import Base
-import ../src/http-body-source.bend as Source
+import ../src/http-response.bend as Source
 import ../src/http-response.bend as Response
-import ../src/sse-reader.bend as SSE
-import ../src/sse-decoder.bend as Event
+import ../src/sse.bend as SSE
+import ../src/sse.bend as Event
 import ../src/callback.bend as Cb
-import ../src/http-response-stream.bend as Stream
+import ../src/http-response.bend as Stream
 import ./http-response.bend as Input
 import ./utf8-runner.bend as Text
 
-def slowRead(state: Input.State) -> IO(Input.State & Result<&2, &2, String, Maybe<&2, Stream.Event>>):
-  do IO<Input.State & Result<&2, &2, String, Maybe<&2, Stream.Event>>>:
+def slowRead(state: Input.State) -> IO(Input.State & Result<&2, &2, String, Maybe<&2, Stream.StreamEvent>>):
+  do IO<Input.State & Result<&2, &2, String, Maybe<&2, Stream.StreamEvent>>>:
     IO.sleep(1)
     Input.read(state)
 
@@ -59,16 +59,16 @@ def advance(action: Char, cursor: SSE.Cursor<String>) -> IO(SSE.Next<String>):
   match action:
     case 'c':
       do IO<SSE.Next<String>>:
-        value : SSE.CloseResult<String> <- SSE.close(String, cursor)
+        value : SSE.CloseResult<String> <- SSE.closeReader(String, cursor)
         return advanced(value)
-    case _: SSE.next(String, cursor)
+    case _: SSE.nextReader(String, cursor)
 
 def actions(todo: String, owner: Source.Owner<Input.State, String>, value: SSE.Next<String>) -> IO(Unit):
   match todo value:
     case SNil{} SSE.Next{cursor, value}:
       do IO<Unit>:
         IO.print(event(value))
-        closed : SSE.CloseResult<String> <- SSE.close(String, cursor)
+        closed : SSE.CloseResult<String> <- SSE.closeReader(String, cursor)
         finished(owner, closed)
     case SCon{action, rest} SSE.Next{cursor, value}:
       do IO<Unit>:
@@ -81,11 +81,11 @@ def acquired(todo: String, pair: Source.Owner<Input.State, String> & SSE.Source<
     case SCon{'p', _} Tuple{owner, source}: parallel(owner, source)
     case SNil{} Tuple{owner, source}:
       do IO<Unit>:
-        closed : SSE.CloseResult<String> <- SSE.close(String, SSE.create(String, source))
+        closed : SSE.CloseResult<String> <- SSE.closeReader(String, SSE.createReader(String, source))
         finished(owner, closed)
     case SCon{action, rest} Tuple{owner, source}:
       do IO<Unit>:
-        next : SSE.Next<String> <- advance(action, SSE.create(String, source))
+        next : SSE.Next<String> <- advance(action, SSE.createReader(String, source))
         actions(rest, owner, next)
 
 def run(parts: List<&2, String>) -> IO(Unit):

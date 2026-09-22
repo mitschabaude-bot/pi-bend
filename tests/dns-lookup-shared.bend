@@ -5,7 +5,7 @@ import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/ref.bend as Ref
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-lookup-ids.bend as IDs
 import ./dns-tcp-query.bend as QueryTest

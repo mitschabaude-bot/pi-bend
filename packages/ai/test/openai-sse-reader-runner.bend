@@ -1,7 +1,7 @@
 import Base
 import ./openai-sse-reader-support.bend as H
 import ../../runtime/test/utf8-runner.bend as Codec
-import ../../runtime/src/sse-reader.bend as D
+import ../../runtime/src/sse.bend as D
 
 def inputs(parts: List<&2, String>) -> List<&2, H.Input>:
   match parts:

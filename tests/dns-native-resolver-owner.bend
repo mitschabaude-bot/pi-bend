@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ./dns-lookup-options.bend as Options
 import ../packages/runtime/src/dns-message.bend as Query
 import ../packages/runtime/src/dns-resolver.bend as Resolver
@@ -7,7 +7,7 @@ import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Configuration
 import ../packages/runtime/src/resolver-config.bend as Policy
 import ../packages/runtime/src/resolver-config.bend as Plan
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ./dns-udp-plan.bend as PlanTest
 import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/src/dns-transport.bend as Servers
@@ -31,13 +31,13 @@ def requestLabel(request: Query.QueryOptions) -> String:
 def endpoints(servers: List<&2, Servers.Server>) -> List<&2, Endpoint.Endpoint>:
   match servers:
     case Nil{}: Nil{}
-    case Servers.Server{Connect.V4{ip}, port} <> rest: Endpoint.V4{ip, port} <> endpoints(rest)
-    case Servers.Server{Connect.V6{ip, scope}, port} <> rest: Endpoint.V6{ip, port, scope} <> endpoints(rest)
+    case Servers.Server{Connect.V4{ip}, port} <> rest: Endpoint.EndpointV4{ip, port} <> endpoints(rest)
+    case Servers.Server{Connect.V6{ip, scope}, port} <> rest: Endpoint.EndpointV6{ip, port, scope} <> endpoints(rest)
 
 def timed(entries: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> String:
   match entries:
     case Nil{}: ""
-    case Plan.Attempt{Endpoint.V4{_, port}, position, duration} <> rest: PlanTest.show(Plan.Attempt{port, position, duration}) ++ timed(rest)
+    case Plan.Attempt{Endpoint.EndpointV4{_, port}, position, duration} <> rest: PlanTest.show(Plan.Attempt{port, position, duration}) ++ timed(rest)
     case _ <> rest: "unexpected-v6" ++ timed(rest)
 
 def selected(pair: Resolver.Owner & Resolver.Resolver) -> IO(Resolver.Owner):

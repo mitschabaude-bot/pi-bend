@@ -1,14 +1,14 @@
 import Base
 import ../packages/runtime/src/url-search-params.bend as Params
 import ../packages/runtime/src/url-form.bend as Form
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/http-header.bend as H
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-socket-exchange.bend as Exchange
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-message.bend as H
+import ../packages/runtime/src/http-message.bend as Headers
+import ../packages/runtime/src/http-exchange.bend as Exchange
 import ../packages/runtime/src/abort.bend as A
-import ../packages/runtime/src/http-response-stream.bend as Response
-import ../packages/runtime/src/http-chunked-body.bend as Chunked
+import ../packages/runtime/src/http-response.bend as Response
+import ../packages/runtime/src/http-message.bend as Chunked
 import ./tcp-bytes-probe.bend as Probe
 
 def cleanup(result: Result<&2, &2, Exchange.ReadError<String>, Unit>) -> IO(Unit):
@@ -18,7 +18,7 @@ def cleanup(result: Result<&2, &2, Exchange.ReadError<String>, Unit>) -> IO(Unit
 
 def close(exchange: Exchange.Exchange<String>) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.close(String, exchange)
+    result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.closeSocketExchange(String, exchange)
     cleanup(result)
 
 def opened(result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Exchange.Exchange<String>):
@@ -26,7 +26,7 @@ def opened(result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange
     case Done{exchange}: IO.pure(Exchange.Exchange<String>, exchange)
     case Fail{_}: IO.die(Exchange.Exchange<String>, 1, "exchange start failed")
 
-def accumulated(value: Response.Event, body: List<&2, U32>) -> List<&2, U32>:
+def accumulated(value: Response.StreamEvent, body: List<&2, U32>) -> List<&2, U32>:
   match value:
     case Response.BodyData{bytes}: List.append(&2, U32, body, bytes)
     case _: body
@@ -44,14 +44,14 @@ def loop(fuel: Nat, next: Exchange.Next<String>, body: List<&2, U32>) -> IO(Unit
     case _ Exchange.Next{exchange, Done{None{}}}: finished(exchange, body)
     case Succ{rest} Exchange.Next{exchange, Done{Some{event}}}:
       do IO<Unit>:
-        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
         loop(rest, next, accumulated(event, body))
     case _ Exchange.Next{exchange, _}:
       do IO<Unit>:
         close(exchange)
         IO.die(Unit, 1, "exchange reader failed")
 
-def prepared(socket: Socket, signal: A.AbortSignal<String>, request: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):
+def prepared(socket: Socket, signal: A.AbortSignal<String>, request: Result<&2, &2, Request.RequestError, Request.BufferedRequestPrepared>) -> IO(Unit):
   match request:
     case Fail{_}:
       do IO<Unit>:
@@ -59,9 +59,9 @@ def prepared(socket: Socket, signal: A.AbortSignal<String>, request: Result<&2, 
         IO.die(Unit, 1, "request preparation failed")
     case Done{value}:
       do IO<Unit>:
-        started : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.start(~String, socket, signal, value, 7, Response.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
+        started : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.startSocketExchange(~String, socket, signal, value, 7, Response.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
         exchange : Exchange.Exchange<String> <- opened(started)
-        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
         loop(128n, next, Nil{})
 
 def requestHeaders(port: U32, chunked: Bool, form: Bool) -> Headers.Headers:
@@ -76,7 +76,7 @@ def input(form: Bool) -> Body.Input:
     case True{}: Body.SearchParams{Params.fromEntries(Form.Entry{"scope", "openid email"} <> Form.Entry{"scope", "offline_access"} <> Form.Entry{"state", "hé🙂+&=%"} <> Form.Entry{"", ""} <> Nil{})}
 
 def request(socket: Socket, signal: A.AbortSignal<String>, port: U32, +chunked: Bool, +form: Bool) -> IO(Unit):
-  prepared(socket, signal, Request.prepare(Bool.pick(String, chunked, "delete", "post"), "/v1/responses?x=%C3%A9", requestHeaders(port, chunked, form), input(form)))
+  prepared(socket, signal, Request.prepareBufferedRequest(Bool.pick(String, chunked, "delete", "post"), "/v1/responses?x=%C3%A9", requestHeaders(port, chunked, form), input(form)))
 
 def cases(count: Nat, +port: U32, +chunked: Bool, +form: Bool) -> IO(Unit):
   match count:

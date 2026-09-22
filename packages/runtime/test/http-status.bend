@@ -1,6 +1,6 @@
 import Base
-import ../src/http-status.bend as Status
-import ../src/http-line.bend as Line
+import ../src/http-message.bend as Status
+import ../src/http-message.bend as Line
 import ./utf8-runner.bend as Text
 
 def shown(value: Result<&2, &2, Status.SyntaxError, Status.StatusLine>) -> String:
@@ -14,18 +14,18 @@ def fetched(value: Result<&2, &2, Status.SyntaxError, Status.StatusLine>) -> Str
     case Fail{_}: "error"
     case Done{+line}: Text.showText(Status.statusText(line))
 
-def stream(chunks: List<&2, String>, result: Status.ReadResult) -> String:
+def stream(chunks: List<&2, String>, result: Status.StatusReadResult) -> String:
   match chunks result:
-    case _ Status.Failed{_}: "error"
-    case _ Status.Complete{value, rest}: shown(Done{value}) ++ ";" ++ String.join(Text.showNumbers(rest), ",")
-    case Nil{} Status.More{_}: "incomplete"
-    case head <> tail Status.More{reader}: stream(tail, Status.read(reader, Text.parseNumbers(head)))
+    case _ Status.StatusFailed{_}: "error"
+    case _ Status.StatusComplete{value, rest}: shown(Done{value}) ++ ";" ++ String.join(Text.showNumbers(rest), ",")
+    case Nil{} Status.StatusMore{_}: "incomplete"
+    case head <> tail Status.StatusMore{reader}: stream(tail, Status.readStatus(reader, Text.parseNumbers(head)))
 
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
-    case "f" <> bytes <> Nil{}: IO.print(fetched(Status.parse(Text.parseNumbers(bytes))))
-    case "p" <> bytes <> Nil{}: IO.print(shown(Status.parse(Text.parseNumbers(bytes))))
-    case "s" <> chunks: IO.print(stream(chunks, Status.More{Line.new(1024n)}))
+    case "f" <> bytes <> Nil{}: IO.print(fetched(Status.parseStatus(Text.parseNumbers(bytes))))
+    case "p" <> bytes <> Nil{}: IO.print(shown(Status.parseStatus(Text.parseNumbers(bytes))))
+    case "s" <> chunks: IO.print(stream(chunks, Status.StatusMore{Line.newLine(1024n)}))
     case _: IO.die(Unit, 1, "invalid status fixture")
 
 def cases(arguments: List<String>) -> IO(Unit):

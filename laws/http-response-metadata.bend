@@ -1,9 +1,9 @@
 import Base
-import ../packages/runtime/src/http-response-metadata.bend as Metadata
-import ../packages/runtime/src/http-head.bend as Head
-import ../packages/runtime/src/http-status.bend as Status
-import ../packages/runtime/src/http-header.bend as Header
-import ../packages/runtime/src/headers.bend as Headers
+import ../packages/runtime/src/http-response.bend as Metadata
+import ../packages/runtime/src/http-message.bend as Head
+import ../packages/runtime/src/http-message.bend as Status
+import ../packages/runtime/src/http-message.bend as Header
+import ../packages/runtime/src/http-message.bend as Headers
 
 law fields_partition:
   for +left: List<&2, Header.Header>
@@ -32,7 +32,7 @@ law status_retained:
   for reason: List<&2, U32>
   for fields: List<&2, Header.Header>
   for expose: Bool
-  {Metadata.status(Metadata.fromHead(Head.ResponseHead{Status.StatusLine{major, minor, code, reason}, fields}, expose)) == code : U32}
+  {Metadata.statusResponseMetadata(Metadata.fromHead(Head.ResponseHead{Status.StatusLine{major, minor, code, reason}, fields}, expose)) == code : U32}
 
 law success_classification:
   for major: U32

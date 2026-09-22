@@ -139,7 +139,7 @@ for fail in [False, True]:
 
 (ROOT / 'build').mkdir(exist_ok=True)
 negative = ROOT / 'build/http-response-reader-duplicate.bend'
-negative.write_text('import Base\nimport ../packages/runtime/src/http-response-reader.bend as Reader\n'
+negative.write_text('import Base\nimport ../packages/runtime/src/http-response.bend as Reader\n'
                     'def duplicate(+cursor: Reader.Cursor<String>) -> Reader.Cursor<String> & Reader.Cursor<String>:\n'
                     '  (cursor, cursor)\n')
 rejected = subprocess.run([BEND, str(negative)],

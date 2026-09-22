@@ -1,6 +1,6 @@
 import Base
 import ../packages/ai/src/api/openai-sse.bend as Sse
-import ../packages/runtime/src/sse-decoder.bend as Event
+import ../packages/runtime/src/sse.bend as Event
 import ../packages/runtime/src/json-parse.bend as Json
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V

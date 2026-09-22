@@ -1,7 +1,7 @@
 import Base
 import ../src/api/openai-sse.bend as Sse
 import ../../runtime/src/json-parse.bend as Json
-import ../../runtime/src/sse-decoder.bend as SSE
+import ../../runtime/src/sse.bend as SSE
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/test/utf8-runner.bend as H
 

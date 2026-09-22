@@ -2,7 +2,7 @@ import Base
 import ../laws/http-body-buffer.bend as Laws
 import ../laws/bounded-bytes.bend as BoundedLaws
 import ./bounded-bytes.bend as Bounded
-import ../packages/runtime/src/http-body-buffer.bend as Buffer
+import ../packages/runtime/src/http-response.bend as Buffer
 import ../packages/runtime/src/bounded-bytes.bend as Bytes
 
 def Laws.successful_body_preserved(E, bytes): {==}

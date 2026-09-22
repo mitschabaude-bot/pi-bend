@@ -6,8 +6,8 @@ import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/dns-message.bend as Frame
 import ../packages/runtime/src/dns-message.bend as Message
 import ../packages/runtime/src/dns-message.bend as Name
-import ../packages/runtime/src/abortable-socket.bend as SocketIO
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as SocketIO
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Scalar
@@ -33,8 +33,8 @@ def outcome(value: Result<&2, &2, Query.TcpQueryError<String>, Query.Reply>) -> 
     case Fail{Query.TcpQueryInvalidReadSize{}}: "zero"
     case Fail{Query.TcpQueryConnection{Connect.Aborted{why}}}: "connect:" ++ cause(why)
     case Fail{Query.TcpQueryConnection{Connect.SocketError{code, _}}}: "socket:" ++ U32.show(code)
-    case Fail{Query.TcpQueryAdoption{Peer.Adoption{SocketIO.Aborted{why}}}}: "adopt:" ++ cause(why)
-    case Fail{Query.Terminated{Session.TcpSessionTransport{TCP.Transport{_, SocketIO.Aborted{why}}}}}: "read:" ++ cause(why)
+    case Fail{Query.TcpQueryAdoption{Peer.Adoption{SocketIO.SocketAborted{why}}}}: "adopt:" ++ cause(why)
+    case Fail{Query.Terminated{Session.TcpSessionTransport{TCP.Transport{_, SocketIO.SocketAborted{why}}}}}: "read:" ++ cause(why)
     case Fail{Query.Terminated{Session.EndOfStream{}}}: "eof"
     case Fail{Query.Terminated{Session.TcpSessionTransport{TCP.Framing{Frame.IncompleteFrame{}}}}}: "frame"
     case Fail{Query.Submission{Session.Query{_}}}: "query"

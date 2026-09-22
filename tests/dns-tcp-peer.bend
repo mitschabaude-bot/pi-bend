@@ -4,9 +4,9 @@ import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/dns-message.bend as Response
 import ../packages/runtime/src/dns-message.bend as Message
 import ../packages/runtime/src/dns-message.bend as Name
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
-import ../packages/runtime/src/abortable-connect.bend as Connect
-import ../packages/runtime/src/abortable-socket.bend as SocketIO
+import ../packages/runtime/src/socket.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Connect
+import ../packages/runtime/src/socket.bend as SocketIO
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-tcp-connection.bend as Test
@@ -15,8 +15,8 @@ import ./abortable-socket.bend as Check
 
 def show(value: Response.Endpoint) -> String:
   match value:
-    case Response.Endpoint{Response.V4{ip}, port}: Show.show(Endpoint.V4{ip, port})
-    case Response.Endpoint{Response.V6{ip, scope}, port}: Show.show(Endpoint.V6{ip, port, scope})
+    case Response.Endpoint{Response.V4{ip}, port}: Show.show(Endpoint.EndpointV4{ip, port})
+    case Response.Endpoint{Response.V6{ip, scope}, port}: Show.show(Endpoint.EndpointV6{ip, port, scope})
 
 def report(route: Peer.Route) -> IO(Unit):
   match route:
@@ -64,7 +64,7 @@ def opened(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>)
 
 def rejected(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>) -> IO(Unit):
   match result:
-    case Fail{Peer.Adoption{SocketIO.Aborted{Abort.Supplied{"stop"}}}}: IO.pure(Unit, Unit{})
+    case Fail{Peer.Adoption{SocketIO.SocketAborted{Abort.Supplied{"stop"}}}}: IO.pure(Unit, Unit{})
     case Done{Peer.Peer{_, connection}}:
       do IO<Unit>:
         Test.close(connection)

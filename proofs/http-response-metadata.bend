@@ -1,7 +1,7 @@
 import Base
 import ../laws/http-response-metadata.bend as Laws
-import ../packages/runtime/src/http-head.bend as Head
-import ../packages/runtime/src/headers.bend as Headers
+import ../packages/runtime/src/http-message.bend as Head
+import ../packages/runtime/src/http-message.bend as Headers
 
 def Laws.fields_partition(left, initial, right):
   match left:

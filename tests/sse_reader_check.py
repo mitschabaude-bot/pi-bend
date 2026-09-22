@@ -80,7 +80,7 @@ def chunk(value):
 arguments = ['s' + str(int(case['closeFails'])) + '/' + case['actions'] + '/' + '|'.join(map(chunk, case['chunks'])) for case in cases]
 (ROOT / 'build').mkdir(exist_ok=True)
 negative = ROOT / 'build/sse-reader-duplicate.bend'
-negative.write_text('import Base\nimport ../packages/runtime/src/sse-reader.bend as Reader\n'
+negative.write_text('import Base\nimport ../packages/runtime/src/sse.bend as Reader\n'
                     'def duplicate(+cursor: Reader.Cursor<String>) -> Reader.Cursor<String> & Reader.Cursor<String>:\n'
                     '  (cursor, cursor)\n')
 rejected = subprocess.run([BEND, str(negative)],

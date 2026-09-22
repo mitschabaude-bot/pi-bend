@@ -3,7 +3,7 @@ import ../packages/runtime/src/connection-driver.bend as HTTP
 import ../packages/runtime/src/connection-driver.bend as Driver
 import ../packages/runtime/src/connection-driver.bend as Candidates
 import ../packages/runtime/src/connection-driver.bend as Order
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 
 # Equality of IO programs for arbitrary connectors: an unavailable resolution
 # returns immediately, with its complete report, and cannot invoke a connector.

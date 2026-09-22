@@ -1,7 +1,7 @@
 import Base
-import ../src/http-buffered-body.bend as Body
-import ../src/headers.bend as Headers
-import ../src/http-header.bend as H
+import ../src/http-message.bend as Body
+import ../src/http-message.bend as Headers
+import ../src/http-message.bend as H
 import ./utf8-runner.bend as Text
 import ../src/big-nat.bend as N
 import ../src/url-search-params.bend as Params
@@ -29,14 +29,14 @@ def content(value: Maybe<&2, Body.Content>) -> String:
     case None{}: "absent"
     case Some{Body.Content{bytes, length}}: N.toDecimal(length) ++ ":" ++ String.join(Text.showNumbers(bytes), ",")
 
-def field(value: Result<&2, &2, H.HeaderError, Maybe<&2, String>>) -> String:
+def field(value: Result<&2, &2, H.HeaderHeaderError, Maybe<&2, String>>) -> String:
   match value:
     case Done{Some{text}}: "+" ++ Text.showText(text)
     case _: "-"
 
-def show(value: Result<&2, &2, Body.BodyError, Body.Prepared>) -> String:
+def show(value: Result<&2, &2, Body.BufferedBodyBodyError, Body.Prepared>) -> String:
   match value:
-    case Fail{Body.InvalidByte{byte}}: "invalid-byte:" ++ U32.show(byte)
+    case Fail{Body.BufferedBodyInvalidByte{byte}}: "invalid-byte:" ++ U32.show(byte)
     case Fail{_}: "error"
     case Done{Body.Prepared{method, headers, body}}: Text.showText(method) ++ ";" ++ field(Headers.get(headers, "content-type")) ++ ";" ++ content(body)
 

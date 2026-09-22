@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/http-date.bend as H
-import ../packages/runtime/src/http-date-year.bend as Y
-import ../packages/runtime/src/http-date-syntax.bend as S
+import ../packages/runtime/src/http-message.bend as H
+import ../packages/runtime/src/http-message.bend as Y
+import ../packages/runtime/src/http-message.bend as S
 import ../packages/runtime/src/calendar.bend as C
 import ../packages/runtime/src/u64.bend as W
 
@@ -29,5 +29,5 @@ law mismatched_weekday_never_produces_an_instant:
 
 law year_failure_preserves_cause:
   for date: S.DateFields
-  for +cause: Y.Error
+  for +cause: Y.DateYearError
   {H.resolvedYear(date, Fail{cause}) == Fail{H.YearFailure{cause}} : Result<&2, &2, H.Error, H.Instant>}

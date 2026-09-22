@@ -3,8 +3,8 @@ import ../src/types.bend as T
 import ../src/utils/headers.bend as Provider
 import ../src/utils/headers.bend as Projection
 import ../src/api/openai-responses.bend as Responses
-import ../../runtime/src/headers.bend as Native
-import ../../runtime/src/http-header.bend as Field
+import ../../runtime/src/http-message.bend as Native
+import ../../runtime/src/http-message.bend as Field
 import ../../runtime/src/record.bend as R
 import ./provider-headers.bend as Input
 import ./headers.bend as Output
@@ -39,12 +39,12 @@ def showProperties(properties: List<&2, R.Property<T.Nullable<String>>>) -> List
     case R.Property{name, value} <> rest:
       (Text.showText(name) ++ ";" ++ showValue(value)) <> showProperties(rest)
 
-def applyDefaults(defaults: T.ProviderHeaders(), base: Result<&2, &2, Field.HeaderError, Native.Headers>) -> Result<&2, &2, Field.HeaderError, Native.Headers>:
+def applyDefaults(defaults: T.ProviderHeaders(), base: Result<&2, &2, Field.HeaderHeaderError, Native.Headers>) -> Result<&2, &2, Field.HeaderHeaderError, Native.Headers>:
   match base:
     case Fail{error}: Fail{error}
     case Done{headers}: Provider.apply(headers, Some{defaults})
 
-def showApplied(result: Result<&2, &2, Field.HeaderError, Native.Headers>) -> String:
+def showApplied(result: Result<&2, &2, Field.HeaderHeaderError, Native.Headers>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{headers}: "ok:" ++ Output.snapshot(headers)

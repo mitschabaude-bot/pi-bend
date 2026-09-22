@@ -1,20 +1,20 @@
 import Base
-import ../packages/runtime/src/sse-decoder.bend as SSE
+import ../packages/runtime/src/sse.bend as SSE
 
 type Buffers is Data:
   Buffers{data: List<&2, String>, raw: List<&2, String>}
 
-def decoderOf(result: SSE.Decoded) -> SSE.SSEDecoder:
+def decoderOf(result: SSE.DecoderDecoded) -> SSE.SSEDecoder:
   match result:
-    case SSE.Decoded{decoder, _}: decoder
+    case SSE.DecoderDecoded{decoder, _}: decoder
 
 def buffers(decoder: SSE.SSEDecoder) -> Buffers:
   match decoder:
     case SSE.SSEDecoder{_, data, raw}: Buffers{data, raw}
 
-def eventOf(result: SSE.Decoded) -> Maybe<&2, SSE.ServerSentEvent>:
+def eventOf(result: SSE.DecoderDecoded) -> Maybe<&2, SSE.ServerSentEvent>:
   match result:
-    case SSE.Decoded{_, event}: event
+    case SSE.DecoderDecoded{_, event}: event
 
 # Every blank block clears pending data and diagnostics, including empty blocks.
 law blank_clears_buffers:

@@ -1,6 +1,6 @@
 import Base
-import ../src/http-field.bend as Field
-import ../src/http-header.bend as H
+import ../src/http-message.bend as Field
+import ../src/http-message.bend as H
 import ./utf8-runner.bend as Text
 
 def shown(result: Result<&2, &2, Field.FieldError, Field.FieldLine>) -> String:
@@ -14,7 +14,7 @@ def cases(arguments: List<String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case head <> rest:
       do IO<Unit>:
-        IO.print(shown(Field.parse(Text.parseNumbers(head))))
+        IO.print(shown(Field.parseField(Text.parseNumbers(head))))
         cases(rest)
 
 def main() -> IO(Unit):

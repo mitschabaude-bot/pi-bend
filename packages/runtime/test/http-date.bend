@@ -1,10 +1,10 @@
 import Base
-import ../src/http-date.bend as D
+import ../src/http-message.bend as D
 import ../../ai/src/utils/provider-retry.bend as P
 import ../src/f64.bend as F
 import ../src/u64.bend as W
 import ../src/callback.bend as Callback
-import ../src/http-date-syntax.bend as S
+import ../src/http-message.bend as S
 import ../src/calendar.bend as C
 import ./utf8-runner.bend as H
 

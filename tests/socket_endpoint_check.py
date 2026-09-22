@@ -58,5 +58,5 @@ for label,command in [('native 1',['build/socket-endpoint','--threads','1']),('n
     assert first[:5]==[4,0,0,0,0] and 0<first[5]<=65535 and first[6]==0,first
     results.append(dict(backend=label,mode='unconnected UDP',endpoint=first,peer_error=errno.ENOTCONN))
     print(label+': endpoint ownership/metadata PASS',flush=True)
-paths=[ROOT/'packages/runtime/src/socket-endpoint.bend',ROOT/'tests/socket-endpoint.bend',ROOT/'tests/socket_endpoint_check.py',candidate/'comp.ts',candidate/'base.bend',candidate/'effs/socket_endpoint.c',candidate/'effs/socket_endpoint.js',ROOT/'build/socket-endpoint',ROOT/'build/socket-endpoint.js']
+paths=[ROOT/'packages/runtime/src/socket.bend',ROOT/'tests/socket-endpoint.bend',ROOT/'tests/socket_endpoint_check.py',candidate/'comp.ts',candidate/'base.bend',candidate/'effs/socket_endpoint.c',candidate/'effs/socket_endpoint.js',ROOT/'build/socket-endpoint',ROOT/'build/socket-endpoint.js']
 (ROOT/'build/socket-endpoint-result.json').write_text(json.dumps({'scope':__doc__,'cases':results,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}},indent=2)+'\n')

@@ -4,11 +4,11 @@ import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/src/url-record.bend as URL
 import ../packages/runtime/src/url-scheme.bend as Scheme
 import ../packages/runtime/src/url-host.bend as Host
-import ../packages/runtime/src/http-url.bend as Endpoint
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/http-header.bend as Header
-import ../packages/runtime/src/headers.bend as Headers
+import ../packages/runtime/src/http-message.bend as Endpoint
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-message.bend as Header
+import ../packages/runtime/src/http-message.bend as Headers
 import ../packages/runtime/src/abort.bend as Abort
 import ./http-request-exchange.bend as ExchangeTest
 import ./tcp-bytes-probe.bend as Probe

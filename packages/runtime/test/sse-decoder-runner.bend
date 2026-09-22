@@ -1,5 +1,5 @@
 import Base
-import ../src/sse-decoder.bend as SSE
+import ../src/sse.bend as SSE
 import ./utf8-runner.bend as H
 
 def showName(name: Maybe<&2, String>) -> String:
@@ -17,15 +17,15 @@ def showEvent(event: Maybe<&2, SSE.ServerSentEvent>) -> String:
     case None{}: "-"
     case Some{SSE.ServerSentEvent{name, data, raw}}: showName(name) ++ "/" ++ H.showText(data) ++ "/" ++ String.join(showRaw(raw), ";")
 
-def execute(lines: List<&2, String>, result: SSE.Decoded) -> List<&2, String>:
+def execute(lines: List<&2, String>, result: SSE.DecoderDecoded) -> List<&2, String>:
   match lines result:
-    case Nil{} SSE.Decoded{_, event}: showEvent(event) <> Nil{}
-    case line <> rest SSE.Decoded{decoder, event}: showEvent(event) <> execute(rest, SSE.decode(decoder, H.fromScalars(H.parseNumbers(line))))
+    case Nil{} SSE.DecoderDecoded{_, event}: showEvent(event) <> Nil{}
+    case line <> rest SSE.DecoderDecoded{decoder, event}: showEvent(event) <> execute(rest, SSE.decodeDecoder(decoder, H.fromScalars(H.parseNumbers(line))))
 
 def start(lines: List<&2, String>) -> String:
   match lines:
     case Nil{}: ""
-    case line <> rest: String.join(execute(rest, SSE.decode(SSE.create(), H.fromScalars(H.parseNumbers(line)))), "|")
+    case line <> rest: String.join(execute(rest, SSE.decodeDecoder(SSE.createDecoder(), H.fromScalars(H.parseNumbers(line)))), "|")
 
 def all(arguments: List<String>) -> IO(Unit):
   match arguments:

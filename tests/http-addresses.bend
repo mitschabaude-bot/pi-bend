@@ -1,12 +1,12 @@
 import Base
-import ../packages/runtime/src/http-addresses.bend as Addresses
+import ../packages/runtime/src/http-exchange.bend as Addresses
 import ../packages/runtime/src/connection-driver.bend as Candidates
-import ../packages/runtime/src/http-host-resolver.bend as HTTP
-import ../packages/runtime/src/http-host-route.bend as Route
+import ../packages/runtime/src/http-exchange.bend as HTTP
+import ../packages/runtime/src/http-exchange.bend as Route
 import ../packages/runtime/src/url-host.bend as URLHost
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/dns-resolver.bend as HostResolver
 import ../packages/runtime/src/hosts.bend as HostResolve
 import ../packages/runtime/src/hosts.bend as HostFile
@@ -25,7 +25,7 @@ import ../packages/runtime/src/dns-resolver.bend as Answer
 import ../packages/runtime/src/dns-transport.bend as Exchange
 import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/src/resolver-config.bend as Plan
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/resolver-config.bend as Options
 import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/dns-message.bend as Id
@@ -98,7 +98,7 @@ def hostReport(value: HostResolve.Report<HostFile.Failure, HostResolver.PairHost
 def host(+mode: String) -> URLHost.Host:
   Bool.pick(URLHost.Host, String.eq(mode, "numeric4"), URLHost.IPv4{IPv4.Address{2130706433}}, Bool.pick(URLHost.Host, String.eq(mode, "numeric6"), URLHost.IPv6{IPv6.Address{0, 0, 0, 1}}, Bool.pick(URLHost.Host, String.eq(mode, "numeric-mapped"), URLHost.IPv6{IPv6.Address{0, 0, 65535, 2130706433}}, Bool.pick(URLHost.Host, String.eq(mode, "empty-host"), URLHost.Empty{}, Bool.pick(URLHost.Host, String.eq(mode, "empty-domain"), URLHost.Domain{""}, Bool.pick(URLHost.Host, String.eq(mode, "opaque-host"), URLHost.Opaque{"a"}, URLHost.Domain{textName(mode)}))))))
 
-def routed(value: Result<&2, &2, Route.Error, Route.Resolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>>) -> IO(Unit):
+def routed(value: Result<&2, &2, Route.HostRouteError, Route.HostRouteResolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>>) -> IO(Unit):
   match value:
     case Fail{Route.InvalidHost{}}: IO.print("invalid-http-host")
     case Done{Route.NumericAddress{Connect.V4{IPv4.Address{address}}}}: IO.print("numeric4:" ++ U32.show(address))
@@ -120,7 +120,7 @@ def candidates(value: Candidates.Candidates) -> IO(Unit):
     case Candidates.Ordered{first, rest}: IO.print("ordered:" ++ showAddresses(first <> rest))
     case Candidates.Paired{ipv4, ipv6}: IO.print("paired:" ++ showAddresses(ipv4) ++ "/" ++ showAddresses(ipv6))
 
-def projected(value: Candidates.Plan<Result<&2, &2, Route.Error, Route.Resolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>>>) -> IO(Unit):
+def projected(value: Candidates.Plan<Result<&2, &2, Route.HostRouteError, Route.HostRouteResolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>>>) -> IO(Unit):
   match value:
     case Candidates.NoAddresses{original}:
       do IO<Unit>:
@@ -133,7 +133,7 @@ def projected(value: Candidates.Plan<Result<&2, &2, Route.Error, Route.Resolutio
 
 def once(+mode: String, count: Ref.Ref<U32>, resolver: Resolver.Resolver, parent: Abort.AbortSignal<String>, priority: Pair.Priority) -> IO(Unit):
   do IO<Unit>:
-    value : Result<&2, &2, Route.Error, Route.Resolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>> <- HTTP.resolveWith(~Environment, ~draw, ~String, ~HostFile.Failure, Environment{mode, count}, resolver, parent, priority, host(mode), database(mode))
+    value : Result<&2, &2, Route.HostRouteError, Route.HostRouteResolution<HostResolve.Report<HostFile.Failure, HostResolver.PairHostsResolverDNS<String>>>> <- HTTP.resolveWithHostResolver(~Environment, ~draw, ~String, ~HostFile.Failure, Environment{mode, count}, resolver, parent, priority, host(mode), database(mode))
     projected(Addresses.prepare(String, HostFile.Failure, value))
 
 def repeat(enabled: Bool, mode: String, count: Ref.Ref<U32>, resolver: Resolver.Resolver, parent: Abort.AbortSignal<String>, priority: Pair.Priority) -> IO(Unit):

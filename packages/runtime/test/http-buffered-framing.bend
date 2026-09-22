@@ -1,8 +1,8 @@
 import Base
-import ../src/http-buffered-body.bend as Body
-import ../src/http-buffered-framing.bend as Framing
-import ../src/headers.bend as Headers
-import ../src/http-header.bend as H
+import ../src/http-message.bend as Body
+import ../src/http-message.bend as Framing
+import ../src/http-message.bend as Headers
+import ../src/http-message.bend as H
 import ./utf8-runner.bend as Text
 
 def input(value: String) -> Body.Input:
@@ -13,23 +13,23 @@ def input(value: String) -> Body.Input:
 
 def set(headers: Headers.Headers, name: String, value: String) -> Headers.Headers:
   match value:
-    case SCon{Chr{43}, rest}: Headers.appendField(headers, H.Header{name, H.trim(Text.fromScalars(Text.parseNumbers(rest)))})
+    case SCon{Chr{43}, rest}: Headers.appendField(headers, H.Header{name, H.trimHeader(Text.fromScalars(Text.parseNumbers(rest)))})
     case _: headers
 
-def field(value: Result<&2, &2, H.HeaderError, Maybe<&2, String>>) -> String:
+def field(value: Result<&2, &2, H.HeaderHeaderError, Maybe<&2, String>>) -> String:
   match value:
     case Done{Some{text}}: "+" ++ Text.showText(text)
     case _: "-"
 
-def show(value: Result<&2, &2, Framing.FramingError, Framing.Prepared>) -> String:
+def show(value: Result<&2, &2, Framing.FramingError, Framing.BufferedFramingPrepared>) -> String:
   match value:
     case Fail{_}: "error"
-    case Done{Framing.Prepared{Body.Prepared{_, +headers, content}, encoding}}: field(Headers.get(headers, "content-length")) ++ ";" ++ field(Headers.get(headers, "transfer-encoding")) ++ ";" ++ String.join(Text.showNumbers(Framing.wireContent(content, encoding)), ",")
+    case Done{Framing.BufferedFramingPrepared{Body.Prepared{_, +headers, content}, encoding}}: field(Headers.get(headers, "content-length")) ++ ";" ++ field(Headers.get(headers, "transfer-encoding")) ++ ";" ++ String.join(Text.showNumbers(Framing.wireContent(content, encoding)), ",")
 
-def prepared(value: Result<&2, &2, Body.BodyError, Body.Prepared>) -> String:
+def prepared(value: Result<&2, &2, Body.BufferedBodyBodyError, Body.Prepared>) -> String:
   match value:
     case Fail{_}: "error"
-    case Done{request}: show(Framing.prepare(request))
+    case Done{request}: show(Framing.prepareBufferedFraming(request))
 
 def run(parts: List<&2, String>) -> String:
   match parts:

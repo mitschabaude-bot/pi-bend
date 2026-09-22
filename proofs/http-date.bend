@@ -1,6 +1,6 @@
 import Base
 import ../laws/http-date.bend as Laws
-import ../packages/runtime/src/http-date-syntax.bend as S
+import ../packages/runtime/src/http-message.bend as S
 
 def Laws.ordinary_unix_conversion_is_exact(milliseconds): {==}
 def Laws.leap_seconds_never_silently_become_unix_timestamps(milliseconds): {==}

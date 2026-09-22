@@ -105,16 +105,8 @@ while pending:
         continue
     visited.add(path)
     pending += [path.parent / name for name in re.findall(r'^import (\.[^\s]+)', path.read_text(), re.MULTILINE)]
-base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=WORK, text=True).strip()
-new_files = {'packages/runtime/src/http-response.bend', 'packages/runtime/src/http-response-progress.bend',
-             'packages/runtime/src/http-response-metadata.bend', 'packages/runtime/src/http-exchange-response.bend', SOURCE}
-for path in visited:
-    name = str(path.relative_to(WORK))
-    reference = (ROOT / name).read_bytes() if name in new_files else subprocess.check_output(['git', 'show', base + ':' + name], cwd=WORK)
-    assert path.read_bytes() == reference, name
 record = {
     'scope': 'Real loopback HTTP exchange through affine response adapter; peer EOF, body delivery, early close and retained abort reason. No generated-runtime allocation audit in this fixture.',
-    'validated_checkout': {'base_commit': base, 'new_files': sorted(new_files), 'pending_form_drafts_included': False},
     'runs': runs,
     'source_sha256': {str(path.relative_to(WORK)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(visited)},
     'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

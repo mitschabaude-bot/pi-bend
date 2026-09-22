@@ -1,9 +1,9 @@
 import Base
-import ../src/sse-reader.bend as D
+import ../src/sse.bend as D
 import ../src/ref.bend as Ref
 import ../src/callback.bend as Cb
 import ./sse-decoder-runner.bend as Events
-import ../src/sse-decoder.bend as SSE
+import ../src/sse.bend as SSE
 
 type Input is Data:
   ChunkStep{chunk: D.Chunk}
@@ -76,12 +76,12 @@ def execute(actions: List<&2, Action>, +capture: Ref.Ref<Capture>, cursor: D.Cur
     case Nil{}: IO.pure(D.Cursor<String>, cursor)
     case Pull{} <> rest:
       do IO<D.Cursor<String>>:
-        next : D.Next<String> <- D.next(String, cursor)
+        next : D.Next<String> <- D.nextReader(String, cursor)
         cursor : D.Cursor<String> <- recordNext(capture, next)
         execute(rest, capture, cursor)
     case Return{} <> rest:
       do IO<D.Cursor<String>>:
-        closed : D.CloseResult<String> <- D.close(String, cursor)
+        closed : D.CloseResult<String> <- D.closeReader(String, cursor)
         cursor : D.Cursor<String> <- recordClose(capture, closed)
         execute(rest, capture, cursor)
 
@@ -94,7 +94,7 @@ def run(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails: Bool) -
     +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{inputs, Nil{}})
     +reader : Cb.Callback<Unit, Result<&2, &2, String, Maybe<&2, D.Chunk>>> <- Cb.create(~Environment, ~Unit, ~Result<&2, &2, String, Maybe<&2, D.Chunk>>, ~readCallback, Environment{capture, closeFails})
     +closer : Cb.Callback<Unit, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~Unit, ~Result<&2, &2, String, Unit>, ~closeCallback, Environment{capture, closeFails})
-    finished : D.Cursor<String> <- execute(actions, capture, D.create(String, D.Source{reader, closer}))
+    finished : D.Cursor<String> <- execute(actions, capture, D.createReader(String, D.Source{reader, closer}))
     Cb.dispose(Unit, Result<&2, &2, String, Maybe<&2, D.Chunk>>, reader)
     Cb.dispose(Unit, Result<&2, &2, String, Unit>, closer)
     trace : Capture <- Ref.dispose(Capture, capture)

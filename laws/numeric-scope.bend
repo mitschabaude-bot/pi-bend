@@ -4,7 +4,7 @@ import ../packages/runtime/src/numeric-host.bend as Host
 import ../packages/runtime/src/ipv6-scope.bend as Zone
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 
 law failed_input_needs_no_lookup:
   for -E: Data

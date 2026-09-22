@@ -7,8 +7,8 @@ import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/dns-message.bend as Message
 import ../packages/runtime/src/dns-message.bend as Frame
 import ../packages/runtime/src/dns-message.bend as Name
-import ../packages/runtime/src/abortable-socket.bend as SocketIO
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as SocketIO
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-tcp-connection.bend as Test
@@ -23,7 +23,7 @@ def failure(value: Session.Failure<String>) -> String:
   match value:
     case Session.EndOfStream{}: "eof"
     case Session.TcpSessionTransport{TCP.Framing{Frame.IncompleteFrame{}}}: "framing"
-    case Session.TcpSessionTransport{TCP.Transport{_, SocketIO.Aborted{Abort.Supplied{"stop"}}}}: "abort"
+    case Session.TcpSessionTransport{TCP.Transport{_, SocketIO.SocketAborted{Abort.Supplied{"stop"}}}}: "abort"
     case _: "unexpected"
 
 def describe(value: Session.Outcome<String, U32>) -> String:

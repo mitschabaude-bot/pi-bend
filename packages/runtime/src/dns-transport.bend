@@ -3,11 +3,11 @@ import ./dns-message.bend as Message
 import ./abort.bend as Abort
 import ./resolver-config.bend as Plan
 import ./deadline.bend as Deadline
-import ./socket-endpoint.bend as Endpoint
-import ./abortable-connect.bend as Connect
-import ./abortable-socket.bend as SocketIO
-import ./socket-interrupt.bend as Interrupt
-import ./abortable-datagram.bend as Datagram
+import ./socket.bend as Endpoint
+import ./socket.bend as Connect
+import ./socket.bend as SocketIO
+import ./socket.bend as Interrupt
+import ./socket.bend as Datagram
 import ./datagram-peer.bend as Peer
 import ./ref.bend as Ref
 import ./random-index.bend as Index
@@ -53,15 +53,15 @@ type UdpQueryError<-Reason: Data> is Data:
   UdpQueryEncoding{error: Message.EdnsError}
   Aborted{reason: Abort.AbortReason<Reason>}
   Opening{error: Peer.Error}
-  UdpQueryTransport{error: Datagram.Error<Reason>}
+  UdpQueryTransport{error: Datagram.DatagramError<Reason>}
 
 def encode(request: Message.Request) -> Result<&2, &2, Message.EdnsError, List<&2, U32>>:
   Message.encodeQuery(request)
 
 def endpointUdpQuery(value: Endpoint.Endpoint) -> Message.Endpoint:
   match value:
-    case Endpoint.V4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
-    case Endpoint.V6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
+    case Endpoint.EndpointV4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
+    case Endpoint.EndpointV6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
 
 def transactionUdpQuery(route: Peer.Route, request: Message.Request) -> Message.Transaction:
   match route request:
@@ -77,7 +77,7 @@ def inspectedUdpQuery(-Reason: Data, socket: Socket, decision: Message.Decision)
     case Message.ResponseTruncated{headerLocal}: UdpQueryFinish{socket, Done{UdpQueryTruncated{headerLocal}}}
     case Message.Matched{message}: UdpQueryFinish{socket, Done{UdpQueryAnswer{message}}}
 
-def receivedUdpQuery(-Reason: Data, expected: Message.Transaction, local: Endpoint.Endpoint, pair: Socket & Result<&2, &2, Datagram.Error<Reason>, Datagram.Packet>) -> UdpQueryReading<Reason>:
+def receivedUdpQuery(-Reason: Data, expected: Message.Transaction, local: Endpoint.Endpoint, pair: Socket & Result<&2, &2, Datagram.DatagramError<Reason>, Datagram.Packet>) -> UdpQueryReading<Reason>:
   match pair:
     case (socket, Fail{error}): UdpQueryFinish{socket, Fail{UdpQueryTransport{error}}}
     # DNS messages are bounded at 65535 bytes. A larger truncated datagram is
@@ -95,10 +95,10 @@ def receivedUdpQuery(-Reason: Data, expected: Message.Transaction, local: Endpoi
         return result
     case UdpQueryContinue{socket}:
       do IO<Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>>:
-        packet : Socket & Result<&2, &2, Datagram.Error<Reason>, Datagram.Packet> <- Datagram.recv(Reason, socket, 65535, signal)
+        packet : Socket & Result<&2, &2, Datagram.DatagramError<Reason>, Datagram.Packet> <- Datagram.recv(Reason, socket, 65535, signal)
         readUdpQuery(Reason, signal, expected, local, receivedUdpQuery(Reason, expected, local, packet))
 
-def sentUdpQuery(-Reason: Data, signal: Abort.AbortSignal<Reason>, expected: Message.Transaction, local: Endpoint.Endpoint, pair: Socket & Result<&2, &2, Datagram.Error<Reason>, Unit>) -> IO(Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>):
+def sentUdpQuery(-Reason: Data, signal: Abort.AbortSignal<Reason>, expected: Message.Transaction, local: Endpoint.Endpoint, pair: Socket & Result<&2, &2, Datagram.DatagramError<Reason>, Unit>) -> IO(Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>):
   match pair:
     case (socket, Fail{error}):
       do IO<Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>>:
@@ -110,7 +110,7 @@ def ownedUdpQuery(-Reason: Data, +signal: Abort.AbortSignal<Reason>, request: Me
   match owner:
     case Peer.Owner{socket, Peer.Route{+local, +remote}}:
       do IO<Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>>:
-        result : Socket & Result<&2, &2, Datagram.Error<Reason>, Unit> <- Datagram.send(Reason, socket, remote, bytes, signal)
+        result : Socket & Result<&2, &2, Datagram.DatagramError<Reason>, Unit> <- Datagram.send(Reason, socket, remote, bytes, signal)
         sentUdpQuery(Reason, signal, transactionUdpQuery(Peer.Route{local, remote}, request), local, result)
 
 def opened(-Reason: Data, signal: Abort.AbortSignal<Reason>, request: Message.Request, bytes: List<&2, U32>, result: Result<&2, &1, Peer.Error, Peer.Owner>) -> IO(Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>):
@@ -239,10 +239,10 @@ def expired(-Reason: Data, why: Abort.AbortReason<Deadline.Cause<Deadline.Cause<
 
 def retryableUdpServers(-Reason: Data, error: UdpQueryError<Deadline.Cause<Deadline.Cause<Reason>>>) -> Bool:
   match error:
-    case UdpQueryTransport{Datagram.SocketError{_, _}}: True{}
+    case UdpQueryTransport{Datagram.DatagramSocketError{_, _}}: True{}
     case Opening{Peer.Association{_, _}}: True{}
     case Aborted{why}: expired(Reason, why)
-    case UdpQueryTransport{Datagram.Aborted{why}}: expired(Reason, why)
+    case UdpQueryTransport{Datagram.DatagramAborted{why}}: expired(Reason, why)
     case _: False{}
 
 def retryUdpServers(-Reason: Data, allowed: Bool, report: UdpServersReport<Reason>) -> UdpServersDecision<Reason>:
@@ -309,8 +309,8 @@ def validPort(+port: U32) -> Bool: U32.is_gt(port, 0) && U32.is_le(port, 65535)
 
 def valid(endpoint: Endpoint.Endpoint) -> Bool:
   match endpoint:
-    case Endpoint.V4{_, port}: validPort(port)
-    case Endpoint.V6{_, port, _}: validPort(port)
+    case Endpoint.EndpointV4{_, port}: validPort(port)
+    case Endpoint.EndpointV6{_, port, _}: validPort(port)
 
 def checkedUdpServers(-Reason: Data, valid: Bool, endpoint: Endpoint.Endpoint, duration: Plan.Duration, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Message.Request) -> IO(UdpServersDecision<Reason>):
   match valid:
@@ -363,7 +363,7 @@ def readOperation(reader: Message.Reader) -> Operation:
 
 type TcpConnectionError<-Reason: Data> is Data:
   Framing{error: Message.TcpFrameError}
-  Transport{operation: Operation, error: SocketIO.Error<Reason>}
+  Transport{operation: Operation, error: SocketIO.SocketErrorOfSocket<Reason>}
   InvalidReadSize{}
 
 type Position<-Reason: Data> is Data:
@@ -402,7 +402,7 @@ def eof(-Reason: Data, socket: SocketIO.Owner<Reason>, result: Result<&2, &2, Me
     case Done{_}: endedTcpConnection(Reason, socket, None{})
     case Fail{error}: endedTcpConnection(Reason, socket, Some{Framing{error}})
 
-def received(-Reason: Data, reader: Message.Reader, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, List<&2, U32>>) -> Step<Reason>:
+def received(-Reason: Data, reader: Message.Reader, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, List<&2, U32>>) -> Step<Reason>:
   match pair:
     case (socket, Fail{error}): endedTcpConnection(Reason, socket, Some{Transport{readOperation(reader), error}})
     case (socket, Done{Nil{}}): eof(Reason, socket, Message.finish(reader))
@@ -415,10 +415,10 @@ def received(-Reason: Data, reader: Message.Reader, pair: SocketIO.Owner<Reason>
     case Ready{value}: IO.pure(Next<Reason>, value)
     case Pull{socket, reader}:
       do IO<Next<Reason>>:
-        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, List<&2, U32>> <- SocketIO.recv(Reason, socket, maximum)
+        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, List<&2, U32>> <- SocketIO.recvSocket(Reason, socket, maximum)
         driveTcpConnection(Reason, maximum, received(Reason, reader, result))
 
-def inspected(-Reason: Data, reader: Message.Reader, unread: List<&2, U32>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit>) -> Step<Reason>:
+def inspected(-Reason: Data, reader: Message.Reader, unread: List<&2, U32>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit>) -> Step<Reason>:
   match pair:
     case (socket, Fail{error}): endedTcpConnection(Reason, socket, Some{Transport{readOperation(reader), error}})
     case (socket, Done{_}): decoded(Reason, socket, Message.read(reader, unread))
@@ -427,7 +427,7 @@ def pendingTcpConnection(-Reason: Data, connection: Connection<Reason>) -> IO(St
   match connection:
     case Connection{socket, Reading{reader, unread}}:
       do IO<Step<Reason>>:
-        checked : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit> <- SocketIO.run(Reason, Unit, socket, owned => IO.pure(Socket & Result<&1, &1, U32 & String, Unit>, (owned, Done{Unit{}})))
+        checked : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit> <- SocketIO.run(Reason, Unit, socket, owned => IO.pure(Socket & Result<&1, &1, U32 & String, Unit>, (owned, Done{Unit{}})))
         return inspected(Reason, reader, unread, checked)
     case Connection{socket, Ended{error}}: IO.pure(Step<Reason>, endedTcpConnection(Reason, socket, error))
 
@@ -442,7 +442,7 @@ def receiveTcpConnection(-Reason: Data, connection: Connection<Reason>, maximum:
         step : Step<Reason> <- pendingTcpConnection(Reason, connection)
         driveTcpConnection(Reason, size, step)
 
-def sent(-Reason: Data, position: Position<Reason>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit>) -> Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>:
+def sent(-Reason: Data, position: Position<Reason>, pair: SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit>) -> Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>:
   match pair:
     case (socket, Done{_}): (Connection{socket, position}, Done{Unit{}})
     case (socket, Fail{error}): (Connection{socket, position}, Fail{Transport{Sending{}, error}})
@@ -452,7 +452,7 @@ def sendFrame(-Reason: Data, connection: Connection<Reason>, result: Result<&2, 
     case owner Fail{error}: IO.pure(Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>, (owner, Fail{Framing{error}}))
     case Connection{socket, position} Done{wire}:
       do IO<Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>>:
-        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.Error<Reason>, Unit> <- SocketIO.send(Reason, socket, wire)
+        result : SocketIO.Owner<Reason> & Result<&2, &2, SocketIO.SocketErrorOfSocket<Reason>, Unit> <- SocketIO.sendSocket(Reason, socket, wire)
         return sent(Reason, position, result)
 
 # Encoding failure leaves the connection untouched. A transport write failure
@@ -462,7 +462,7 @@ def sendFrame(-Reason: Data, connection: Connection<Reason>, result: Result<&2, 
 def send(-Reason: Data, connection: Connection<Reason>, bytes: List<&2, U32>) -> IO(Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>):
   sendFrame(Reason, connection, Message.encodeTcpFrame(bytes))
 
-def closeTcpConnection(-Reason: Data, connection: Connection<Reason>) -> IO(Result<&2, &2, Interrupt.Error, Unit>):
+def closeTcpConnection(-Reason: Data, connection: Connection<Reason>) -> IO(Result<&2, &2, Interrupt.InterruptError, Unit>):
   match connection:
     case Connection{socket, _}: SocketIO.close(Reason, socket)
 
@@ -475,20 +475,20 @@ type Peer<-Reason: Data> is Type:
   Peer{route: Route, connection: Connection<Reason>}
 
 type TcpPeerError<-Reason: Data> is Data:
-  Inspection{error: Endpoint.Error}
-  Adoption{error: SocketIO.Error<Reason>}
+  Inspection{error: Endpoint.EndpointError}
+  Adoption{error: SocketIO.SocketErrorOfSocket<Reason>}
 
 def addressTcpPeer(value: Endpoint.Endpoint) -> Message.Endpoint:
   match value:
-    case Endpoint.V4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
-    case Endpoint.V6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
+    case Endpoint.EndpointV4{ip, port}: Message.Endpoint{Message.V4{ip}, port}
+    case Endpoint.EndpointV6{ip, port, scope}: Message.Endpoint{Message.V6{ip, scope}, port}
 
-def adopted(-Reason: Data, route: Route, result: Result<&2, &1, SocketIO.Error<Reason>, SocketIO.Owner<Reason>>) -> Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>:
+def adopted(-Reason: Data, route: Route, result: Result<&2, &1, SocketIO.SocketErrorOfSocket<Reason>, SocketIO.Owner<Reason>>) -> Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>:
   match result:
     case Fail{error}: Fail{Adoption{error}}
     case Done{socket}: Done{Peer{route, adopt(Reason, socket)}}
 
-def remoteTcpPeer(-Reason: Data, localTcpPeer: Message.Endpoint, signal: Abort.AbortSignal<Reason>, pair: Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
+def remoteTcpPeer(-Reason: Data, localTcpPeer: Message.Endpoint, signal: Abort.AbortSignal<Reason>, pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
   match pair:
     case (socket, Fail{error}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
@@ -496,10 +496,10 @@ def remoteTcpPeer(-Reason: Data, localTcpPeer: Message.Endpoint, signal: Abort.A
         return Fail{Inspection{error}}
     case (socket, Done{at}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
-        result : Result<&2, &1, SocketIO.Error<Reason>, SocketIO.Owner<Reason>> <- SocketIO.create(Reason, socket, signal)
+        result : Result<&2, &1, SocketIO.SocketErrorOfSocket<Reason>, SocketIO.Owner<Reason>> <- SocketIO.create(Reason, socket, signal)
         return adopted(Reason, Route{localTcpPeer, addressTcpPeer(at)}, result)
 
-def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
+def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
   match pair:
     case (socket, Fail{error}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
@@ -507,7 +507,7 @@ def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket 
         return Fail{Inspection{error}}
     case (socket, Done{at}):
       do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
-        result : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
+        result : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
         remoteTcpPeer(Reason, addressTcpPeer(at), signal, result)
 
 # Consumes the connected socket, including on failure. Adoption checks retained
@@ -515,7 +515,7 @@ def localTcpPeer(-Reason: Data, signal: Abort.AbortSignal<Reason>, pair: Socket 
 # Signal ownership stays with the caller until the TCP connection is closed.
 def createTcpPeer(-Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reason>) -> IO(Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>):
   do IO<Result<&2, &1, TcpPeerError<Reason>, Peer<Reason>>>:
-    result : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+    result : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     localTcpPeer(Reason, signal, result)
 
 def transaction(route: Route, id: U32, opcode: U32, question: Message.Question) -> Message.Transaction:
@@ -682,7 +682,7 @@ type TcpSessionStep<-Reason: Data, -Token: Data> is Type:
   TcpSessionStep{session: Session<Reason, Token>, event: Outcome<Reason, Token>}
 
 type Closed<-Token: Data> is Data:
-  Closed{outstanding: List<&2, Entry<Token>>, cleanup: Result<&2, &2, Interrupt.Error, Unit>}
+  Closed{outstanding: List<&2, Entry<Token>>, cleanup: Result<&2, &2, Interrupt.InterruptError, Unit>}
 
 def adoptTcpSession(-Reason: Data, -Token: Data, peer: Peer<Reason>) -> Session<Reason, Token>:
   match peer:
@@ -773,7 +773,7 @@ def closeTcpSession(-Reason: Data, -Token: Data, session: Session<Reason, Token>
   match session:
     case Session{_, connection, pending, _}:
       do IO<Closed<Token>>:
-        cleanup : Result<&2, &2, Interrupt.Error, Unit> <- closeTcpConnection(Reason, connection)
+        cleanup : Result<&2, &2, Interrupt.InterruptError, Unit> <- closeTcpConnection(Reason, connection)
         return Closed{drain(Token, pending), cleanup}
 
 
@@ -802,10 +802,10 @@ type TcpQueryError<-Reason: Data> is Data:
 # Preserve the primary result if socket cleanup also fails. A late deadline
 # reason is diagnostic; it does not retroactively replace a completed reply.
 type Report<-Reason: Data> is Data:
-  Report{result: Result<&2, &2, TcpQueryError<Reason>, Reply>, cleanup: Result<&2, &2, Interrupt.Error, Unit>, deadline: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>}
+  Report{result: Result<&2, &2, TcpQueryError<Reason>, Reply>, cleanup: Result<&2, &2, Interrupt.InterruptError, Unit>, deadline: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>}
 
 type Completed<-Reason: Data> is Data:
-  Completed{result: Result<&2, &2, TcpQueryError<Reason>, Reply>, cleanup: Result<&2, &2, Interrupt.Error, Unit>}
+  Completed{result: Result<&2, &2, TcpQueryError<Reason>, Reply>, cleanup: Result<&2, &2, Interrupt.InterruptError, Unit>}
 
 type TcpQueryReading<-Reason: Data> is Type:
   TcpQueryContinue{session: Session<Deadline.Cause<Reason>, Unit>}
@@ -908,7 +908,7 @@ def query(-Reason: Data, address: Connect.Address, port: U32, milliseconds: U32,
 # recoverable reset site. Never unwrap failed cleanup or treat abort as errno.
 def reset(-Reason: Data, report: Completed<Reason>) -> IO(Bool):
   match report:
-    case Completed{Fail{Terminated{TcpSessionTransport{Transport{ReadingLength{}, SocketIO.SocketError{code, _}}}}}, Done{_}}: Socket.isConnectionReset(code)
+    case Completed{Fail{Terminated{TcpSessionTransport{Transport{ReadingLength{}, SocketIO.SocketSocketError{code, _}}}}}, Done{_}}: Socket.isConnectionReset(code)
     case _: IO.pure(Bool, False{})
 
 def finishTcpRecover(-Reason: Data, retry: Bool, report: Completed<Reason>, address: Connect.Address, port: U32, signal: Abort.AbortSignal<Deadline.Cause<Reason>>, request: Message.Request, maximum: U32) -> IO(Completed<Reason>):
@@ -946,7 +946,7 @@ def retryable(-Reason: Data, error: TcpQueryError<Reason>) -> Bool:
   match error:
     case TcpQueryConnection{Connect.SocketError{_, _}}: True{}
     case Terminated{EndOfStream{}}: True{}
-    case Terminated{TcpSessionTransport{Transport{_, SocketIO.SocketError{_, _}}}}: True{}
+    case Terminated{TcpSessionTransport{Transport{_, SocketIO.SocketSocketError{_, _}}}}: True{}
     case Terminated{TcpSessionTransport{Framing{Message.IncompleteFrame{}}}}: True{}
     case _: False{}
 
@@ -1031,8 +1031,8 @@ type State<-Reason: Data> is Data:
 
 def server(value: Endpoint.Endpoint) -> Server:
   match value:
-    case Endpoint.V4{ip, port}: Server{Connect.V4{ip}, port}
-    case Endpoint.V6{ip, port, scope}: Server{Connect.V6{ip, scope}, port}
+    case Endpoint.EndpointV4{ip, port}: Server{Connect.V4{ip}, port}
+    case Endpoint.EndpointV6{ip, port, scope}: Server{Connect.V6{ip, scope}, port}
 
 def entryTransport(value: Plan.Attempt<Endpoint.Endpoint>) -> Server:
   match value:

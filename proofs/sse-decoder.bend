@@ -1,6 +1,6 @@
 import Base
 import ../laws/sse-decoder.bend as Laws
-import ../packages/runtime/src/sse-decoder.bend as SSE
+import ../packages/runtime/src/sse.bend as SSE
 
 def Laws.blank_clears_buffers(decoder):
   match decoder:

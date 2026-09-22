@@ -1,7 +1,7 @@
 import Base
-import ../src/http-response-policy.bend as Policy
-import ../src/http-head.bend as Head
-import ../src/http-status.bend as Status
+import ../src/http-response.bend as Policy
+import ../src/http-message.bend as Head
+import ../src/http-message.bend as Status
 import ./http-framing-fields.bend as Framing
 import ./http-content-length.bend as Input
 import ./utf8-runner.bend as Text

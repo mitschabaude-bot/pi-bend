@@ -29,7 +29,7 @@ for backend,command in [('native 1',['build/udp-interrupt-probe','--threads','1'
         except subprocess.TimeoutExpired as error:
             decode=lambda text: text.decode() if isinstance(text,bytes) else text or ''
             rows.append(dict(backend=backend,family=family,timeout=True,stdout=decode(error.stdout),stderr=decode(error.stderr)))
-paths=['scripts/investigate-udp-interrupt.py','tests/udp-interrupt-probe.bend','packages/runtime/src/socket-interrupt.bend','patches/experimental/udp-bytes/udp_recv_bytes.c','patches/experimental/udp-bytes/udp_recv_bytes.js']
+paths=['scripts/investigate-udp-interrupt.py','tests/udp-interrupt-probe.bend','packages/runtime/src/socket.bend','patches/experimental/udp-bytes/udp_recv_bytes.c','patches/experimental/udp-bytes/udp_recv_bytes.js']
 r=dict(scope=__doc__,os=os_rows,probe=rows,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},compiler_sha256={p:hashlib.sha256((candidate/p).read_bytes()).hexdigest() for p in ['base.bend','comp.ts','bend.ts','main.ts']})
 (ROOT/'build/udp-interrupt-investigation.json').write_text(json.dumps(r,indent=2)+'\n')
 print(json.dumps(rows,indent=2))

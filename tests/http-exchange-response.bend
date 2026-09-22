@@ -1,26 +1,26 @@
 import Base
-import ../packages/runtime/src/http-exchange-response.bend as HTTP
+import ../packages/runtime/src/http-exchange.bend as HTTP
 import ../packages/runtime/src/http-response.bend as Response
-import ../packages/runtime/src/http-response-progress.bend as Progress
-import ../packages/runtime/src/http-response-metadata.bend as Metadata
-import ../packages/runtime/src/http-socket-exchange.bend as Exchange
-import ../packages/runtime/src/http-response-reader.bend as Reader
-import ../packages/runtime/src/http-socket-source.bend as Source
-import ../packages/runtime/src/abortable-socket.bend as SocketIO
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/http-response-stream.bend as Stream
-import ../packages/runtime/src/http-chunked-body.bend as Chunked
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-header.bend as Header
+import ../packages/runtime/src/http-response.bend as Progress
+import ../packages/runtime/src/http-response.bend as Metadata
+import ../packages/runtime/src/http-exchange.bend as Exchange
+import ../packages/runtime/src/http-response.bend as Reader
+import ../packages/runtime/src/http-exchange.bend as Source
+import ../packages/runtime/src/socket.bend as SocketIO
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-response.bend as Stream
+import ../packages/runtime/src/http-message.bend as Chunked
+import ../packages/runtime/src/http-message.bend as Headers
+import ../packages/runtime/src/http-message.bend as Header
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/test/utf8-runner.bend as Text
 
-def result(value: Result<&2, &2, Progress.Error<Exchange.ReadError<String>>, Maybe<&2, List<&2, U32>>>) -> String:
+def result(value: Result<&2, &2, Progress.ResponseProgressError<Exchange.ReadError<String>>, Maybe<&2, List<&2, U32>>>) -> String:
   match value:
     case Done{None{}}: "end"
     case Done{Some{bytes}}: "bytes:" ++ String.join(Text.showNumbers(bytes), ",")
-    case Fail{Progress.PrimaryFailure{Progress.TransportFailure{Exchange.ResponseFailure{Reader.PrimaryFailure{Reader.SourceError{Source.SocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}}}}}: "abort:" ++ reason
+    case Fail{Progress.ResponseProgressPrimaryFailure{Progress.TransportFailure{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}}}}}: "abort:" ++ reason
     case Fail{_}: "error"
 
 def closed(value: Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>>) -> IO(Unit):
@@ -59,12 +59,12 @@ def consume(mode: U32, controller: Abort.AbortController<String>, body: Response
         next : Response.Next<Exchange.ReadError<String>, Exchange.Exchange<String>> <- HTTP.next(~String, body)
         loop(128n, next)
 
-def response(mode: U32, controller: Abort.AbortController<String>, value: Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Unit):
+def response(mode: U32, controller: Abort.AbortController<String>, value: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Unit):
   match value:
     case Fail{_}: IO.print("start-error")
     case Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("head:" ++ U32.show(Metadata.status(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
+        IO.print("head:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
         consume(mode, controller, body)
 
 def exchange(mode: U32, controller: Abort.AbortController<String>, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Unit):
@@ -72,10 +72,10 @@ def exchange(mode: U32, controller: Abort.AbortController<String>, value: Result
     case Fail{_}: IO.die(Unit, 1, "exchange start failed")
     case Done{owner}:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(~String, owner)
+        value : Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.startExchangeResponse(~String, owner)
         response(mode, controller, value)
 
-def prepared(mode: U32, +controller: Abort.AbortController<String>, socket: Socket, value: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):
+def prepared(mode: U32, +controller: Abort.AbortController<String>, socket: Socket, value: Result<&2, &2, Request.RequestError, Request.BufferedRequestPrepared>) -> IO(Unit):
   match value:
     case Fail{_}:
       do IO<Unit>:
@@ -83,7 +83,7 @@ def prepared(mode: U32, +controller: Abort.AbortController<String>, socket: Sock
         IO.die(Unit, 1, "prepare failed")
     case Done{request}:
       do IO<Unit>:
-        value : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.start(~String, socket, Abort.signal(String, controller), request, 4096, Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
+        value : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.startSocketExchange(~String, socket, Abort.signal(String, controller), request, 4096, Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
         exchange(mode, controller, value)
 
 def run(args: List<String>) -> IO(Unit):
@@ -92,7 +92,7 @@ def run(args: List<String>) -> IO(Unit):
       do IO<Unit>:
         +controller : Abort.AbortController<String> <- Abort.new(String)
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", Text.decimal(port, 0)))
-        prepared(Text.decimal(mode, 0), controller, socket, Request.prepare(method, "/body", Headers.appendField(Headers.new(), Header.Header{"host", "localhost"}), Body.Absent{}))
+        prepared(Text.decimal(mode, 0), controller, socket, Request.prepareBufferedRequest(method, "/body", Headers.appendField(Headers.new(), Header.Header{"host", "localhost"}), Body.Absent{}))
         Abort.dispose(String, controller)
     case _: IO.die(Unit, 1, "expected port mode method")
 

@@ -1,9 +1,9 @@
 import Base
-import ../packages/runtime/src/http-host-route.bend as Route
+import ../packages/runtime/src/http-exchange.bend as Route
 import ../packages/runtime/src/url-host.bend as Host
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 
 law ipv4_bypasses_lookup:
   for +address: IPv4.Address

@@ -901,7 +901,7 @@ Same host, same archived full fixture (`build/compiler-memory-reading/provider-b
 
 ### BEND-012 recurrence: Base type names are reserved against user definitions (2026-09-22)
 
-The toolchain's `base.bend` declares `type Event is Data` (a GUI event with `Key`/`Mouse`/`Move`/`Close`). A user module may declare its own `type Event` (`packages/runtime/src/http-response-stream.bend` does), but `def Event(...) -> Data` type aliases in `packages/agent/src/loop-stream.bend` and `agent-run.bend` now fail with `a fresh name (duplicate declaration: Event)`. Both aliases are renamed (`LoopEvent`, `RunEvent`). The diagnostic does not say that the conflicting declaration is in Base. Whether user definitions should shadow Base names, and why a `type` may while a `def` may not, is a language question for upstream.
+The toolchain's `base.bend` declares `type Event is Data` (a GUI event with `Key`/`Mouse`/`Move`/`Close`). A user module may declare its own `type Event` (the http response stream section of `http-response.bend` does), but `def Event(...) -> Data` type aliases in `packages/agent/src/loop-stream.bend` and `agent-run.bend` now fail with `a fresh name (duplicate declaration: Event)`. Both aliases are renamed (`LoopEvent`, `RunEvent`). The diagnostic does not say that the conflicting declaration is in Base. Whether user definitions should shadow Base names, and why a `type` may while a `def` may not, is a language question for upstream.
 
 
 ### BEND-025 recurrence: SHA-512 test dispatch dominates generated output (2026-09-22)
@@ -913,3 +913,7 @@ The initial hypothesis that a sixteen-word schedule record caused the cliff was 
 ### BEND-012 recurrence: Base `Halt` constructor (2026-09-22)
 
 Like `Event`, the toolchain Base declares a constructor `Halt{code, message}`; a user datatype constructor `Halt{failure}` (the DNS search run's halt outcome) fails with `a fresh constructor name (duplicate declaration: Halt)` once it shares a file with other definitions that reach Base. Renamed to `SearchHalt`. Base names are effectively reserved words for user constructors and `def` aliases; the diagnostic does not name Base as the other party.
+
+## BEND-029 — C backend mangles function identifiers case-insensitively (2026-09-22)
+
+Merging `http-url.bend` (with `prepare`, renamed `prepareUrl` by the merge tool) into the same module as `http-buffered-request.bend`'s `prepareURL` failed at C emission with `two names mangle to FID____PACKAGES_RUNTIME_SRC_HTTP_MESSAGE_PREPAREURL`. The checker accepts both names; only the C symbol table is case-insensitive (`cid_mac`/`compile_tables` upper-case the mangled name). Type-alias definitions differing only by case from a function (`Read`/`read`, `ExecutionOutcome`/`executionOutcome`) do not collide because types are erased. The merge tool now treats definition names that differ only by case as collisions and avoids generating them. A case-preserving mangling (or a checker-level diagnostic) is the language fix; not patched locally.
