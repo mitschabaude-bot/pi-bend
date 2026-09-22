@@ -237,6 +237,55 @@ def compareChecked(unordered: Bool, a: F64, b: F64) -> Maybe<&2, Cmp>:
 def compare(+a: F64, +b: F64) -> Maybe<&2, Cmp>:
   compareChecked(isNaN(a) || isNaN(b), a, b)
 
+# Outcomes of an ordered comparison; None (an unordered operand) is never
+# equal, greater, at least or at most.
+def isEqual(order: Maybe<&2, Cmp>) -> Bool:
+  match order:
+    case Some{EQ{}}: True{}
+    case _: False{}
+
+def isGreater(order: Maybe<&2, Cmp>) -> Bool:
+  match order:
+    case Some{GT{}}: True{}
+    case _: False{}
+
+def isAtLeast(order: Maybe<&2, Cmp>) -> Bool:
+  match order:
+    case Some{EQ{}}: True{}
+    case Some{GT{}}: True{}
+    case _: False{}
+
+def isAtMost(order: Maybe<&2, Cmp>) -> Bool:
+  match order:
+    case Some{LT{}}: True{}
+    case Some{EQ{}}: True{}
+    case _: False{}
+
+def isFinite(value: Decoded) -> Bool:
+  match value:
+    case Finite{_, _, _}: True{}
+    case _: False{}
+
+# Unordered numeric inputs propagate NaN. Equal values need no identity or
+# signed-zero distinction for a token count.
+def minimumOrdered(order: Maybe<&2, Cmp>, left: F64, right: F64) -> F64:
+  match order:
+    case None{}: nan()
+    case Some{GT{}}: right
+    case _: left
+
+def minimum(+left: F64, +right: F64) -> F64:
+  minimumOrdered(compare(left, right), left, right)
+
+def maximumOrdered(order: Maybe<&2, Cmp>, left: F64, right: F64) -> F64:
+  match order:
+    case None{}: nan()
+    case Some{LT{}}: right
+    case _: left
+
+def maximum(+left: F64, +right: F64) -> F64:
+  maximumOrdered(compare(left, right), left, right)
+
 def shrinkInteger(fuel: Nat, large: Bool, +exponent: U32, +value: W.U64) -> F64:
   match fuel large:
     case _ False{}: normalize(56n, W.atLeast(W.compare(value, W.U64{8388608, 0})), False{}, exponent, value)

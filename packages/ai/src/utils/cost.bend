@@ -4,15 +4,10 @@ import ../../../runtime/src/f64.bend as F
 
 # Preserve binary64 evaluation order from models.ts calculateCost. Tier rates
 # apply to the entire request, not just tokens above the selected threshold.
-def greater(result: Maybe<&2, Cmp>) -> Bool:
-  match result:
-    case Some{GT{}}: True{}
-    case _: False{}
-
 def chooseTier(tier: T.ModelCostTier, +inputTokens: F.F64, +matched: F.F64, rates: T.ModelCostRates) -> F.F64 & T.ModelCostRates:
   match tier:
     case T.ModelCostTier{input, output, cacheRead, cacheWrite, +threshold}:
-      Bool.pick(F.F64 & T.ModelCostRates, greater(F.compare(inputTokens, threshold)) && greater(F.compare(threshold, matched)), (threshold, T.ModelCostRates{input, output, cacheRead, cacheWrite}), (matched, rates))
+      Bool.pick(F.F64 & T.ModelCostRates, F.isGreater(F.compare(inputTokens, threshold)) && F.isGreater(F.compare(threshold, matched)), (threshold, T.ModelCostRates{input, output, cacheRead, cacheWrite}), (matched, rates))
 
 def tiers(remaining: List<&2, T.ModelCostTier>, +inputTokens: F.F64, state: F.F64 & T.ModelCostRates) -> T.ModelCostRates:
   match remaining state:

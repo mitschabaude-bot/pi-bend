@@ -19,6 +19,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/dns-message.bend` | 25 | `packages/runtime/src/dns-message.bend` |
 | `laws/dns-resolver.bend` | 9 | `packages/runtime/src/dns-resolver.bend` |
 | `laws/dns-transport.bend` | 13 | `packages/runtime/src/dns-transport.bend` |
+| `laws/f64.bend` | 8 | `packages/runtime/src/f64.bend` (comparison outcomes, finiteness, NaN-propagating extrema) |
 | `laws/fetch.bend` | 9 | `packages/runtime/src/fetch.bend` |
 | `laws/fifo.bend` | 3 | `packages/runtime/src/fifo.bend` |
 | `laws/hosts.bend` | 14 | `packages/runtime/src/hosts.bend` |
@@ -49,7 +50,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/utf8.bend` | 6 | `packages/runtime/src/utf8.bend` |
 | `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
 | `laws/x509-trust.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
-| **Total** | **494** | |
+| **Total** | **502** | |
 
 The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.
 

@@ -14,26 +14,10 @@ import ../../../runtime/src/f64.bend as F
 type ContextUsageEstimate is Data:
   ContextUsageEstimate{tokens: F.F64, usageTokens: F.F64, trailingTokens: F.F64, lastUsageIndex: Maybe<&2, Nat>}
 
-def equalOrder(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{EQ{}}: True{}
-    case _: False{}
-
-def positive(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{GT{}}: True{}
-    case _: False{}
-
-def atLeast(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{GT{}}: True{}
-    case Some{EQ{}}: True{}
-    case _: False{}
-
 def calculateContextTokens(usage: T.Usage) -> F.F64:
   match usage:
     case T.Usage{input, output, read, write, _, _, +total, _}:
-      Bool.pick(F.F64, equalOrder(F.compare(total, F.fromU32(0))) || F.isNaN(total), F.add(F.add(F.add(input, output), read), write), total)
+      Bool.pick(F.F64, F.isEqual(F.compare(total, F.fromU32(0))) || F.isNaN(total), F.add(F.add(F.add(input, output), read), write), total)
 
 def textCharsFrom(text: String, chars: F.F64) -> F.F64:
   match text:
@@ -45,7 +29,7 @@ def textChars(text: String) -> F.F64: textCharsFrom(text, F.fromU32(0))
 def tokensForChars(chars: F.F64) -> F.F64:
   +quotient = F.divide(chars, F.fromU32(4))
   +whole = F.truncate(quotient)
-  Bool.pick(F.F64, equalOrder(F.compare(quotient, whole)), whole, F.add(whole, F.fromU32(1)))
+  Bool.pick(F.F64, F.isEqual(F.compare(quotient, whole)), whole, F.add(whole, F.fromU32(1)))
 
 def estimateTextTokens(text: String) -> F.F64: tokensForChars(textChars(text))
 
@@ -134,7 +118,7 @@ def assistantObservation(~A: Data, ~G: Data, message: T.AssistantMessage<A, G>) 
   match message:
     case T.AssistantMessage{_, _, _, _, _, _, _, _, usage, reason, _, _, _, _, timestamp}:
       +tokens = calculateContextTokens(usage)
-      Observation{timestamp, Bool.pick(Maybe<&2, F.F64>, successful(reason) && positive(F.compare(tokens, F.fromU32(0))), Some{tokens}, None{})}
+      Observation{timestamp, Bool.pick(Maybe<&2, F.F64>, successful(reason) && F.isGreater(F.compare(tokens, F.fromU32(0))), Some{tokens}, None{})}
 
 def observe(~P: Data, ~A: Data, ~G: Data, ~D: Data, message: T.Message<P, A, G, D>) -> Observation:
   match message:
@@ -142,12 +126,6 @@ def observe(~P: Data, ~A: Data, ~G: Data, ~D: Data, message: T.Message<P, A, G, 
     case T.User{T.UserMessage{_, timestamp}}: Observation{timestamp, None{}}
     case T.ToolResult{T.ToolResultMessage{_, _, _, _, _, _, timestamp}}: Observation{timestamp, None{}}
     case T.Assistant{value}: assistantObservation(~A, ~G, value)
-
-def laterTimestamp(order: Maybe<&2, Cmp>, left: F.F64, right: F.F64) -> F.F64:
-  match order:
-    case None{}: F.nan()
-    case Some{LT{}}: right
-    case _: left
 
 type EstimateState is Data:
   EstimateState{nextIndex: Nat, latestPrefixTimestamp: F.F64, usageTokens: F.F64, trailingTokens: F.F64, lastUsageIndex: Maybe<&2, Nat>}
@@ -160,7 +138,7 @@ def recordEstimate(applies: Bool, usage: Maybe<&2, F.F64>, +index: Nat, latest: 
 def advance(state: EstimateState, observation: Observation, estimated: F.F64) -> EstimateState:
   match state observation:
     case EstimateState{index, +prefix, usage, trailing, last} Observation{+timestamp, reported}:
-      recordEstimate(atLeast(F.compare(timestamp, prefix)), reported, index, laterTimestamp(F.compare(prefix, timestamp), prefix, timestamp), usage, trailing, last, estimated)
+      recordEstimate(F.isAtLeast(F.compare(timestamp, prefix)), reported, index, F.maximum(prefix, timestamp), usage, trailing, last, estimated)
 
 def finish(state: EstimateState) -> ContextUsageEstimate:
   match state:

@@ -56,14 +56,9 @@ type PrimitiveType is Data:
 def primitiveType(+kind: String) -> PrimitiveType:
   Bool.pick(PrimitiveType, String.eq(kind, "number"), Numeric{False{}}, Bool.pick(PrimitiveType, String.eq(kind, "integer"), Numeric{True{}}, Bool.pick(PrimitiveType, String.eq(kind, "boolean"), BooleanType{}, Bool.pick(PrimitiveType, String.eq(kind, "string"), StringType{}, Bool.pick(PrimitiveType, String.eq(kind, "null"), NullType{}, OtherType{})))))
 
-def finiteNumber(value: F.Decoded) -> Bool:
-  match value:
-    case F.Finite{_, _, _}: True{}
-    case _: False{}
-
 def numericText(integerOnly: Bool, +text: String) -> V.Value:
   +parsed = NumberString.toNumber(text)
-  acceptable = Bool.pick(Bool, integerOnly, F.isInteger(parsed), finiteNumber(F.decode(parsed)))
+  acceptable = Bool.pick(Bool, integerOnly, F.isInteger(parsed), F.isFinite(F.decode(parsed)))
   Bool.pick(V.Value, Bool.not(String.is_empty(NumberString.trim(text))) && acceptable, V.Number{parsed}, V.Text{text})
 
 def coerceNumeric(integerOnly: Bool, value: V.Value) -> V.Value:
@@ -73,16 +68,11 @@ def coerceNumeric(integerOnly: Bool, value: V.Value) -> V.Value:
     case V.Text{text}: numericText(integerOnly, text)
     case other: other
 
-def equalNumber(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{EQ{}}: True{}
-    case _: False{}
-
 def coerceBoolean(value: V.Value) -> V.Value:
   match value:
     case V.Null{}: V.Boolean{False{}}
     case V.Text{+text}: Bool.pick(V.Value, String.eq(text, "true"), V.Boolean{True{}}, Bool.pick(V.Value, String.eq(text, "false"), V.Boolean{False{}}, V.Text{text}))
-    case V.Number{+number}: Bool.pick(V.Value, equalNumber(F.compare(number, F.fromU32(1))), V.Boolean{True{}}, Bool.pick(V.Value, equalNumber(F.compare(number, F.fromU32(0))), V.Boolean{False{}}, V.Number{number}))
+    case V.Number{+number}: Bool.pick(V.Value, F.isEqual(F.compare(number, F.fromU32(1))), V.Boolean{True{}}, Bool.pick(V.Value, F.isEqual(F.compare(number, F.fromU32(0))), V.Boolean{False{}}, V.Number{number}))
     case other: other
 
 def formattedNumber(value: Maybe<&2, String>) -> Coercion():
@@ -100,7 +90,7 @@ def coerceString(value: V.Value) -> Coercion():
 def coerceNull(value: V.Value) -> V.Value:
   match value:
     case V.Text{+text}: Bool.pick(V.Value, String.is_empty(text), V.Null{}, V.Text{text})
-    case V.Number{+number}: Bool.pick(V.Value, equalNumber(F.compare(number, F.fromU32(0))), V.Null{}, V.Number{number})
+    case V.Number{+number}: Bool.pick(V.Value, F.isEqual(F.compare(number, F.fromU32(0))), V.Null{}, V.Number{number})
     case V.Boolean{flag}: Bool.pick(V.Value, flag, V.Boolean{True{}}, V.Null{})
     case other: other
 
@@ -118,7 +108,7 @@ def coercePrimitiveByType(value: V.Value, kind: String) -> Coercion():
 # Primitive coercion changes scalar values only; aggregates pass through.
 def primitiveCandidateChanged(original: V.Value, candidate: V.Value) -> Bool:
   match original candidate:
-    case V.Number{a} V.Number{b}: Bool.not(equalNumber(F.compare(a, b)))
+    case V.Number{a} V.Number{b}: Bool.not(F.isEqual(F.compare(a, b)))
     case V.Text{a} V.Text{b}: Bool.not(String.eq(a, b))
     case V.Boolean{+a} V.Boolean{+b}: (a && Bool.not(b)) || (Bool.not(a) && b)
     case V.Null{} V.Null{}: False{}

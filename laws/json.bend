@@ -9,11 +9,11 @@ law finite_components_are_accepted:
   for sign: Bool
   for exponent: U32
   for significand: W.U64
-  {S.finiteNumber(F.Finite{sign, exponent, significand}) == True{} : Bool}
+  {F.isFinite(F.Finite{sign, exponent, significand}) == True{} : Bool}
 
 law infinities_are_rejected:
   for sign: Bool
-  {S.finiteNumber(F.Infinity{sign}) == False{} : Bool}
+  {F.isFinite(F.Infinity{sign}) == False{} : Bool}
 
 law array_checks_head_and_tail:
   for head: T.JsonValue
@@ -37,5 +37,5 @@ law array_partition:
 
 law invalid_numeric_leaf_is_rejected:
   for +value: F.F64
-  for invalid: {S.finiteNumber(F.decode(value)) == False{} : Bool}
+  for invalid: {F.isFinite(F.decode(value)) == False{} : Bool}
   {S.finite(T.JsonNumber{value}) == False{} : Bool}

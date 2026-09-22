@@ -43,33 +43,13 @@ def thinkingBudgetForLevel(reasoningLevel: T.ThinkingLevel, customBudgets: Maybe
     case None{}: selectBudget(reasoningLevel, DEFAULT_THINKING_BUDGETS())
     case Some{budgets}: selectBudget(reasoningLevel, budgets)
 
-# Unordered numeric inputs propagate NaN. Equal values need no identity or
-# signed-zero distinction for a token count.
-def minimumOrdered(order: Maybe<&2, Cmp>, left: F.F64, right: F.F64) -> F.F64:
-  match order:
-    case None{}: F.nan()
-    case Some{GT{}}: right
-    case _: left
-
-def minimum(+left: F.F64, +right: F.F64) -> F.F64:
-  minimumOrdered(F.compare(left, right), left, right)
-
-def maximumOrdered(order: Maybe<&2, Cmp>, left: F.F64, right: F.F64) -> F.F64:
-  match order:
-    case None{}: F.nan()
-    case Some{LT{}}: right
-    case _: left
-
-def maximum(+left: F.F64, +right: F.F64) -> F.F64:
-  maximumOrdered(F.compare(left, right), left, right)
-
 def clampThinkingBudgetToAnswerRoom(thinkingBudget: F.F64, ceiling: F.F64) -> F.F64:
-  minimum(thinkingBudget, maximum(F.fromU32(0), F.subtract(ceiling, MIN_ANSWER_TOKENS())))
+  F.minimum(thinkingBudget, F.maximum(F.fromU32(0), F.subtract(ceiling, MIN_ANSWER_TOKENS())))
 
 def responseCeiling(baseMaxTokens: Maybe<&2, F.F64>, modelMaxTokens: F.F64, thinkingBudget: F.F64) -> F.F64:
   match baseMaxTokens:
     case None{}: modelMaxTokens
-    case Some{base}: minimum(F.add(base, thinkingBudget), modelMaxTokens)
+    case Some{base}: F.minimum(F.add(base, thinkingBudget), modelMaxTokens)
 
 def fitBudget(order: Maybe<&2, Cmp>, +maxTokens: F.F64, thinkingBudget: F.F64) -> ThinkingTokenAllocation:
   match order:
@@ -82,15 +62,9 @@ def adjustMaxTokensForThinking(baseMaxTokens: Maybe<&2, F.F64>, modelMaxTokens: 
   +maxTokens = responseCeiling(baseMaxTokens, modelMaxTokens, thinkingBudget)
   fitBudget(F.compare(maxTokens, thinkingBudget), maxTokens, thinkingBudget)
 
-def nonPositive(order: Maybe<&2, Cmp>) -> Bool:
-  match order:
-    case Some{LT{}}: True{}
-    case Some{EQ{}}: True{}
-    case _: False{}
-
 def contextCeiling(+window: F.F64, estimated: F.F64, +maxTokens: F.F64) -> F.F64:
   available = F.subtract(F.subtract(window, estimated), F.fromU32(4096))
-  Bool.pick(F.F64, nonPositive(F.compare(window, F.fromU32(0))), maximum(F.fromU32(1), maxTokens), minimum(maxTokens, maximum(F.fromU32(1), available)))
+  Bool.pick(F.F64, F.isAtMost(F.compare(window, F.fromU32(0))), F.maximum(F.fromU32(1), maxTokens), F.minimum(maxTokens, F.maximum(F.fromU32(1), available)))
 
 def estimatedTokens(value: Estimate.ContextUsageEstimate) -> F.F64:
   match value:

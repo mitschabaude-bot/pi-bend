@@ -42,14 +42,9 @@ def decodedPhase(value: Maybe<&2,V.Value>) -> Maybe<&2,T.TextSignaturePhase>:
     case Some{V.Text{"final_answer"}}: Some{T.FinalAnswer{}}
     case _: None{}
 
-def equalVersion(order: Maybe<&2,Cmp>) -> Bool:
-  match order:
-    case Some{EQ{}}: True{}
-    case _: False{}
-
 def version(value: Maybe<&2,V.Value>) -> Bool:
   match value:
-    case Some{V.Number{number}}: equalVersion(F.compare(number,F.fromU32(1)))
+    case Some{V.Number{number}}: F.isEqual(F.compare(number,F.fromU32(1)))
     case _: False{}
 
 def parsedFields(validVersion: Bool, id: Maybe<&2,V.Value>, phase: Maybe<&2,V.Value>) -> Maybe<&2,T.TextSignatureV1>:
