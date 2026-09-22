@@ -1,11 +1,11 @@
 {
   "date": "2026-09-22T07:37:40.648934+00:00",
   "issue": "Shared generic constructor seals a concrete field whose unbox still assumes unique ownership",
-  "status": "Isolated candidate; not installed",
+  "status": "Installed in ordinary and native compiler sources after candidate correctness/performance checks",
   "patch": "patches/bend-hot-constructor-fields.patch",
   "root_cause": "Global sharing makes Some hot. Constructing Some<Wide> seals Wide with an RFC wrapper, but the concrete Wide type was not marked hot if the value was immediately boxed without a typed binding. The cold Wide unbox then reads the RFC wrapper with term_loc and frees it in the Wide allocation class. This corrupts both values and allocator state.",
   "fix": "In emit_ctr, propagate an already-hot constructor through its concrete ADT with existing facts_hot. Analysis only grows hot facts and discards generated output until the fixed point, so earlier emitted cold unboxes are regenerated.",
-  "scope": "One executable compiler line plus explanatory comment; no runtime change, generated-C workaround, or compiler installation.",
+  "scope": "One executable compiler line plus explanatory comment; no runtime change or generated-C workaround. Installed after the recorded candidate checks.",
   "source_hashes": {
     "installed_comp_ts": "2da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9",
     "candidate_comp_ts": "a745236937442b431c020fd5303d8195ea2e8f764a34c9b772be4819b407d80d"
@@ -158,5 +158,22 @@
       "seconds": 11.730738876387477,
       "rss_kib": 1170444
     }
-  }
+  },
+  "installation": [
+    {
+      "path": "/home/agent/.bend/app/2.0.7/A4kk1m/bend2/comp.ts",
+      "before": "2da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9",
+      "after": "a745236937442b431c020fd5303d8195ea2e8f764a34c9b772be4819b407d80d"
+    },
+    {
+      "path": "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/comp.ts",
+      "before": "2da642b45626b8d47db63b013fd8179282fa6e953f31dbdc658eeda72e86e3d9",
+      "after": "a745236937442b431c020fd5303d8195ea2e8f764a34c9b772be4819b407d80d"
+    }
+  ],
+  "installed_validation": [
+    "14 positive shared optional-record cases on Bun/native1/native4",
+    "1088 X509 checks on Bun/native1/native4",
+    "Existing static and dynamic sum, converted literal, and typed-do regressions"
+  ]
 }
