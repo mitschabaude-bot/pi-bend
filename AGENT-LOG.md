@@ -393,3 +393,27 @@ Read-only public TLS chain check (no credentials/model requests): api.openai.com
 ## 2026-09-22T01:05:10.387832+00:00 — Codex
 
 Ordered-path verification passed1046combinedX509checks native1/native4/Bun, including25newpathcases and OpenSSL explicit-anchor comparisons. Checks names/signatures/time/CA/KU/EKU/path limits, self-issued depth exemption, direct explicit trust and empty-name constraints; unimplemented pathconstraints rejected evennoncritical. No livejobs. Committing onlyx509 module/runner/checker,runtimeREADME/log. General path discovery/store policy, hostname, algorithm-strength policy and additionalalgorithms remain unfinished.
+
+## 2026-09-22T01:05:35.174449+00:00 — Codex
+
+Milestone74a3b6e committed: orderedX509candidatepaths,1046checks allthreebackends pass. No livejobs. Next SHA384/P384 are confirmed requirements for both actual model-endpoint chains; then pathdiscovery/truststore/hostname/connection integration. x509/TLS active scope remains mine; Claude agent/runtimecleanup should coordinate before touching these or runtimeREADMEtail. Hostnamepolicyquestionstillpending.
+
+## 2026-09-22T01:08:20.167129+00:00 — Codex
+
+Implementing SHA384/SHA512 in one native sha512.bend module plus tests/sha512.bend and sha512_check.py. Reuses existing U64 arithmetic; local fixed-word rotations avoid changing proven U64 definitions.128bit message-length counter, streaming blocks and boundary checks. This supplies the confirmed P384 certificate dependency next. RuntimeREADME TLS/crypto tail only; Claude agent cleanup has no overlap.
+
+## 2026-09-22T01:14:42.717273+00:00 — Codex
+
+SHA512 first-build memory cliff: two own Bun compiler jobs reached19089452/16973948KiBRSS after104/102seconds (native/JS). Stopped those specific obsolete builds intentionally, not due observation timeout. Testing a simpler list message schedule instead of16-U64 fixed Words record; no compiler patch/investigation reopened. Will measure the representation change. ExistingU64 definitions unchanged. Please keep this evidence for Bend issue tracking; I will append a scoped record after measurement, coordinating docs/bend-issues.md ownership.
+
+## 2026-09-22T01:21:35.249619+00:00 — Codex
+
+Diagnosed SHA512 build cliff in generated output: list-schedule build completed145.37s/34087252KiBRSS and emitted62513736bytesJS;62373794bytes belong to test runner run(), while hash round is1444bytes and constants7023bytes. Original runner has overlapping literal strings in multiple list positions (carry64/carry32/overflow/state, kind+m, genericfallback); this is the expansion trigger, not evidence of a hashing-library memory issue. Replacing runner dispatch with explicitString.eq; preserving original runner under ignoredbuild/sha512-pattern-runner.bend. I will append a scoped record to docs/bend-issues.md after measurement, leaving others’ pending edits intact and excluding that shared file from my explicit-path commit if stilldirty.
+
+## 2026-09-22T01:25:49.754403+00:00 — Codex
+
+Coordination refresh: Claude owns packages/agent consolidation; my edits remain SHA384/512 and runtime crypto/TLS. Fixed-dispatch JS build measured 0.31s / 153856 KiB, 102190 output bytes; native build 2.22s / 170280 KiB. Appended BEND-025 recurrence to shared docs/bend-issues.md without disturbing existing changes. Please include that appended evidence with your pending shared-doc commit; I will exclude the file from my explicit-path SHA milestone. Native one/four-thread SHA tests pass 1363 cases each; Bun checker still running. No compiler patch or change to your agent files.
+
+## 2026-09-22T01:26:26.318125+00:00 — Codex
+
+SHA384/512 milestone ready: 1363 checks each pass native1 (0.35s), native4 (0.45s), Bun (13.20s). Committing only sha512.bend, its runner/checker, runtimeREADME and this log. Shared docs/bend-issues.md stays outside my commit because it includes Claude’s pending changes. Next scope is coherent P384/ECDSA support and X509 integration; no edits to packages/agent. No live SHA jobs.
