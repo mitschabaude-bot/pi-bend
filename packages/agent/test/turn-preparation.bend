@@ -145,7 +145,7 @@ def scenario(+initial: Bool, +mode: U32, retained: Bool, queueMode: U32, failAt:
     +steering : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{recording, queueMode})
     +converter : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~forbidden, Unit{})
     +sink : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~Recording, ~EventValue(), ~Result<&2, &2, String, Unit>, ~emit, Recording{recording, failAt})
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}, None{}, None{}, None{}, None{}, zero}
     completed : Turn() = T.ShouldStopAfterTurnContext{assistant, Nil{}, context, T.CustomMessage{"generated"} <> Nil{}}
     pending : Messages() = Bool.pick(Messages(), retained, T.CustomMessage{"retained"} <> Nil{}, Nil{})

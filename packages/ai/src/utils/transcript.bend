@@ -104,7 +104,7 @@ def getDeclaredTools(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, 
   collectTools(P, A, G, H, messages, M.new(T.Tool<P>), False{})
 
 type ReplayState is Data:
-  ReplayState{content: List<&2, String>, sections: R.Record<Maybe<&2, String>>, timestamp: Maybe<&2, Number.F64>}
+  ReplayState{content: List<&2, String>, sections: R.Record<Maybe<&2, String>>, timestamp: Maybe<&2, F64>}
 
 def applySections(properties: List<&2, R.Property<Maybe<&2, String>>>, sections: R.Record<Maybe<&2, String>>) -> R.Record<Maybe<&2, String>>:
   match properties:
@@ -112,7 +112,7 @@ def applySections(properties: List<&2, R.Property<Maybe<&2, String>>>, sections:
     case R.Property{name, None{}} <> rest: applySections(rest, R.remove(Maybe<&2, String>, sections, name))
     case R.Property{name, Some{value}} <> rest: applySections(rest, R.set(Maybe<&2, String>, sections, name, Some{value}))
 
-def firstTimestamp(existing: Maybe<&2, Number.F64>, timestamp: Number.F64) -> Maybe<&2, Number.F64>:
+def firstTimestamp(existing: Maybe<&2, F64>, timestamp: F64) -> Maybe<&2, F64>:
   match existing:
     case None{}: Some{timestamp}
     case Some{value}: Some{value}
@@ -138,7 +138,7 @@ def optionalSections(properties: List<&2, R.Property<Maybe<&2, String>>>) -> May
     case Nil{}: None{}
     case head <> tail: Some{R.Record{head <> tail}}
 
-def timestampValue(timestamp: Maybe<&2, Number.F64>) -> Number.F64:
+def timestampValue(timestamp: Maybe<&2, F64>) -> F64:
   match timestamp:
     case None{}: Number.fromU32(0)
     case Some{value}: value

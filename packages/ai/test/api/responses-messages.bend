@@ -11,7 +11,7 @@ import ../../../runtime/test/schema.bend as A
 
 def Messages() -> Data: List<&2,T.Message<V.Value,R.Record<V.Value>,Unit,Unit>>
 
-def clock(unused: Unit) -> IO(F.F64): IO.pure(F.F64,F.fromU32(1000))
+def clock(unused: Unit) -> IO(F64): IO.pure(F64,F.fromU32(1000))
 
 def model(reasoning: Bool, vision: Bool, developer: Maybe<&2,Bool>) -> T.Model<Unit>:
   +zero = F.fromU32(0)

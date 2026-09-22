@@ -45,7 +45,7 @@ def custom(message: MessageValue()) -> IO(String):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +zero : N.F64 = N.fromU32(0)
+    +zero : F64 = N.fromU32(0)
     +cost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +partial : Ai.AssistantMessage<Schema.Value, Unit> = assistant(Nil{}, usage(cost), Ai.Pending{})
     check(T.MessageUpdate{T.LlmMessage{Ai.Assistant{partial}}, Ai.Start{partial}}, "message_update")

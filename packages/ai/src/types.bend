@@ -27,10 +27,10 @@ type ImageContent is Data:
 # The content constructors supply the upstream literal "type" discriminator.
 # UsageCost names the anonymous record declared as Usage.cost upstream.
 type UsageCost is Data:
-  UsageCost{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, total: Number.F64}
+  UsageCost{input: F64, output: F64, cacheRead: F64, cacheWrite: F64, total: F64}
 
 type Usage is Data:
-  Usage{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, cacheWrite1h: Maybe<&2, Number.F64>, reasoning: Maybe<&2, Number.F64>, totalTokens: Number.F64, cost: UsageCost}
+  Usage{input: F64, output: F64, cacheRead: F64, cacheWrite: F64, cacheWrite1h: Maybe<&2, F64>, reasoning: Maybe<&2, F64>, totalTokens: F64, cost: UsageCost}
 
 type StopReason is Data:
   Pending{}
@@ -42,27 +42,27 @@ type StopReason is Data:
   Deferred{}
 
 type ModelCostRates is Data:
-  ModelCostRates{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64}
+  ModelCostRates{input: F64, output: F64, cacheRead: F64, cacheWrite: F64}
 
 # TypeScript interface extension is flattened without changing field names.
 type ModelCostTier is Data:
-  ModelCostTier{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, inputTokensAbove: Number.F64}
+  ModelCostTier{input: F64, output: F64, cacheRead: F64, cacheWrite: F64, inputTokensAbove: F64}
 
 type ModelCost is Data:
-  ModelCost{input: Number.F64, output: Number.F64, cacheRead: Number.F64, cacheWrite: Number.F64, tiers: Maybe<&2, List<&2, ModelCostTier>>}
+  ModelCost{input: F64, output: F64, cacheRead: F64, cacheWrite: F64, tiers: Maybe<&2, List<&2, ModelCostTier>>}
 
 # Only explicitly JSON-valued upstream fields use this recursive value type.
 # Own string property ordering is provided by the runtime Record type.
 type JsonValue is Data:
   JsonNull{}
   JsonBoolean{value: Bool}
-  JsonNumber{value: Number.F64}
+  JsonNumber{value: F64}
   JsonString{value: String}
   JsonArray{values: List<&2, JsonValue>}
   JsonObject{fields: Record.Record<JsonValue>}
 
 type DeferredHandle is Data:
-  DeferredHandle{provider: String, modelId: String, api: String, id: String, expiresAt: Maybe<&2, Number.F64>, pollAfterMs: Maybe<&2, Number.F64>, data: Maybe<&2, JsonValue>}
+  DeferredHandle{provider: String, modelId: String, api: String, id: String, expiresAt: Maybe<&2, F64>, pollAfterMs: Maybe<&2, F64>, data: Maybe<&2, JsonValue>}
 
 type TextSignaturePhase is Data:
   Commentary{}
@@ -87,10 +87,10 @@ type UserContent is Data:
 
 # Message constructors supply their corresponding literal role discriminator.
 type UserMessage is Data:
-  UserMessage{content: UserContent, timestamp: Number.F64}
+  UserMessage{content: UserContent, timestamp: F64}
 
 type ToolResultMessage<-Details: Data> is Data:
-  ToolResultMessage{toolCallId: String, toolName: String, content: List<&2, TextImageContent>, details: Maybe<&2, Details>, usage: Maybe<&2, Usage>, isError: Bool, timestamp: Number.F64}
+  ToolResultMessage{toolCallId: String, toolName: String, content: List<&2, TextImageContent>, details: Maybe<&2, Details>, usage: Maybe<&2, Usage>, isError: Bool, timestamp: F64}
 
 # Events carry immutable content values; subsequent updates create new values.
 type AssistantContent<-Arguments: Data> is Data:
@@ -99,7 +99,7 @@ type AssistantContent<-Arguments: Data> is Data:
   AssistantToolCall{value: ToolCall<Arguments>}
 
 type AssistantMessage<-Arguments: Data, -DiagnosticDetails: Data> is Data:
-  AssistantMessage{content: List<&2, AssistantContent<Arguments>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: Number.F64}
+  AssistantMessage{content: List<&2, AssistantContent<Arguments>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: F64}
 
 # Restricted terminal reasons preserve upstream Extract<StopReason, ...>.
 type DoneReason is Data:
@@ -114,15 +114,15 @@ type ErrorReason is Data:
 
 type AssistantMessageEvent<-Arguments: Data, -DiagnosticDetails: Data> is Data:
   Start{partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  TextStart{contentIndex: Number.F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  TextDelta{contentIndex: Number.F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  TextEnd{contentIndex: Number.F64, content: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  ThinkingStart{contentIndex: Number.F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  ThinkingDelta{contentIndex: Number.F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  ThinkingEnd{contentIndex: Number.F64, content: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  ToolcallStart{contentIndex: Number.F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  ToolcallDelta{contentIndex: Number.F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
-  ToolcallEnd{contentIndex: Number.F64, toolCall: ToolCall<Arguments>, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  TextStart{contentIndex: F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  TextDelta{contentIndex: F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  TextEnd{contentIndex: F64, content: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ThinkingStart{contentIndex: F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ThinkingDelta{contentIndex: F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ThinkingEnd{contentIndex: F64, content: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolcallStart{contentIndex: F64, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolcallDelta{contentIndex: F64, delta: String, partial: AssistantMessage<Arguments, DiagnosticDetails>}
+  ToolcallEnd{contentIndex: F64, toolCall: ToolCall<Arguments>, partial: AssistantMessage<Arguments, DiagnosticDetails>}
   StreamDone{reason: DoneReason, message: AssistantMessage<Arguments, DiagnosticDetails>}
   StreamError{reason: ErrorReason, error: AssistantMessage<Arguments, DiagnosticDetails>}
 
@@ -138,7 +138,7 @@ type ImagesContext is Data:
   ImagesContext{input: List<&2, ImagesInputContent()>}
 
 type AssistantImages is Data:
-  AssistantImages{api: ImagesApi(), provider: ImagesProviderId(), model: String, output: List<&2, ImagesOutputContent()>, responseId: Maybe<&2, String>, usage: Maybe<&2, Usage>, stopReason: ImagesStopReason, errorMessage: Maybe<&2, String>, timestamp: Number.F64}
+  AssistantImages{api: ImagesApi(), provider: ImagesProviderId(), model: String, output: List<&2, ImagesOutputContent()>, responseId: Maybe<&2, String>, usage: Maybe<&2, Usage>, stopReason: ImagesStopReason, errorMessage: Maybe<&2, String>, timestamp: F64}
 
 
 # Tool schema values retain their concrete type. The TypeBox-equivalent schema
@@ -175,7 +175,7 @@ type SystemContent is Data:
   SystemBlocks{values: List<&2, TextContent>}
 
 type SystemMessage<-Parameters: Data> is Data:
-  SystemMessage{content: SystemContent, sections: Maybe<&2, Record.Record<Maybe<&2, String>>>, toolsAdded: Maybe<&2, List<&2, Tool<Parameters>>>, toolsRemoved: Maybe<&2, List<&2, ToolReference>>, timestamp: Number.F64}
+  SystemMessage{content: SystemContent, sections: Maybe<&2, Record.Record<Maybe<&2, String>>>, toolsAdded: Maybe<&2, List<&2, Tool<Parameters>>>, toolsRemoved: Maybe<&2, List<&2, ToolReference>>, timestamp: F64}
 
 type Message<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -ToolDetails: Data> is Data:
   System{value: SystemMessage<Parameters>}
@@ -223,7 +223,7 @@ type ThinkingVariable is Data:
 
 type ChatTemplateKwargValue is Data:
   TemplateString{value: String}
-  TemplateNumber{value: Number.F64}
+  TemplateNumber{value: F64}
   TemplateBoolean{value: Bool}
   TemplateNull{}
   TemplateVariable{variable: ThinkingVariable, omitWhenOff: Maybe<&2, Bool>}
@@ -234,7 +234,7 @@ type ThinkingTokenBudgetField is Data:
   ThinkingBudgetTokens{}
 
 type ThinkingBudgets is Data:
-  ThinkingBudgets{minimal: Maybe<&2, Number.F64>, low: Maybe<&2, Number.F64>, medium: Maybe<&2, Number.F64>, high: Maybe<&2, Number.F64>}
+  ThinkingBudgets{minimal: Maybe<&2, F64>, low: Maybe<&2, F64>, medium: Maybe<&2, F64>, high: Maybe<&2, F64>}
 
 type SessionAffinityFormat is Data:
   OpenAISession{}
@@ -250,17 +250,17 @@ type RoutingSort is Data:
   SortByOptions{by: Maybe<&2, String>, partition: Maybe<&2, Nullable<String>>}
 
 type PriceValue is Data:
-  NumericPrice{value: Number.F64}
+  NumericPrice{value: F64}
   StringPrice{value: String}
 
 type RoutingMaxPrice is Data:
   RoutingMaxPrice{prompt: Maybe<&2, PriceValue>, completion: Maybe<&2, PriceValue>, image: Maybe<&2, PriceValue>, audio: Maybe<&2, PriceValue>, request: Maybe<&2, PriceValue>}
 
 type RoutingPercentiles is Data:
-  RoutingPercentiles{p50: Maybe<&2, Number.F64>, p75: Maybe<&2, Number.F64>, p90: Maybe<&2, Number.F64>, p99: Maybe<&2, Number.F64>}
+  RoutingPercentiles{p50: Maybe<&2, F64>, p75: Maybe<&2, F64>, p90: Maybe<&2, F64>, p99: Maybe<&2, F64>}
 
 type RoutingPreference is Data:
-  OverallPreference{value: Number.F64}
+  OverallPreference{value: F64}
   PercentilePreference{values: RoutingPercentiles}
 
 type OpenRouterRouting is Data:
@@ -290,7 +290,7 @@ type CacheControlFormat is Data:
   AnthropicCacheControl{}
 
 type OpenAICompletionsCompat is Data:
-  OpenAICompletionsCompat{supportsStore: Maybe<&2, Bool>, supportsDeveloperRole: Maybe<&2, Bool>, supportsReasoningEffort: Maybe<&2, Bool>, supportsUsageInStreaming: Maybe<&2, Bool>, supportsFinishReason: Maybe<&2, Bool>, maxTokensField: Maybe<&2, MaxTokensField>, requiresToolResultName: Maybe<&2, Bool>, requiresAssistantAfterToolResult: Maybe<&2, Bool>, requiresThinkingAsText: Maybe<&2, Bool>, requiresReasoningContentOnAssistantMessages: Maybe<&2, Bool>, thinkingFormat: Maybe<&2, ThinkingFormat>, chatTemplateKwargs: Maybe<&2, Record.Record<ChatTemplateKwargValue>>, chatTemplateArgs: Maybe<&2, Record.Record<ChatTemplateKwargValue>>, openRouterRouting: Maybe<&2, OpenRouterRouting>, vercelGatewayRouting: Maybe<&2, VercelGatewayRouting>, zaiToolStream: Maybe<&2, Bool>, thinkingTokenBudgetField: Maybe<&2, ThinkingTokenBudgetField>, supportsThinkingTokenBudget: Maybe<&2, Bool>, supportsOpenAIGrammarTools: Maybe<&2, Bool>, supportsMidConvoSystemMessages: Maybe<&2, Bool>, supportsMidConvoToolAdditions: Maybe<&2, Bool>, supportsStrictMode: Maybe<&2, Bool>, cacheControlFormat: Maybe<&2, CacheControlFormat>, sendSessionAffinityHeaders: Maybe<&2, Bool>, sessionAffinityFormat: Maybe<&2, SessionAffinityFormat>, supportsLongCacheRetention: Maybe<&2, Bool>, vllmPriority: Maybe<&2, Number.F64>}
+  OpenAICompletionsCompat{supportsStore: Maybe<&2, Bool>, supportsDeveloperRole: Maybe<&2, Bool>, supportsReasoningEffort: Maybe<&2, Bool>, supportsUsageInStreaming: Maybe<&2, Bool>, supportsFinishReason: Maybe<&2, Bool>, maxTokensField: Maybe<&2, MaxTokensField>, requiresToolResultName: Maybe<&2, Bool>, requiresAssistantAfterToolResult: Maybe<&2, Bool>, requiresThinkingAsText: Maybe<&2, Bool>, requiresReasoningContentOnAssistantMessages: Maybe<&2, Bool>, thinkingFormat: Maybe<&2, ThinkingFormat>, chatTemplateKwargs: Maybe<&2, Record.Record<ChatTemplateKwargValue>>, chatTemplateArgs: Maybe<&2, Record.Record<ChatTemplateKwargValue>>, openRouterRouting: Maybe<&2, OpenRouterRouting>, vercelGatewayRouting: Maybe<&2, VercelGatewayRouting>, zaiToolStream: Maybe<&2, Bool>, thinkingTokenBudgetField: Maybe<&2, ThinkingTokenBudgetField>, supportsThinkingTokenBudget: Maybe<&2, Bool>, supportsOpenAIGrammarTools: Maybe<&2, Bool>, supportsMidConvoSystemMessages: Maybe<&2, Bool>, supportsMidConvoToolAdditions: Maybe<&2, Bool>, supportsStrictMode: Maybe<&2, Bool>, cacheControlFormat: Maybe<&2, CacheControlFormat>, sendSessionAffinityHeaders: Maybe<&2, Bool>, sessionAffinityFormat: Maybe<&2, SessionAffinityFormat>, supportsLongCacheRetention: Maybe<&2, Bool>, vllmPriority: Maybe<&2, F64>}
 
 type OpenAIResponsesCompat is Data:
   OpenAIResponsesCompat{supportsDeveloperRole: Maybe<&2, Bool>, supportsMidConvoSystemMessages: Maybe<&2, Bool>, sessionAffinityFormat: Maybe<&2, SessionAffinityFormat>, supportsLongCacheRetention: Maybe<&2, Bool>, supportsStrictMode: Maybe<&2, Bool>, supportsOpenAIGrammarTools: Maybe<&2, Bool>, supportsAdditionalTools: Maybe<&2, Bool>, supportsToolSearch: Maybe<&2, Bool>, supportsExplicitPromptCacheMode: Maybe<&2, Bool>, supportsMaxOutputTokens: Maybe<&2, Bool>}
@@ -344,7 +344,7 @@ type ModelInput is Data:
 # upstream contract. Sampling values remain caller-typed opaque data; this does
 # not replace provider payloads or validated argument types with untyped JSON.
 type Model<-SamplingValue: Data> is Data:
-  Model{id: String, name: String, api: ModelApi, provider: ProviderId(), baseUrl: String, reasoning: Bool, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, contextWindow: Number.F64, maxTokens: Number.F64, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, compat: Maybe<&2, ModelCompatibility(api)>}
+  Model{id: String, name: String, api: ModelApi, provider: ProviderId(), baseUrl: String, reasoning: Bool, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, contextWindow: F64, maxTokens: F64, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, compat: Maybe<&2, ModelCompatibility(api)>}
 
 type ImagesModel<-SamplingValue: Data> is Data:
   ImagesModel{id: String, name: String, api: ImagesApi(), provider: ImagesProviderId(), baseUrl: String, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, output: List<&2, ModelInput>}
@@ -379,7 +379,7 @@ def ProviderEnv() -> Data: Record.Record<String>
 def ProviderHeaders() -> Data: Record.Record<Nullable<String>>
 
 type ProviderResponse is Data:
-  ProviderResponse{status: Number.F64, headers: Record.Record<String>}
+  ProviderResponse{status: F64, headers: Record.Record<String>}
 
 type PayloadInput<-Payload: Data, -RequestModel: Data> is Data:
   PayloadInput{payload: Payload, model: RequestModel}
@@ -394,13 +394,13 @@ def ResponseCallback(-RequestModel: Data, -Error: Data) -> Data:
   Callback.Callback<ResponseInput<RequestModel>, Result<&2, &2, Error, Unit>>
 
 type ProviderRequestOptions<-RequestModel: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Payload: Data, -Error: Data> is Data:
-  ProviderRequestOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Payload, RequestModel, Error)>, onResponse: Maybe<&2, ResponseCallback(RequestModel, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>}
+  ProviderRequestOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Payload, RequestModel, Error)>, onResponse: Maybe<&2, ResponseCallback(RequestModel, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>}
 
 type StreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
-  StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Record.Record<Value>>}
+  StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>, temperature: Maybe<&2, F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, F64>, metadata: Maybe<&2, Record.Record<Value>>}
 
 type SimpleStreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
-  SimpleStreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, Number.F64>, maxRetries: Maybe<&2, Number.F64>, maxRetryDelayMs: Maybe<&2, Number.F64>, temperature: Maybe<&2, Number.F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, Number.F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, Number.F64>, metadata: Maybe<&2, Record.Record<Value>>, toolChoice: Maybe<&2, ToolChoice>, reasoning: Maybe<&2, ThinkingLevel>, deferred: Maybe<&2, DeferredRequest>, thinkingBudgets: Maybe<&2, ThinkingBudgets>}
+  SimpleStreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>, temperature: Maybe<&2, F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, F64>, metadata: Maybe<&2, Record.Record<Value>>, toolChoice: Maybe<&2, ToolChoice>, reasoning: Maybe<&2, ThinkingLevel>, deferred: Maybe<&2, DeferredRequest>, thinkingBudgets: Maybe<&2, ThinkingBudgets>}
 
 # Every option unset; callers override individual fields from here.
 def emptySimpleStreamOptions(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data) -> SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>:

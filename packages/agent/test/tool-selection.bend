@@ -68,7 +68,7 @@ def run(tags: List<&2, String>, specs: List<&2, B.ToolSpec>, present: Bool, conf
     +text : Ai.TextContent = Ai.TextContent{"text", None{}}
     +thinking : Ai.ThinkingContent = Ai.ThinkingContent{"thinking", None{}, None{}}
     +content : List<&2, Ai.AssistantContent<Schema.Value>> = contents(tags, a, b, text, thinking)
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     +cost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +usage : Ai.Usage = Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}
     +assistant : Message() = Ai.AssistantMessage{content, "custom", "provider", "model", None{}, None{}, None{}, None{}, usage, Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}

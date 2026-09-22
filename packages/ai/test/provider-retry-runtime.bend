@@ -9,7 +9,7 @@ import ../../runtime/src/f64.bend as F
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/ref.bend as Ref
 
-def parserBody(environment: Unit, text: String) -> IO(F.F64): IO.pure(F.F64, F.fromU32(1234))
+def parserBody(environment: Unit, text: String) -> IO(F64): IO.pure(F64, F.fromU32(1234))
 
 def expectSleep(result: Result<&2, &2, Retry.SleepError, Unit>) -> IO(Unit):
   match result:
@@ -20,10 +20,10 @@ def inspectEffects(effects: Retry.Effects<String>) -> IO(Unit):
   match effects:
     case Retry.Effects{+random, parser, now, sleep}:
       do IO<Unit>:
-        first : F.F64 <- C.call(Unit, F.F64, random, Unit{})
-        second : F.F64 <- C.call(Unit, F.F64, random, Unit{})
-        epoch : F.F64 <- C.call(Unit, F.F64, now, Unit{})
-        parsed : F.F64 <- C.call(String, F.F64, parser, "input")
+        first : F64 <- C.call(Unit, F64, random, Unit{})
+        second : F64 <- C.call(Unit, F64, random, Unit{})
+        epoch : F64 <- C.call(Unit, F64, now, Unit{})
+        parsed : F64 <- C.call(String, F64, parser, "input")
         IO.print("random " ++ T.scalar(F.toBits(first)))
         IO.print("random " ++ T.scalar(F.toBits(second)))
         IO.print("now " ++ T.scalar(F.toBits(epoch)))
@@ -52,12 +52,12 @@ def retireNew(result: Result<&2, &1, Seed.SeedError, Runtime.Runtime<U32>>) -> I
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +parser : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~parserBody, Unit{})
+    +parser : C.Callback<String, F64> <- C.create(~Unit, ~String, ~F64, ~parserBody, Unit{})
     generator : Random.Generator <- Random.seeded(W.zero())
     owner : Runtime.Runtime<String> <- Runtime.fromGenerator(~String, parser, generator)
     useBorrowed(Runtime.borrow(String, owner))
     other : Result<&2, &1, Seed.SeedError, Runtime.Runtime<U32>> <- Runtime.new(~U32, parser)
     retireNew(other)
-    retained : F.F64 <- C.call(String, F.F64, parser, "still alive")
+    retained : F64 <- C.call(String, F64, parser, "still alive")
     IO.print("retained " ++ T.scalar(F.toBits(retained)))
-    C.dispose(String, F.F64, parser)
+    C.dispose(String, F64, parser)

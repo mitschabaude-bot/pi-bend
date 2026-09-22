@@ -7,7 +7,7 @@ import ./utf8-runner.bend as H
 def shown(value: Result<&2, &2, D.Error, U32>) -> String:
   match value:
     case Done{word}: U32.show(word)
-    case Fail{D.InvalidDuration{F.F64{W.U64{hi, lo}}}}: "invalid:" ++ U32.show(hi) ++ ":" ++ U32.show(lo)
+    case Fail{D.InvalidDuration{F64{hi, lo}}}: "invalid:" ++ U32.show(hi) ++ ":" ++ U32.show(lo)
 
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:

@@ -36,6 +36,6 @@ law array_partition:
   {S.finite(T.JsonArray{List.append(&2, T.JsonValue, left, right)}) == (S.finite(T.JsonArray{left}) && S.finite(T.JsonArray{right})) : Bool}
 
 law invalid_numeric_leaf_is_rejected:
-  for +value: F.F64
+  for +value: F64
   for invalid: {F.isFinite(F.decode(value)) == False{} : Bool}
   {S.finite(T.JsonNumber{value}) == False{} : Bool}

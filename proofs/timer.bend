@@ -9,7 +9,7 @@ def Laws.larger_conversion_is_rejected(value, word): {==}
 def Laws.unordered_conversion_is_rejected(value, word): {==}
 
 law checked_exact:
-  for +value: F.F64
+  for +value: F64
   for +word: U32
   for +comparison: Maybe<&2, Cmp>
   for equality: {F.compare(value, F.fromU32(word)) == comparison : Maybe<&2, Cmp>}

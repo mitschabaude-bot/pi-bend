@@ -335,7 +335,7 @@ def emitToolResultMessage(-DiagnosticDetails: Data, -Details: Data, -Custom: Dat
     started : Result<&2, &2, ListenerError, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ListenerError, Unit>, emit, T.MessageStart{T.LlmMessage{Ai.ToolResult{toolResultMessage}}})
     finishToolResultMessage(DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult, ListenerError, toolResultMessage, emit, started)
 
-def toolResultMessageAt(-Details: Data, call: Ai.ToolCall<Schema.Value>, result: T.AgentToolResult<Details>, isError: Bool, timestamp: Number.F64) -> Ai.ToolResultMessage<Details>:
+def toolResultMessageAt(-Details: Data, call: Ai.ToolCall<Schema.Value>, result: T.AgentToolResult<Details>, isError: Bool, timestamp: F64) -> Ai.ToolResultMessage<Details>:
   match call result:
     case Ai.ToolCall{id, name, _, _, _} T.AgentToolResult{content, details, usage, _}:
       Ai.ToolResultMessage{id, name, content, Some{details}, usage, isError, timestamp}
@@ -346,7 +346,7 @@ def createToolResultMessage(-Details: Data, finalized: FinalizedToolCallOutcome<
       do IO<Ai.ToolResultMessage<Details>>:
         call : Ai.ToolCall<Schema.Value> = toolCall
         value : T.AgentToolResult<Details> = result
-        timestamp : Number.F64 <- Date.now()
+        timestamp : F64 <- Date.now()
         IO.pure(Ai.ToolResultMessage<Details>, toolResultMessageAt(Details, call, value, isError, timestamp))
 
 # Raw and adapter-output argument types may differ. This explicit union retains
@@ -1626,12 +1626,12 @@ def insert(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, messages: Li
     case T.LlmMessage{Ai.System{system}} <> rest: T.LlmMessage{Ai.System{system}} <> insert(DiagnosticDetails, Details, Custom, rest, update)
     case remaining: T.LlmMessage{Ai.System{update}} <> remaining
 
-def absent(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, messages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, changes: Transcript.ToolStateChanges<Schema.Value>, timestamp: Number.F64, changed: Bool) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
+def absent(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, messages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, changes: Transcript.ToolStateChanges<Schema.Value>, timestamp: F64, changed: Bool) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
   match changed:
     case False{}: messages
     case True{}: insert(DiagnosticDetails, Details, Custom, messages, withToolChanges(Ai.SystemMessage{Ai.SystemText{""}, None{}, None{}, None{}, timestamp}, changes))
 
-def applyAt(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, timestamp: Number.F64, planned: Declaration.DeclarationResult<ChangePlan<DiagnosticDetails, Details, Custom>>) -> Declaration.DeclarationResult<List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>:
+def applyAt(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, timestamp: F64, planned: Declaration.DeclarationResult<ChangePlan<DiagnosticDetails, Details, Custom>>) -> Declaration.DeclarationResult<List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>:
   match planned:
     case Declaration.Failure{error}: Declaration.Failure{error}
     case Declaration.Success{ChangePlan{Existing{before, +system, after}, +changes}}:
@@ -1649,7 +1649,7 @@ def commit(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, planned: Dec
     case False{}: IO.pure(Declaration.DeclarationResult<List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, applyAt(DiagnosticDetails, Details, Custom, Number.fromU32(0), planned))
     case True{}:
       do IO<Declaration.DeclarationResult<List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
-        timestamp : Number.F64 <- Date.now()
+        timestamp : F64 <- Date.now()
         return applyAt(DiagnosticDetails, Details, Custom, timestamp, planned)
 
 def declareToolChanges(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, context: T.AgentContext<DiagnosticDetails, Details, Custom, Error>, pendingMessages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>) -> IO(Declaration.DeclarationResult<List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>):

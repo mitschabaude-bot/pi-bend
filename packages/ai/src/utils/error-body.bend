@@ -15,10 +15,10 @@ type Body is Data:
   UnavailableBody{}
 
 type ProviderFailure is Data:
-  ProviderFailure{status: Maybe<&2, F.F64>, message: String, bodies: List<&2, Body>}
+  ProviderFailure{status: Maybe<&2, F64>, message: String, bodies: List<&2, Body>}
 
 type NormalizedProviderError is Data:
-  NormalizedProviderError{status: Maybe<&2, F.F64>, body: Maybe<&2, String>, message: String, messageCarriesBody: Bool}
+  NormalizedProviderError{status: Maybe<&2, F64>, body: Maybe<&2, String>, message: String, messageCarriesBody: Bool}
 
 type NormalizationError is Data:
   NonJsonBody{}

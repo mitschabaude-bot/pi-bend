@@ -203,7 +203,7 @@ def firstPass(-P: Data, -A: Data, -G: Data, -D: Data, -J: Data, -E: Data, messag
         next : Result<&2, &2, E, FirstPass<P, A, G, D>> <- transformOne(P, A, G, D, J, E, message, model, normalizer, current)
         firstPass(P, A, G, D, J, E, rest, model, normalizer, next)
 
-def finishTransform(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~E: Data, ~now: Unit -> IO(F.F64), result: Result<&2, &2, E, Repair.Messages(P, A, G, D)>) -> IO(Result<&2, &2, E, Repair.Messages(P, A, G, D)>):
+def finishTransform(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~E: Data, ~now: Unit -> IO(F64), result: Result<&2, &2, E, Repair.Messages(P, A, G, D)>) -> IO(Result<&2, &2, E, Repair.Messages(P, A, G, D)>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, E, Repair.Messages(P, A, G, D)>, Fail{error})
     case Done{messages}:
@@ -211,7 +211,7 @@ def finishTransform(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~E: Data, ~now: Unit
         repaired : Repair.Messages(P, A, G, D) <- Repair.repairWith(~P, ~A, ~G, ~D, ~now, messages)
         return Done{repaired}
 
-def transformMessagesWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~E: Data, ~now: Unit -> IO(F.F64), messages: Repair.Messages(P, A, G, D), +model: Ai.Model<J>, normalizer: Maybe<&2, Normalizer(A, G, J, E)>) -> IO(Result<&2, &2, E, Repair.Messages(P, A, G, D)>):
+def transformMessagesWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~E: Data, ~now: Unit -> IO(F64), messages: Repair.Messages(P, A, G, D), +model: Ai.Model<J>, normalizer: Maybe<&2, Normalizer(A, G, J, E)>) -> IO(Result<&2, &2, E, Repair.Messages(P, A, G, D)>):
   do IO<Result<&2, &2, E, Repair.Messages(P, A, G, D)>>:
     transformed : Result<&2, &2, E, Repair.Messages(P, A, G, D)> <- firstPass(P, A, G, D, J, E, downgradeUnsupportedImages(P, A, G, D, J, messages, model), model, normalizer, Done{FirstPass{Nil{}, R.new(String)}})
     finishTransform(~P, ~A, ~G, ~D, ~E, ~now, transformed)

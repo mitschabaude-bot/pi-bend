@@ -11,7 +11,7 @@ def optionalText(value: V.Value) -> Maybe<&2, String>:
     case V.Text{text}: Some{text}
     case _: None{}
 
-def optionalStatus(value: V.Value) -> Maybe<&2, F.F64>:
+def optionalStatus(value: V.Value) -> Maybe<&2, F64>:
   match value:
     case V.Number{scalar}: Some{scalar}
     case _: None{}
@@ -32,7 +32,7 @@ def textValue(value: Maybe<&2, String>) -> V.Value:
     case None{}: V.Null{}
     case Some{text}: V.Text{text}
 
-def statusValue(value: Maybe<&2, F.F64>) -> V.Value:
+def statusValue(value: Maybe<&2, F64>) -> V.Value:
   match value:
     case None{}: V.Null{}
     case Some{scalar}: V.Number{scalar}

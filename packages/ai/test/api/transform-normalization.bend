@@ -83,8 +83,8 @@ def normalizeBody(capture: Capture, input: Input()) -> IO(Output()):
         T.assertion(String.eq(targetId(model), "foreign") && Bool.not(String.eq(tag, "INVALID")), "callback sees original assistant and target model")
         R.modify(String, Unit, trace, old => (old ++ id ++ "@" ++ tag ++ ";", Unit{}))
         return decision(mode, index, id)
-def clock(unused: Unit) -> IO(F.F64): IO.pure(F.F64, F.fromU32(1000))
-def forbiddenClock(unused: Unit) -> IO(F.F64): IO.die(F.F64, 1, "failed normalization must not begin repair")
+def clock(unused: Unit) -> IO(F64): IO.pure(F64, F.fromU32(1000))
+def forbiddenClock(unused: Unit) -> IO(F64): IO.die(F64, 1, "failed normalization must not begin repair")
 def invoke(failure: Bool, messages: Messages(), model: Ai.Model<Unit>, callback: Maybe<&2, Transform.Normalizer(String, Unit, Unit, String)>) -> IO(Result<&2, &2, String, Messages()>):
   match failure:
     case True{}: Transform.transformMessagesWith(~Unit, ~String, ~Unit, ~String, ~Unit, ~String, ~forbiddenClock, messages, model, callback)

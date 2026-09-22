@@ -65,7 +65,7 @@ def hasSystem(-P: Data, -A: Data, -G: Data, -H: Data, messages: List<&2, T.Messa
     case T.System{_} <> _: True{}
     case _ <> rest: hasSystem(P, A, G, H, rest)
 
-def timestampOf(state: Transcript.ReplayState) -> Maybe<&2, F.F64>:
+def timestampOf(state: Transcript.ReplayState) -> Maybe<&2, F64>:
   match state:
     case Transcript.ReplayState{_, _, timestamp}: timestamp
 
@@ -109,8 +109,8 @@ law replay_keeps_the_first_timestamp:
   for messages: List<&2, T.Message<P, A, G, H>>
   for content: List<&2, String>
   for sections: R.Record<Maybe<&2, String>>
-  for timestamp: F.F64
-  {timestampOf(Transcript.replayMessages(P, A, G, H, messages, Transcript.ReplayState{content, sections, Some{timestamp}})) == Some{timestamp} : Maybe<&2, F.F64>}
+  for timestamp: F64
+  {timestampOf(Transcript.replayMessages(P, A, G, H, messages, Transcript.ReplayState{content, sections, Some{timestamp}})) == Some{timestamp} : Maybe<&2, F64>}
 
 # Tool replay: removals only count for the current tool set, never for the
 # declared one; a first declaration is never a redefinition.
@@ -121,7 +121,7 @@ law declared_tools_ignore_removals:
   for sections: Maybe<&2, R.Record<Maybe<&2, String>>>
   for added: Maybe<&2, List<&2, T.Tool<P>>>
   for removed: Maybe<&2, List<&2, T.ToolReference>>
-  for timestamp: F.F64
+  for timestamp: F64
   for tools: M.OrderedMap<T.Tool<P>>
   {Transcript.replayTools(P, T.SystemMessage{content, sections, added, removed, timestamp}, tools, False{}) == Transcript.addTools(P, Transcript.listValue(T.Tool<P>, added), tools) : M.OrderedMap<T.Tool<P>>}
 
@@ -136,7 +136,7 @@ law an_added_tool_is_current:
   for description: String
   for parameters: P
   for sampling: Maybe<&2, T.ToolConstrainedSampling>
-  for timestamp: F.F64
+  for timestamp: F64
   {Transcript.getCurrentTools(P, A, G, H, T.System{T.SystemMessage{content, sections, Some{T.Tool{name, description, parameters, sampling} <> Nil{}}, None{}, timestamp}} <> Nil{}) == T.Tool{name, description, parameters, sampling} <> Nil{} : List<&2, T.Tool<P>>}
 
 law a_removed_tool_is_no_longer_current:
@@ -150,10 +150,10 @@ law a_removed_tool_is_no_longer_current:
   for description: String
   for parameters: P
   for sampling: Maybe<&2, T.ToolConstrainedSampling>
-  for timestamp: F.F64
+  for timestamp: F64
   for later: T.SystemContent
   for laterSections: Maybe<&2, R.Record<Maybe<&2, String>>>
-  for laterTimestamp: F.F64
+  for laterTimestamp: F64
   {Transcript.getCurrentTools(P, A, G, H, T.System{T.SystemMessage{content, sections, Some{T.Tool{name, description, parameters, sampling} <> Nil{}}, None{}, timestamp}} <> T.System{T.SystemMessage{later, laterSections, None{}, Some{T.ToolReference{name} <> Nil{}}, laterTimestamp}} <> Nil{}) == Nil{} : List<&2, T.Tool<P>>}
 
 law declared_tools_survive_removal:
@@ -167,10 +167,10 @@ law declared_tools_survive_removal:
   for description: String
   for parameters: P
   for sampling: Maybe<&2, T.ToolConstrainedSampling>
-  for timestamp: F.F64
+  for timestamp: F64
   for later: T.SystemContent
   for laterSections: Maybe<&2, R.Record<Maybe<&2, String>>>
-  for laterTimestamp: F.F64
+  for laterTimestamp: F64
   {Transcript.getDeclaredTools(P, A, G, H, T.System{T.SystemMessage{content, sections, Some{T.Tool{name, description, parameters, sampling} <> Nil{}}, None{}, timestamp}} <> T.System{T.SystemMessage{later, laterSections, None{}, Some{T.ToolReference{name} <> Nil{}}, laterTimestamp}} <> Nil{}) == T.Tool{name, description, parameters, sampling} <> Nil{} : List<&2, T.Tool<P>>}
 
 law tool_removals_are_non_additive:
@@ -183,6 +183,6 @@ law tool_removals_are_non_additive:
   for added: Maybe<&2, List<&2, T.Tool<P>>>
   for reference: T.ToolReference
   for references: List<&2, T.ToolReference>
-  for timestamp: F.F64
+  for timestamp: F64
   for rest: List<&2, T.Message<P, A, G, H>>
   {Transcript.hasNonAdditiveToolChanges(P, A, G, H, T.System{T.SystemMessage{content, sections, added, Some{reference <> references}, timestamp}} <> rest) == True{} : Bool}

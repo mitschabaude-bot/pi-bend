@@ -62,10 +62,10 @@ def callbackCheck(result: Result<&2, &2, Seed.SeedError, R.Generator>) -> IO(Uni
     case Fail{_}: IO.die(Unit, 1, "OS entropy initialization failed")
     case Done{+generator}:
       do IO<Unit>:
-        +callback : C.Callback<Unit, F.F64> <- Retry.randomCallback(generator)
-        value : F.F64 <- C.call(Unit, F.F64, callback, Unit{})
+        +callback : C.Callback<Unit, F64> <- Retry.randomCallback(generator)
+        value : F64 <- C.call(Unit, F64, callback, Unit{})
         IO.print("random " ++ bits(F.toBits(value)))
-        C.dispose(Unit, F.F64, callback)
+        C.dispose(Unit, F64, callback)
         R.dispose(generator)
 
 def run(arguments: List<String>) -> IO(Unit):

@@ -28,7 +28,7 @@ def usageOk(value: Maybe<&2, Ai.Usage>, cost: Ai.UsageCost) -> Bool:
     case Some{Ai.Usage{_, _, _, _, _, _, _, actual}}: Cost.sameCost(actual, cost)
     case _: False{}
 
-def check(value: Ai.ToolResultMessage<String>, expected: String, cost: Ai.UsageCost, lower: F.F64, upper: F.F64) -> IO(Unit):
+def check(value: Ai.ToolResultMessage<String>, expected: String, cost: Ai.UsageCost, lower: F64, upper: F64) -> IO(Unit):
   match value:
     case Ai.ToolResultMessage{id, name, content, Some{+details}, usage, isError, +timestamp}:
       do IO<Unit>:
@@ -41,16 +41,16 @@ def check(value: Ai.ToolResultMessage<String>, expected: String, cost: Ai.UsageC
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     +details : String <- IO.pure(String, "before")
     +cost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +call : T.AgentToolCall = Ai.ToolCall{"call-id", "echo", Schema.Null{}, None{}, None{}}
     +result : T.AgentToolResult<String> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"tool output", None{}}} <> Nil{}, details, Some{Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}}, Some{True{}}}
     +finalized : Loop.FinalizedToolCallOutcome<String> = Loop.FinalizedToolCallOutcome{call, result, True{}}
-    +lower : F.F64 <- Date.now()
+    +lower : F64 <- Date.now()
     +first : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, finalized)
     +second : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, finalized)
-    +upper : F.F64 <- Date.now()
+    +upper : F64 <- Date.now()
     firstValue : Ai.ToolResultMessage<String> = first
     secondValue : Ai.ToolResultMessage<String> = second
     check(firstValue, details, cost, lower, upper)

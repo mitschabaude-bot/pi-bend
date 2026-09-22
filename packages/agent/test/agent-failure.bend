@@ -22,14 +22,14 @@ def isEqual(order: Maybe<&2, Cmp>) -> Bool:
   match order:
     case Some{EQ{}}: True{}
     case _: False{}
-def equal(a: F.F64, b: F.F64) -> Bool: isEqual(F.compare(a, b))
+def equal(a: F64, b: F64) -> Bool: isEqual(F.compare(a, b))
 def ordered(order: Maybe<&2, Cmp>) -> Bool:
   match order:
     case Some{LT{}}: True{}
     case Some{EQ{}}: True{}
     case _: False{}
-def atMost(a: F.F64, b: F.F64) -> Bool: ordered(F.compare(a, b))
-def zero(value: F.F64) -> Bool: equal(value, F.fromU32(0))
+def atMost(a: F64, b: F64) -> Bool: ordered(F.compare(a, b))
+def zero(value: F64) -> Bool: equal(value, F.fromU32(0))
 def usageZero(usage: Ai.Usage) -> Bool:
   match usage:
     case Ai.Usage{a, b, c, d, None{}, None{}, e, Ai.UsageCost{f, g, h, i, j}}: zero(a) && zero(b) && zero(c) && zero(d) && zero(e) && zero(f) && zero(g) && zero(h) && zero(i) && zero(j)
@@ -39,15 +39,15 @@ def reason(stop: Ai.StopReason, aborted: Bool) -> Bool:
     case Ai.Error{}: Bool.not(aborted)
     case Ai.Aborted{}: aborted
     case _: False{}
-def valid(message: Ai.AssistantMessage<Schema.Value, Unit>, aborted: Bool, expected: String, lower: F.F64, upper: F.F64) -> Bool:
+def valid(message: Ai.AssistantMessage<Schema.Value, Unit>, aborted: Bool, expected: String, lower: F64, upper: F64) -> Bool:
   match message:
     case Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"", None{}}} <> Nil{}, "failure-api", "failure-provider", "failure-model", None{}, None{}, None{}, None{}, usage, stop, None{}, Some{error}, None{}, None{}, +timestamp}:
       usageZero(usage) && reason(stop, aborted) && String.eq(error, expected) && atMost(lower, timestamp) && atMost(timestamp, upper)
     case _: False{}
-def timestamp(message: Ai.AssistantMessage<Schema.Value, Unit>) -> F.F64:
+def timestamp(message: Ai.AssistantMessage<Schema.Value, Unit>) -> F64:
   match message:
     case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, _, _, _, value}: value
-def stampState(previous: Maybe<&2, F.F64>, +value: F.F64) -> Maybe<&2, F.F64> & Bool:
+def stampState(previous: Maybe<&2, F64>, +value: F64) -> Maybe<&2, F64> & Bool:
   match previous:
     case None{}: (Some{value}, True{})
     case Some{+old}: (Some{old}, equal(old, value))
@@ -81,15 +81,15 @@ def stateError(value: Fixture.Value()) -> String:
 def key(+owned: Fixture.Owned()) -> String:
   Fixture.key(owned) ++ "~" ++ stateError(Runtime.stateValue(Unit, Unit, String, String, owned))
 type Environment is Data:
-  Environment{runtime: Fixture.Runtime(), log: R.Ref<String>, stamp: R.Ref<Maybe<&2, F.F64>>, lower: F.F64, aborted: Bool, error: String, failStage: U32, failListener: U32, listener: U32}
+  Environment{runtime: Fixture.Runtime(), log: R.Ref<String>, stamp: R.Ref<Maybe<&2, F64>>, lower: F64, aborted: Bool, error: String, failStage: U32, failListener: U32, listener: U32}
 def body(environment: Environment, input: EventTest.Input()) -> IO(Emission.Emission<String>):
   match environment input:
     case Environment{runtime, log, stamp, lower, +aborted, error, failStage, failListener, +listener} Listeners.Input{+event, signal}:
       do IO<Emission.Emission<String>>:
         +message : Ai.AssistantMessage<Schema.Value, Unit> <- eventMessage(event)
-        upper : F.F64 <- Date.now()
+        upper : F64 <- Date.now()
         Test.assertion(valid(message, aborted, error, lower, upper), "failure content, metadata, usage, reason, error or wall-clock timestamp differs")
-        stable : Bool <- R.modify(Maybe<&2, F.F64>, Bool, stamp, previous => stampState(previous, timestamp(message)))
+        stable : Bool <- R.modify(Maybe<&2, F64>, Bool, stamp, previous => stampState(previous, timestamp(message)))
         Test.assertion(stable, "all failure events share one timestamp")
         cancelled : Bool <- Abort.aborted(Unit, signal)
         Test.assertion(Bool.not(Bool.xor(cancelled, aborted)), "failure listener gets the active cancellation signal")
@@ -127,8 +127,8 @@ def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32
     +runtime : Fixture.Runtime() <- Runtime.newRuntime(Unit, Unit, String, String, initial, T.OneAtATime{}, T.OneAtATime{})
     +registry : EventTest.Registry() <- Listeners.newListeners(EventTest.EmittedEvent(), String)
     +log : R.Ref<String> <- R.new(String, "")
-    +stamp : R.Ref<Maybe<&2, F.F64>> <- R.new(Maybe<&2, F.F64>, None{})
-    +lower : F.F64 <- Date.now()
+    +stamp : R.Ref<Maybe<&2, F64>> <- R.new(Maybe<&2, F64>, None{})
+    +lower : F64 <- Date.now()
     +first : Listeners.Handler(EventTest.EmittedEvent(), String) <- C.create(~Environment, ~EventTest.Input(), ~Emission.Emission<String>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 0})
     +second : Listeners.Handler(EventTest.EmittedEvent(), String) <- C.create(~Environment, ~EventTest.Input(), ~Emission.Emission<String>, ~body, Environment{runtime, log, stamp, lower, aborted, error, failStage, failListener, 1})
     ignored : Listeners.Subscription<EventTest.EmittedEvent(), String> <- Listeners.subscribeListeners(EventTest.EmittedEvent(), String, registry, first)
@@ -146,5 +146,5 @@ def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32
     C.dispose(EventTest.Input(), Emission.Emission<String>, first)
     C.dispose(EventTest.Input(), Emission.Emission<String>, second)
     oldLog : String <- R.dispose(String, log)
-    oldStamp : Maybe<&2, F.F64> <- R.dispose(Maybe<&2, F.F64>, stamp)
+    oldStamp : Maybe<&2, F64> <- R.dispose(Maybe<&2, F64>, stamp)
     return Unit{}

@@ -16,13 +16,13 @@ def same(actual: E.ContextUsageEstimate, expected: E.ContextUsageEstimate) -> Bo
   match actual expected:
     case E.ContextUsageEstimate{a, b, c, d} E.ContextUsageEstimate{e, f, g, h}: NumberTest.numberEqual(a, e) && NumberTest.numberEqual(b, f) && NumberTest.numberEqual(c, g) && sameIndex(d, h)
 
-def individuals(messages: List<&2, T.Message<V.Value, V.Value, Unit, Unit>>, expected: List<&2, F.F64>) -> Bool:
+def individuals(messages: List<&2, T.Message<V.Value, V.Value, Unit, Unit>>, expected: List<&2, F64>) -> Bool:
   match messages expected:
     case Nil{} Nil{}: True{}
     case head <> tail value <> rest: NumberTest.numberEqual(E.estimateMessageTokens(~Unit, ~Unit, head), value) && individuals(tail, rest)
     case _ _: False{}
 
-def check(+messages: List<&2, T.Message<V.Value, V.Value, Unit, Unit>>, expected: E.ContextUsageEstimate, individual: List<&2, F.F64>, label: String) -> IO(Unit):
+def check(+messages: List<&2, T.Message<V.Value, V.Value, Unit, Unit>>, expected: E.ContextUsageEstimate, individual: List<&2, F64>, label: String) -> IO(Unit):
   Assert.assertion(same(E.estimateContextTokens(~Unit, ~Unit, T.TranscriptContext{messages}), expected) && individuals(messages, individual), label)
 
 def repeat(count: Nat, +char: Char) -> String:

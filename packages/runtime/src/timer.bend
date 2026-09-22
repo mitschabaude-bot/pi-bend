@@ -6,7 +6,7 @@ import ./u64.bend as W
 # Native timers use literal U32 milliseconds. Reject unrepresentable durations
 # instead of rounding, wrapping or turning overflow into a one-millisecond wait.
 type MillisecondsError is Data:
-  Unrepresentable{value: F.F64}
+  Unrepresentable{value: F64}
 
 def low(value: W.U64) -> U32:
   match value:
@@ -18,14 +18,14 @@ def candidate(value: F.Decoded) -> U32:
       low(W.shiftRight(significand, U32.to_nat(U32.min((1075 - exponent : U32), 64))))
     case _: 0
 
-def checkedMilliseconds(value: F.F64, exactMilliseconds: U32, comparison: Maybe<&2, Cmp>) -> Result<&2, &2, MillisecondsError, U32>:
+def checkedMilliseconds(value: F64, exactMilliseconds: U32, comparison: Maybe<&2, Cmp>) -> Result<&2, &2, MillisecondsError, U32>:
   match comparison:
     case Some{EQ{}}: Done{exactMilliseconds}
     case _: Fail{Unrepresentable{value}}
 
 # Re-encoding the candidate establishes exactness, including signed-zero
 # equality. This also rejects negative, fractional and non-finite inputs.
-def exactMilliseconds(+value: F.F64) -> Result<&2, &2, MillisecondsError, U32>:
+def exactMilliseconds(+value: F64) -> Result<&2, &2, MillisecondsError, U32>:
   +word = candidate(F.decode(value))
   checkedMilliseconds(value, word, F.compare(value, F.fromU32(word)))
 
@@ -33,13 +33,13 @@ def exactMilliseconds(+value: F.F64) -> Result<&2, &2, MillisecondsError, U32>:
 # Backoff may be fractional. Quantize downward only when the input is finite,
 # nonnegative and below 2^32; invalid values retain their original bits.
 type Error is Data:
-  InvalidDuration{value: F.F64}
+  InvalidDuration{value: F64}
 
-def checked(value: F.F64, word: U32, lower: Maybe<&2, Cmp>, upper: Maybe<&2, Cmp>) -> Result<&2, &2, Error, U32>:
+def checked(value: F64, word: U32, lower: Maybe<&2, Cmp>, upper: Maybe<&2, Cmp>) -> Result<&2, &2, Error, U32>:
   match lower upper:
     case Some{EQ{}} Some{LT{}}: Done{word}
     case Some{GT{}} Some{LT{}}: Done{word}
     case _ _: Fail{InvalidDuration{value}}
 
-def milliseconds(+value: F.F64) -> Result<&2, &2, Error, U32>:
+def milliseconds(+value: F64) -> Result<&2, &2, Error, U32>:
   checked(value, candidate(F.decode(value)), F.compare(value, F.fromU32(0)), F.compare(value, F.multiply(F.fromU32(65536), F.fromU32(65536))))

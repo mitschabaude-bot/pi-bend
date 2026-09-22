@@ -91,7 +91,7 @@ def run(+valid: Bool) -> IO(Unit):
     schema : V.Value = V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", field(V.ObjectValue{R.Record{R.Property{"type", V.Text{"number"}} <> Nil{}}})} <> R.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     call : Ai.ToolCall<V.Value> = Ai.ToolCall{"call", "echo", field(V.Text{Bool.pick(String, valid, "42", "bad")}), None{}, None{}}
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
     controller2 : Abort.AbortController<Unit> <- Abort.new(Unit)
     state : Preparation() <- Loop.prepareToolCallWith(Unit, String, String, String, Unit, context, assistant, call, config(converter), Some{Abort.signal(Unit, controller2)}, validator, signal => IO.pure(Bool, False{}), "empty", error => error)

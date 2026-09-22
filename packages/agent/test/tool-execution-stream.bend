@@ -84,7 +84,7 @@ def main() -> IO(Unit):
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     outcome : Execute.Outcome() <- Loop.executePreparedToolCall(String, String, prepared, Some{Abort.signal(Unit, controller)}, updates, "empty details", error => error)
     result : Loop.ExecutedToolCallOutcome<String> <- executed(outcome)
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
     controller2 : Abort.AbortController<Unit> <- Abort.new(Unit)
     +finalized : Loop.FinalizedToolCallOutcome<String> <- Loop.finalizeExecutedToolCall(Unit, String, String, String, Unit, T.AgentContext{Nil{}, None{}}, assistant, prepared, result, Finalize.configuration(converter, Some{hook}), Some{Abort.signal(Unit, controller2)}, "empty details", error => error)

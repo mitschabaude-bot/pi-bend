@@ -28,8 +28,8 @@ def HookOutput() -> Data: Result<&2, &2, String, Maybe<&2, T.AfterToolCallResult
 type Provider is Data:
   Provider{truncated: Bool, calls: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
 
-def equalNumber(a: F.F64, b: F.F64) -> Bool: Bits.equal(F.toBits(a), F.toBits(b))
-def tenth(n: U32) -> F.F64: F.divide(F.fromU32(n), F.fromU32(10))
+def equalNumber(a: F64, b: F64) -> Bool: Bits.equal(F.toBits(a), F.toBits(b))
+def tenth(n: U32) -> F64: F.divide(F.fromU32(n), F.fromU32(10))
 def usage(patched: Bool) -> Ai.Usage:
   match patched:
     case False{}: Ai.Usage{F.fromU32(1), F.fromU32(2), F.fromU32(3), F.fromU32(4), None{}, None{}, F.fromU32(10), Ai.UsageCost{tenth(1), tenth(2), tenth(3), tenth(4), F.fromU32(1)}}

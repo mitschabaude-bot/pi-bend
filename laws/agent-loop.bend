@@ -164,7 +164,7 @@ law only_length_stops_are_truncated:
   for error: Maybe<&2, String>
   for rawReason: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   {Loop.lengthLimited(DiagnosticDetails, Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}) == isLength(reason) : Bool}
 
 # The stream lease: a failed open has nothing to release; after a consumed

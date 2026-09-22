@@ -22,19 +22,19 @@ def toolCalls(-A: Data, content: List<&2, Ai.AssistantContent<A>>) -> List<&2, A
     case Ai.AssistantToolCall{call} <> rest: call <> toolCalls(A, rest)
     case _ <> rest: toolCalls(A, rest)
 
-def appendMissing(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), exists: Bool, call: Ai.ToolCall<A>, output: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
+def appendMissing(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F64), exists: Bool, call: Ai.ToolCall<A>, output: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
   match exists call:
     case True{} _: IO.pure(Messages(P, A, G, D), output)
     case False{} Ai.ToolCall{id, name, _, _, _}:
       do IO<Messages(P, A, G, D)>:
-        timestamp : F.F64 <- now(Unit{})
+        timestamp : F64 <- now(Unit{})
         return Ai.ToolResult{Ai.ToolResultMessage{id, name, Ai.TextImageText{Ai.TextContent{"No result provided", None{}}} <> Nil{}, None{}, None{}, True{}, timestamp}} <> output
 
 def callId(-A: Data, call: Ai.ToolCall<A>) -> String:
   match call:
     case Ai.ToolCall{id, _, _, _, _}: id
 
-def missing(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), calls: List<&2, Ai.ToolCall<A>>, +seen: List<&2, String>, output: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
+def missing(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F64), calls: List<&2, Ai.ToolCall<A>>, +seen: List<&2, String>, output: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
   match calls:
     case Nil{}: IO.pure(Messages(P, A, G, D), output)
     case +call <> rest:
@@ -42,7 +42,7 @@ def missing(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), cal
         output : Messages(P, A, G, D) <- appendMissing(~P, ~A, ~G, ~D, ~now, contains(seen, callId(A, call)), call, output)
         missing(~P, ~A, ~G, ~D, ~now, rest, seen, output)
 
-def flush(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), state: State<P, A, G, D>) -> IO(Messages(P, A, G, D)):
+def flush(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F64), state: State<P, A, G, D>) -> IO(Messages(P, A, G, D)):
   match state:
     case State{pending, seen, held, output}:
       do IO<Messages(P, A, G, D)>:
@@ -75,7 +75,7 @@ def systemState(-P: Data, -A: Data, -G: Data, -D: Data, system: Ai.SystemMessage
     case State{Nil{}, seen, held, output}: State{Nil{}, seen, held, Ai.System{system} <> output}
     case State{pending, seen, held, output}: State{pending, seen, Ai.System{system} <> held, output}
 
-def advance(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), message: Ai.Message<P, A, G, D>, state: State<P, A, G, D>) -> IO(State<P, A, G, D>):
+def advance(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F64), message: Ai.Message<P, A, G, D>, state: State<P, A, G, D>) -> IO(State<P, A, G, D>):
   match message:
     case Ai.Assistant{source}:
       do IO<State<P, A, G, D>>:
@@ -88,7 +88,7 @@ def advance(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), mes
     case Ai.ToolResult{result}: IO.pure(State<P, A, G, D>, resultState(P, A, G, D, result, state))
     case Ai.System{system}: IO.pure(State<P, A, G, D>, systemState(P, A, G, D, system, state))
 
-def run(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), messages: Messages(P, A, G, D), state: State<P, A, G, D>) -> IO(Messages(P, A, G, D)):
+def run(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F64), messages: Messages(P, A, G, D), state: State<P, A, G, D>) -> IO(Messages(P, A, G, D)):
   match messages:
     case Nil{}:
       do IO<Messages(P, A, G, D)>:
@@ -99,10 +99,10 @@ def run(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), message
         next : State<P, A, G, D> <- advance(~P, ~A, ~G, ~D, ~now, message, state)
         run(~P, ~A, ~G, ~D, ~now, rest, next)
 
-def repairWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F.F64), messages: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
+def repairWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~now: Unit -> IO(F64), messages: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
   run(~P, ~A, ~G, ~D, ~now, messages, State{Nil{}, Nil{}, Nil{}, Nil{}})
 
-def wallClock(unused: Unit) -> IO(F.F64): Date.now()
+def wallClock(unused: Unit) -> IO(F64): Date.now()
 
 def repairToolResults(~P: Data, ~A: Data, ~G: Data, ~D: Data, messages: Messages(P, A, G, D)) -> IO(Messages(P, A, G, D)):
   repairWith(~P, ~A, ~G, ~D, ~wallClock, messages)

@@ -195,7 +195,7 @@ def scenario(+failure: Bool) -> IO(Unit):
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     +arguments : V.Value = H.field(V.Text{"42"})
     calls : List<&2, Ai.ToolCall<V.Value>> = Ai.ToolCall{"one", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"two", "echo", arguments, None{}, None{}} <> Ai.ToolCall{"three", "echo", arguments, None{}, None{}} <> Nil{}
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{contents(calls), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}

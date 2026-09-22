@@ -49,15 +49,15 @@ def cache(left: T.CacheRetention, right: T.CacheRetention) -> Bool:
     case T.CacheLong{} T.CacheLong{}: True{}
     case _ _: False{}
 
-def number(left: F.F64, right: F.F64) -> Bool: Numbers.numberEqual(left, right)
+def number(left: F64, right: F64) -> Bool: Numbers.numberEqual(left, right)
 
 def same(left: T.StreamOptions<V.Value, String, String, String, String>, right: T.StreamOptions<V.Value, String, String, String, String>) -> Bool:
   match left right:
     case T.StreamOptions{a,b,c,d,e,None{},None{},h,i,j,k,l,m,n,o,p,q,r,s} T.StreamOptions{aa,bb,cc,dd,ee,None{},None{},hh,ii,jj,kk,ll,mm,nn,oo,pp,qq,rr,ss}:
-      optional(~String, ~String.eq, a, aa) && optional(~String, ~String.eq, b, bb) && optional(~String, ~String.eq, c, cc) && optional(~String, ~String.eq, d, dd) && optional(~T.ProviderEnv(), ~environment, e, ee) && optional(~T.ProviderHeaders(), ~headers, h, hh) && optional(~F.F64, ~number, i, ii) && optional(~F.F64, ~number, j, jj) && optional(~F.F64, ~number, k, kk) && optional(~F.F64, ~number, l, ll) && optional(~R.Record<V.Value>, ~record, m, mm) && optional(~F.F64, ~number, n, nn) && optional(~T.Transport, ~transport, o, oo) && optional(~T.CacheRetention, ~cache, p, pp) && optional(~String, ~String.eq, q, qq) && optional(~F.F64, ~number, r, rr) && optional(~R.Record<V.Value>, ~record, s, ss)
+      optional(~String, ~String.eq, a, aa) && optional(~String, ~String.eq, b, bb) && optional(~String, ~String.eq, c, cc) && optional(~String, ~String.eq, d, dd) && optional(~T.ProviderEnv(), ~environment, e, ee) && optional(~T.ProviderHeaders(), ~headers, h, hh) && optional(~F64, ~number, i, ii) && optional(~F64, ~number, j, jj) && optional(~F64, ~number, k, kk) && optional(~F64, ~number, l, ll) && optional(~R.Record<V.Value>, ~record, m, mm) && optional(~F64, ~number, n, nn) && optional(~T.Transport, ~transport, o, oo) && optional(~T.CacheRetention, ~cache, p, pp) && optional(~String, ~String.eq, q, qq) && optional(~F64, ~number, r, rr) && optional(~R.Record<V.Value>, ~record, s, ss)
     case _ _: False{}
 
-def model(window: F.F64, maxTokens: F.F64, sampling: Maybe<&2, R.Record<V.Value>>) -> T.Model<V.Value>:
+def model(window: F64, maxTokens: F64, sampling: Maybe<&2, R.Record<V.Value>>) -> T.Model<V.Value>:
   +zero = F.fromU32(0)
   T.Model{"test", "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, window, maxTokens, sampling, None{}, None{}}
 

@@ -77,34 +77,34 @@ def mantissa(input: List<&2, MantissaToken>, coefficient: B.BigNat, +digits: Nat
     case DecimalDigit{value} <> rest: mantissa(rest, B.add(B.multiplyU32(coefficient, 10), B.fromU32(value)), digits + 1n, fractional + Bool.pick(Nat, dot, 1n, 0n), dot)
     case InvalidCharacter{} <> _: None{}
 
-def ratioValue(value: Maybe<&2, F.F64>) -> F.F64:
+def ratioValue(value: Maybe<&2, F64>) -> F64:
   match value:
     case Some{number}: number
     case None{}: F.nan()
 
-def scaleWithin(overflow: Bool, underflow: Bool, negative: Bool, coefficient: B.BigNat, positivePower: Nat, negativePower: Nat) -> F.F64:
+def scaleWithin(overflow: Bool, underflow: Bool, negative: Bool, coefficient: B.BigNat, positivePower: Nat, negativePower: Nat) -> F64:
   match overflow underflow:
     case True{} _: F.infinity(negative)
     case _ True{}: Ratio.signed(negative, F.fromU32(0))
     case False{} False{}: ratioValue(Ratio.fromRatio(negative, B.multiply(coefficient, B.power(B.fromU32(10), positivePower)), B.power(B.fromU32(10), negativePower)))
 
-def scale(negative: Bool, coefficient: B.BigNat, digits: Nat, +positivePower: Nat, +negativePower: Nat) -> F.F64:
+def scale(negative: Bool, coefficient: B.BigNat, digits: Nat, +positivePower: Nat, +negativePower: Nat) -> F64:
   match coefficient:
     case B.BigNat{Nil{}}: Ratio.signed(negative, F.fromU32(0))
     case B.BigNat{limb <> tail}: scaleWithin(Nat.is_ge(positivePower, 400n), Nat.is_ge(negativePower, digits + 400n), negative, B.BigNat{limb <> tail}, positivePower, negativePower)
 
-def decimalValue(negative: Bool, value: Maybe<&2, Decimal>) -> F.F64:
+def decimalValue(negative: Bool, value: Maybe<&2, Decimal>) -> F64:
   match value:
     case None{}: F.nan()
     case Some{Decimal{coefficient, digits, fractional, Exponent{True{}, exponent}}}: scale(negative, coefficient, digits, 0n, fractional + exponent)
     case Some{Decimal{coefficient, digits, +fractional, Exponent{False{}, +exponent}}}: scale(negative, coefficient, digits, Nat.sub(exponent, fractional), Nat.sub(fractional, exponent))
 
-def decimalOrInfinity(infinite: Bool, negative: Bool, text: String) -> F.F64:
+def decimalOrInfinity(infinite: Bool, negative: Bool, text: String) -> F64:
   match infinite:
     case True{}: F.infinity(negative)
     case False{}: decimalValue(negative, mantissa(tokens(text), B.zero(), 0n, 0n, False{}))
 
-def signedDecimal(negative: Bool, +text: String) -> F.F64:
+def signedDecimal(negative: Bool, +text: String) -> F64:
   decimalOrInfinity(String.eq(text, "Infinity"), negative, text)
 
 def radixDigit(+code: U32) -> U32:
@@ -117,12 +117,12 @@ def radixDigits(text: String, +radix: U32, coefficient: B.BigNat, seen: Bool) ->
       +value = radixDigit(code)
       Bool.pick(Maybe<&2, B.BigNat>, U32.is_lt(value, radix), radixDigits(rest, radix, B.add(B.multiplyU32(coefficient, radix), B.fromU32(value)), True{}), None{})
 
-def radixValue(value: Maybe<&2, B.BigNat>) -> F.F64:
+def radixValue(value: Maybe<&2, B.BigNat>) -> F64:
   match value:
     case None{}: F.nan()
     case Some{number}: ratioValue(Ratio.fromRatio(False{}, number, B.one()))
 
-def fromTrimmed(text: String) -> F.F64:
+def fromTrimmed(text: String) -> F64:
   match text:
     case SNil{}: F.fromU32(0)
     case SCon{Chr{43}, rest}: signedDecimal(False{}, rest)
@@ -135,7 +135,7 @@ def fromTrimmed(text: String) -> F.F64:
     case SCon{Chr{48}, SCon{Chr{66}, rest}}: radixValue(radixDigits(rest, 2, B.zero(), False{}))
     case text: signedDecimal(False{}, text)
 
-def toNumber(text: String) -> F.F64: fromTrimmed(trim(text))
+def toNumber(text: String) -> F64: fromTrimmed(trim(text))
 
 # Fixed decimal formatting rounds the exact stored binary64 value, once.
 # Multiplying in floating point before rounding can change a halfway result.
@@ -179,5 +179,5 @@ def fixedDecoded(+digits: Nat, value: F.Decoded) -> Maybe<&2,String>:
 
 # Nonfinite values and excessive precision are rejected. Finite values always
 # use fixed notation, including magnitudes for which JS switches to exponent form.
-def formatFixed(value: F.F64, +digits: Nat) -> Maybe<&2,String>:
+def formatFixed(value: F64, +digits: Nat) -> Maybe<&2,String>:
   Bool.pick(Unit -> Maybe<&2,String>,Nat.is_le(digits,100n),_ => fixedDecoded(digits,F.decode(value)),_ => None{})(Unit{})

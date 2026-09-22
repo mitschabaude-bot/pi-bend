@@ -45,17 +45,17 @@ def prefixLength(chars: String, next: Step, +seenDigit: Bool, +consumed: Nat, pr
     case SCon{Chr{+code}, rest} Continue{state, accepting}:
       prefixLength(rest, step(Number.digit(code), state, code, seenDigit), seenDigit || Number.digit(code), consumed + 1n, accepted(accepting, consumed, previous))
 
-def decimal(+text: String, sign: String) -> F.F64:
+def decimal(+text: String, sign: String) -> F64:
   length = prefixLength(text, Continue{IntegerPart{}, False{}}, False{}, 0n, 0n)
   Number.toNumber(sign ++ String.take(text, length))
 
-def numeric(+negative: Bool, +text: String) -> F.F64:
-  Bool.pick(F.F64, String.starts_with(text, "Infinity"), F.infinity(negative), decimal(text, Bool.pick(String, negative, "-", "+")))
+def numeric(+negative: Bool, +text: String) -> F64:
+  Bool.pick(F64, String.starts_with(text, "Infinity"), F.infinity(negative), decimal(text, Bool.pick(String, negative, "-", "+")))
 
-def trimmed(text: String) -> F.F64:
+def trimmed(text: String) -> F64:
   match text:
     case SCon{'+', rest}: numeric(False{}, rest)
     case SCon{'-', rest}: numeric(True{}, rest)
     case other: numeric(False{}, other)
 
-def parseFloat(text: String) -> F.F64: trimmed(Number.trimStart(text))
+def parseFloat(text: String) -> F64: trimmed(Number.trimStart(text))

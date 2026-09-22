@@ -29,29 +29,29 @@ import ../../../runtime/src/u64.bend as W
 # failures never enter this policy.
 type DelaySource is Data:
   Backoff{}
-  ServerMilliseconds{value: F.F64}
+  ServerMilliseconds{value: F64}
   ServerDate{text: String}
 
 type DelayError is Data:
-  ServerDelayTooLong{delayMs: F.F64, maxDelayMs: F.F64}
+  ServerDelayTooLong{delayMs: F64, maxDelayMs: F64}
 
-def DEFAULT_MAX_RETRY_DELAY_MS() -> F.F64: F.fromU32(60000)
+def DEFAULT_MAX_RETRY_DELAY_MS() -> F64: F.fromU32(60000)
 
-def equal(left: F.F64, right: F.F64) -> Bool: F.isEqual(F.compare(left, right))
+def equal(left: F64, right: F64) -> Bool: F.isEqual(F.compare(left, right))
 
-def retryableStatus(status: Maybe<&2, F.F64>) -> Bool:
+def retryableStatus(status: Maybe<&2, F64>) -> Bool:
   match status:
     case None{}: True{}
     case Some{+value}: equal(value, F.fromU32(408)) || equal(value, F.fromU32(409)) || equal(value, F.fromU32(429)) || F.isAtLeast(F.compare(value, F.fromU32(500)))
 
 # Mirrors the pinned OpenAI/Anthropic SDK retry policy.
-def isRetryableProviderError(status: Maybe<&2, F.F64>, shouldRetry: Maybe<&2, String>) -> Bool:
+def isRetryableProviderError(status: Maybe<&2, F64>, shouldRetry: Maybe<&2, String>) -> Bool:
   match shouldRetry:
     case Some{"true"}: True{}
     case Some{"false"}: False{}
     case _: retryableStatus(status)
 
-def secondsOrDate(invalid: Bool, seconds: F.F64, text: String) -> DelaySource:
+def secondsOrDate(invalid: Bool, seconds: F64, text: String) -> DelaySource:
   match invalid:
     case True{}: ServerDate{text}
     case False{}: ServerMilliseconds{F.multiply(seconds, F.fromU32(1000))}
@@ -64,7 +64,7 @@ def retryAfter(value: Maybe<&2, String>) -> DelaySource:
       +seconds = Number.parseFloat(text)
       secondsOrDate(F.isNaN(seconds), seconds, text)
 
-def millisecondsOrFallback(invalid: Bool, value: F.F64, fallback: Maybe<&2, String>) -> DelaySource:
+def millisecondsOrFallback(invalid: Bool, value: F64, fallback: Maybe<&2, String>) -> DelaySource:
   match invalid:
     case True{}: retryAfter(fallback)
     case False{}: ServerMilliseconds{value}
@@ -77,21 +77,21 @@ def selectDelaySource(milliseconds: Maybe<&2, String>, seconds: Maybe<&2, String
       +value = Number.parseFloat(text)
       millisecondsOrFallback(F.isNaN(value), value, seconds)
 
-def maxDelay(value: Maybe<&2, F.F64>) -> F.F64:
+def maxDelay(value: Maybe<&2, F64>) -> F64:
   match value:
     case None{}: DEFAULT_MAX_RETRY_DELAY_MS()
     case Some{scalar}: scalar
 
-def limited(excessive: Bool, delayMs: F.F64, maxDelayMs: F.F64) -> Result<&2, &2, DelayError, F.F64>:
+def limited(excessive: Bool, delayMs: F64, maxDelayMs: F64) -> Result<&2, &2, DelayError, F64>:
   match excessive:
     case True{}: Fail{ServerDelayTooLong{delayMs, maxDelayMs}}
     case False{}: Done{delayMs}
 
-def validateServerRetryDelayMs(+delayMs: F.F64, maximum: Maybe<&2, F.F64>) -> Result<&2, &2, DelayError, F.F64>:
+def validateServerRetryDelayMs(+delayMs: F64, maximum: Maybe<&2, F64>) -> Result<&2, &2, DelayError, F64>:
   +limit = maxDelay(maximum)
   limited(F.isGreater(F.compare(limit, F.fromU32(0))) && F.isGreater(F.compare(delayMs, limit)), delayMs, limit)
 
-def baseDelay(index: Nat) -> F.F64:
+def baseDelay(index: Nat) -> F64:
   match index:
     case 0n: F.fromU32(500)
     case 1n: F.fromU32(1000)
@@ -99,19 +99,19 @@ def baseDelay(index: Nat) -> F.F64:
     case 3n: F.fromU32(4000)
     case _: F.fromU32(8000)
 
-def backoffDelay(retryIndex: Nat, random: F.F64) -> F.F64:
+def backoffDelay(retryIndex: Nat, random: F64) -> F64:
   F.multiply(baseDelay(retryIndex), F.subtract(F.fromU32(1), F.multiply(random, F.divide(F.fromU32(1), F.fromU32(4)))))
 
 # A date instruction is resolved before validating its server delay; backoff
 # jitter is not subject to the server-requested-delay cap.
-def resolveServerDate(parsedEpochMs: F.F64, nowMs: F.F64, maximum: Maybe<&2, F.F64>) -> Result<&2, &2, DelayError, F.F64>:
+def resolveServerDate(parsedEpochMs: F64, nowMs: F64, maximum: Maybe<&2, F64>) -> Result<&2, &2, DelayError, F64>:
   validateServerRetryDelayMs(F.subtract(parsedEpochMs, nowMs), maximum)
 
 # Failures and options
 # --------------------
 
 type ProviderError<-E: Data> is Data:
-  ProviderError{original: E, message: String, status: Maybe<&2, F.F64>, shouldRetry: Maybe<&2, String>, retryAfterMs: Maybe<&2, String>, retryAfter: Maybe<&2, String>}
+  ProviderError{original: E, message: String, status: Maybe<&2, F64>, shouldRetry: Maybe<&2, String>, retryAfterMs: Maybe<&2, String>, retryAfter: Maybe<&2, String>}
 
 type RequestFailure<-E: Data> is Data:
   Provider{error: ProviderError<E>}
@@ -128,26 +128,26 @@ type RetryFailure<-E: Data> is Data:
   DelayRejected{error: DelayError, providerMessage: String}
 
 type ProviderRetryOptions<-Reason: Data> is Data:
-  ProviderRetryOptions{maxRetries: Maybe<&2, Nat>, maxRetryDelayMs: Maybe<&2, F.F64>, signal: Maybe<&2, A.AbortSignal<Reason>>}
+  ProviderRetryOptions{maxRetries: Maybe<&2, Nat>, maxRetryDelayMs: Maybe<&2, F64>, signal: Maybe<&2, A.AbortSignal<Reason>>}
 
 # The public numeric options are validated once at the provider boundary.
 # Absent values keep the defaults (zero retries, a 60-second delay cap; zero
 # disables the cap). Invalid configuration is a typed failure, not NaN math.
 type OptionsError is Data:
   InvalidRetryCount{cause: Natural.Error}
-  InvalidDelayLimit{value: F.F64}
+  InvalidDelayLimit{value: F64}
 
 def countValue(value: Result<&2, &2, Natural.Error, Nat>) -> Result<&2, &2, OptionsError, Maybe<&2, Nat>>:
   match value:
     case Fail{cause}: Fail{InvalidRetryCount{cause}}
     case Done{number}: Done{Some{number}}
 
-def countOption(value: Maybe<&2, F.F64>) -> Result<&2, &2, OptionsError, Maybe<&2, Nat>>:
+def countOption(value: Maybe<&2, F64>) -> Result<&2, &2, OptionsError, Maybe<&2, Nat>>:
   match value:
     case None{}: Done{None{}}
     case Some{number}: countValue(Natural.convert(number))
 
-def delayChecked(value: F.F64, valid: Bool) -> Result<&2, &2, OptionsError, Maybe<&2, F.F64>>:
+def delayChecked(value: F64, valid: Bool) -> Result<&2, &2, OptionsError, Maybe<&2, F64>>:
   match valid:
     case False{}: Fail{InvalidDelayLimit{value}}
     case True{}: Done{Some{value}}
@@ -158,34 +158,34 @@ def nonnegative(comparison: Maybe<&2, Cmp>) -> Bool:
     case Some{GT{}}: True{}
     case _: False{}
 
-def delayLimit(value: Maybe<&2, F.F64>) -> Result<&2, &2, OptionsError, Maybe<&2, F.F64>>:
+def delayLimit(value: Maybe<&2, F64>) -> Result<&2, &2, OptionsError, Maybe<&2, F64>>:
   match value:
     case None{}: Done{None{}}
     case Some{+number}: delayChecked(number, F.isFinite(F.decode(number)) && nonnegative(F.compare(number, F.fromU32(0))))
 
-def completed(-Reason: Data, retries: Maybe<&2, Nat>, signal: Maybe<&2, A.AbortSignal<Reason>>, value: Result<&2, &2, OptionsError, Maybe<&2, F.F64>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
+def completed(-Reason: Data, retries: Maybe<&2, Nat>, signal: Maybe<&2, A.AbortSignal<Reason>>, value: Result<&2, &2, OptionsError, Maybe<&2, F64>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
   match value:
     case Fail{cause}: Fail{cause}
     case Done{limit}: Done{ProviderRetryOptions{retries, limit, signal}}
 
-def counted(-Reason: Data, limit: Maybe<&2, F.F64>, signal: Maybe<&2, A.AbortSignal<Reason>>, value: Result<&2, &2, OptionsError, Maybe<&2, Nat>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
+def counted(-Reason: Data, limit: Maybe<&2, F64>, signal: Maybe<&2, A.AbortSignal<Reason>>, value: Result<&2, &2, OptionsError, Maybe<&2, Nat>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
   match value:
     case Fail{cause}: Fail{cause}
     case Done{retries}: completed(Reason, retries, signal, delayLimit(limit))
 
-def resolve(-Reason: Data, retries: Maybe<&2, F.F64>, limit: Maybe<&2, F.F64>, signal: Maybe<&2, A.AbortSignal<Reason>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
+def resolve(-Reason: Data, retries: Maybe<&2, F64>, limit: Maybe<&2, F64>, signal: Maybe<&2, A.AbortSignal<Reason>>) -> Result<&2, &2, OptionsError, ProviderRetryOptions<Reason>>:
   counted(Reason, limit, signal, countOption(retries))
 
 # The request loop
 # ----------------
 
 type SleepInput<-Reason: Data> is Data:
-  SleepInput{milliseconds: F.F64, signal: Maybe<&2, A.AbortSignal<Reason>>}
+  SleepInput{milliseconds: F64, signal: Maybe<&2, A.AbortSignal<Reason>>}
 
 # Effect handles are borrowed for the duration of the request loop. The caller
 # owns their disposal; production and virtual-time tests use the same loop.
 type Effects<-Reason: Data> is Data:
-  Effects{random: C.Callback<Unit, F.F64>, parseDate: C.Callback<String, F.F64>, now: C.Callback<Unit, F.F64>, sleep: C.Callback<SleepInput<Reason>, Result<&2, &2, SleepError, Unit>>}
+  Effects{random: C.Callback<Unit, F64>, parseDate: C.Callback<String, F64>, now: C.Callback<Unit, F64>, sleep: C.Callback<SleepInput<Reason>, Result<&2, &2, SleepError, Unit>>}
 
 type Decision<v, -E: Data, -Value: Kind(v)> is Kind(v):
   Finished{result: Result<&2, v, RetryFailure<E>, Value>}
@@ -196,19 +196,19 @@ def signalAborted(-Reason: Data, signal: Maybe<&2, A.AbortSignal<Reason>>) -> IO
     case None{}: IO.pure(Bool, False{})
     case Some{value}: A.aborted(Reason, value)
 
-def delay(-Reason: Data, effects: Effects<Reason>, source: DelaySource, index: Nat, maximum: Maybe<&2, F.F64>) -> IO(Result<&2, &2, DelayError, F.F64>):
+def delay(-Reason: Data, effects: Effects<Reason>, source: DelaySource, index: Nat, maximum: Maybe<&2, F64>) -> IO(Result<&2, &2, DelayError, F64>):
   match effects:
     case Effects{random, parseDate, now, _}:
       match source:
         case Backoff{}:
-          do IO<Result<&2, &2, DelayError, F.F64>>:
-            value : F.F64 <- C.call(Unit, F.F64, random, Unit{})
+          do IO<Result<&2, &2, DelayError, F64>>:
+            value : F64 <- C.call(Unit, F64, random, Unit{})
             return Done{backoffDelay(index, value)}
-        case ServerMilliseconds{value}: IO.pure(Result<&2, &2, DelayError, F.F64>, validateServerRetryDelayMs(value, maximum))
+        case ServerMilliseconds{value}: IO.pure(Result<&2, &2, DelayError, F64>, validateServerRetryDelayMs(value, maximum))
         case ServerDate{text}:
-          do IO<Result<&2, &2, DelayError, F.F64>>:
-            epoch : F.F64 <- C.call(String, F.F64, parseDate, text)
-            current : F.F64 <- C.call(Unit, F.F64, now, Unit{})
+          do IO<Result<&2, &2, DelayError, F64>>:
+            epoch : F64 <- C.call(String, F64, parseDate, text)
+            current : F64 <- C.call(Unit, F64, now, Unit{})
             return resolveServerDate(epoch, current, maximum)
 
 def afterSleep(v, -E: Data, -Value: Kind(v), result: Result<&2, &2, SleepError, Unit>) -> Decision<v, E, Value>:
@@ -217,7 +217,7 @@ def afterSleep(v, -E: Data, -Value: Kind(v), result: Result<&2, &2, SleepError, 
     case Fail{SleepAborted{}}: Finished{Fail{RequestAborted{}}}
     case Fail{InvalidSleepDuration{error}}: Finished{Fail{SleepRejected{error}}}
 
-def sleepDelay(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, signal: Maybe<&2, A.AbortSignal<Reason>>, message: String, result: Result<&2, &2, DelayError, F.F64>) -> IO(Decision<v, E, Value>):
+def sleepDelay(v, -Reason: Data, -E: Data, -Value: Kind(v), effects: Effects<Reason>, signal: Maybe<&2, A.AbortSignal<Reason>>, message: String, result: Result<&2, &2, DelayError, F64>) -> IO(Decision<v, E, Value>):
   match effects result:
     case _ Fail{error}: IO.pure(Decision<v, E, Value>, Finished{Fail{DelayRejected{error, message}}})
     case Effects{_, _, _, sleep} Done{milliseconds}:
@@ -230,7 +230,7 @@ def providerDecision(v, -Reason: Data, -E: Data, -Value: Kind(v), +effects: Effe
     case _ value False{}: IO.pure(Decision<v, E, Value>, Finished{Fail{RequestFailed{Provider{value}}}})
     case ProviderRetryOptions{_, maximum, signal} ProviderError{_, message, _, _, milliseconds, seconds} True{}:
       do IO<Decision<v, E, Value>>:
-        result : Result<&2, &2, DelayError, F.F64> <- delay(Reason, effects, selectDelaySource(milliseconds, seconds), index, maximum)
+        result : Result<&2, &2, DelayError, F64> <- delay(Reason, effects, selectDelaySource(milliseconds, seconds), index, maximum)
         sleepDelay(v, Reason, E, Value, effects, signal, message, result)
 
 def canRetry(-E: Data, error: ProviderError<E>) -> Bool:
@@ -376,41 +376,41 @@ def sleep(-Reason: Data, input: SleepInput<Reason>) -> IO(Result<&2, &2, SleepEr
     case SleepInput{milliseconds, signal}: converted(Reason, Delay.milliseconds(milliseconds), signal)
 
 # Retry-After dates: the provider's numeric API uses NaN for an unusable hint.
-def unix(result: Result<&2, &2, HTTP.UnixError, W.U64>) -> F.F64:
+def unix(result: Result<&2, &2, HTTP.UnixError, W.U64>) -> F64:
   match result:
     case Fail{_}: F.nan()
     case Done{milliseconds}: Date.fromMilliseconds(milliseconds)
 
-def interpreted(result: Result<&2, &2, HTTP.Error, HTTP.Instant>) -> F.F64:
+def interpreted(result: Result<&2, &2, HTTP.Error, HTTP.Instant>) -> F64:
   match result:
     case Fail{_}: F.nan()
     case Done{instant}: unix(HTTP.unixMilliseconds(instant))
 
-def reference(text: String, result: Result<&2, &2, Inverse.Error, Calendar.CivilTime>) -> F.F64:
+def reference(text: String, result: Result<&2, &2, Inverse.Error, Calendar.CivilTime>) -> F64:
   match result:
     case Fail{_}: F.nan()
     case Done{current}: interpreted(HTTP.parseAt(current, text))
 
-def parseDateAt(epoch: W.U64, text: String) -> F.F64:
+def parseDateAt(epoch: W.U64, text: String) -> F64:
   reference(text, Inverse.fromEpochMilliseconds(epoch))
 
-def dateBody(environment: Unit, text: String) -> IO(F.F64):
-  do IO<F.F64>:
+def dateBody(environment: Unit, text: String) -> IO(F64):
+  do IO<F64>:
     epoch : U32 & U32 <- IO.unixMilliseconds()
     return parseDateAt(Date.words(epoch), text)
 
 # The caller owns this callback and retires it after all retry users.
-def dateParser() -> IO(C.Callback<String, F.F64>):
-  C.create(~Unit, ~String, ~F.F64, ~dateBody, Unit{})
+def dateParser() -> IO(C.Callback<String, F64>):
+  C.create(~Unit, ~String, ~F64, ~dateBody, Unit{})
 
 # The jitter callback borrows its generator; dispose the callback first.
-def draw(generator: Random.Generator, unused: Unit) -> IO(F.F64):
+def draw(generator: Random.Generator, unused: Unit) -> IO(F64):
   Random.random(generator)
 
-def randomCallback(generator: Random.Generator) -> IO(C.Callback<Unit, F.F64>):
-  C.create(~Random.Generator, ~Unit, ~F.F64, ~draw, generator)
+def randomCallback(generator: Random.Generator) -> IO(C.Callback<Unit, F64>):
+  C.create(~Random.Generator, ~Unit, ~F64, ~draw, generator)
 
-def nowBody(environment: Unit, unused: Unit) -> IO(F.F64): Date.now()
+def nowBody(environment: Unit, unused: Unit) -> IO(F64): Date.now()
 
 def sleepBody(~Reason: Data, environment: Unit, input: SleepInput<Reason>) -> IO(Result<&2, &2, SleepError, Unit>):
   sleep(Reason, input)
@@ -422,14 +422,14 @@ type Runtime<-Reason: Data> is Type:
 
 # Takes ownership of the supplied generator; deterministic tests use this
 # without replacing the production callback assembly.
-def fromGenerator(~Reason: Data, parseDate: C.Callback<String, F.F64>, +generator: Random.Generator) -> IO(Runtime<Reason>):
+def fromGenerator(~Reason: Data, parseDate: C.Callback<String, F64>, +generator: Random.Generator) -> IO(Runtime<Reason>):
   do IO<Runtime<Reason>>:
-    random : C.Callback<Unit, F.F64> <- randomCallback(generator)
-    now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~nowBody, Unit{})
+    random : C.Callback<Unit, F64> <- randomCallback(generator)
+    now : C.Callback<Unit, F64> <- C.create(~Unit, ~Unit, ~F64, ~nowBody, Unit{})
     sleeper : C.Callback<SleepInput<Reason>, Result<&2, &2, SleepError, Unit>> <- C.create(~Unit, ~SleepInput<Reason>, ~Result<&2, &2, SleepError, Unit>, ~(sleepBody(~Reason)), Unit{})
     return Runtime{Effects{random, parseDate, now, sleeper}, generator}
 
-def initialized(~Reason: Data, parseDate: C.Callback<String, F.F64>, result: Result<&2, &2, Seed.SeedError, Random.Generator>) -> IO(Result<&2, &1, Seed.SeedError, Runtime<Reason>>):
+def initialized(~Reason: Data, parseDate: C.Callback<String, F64>, result: Result<&2, &2, Seed.SeedError, Random.Generator>) -> IO(Result<&2, &1, Seed.SeedError, Runtime<Reason>>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &1, Seed.SeedError, Runtime<Reason>>, Fail{error})
     case Done{generator}:
@@ -437,7 +437,7 @@ def initialized(~Reason: Data, parseDate: C.Callback<String, F.F64>, result: Res
         runtime : Runtime<Reason> <- fromGenerator(~Reason, parseDate, generator)
         return Done{runtime}
 
-def new(~Reason: Data, parseDate: C.Callback<String, F.F64>) -> IO(Result<&2, &1, Seed.SeedError, Runtime<Reason>>):
+def new(~Reason: Data, parseDate: C.Callback<String, F64>) -> IO(Result<&2, &1, Seed.SeedError, Runtime<Reason>>):
   do IO<Result<&2, &1, Seed.SeedError, Runtime<Reason>>>:
     result : Result<&2, &2, Seed.SeedError, Random.Generator> <- Seed.new()
     initialized(~Reason, parseDate, result)
@@ -452,7 +452,7 @@ def dispose(-Reason: Data, runtime: Runtime<Reason>) -> IO(Unit):
   match runtime:
     case Runtime{Effects{random, _, now, sleeper}, generator}:
       do IO<Unit>:
-        C.dispose(Unit, F.F64, random)
-        C.dispose(Unit, F.F64, now)
+        C.dispose(Unit, F64, random)
+        C.dispose(Unit, F64, now)
         C.dispose(SleepInput<Reason>, Result<&2, &2, SleepError, Unit>, sleeper)
         Random.dispose(generator)

@@ -23,9 +23,8 @@ if args.prepare_audit:
     prepare(prefix,toolchain,any(b.startswith('native-') for b in args.backends))
     raise SystemExit(0)
 program=Path(str(prefix)+('-audit' if args.audit else ''))
-# Native emission needs the isolated layout cap (BEND-010): the installed
-# toolchain exceeds its byte-sized arity table on this fixture.
-capped=ROOT/'build/bend-lay-cap/main.ts'
+# The installed toolchain carries the layout cap (BEND-010 resolution).
+capped=compiler
 if not args.no_build and not args.audit:
     for suffix,limit,tool in [('c','16',capped if capped.is_file() else compiler),('js','8',compiler)]:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',limit,'--stats',f'{prefix}-{suffix}-build.json','--',str(bun),str(tool),'tests/openai-responses.bend','-o',f'{prefix}.{suffix}'],cwd=ROOT,check=True,env={**os.environ,'BEND_LAY_MAX':'32'})

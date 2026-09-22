@@ -152,7 +152,7 @@ def run(+mode: U32) -> IO(Unit):
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
     tools : List<&2, T.AgentTool<String, String>> = T.AgentTool{"echo", "", Schema.Null{}, None{}, "", ConfigTest.selected(C.Callback<Schema.Value, ValidationOutput()>, U32.is_eq(mode, 1) || U32.is_eq(mode, 2) || U32.is_eq(mode, 10), adapt), executor, None{}, None{}} <> T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, other, None{}, None{}} <> Nil{}
     call : Ai.ToolCall<Schema.Value> = Ai.ToolCall{"call", Bool.pick(String, U32.is_eq(mode, 7), "absent", "echo"), Bool.pick(Schema.Value, U32.is_eq(mode, 9), Schema.Text{"invalid"}, Schema.Text{"raw"}), None{}, None{}}
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
     config : ConfigTest.Config() = configuration(converter, ConfigTest.selected(Hook(), Bool.not(U32.is_eq(mode, 0) || U32.is_eq(mode, 8)), hook))
     controller2 : Abort.AbortController<Unit> <- Abort.new(Unit)

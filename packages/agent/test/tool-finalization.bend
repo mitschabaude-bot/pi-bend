@@ -93,7 +93,7 @@ def scenario(+present: Bool, mode: U32, +originallyError: Bool, expectedText: St
     +after : Hook() <- C.create(~State, ~Input(), ~Output(), ~hook, State{calls, mode, originallyError, entered, release})
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
     +execute : C.Callback<ToolInput(), ToolOutput()> <- C.create(~Unit, ~ToolInput(), ~ToolOutput(), ~forbidden, Unit{})
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
     prepared : Loop.PreparedToolCall<String, String> = Loop.PreparedToolCall{Ai.ToolCall{"call-id", "echo", Schema.Text{"raw args"}, None{}, None{}}, T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, execute, None{}, None{}}, Schema.Number{F.fromU32(123)}}
     executed : Loop.ExecutedToolCallOutcome<String> = Loop.ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"original", None{}}} <> Nil{}, "original details", None{}, None{}}, originallyError}

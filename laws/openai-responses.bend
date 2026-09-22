@@ -56,7 +56,7 @@ law failure_preserves_message_fields:
   for error: Maybe<&2, String>
   for raw: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   for aborted: Bool
   for detail: String
   {P.withFailure(G, T.AssistantMessage{content, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, stop, deferred, error, raw, endTurn, timestamp}, aborted, detail) == T.AssistantMessage{content, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, Bool.pick(T.StopReason, aborted, T.Aborted{}, T.Error{}), deferred, Some{detail}, raw, endTurn, timestamp} : T.AssistantMessage<V.Value, G>}

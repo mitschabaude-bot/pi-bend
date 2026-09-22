@@ -12,7 +12,7 @@ def text(message: Ai.AssistantMessage<Schema.Value, Unit>) -> String:
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     +usage : Ai.Usage = Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero})
     original : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Ai.AssistantText{Ai.TextContent{"before", None{}}} <> Nil{}, usage, Ai.Pending{})
     snapshot : Ai.AssistantMessage<Schema.Value, Unit> = Loop.snapshotAssistantMessage(Unit, original)

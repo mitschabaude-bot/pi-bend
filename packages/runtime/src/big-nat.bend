@@ -274,8 +274,106 @@ def writeBigEndian(count: Nat, step: SmallDivision, bytes: List<&2, U32>) -> Lis
     case 0n _: bytes
     case 1n+count SmallDivision{quotient, byte}: writeBigEndian(count, divideSmallRaw(quotient, 256), byte <> bytes)
 
+# Montgomery arithmetic for an odd modulus of k limbs, R = 2^(16k). A value
+# is kept as a*R mod m; a product of two such values is reduced word by word:
+# k times, add u*m for the u that clears the low limb, then drop that limb.
+# Every step is linear in k, so a modular product is quadratic, where the
+# bit-serial division behind `reduce` is quadratic per bit.
+type Montgomery is Data:
+  Montgomery{modulus: List<&2, U32>, width: Nat, negInverse: U32}
+
+# -m^-1 mod 2^16 by Newton's iteration from the low limb (odd): each step
+# doubles the correct bits, and m0*m0 = 1 mod 8 seeds three of them.
+def newtonInverse(fuel: Nat, +m0: U32, +inverse: U32) -> U32:
+  match fuel:
+    case 0n: inverse
+    case 1n+n: newtonInverse(n, m0, U32.and((inverse * U32.sub(2, (m0 * inverse : U32)) : U32), 65535))
+
+def montgomery(limbs: List<&2, U32>) -> Montgomery:
+  match limbs:
+    case Nil{}: Montgomery{Nil{}, 0n, 0}
+    case +m0 <> +rest:
+      Montgomery{m0 <> rest, List.length(&2, U32, m0 <> rest), U32.and(U32.sub(65536, newtonInverse(4n, m0, m0)), 65535)}
+
+def dropLow(limbs: List<&2, U32>) -> List<&2, U32>:
+  match limbs:
+    case Nil{}: Nil{}
+    case _ <> rest: rest
+
+def lowLimb(limbs: List<&2, U32>) -> U32:
+  match limbs:
+    case Nil{}: 0
+    case head <> _: head
+
+def reduceSteps(steps: Nat, space: Montgomery, +value: List<&2, U32>) -> List<&2, U32>:
+  match steps space:
+    case 0n _: value
+    case 1n+n Montgomery{+modulus, width, +negInverse}:
+      +factor = U32.and((lowLimb(value) * negInverse : U32), 65535)
+      reduceSteps(n, Montgomery{modulus, width, negInverse}, dropLow(addLimbs(value, multiplyLimb(modulus, factor, 0), 0)))
+
+def montgomeryFinish(order: Cmp, value: List<&2, U32>, modulus: List<&2, U32>) -> BigNat:
+  match order:
+    case LT{}: BigNat{trim(value)}
+    case _: BigNat{trim(subtractLimbs(value, modulus, 0))}
+
+# REDC: value < m*R in, value*R^-1 mod m out.
+def montgomeryReduce(space: Montgomery, value: List<&2, U32>) -> BigNat:
+  match space:
+    case Montgomery{+modulus, +width, +negInverse}:
+      +reduced = reduceSteps(width, Montgomery{modulus, width, negInverse}, value)
+      montgomeryFinish(compareLimbs(trim(reduced), modulus), reduced, modulus)
+
+def montgomeryMultiply(space: Montgomery, left: BigNat, right: BigNat) -> BigNat:
+  match left right:
+    case BigNat{a} BigNat{b}: montgomeryReduce(space, multiplyLimbs(a, b))
+
+def montgomeryBit(set: Bool, space: Montgomery, squared: BigNat, base: BigNat) -> BigNat:
+  match set:
+    case False{}: squared
+    case True{}: montgomeryMultiply(space, squared, base)
+
+def montgomeryByte(fuel: Nat, +byte: U32, +space: Montgomery, +base: BigNat, +value: BigNat) -> BigNat:
+  match fuel:
+    case 0n: value
+    case 1n+fuel:
+      montgomeryByte(fuel, U32.and(U32.shl(byte), 255), space, base, montgomeryBit(U32.is_eq(U32.and(byte, 128), 128), space, montgomeryMultiply(space, value, value), base))
+
+def montgomeryPower(exponent: List<&2, U32>, +space: Montgomery, +base: BigNat, value: BigNat) -> BigNat:
+  match exponent:
+    case Nil{}: value
+    case byte <> rest: montgomeryPower(rest, space, base, montgomeryByte(8n, byte, space, base, value))
+
+# Enters Montgomery form: a*R mod m through the general reduction, once.
+def montgomeryEnter(space: Montgomery, value: BigNat, modulus: BigNat) -> BigNat:
+  match space:
+    case Montgomery{_, width, _}: reduce(shiftLeft(value, Nat.mul(width, 16n)), modulus)
+
+def limbsOf(value: BigNat) -> List<&2, U32>:
+  match value:
+    case BigNat{limbs}: limbs
+
+def isOdd(value: BigNat) -> Bool:
+  match value:
+    case BigNat{Nil{}}: False{}
+    case BigNat{head <> _}: U32.is_eq(U32.and(head, 1), 1)
+
+def montgomeryPowerMod(exponent: List<&2, U32>, base: BigNat, modulus: BigNat) -> BigNat:
+  match modulus:
+    case BigNat{+limbs}:
+      +space = montgomery(limbs)
+      +m = {BigNat{limbs} : BigNat}
+      montgomeryReduce(space, limbsOf(montgomeryPower(exponent, space, montgomeryEnter(space, base, m), montgomeryEnter(space, one(), m))))
+
+def powerModBy(odd: Bool, exponent: List<&2, U32>, base: BigNat, +modulus: BigNat) -> BigNat:
+  match odd:
+    case True{}: montgomeryPowerMod(exponent, base, modulus)
+    case False{}: modularPower(exponent, base, modulus, reduce(one(), modulus))
+
+# The modulus must be nonzero; an odd one (every RSA modulus and prime
+# field) takes the Montgomery ladder, an even one the bit-serial reduction.
 def powerMod(exponent: List<&2, U32>, base: BigNat, +modulus: BigNat) -> BigNat:
-  modularPower(exponent, base, modulus, reduce(one(), modulus))
+  powerModBy(isOdd(modulus), exponent, base, modulus)
 
 def toBigEndian(width: Nat, value: BigNat) -> List<&2, U32>:
   writeBigEndian(width, divideSmallRaw(value, 256), Nil{})

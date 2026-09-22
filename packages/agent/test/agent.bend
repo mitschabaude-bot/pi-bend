@@ -63,7 +63,7 @@ def comparison(value: Maybe<&2, Cmp>) -> Bool:
   match value:
     case Some{EQ{}}: True{}
     case _: False{}
-def equals(value: F.F64, expected: U32) -> Bool: comparison(F.compare(value, F.fromU32(expected)))
+def equals(value: F64, expected: U32) -> Bool: comparison(F.compare(value, F.fromU32(expected)))
 def completeModel(model: Ai.Model<Ai.JsonValue>, expectedApi: String) -> Bool:
   match model:
     case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)

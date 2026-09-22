@@ -12,34 +12,34 @@ import ../../../runtime/src/f64.bend as F
 # upstream. Message/schema types remain intact; callers supply pure encoders
 # when their tool parameters or arguments use application-specific records.
 type ContextUsageEstimate is Data:
-  ContextUsageEstimate{tokens: F.F64, usageTokens: F.F64, trailingTokens: F.F64, lastUsageIndex: Maybe<&2, Nat>}
+  ContextUsageEstimate{tokens: F64, usageTokens: F64, trailingTokens: F64, lastUsageIndex: Maybe<&2, Nat>}
 
-def calculateContextTokens(usage: T.Usage) -> F.F64:
+def calculateContextTokens(usage: T.Usage) -> F64:
   match usage:
     case T.Usage{input, output, read, write, _, _, +total, _}:
-      Bool.pick(F.F64, F.isEqual(F.compare(total, F.fromU32(0))) || F.isNaN(total), F.add(F.add(F.add(input, output), read), write), total)
+      Bool.pick(F64, F.isEqual(F.compare(total, F.fromU32(0))) || F.isNaN(total), F.add(F.add(F.add(input, output), read), write), total)
 
-def textCharsFrom(text: String, chars: F.F64) -> F.F64:
+def textCharsFrom(text: String, chars: F64) -> F64:
   match text:
     case SNil{}: chars
     case SCon{Chr{code}, rest}: textCharsFrom(rest, F.add(chars, F.fromU32(Bool.pick(U32, U32.is_gt(code, 65535), 2, 1))))
 
-def textChars(text: String) -> F.F64: textCharsFrom(text, F.fromU32(0))
+def textChars(text: String) -> F64: textCharsFrom(text, F.fromU32(0))
 
-def tokensForChars(chars: F.F64) -> F.F64:
+def tokensForChars(chars: F64) -> F64:
   +quotient = F.divide(chars, F.fromU32(4))
   +whole = F.truncate(quotient)
-  Bool.pick(F.F64, F.isEqual(F.compare(quotient, whole)), whole, F.add(whole, F.fromU32(1)))
+  Bool.pick(F64, F.isEqual(F.compare(quotient, whole)), whole, F.add(whole, F.fromU32(1)))
 
-def estimateTextTokens(text: String) -> F.F64: tokensForChars(textChars(text))
+def estimateTextTokens(text: String) -> F64: tokensForChars(textChars(text))
 
-def blockChars(blocks: List<&2, T.TextImageContent>, chars: F.F64) -> F.F64:
+def blockChars(blocks: List<&2, T.TextImageContent>, chars: F64) -> F64:
   match blocks:
     case Nil{}: chars
     case T.TextImageText{T.TextContent{text, _}} <> rest: blockChars(rest, F.add(chars, textChars(text)))
     case T.TextImageImage{_} <> rest: blockChars(rest, F.add(chars, F.fromU32(4800)))
 
-def estimateTextAndImageContentTokens(content: T.UserContent) -> F.F64:
+def estimateTextAndImageContentTokens(content: T.UserContent) -> F64:
   match content:
     case T.UserText{text}: estimateTextTokens(text)
     case T.UserBlocks{blocks}: tokensForChars(blockChars(blocks, F.fromU32(0)))
@@ -63,37 +63,37 @@ def referenceValues(tools: List<&2, T.ToolReference>) -> List<&2, T.JsonValue>:
     case Nil{}: Nil{}
     case T.ToolReference{name} <> rest: T.JsonObject{R.Record{R.Property{"name", T.JsonString{name}} <> Nil{}}} <> referenceValues(rest)
 
-def estimateToolsTokens(values: List<&2, T.JsonValue>) -> F.F64:
+def estimateToolsTokens(values: List<&2, T.JsonValue>) -> F64:
   match values:
     case Nil{}: F.fromU32(0)
     case head <> tail: estimateTextTokens(safeJsonStringify(T.JsonArray{head <> tail}))
 
-def addedTokens(~P: Data, ~encode: P -> T.JsonValue, tools: Maybe<&2, List<&2, T.Tool<P>>>) -> F.F64:
+def addedTokens(~P: Data, ~encode: P -> T.JsonValue, tools: Maybe<&2, List<&2, T.Tool<P>>>) -> F64:
   match tools:
     case None{}: F.fromU32(0)
     case Some{values}: estimateToolsTokens(toolValues(~P, ~encode, values))
 
-def removedTokens(tools: Maybe<&2, List<&2, T.ToolReference>>) -> F.F64:
+def removedTokens(tools: Maybe<&2, List<&2, T.ToolReference>>) -> F64:
   match tools:
     case None{}: F.fromU32(0)
     case Some{values}: estimateToolsTokens(referenceValues(values))
 
-def systemParts(~P: Data, ~encode: P -> T.JsonValue, message: T.SystemMessage<P>, text: F.F64) -> F.F64:
+def systemParts(~P: Data, ~encode: P -> T.JsonValue, message: T.SystemMessage<P>, text: F64) -> F64:
   match message:
     case T.SystemMessage{_, _, added, removed, _}: F.add(F.add(text, addedTokens(~P, ~encode, added)), removedTokens(removed))
 
-def systemTokens(~P: Data, ~encode: P -> T.JsonValue, +message: T.SystemMessage<P>) -> F.F64:
+def systemTokens(~P: Data, ~encode: P -> T.JsonValue, +message: T.SystemMessage<P>) -> F64:
   text = estimateTextTokens(Text.renderComplete(P, message))
   systemParts(~P, ~encode, message, text)
 
-def assistantChars(~A: Data, ~encode: A -> T.JsonValue, blocks: List<&2, T.AssistantContent<A>>, chars: F.F64) -> F.F64:
+def assistantChars(~A: Data, ~encode: A -> T.JsonValue, blocks: List<&2, T.AssistantContent<A>>, chars: F64) -> F64:
   match blocks:
     case Nil{}: chars
     case T.AssistantText{T.TextContent{text, _}} <> rest: assistantChars(~A, ~encode, rest, F.add(chars, textChars(text)))
     case T.AssistantThinking{T.ThinkingContent{text, _, _}} <> rest: assistantChars(~A, ~encode, rest, F.add(chars, textChars(text)))
     case T.AssistantToolCall{T.ToolCall{_, name, arguments, _, _}} <> rest: assistantChars(~A, ~encode, rest, F.add(chars, F.add(textChars(name), textChars(safeJsonStringify(encode(arguments))))))
 
-def estimateMessageTokensWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~encodeParameters: P -> T.JsonValue, ~encodeArguments: A -> T.JsonValue, message: T.Message<P, A, G, D>) -> F.F64:
+def estimateMessageTokensWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~encodeParameters: P -> T.JsonValue, ~encodeArguments: A -> T.JsonValue, message: T.Message<P, A, G, D>) -> F64:
   match message:
     case T.System{value}: systemTokens(~P, ~encodeParameters, value)
     case T.User{T.UserMessage{content, _}}: estimateTextAndImageContentTokens(content)
@@ -102,11 +102,11 @@ def estimateMessageTokensWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~encodePar
 
 # Wire-schema convenience entry point; diagnostic and tool-result details do
 # not contribute tokens and retain their caller-selected types.
-def estimateMessageTokens(~G: Data, ~D: Data, message: T.Message<S.Value, S.Value, G, D>) -> F.F64:
+def estimateMessageTokens(~G: Data, ~D: Data, message: T.Message<S.Value, S.Value, G, D>) -> F64:
   estimateMessageTokensWith(~S.Value, ~S.Value, ~G, ~D, ~SchemaJson.toJson, ~SchemaJson.toJson, message)
 
 type Observation is Data:
-  Observation{timestamp: F.F64, usage: Maybe<&2, F.F64>}
+  Observation{timestamp: F64, usage: Maybe<&2, F64>}
 
 def successful(reason: T.StopReason) -> Bool:
   match reason:
@@ -118,7 +118,7 @@ def assistantObservation(~A: Data, ~G: Data, message: T.AssistantMessage<A, G>) 
   match message:
     case T.AssistantMessage{_, _, _, _, _, _, _, _, usage, reason, _, _, _, _, timestamp}:
       +tokens = calculateContextTokens(usage)
-      Observation{timestamp, Bool.pick(Maybe<&2, F.F64>, successful(reason) && F.isGreater(F.compare(tokens, F.fromU32(0))), Some{tokens}, None{})}
+      Observation{timestamp, Bool.pick(Maybe<&2, F64>, successful(reason) && F.isGreater(F.compare(tokens, F.fromU32(0))), Some{tokens}, None{})}
 
 def observe(~P: Data, ~A: Data, ~G: Data, ~D: Data, message: T.Message<P, A, G, D>) -> Observation:
   match message:
@@ -128,14 +128,14 @@ def observe(~P: Data, ~A: Data, ~G: Data, ~D: Data, message: T.Message<P, A, G, 
     case T.Assistant{value}: assistantObservation(~A, ~G, value)
 
 type EstimateState is Data:
-  EstimateState{nextIndex: Nat, latestPrefixTimestamp: F.F64, usageTokens: F.F64, trailingTokens: F.F64, lastUsageIndex: Maybe<&2, Nat>}
+  EstimateState{nextIndex: Nat, latestPrefixTimestamp: F64, usageTokens: F64, trailingTokens: F64, lastUsageIndex: Maybe<&2, Nat>}
 
-def recordEstimate(applies: Bool, usage: Maybe<&2, F.F64>, +index: Nat, latest: F.F64, previousUsage: F.F64, trailing: F.F64, previousIndex: Maybe<&2, Nat>, estimated: F.F64) -> EstimateState:
+def recordEstimate(applies: Bool, usage: Maybe<&2, F64>, +index: Nat, latest: F64, previousUsage: F64, trailing: F64, previousIndex: Maybe<&2, Nat>, estimated: F64) -> EstimateState:
   match applies usage:
     case True{} Some{tokens}: EstimateState{1n+index, latest, tokens, F.fromU32(0), Some{index}}
     case _ _: EstimateState{1n+index, latest, previousUsage, F.add(trailing, estimated), previousIndex}
 
-def advance(state: EstimateState, observation: Observation, estimated: F.F64) -> EstimateState:
+def advance(state: EstimateState, observation: Observation, estimated: F64) -> EstimateState:
   match state observation:
     case EstimateState{index, +prefix, usage, trailing, last} Observation{+timestamp, reported}:
       recordEstimate(F.isAtLeast(F.compare(timestamp, prefix)), reported, index, F.maximum(prefix, timestamp), usage, trailing, last, estimated)

@@ -85,7 +85,7 @@ def tierName(value: ServiceTier) -> String:
 # Extends StreamOptions with the Responses-specific fields. Tool choice is the
 # SDK's JSON-shaped union, kept as the wire value.
 type OpenAIResponsesOptions<-Reason: Data, -Telemetry: Data, -E: Data> is Data:
-  OpenAIResponsesOptions{signal: Maybe<&2, Signal(Reason)>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch.Fetch(Reason)>, env: Maybe<&2, T.ProviderEnv()>, onPayload: Maybe<&2, T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, E)>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, E)>, headers: Maybe<&2, T.ProviderHeaders()>, timeoutMs: Maybe<&2, F.F64>, maxRetries: Maybe<&2, F.F64>, maxRetryDelayMs: Maybe<&2, F.F64>, temperature: Maybe<&2, F.F64>, samplingParams: Maybe<&2, R.Record<T.JsonValue>>, maxTokens: Maybe<&2, F.F64>, transport: Maybe<&2, T.Transport>, cacheRetention: Maybe<&2, T.CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, F.F64>, metadata: Maybe<&2, R.Record<T.JsonValue>>, reasoningEffort: Maybe<&2, T.ThinkingLevel>, reasoningSummary: Maybe<&2, T.Nullable<ReasoningSummary>>, serviceTier: Maybe<&2, T.Nullable<ServiceTier>>, toolChoice: Maybe<&2, T.JsonValue>}
+  OpenAIResponsesOptions{signal: Maybe<&2, Signal(Reason)>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch.Fetch(Reason)>, env: Maybe<&2, T.ProviderEnv()>, onPayload: Maybe<&2, T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, E)>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, E)>, headers: Maybe<&2, T.ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>, temperature: Maybe<&2, F64>, samplingParams: Maybe<&2, R.Record<T.JsonValue>>, maxTokens: Maybe<&2, F64>, transport: Maybe<&2, T.Transport>, cacheRetention: Maybe<&2, T.CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, F64>, metadata: Maybe<&2, R.Record<T.JsonValue>>, reasoningEffort: Maybe<&2, T.ThinkingLevel>, reasoningSummary: Maybe<&2, T.Nullable<ReasoningSummary>>, serviceTier: Maybe<&2, T.Nullable<ServiceTier>>, toolChoice: Maybe<&2, T.JsonValue>}
 
 type ResponsesSettings is Data:
   ResponsesSettings{reasoningEffort: Maybe<&2, T.ThinkingLevel>, reasoningSummary: Maybe<&2, T.Nullable<ReasoningSummary>>, serviceTier: Maybe<&2, T.Nullable<ServiceTier>>, toolChoice: Maybe<&2, T.JsonValue>}
@@ -232,7 +232,7 @@ def OPENAI_TOOL_CALL_PROVIDERS() -> List<&2, String>:
   "openai" <> "openai-codex" <> "opencode" <> Nil{}
 
 # OpenAI Responses rejects max_output_tokens below 16 (pi#6265).
-def OPENAI_RESPONSES_MIN_OUTPUT_TOKENS() -> F.F64: F.fromU32(16)
+def OPENAI_RESPONSES_MIN_OUTPUT_TOKENS() -> F64: F.fromU32(16)
 
 type BuildError is Data:
   MessageConversion{error: Shared.MessageError}
@@ -249,7 +249,7 @@ def optionalNullableString(fields: R.Record<T.JsonValue>, key: String, value: Ma
     case Some{T.NullValue{}}: R.set(T.JsonValue, fields, key, T.JsonNull{})
     case Some{T.PresentValue{text}}: R.set(T.JsonValue, fields, key, T.JsonString{text})
 
-def optionalNumber(fields: R.Record<T.JsonValue>, key: String, value: Maybe<&2, F.F64>) -> R.Record<T.JsonValue>:
+def optionalNumber(fields: R.Record<T.JsonValue>, key: String, value: Maybe<&2, F64>) -> R.Record<T.JsonValue>:
   match value:
     case None{}: fields
     case Some{scalar}: R.set(T.JsonValue, fields, key, T.JsonNumber{scalar})
@@ -266,9 +266,9 @@ def activeNumber(value: F.Decoded) -> Bool:
     case F.Finite{_, _, magnitude}: Bool.not(Word.equal(magnitude, Word.zero()))
 
 # `options.maxTokens &&`: zero and NaN are falsy and send no budget.
-def outputTokens(enabled: Bool, value: Maybe<&2, F.F64>) -> Maybe<&2, F.F64>:
+def outputTokens(enabled: Bool, value: Maybe<&2, F64>) -> Maybe<&2, F64>:
   match enabled value:
-    case True{} Some{+scalar}: Bool.pick(Maybe<&2, F.F64>, activeNumber(F.decode(scalar)), Some{F.maximum(scalar, OPENAI_RESPONSES_MIN_OUTPUT_TOKENS())}, None{})
+    case True{} Some{+scalar}: Bool.pick(Maybe<&2, F64>, activeNumber(F.decode(scalar)), Some{F.maximum(scalar, OPENAI_RESPONSES_MIN_OUTPUT_TOKENS())}, None{})
     case _ _: None{}
 
 def mappedEffort(value: Maybe<&2, T.Nullable<String>>, fallback: String) -> String:
@@ -523,13 +523,13 @@ def prepare(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, +mode
 # Service-tier pricing
 # --------------------
 
-def getServiceTierCostMultiplier(modelId: String, serviceTier: Maybe<&2, String>) -> Maybe<&2, F.F64>:
+def getServiceTierCostMultiplier(modelId: String, serviceTier: Maybe<&2, String>) -> Maybe<&2, F64>:
   match serviceTier:
     case Some{"flex"}: Some{F.fromBits(1071644672, 0)}
-    case Some{"priority"}: Some{Bool.pick(F.F64, String.eq(modelId, "gpt-5.5"), F.fromBits(1074003968, 0), F.fromU32(2))}
+    case Some{"priority"}: Some{Bool.pick(F64, String.eq(modelId, "gpt-5.5"), F.fromBits(1074003968, 0), F.fromU32(2))}
     case _: None{}
 
-def scaleCosts(+factor: F.F64, costs: T.UsageCost) -> T.UsageCost:
+def scaleCosts(+factor: F64, costs: T.UsageCost) -> T.UsageCost:
   match costs:
     case T.UsageCost{input, output, read, write, _}:
       +input = F.multiply(input, factor)
@@ -538,7 +538,7 @@ def scaleCosts(+factor: F.F64, costs: T.UsageCost) -> T.UsageCost:
       +write = F.multiply(write, factor)
       T.UsageCost{input, output, read, write, F.add(F.add(F.add(input, output), read), write)}
 
-def scaled(multiplier: Maybe<&2, F.F64>, usage: T.Usage) -> T.Usage:
+def scaled(multiplier: Maybe<&2, F64>, usage: T.Usage) -> T.Usage:
   match multiplier usage:
     case None{} original: original
     case Some{factor} T.Usage{input, output, read, write, longWrite, reasoning, total, costs}: T.Usage{input, output, read, write, longWrite, reasoning, total, scaleCosts(factor, costs)}
@@ -753,7 +753,7 @@ type Terminal<-Reason: Data, -G: Data, -E: Data> is Data:
 type RunResult<-Reason: Data, -G: Data, -E: Data> is Data:
   RunResult{terminal: Terminal<Reason, G, E>, cleanup: Maybe<&2, Error<Reason, E>>}
 
-def initialMessage(-G: Data, model: T.Model<T.JsonValue>, timestamp: F.F64) -> T.AssistantMessage<V.Value, G>:
+def initialMessage(-G: Data, model: T.Model<T.JsonValue>, timestamp: F64) -> T.AssistantMessage<V.Value, G>:
   match model:
     case T.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}:
       +zero = F.fromU32(0)
@@ -887,7 +887,7 @@ def retried(-Reason: Data, -E: Data, result: Result<&2, &1, Retry.RetryFailure<C
 
 # retryProviderRequest around one attempt callback. The retry effects, their
 # entropy and the date parser live only for this loop.
-def attemptWithEffects(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F.F64>, pair: Retry.Runtime<Reason> & Retry.Effects<Reason>) -> IO(Acquired(Reason, E)):
+def attemptWithEffects(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F64>, pair: Retry.Runtime<Reason> & Retry.Effects<Reason>) -> IO(Acquired(Reason, E)):
   match pair:
     case (owner, effects):
       do IO<Acquired(Reason, E)>:
@@ -895,16 +895,16 @@ def attemptWithEffects(~Reason: Data, ~E: Data, environment: AttemptEnvironment<
         result : Result<&2, &1, Retry.RetryFailure<Client.AttemptError<Reason>>, Response.Response<Client.State(Reason)>> <- Retry.retryProviderRequestOwned(Reason, Client.AttemptError<Reason>, Response.Response<Client.State(Reason)>, request, effects, retry)
         C.dispose(Unit, Client.Outcome(Reason), request)
         Retry.dispose(Reason, owner)
-        C.dispose(String, F.F64, date)
+        C.dispose(String, F64, date)
         return retried(Reason, E, result)
 
 # retryProviderRequest around one attempt callback. The retry effects, their
 # entropy and the date parser live only for this loop.
-def attempted(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F.F64>, seeded: Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>>) -> IO(Acquired(Reason, E)):
+def attempted(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F64>, seeded: Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>>) -> IO(Acquired(Reason, E)):
   match seeded:
     case Fail{cause}:
       do IO<Acquired(Reason, E)>:
-        C.dispose(String, F.F64, date)
+        C.dispose(String, F64, date)
         return Fail{EntropyFailure{cause}}
     case Done{runtime}: attemptWithEffects(~Reason, ~E, environment, retry, date, Retry.borrow(Reason, runtime))
 
@@ -912,7 +912,7 @@ def acquire(~Reason: Data, ~E: Data, config: Config, fetch: Fetch.Fetch(Reason),
   match config:
     case Config{_, _, _, _, _, limit, _}:
       do IO<Acquired(Reason, E)>:
-        +date : C.Callback<String, F.F64> <- Retry.dateParser()
+        +date : C.Callback<String, F64> <- Retry.dateParser()
         seeded : Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>> <- Retry.new(~Reason, date)
         attempted(~Reason, ~E, AttemptEnvironment{request, parent, fetch, limit}, retry, date, seeded)
 
@@ -1130,7 +1130,7 @@ def streamOptions(prepared: Prepared, tier: Maybe<&2, T.Nullable<ServiceTier>>) 
     case Prepared{_, _, _, _, _, grammar, _} Some{T.PresentValue{selected}}: Stream.OpenAIResponsesStreamOptions{Some{tierName(selected)}, grammar}
     case Prepared{_, _, _, _, _, grammar, _} _: Stream.OpenAIResponsesStreamOptions{None{}, grammar}
 
-def envelope(config: Config, prepared: Prepared, timeout: Maybe<&2, F.F64>, payload: T.JsonValue) -> Result<&2, &2, Client.RequestError, Client.Request>:
+def envelope(config: Config, prepared: Prepared, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, Client.RequestError, Client.Request>:
   match config prepared:
     case Config{url, defaults, _, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
 
@@ -1170,7 +1170,7 @@ def modelProvider(model: T.Model<T.JsonValue>) -> String:
   match model:
     case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
 
-def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, +events: Events.AssistantMessageEventStream(V.Value, G), timestamp: F.F64, finalizer: IO(Unit), pair: SignalOwner<Reason> & Signal(Reason)) -> IO(RunResult<Reason, G, E>):
+def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, +events: Events.AssistantMessageEventStream(V.Value, G), timestamp: F64, finalizer: IO(Unit), pair: SignalOwner<Reason> & Signal(Reason)) -> IO(RunResult<Reason, G, E>):
   match pair:
     case (owner, +parent):
       do IO<RunResult<Reason, G, E>>:
@@ -1181,7 +1181,7 @@ def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~
 
 # The body of upstream `stream`'s async task: try everything, then settle the
 # message, publish `done`/`error` and end the canonical stream.
-def produce(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, events: Events.AssistantMessageEventStream(V.Value, G), signal: SignalOwner<Reason>, timestamp: F.F64, finalizer: IO(Unit)) -> IO(RunResult<Reason, G, E>):
+def produce(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, events: Events.AssistantMessageEventStream(V.Value, G), signal: SignalOwner<Reason>, timestamp: F64, finalizer: IO(Unit)) -> IO(RunResult<Reason, G, E>):
   produceWith(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, events, timestamp, finalizer, ownedSignal(Reason, signal))
 
 # Public entry points
@@ -1190,7 +1190,7 @@ def produce(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~rend
 # Start the request with an explicit timestamp, SSE hooks and a finalizer that
 # runs after the producer has retired everything it owns. Returns the run
 # owner immediately; borrow its event stream, then wait or dispose.
-def streamAt(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, timestamp: F.F64, finalizer: IO(Unit)) -> IO(Run<Reason, G, E>):
+def streamAt(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, timestamp: F64, finalizer: IO(Unit)) -> IO(Run<Reason, G, E>):
   match options:
     case OpenAIResponsesOptions{requestedSignal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       do IO<Run<Reason, G, E>>:
@@ -1202,7 +1202,7 @@ def streamAt(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~ren
 # Generate function for the OpenAI Responses API.
 def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, model: T.Model<T.JsonValue>, context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> IO(Run<Reason, G, E>):
   do IO<Run<Reason, G, E>>:
-    timestamp : F.F64 <- Date.now()
+    timestamp : F64 <- Date.now()
     +hooks : Sse.Hooks<Sse.TransportError(Reason)> <- Sse.defaultHooks(~(Sse.TransportError(Reason)))
     streamAt(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, timestamp, Sse.disposeHooks(Sse.TransportError(Reason), hooks))
 

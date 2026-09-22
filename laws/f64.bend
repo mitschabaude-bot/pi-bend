@@ -29,9 +29,9 @@ law unordered_comparisons_satisfy_nothing:
   {Bool.or(Bool.or(F.isEqual(None{}), F.isGreater(None{})), Bool.or(F.isAtLeast(None{}), F.isAtMost(None{}))) == False{} : Bool}
 
 law minimum_of_unordered_is_nan:
-  for value: F.F64
-  {F.minimum(F.nan(), value) == F.nan() : F.F64}
+  for value: F64
+  {F.minimum(F.nan(), value) == F.nan() : F64}
 
 law maximum_of_unordered_is_nan:
-  for value: F.F64
-  {F.maximum(F.nan(), value) == F.nan() : F.F64}
+  for value: F64
+  {F.maximum(F.nan(), value) == F.nan() : F64}
