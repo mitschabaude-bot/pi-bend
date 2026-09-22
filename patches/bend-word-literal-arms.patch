@@ -1,0 +1,287 @@
+--- a/bend.ts	2026-09-21 23:03:36.190113386 +0200
++++ b/bend.ts	2026-09-22 12:08:45.421468775 +0200
+@@ -284,7 +284,7 @@
+   | { $: "App"; f: TermOf<B>; x: TermOf<B> }                                       // f(x)
+   | { $: "ADT"; k: Name; x: TermOf<B>[]; r: Name[] }                               // A<x0,x1,...>
+   | { $: "Ctr"; k: Name; x: TermOf<B>[] }                                          // A{x0,x1,...}
+-  | { $: "Mat"; k: Name; h: TermOf<B>; m: TermOf<B>; ks?: Span }                   // \{A: h; m}
++  | { $: "Mat"; k: Name; h: TermOf<B>; m: TermOf<B>; ks?: Span; w?: U32 }          // \{A: h; m}; w: a word literal arm
+   | { $: "Efq" }                                                                   // \{}
+   | { $: "Eql"; a: TermOf<B>; b: TermOf<B>; T: TermOf<B> }                         // {a == b : T}
+   | { $: "Rfl" }                                                                   // {==}
+@@ -417,8 +417,8 @@
+   return { $: "Ctr", k, x, s };
+ }
+ 
+-export function Mat<X>(k: Name, h: TermOf<X>, m: TermOf<X>, s?: Span, ks?: Span): TermOf<X> {
+-  return { $: "Mat", k, h, m, s, ks };
++export function Mat<X>(k: Name, h: TermOf<X>, m: TermOf<X>, s?: Span, ks?: Span, w?: U32): TermOf<X> {
++  return w === undefined ? { $: "Mat", k, h, m, s, ks } : { $: "Mat", k, h, m, s, ks, w };
+ }
+ 
+ export function Efq<X>(s?: Span): TermOf<X> {
+@@ -795,7 +795,7 @@
+       return Ctr(tm.k, tm.x.map((x) => term_higher(x, env)), tm.s);
+     }
+     case "Mat": {
+-      return Mat(tm.k, term_higher(tm.h, env), term_higher(tm.m, env), tm.s, tm.ks);
++      return Mat(tm.k, term_higher(tm.h, env), term_higher(tm.m, env), tm.s, tm.ks, tm.w);
+     }
+     case "Efq": {
+       return Efq(tm.s);
+@@ -864,7 +864,7 @@
+       return Ctr(tm.k, tm.x.map((x) => term_lower(x, d)), tm.s);
+     }
+     case "Mat": {
+-      return Mat(tm.k, term_lower(tm.h, d), term_lower(tm.m, d), tm.s, tm.ks);
++      return Mat(tm.k, term_lower(tm.h, d), term_lower(tm.m, d), tm.s, tm.ks, tm.w);
+     }
+     case "Efq": {
+       return Efq(tm.s);
+@@ -1458,7 +1458,7 @@
+         const arms: string[] = [];
+         let m: LTerm = tm;
+         while (m.$ === "Mat") {
+-          arms.push(m.k + ": " + go(m.h, 1));
++          arms.push((m.w === undefined ? m.k : String(m.w)) + ": " + go(m.h, 1));
+           m = m.m;
+         }
+         if (m.$ !== "Efq") {
+@@ -2804,6 +2804,24 @@
+     } else if (v === x) {
+       if (c === null) {
+         return Efq(m.s);
++      } else if (patt_word(c) !== null && m.r.every((row) =>
++        row.p[0].$ === "PVar" || patt_word(row.p[0]) !== null)) {
++        // A column of word literals: one arm compares the whole word, so
++        // the default is flattened once per literal, not once per bit.
++        const w = patt_word(c) as U32;
++        const ps = m.r.flatMap((row): Rows => {
++          const p0 = row.p[0];
++          if (p0.$ === "PCtr") {
++            return patt_word(p0) === w
++              ? [{ p: row.p.slice(1), f: body_sub(row.f, x.i, c) }] : [];
++          }
++          const g = body_sub(row.f, p0.i, x);
++          return [{ p: row.p.slice(1), f: body_sub(g, x.i, c) }];
++        });
++        const pt = match_flatten({ $: "Match", e: m.e.slice(1), r: ps, s: m.s }, vars.slice(1), fr);
++        const ds = m.r.filter((row) => row.p[0].$ !== "PCtr" || patt_word(row.p[0]) !== w);
++        const dt = match_flatten({ $: "Match", e: m.e, r: ds, s: m.s }, vars, fr);
++        return Mat(c.k, pt, dt, m.s, c.s, w);
+       } else {
+         const xs = c.x.map((q): PVar => {
+           if (q.$ === "PVar") {
+@@ -2859,6 +2877,11 @@
+   }
+ }
+ 
++// A pattern that is a complete word literal: U32{WCon{b0, .. WNil{}}}.
++export function patt_word(q: Patt): U32 | null {
++  return q.$ === "PCtr" && q.k === "U32" ? u32_from_term(patt_term(q)) : null;
++}
++
+ export function body_flatten(b: Body, vars: PVar[], fr: () => number): LTerm {
+   switch (b.$) {
+     case "Reply": {
+@@ -3031,7 +3054,7 @@
+               case "Ctr": tm = Ctr(tm.k, tm.x.map((x) => term_cell(x)), tm.s); break;
+               case "ADT": tm = ADT(tm.k, tm.x.map((x) => term_cell(x)), tm.s, tm.r); break;
+               case "All": tm = All(tm.q, tm.k, tm.i, term_cell(tm.A), tm.B, tm.s); break;
+-              case "Mat": tm = Mat(tm.k, term_cell(tm.h), term_cell(tm.m), tm.s, tm.ks); break;
++              case "Mat": tm = Mat(tm.k, term_cell(tm.h), term_cell(tm.m), tm.s, tm.ks, tm.w); break;
+               case "Eql": tm = Eql(term_cell(tm.a), term_cell(tm.b), term_cell(tm.T), tm.s); break;
+               case "Min": tm = Min(term_cell(tm.a), term_cell(tm.b), tm.s); break;
+               case "Typ": tm = Typ(term_cell(tm.g), tm.s); break;
+@@ -3077,6 +3100,22 @@
+                     continue walk;
+                   }
+                   case "Mat": {
++                    if (t.w !== undefined) {
++                      const n = u32_from_term(ctr);
++                      if (n === null) {
++                        tm = term_apply(fr.lhs === null ? fr.t : fr.lhs.t(), fr.e, fr.s);
++                        continue back;
++                      } else if (n === t.w) {
++                        const fl = fr.lhs;
++                        lhs = fl === null ? null
++                          : { t: () => term_apply(fl.t(), ctr), n: fl.n - 1 };
++                        tm = t.h;
++                        continue main;
++                      } else {
++                        t = t.m;
++                        continue walk;
++                      }
++                    }
+                     if (t.k === ctr.k) {
+                       const fl = fr.lhs;
+                       if (fl === null) {
+@@ -3162,7 +3201,7 @@
+       return Ctr(tm.k, tm.x.map((x) => term_snf(book, x)), tm.s);
+     }
+     case "Mat": {
+-      return Mat(tm.k, term_snf(book, tm.h), term_snf(book, tm.m), tm.s, tm.ks);
++      return Mat(tm.k, term_snf(book, tm.h), term_snf(book, tm.m), tm.s, tm.ks, tm.w);
+     }
+     case "Efq": {
+       return Efq(tm.s);
+@@ -3278,7 +3317,7 @@
+           && a.x.every((x, j) => term_compare("EQ", book, x, b.x[j], dep));
+     }
+     case "Mat": {
+-      return b.$ === "Mat" && a.k === b.k
++      return b.$ === "Mat" && a.k === b.k && a.w === b.w
+           && term_compare("EQ", book, a.h, b.h, dep)
+           && term_compare("EQ", book, a.m, b.m, dep);
+     }
+@@ -3646,6 +3685,18 @@
+           if (ctr === null) {
+             throw Err(book, ctx, "a constructor of " + a_wnf.k + " (missing, or already matched)", tm, tm.ks ?? tm.s, lhs.def);
+           }
++          // A word literal arm: h at P(literal), the rest over the whole type.
++          if (tm.w !== undefined) {
++            if (a_wnf.k !== "U32") {
++              throw Err(book, ctx, "a U32 scrutinee for a word literal", tm, tm.ks ?? tm.s, lhs.def);
++            }
++            const lit = u32_to_term(tm.w, tm.s);
++            const l_lhs = lhs.n > 0
++              ? { ...lhs, t: term_apply(lhs.t, lit), n: lhs.n - 1 } : lhs;
++            const l_chk = term_check(book, l_lhs, tm.h, qt, t_all.B(lit), ctx, d);
++            const r_chk = term_check(book, lhs, tm.m, qt, t_wnf, ctx, d);
++            return Check(Mat(tm.k, l_chk.tm, r_chk.tm, tm.s, tm.ks, tm.w), ty, pmap_union(l_chk.us, r_chk.us, quant_join));
++          }
+           const tel = tele_fill(book, ctr.T, a_wnf.x, ctx, lhs.def, tm.s);
+           function term_check_mat_goal(cur: HTerm, n: number, xs: HTerm[]): HTerm {
+             if (n === 0) {
+--- a/comp.ts	2026-09-22 09:41:56.560461136 +0200
++++ b/comp.ts	2026-09-22 12:52:44.409183782 +0200
+@@ -1140,14 +1140,17 @@
+     && quant_live((ty_all(book, ty) ?? die("an untyped binder")).q));
+ }
+ 
+-function mat_arms(t: HTerm): { arms: [Bend.Name, HTerm][]; end: HTerm } {
++function mat_arms(t: HTerm): { arms: [Bend.Name, HTerm][]; end: HTerm;
++  lits: (Bend.U32 | undefined)[] } {
+   const arms: [Bend.Name, HTerm][] = [];
++  const lits: (Bend.U32 | undefined)[] = [];
+   let cur = t;
+   for (let m = Bend.term_strip(cur); m.$ === "Mat"; m = Bend.term_strip(cur)) {
+     arms.push([m.k, m.h]);
++    lits.push(m.w);
+     cur = m.m;
+   }
+-  return { arms, end: cur };
++  return { arms, end: cur, lits };
+ }
+ 
+ // Quant
+@@ -1198,7 +1201,7 @@
+   }
+   if (s.$ === "Mat") {
+     const ctr = book.ctrs[s.k];
+-    const d = ctr?.n ?? 0;
++    const d = s.w !== undefined ? 0 : ctr?.n ?? 0;
+     return Math.min(def_raise(book, s.h, left - 1 + d),
+       def_raise(book, s.m, left));
+   }
+@@ -2377,13 +2380,19 @@
+       if (c === null || c.$ !== "Ctr" || !term_const(c)) {
+         return null;
+       }
+-      const { arms, end } = mat_arms(w);
+-      const arm = arms.find(([k]) => k === c.k);
++      const { arms, end, lits } = mat_arms(w);
++      const lit = lits[0] !== undefined ? Bend.u32_from_term(c) : null;
++      if (lits[0] !== undefined && lit === null) {
++        return null;
++      }
++      const at = lits[0] !== undefined ? lits.indexOf(lit as Bend.U32)
++        : arms.findIndex(([k]) => k === c.k);
++      const arm = at < 0 ? undefined : arms[at];
+       if (arm === undefined && Bend.term_strip(end).$ === "Efq") {
+         return null;
+       }
+       b = arm === undefined ? end : arm[1];
+-      xs = arm === undefined ? xs
++      xs = arm === undefined ? xs : lits[0] !== undefined ? xs.slice(1)
+         : [...ctr_flds(fl.book, c.k, c.x), ...xs.slice(1)];
+       hit = true;
+     }
+@@ -2704,13 +2713,14 @@
+   const rest = args.slice(1);
+   const all = ty_all(fl.book, ty) ?? die("an untyped match");
+   const adt = mat_adt(fl.book, all.A);
+-  const word = adt.k === "U32" || adt.k === "F32";
++  const { arms, end, lits } = mat_arms(x);
++  const lit = lits[0] !== undefined;
++  const word = !lit && (adt.k === "U32" || adt.k === "F32");
+   const lay = word ? lay_node(fl.book, adt.k) : lay_of(fl.book, all.A);
+   const bits = word ? val_hold(fl, val_to(fl, args[0], W32), "u").ws[0] : "";
+   const s = val_hold(fl, word ? val_new(lay.ks.map((_, i) =>
+     `((${bits} >> ${i}) & 1)`), lay) : val_to(fl, args[0], lay), "s");
+   const total = Bend.book_adt(fl.book, adt, Bend.Emp()).c.length;
+-  const { arms, end } = mat_arms(x);
+   const sw = s.ws[0];
+   const ls = adt.k === "Nat" ? emit_nat(x) : null;
+   const id = ls === null ? null : emit_tab(fl, ls, all.B(DUMMY));
+@@ -2722,7 +2732,10 @@
+   const lv: Level[] = ls !== null
+     ? ls.map(([h, n], i): Level => [`${sw} == ${i}`, h, () =>
+       n === null ? [] : [val_new([`(${sw} - ${n})`], lay)]])
+-    : arms.map(([k, h]): Level => {
++    : arms.map(([k, h], i): Level => {
++      if (lit) {
++        return [`${sw} == ${lits[i]}u`, h, () => []];
++      }
+       if (adt.k === "Array") {
+         const el = lay_of(fl.book, adt.x[0]);
+         return [`blk_cls(${sw}) ${k === "ALeaf" ? "==" : "!="} ${
+@@ -2739,7 +2752,7 @@
+         () => lay_arm(lay, k).fs.map((f) => val_field(s, f))];
+     });
+   // A match over IO.OP keeps its default: a foreign request is refused.
+-  if (ls === null && (arms.length < total || adt.k === "IO.OP"
++  if (ls === null && (lit || arms.length < total || adt.k === "IO.OP"
+     || Bend.term_strip(end).$ !== "Efq")) {
+     lv.push(["", end, () => [s]]);
+   }
+@@ -2755,7 +2768,7 @@
+     fl.spares = dst === null ? spares : [];
+     Object.assign(fl, outer);
+   });
+-  if (arms2.length === 1 || total === 1) {
++  if (!lit && (arms2.length === 1 || total === 1)) {
+     return arms2[0]();
+   }
+   emit_chain(fl, (i) => lv[i][0], arms2);
+@@ -2836,13 +2849,13 @@
+     }
+     defs.push(...ms.map((m, i) => `#define ${m} ${i}`));
+   }
+-  const table = (nm: string, vals: number[]) => {
++  const table = (nm: string, vals: number[], names: string[] = []) => {
+     if (vals.some((v) => v > 255)) {
+-      die("an arity over 255");
++      die("an arity over 255" + vals.map((v, i) => v > 255 ? " " + (names[i] ?? String(i)) + "=" + String(v) : "").join(""));
+     }
+     defs.push(`CONSTV u8 ${nm}[] = { ${vals.join(", ")} };`);
+   };
+-  table("FID_ARITY_T", entries.map((s) => s.params.length));
++  table("FID_ARITY_T", entries.map((s) => s.params.length), entries.map((s) => s.fid));
+   // A segment may fork when it, or one it reaches, does.
+   const forky = new Set(["FID_CLO_APPLY",
+     ...fl.segs.filter((s) => s.fork).map((s) => s.fid)]);
+@@ -3123,8 +3136,12 @@
+     const rest = args.slice(1);
+     const all = ty_all(fl.book, ty) ?? die("an untyped match");
+     const adt = mat_adt(fl.book, all.A);
+-    const { arms, end } = mat_arms(x);
++    const { arms, end, lits } = mat_arms(x);
+     const total = Bend.book_adt(fl.book, adt, Bend.Emp()).c.length;
++    if (lits[0] !== undefined) {
++      return emit_chain(fl, (i) => `${s} === ${lits[i]}`, [...arms.map(([, h]) =>
++        () => js_func(fl, h, null, rest)), () => js_func(fl, end, null, [s, ...rest])]);
++    }
+     if (adt.k === "IO.OP") {
+       block(fl, "if (" + s + ".$ === \"$FFI\") {", () => {
+         file_push(fl, "throw " + s + ";");
