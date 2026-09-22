@@ -31,3 +31,5 @@ python3 tests/find_public_check.py bun native-1 native-4 --fd /path/to/fd-10.3.0
 ```
 
 A small throughput check used 20 directories with 100 files each, pattern `*.txt`, warm filesystem cache and the median of five runs after one warmup. The full native one-worker fixture took about 37 ms at the default 1,000-result cap and 73 ms with an unlimited 2,000-result traversal; fd 10.3.0 took about 6.3 ms and 6.2 ms respectively. This is not a matched-output microbenchmark: the native fixture also performs public-tool normalization/truncation and Base64 report encoding, while fd emits raw paths. Guarding unreachable matcher states reduced the same native fixture from roughly 41/76 ms to 37/73 ms. No throughput parity claim is made from these measurements.
+
+The shared search-cursor integration was rebuilt with the unchanged shared compiler and passes all 85 public scenarios on Bun/native one/four, including pinned fd directory comparisons.
