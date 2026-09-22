@@ -3580,8 +3580,9 @@
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/ansi-utils.bend"],
+      "notes": "The original keeps-tabs-in-control-sequences normalization test is replayed; visible widths and layout remain pending. See tests/ansi-utils.md.",
       "sha256": "59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419"
     },
     {
@@ -3606,8 +3607,9 @@
     },
     {
       "source": "packages/tui/test/truncate-to-width.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/ansi-utils.bend"],
+      "notes": "The original Thai/Lao normalization calls are replayed; its width assertions execute only in the source reference, and native truncation remains pending. See tests/ansi-utils.md.",
       "sha256": "fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8"
     },
     {

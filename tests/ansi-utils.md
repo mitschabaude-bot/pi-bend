@@ -41,3 +41,5 @@ python3 tests/ansi_utils_check.py -- build/ansi-utils --threads 4
 Production source SHA-256: `cce67054c279dfbbe42b30de75481959c94111c2589d05fdb5b57a51f9e113bd`. No compiler changes were needed.
 
 Final result: Bun and optimized native explicit one/four threads pass the full source-equivalent corpus, correction cases and long scans. The hosted long-token case passed after fixing only its argument-size harness limit; native runs exercised the complete final harness directly.
+
+Root integration rebuilt the fixture with the unchanged shared compiler and independently passed all source comparisons, corrections and long scans on Bun/native one/four. The reference now checks the exact upstream module and both original test-file hashes before executing them.
