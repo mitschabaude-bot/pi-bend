@@ -45,11 +45,14 @@ type ToolDetails is Data:
   EditDetails{value: Edit.EditToolDetails}
   WriteDetails{}
 
+# Failure carries loop-level messages (validation, declaration, provider)
+# that upstream raises as plain Errors alongside tool failures.
 type ToolError is Data:
   ReadFailed{cause: Read.Error}
   BashFailed{cause: Bash.Error}
   EditFailed{cause: Edit.Error}
   WriteFailed{cause: Write.Error}
+  Failure{message: String}
 
 def fileError(error: FS.Error) -> String:
   match error:
@@ -72,6 +75,9 @@ def errorMessage(error: ToolError) -> String:
     case BashFailed{cause}: Bash.errorMessage(cause)
     case EditFailed{cause}: Edit.errorMessage(cause)
     case WriteFailed{cause}: writeMessage(cause)
+    case Failure{message}: message
+
+def failure(message: String) -> ToolError: Failure{message}
 
 def Tool() -> Data: Agent.AgentTool<ToolDetails, ToolError>
 def Input() -> Data: Agent.ToolExecutionInput<ToolDetails>

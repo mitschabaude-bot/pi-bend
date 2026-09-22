@@ -160,9 +160,9 @@ def parsedToken(now: F64, text: Result<&2, &2, String, String>) -> Result<&2, &2
 def dispatched(fetch: Fetch.Fetch(Unit), signal: Abort.AbortSignal<Unit>, prepared: Result<&2, &2, String, Client.Request>) -> IO(Result<&2, &2, String, OAuthToken>):
   match prepared:
     case Fail{error}: IO.pure(Result<&2, &2, String, OAuthToken>, Fail{error})
-    case Done{request}:
+    case Done{ready}:
       do IO<Result<&2, &2, String, OAuthToken>>:
-        outcome : Client.Outcome(Unit) <- Client.attempt(~Unit, request, signal, fetch, 65536n)
+        outcome : Client.Outcome(Unit) <- Client.attempt(~Unit, ready, signal, fetch, 65536n)
         text : Result<&2, &2, String, String> <- responded(outcome)
         now : F64 <- Date.now()
         return parsedToken(now, text)

@@ -94,7 +94,7 @@ def modelProvider(model: Model()) -> String:
   match model:
     case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
 
-def reference(model: Model()) -> String: modelProvider(model) ++ "/" ++ modelId(model)
+def reference(+model: Model()) -> String: modelProvider(model) ++ "/" ++ modelId(model)
 
 def findModel(models: List<&2, Model()>, +provider: String, +id: String) -> Maybe<&2, Model()>:
   match models:
@@ -133,17 +133,17 @@ def hasConfiguredAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
     resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
     return configured(resolution)
 
-def availableProviders(runtime: ModelRuntime, providers: List<&2, Provider>) -> IO(List<&2, Provider>):
+def availableProviders(+runtime: ModelRuntime, providers: List<&2, Provider>) -> IO(List<&2, Provider>):
   match providers:
     case Nil{}: IO.pure(List<&2, Provider>, Nil{})
     case +provider <> rest:
       do IO<List<&2, Provider>>:
         ready : Bool <- hasConfiguredAuth(runtime, providerId(provider))
-        others : List<&2, Provider> <- availableProviders(runtime, rest)
+        +others : List<&2, Provider> <- availableProviders(runtime, rest)
         return Bool.pick(List<&2, Provider>, ready, provider <> others, others)
 
 # Models whose provider resolves auth now.
-def getAvailable(runtime: ModelRuntime) -> IO(List<&2, Model()>):
+def getAvailable(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
   do IO<List<&2, Model()>>:
     providers : List<&2, Provider> <- availableProviders(runtime, getProviders(runtime))
     return allModels(providers)
@@ -151,8 +151,15 @@ def getAvailable(runtime: ModelRuntime) -> IO(List<&2, Model()>):
 # Model resolution (model-resolver.ts)
 # ------------------------------------
 
-def defaultModelPerProvider() -> List<&2, String & String>:
-  [("openai", "gpt-5.5"), ("openai-codex", "gpt-5.5")]
+type DefaultModel is Data:
+  DefaultModel{provider: String, id: String}
+
+def defaultModelPerProvider() -> List<&2, DefaultModel>:
+  [DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"openai-codex", "gpt-5.5"}]
+
+# A split text; tuples are affine types, so pairs of strings are data.
+type Split is Data:
+  Split{first: String, second: String}
 
 def reversedDate(chars: List<&2, Char>) -> Bool:
   match chars:
@@ -169,12 +176,16 @@ def isAlias(+id: String) -> Bool:
 def canonicalMatches(models: List<&2, Model()>, +normalized: String) -> List<&2, Model()>:
   match models:
     case Nil{}: Nil{}
-    case +model <> rest: Bool.pick(List<&2, Model()>, String.eq(String.to_lower(reference(model)), normalized), model <> canonicalMatches(rest, normalized), canonicalMatches(rest, normalized))
+    case +model <> rest:
+      +tail = canonicalMatches(rest, normalized)
+      Bool.pick(List<&2, Model()>, String.eq(String.to_lower(reference(model)), normalized), model <> tail, tail)
 
 def idMatches(models: List<&2, Model()>, +normalized: String) -> List<&2, Model()>:
   match models:
     case Nil{}: Nil{}
-    case +model <> rest: Bool.pick(List<&2, Model()>, String.eq(String.to_lower(modelId(model)), normalized), model <> idMatches(rest, normalized), idMatches(rest, normalized))
+    case +model <> rest:
+      +tail = idMatches(rest, normalized)
+      Bool.pick(List<&2, Model()>, String.eq(String.to_lower(modelId(model)), normalized), model <> tail, tail)
 
 # Zero matches fall through; more than one is ambiguous and rejects.
 type Matched is Data:
@@ -191,15 +202,17 @@ def matched(models: List<&2, Model()>) -> Matched:
 def providerIdMatches(models: List<&2, Model()>, +provider: String, +id: String) -> List<&2, Model()>:
   match models:
     case Nil{}: Nil{}
-    case +model <> rest: Bool.pick(List<&2, Model()>, String.eq(String.to_lower(modelProvider(model)), provider) && String.eq(String.to_lower(modelId(model)), id), model <> providerIdMatches(rest, provider, id), providerIdMatches(rest, provider, id))
+    case +model <> rest:
+      +tail = providerIdMatches(rest, provider, id)
+      Bool.pick(List<&2, Model()>, String.eq(String.to_lower(modelProvider(model)), provider) && String.eq(String.to_lower(modelId(model)), id), model <> tail, tail)
 
-def trimmedParts(parts: List<&2, String>) -> Maybe<&2, String & String>:
+def trimmedParts(parts: List<&2, String>) -> Maybe<&2, Split>:
   match parts:
     case Nil{}: None{}
     case _ <> Nil{}: None{}
-    case head <> rest: Some{(String.trim(head), String.trim(String.join(rest, "/")))}
+    case head <> rest: Some{Split{String.trim(head), String.trim(String.join(rest, "/"))}}
 
-def slashParts(text: String) -> Maybe<&2, String & String>:
+def slashParts(text: String) -> Maybe<&2, Split>:
   trimmedParts(Strings.split(text, '/'))
 
 def bareMatched(result: Matched) -> Maybe<&2, Model()>:
@@ -210,16 +223,16 @@ def bareMatched(result: Matched) -> Maybe<&2, Model()>:
 def bareMatch(models: List<&2, Model()>, normalized: String) -> Maybe<&2, Model()>:
   bareMatched(matched(idMatches(models, normalized)))
 
-def providerMatch(split: Maybe<&2, String & String>, +models: List<&2, Model()>, +normalized: String) -> Maybe<&2, Model()>:
-  match split:
-    case Some{(SCon{p, ps}, SCon{i, ids})}: providerMatched(matched(providerIdMatches(models, String.to_lower(SCon{p, ps}), String.to_lower(SCon{i, ids}))), models, normalized)
-    case _: bareMatch(models, normalized)
-
 def providerMatched(result: Matched, models: List<&2, Model()>, normalized: String) -> Maybe<&2, Model()>:
   match result:
     case OneMatch{model}: Some{model}
     case Ambiguous{}: None{}
     case NoMatch{}: bareMatch(models, normalized)
+
+def providerMatch(split: Maybe<&2, Split>, +models: List<&2, Model()>, +normalized: String) -> Maybe<&2, Model()>:
+  match split:
+    case Some{Split{SCon{p, ps}, SCon{i, ids}}}: providerMatched(matched(providerIdMatches(models, String.to_lower(SCon{p, ps}), String.to_lower(SCon{i, ids}))), models, normalized)
+    case _: bareMatch(models, normalized)
 
 def canonicalMatched(result: Matched, +reference: String, +models: List<&2, Model()>, +normalized: String) -> Maybe<&2, Model()>:
   match result:
@@ -239,27 +252,35 @@ def findExactModelReferenceMatch(+reference: String, models: List<&2, Model()>) 
 def partialMatches(models: List<&2, Model()>, +pattern: String) -> List<&2, Model()>:
   match models:
     case Nil{}: Nil{}
-    case +model <> rest: Bool.pick(List<&2, Model()>, String.contains(String.to_lower(modelId(model)), pattern) || String.contains(String.to_lower(modelName(model)), pattern), model <> partialMatches(rest, pattern), partialMatches(rest, pattern))
+    case +model <> rest:
+      +tail = partialMatches(rest, pattern)
+      Bool.pick(List<&2, Model()>, String.contains(String.to_lower(modelId(model)), pattern) || String.contains(String.to_lower(modelName(model)), pattern), model <> tail, tail)
 
 def aliases(models: List<&2, Model()>, +wanted: Bool) -> List<&2, Model()>:
   match models:
     case Nil{}: Nil{}
-    case +model <> rest: Bool.pick(List<&2, Model()>, Bool.pick(Bool, wanted, isAlias(modelId(model)), Bool.not(isAlias(modelId(model)))), model <> aliases(rest, wanted), aliases(rest, wanted))
+    case +model <> rest:
+      +tail = aliases(rest, wanted)
+      Bool.pick(List<&2, Model()>, Bool.pick(Bool, wanted, isAlias(modelId(model)), Bool.not(isAlias(modelId(model)))), model <> tail, tail)
 
-def notGreater(order: Cmp) -> Bool:
-  match order:
-    case GT{}: False{}
-    case _: True{}
+def notGreater(compared: (String & String) & Cmp) -> Bool:
+  match compared:
+    case Tuple{_, GT{}}: False{}
+    case Tuple{_, _}: True{}
 
 # left sorts at or after right in descending id order
 def descending(left: Model(), right: Model()) -> Bool:
   notGreater(String.cmp(modelId(right), modelId(left)))
 
+def highestFrom(models: List<&2, Model()>, +best: Model()) -> Model():
+  match models:
+    case Nil{}: best
+    case +candidate <> rest: highestFrom(rest, Bool.pick(Model(), descending(best, candidate), best, candidate))
+
 def highest(models: List<&2, Model()>) -> Maybe<&2, Model()>:
   match models:
     case Nil{}: None{}
-    case model <> Nil{}: Some{model}
-    case +first <> +second <> rest: highest(Bool.pick(Model(), descending(first, second), first, second) <> rest)
+    case first <> rest: Some{highestFrom(rest, first)}
 
 def preferredAlias(found: List<&2, Model()>, dated: List<&2, Model()>) -> Maybe<&2, Model()>:
   match found:
@@ -278,13 +299,13 @@ type ParsedModelResult is Data:
 
 def noMatch() -> ParsedModelResult: ParsedModelResult{None{}, None{}, None{}}
 
-def splitReversed(parts: List<&2, String>) -> Maybe<&2, String & String>:
+def splitReversed(parts: List<&2, String>) -> Maybe<&2, Split>:
   match parts:
     case Nil{}: None{}
     case _ <> Nil{}: None{}
-    case suffix <> reversed: Some{(String.join(List.reverse(&2, String, reversed), ":"), suffix)}
+    case suffix <> reversed: Some{Split{String.join(List.reverse(&2, String, reversed), ":"), suffix}}
 
-def lastColonSplit(pattern: String) -> Maybe<&2, String & String>:
+def lastColonSplit(pattern: String) -> Maybe<&2, Split>:
   splitReversed(List.reverse(&2, String, Strings.split(pattern, ':')))
 
 def thinkingLevel(value: String) -> Maybe<&2, Ai.ModelThinkingLevel>:
@@ -308,30 +329,30 @@ def withWarning(result: ParsedModelResult, +suffix: String, +pattern: String) ->
     case ParsedModelResult{Some{model}, _, _}: ParsedModelResult{Some{model}, None{}, Some{"Invalid thinking level \"" ++ suffix ++ "\" in pattern \"" ++ pattern ++ "\". Using default instead."}}
     case other: other
 
-# "pattern:level" parsing; the colon split recurses on the prefix, so ids
-# with colons still match when the full text does.
-def parseSplit(fuel: Nat, split: Maybe<&2, String & String>, +pattern: String, +models: List<&2, Model()>, allowFallback: Bool) -> ParsedModelResult:
-  match split:
-    case None{}: noMatch()
-    case Some{(prefix, +suffix)}: parseSuffix(fuel, prefix, suffix, thinkingLevel(suffix), pattern, models, allowFallback)
+# "pattern:level" parsing. Bend has no mutual recursion, so the loop carries
+# the exact match and the last-colon split of each candidate as data and
+# recurses on fuel; ids with colons still match when the full text does.
+type PatternStep is Data:
+  PatternStep{pattern: String, exact: Maybe<&2, Model()>, split: Maybe<&2, Split>}
 
-def parseSuffix(fuel: Nat, prefix: String, suffix: String, level: Maybe<&2, Ai.ModelThinkingLevel>, pattern: String, models: List<&2, Model()>, +allowFallback: Bool) -> ParsedModelResult:
-  match level:
-    case Some{level}: withLevel(parseModelPattern(fuel, prefix, models, allowFallback), level)
-    case None{}: Bool.pick(ParsedModelResult, allowFallback, withWarning(parseModelPattern(fuel, prefix, models, allowFallback), suffix, pattern), noMatch())
+def stepOf(+pattern: String, models: List<&2, Model()>) -> PatternStep:
+  PatternStep{pattern, tryMatchModel(pattern, models), lastColonSplit(pattern)}
 
-def parseModelPattern(fuel: Nat, +pattern: String, +models: List<&2, Model()>, allowFallback: Bool) -> ParsedModelResult:
-  match fuel:
-    case 0n: noMatch()
-    case 1n+n: parseMatched(n, tryMatchModel(pattern, models), pattern, models, allowFallback)
+def combined(level: Maybe<&2, Ai.ModelThinkingLevel>, inner: ParsedModelResult, suffix: String, pattern: String, allowFallback: Bool) -> ParsedModelResult:
+  match level allowFallback:
+    case Some{level} _: withLevel(inner, level)
+    case None{} True{}: withWarning(inner, suffix, pattern)
+    case None{} False{}: noMatch()
 
-def parseMatched(fuel: Nat, exact: Maybe<&2, Model()>, +pattern: String, models: List<&2, Model()>, allowFallback: Bool) -> ParsedModelResult:
-  match exact:
-    case Some{model}: ParsedModelResult{Some{model}, None{}, None{}}
-    case None{}: parseSplit(fuel, lastColonSplit(pattern), pattern, models, allowFallback)
+def parseLoop(fuel: Nat, step: PatternStep, +models: List<&2, Model()>, +allowFallback: Bool) -> ParsedModelResult:
+  match fuel step:
+    case _ PatternStep{_, Some{model}, _}: ParsedModelResult{Some{model}, None{}, None{}}
+    case _ PatternStep{_, None{}, None{}}: noMatch()
+    case 0n PatternStep{_, None{}, Some{_}}: noMatch()
+    case 1n+n PatternStep{pattern, None{}, Some{Split{prefix, +suffix}}}: combined(thinkingLevel(suffix), parseLoop(n, stepOf(prefix, models), models, allowFallback), suffix, pattern, allowFallback)
 
-def parsePattern(+pattern: String, models: List<&2, Model()>, allowFallback: Bool) -> ParsedModelResult:
-  parseModelPattern(1n + String.length(pattern), pattern, models, allowFallback)
+def parsePattern(+pattern: String, +models: List<&2, Model()>, allowFallback: Bool) -> ParsedModelResult:
+  parseLoop(1n + String.length(pattern), stepOf(pattern, models), models, allowFallback)
 
 type ResolveCliModelResult is Data:
   ResolveCliModelResult{model: Maybe<&2, Model()>, thinkingLevel: Maybe<&2, Ai.ModelThinkingLevel>, warning: Maybe<&2, String>, error: Maybe<&2, String>}
@@ -346,15 +367,17 @@ def canonicalProvider(models: List<&2, Model()>, +wanted: String) -> Maybe<&2, S
 def providerModelsOf(models: List<&2, Model()>, +provider: String) -> List<&2, Model()>:
   match models:
     case Nil{}: Nil{}
-    case +model <> rest: Bool.pick(List<&2, Model()>, String.eq(modelProvider(model), provider), model <> providerModelsOf(rest, provider), providerModelsOf(rest, provider))
+    case +model <> rest:
+      +tail = providerModelsOf(rest, provider)
+      Bool.pick(List<&2, Model()>, String.eq(modelProvider(model), provider), model <> tail, tail)
 
-def splitSlash(parts: List<&2, String>) -> Maybe<&2, String & String>:
+def splitSlash(parts: List<&2, String>) -> Maybe<&2, Split>:
   match parts:
     case Nil{}: None{}
     case _ <> Nil{}: None{}
-    case head <> rest: Some{(head, String.join(rest, "/"))}
+    case head <> rest: Some{Split{head, String.join(rest, "/")}}
 
-def slashSplit(text: String) -> Maybe<&2, String & String>:
+def slashSplit(text: String) -> Maybe<&2, Split>:
   splitSlash(Strings.split(text, '/'))
 
 def stripPrefix(+pattern: String, +prefix: String) -> String:
@@ -370,22 +393,22 @@ def resolveWithin(provider: String, pattern: String, models: List<&2, Model()>) 
 def resolveAcross(pattern: String, models: List<&2, Model()>) -> ResolveCliModelResult:
   resolved(parsePattern(pattern, models, False{}))
 
-# "provider/model" prefers the provider interpretation when the prefix names a
-# known provider; a failed provider-scoped match falls back to the full text.
-def resolveInferred(+cliModel: String, split: Maybe<&2, String & String>, +models: List<&2, Model()>) -> ResolveCliModelResult:
-  match split:
-    case None{}: resolveAcross(cliModel, models)
-    case Some{(+head, +rest)}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, models)
+def fallbackAcross(cliModel: String, scoped: ResolveCliModelResult, models: List<&2, Model()>) -> ResolveCliModelResult:
+  match scoped:
+    case ResolveCliModelResult{None{}, _, _, None{}}: resolveAcross(cliModel, models)
+    case other: other
 
 def resolveCandidate(+cliModel: String, provider: Maybe<&2, String>, rest: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
     case None{}: resolveAcross(cliModel, models)
     case Some{+provider}: fallbackAcross(cliModel, resolveWithin(provider, rest, models), models)
 
-def fallbackAcross(cliModel: String, scoped: ResolveCliModelResult, models: List<&2, Model()>) -> ResolveCliModelResult:
-  match scoped:
-    case ResolveCliModelResult{None{}, _, _, None{}}: resolveAcross(cliModel, models)
-    case other: other
+# "provider/model" prefers the provider interpretation when the prefix names a
+# known provider; a failed provider-scoped match falls back to the full text.
+def resolveInferred(+cliModel: String, split: Maybe<&2, Split>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+  match split:
+    case None{}: resolveAcross(cliModel, models)
+    case Some{Split{+head, +rest}}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, models)
 
 def resolveKnown(provider: Maybe<&2, String>, cliProvider: String, cliModel: String, models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
@@ -407,10 +430,10 @@ def resolveCliModel(runtime: ModelRuntime, cliProvider: Maybe<&2, String>, cliMo
     case None{}: ResolveCliModelResult{None{}, None{}, None{}, None{}}
     case Some{pattern}: resolveCliModelWith(cliProvider, pattern, getModels(runtime))
 
-def defaultAmong(defaults: List<&2, String & String>, +models: List<&2, Model()>) -> Maybe<&2, Model()>:
+def defaultAmong(defaults: List<&2, DefaultModel>, +models: List<&2, Model()>) -> Maybe<&2, Model()>:
   match defaults:
     case Nil{}: List.head(&2, Model(), models)
-    case (provider, id) <> rest: Maybe.or(&2, Model(), findModel(models, provider, id), defaultAmong(rest, models))
+    case DefaultModel{provider, id} <> rest: Maybe.or(&2, Model(), findModel(models, provider, id), defaultAmong(rest, models))
 
 # Without a CLI model: the first known default whose provider is authenticated,
 # otherwise the first available model.

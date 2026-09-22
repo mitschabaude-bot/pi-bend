@@ -30,11 +30,11 @@ def dispose(credentials: RuntimeCredentials) -> IO(Unit):
 
 def setRuntimeApiKey(credentials: RuntimeCredentials, providerId: String, apiKey: String) -> IO(Unit):
   match credentials:
-    case RuntimeCredentials{_, overrides}: Ref.modify(Overrides(), Unit, overrides, entries => (R.set(String, entries, providerId, apiKey), Unit{}))
+    case RuntimeCredentials{_, overrides}: Ref.modify(Overrides(), Unit, overrides, current => (R.set(String, current, providerId, apiKey), Unit{}))
 
 def removeRuntimeApiKey(credentials: RuntimeCredentials, providerId: String) -> IO(Unit):
   match credentials:
-    case RuntimeCredentials{_, overrides}: Ref.modify(Overrides(), Unit, overrides, entries => (R.remove(String, entries, providerId), Unit{}))
+    case RuntimeCredentials{_, overrides}: Ref.modify(Overrides(), Unit, overrides, current => (R.remove(String, current, providerId), Unit{}))
 
 def override(credentials: RuntimeCredentials, providerId: String) -> IO(Maybe<&2, String>):
   match credentials:
@@ -125,7 +125,7 @@ def deleted(overrides: Ref.Ref<Overrides()>, providerId: String, result: Outcome
     case Fail{error}: IO.pure(Outcome(Unit), Fail{error})
     case Done{Unit{}}:
       do IO<Outcome(Unit)>:
-        Ref.modify(Overrides(), Unit, overrides, entries => (R.remove(String, entries, providerId), Unit{}))
+        Ref.modify(Overrides(), Unit, overrides, current => (R.remove(String, current, providerId), Unit{}))
         return Done{Unit{}}
 
 def deleteUnlessAborted(store: Auth.CredentialStore, providerId: String, signal: Auth.Signal(), cancelled: Bool) -> IO(Outcome(Unit)):
