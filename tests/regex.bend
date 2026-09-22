@@ -1,5 +1,6 @@
 import Base
 import ../packages/runtime/src/regex.bend as R
+import ../packages/runtime/src/regex-bytes.bend as Bytes
 import ../packages/runtime/src/base64.bend as B64
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/u32-table.bend as Table
@@ -39,6 +40,25 @@ def runCase(+mode: String,pattern: Maybe<&2,String>,text: Maybe<&2,String>) -> I
     case Some{pattern} Some{text}: report(mode,compile(mode,pattern),text)
     case _ _: IO.die(Unit,1,"invalid fixture Base64/UTF-8")
 
+def reportBytes(mode: String,result: Result<&2,&2,R.Error,Bytes.Regex>,+bytes: List<&2,U32>) -> IO(Unit):
+  match mode result:
+    case _ Fail{R.Syntax{message}}: IO.print(String.append("error:",message))
+    case _ Fail{R.RequiresByteInput{}}: IO.print("byte-input-required")
+    case _ Fail{R.SizeLimit{}}: IO.print("error:Pattern size limit")
+    case SCon{'B',+rest} Done{regex}: IO.print(Bool.pick(String,Bytes.finish(Bytes.feed(List.drop(&2,U32,bytes,String.length(rest)),Bytes.feed(List.take(&2,U32,bytes,String.length(rest)),Bytes.create(regex)))),"true","false"))
+    case _ Done{regex}: IO.print(Bool.pick(String,Bytes.isMatch(regex,bytes),"true","false"))
+
+def runBytes(+mode: String,pattern: Maybe<&2,String>,bytes: Result<&2,&2,B64.Error,List<&2,U32>>) -> IO(Unit):
+  match pattern bytes:
+    case Some{pattern} Done{bytes}: reportBytes(mode,Bytes.compile(pattern,String.eq(mode,"bi")),bytes)
+    case _ _: IO.die(Unit,1,"invalid fixture Base64")
+
+def input(+mode: String,+pattern: String,+text: String) -> IO(Unit):
+  match mode:
+    case SCon{'b',_}: runBytes(mode,decoded(B64.decode(pattern)),B64.decode(text))
+    case SCon{'B',_}: runBytes(mode,decoded(B64.decode(pattern)),B64.decode(text))
+    case mode: runCase(mode,decoded(B64.decode(pattern)),decoded(B64.decode(text)))
+
 def rows(count: Nat,+index: U32,reversed: List<&2,Table.Entry<U32>>) -> List<&2,Table.Entry<U32>>:
   match count:
     case Zero{}: List.reverse(&2,Table.Entry<U32>,reversed)
@@ -75,7 +95,7 @@ def run(args: List<String>) -> IO(Unit):
     case "tables" <> Nil{}: checkTables()
     case mode <> pattern <> text <> rest:
       do IO<Unit>:
-        runCase(mode,decoded(B64.decode(pattern)),decoded(B64.decode(text)))
+        input(mode,pattern,text)
         run(rest)
     case Nil{}: IO.pure(Unit,Unit{})
     case _: IO.die(Unit,1,"expected mode/Base64-pattern/Base64-text triples")

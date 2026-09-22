@@ -19,8 +19,13 @@ fn main() {
     for row in io::stdin().lock().lines() {
         let row: Vec<String> = serde_json::from_str(&row.unwrap()).unwrap();
         match regex::bytes::RegexBuilder::new(&row[1])
-            .case_insensitive(row[0] == "i").build() {
-            Ok(regex) => println!("{}", regex.is_match(row[2].as_bytes())),
+            .case_insensitive(row[0] == "i" || row[0] == "bi").build() {
+            Ok(regex) => {
+                let bytes = if row[0].starts_with("b") {
+                    (0..row[2].len()).step_by(2).map(|i| u8::from_str_radix(&row[2][i..i+2],16).unwrap()).collect::<Vec<_>>()
+                } else { row[2].as_bytes().to_vec() };
+                println!("{}", regex.is_match(&bytes));
+            },
             Err(_) => println!("error"),
         }
     }

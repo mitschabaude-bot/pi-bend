@@ -102,11 +102,12 @@ type Assertion is Data:
   End{}
   LineStart{crlf: Bool}
   LineEnd{crlf: Bool}
-  Boundary{kind: U32,word: Class}
+  Boundary{kind: U32,word: Class,unicode: Bool}
 
 type Expression is Data:
   Empty{}
   Character{value: Class,insensitive: Bool}
+  ByteCharacter{value: Class}
   Assert{value: Assertion}
   Sequence{left: Expression,right: Expression}
   Alternative{left: Expression,right: Expression}
@@ -114,6 +115,7 @@ type Expression is Data:
 
 type Instruction is Data:
   Consume{value: Class,insensitive: Bool,next: U32}
+  ConsumeByte{value: Class,next: U32}
   Check{value: Assertion,next: U32}
   Split{left: U32,right: U32}
   Accept{}
@@ -140,6 +142,7 @@ def cost(expression: Expression) -> Nat:
   match expression:
     case Empty{}: 0n
     case Character{_,_}: 1n
+    case ByteCharacter{_}: 1n
     case Assert{_}: 1n
     case Sequence{a,b}: bounded(cost(a) + cost(b))
     case Alternative{a,b}: bounded(1n + bounded(cost(a) + cost(b)))
@@ -180,6 +183,7 @@ def compileStep(state: Compilation) -> Compilation:
     case Compilation{FinishSplit{continuation} <> work,builder,+entry}: emitted(work,push(Split{entry,continuation},builder))
     case Compilation{Compile{Empty{},continuation} <> work,builder,_}: Compilation{work,builder,continuation}
     case Compilation{Compile{Character{value,insensitive},continuation} <> work,builder,_}: emitted(work,push(Consume{value,insensitive,continuation},builder))
+    case Compilation{Compile{ByteCharacter{value},continuation} <> work,builder,_}: emitted(work,push(ConsumeByte{value,continuation},builder))
     case Compilation{Compile{Assert{value},continuation} <> work,builder,_}: emitted(work,push(Check{value,continuation},builder))
     case Compilation{Compile{Sequence{a,b},+continuation} <> work,builder,_}: Compilation{Compile{b,continuation} <> ContinueSequence{a} <> work,builder,continuation}
     case Compilation{Compile{Alternative{a,b},+continuation} <> work,builder,_}: Compilation{Compile{a,continuation} <> ContinueAlternative{b,continuation} <> work,builder,continuation}
@@ -320,7 +324,7 @@ def assertion(value: Assertion,+left: Maybe<&2,Char>,+right: Maybe<&2,Char>) -> 
     case End{}: Maybe.is_none(&2,Char,right)
     case LineStart{crlf}: Maybe.is_none(&2,Char,left) || isChar(left,10) || (crlf && isChar(left,13) && Bool.not(isChar(right,10)))
     case LineEnd{+crlf}: Maybe.is_none(&2,Char,right) || (isChar(right,10) && Bool.not(crlf && isChar(left,13))) || (crlf && isChar(right,13))
-    case Boundary{kind,+word}: boundary(kind,member(left,word),member(right,word))
+    case Boundary{kind,+word,_}: boundary(kind,member(left,word),member(right,word))
 
 type Frontier is Type:
   Frontier{seen: Array<U32>,pending: List<&2,U32>,next: List<&2,U32>,matched: Bool}
@@ -336,6 +340,7 @@ def instruction(value: Maybe<&2,Instruction>,seen: Array<U32>,+pending: List<&2,
     case Some{Accept{}}: Frontier{seen,pending,next,True{}}
     case Some{Split{a,b}}: Frontier{seen,a <> b <> pending,next,matched}
     case Some{Check{check,target}}: Frontier{seen,Bool.pick(List<&2,U32>,assertion(check,left,right),target <> pending,pending),next,matched}
+    case Some{ConsumeByte{_,_}}: Frontier{seen,pending,next,matched}
     case Some{Consume{value,insensitive,target}}:
       Frontier{seen,pending,Bool.pick(List<&2,U32>,consumes(value,insensitive,right),target <> next,next),matched}
 
@@ -457,6 +462,9 @@ def enabled(flags: U32,mask: U32) -> Bool: Bool.not(U32.is_eq(U32.and(flags,mask
 def character(+value: Class,+flags: U32) -> Expression:
   Bool.pick(Unit -> Expression,enabled(flags,1) && Bool.not(enabled(flags,32)),_ => Character{CaseAscii{value},False{}},_ => Character{value,enabled(flags,1)})(Unit{})
 
+def byteCharacter(+value: Class,+flags: U32) -> Expression:
+  Bool.pick(Expression,enabled(flags,1),ByteCharacter{CaseAscii{value}},ByteCharacter{value})
+
 def literal(char: Char,flags: U32) -> Expression:
   +point = Char.to_u32(char)
   character(Range{point,point},flags)
@@ -481,26 +489,33 @@ def matchesNonAsciiByte(fuel: Nat,+value: Class,+point: U32) -> Bool:
 
 def scalarClass(+value: Class,+flags: U32,rest: String) -> Result<&2,&2,Error,Atom>:
   +selected = Bool.pick(Class,enabled(flags,32) || enabled(flags,128),value,Intersection{value,Range{0,255}})
-  +requires = Bool.pick(Unit -> Bool,enabled(flags,32) || enabled(flags,128),_ => False{},_ => matchesNonAsciiByte(128n,selected,128))(Unit{})
-  Bool.pick(Unit -> Result<&2,&2,Error,Atom>,requires,_ => Fail{RequiresByteInput{}},_ => Done{Atom{character(selected,flags),rest}})(Unit{})
+  +requires = Bool.pick(Unit -> Bool,enabled(flags,32) || enabled(flags,128) || enabled(flags,512),_ => False{},_ => matchesNonAsciiByte(128n,selected,128))(Unit{})
+  Bool.pick(Unit -> Result<&2,&2,Error,Atom>,requires,_ => Fail{RequiresByteInput{}},_ => Done{Atom{Bool.pick(Unit -> Expression,enabled(flags,512) && Bool.not(enabled(flags,32) || enabled(flags,128)),_ => byteCharacter(selected,flags),_ => character(selected,flags))(Unit{}),rest}})(Unit{})
 
 def classAtom(result: Result<&2,&2,Error,Class>,flags: U32,negative: Bool,rest: String) -> Result<&2,&2,Error,Atom>:
   match result:
     case Fail{error}: Fail{error}
     case Done{+value}: scalarClass(Bool.pick(Class,negative,Negation{value},value),flags,rest)
 
-def wordAtom(result: Result<&2,&2,Error,Class>,kind: U32,rest: String) -> Result<&2,&2,Error,Atom>:
+def wordAtom(result: Result<&2,&2,Error,Class>,kind: U32,unicode: Bool,rest: String) -> Result<&2,&2,Error,Atom>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{word}: Done{Atom{Assert{Boundary{kind,word}},rest}}
+    case Done{word}: Done{Atom{Assert{Boundary{kind,word,unicode}},rest}}
 
 def regexWhitespace(char: Char) -> Bool:
   match char:
     case Chr{+point}: (U32.is_ge(point,9) && U32.is_le(point,13)) || U32.is_eq(point,32) || U32.is_eq(point,133) || U32.is_eq(point,160) || U32.is_eq(point,5760) || (U32.is_ge(point,8192) && U32.is_le(point,8202)) || U32.is_eq(point,8232) || U32.is_eq(point,8233) || U32.is_eq(point,8239) || U32.is_eq(point,8287) || U32.is_eq(point,12288)
 
-def escapedPoint(point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
-  match point:
-    case +point: Bool.pick(Unit -> Result<&2,&2,Error,Atom>,Bool.not(enabled(flags,32)) && (enabled(flags,128) || enabled(flags,256)) && U32.is_ge(point,128),_ => Fail{RequiresByteInput{}},_ => Bool.pick(Result<&2,&2,Error,Atom>,U32.is_le(point,1114111) && Bool.not(U32.is_ge(point,55296) && U32.is_le(point,57343)),Done{Atom{character(Range{point,point},flags),rest}},Fail{Syntax{"Invalid Unicode scalar escape"}}))(Unit{})
+def escapedPoint(+point: U32,+flags: U32,+rest: String) -> Result<&2,&2,Error,Atom>:
+  +raw = Bool.not(enabled(flags,32)) && enabled(flags,256)
+  +nonAsciiClass = Bool.not(enabled(flags,32)) && enabled(flags,128) && U32.is_ge(point,128) && Bool.not(raw)
+  Bool.pick(Unit -> Result<&2,&2,Error,Atom>,nonAsciiClass,
+    _ => Fail{Bool.pick(Error,enabled(flags,512),Syntax{"Non-ASCII scalar in a byte class"},RequiresByteInput{})},
+    _ => Bool.pick(Unit -> Result<&2,&2,Error,Atom>,raw && U32.is_ge(point,128) && Bool.not(enabled(flags,512)),
+      _ => Fail{RequiresByteInput{}},
+      _ => Bool.pick(Unit -> Result<&2,&2,Error,Atom>,U32.is_le(point,1114111) && Bool.not(U32.is_ge(point,55296) && U32.is_le(point,57343)),
+        _ => Done{Atom{Bool.pick(Unit -> Expression,raw && enabled(flags,512) && Bool.not(enabled(flags,128)),_ => byteCharacter(Range{point,point},flags),_ => character(Range{point,point},flags))(Unit{}),rest}},
+        _ => Fail{Syntax{"Invalid Unicode scalar escape"}})(Unit{}))(Unit{}))(Unit{})
 
 def hexDigit(+point: U32) -> Maybe<&2,U32>:
   Bool.pick(Maybe<&2,U32>,U32.is_ge(point,48) && U32.is_le(point,57),Some{(point - 48 : U32)},Bool.pick(Maybe<&2,U32>,U32.is_ge(point,65) && U32.is_le(point,70),Some{(point - 55 : U32)},Bool.pick(Maybe<&2,U32>,U32.is_ge(point,97) && U32.is_le(point,102),Some{(point - 87 : U32)},None{})))
@@ -531,7 +546,7 @@ def hexEscape(text: String,+flags: U32,remaining: Nat,braced: Bool,+count: Nat,w
 
 def beginHex(text: String,+flags: U32,+width: Nat) -> Result<&2,&2,Error,Atom>:
   match text:
-    case SCon{'{',rest}: hexEscape(rest,U32.or(flags,Bool.pick(U32,Nat.is_eq(width,2n),256,0)),6n,True{},Zero{},Some{0})
+    case SCon{'{',rest}: hexEscape(rest,flags,6n,True{},Zero{},Some{0})
     case text: hexEscape(text,U32.or(flags,Bool.pick(U32,Nat.is_eq(width,2n),256,0)),width,False{},Zero{},Some{0})
 
 def propertyQuery(text: String,negative: Bool,reversed: String,flags: U32,rest: String) -> Result<&2,&2,Error,Atom>:
@@ -560,10 +575,10 @@ def wordKind(name: String) -> Maybe<&2,U32>:
     case "end-half": Some{5}
     case _: None{}
 
-def wordNamed(kind: Maybe<&2,U32>,flags: U32,rest: String) -> Result<&2,&2,Error,Atom>:
+def wordNamed(kind: Maybe<&2,U32>,+flags: U32,rest: String) -> Result<&2,&2,Error,Atom>:
   match kind:
     case None{}: Fail{Syntax{"Unknown word boundary"}}
-    case Some{kind}: wordAtom(shorthand('w',enabled(flags,32)),kind,rest)
+    case Some{kind}: wordAtom(shorthand('w',enabled(flags,32)),kind,enabled(flags,32),rest)
 
 def wordName(text: String,flags: U32,reversed: String) -> Result<&2,&2,Error,Atom>:
   match text:
@@ -571,10 +586,10 @@ def wordName(text: String,flags: U32,reversed: String) -> Result<&2,&2,Error,Ato
     case SCon{'}',rest}: wordNamed(wordKind(String.reverse(reversed)),flags,rest)
     case SCon{char,rest}: wordName(rest,flags,SCon{char,reversed})
 
-def wordEscape(text: String,flags: U32) -> Result<&2,&2,Error,Atom>:
+def wordEscape(text: String,+flags: U32) -> Result<&2,&2,Error,Atom>:
   match text:
     case SCon{'{',rest}: wordName(rest,flags,"")
-    case text: wordAtom(shorthand('w',enabled(flags,32)),0,text)
+    case text: wordAtom(shorthand('w',enabled(flags,32)),0,enabled(flags,32),text)
 
 def escape(text: String,+flags: U32) -> Result<&2,&2,Error,Atom>:
   match text:
@@ -599,9 +614,9 @@ def escape(text: String,+flags: U32) -> Result<&2,&2,Error,Atom>:
     case SCon{'A',rest}: Done{Atom{Assert{Start{}},rest}}
     case SCon{'z',rest}: Done{Atom{Assert{End{}},rest}}
     case SCon{'b',rest}: wordEscape(rest,flags)
-    case SCon{'B',rest}: wordAtom(shorthand('w',enabled(flags,32)),1,rest)
-    case SCon{'<',rest}: wordAtom(shorthand('w',enabled(flags,32)),2,rest)
-    case SCon{'>',rest}: wordAtom(shorthand('w',enabled(flags,32)),3,rest)
+    case SCon{'B',rest}: wordAtom(shorthand('w',enabled(flags,32)),1,enabled(flags,32),rest)
+    case SCon{'<',rest}: wordAtom(shorthand('w',enabled(flags,32)),2,enabled(flags,32),rest)
+    case SCon{'>',rest}: wordAtom(shorthand('w',enabled(flags,32)),3,enabled(flags,32),rest)
     case SCon{char,rest}:
       +char = {char : Char}
       Bool.pick(Result<&2,&2,Error,Atom>,Char.is_alpha(char) || Char.is_digit(char),Fail{Syntax{"Unsupported escape (backreferences are not regular)"}},Done{Atom{literal(char,flags),rest}})
@@ -737,8 +752,8 @@ def classStep(state: ClassParsing,+flags: U32) -> ClassParsing:
     case InClass{SCon{'^',rest},ClassFrame{False{},EmptyClass{},0,EmptyClass{},None{},False{},True{}},parents}: InClass{rest,ClassFrame{True{},EmptyClass{},0,EmptyClass{},None{},False{},True{}},parents}
     case InClass{SCon{']',rest},ClassFrame{negative,left,operator,current,pending,range,True{}},parents}: appendScalar(93,rest,ClassFrame{negative,left,operator,current,pending,range,True{}},parents)
     case InClass{SCon{']',rest},frame,parents}: endClass(rest,frame,parents)
-    case InClass{SCon{'[',SCon{':',SCon{'^',rest}}},frame,parents}: classEscaped(asciiName(rest,U32.and(flags,4294967294),True{},""),frame,parents)
-    case InClass{SCon{'[',SCon{':',rest}},frame,parents}: classEscaped(asciiName(rest,U32.and(flags,4294967294),False{},""),frame,parents)
+    case InClass{SCon{'[',SCon{':',SCon{'^',rest}}},frame,parents}: classEscaped(asciiName(rest,U32.or(U32.and(flags,4294967294),128),True{},""),frame,parents)
+    case InClass{SCon{'[',SCon{':',rest}},frame,parents}: classEscaped(asciiName(rest,U32.or(U32.and(flags,4294967294),128),False{},""),frame,parents)
     case InClass{SCon{'[',rest},frame,parents}: beginClass(rest,frame <> parents)
     case InClass{SCon{'&',SCon{'&',rest}},frame,parents}: classOperator(1,rest,frame,parents)
     case InClass{SCon{'-',SCon{'-',rest}},frame,parents}: classOperator(2,rest,frame,parents)
@@ -751,7 +766,7 @@ def classStep(state: ClassParsing,+flags: U32) -> ClassParsing:
       +rest = {rest : String}
       +frame = {frame : ClassFrame}
       +parents = {parents : List<&2,ClassFrame>}
-      Bool.pick(Unit -> ClassParsing,enabled(flags,64) && regexWhitespace(char),_ => InClass{rest,frame,parents},_ => Bool.pick(Unit -> ClassParsing,Bool.not(enabled(flags,32)) && U32.is_ge(Char.to_u32(char),128),_ => BadClass{RequiresByteInput{}},_ => appendScalar(Char.to_u32(char),rest,frame,parents))(Unit{}))(Unit{})
+      Bool.pick(Unit -> ClassParsing,enabled(flags,64) && regexWhitespace(char),_ => InClass{rest,frame,parents},_ => Bool.pick(Unit -> ClassParsing,Bool.not(enabled(flags,32)) && U32.is_ge(Char.to_u32(char),128),_ => BadClass{Bool.pick(Error,enabled(flags,512),Syntax{"Non-ASCII scalar in a byte class"},RequiresByteInput{})},_ => appendScalar(Char.to_u32(char),rest,frame,parents))(Unit{}))(Unit{})
     case state: state
 
 def readClass(fuel: Nat,state: ClassParsing,+flags: U32) -> Result<&2,&2,Error,Atom>:
@@ -906,7 +921,8 @@ def alternative(text: String,frame: Frame,parents: List<&2,Frame>,depth: Nat) ->
     case Frame{flags,sequence,alternatives,names}: Parsing{text,Frame{flags,Nil{},expressions(sequence,False{}) <> alternatives,names},parents,depth}
 
 def dot(+flags: U32) -> Expression:
-  character(Bool.pick(Class,enabled(flags,4),Range{0,1114111},Negation{Bool.pick(Class,enabled(flags,8),Union{Range{10,10},Range{13,13}},Range{10,10})}),flags)
+  +value = Bool.pick(Class,enabled(flags,4),Range{0,1114111},Negation{Bool.pick(Class,enabled(flags,8),Union{Range{10,10},Range{13,13}},Range{10,10})})
+  Bool.pick(Unit -> Expression,enabled(flags,32),_ => character(value,flags),_ => byteCharacter(Intersection{value,Range{0,255}},flags))(Unit{})
 
 def parserStep(state: Parsing) -> Parsing:
   match state:
@@ -921,7 +937,7 @@ def parserStep(state: Parsing) -> Parsing:
     case Parsing{SCon{'{',rest},frame,parents,depth}: repeatBounds(rest,Zero{},Zero{},False{},False{},frame,parents,depth)
     case Parsing{SCon{'[',+rest},+frame,parents,depth}: appendAtom(readClass(Succ{textLength(rest,Zero{})},beginClass(rest,Nil{}),flagsOf(frame)),frame,parents,depth)
     case Parsing{SCon{'\\',rest},+frame,parents,depth}: appendAtom(escape(rest,flagsOf(frame)),frame,parents,depth)
-    case Parsing{SCon{'.',rest},+frame,parents,depth}: appendAtom(Bool.pick(Result<&2,&2,Error,Atom>,enabled(flagsOf(frame),32),Done{Atom{dot(flagsOf(frame)),rest}},Fail{RequiresByteInput{}}),frame,parents,depth)
+    case Parsing{SCon{'.',rest},+frame,parents,depth}: appendAtom(Bool.pick(Result<&2,&2,Error,Atom>,enabled(flagsOf(frame),32) || enabled(flagsOf(frame),512),Done{Atom{dot(flagsOf(frame)),rest}},Fail{RequiresByteInput{}}),frame,parents,depth)
     case Parsing{SCon{'^',rest},+frame,parents,depth}: appendAtom(Done{Atom{Assert{Bool.pick(Assertion,enabled(flagsOf(frame),2),LineStart{enabled(flagsOf(frame),8)},Start{})},rest}},frame,parents,depth)
     case Parsing{SCon{'$',rest},+frame,parents,depth}: appendAtom(Done{Atom{Assert{Bool.pick(Assertion,enabled(flagsOf(frame),2),LineEnd{enabled(flagsOf(frame),8)},End{})},rest}},frame,parents,depth)
     case Parsing{SCon{'#',+rest},+frame,+parents,+depth}: Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),64),_ => Parsing{skipComment(rest),frame,parents,depth},_ => appendAtom(Done{Atom{literal('#',flagsOf(frame)),rest}},frame,parents,depth))(Unit{})
@@ -934,12 +950,20 @@ def parserStep(state: Parsing) -> Parsing:
       Bool.pick(Unit -> Parsing,enabled(flagsOf(frame),64) && regexWhitespace(char),_ => Parsing{rest,frame,parents,depth},_ => appendAtom(Done{Atom{literal(char,flagsOf(frame)),rest}},frame,parents,depth))(Unit{})
     case state: state
 
-def parse(fuel: Nat,state: Parsing) -> Result<&2,&2,Error,Regex>:
+def parse(fuel: Nat,state: Parsing) -> Result<&2,&2,Error,Expression>:
   match fuel state:
     case _ ParseError{error}: Fail{error}
-    case _ Parsed{expression}: compileExpression(expression)
+    case _ Parsed{expression}: Done{expression}
     case Zero{} _: Fail{SizeLimit{}}
     case Succ{fuel} state: parse(fuel,parserStep(state))
 
-def compile(+pattern: String,insensitive: Bool) -> Result<&2,&2,Error,Regex>:
-  parse(textLength(pattern,Zero{}) + 2n,Parsing{pattern,Frame{Bool.pick(U32,insensitive,33,32),Nil{},Nil{},Nil{}},Nil{},Zero{}})
+def parsedExpression(result: Result<&2,&2,Error,Expression>) -> Result<&2,&2,Error,Regex>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{expression}: compileExpression(expression)
+
+def parsePattern(+pattern: String,insensitive: Bool,bytes: Bool) -> Result<&2,&2,Error,Expression>:
+  parse(textLength(pattern,Zero{}) + 2n,Parsing{pattern,Frame{U32.or(Bool.pick(U32,insensitive,33,32),Bool.pick(U32,bytes,512,0)),Nil{},Nil{},Nil{}},Nil{},Zero{}})
+
+def compile(pattern: String,insensitive: Bool) -> Result<&2,&2,Error,Regex>:
+  parsedExpression(parsePattern(pattern,insensitive,False{}))
