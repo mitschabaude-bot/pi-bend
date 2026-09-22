@@ -680,4 +680,3 @@ def contains(+char: Char, values: List<&2,Char>) -> Bool:
 
 def equal(+a: Char, +b: Char) -> Bool:
   Bool.pick(Unit -> Bool,Char.is_eq(a,b),_ => True{},_ => contains(b,variants(a)))(Unit{})
-
