@@ -7,12 +7,12 @@ The source is Unicode 17.0.0 [CaseFolding.txt](https://www.unicode.org/Public/17
 The 2,994 participating scalars form cycles of at most four members. Their next-member mappings compress into 320 contiguous ranges with alternating offsets, searched through the existing immutable U32 table. The generator verifies exact expansion of every compressed range and the cycle bound. This gives bounded lookup and short lists without generated forwarding functions or scanning the whole mapping table per character.
 
 ```sh
-python 3 scripts/generate-case-fold.py
+python3 scripts/generate-case-fold.py
 BEND_TUS=8 sh scripts/build-pure.sh tests/case-fold.bend build/case-fold
-build/bend-native-toolchain/bend 2/main.ts tests/case-fold.bend -o build/case-fold.js
-python 3 tests/case_fold_check.py
+build/bend-native-toolchain/bend2/main.ts tests/case-fold.bend -o build/case-fold.js
+python3 tests/case_fold_check.py
 # Optional pinned JavaScript dependency comparison:
-python 3 tests/case_fold_check.py native-1 --reference /path/to/unpacked/ignore-7.0.8/package
+python3 tests/case_fold_check.py native-1 --reference /path/to/unpacked/ignore-7.0.8/package
 ```
 
 Tests check every 1,112,064 valid Unicode scalar, exact membership of every nontrivial class against the official source, singleton identity, no duplicates, both equality directions for every class member, 15 targeted positive/negative literal comparisons and 196 range-membership cases. These are exhaustive finite-data checks and executed regressions, not Bend proofs. All pass on Bun and optimized native one/four workers. Observed full scalar scans, including reporting and equality checks, take 15.0 s hosted and 0.12–0.14 s native; an earlier native variant-only scan used 2.3 MB maximum RSS. These measurements describe this fixture, not complete ignore-matcher throughput.
