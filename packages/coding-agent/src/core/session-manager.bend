@@ -1,4 +1,7 @@
 import Base
+import ../../../ai/src/utils/transcript.bend as Transcript
+import ../../../runtime/src/stable-sort.bend as Sort
+import ../../../runtime/src/number-string.bend as NumberString
 import ./messages.bend as Messages
 import ../../../agent/src/types.bend as Agent
 import ../../../ai/src/types.bend as Ai
@@ -52,6 +55,9 @@ type Error is Data:
   DuplicateId{id: String}
   EmptyId{}
   Cycle{id: String}
+  EntryNotFound{id: String}
+  InvalidMessage{}
+  LabelIdCount{}
   InvalidTimestamp{id: String, cause: Date.ParseError}
 
 def entryBase(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>) -> SessionEntryBase:
@@ -223,3 +229,380 @@ def contextFromPath(-D: Data,-T: Data,-C: Data, +path: List<&2,SessionEntry<D,T,
 
 def buildSessionContext(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, leaf: LeafSelection) -> Result<&2,&2,Error,SessionContext<D,T,C>>:
   Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionContext<D,T,C>,buildSessionPath(D,T,C,entries,leaf),path => contextFromPath(D,T,C,path))
+
+# Immutable in-memory session. Supplied stamps keep randomness/time at the IO
+# boundary. History is reversed for constant-time append; the selected leaf is
+# independent of the most recently appended entry.
+type EntryStamp is Data:
+  EntryStamp{id: String, timestamp: String}
+type ResolvedLabel is Data:
+  ResolvedLabel{label: String, timestamp: String, position: Nat}
+type LabelPosition is Data:
+  LabelPosition{targetId: String, position: Nat}
+type SessionManager<-D: Data,-T: Data,-C: Data> is Data:
+  SessionManager{header: SessionHeader, reversed: List<&2,SessionEntry<D,T,C>>, index: EntryIndex<D,T,C>, leafId: Maybe<&2,String>, labels: Map<&2,Maybe<&2,ResolvedLabel>>, labelOrder: List<&2,LabelPosition>, nextLabel: Nat}
+
+def inMemory(-D: Data,-T: Data,-C: Data, +header: SessionHeader) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match header:
+    case SessionHeader{_,SNil{},_,_,_}: Fail{EmptyId{}}
+    case SessionHeader{_,id,timestamp,_,_}:
+      Result.map(&2,&2,Error,F64,SessionManager<D,T,C>,_ => SessionManager{header,Nil{},EntryIndex{Map.new(&2,Maybe<&2,SessionEntry<D,T,C>>),None{},0n},None{},Map.new(&2,Maybe<&2,ResolvedLabel>),Nil{},0n},dated(F64,id,Date.parseIso(timestamp)))
+
+def getHeader(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> SessionHeader:
+  match state:
+    case SessionManager{header,_,_,_,_,_,_}: header
+
+def getSessionId(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> String:
+  match state:
+    case SessionManager{SessionHeader{_,id,_,_,_},_,_,_,_,_,_}: id
+
+def getCwd(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> String:
+  match state:
+    case SessionManager{SessionHeader{_,_,_,cwd,_},_,_,_,_,_,_}: cwd
+
+def newSession(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, stamp: EntryStamp, parentSession: Maybe<&2,String>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match stamp:
+    case EntryStamp{id,timestamp}: inMemory(D,T,C,SessionHeader{Some{CURRENT_SESSION_VERSION()},id,timestamp,getCwd(D,T,C,state),parentSession})
+
+def getEntries(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> List<&2,SessionEntry<D,T,C>>:
+  match state:
+    case SessionManager{_,reversed,_,_,_,_,_}: List.reverse(&2,SessionEntry<D,T,C>,reversed)
+
+def getLeafId(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Maybe<&2,String>:
+  match state:
+    case SessionManager{_,_,_,leaf,_,_,_}: leaf
+
+def getEntry(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, id: String) -> Maybe<&2,SessionEntry<D,T,C>>:
+  match state:
+    case SessionManager{_,_,EntryIndex{index,_,_},_,_,_,_}: lookup(D,T,C,index,id)
+
+def getLeafEntry(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Maybe<&2,SessionEntry<D,T,C>>:
+  match state:
+    case SessionManager{_,_,EntryIndex{index,_,_},leaf,_,_,_}: Maybe.bind(&2,String,SessionEntry<D,T,C>,leaf,id => lookup(D,T,C,index,id))
+
+def getBranch(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, selection: LeafSelection) -> Result<&2,&2,Error,List<&2,SessionEntry<D,T,C>>>:
+  match state selection:
+    case _ Root{}: Done{Nil{}}
+    case SessionManager{_,_,EntryIndex{+index,_,count},leaf,_,_,_} Latest{}: walkPath(D,T,C,count,index,Maybe.bind(&2,String,SessionEntry<D,T,C>,leaf,id => lookup(D,T,C,index,id)),Nil{})
+    case SessionManager{_,_,EntryIndex{+index,_,count},_,_,_,_} Leaf{id}: walkPath(D,T,C,count,index,lookup(D,T,C,index,id),Nil{})
+
+def sessionContext(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Result<&2,&2,Error,SessionContext<D,T,C>>:
+  Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionContext<D,T,C>,getBranch(D,T,C,state,Latest{}),path => contextFromPath(D,T,C,path))
+
+def sessionContextEntries(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Result<&2,&2,Error,List<&2,SessionEntry<D,T,C>>>:
+  Result.map(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,List<&2,SessionEntry<D,T,C>>,path => contextEntries(D,T,C,path),getBranch(D,T,C,state,Latest{}))
+
+def branch(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, +id: String) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match state:
+    case SessionManager{header,reversed,EntryIndex{+index,latest,count},_,labels,order,next}:
+      Bool.pick(Result<&2,&2,Error,SessionManager<D,T,C>>,Maybe.is_some(&2,SessionEntry<D,T,C>,lookup(D,T,C,index,id)),Done{SessionManager{header,reversed,EntryIndex{index,latest,count},Some{id},labels,order,next}},Fail{EntryNotFound{id}})
+
+def resetLeaf(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> SessionManager<D,T,C>:
+  match state:
+    case SessionManager{header,reversed,index,_,labels,order,next}: SessionManager{header,reversed,index,None{},labels,order,next}
+
+def stampBase(stamp: EntryStamp, parent: Maybe<&2,String>) -> SessionEntryBase:
+  match stamp:
+    case EntryStamp{id,time}: SessionEntryBase{id,parent,time}
+
+def labelAt(labels: Map<&2,Maybe<&2,ResolvedLabel>>, id: String) -> Maybe<&2,ResolvedLabel>:
+  lookupValue(Maybe<&2,ResolvedLabel>,Map.get(Maybe<&2,ResolvedLabel>,None{},labels,id))
+
+def labelText(value: ResolvedLabel) -> String:
+  match value:
+    case ResolvedLabel{text,_,_}: text
+
+def getLabel(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, id: String) -> Maybe<&2,String>:
+  match state:
+    case SessionManager{_,_,_,_,labels,_,_}: Maybe.map(&2,ResolvedLabel,String,labelText,labelAt(labels,id))
+
+def labelPosition(value: ResolvedLabel) -> Nat:
+  match value:
+    case ResolvedLabel{_,_,position}: position
+
+# An order ticket is created only on insertion. Clearing then re-adding moves
+# a label to the end; old tickets are ignored when enumerating resolved labels.
+def updateLabel(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, +target: String, label: Maybe<&2,String>, timestamp: String) -> SessionManager<D,T,C>:
+  match state label:
+    case SessionManager{header,reversed,index,leaf,labels,order,next} None{}:
+      SessionManager{header,reversed,index,leaf,Map.set(&2,Maybe<&2,ResolvedLabel>,labels,target,None{}),order,next}
+    case SessionManager{header,reversed,index,leaf,labels,order,next} Some{SNil{}}:
+      SessionManager{header,reversed,index,leaf,Map.set(&2,Maybe<&2,ResolvedLabel>,labels,target,None{}),order,next}
+    case SessionManager{header,reversed,index,leaf,+labels,+order,+next} Some{text}:
+      +previous = labelAt(labels,target)
+      +position = Maybe.default(&2,Nat,Maybe.map(&2,ResolvedLabel,Nat,labelPosition,previous),next)
+      SessionManager{header,reversed,index,leaf,Map.set(&2,Maybe<&2,ResolvedLabel>,labels,target,Some{ResolvedLabel{text,timestamp,position}}),Bool.pick(List<&2,LabelPosition>,Maybe.is_none(&2,ResolvedLabel,previous),LabelPosition{target,next} <> order,order),next + 1n}
+
+def acceptEntry(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, +entry: SessionEntry<D,T,C>, checked: Result<&2,&2,Error,EntryIndex<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match state checked:
+    case _ Fail{cause}: Fail{cause}
+    case SessionManager{header,reversed,_,_,labels,order,next} Done{index}:
+      Done{SessionManager{header,entry <> reversed,index,Some{entryId(D,T,C,entry)},labels,order,next}}
+
+def appendChecked(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +entry: SessionEntry<D,T,C>, metadata: SessionEntryBase) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match state metadata:
+    case SessionManager{_,_,index,_,_,_,_} SessionEntryBase{+id,_,timestamp}:
+      Result.bind(&2,&2,Error,F64,SessionManager<D,T,C>,dated(F64,id,Date.parseIso(timestamp)),_ => acceptEntry(D,T,C,state,entry,insertEntry(D,T,C,entry,index,id)))
+
+def appendMessage(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, message: Agent.AgentMessage<D,T,Messages.CodingMessage<C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match message:
+    case Agent.CustomMessage{Messages.BranchSummary{_}}: Fail{InvalidMessage{}}
+    case Agent.CustomMessage{Messages.CompactionSummary{_}}: Fail{InvalidMessage{}}
+    case message:
+      +base = stampBase(stamp,getLeafId(D,T,C,state))
+      appendChecked(D,T,C,state,SessionMessageEntry{base,message},base)
+
+def appendThinkingLevelChange(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, level: String) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  +base = stampBase(stamp,getLeafId(D,T,C,state))
+  appendChecked(D,T,C,state,ThinkingLevelChangeEntry{base,level},base)
+
+def appendModelChange(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, provider: String, model: String) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  +base = stampBase(stamp,getLeafId(D,T,C,state))
+  appendChecked(D,T,C,state,ModelChangeEntry{base,provider,model},base)
+
+def appendCustomEntry(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, kind: String, data: Maybe<&2,C>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  +base = stampBase(stamp,getLeafId(D,T,C,state))
+  appendChecked(D,T,C,state,CustomEntry{base,kind,data},base)
+
+def appendCustomMessageEntry(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, kind: String, content: Ai.UserContent, display: Bool, details: Maybe<&2,C>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  +base = stampBase(stamp,getLeafId(D,T,C,state))
+  appendChecked(D,T,C,state,CustomMessageEntry{base,kind,content,details,display},base)
+
+def trimNameStart(value: String) -> String:
+  match value:
+    case SNil{}: ""
+    case SCon{Chr{+char},+rest}: Bool.pick(Unit -> String,NumberString.whitespace(char),_ => trimNameStart(rest),_ => SCon{Chr{char},rest})(Unit{})
+
+def trimName(value: String) -> String:
+  String.reverse(trimNameStart(String.reverse(trimNameStart(value))))
+
+def sanitizeName(name: String, inBreak: Bool, +reversed: String) -> String:
+  match name:
+    case SNil{}: trimName(String.reverse(reversed))
+    case SCon{+char,rest}:
+      +isBreak = Char.is_eq(char,'\r') || Char.is_eq(char,'\n')
+      sanitizeName(rest,isBreak,Bool.pick(String,isBreak,Bool.pick(String,inBreak,reversed,SCon{' ',reversed}),SCon{char,reversed}))
+
+def appendSessionInfo(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, name: String) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  +base = stampBase(stamp,getLeafId(D,T,C,state))
+  appendChecked(D,T,C,state,SessionInfoEntry{base,Some{sanitizeName(name,False{},"")}},base)
+
+def findSessionName(-D: Data,-T: Data,-C: Data, reversed: List<&2,SessionEntry<D,T,C>>) -> Maybe<&2,String>:
+  match reversed:
+    case SessionInfoEntry{_,None{}} <> _: None{}
+    case SessionInfoEntry{_,Some{name}} <> _:
+      +trimmed = trimName(name)
+      Bool.pick(Maybe<&2,String>,String.is_empty(trimmed),None{},Some{trimmed})
+    case _ <> rest: findSessionName(D,T,C,rest)
+    case Nil{}: None{}
+
+def getSessionName(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Maybe<&2,String>:
+  match state:
+    case SessionManager{_,reversed,_,_,_,_,_}: findSessionName(D,T,C,reversed)
+
+def appendLabelChange(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +stamp: EntryStamp, +target: String, +label: Maybe<&2,String>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match stamp:
+    case EntryStamp{_,+timestamp}:
+      +base = stampBase(stamp,getLeafId(D,T,C,state))
+      Bool.pick(Unit -> Result<&2,&2,Error,SessionManager<D,T,C>>,Maybe.is_some(&2,SessionEntry<D,T,C>,getEntry(D,T,C,state,target)),
+        _ => Result.map(&2,&2,Error,SessionManager<D,T,C>,SessionManager<D,T,C>,next => updateLabel(D,T,C,next,target,label,timestamp),appendChecked(D,T,C,state,LabelEntry{base,target,label},base)),
+        _ => Fail{EntryNotFound{target}})(Unit{})
+
+def branchWithSummary(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, target: Maybe<&2,String>, summary: String, details: Maybe<&2,C>, fromHook: Maybe<&2,Bool>, usage: Maybe<&2,Ai.Usage>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match target:
+    case None{}:
+      from = Maybe.default(&2,String,getLeafId(D,T,C,state),"root")
+      +base = stampBase(stamp,None{})
+      appendChecked(D,T,C,resetLeaf(D,T,C,state),BranchSummaryEntry{base,from,summary,details,usage,fromHook},base)
+    case Some{+id}:
+      from = Maybe.default(&2,String,getLeafId(D,T,C,state),"root")
+      +base = stampBase(stamp,Some{id})
+      Result.bind(&2,&2,Error,SessionManager<D,T,C>,SessionManager<D,T,C>,branch(D,T,C,state,id),next => appendChecked(D,T,C,next,BranchSummaryEntry{base,from,summary,details,usage,fromHook},base))
+
+def llmMessages(-D: Data,-T: Data,-C: Data, messages: List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>, reversed: List<&2,Ai.Message<Value.Value,Value.Value,D,T>>) -> List<&2,Ai.Message<Value.Value,Value.Value,D,T>>:
+  match messages:
+    case Nil{}: List.reverse(&2,Ai.Message<Value.Value,Value.Value,D,T>,reversed)
+    case Agent.LlmMessage{value} <> rest: llmMessages(D,T,C,rest,value <> reversed)
+    case _ <> rest: llmMessages(D,T,C,rest,reversed)
+
+def systemTimestamp(timestamp: F64, value: Ai.SystemMessage<Value.Value>) -> Ai.SystemMessage<Value.Value>:
+  match value:
+    case Ai.SystemMessage{content,sections,tools,changes,_}: Ai.SystemMessage{content,sections,tools,changes,timestamp}
+
+def appendCompactionFromContext(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, +base: SessionEntryBase, summary: String, keep: String, tokens: Nat, details: Maybe<&2,C>, fromHook: Maybe<&2,Bool>, usage: Maybe<&2,Ai.Usage>, context: SessionContext<D,T,C>, time: F64) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match context:
+    case SessionContext{messages,_,_}:
+      snapshot = Maybe.map(&2,Ai.SystemMessage<Value.Value>,Ai.SystemMessage<Value.Value>,value => systemTimestamp(time,value),Transcript.getCurrentSystemMessage(Value.Value,Value.Value,D,T,llmMessages(D,T,C,messages,Nil{})))
+      appendChecked(D,T,C,state,Compaction{CompactionEntry{base,summary,keep,tokens,details,usage,fromHook,snapshot}},base)
+
+def appendCompaction(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +stamp: EntryStamp, summary: String, keep: String, tokens: Nat, details: Maybe<&2,C>, fromHook: Maybe<&2,Bool>, usage: Maybe<&2,Ai.Usage>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match stamp:
+    case EntryStamp{id,timestamp}:
+      base = stampBase(stamp,getLeafId(D,T,C,state))
+      Result.bind(&2,&2,Error,F64,SessionManager<D,T,C>,dated(F64,id,Date.parseIso(timestamp)),time => Result.bind(&2,&2,Error,SessionContext<D,T,C>,SessionManager<D,T,C>,sessionContext(D,T,C,state),context => appendCompactionFromContext(D,T,C,state,base,summary,keep,tokens,details,fromHook,usage,context,time)))
+
+def sameParent(left: Maybe<&2,String>, right: Maybe<&2,String>) -> Bool:
+  match left right:
+    case None{} None{}: True{}
+    case Some{a} Some{b}: Strings.equal(a,b)
+    case _ _: False{}
+
+def baseParent(base: SessionEntryBase) -> Maybe<&2,String>:
+  match base:
+    case SessionEntryBase{_,parent,_}: parent
+
+def entryParent(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>) -> Maybe<&2,String>:
+  baseParent(entryBase(D,T,C,entry))
+
+def childrenFrom(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, +parent: String, +children: List<&2,SessionEntry<D,T,C>>) -> List<&2,SessionEntry<D,T,C>>:
+  match entries:
+    case Nil{}: children
+    case +entry <> rest: childrenFrom(D,T,C,rest,parent,Bool.pick(List<&2,SessionEntry<D,T,C>>,sameParent(entryParent(D,T,C,entry),Some{parent}),entry <> children,children))
+
+def getChildren(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, parent: String) -> List<&2,SessionEntry<D,T,C>>:
+  match state:
+    case SessionManager{_,reversed,_,_,_,_,_}: childrenFrom(D,T,C,reversed,parent,Nil{})
+
+# Appends can only reference existing parents. Reverse insertion order is thus
+# a topological order: assemble each subtree once, without recursive descent.
+type TimedNode<-D: Data,-T: Data,-C: Data> is Data:
+  TimedNode{node: SessionTreeNode<D,T,C>, time: F64}
+def nodeBefore(-D: Data,-T: Data,-C: Data, left: TimedNode<D,T,C>, right: TimedNode<D,T,C>) -> Bool:
+  match left right:
+    case TimedNode{_,a} TimedNode{_,b}: F64.is_le(a,b)
+def mergeNodes(-D: Data,-T: Data,-C: Data, left: List<&2,TimedNode<D,T,C>>, right: List<&2,TimedNode<D,T,C>>, +reversed: List<&2,TimedNode<D,T,C>>) -> List<&2,TimedNode<D,T,C>>:
+  match left right:
+    case Nil{} right: List.reverse.go(&2,TimedNode<D,T,C>,reversed,right)
+    case left Nil{}: List.reverse.go(&2,TimedNode<D,T,C>,reversed,left)
+    case +a <> +left +b <> +right:
+      Bool.pick(Unit -> List<&2,TimedNode<D,T,C>>,nodeBefore(D,T,C,a,b),_ => mergeNodes(D,T,C,left,b <> right,a <> reversed),_ => mergeNodes(D,T,C,a <> left,right,b <> reversed))(Unit{})
+
+def mergeNodeRuns(-D: Data,-T: Data,-C: Data, runs: List<&2,List<&2,TimedNode<D,T,C>>>, reversed: List<&2,List<&2,TimedNode<D,T,C>>>) -> List<&2,List<&2,TimedNode<D,T,C>>>:
+  match runs:
+    case Nil{}: List.reverse(&2,List<&2,TimedNode<D,T,C>>,reversed)
+    case last <> Nil{}: List.reverse(&2,List<&2,TimedNode<D,T,C>>,last <> reversed)
+    case left <> right <> rest: mergeNodeRuns(D,T,C,rest,mergeNodes(D,T,C,left,right,Nil{}) <> reversed)
+
+def sortNodeRuns(-D: Data,-T: Data,-C: Data, fuel: Nat, runs: List<&2,List<&2,TimedNode<D,T,C>>>) -> List<&2,TimedNode<D,T,C>>:
+  match fuel runs:
+    case _ Nil{}: Nil{}
+    case _ last <> Nil{}: last
+    case 1n+fuel first <> second <> rest: sortNodeRuns(D,T,C,fuel,mergeNodeRuns(D,T,C,first <> second <> rest,Nil{}))
+    case 0n _: Nil{}
+
+def nodeValue(-D: Data,-T: Data,-C: Data, value: TimedNode<D,T,C>) -> SessionTreeNode<D,T,C>:
+  match value:
+    case TimedNode{node,_}: node
+
+def nodeValues(-D: Data,-T: Data,-C: Data, values: List<&2,TimedNode<D,T,C>>, reversed: List<&2,SessionTreeNode<D,T,C>>) -> List<&2,SessionTreeNode<D,T,C>>:
+  match values:
+    case Nil{}: List.reverse(&2,SessionTreeNode<D,T,C>,reversed)
+    case value <> rest: nodeValues(D,T,C,rest,nodeValue(D,T,C,value) <> reversed)
+
+def nodeLabel(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, children: List<&2,SessionTreeNode<D,T,C>>, label: Maybe<&2,ResolvedLabel>) -> SessionTreeNode<D,T,C>:
+  match label:
+    case None{}: SessionTreeNode{entry,children,None{},None{}}
+    case Some{ResolvedLabel{text,timestamp,_}}: SessionTreeNode{entry,children,Some{text},Some{timestamp}}
+
+type ForestStep<-D: Data,-T: Data,-C: Data> is Data:
+  ForestStep{children: Map<&2,List<&2,TimedNode<D,T,C>>>, roots: List<&2,SessionTreeNode<D,T,C>>}
+
+def addTreeNode(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, labels: Map<&2,Maybe<&2,ResolvedLabel>>, +children: Map<&2,List<&2,TimedNode<D,T,C>>>, roots: List<&2,SessionTreeNode<D,T,C>>, metadata: SessionEntryBase) -> Result<&2,&2,Error,ForestStep<D,T,C>>:
+  match metadata:
+    case SessionEntryBase{+id,None{},_}:
+      +group = lookupValue(List<&2,TimedNode<D,T,C>>,Map.get(List<&2,TimedNode<D,T,C>>,Nil{},children,id))
+      node = nodeLabel(D,T,C,entry,nodeValues(D,T,C,sortNodeRuns(D,T,C,Sort.length(TimedNode<D,T,C>,group,0n),Sort.runs(TimedNode<D,T,C>,group,Nil{})),Nil{}),labelAt(labels,id))
+      Done{ForestStep{children,node <> roots}}
+    case SessionEntryBase{+id,Some{+parent},timestamp}:
+      +group = lookupValue(List<&2,TimedNode<D,T,C>>,Map.get(List<&2,TimedNode<D,T,C>>,Nil{},children,id))
+      node = nodeLabel(D,T,C,entry,nodeValues(D,T,C,sortNodeRuns(D,T,C,Sort.length(TimedNode<D,T,C>,group,0n),Sort.runs(TimedNode<D,T,C>,group,Nil{})),Nil{}),labelAt(labels,id))
+      Result.map(&2,&2,Error,F64,ForestStep<D,T,C>,time => ForestStep{Map.set(&2,List<&2,TimedNode<D,T,C>>,children,parent,TimedNode{node,time} <> lookupValue(List<&2,TimedNode<D,T,C>>,Map.get(List<&2,TimedNode<D,T,C>>,Nil{},children,parent))),roots},dated(F64,id,Date.parseIso(timestamp)))
+
+def forest(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, +labels: Map<&2,Maybe<&2,ResolvedLabel>>, state: Result<&2,&2,Error,ForestStep<D,T,C>>) -> Result<&2,&2,Error,List<&2,SessionTreeNode<D,T,C>>>:
+  match entries state:
+    case _ Fail{cause}: Fail{cause}
+    case Nil{} Done{ForestStep{_,roots}}: Done{roots}
+    case +entry <> rest Done{ForestStep{children,roots}}: forest(D,T,C,rest,labels,addTreeNode(D,T,C,entry,labels,children,roots,entryBase(D,T,C,entry)))
+
+def getTree(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Result<&2,&2,Error,List<&2,SessionTreeNode<D,T,C>>>:
+  match state:
+    case SessionManager{_,reversed,_,_,labels,_,_}: forest(D,T,C,reversed,labels,Done{ForestStep{Map.new(&2,List<&2,TimedNode<D,T,C>>),Nil{}}})
+
+# Forks remove label entries, reconnect the path, and reproduce only resolved
+# labels on retained targets. Replacement links also repair compactions whose
+# first kept entry was a removed label.
+def reparentBase(base: SessionEntryBase, parent: Maybe<&2,String>) -> SessionEntryBase:
+  match base:
+    case SessionEntryBase{id,_,timestamp}: SessionEntryBase{id,parent,timestamp}
+
+def replacement(links: Map<&2,Maybe<&2,String>>, +id: String) -> String:
+  Maybe.default(&2,String,lookupValue(Maybe<&2,String>,Map.get(Maybe<&2,String>,None{},links,id)),id)
+
+def reparent(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, parent: Maybe<&2,String>, replacements: Map<&2,Maybe<&2,String>>) -> SessionEntry<D,T,C>:
+  match entry:
+    case SessionMessageEntry{base,message}: SessionMessageEntry{reparentBase(base,parent),message}
+    case ThinkingLevelChangeEntry{base,level}: ThinkingLevelChangeEntry{reparentBase(base,parent),level}
+    case ModelChangeEntry{base,provider,model}: ModelChangeEntry{reparentBase(base,parent),provider,model}
+    case Compaction{CompactionEntry{base,summary,keep,tokens,details,usage,hook,system}}: Compaction{CompactionEntry{reparentBase(base,parent),summary,replacement(replacements,keep),tokens,details,usage,hook,system}}
+    case BranchSummaryEntry{base,from,summary,details,usage,hook}: BranchSummaryEntry{reparentBase(base,parent),from,summary,details,usage,hook}
+    case CustomEntry{base,kind,data}: CustomEntry{reparentBase(base,parent),kind,data}
+    case CustomMessageEntry{base,kind,content,details,display}: CustomMessageEntry{reparentBase(base,parent),kind,content,details,display}
+    case LabelEntry{base,target,label}: LabelEntry{reparentBase(base,parent),target,label}
+    case SessionInfoEntry{base,name}: SessionInfoEntry{reparentBase(base,parent),name}
+
+def replacePending(pending: List<&2,String>, +next: String, links: Map<&2,Maybe<&2,String>>) -> Map<&2,Maybe<&2,String>>:
+  match pending:
+    case Nil{}: links
+    case id <> rest: replacePending(rest,next,Map.set(&2,Maybe<&2,String>,links,id,Some{next}))
+
+def forkPath(-D: Data,-T: Data,-C: Data, path: List<&2,SessionEntry<D,T,C>>, pending: List<&2,String>, replacements: Map<&2,Maybe<&2,String>>, state: Result<&2,&2,Error,SessionManager<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match path state:
+    case _ Fail{cause}: Fail{cause}
+    case Nil{} Done{state}: Done{state}
+    case LabelEntry{SessionEntryBase{id,_,_},_,_} <> rest Done{state}: forkPath(D,T,C,rest,id <> pending,replacements,Done{state})
+    case reference <> rest Done{+state}:
+      +entry = {reference : SessionEntry<D,T,C>}
+      +links = replacePending(pending,entryId(D,T,C,entry),replacements)
+      +updated = reparent(D,T,C,entry,getLeafId(D,T,C,state),links)
+      forkPath(D,T,C,rest,Nil{},links,appendChecked(D,T,C,state,updated,entryBase(D,T,C,updated)))
+
+def currentLabel(labels: Map<&2,Maybe<&2,ResolvedLabel>>, +target: String, position: Nat) -> Maybe<&2,ResolvedLabel>:
+  previous = labelAt(labels,target)
+  Maybe.bind(&2,ResolvedLabel,ResolvedLabel,previous,+value => Bool.pick(Maybe<&2,ResolvedLabel>,Nat.is_eq(labelPosition(value),position),Some{value},None{}))
+
+def forkLabel(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, id: String, target: String, label: ResolvedLabel) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match label:
+    case ResolvedLabel{text,timestamp,_}: appendLabelChange(D,T,C,state,EntryStamp{id,timestamp},target,Some{text})
+
+type ForkLabelsState<-D: Data,-T: Data,-C: Data> is Data:
+  ForkLabelsState{session: SessionManager<D,T,C>, ids: List<&2,String>}
+
+def copyLabel(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, ids: List<&2,String>, target: String, label: Maybe<&2,ResolvedLabel>) -> Result<&2,&2,Error,ForkLabelsState<D,T,C>>:
+  match ids label:
+    case ids None{}: Done{ForkLabelsState{state,ids}}
+    case Nil{} Some{_}: Fail{LabelIdCount{}}
+    case id <> rest Some{value}: Result.map(&2,&2,Error,SessionManager<D,T,C>,ForkLabelsState<D,T,C>,next => ForkLabelsState{next,rest},forkLabel(D,T,C,state,id,target,value))
+
+def forkLabels(-D: Data,-T: Data,-C: Data, tickets: List<&2,LabelPosition>, +labels: Map<&2,Maybe<&2,ResolvedLabel>>, +retained: SessionManager<D,T,C>, progress: Result<&2,&2,Error,ForkLabelsState<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match tickets progress:
+    case _ Fail{cause}: Fail{cause}
+    case Nil{} Done{ForkLabelsState{state,Nil{}}}: Done{state}
+    case Nil{} Done{ForkLabelsState{_,_}}: Fail{LabelIdCount{}}
+    case LabelPosition{+target,position} <> rest Done{ForkLabelsState{+state,ids}}:
+      label = Bool.pick(Maybe<&2,ResolvedLabel>,Maybe.is_some(&2,SessionEntry<D,T,C>,getEntry(D,T,C,retained,target)),currentLabel(labels,target,position),None{})
+      forkLabels(D,T,C,rest,labels,retained,copyLabel(D,T,C,state,ids,target,label))
+
+def forkResolvedLabels(-D: Data,-T: Data,-C: Data, order: List<&2,LabelPosition>, labels: Map<&2,Maybe<&2,ResolvedLabel>>, ids: List<&2,String>, result: Result<&2,&2,Error,SessionManager<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{+state}: forkLabels(D,T,C,List.reverse(&2,LabelPosition,order),labels,state,Done{ForkLabelsState{state,ids}})
+
+def forkSelected(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, leaf: String, stamp: EntryStamp, ids: List<&2,String>, path: List<&2,SessionEntry<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match state stamp path:
+    case _ _ Nil{}: Fail{EntryNotFound{leaf}}
+    case SessionManager{SessionHeader{_,_,_,cwd,_},_,_,_,labels,order,_} EntryStamp{id,timestamp} path:
+      initial = inMemory(D,T,C,SessionHeader{Some{CURRENT_SESSION_VERSION()},id,timestamp,cwd,None{}})
+      forkResolvedLabels(D,T,C,order,labels,ids,forkPath(D,T,C,path,Nil{},Map.new(&2,Maybe<&2,String>),initial))
+
+def createBranchedSession(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +leaf: String, stamp: EntryStamp, labelIds: List<&2,String>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionManager<D,T,C>,getBranch(D,T,C,state,Leaf{leaf}),path => forkSelected(D,T,C,state,leaf,stamp,labelIds,path))

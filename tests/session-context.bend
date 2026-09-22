@@ -60,6 +60,9 @@ def error(cause: S.Error) -> String:
   match cause:
     case S.DuplicateId{id}: "duplicate:" ++ W.showText(id)
     case S.EmptyId{}: "empty-id"
+    case S.EntryNotFound{id}: "missing:" ++ W.showText(id)
+    case S.InvalidMessage{}: "invalid-message"
+    case S.LabelIdCount{}: "label-id-count"
     case S.Cycle{id}: "cycle:" ++ W.showText(id)
     case S.InvalidTimestamp{id,_}: "timestamp:" ++ W.showText(id)
 def ids(values: List<&2,E()>, reversed: List<&2,String>) -> String:
@@ -85,7 +88,7 @@ def custom(message: M.CodingMessage<String>) -> String:
 def assistantBody(values: List<&2,Ai.AssistantContent<V.Value>>, reversed: String) -> String:
   match values:
     case Nil{}: String.reverse(reversed)
-    case Ai.AssistantText{Ai.TextContent{text,_}} <> rest: assistantBody(rest,String.reverse.go(text,reversed))
+    case Ai.AssistantText{Ai.TextContent{content,_}} <> rest: assistantBody(rest,String.reverse.go(content,reversed))
     case _ <> rest: assistantBody(rest,reversed)
 def message(value: AM()) -> String:
   match value:
@@ -125,7 +128,7 @@ def messageCount(values: List<&2,AM()>, count: Nat) -> Nat:
     case _ <> rest: messageCount(rest,1n + count)
 def longResult(result: Result<&2,&2,S.Error,S.SessionContext<Unit,Unit,String>>) -> String:
   match result:
-    case Done{S.SessionContext{messages,"high",None{}}}: "long|" ++ Nat.show(messageCount(messages,0n))
+    case Done{S.SessionContext{values,"high",None{}}}: "long|" ++ Nat.show(messageCount(values,0n))
     case _: "long-failed"
 
 def run(fields: List<&2,String>) -> IO(Unit):
