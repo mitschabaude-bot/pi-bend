@@ -1,12 +1,17 @@
 import Base
+import ../../utils/paths.bend as Paths
+import ../../../../agent/src/types.bend as Agent
+import ../../../../ai/src/types.bend as Ai
+import ../../../../runtime/src/schema-value.bend as Value
+import ../../../../runtime/src/record.bend as Record
 import ./file-mutation-queue.bend as Queue
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/string.bend as Strings
 
-# The filesystem execution core of write.ts. Tool-definition metadata, schema
-# decoding, input path normalization and renderers are added at the public boundary.
+# Native write tool and filesystem execution. Extension ToolDefinition and
+# terminal rendering remain separate public-boundary integration work.
 type WriteToolInput is Data:
   WriteToolInput{path: String, content: String}
 
@@ -14,6 +19,8 @@ type Error is Data:
   Filesystem{cause: FS.Error}
   Operation{message: String}
   Aborted{}
+  InvalidPath{cause: Paths.Error}
+  InvalidArguments{}
 
 def Outcome() -> Data: Result<&2, &2, Error, Unit>
 
@@ -106,3 +113,91 @@ def execute(queue: Queue.Queue, operations: WriteOperations, +absolutePath: Stri
   do IO<Outcome()>:
     value : Result<&2, &1, FS.Error, Outcome()> <- Queue.withFileMutationQueue(Outcome(), queue, absolutePath, _ => write(operations, absolutePath, content, signal))
     return queued(value)
+
+
+type WriteToolOptions is Data:
+  WriteToolOptions{operations: Maybe<&2, WriteOperations>}
+
+type Invocation is Data:
+  Invocation{paths: Paths.Environment, cwd: String, queue: Queue.Queue, operations: WriteOperations}
+
+# The owner retains its execution callback and any default operations it created.
+# Injected operations are borrowed and remain owned by the caller.
+type ToolOwner is Type:
+  ToolOwner{tool: Agent.AgentTool<Unit, Error>, ownedOperations: Maybe<&2, WriteOperations>}
+
+def ToolResult() -> Data: Result<&2, &2, Error, Agent.AgentToolResult<Unit>>
+
+def parameters(path: Maybe<&2, Value.Value>, content: Maybe<&2, Value.Value>) -> Result<&2, &2, Error, WriteToolInput>:
+  match path content:
+    case Some{Value.Text{path}} Some{Value.Text{content}}: Done{WriteToolInput{path, content}}
+    case _ _: Fail{InvalidArguments{}}
+
+def parseInput(value: Value.Value) -> Result<&2, &2, Error, WriteToolInput>:
+  match value:
+    case Value.ObjectValue{+fields}: parameters(Record.get(Value.Value, fields, "path"), Record.get(Value.Value, fields, "content"))
+    case _: Fail{InvalidArguments{}}
+
+def toolResult(path: String, value: Outcome()) -> ToolResult():
+  match value:
+    case Fail{error}: Fail{error}
+    case Done{Unit{}}: Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Successfully wrote to " ++ path, None{}}} <> Nil{}, Unit{}, None{}, None{}}}
+
+def resolvedInput(queue: Queue.Queue, operations: WriteOperations, path: String, content: String, signal: Maybe<&2, Abort.AbortSignal<Unit>>, resolved: Result<&2, &2, Paths.Error, String>) -> IO(ToolResult()):
+  match resolved:
+    case Fail{cause}: IO.pure(ToolResult(), Fail{InvalidPath{cause}})
+    case Done{absolutePath}:
+      do IO<ToolResult()>:
+        result : Outcome() <- execute(queue, operations, absolutePath, content, signal)
+        return toolResult(path, result)
+
+def invokeInput(environment: Invocation, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: Result<&2, &2, Error, WriteToolInput>) -> IO(ToolResult()):
+  match environment parsed:
+    case _ Fail{error}: IO.pure(ToolResult(), Fail{error})
+    case Invocation{paths, cwd, queue, operations} Done{WriteToolInput{+path, content}}:
+      resolvedInput(queue, operations, path, content, signal, Paths.resolveToCwd(paths, path, cwd))
+
+def invoke(environment: Invocation, request: Agent.ToolExecutionInput<Unit>) -> IO(ToolResult()):
+  match request:
+    case Agent.ToolExecutionInput{_, arguments, signal, _}: invokeInput(environment, signal, parseInput(arguments))
+
+def stringParameter(description: String) -> Value.Value:
+  Value.ObjectValue{Record.Record{Record.Property{"type", Value.Text{"string"}} <> Record.Property{"description", Value.Text{description}} <> Nil{}}}
+
+def writeSchema() -> Value.Value:
+  Value.ObjectValue{Record.Record{
+    Record.Property{"type", Value.Text{"object"}} <>
+    Record.Property{"properties", Value.ObjectValue{Record.Record{
+      Record.Property{"path", stringParameter("Path to the file to write (relative or absolute)")} <>
+      Record.Property{"content", stringParameter("Content to write to the file")} <> Nil{}}}} <>
+    Record.Property{"required", Value.ArrayValue{Value.Text{"path"} <> Value.Text{"content"} <> Nil{}}} <> Nil{}}}
+
+def created(environment: Invocation, owned: Maybe<&2, WriteOperations>) -> IO(ToolOwner):
+  do IO<ToolOwner>:
+    callback : Callback.Callback<Agent.ToolExecutionInput<Unit>, ToolResult()> <- Callback.create(~Invocation, ~Agent.ToolExecutionInput<Unit>, ~ToolResult(), ~invoke, environment)
+    return ToolOwner{Agent.AgentTool{"write", "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.", writeSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "write", None{}, callback, None{}, None{}}, owned}
+
+# Environment and shared queue are explicit native runtime dependencies.
+def createWriteTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: WriteToolOptions) -> IO(ToolOwner):
+  match options:
+    case WriteToolOptions{Some{operations}}: created(Invocation{environment, cwd, queue, operations}, None{})
+    case WriteToolOptions{None{}}:
+      do IO<ToolOwner>:
+        +operations : WriteOperations <- defaultWriteOperations()
+        created(Invocation{environment, cwd, queue, operations}, Some{operations})
+
+def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Unit, Error>:
+  match owner:
+    case ToolOwner{+tool, operations}: (ToolOwner{tool, operations}, tool)
+
+def disposeOwned(owned: Maybe<&2, WriteOperations>) -> IO(Unit):
+  match owned:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{operations}: dispose(operations)
+
+def disposeTool(owner: ToolOwner) -> IO(Unit):
+  match owner:
+    case ToolOwner{Agent.AgentTool{_, _, _, _, _, _, callback, _, _}, operations}:
+      do IO<Unit>:
+        Callback.dispose(Agent.ToolExecutionInput<Unit>, ToolResult(), callback)
+        disposeOwned(operations)

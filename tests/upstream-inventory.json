@@ -2991,11 +2991,13 @@
       "status": "partial",
       "ports": [
         "tests/write-tool.bend",
-        "tests/write_tool_check.py"
+        "tests/write_tool_check.py",
+        "tests/write-public.bend",
+        "tests/write_public_check.py"
       ],
       "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
       "implementation": "packages/coding-agent/src/core/tools/write.bend",
-      "notes": "Write filesystem execution core only: actual contents, overwrite and parent creation tested. Public createWriteTool/createWriteToolDefinition, input normalization, exact result message/details, rendering and all other tools remain pending; the two upstream write-tool cases are not yet fully ported."
+      "notes": "The two write-tool cases (file contents/exact result details and parent creation) are covered through createWriteTool on Bun/native1/native4. Additional tests cover path normalization, overwrite and cancellation in the execution core. Extension createWriteToolDefinition/context overrides, rendering, and all other tools remain pending."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
