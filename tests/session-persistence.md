@@ -25,8 +25,8 @@ Modification times come from `File.modified_time` (native-tls's `bend-file-lock-
 Ported by name: file-operations.test.ts (`loadEntriesFromFile` ×9, header discovery ×3, the scan-limit cases, `findMostRecentSession` ×9, the flat custom directory case, `setSessionFile` with corrupted files ×5), load-entries.test.ts (13 of 14; "adopts headerless entries as current-version without migrating them" is not representable), migration.test.ts (2), save-entry.test.ts (1), custom-session-id.test.ts (13) and session-info-modified-timestamp.test.ts (1). "opens session files larger than Node's max string length" writes a 512 MiB sparse file to exercise a JavaScript string limit and is not ported.
 
 ```sh
-build/bend-native-toolchain/bend2/main.ts tests/session-file.bend -o build/session-file.js
-BEND_TUS=8 sh scripts/build-pure.sh tests/session-file.bend build/session-file
+build/bend-process-files/bend2/main.ts tests/session-file.bend -o build/session-file.js
+BEND=build/bend-process-files/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/session-file.bend build/session-file
 python3 tests/session_file_check.py --runner build/session-file.js
 python3 tests/session_file_check.py --runner build/session-file --threads 1
 python3 tests/session_file_check.py --runner build/session-file --threads 4
@@ -36,3 +36,7 @@ python3 tests/session_file_check.py --runner build/session-file --threads 4
 
 `packages/coding-agent/src/main.bend` ports upstream's `createSessionManager`, `validateForkFlags`, `validateSessionIdFlags`, `getMissingSessionCwdIssue` and the `--name` handling; the agent runtime (`core/agent-runtime.bend`) takes a `SessionSeed` (context messages, recorded model, recorded thinking level) and records the chosen model and thinking level on the session as the SDK does. The agent's custom message type is now pi's coding message union (`Messages.CodingMessage`, converted by `convertToLlm`), so restored bash executions and extension messages survive a resume; tool details restored from a file stay `RawDetails` JSON. `--session` for a session of another project asks "Fork this session into current directory? [y/N]" and reads the answer from standard input to its end (there is no line primitive). `--resume` reports that the interactive selector is not ported. `tests/print_cli_check.py` covers the flag conflicts, the invalid id, the not-a-session file (session-file-invalid.test.ts), the missing stored cwd and an unknown id offline, and with `PI_BEND_LIVE=1` a run against a stored session (header from the file, thinking level recorded, no new messages yet).
 
+
+Root integration with the shared process/files compiler passes 364 operations on native one/four threads, adding discovery across pre-epoch and post-epoch file timestamps. FS.modified interprets the syscall’s seconds as signed two’s-complement before converting to milliseconds. The shared compiler does not carry the experimental explicit-stack JS emitter: its Bun run fails the oversized-header fixture with a machine-stack overflow. Earlier Bun results above used the other agent’s patched private compiler; they do not establish a pass on the shared unpatched compiler.
+
+The combined native CLI rebuild also passes `PI_BEND_CODEX_LIVE=1 python3 tests/print_cli_check.py`: offline argument/session-file checks and a live request through the existing stored Codex OAuth login. This still does not claim that newly generated messages are persisted; that requires the AgentSession integration described above.

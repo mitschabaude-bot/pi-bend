@@ -4,6 +4,7 @@ import ./utf8.bend as Utf8
 import ./file-fold.bend as Fold
 import ./u64.bend as Word
 import ./f64.bend as F
+import ./date.bend as Date
 
 type Error is Data:
   System{code: U32, message: String}
@@ -169,7 +170,7 @@ def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
 def modifiedMilliseconds(value: U32 & U32 & U32) -> F64:
   match value:
     case (high,(low,nanos)):
-      +raw = F64.add(F64.mul(F.fromU64(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
+      +raw = F64.add(F64.mul(Date.fromMilliseconds(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
       F64.floor(F64.add(raw,F64.div(U32.to_f64(1),U32.to_f64(2))))
 
 def modifiedResult(result: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Result<&2,&2,Error,F64>:

@@ -141,6 +141,13 @@ def scenario_file_operations(temp):
     (by_cwd / 'b.jsonl').write_text(header_line('b', project_b) + '\n'); os.utime(by_cwd / 'b.jsonl', (1700000010, 1700000010))
     add({'op': 'findMostRecent', 'dir': str(by_cwd), 'cwd': project_a}, lambda r: r['path'] == str(by_cwd / 'a.jsonl'))  # filters most recent session by cwd
     add({'op': 'findMostRecent', 'dir': str(by_cwd), 'cwd': project_b}, lambda r: r['path'] == str(by_cwd / 'b.jsonl'))
+    # Signed timestamps must compare chronologically, including across 1970.
+    for label, older_ns, newer_ns in [('pre-epoch', -2000000000, -1000000000), ('cross-epoch', -1000000000, 1000000000)]:
+        directory = d / label; directory.mkdir()
+        for name, stamp in [('older', older_ns), ('newer', newer_ns)]:
+            path = directory / (name + '.jsonl'); path.write_text(header_line(name, '/tmp') + '\n')
+            os.utime(path, ns=(stamp, stamp))
+        add({'op': 'findMostRecent', 'dir': str(directory)}, (lambda directory: lambda r: r['path'] == str(directory / 'newer.jsonl'))(directory))
     # SessionManager.setSessionFile with corrupted files
     corrupt = d / 'corrupt'; corrupt.mkdir()
     (corrupt / 'empty.jsonl').write_text('')
@@ -328,7 +335,6 @@ def check_modified(results, path):
     msg_time = results[4]['timestamp']
     session = [s for s in results[5]['sessions'] if s['path'] == path][0]
     assert session['modified'] == msg_time, (session['modified'], msg_time)
-    assert session['modified'] != int(os.stat(path).st_mtime * 1000) or True
 
 def main():
     parser = argparse.ArgumentParser()
