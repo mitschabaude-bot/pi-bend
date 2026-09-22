@@ -27,6 +27,8 @@ type Error is Data:
   UnsupportedNameEncoding{tag: U32}
   UnsupportedConstraint{oid: List<&2,U32>}
   IssuerMismatch{}
+  NoTrustedPath{}
+  PathSearchLimit{}
 
 type PublicKey is Data:
   Rsa{key: RSA.PublicKey}
@@ -809,3 +811,81 @@ def serverPath(+now: W.U64, intermediates: List<&2,Certificate>, anchor: PathCer
 def verifyPath(+now: W.U64, leaf: Certificate, intermediates: List<&2,Certificate>, trusted: Certificate) -> Result<&2,&2,Error,PublicKey>:
   Result.bind(&2,&2,Error,PathCertificate,PublicKey,preparePathCertificate(now,trusted), anchor =>
     Result.bind(&2,&2,Error,PathCertificate,PublicKey,preparePathCertificate(now,leaf), target => serverPath(now,intermediates,anchor,target)))
+
+# Discovery ignores unusable *candidates*, not failures on the selected path.
+# The target is checked separately and its validation errors are preserved.
+def retainPrepared(result: Result<&2,&2,Error,PathCertificate>, reversed: List<&2,PathCertificate>) -> List<&2,PathCertificate>:
+  match result:
+    case Fail{_}: reversed
+    case Done{value}: value <> reversed
+
+def prepareCandidates(values: List<&2,Certificate>, +now: W.U64, reversed: List<&2,PathCertificate>) -> List<&2,PathCertificate>:
+  match values:
+    case Nil{}: List.reverse(&2,PathCertificate,reversed)
+    case head <> rest: prepareCandidates(rest,now,retainPrepared(preparePathCertificate(now,head),reversed))
+
+def linkAccepted(result: Result<&2,&2,Error,Unit>) -> Bool:
+  match result:
+    case Fail{_}: False{}
+    case Done{Unit{}}: True{}
+
+def reachesAnchor(+child: PathCertificate, +anchor: PathCertificate, count: Big.BigNat) -> Bool:
+  match child anchor:
+    case PathCertificate{certificate,_,_,_,_} PathCertificate{trusted,_,_,_,_}:
+      Bool.pick(Unit -> Bool,sameCertificate(certificate,trusted),unit => True{},unit => linkAccepted(issuerLink(child,anchor,count)))(Unit{})
+
+def memberCertificate(member: PathCertificate) -> Certificate:
+  match member:
+    case PathCertificate{certificate,_,_,_,_}: certificate
+
+def alreadyVisited(values: List<&2,Certificate>, +certificate: Certificate) -> Bool:
+  match values:
+    case Nil{}: False{}
+    case head <> rest: sameCertificate(head,certificate) || alreadyVisited(rest,certificate)
+
+type PathSearch is Data:
+  PathSearch{child: PathCertificate, count: Big.BigNat, visited: List<&2,Certificate>}
+
+def trustedCandidate(anchors: List<&2,PathCertificate>, +child: PathCertificate, +count: Big.BigNat) -> Bool:
+  match anchors:
+    case Nil{}: False{}
+    case anchor <> rest:
+      Bool.pick(Unit -> Bool,reachesAnchor(child,anchor,count),unit => True{},unit => trustedCandidate(rest,child,count))(Unit{})
+
+# New branches precede deferred siblings, so the search is depth-first without
+# retaining an exponentially growing breadth-first frontier. Every branch is a
+# simple path: a peer certificate cannot occur twice in its visited list.
+def extendPeers(peers: List<&2,PathCertificate>, +child: PathCertificate, +count: Big.BigNat, +visited: List<&2,Certificate>, pending: List<&2,PathSearch>) -> List<&2,PathSearch>:
+  match peers:
+    case Nil{}: pending
+    case +parent <> rest:
+      +tail = extendPeers(rest,child,count,visited,pending)
+      Bool.pick(Unit -> List<&2,PathSearch>,alreadyVisited(visited,memberCertificate(parent)),unit => tail,unit =>
+        Bool.pick(Unit -> List<&2,PathSearch>,linkAccepted(issuerLink(child,parent,count)),unit =>
+          PathSearch{parent,belowParent(parent,count),memberCertificate(parent) <> visited} <> tail,unit => tail)(Unit{}))(Unit{})
+
+# The caller supplies a work bound for ambiguous/untrusted peer graphs. Limit
+# exhaustion is explicit and never turns an incomplete search into acceptance.
+def searchPath(steps: Nat, pending: List<&2,PathSearch>, +peers: List<&2,PathCertificate>, +anchors: List<&2,PathCertificate>) -> Result<&2,&2,Error,Unit>:
+  match steps pending:
+    case _ Nil{}: Fail{NoTrustedPath{}}
+    case 0n _ <> _: Fail{PathSearchLimit{}}
+    case 1n+rest PathSearch{+child,+count,visited} <> deferred:
+      Bool.pick(Unit -> Result<&2,&2,Error,Unit>,trustedCandidate(anchors,child,count),unit => Done{Unit{}},unit =>
+        searchPath(rest,extendPeers(peers,child,count,visited,deferred),peers,anchors))(Unit{})
+
+def discoverServer(steps: Nat, anchors: List<&2,PathCertificate>, peers: List<&2,PathCertificate>, +leaf: PathCertificate) -> Result<&2,&2,Error,PublicKey>:
+  match leaf:
+    case PathCertificate{certificate,_,_,+key,policy}:
+      Result.bind(&2,&2,Error,Unit,PublicKey,checkServerPolicy(policy),unit =>
+        Result.bind(&2,&2,Error,Unit,PublicKey,searchPath(steps,PathSearch{leaf,Big.zero(),certificate <> Nil{}} <> Nil{},peers,anchors),unit => Done{key}))
+
+# Configured anchors are explicit trust. Peer certificates only supply possible
+# intermediate links; even a self-signed peer root cannot grant itself trust.
+# Hostname authorization remains a separate requirement for TLS connections.
+def verifyChain(steps: Nat, +now: W.U64, leaf: Certificate, peers: List<&2,Certificate>, anchors: List<&2,Certificate>) -> Result<&2,&2,Error,PublicKey>:
+  match anchors:
+    case Nil{}: Fail{NoTrustedPath{}}
+    case head <> rest:
+      Result.bind(&2,&2,Error,PathCertificate,PublicKey,preparePathCertificate(now,leaf), target =>
+        discoverServer(steps,prepareCandidates(head <> rest,now,Nil{}),prepareCandidates(peers,now,Nil{}),target))

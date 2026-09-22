@@ -29,6 +29,7 @@ def error(cause: X509.Error) -> String:
     case X509.UnsupportedConstraint{_}: "constraint"
     case X509.IssuerMismatch{}: "issuer"
     case X509.NoTrustedPath{}: "untrusted"
+    case X509.PathSearchLimit{}: "search-limit"
 
 def parsed(result: Result<&2, &2, X509.Error, X509.Certificate>) -> String:
   match result:
@@ -174,15 +175,16 @@ def candidatePath(now: W.U64, trusted: List<&2,U32>, leaf: List<&2,U32>, interme
       Result.bind(&2,&2,X509.Error,List<&2,X509.Certificate>,Unit,pathCertificates(intermediates,Nil{}), chain =>
         Result.bind(&2,&2,X509.Error,X509.PublicKey,Unit,X509.verifyPath(now,target,chain,anchor),unused => Done{Unit{}}))))
 
-def discoverPath(now: W.U64, leaf: List<&2,U32>, peers: List<&2,String>, anchors: List<&2,String>) -> Result<&2,&2,X509.Error,Unit>:
+def discoverPath(steps: Nat, now: W.U64, leaf: List<&2,U32>, peers: List<&2,String>, anchors: List<&2,String>) -> Result<&2,&2,X509.Error,Unit>:
   Result.bind(&2,&2,X509.Error,X509.Certificate,Unit,X509.parse(leaf), target =>
     Result.bind(&2,&2,X509.Error,List<&2,X509.Certificate>,Unit,pathCertificates(peers,Nil{}), chain =>
       Result.bind(&2,&2,X509.Error,List<&2,X509.Certificate>,Unit,pathCertificates(anchors,Nil{}), trusted =>
-        Result.bind(&2,&2,X509.Error,X509.PublicKey,Unit,X509.verifyChain(now,target,chain,trusted),unused => Done{Unit{}}))))
+        Result.bind(&2,&2,X509.Error,X509.PublicKey,Unit,X509.verifyChain(steps,now,target,chain,trusted),unused => Done{Unit{}}))))
 
 def run(parts: List<&2, String>) -> String:
   match parts:
-    case "discover" <> high <> low <> leaf <> peers <> anchors <> Nil{}: verified(discoverPath(W.U64{Decimal.decimal(high,0),Decimal.decimal(low,0)},Bytes.bytes(leaf),Split.split(peers,'|'),Split.split(anchors,'|')))
+    case "discover" <> high <> low <> leaf <> peers <> anchors <> Nil{}: verified(discoverPath(1024n,W.U64{Decimal.decimal(high,0),Decimal.decimal(low,0)},Bytes.bytes(leaf),Split.split(peers,'|'),Split.split(anchors,'|')))
+    case "limited" <> steps <> high <> low <> leaf <> peers <> anchors <> Nil{}: verified(discoverPath(U32.to_nat(Decimal.decimal(steps,0)),W.U64{Decimal.decimal(high,0),Decimal.decimal(low,0)},Bytes.bytes(leaf),Split.split(peers,'|'),Split.split(anchors,'|')))
     case "chain" <> high <> low <> trusted <> leaf <> intermediates: verified(candidatePath(W.U64{Decimal.decimal(high,0),Decimal.decimal(low,0)},Bytes.bytes(trusted),Bytes.bytes(leaf),intermediates))
     case "dn" <> left <> right <> Nil{}: compared(compareNames(Bytes.bytes(left),Bytes.bytes(right)))
     case "self" <> cert <> Nil{}: selfIssued(Result.bind(&2,&2,X509.Error,X509.Certificate,X509.CertificateNames,X509.parse(Bytes.bytes(cert)),X509.certificateNames))

@@ -60,3 +60,5 @@ import ./proofs/openai-sse.bend as OpenAISSE
 import ./proofs/openai-responses-stream.bend as OpenAIResponsesStream
 import ./proofs/openai-responses.bend as OpenAIResponses
 import ./proofs/fetch.bend as Fetch
+
+import ./proofs/x509-trust.bend as X509Trust

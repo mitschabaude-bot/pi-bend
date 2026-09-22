@@ -609,28 +609,37 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-x509-path-') as temp:
     unnamed = chain_cert(empty_name,other.public_key(),name,issuer,(False,None),1)
     path_case(anchor,unnamed,[],'certificate',oracle=False)
 
-    def discover_case(leaf,peers,anchors,expected,oracle=True):
-        if oracle and anchors:
-            (folder/'anchors.pem').write_bytes(b''.join(c.public_bytes(serialization.Encoding.PEM) for c in anchors))
+    def discover_case(leaf,peers,anchors,expected,oracle=True,steps=None,witness=None):
+        # For ambiguous candidates, OpenSSL may stop at an invalid first choice.
+        # A supplied witness validates the successful selected path independently.
+        oracle_anchors,oracle_peers=witness if witness is not None else (anchors,peers)
+        if (oracle or witness is not None) and oracle_anchors:
+            (folder/'anchors.pem').write_bytes(b''.join(c.public_bytes(serialization.Encoding.PEM) for c in oracle_anchors))
             (folder/'leaf.pem').write_bytes(leaf.public_bytes(serialization.Encoding.PEM))
             args=['openssl','verify','-trusted',str(folder/'anchors.pem'),'-partial_chain','-purpose','sslserver','-attime',str(stamp//1000)]
-            if peers:
-                (folder/'peers.pem').write_bytes(b''.join(c.public_bytes(serialization.Encoding.PEM) for c in peers))
+            if oracle_peers:
+                (folder/'peers.pem').write_bytes(b''.join(c.public_bytes(serialization.Encoding.PEM) for c in oracle_peers))
                 args+=['-untrusted',str(folder/'peers.pem')]
             run=subprocess.run(args+[str(folder/'leaf.pem')],capture_output=True,text=True,timeout=10)
             assert (run.returncode==0)==(expected=='ok'),(expected,run.stdout,run.stderr)
         peer_text='|'.join(encode(cert_wire(c)) for c in peers)
         anchor_text='|'.join(encode(cert_wire(c)) for c in anchors)
-        cases.append((':'.join(['discover',high,low,encode(cert_wire(leaf)),peer_text,anchor_text]),expected))
+        prefix=['discover'] if steps is None else ['limited',str(steps)]
+        cases.append((':'.join(prefix+[high,low,encode(cert_wire(leaf)),peer_text,anchor_text]),expected))
 
     discover_case(direct,[],[anchor],'ok')
     discover_case(target,[middle],[anchor],'ok')
     discover_case(target,[anchor,middle],[anchor],'ok')
     discover_case(target,[middle,anchor],[anchor],'ok')
     discover_case(target,[middle,middle,anchor],[anchor],'ok')
-    discover_case(direct,[],[wrong,anchor],'ok')
+    discover_case(direct,[],[wrong,anchor],'ok',oracle=False,witness=([anchor],[]))
     discover_case(target,[middle],[expired_anchor,anchor],'ok')
     discover_case(direct,[],[direct],'ok')
+    discover_case(direct,[],[anchor],'search-limit',oracle=False,steps=0)
+    discover_case(direct,[],[anchor],'ok',steps=1)
+    discover_case(target,[middle],[anchor],'search-limit',oracle=False,steps=1)
+    discover_case(target,[middle],[anchor],'ok',steps=2)
+    discover_case(target,[middle],[],'untrusted',oracle=False,steps=0)
     discover_case(target,[],[middle],'ok') # Explicit intermediate trust.
     discover_case(target,[middle,anchor],[],'untrusted',oracle=False)
     discover_case(direct,[anchor],[],'untrusted',oracle=False)
@@ -643,7 +652,7 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-x509-path-') as temp:
         invalid_middle=chain_cert(middle_name,other.public_key(),name,issuer,(True,0),32,period=period)
         discover_case(target,[invalid_middle,middle],[anchor],'ok')
     non_ca=chain_cert(middle_name,other.public_key(),name,issuer,(False,None),1)
-    discover_case(target,[non_ca,middle],[anchor],'ok')
+    discover_case(target,[non_ca,middle],[anchor],'ok',oracle=False,witness=([anchor],[middle]))
     discover_case(target,[non_ca],[anchor],'untrusted')
     wrong_key=chain_cert(middle_name,issuer.public_key(),name,issuer,(True,0),32)
     discover_case(target,[wrong_key,middle],[anchor],'ok')
@@ -651,17 +660,20 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-x509-path-') as temp:
     # The first same-key issuer reaches a dead end, so search must backtrack.
     dead_name=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'untrusted authority')])
     dead_end=chain_cert(middle_name,other.public_key(),dead_name,issuer,(True,0),32)
-    discover_case(target,[dead_end,middle],[anchor],'ok',oracle=False)
+    discover_case(target,[dead_end,middle],[anchor],'ok',oracle=False,witness=([anchor],[middle]))
     discover_case(target,[dead_end],[anchor],'untrusted')
     # A real signature cycle cannot establish trust, and must terminate.
     cycle_name=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'cycle')])
     cycle_a=chain_cert(middle_name,other.public_key(),cycle_name,issuer,(True,None),32)
     cycle_b=chain_cert(cycle_name,issuer.public_key(),middle_name,other,(True,None),32)
     discover_case(target,[cycle_a,cycle_b],[wrong],'untrusted')
-    discover_case(target,[cycle_a,cycle_b,middle],[anchor],'ok',oracle=False)
+    discover_case(target,[cycle_a,cycle_b,middle],[anchor],'ok',oracle=False,witness=([anchor],[middle]))
     discover_case(target,[target,middle],[anchor],'ok')
     malformed_target=chain_cert(subject,other.public_key(),name,issuer,(False,None),1,period=expired_period)
     discover_case(malformed_target,[],[anchor],'expired')
+
+if '--discovery-only' in sys.argv[2:]:
+    cases=[case for case in cases if case[0].startswith(('discover:', 'limited:'))]
 
 for name, command in [('native-1', [ARTIFACT, '--threads', '1']),
                       ('native-4', [ARTIFACT, '--threads', '4']),
