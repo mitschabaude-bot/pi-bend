@@ -6,6 +6,9 @@ import ./hkdf-sha256.bend as HKDF
 import ./tls13-kdf.bend as KDF
 import ./aes128.bend as AES
 import ./aes128-gcm.bend as GCM
+import ./x509.bend as X509
+import ./rsa-sha256.bend as RSA
+import ./p256.bend as P256
 
 # TLS 1.3 handshake framing and negotiation. Affine states retain key epochs
 # and exact transcripts; none yet represents an authenticated connection.
@@ -22,6 +25,8 @@ type Error is Data:
   MalformedHandshake{}
   RejectedExtension{kind: U32}
   DuplicateExtension{kind: U32}
+  CertificateFailure{cause: X509.Error}
+  FinishedMismatch{}
 
 type Pending is Type:
   Pending{serverName: Maybe<&2, String>, privateKey: List<&2, U32>, sessionId: List<&2, U32>, clientHello: List<&2, U32>}
@@ -459,3 +464,38 @@ def certificateSignature(transcript: SHA.State, wire: List<&2, U32>) -> Result<&
   Result.bind(&2, &2, Error, List<&2, U32>, CertificateSignature, messageBody(15, wire), body =>
     Result.bind(&2, &2, Error, SHA.Digest, CertificateSignature, hashResult(SHA.Digest, SHA.finish(transcript)), hash =>
       certificateVerifyBody(X.repeat(64n, 32, Record.append(ascii("TLS 1.3, server CertificateVerify"), 0 <> SHA.toBytes(hash))), body)))
+
+# These checks authenticate handshake bytes relative to a supplied certificate
+# key and traffic secret. Certificate path/identity authorization is separate.
+def certificateResult(-A: Data, result: Result<&2, &2, X509.Error, A>) -> Result<&2, &2, Error, A>:
+  match result:
+    case Fail{cause}: Fail{CertificateFailure{cause}}
+    case Done{value}: Done{value}
+
+def verifyEvidence(key: X509.PublicKey, evidence: CertificateSignature) -> Result<&2, &2, Error, Unit>:
+  match key evidence:
+    case X509.Rsa{key} CertificateSignature{RsaPssRsaeSha256{}, signature, input}:
+      certificateResult(Unit, X509.rsaResult(Unit, RSA.verifyPss(key, input, signature, 32n)))
+    case X509.P256{key} CertificateSignature{EcdsaP256Sha256{}, signature, input}:
+      certificateResult(Unit, X509.curveResult(Unit, P256.verify(key, input, signature)))
+    case _ _: Fail{RejectedParameters{}}
+
+def verifyCertificateSignature(key: X509.PublicKey, +transcript: SHA.State, +wire: List<&2, U32>) -> Result<&2, &2, Error, SHA.State>:
+  Result.bind(&2, &2, Error, CertificateSignature, SHA.State, certificateSignature(transcript, wire), evidence =>
+    Result.bind(&2, &2, Error, Unit, SHA.State, verifyEvidence(key, evidence), unused =>
+      hashResult(SHA.State, SHA.update(wire, transcript))))
+
+def finishedMatch(valid: Bool) -> Result<&2, &2, Error, Unit>:
+  match valid:
+    case False{}: Fail{FinishedMismatch{}}
+    case True{}: Done{Unit{}}
+
+# The transcript excludes this Finished until its exact verify_data matches.
+# For SHA-256 both the traffic secret and verify_data are exactly 32 bytes.
+def verifyFinished(+secret: List<&2, U32>, +transcript: SHA.State, +wire: List<&2, U32>) -> Result<&2, &2, Error, SHA.State>:
+  Result.bind(&2, &2, Error, List<&2, U32>, SHA.State, messageBody(20, wire), +body =>
+    Result.bind(&2, &2, Error, Unit, SHA.State, require(Nat.is_eq(Record.length(body,0n),32n) && Nat.is_eq(Record.length(secret,0n),32n)), unused =>
+      Result.bind(&2, &2, Error, SHA.Digest, SHA.State, hashResult(SHA.Digest, SHA.finish(transcript)), hash =>
+        Result.bind(&2, &2, Error, SHA.Digest, SHA.State, derivation(SHA.Digest, KDF.finished(secret, hash)), expected =>
+          Result.bind(&2, &2, Error, Unit, SHA.State, finishedMatch(RSA.equal(body, SHA.toBytes(expected), 0)), unused =>
+            hashResult(SHA.State, SHA.update(wire, transcript)))))))

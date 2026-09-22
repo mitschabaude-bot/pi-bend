@@ -5,6 +5,7 @@ import ../packages/runtime/src/sha256.bend as SHA
 import ../packages/runtime/src/tls13-record.bend as Record
 import ../packages/runtime/test/utf8-runner.bend as Decimal
 import ./aes128-gcm.bend as Bytes
+import ../packages/runtime/src/x509.bend as X509
 
 def name(text: String) -> Maybe<&2, String>:
   match text:
@@ -25,6 +26,8 @@ def error(cause: TLS.Error) -> String:
     case TLS.MalformedHandshake{}: "handshake"
     case TLS.RejectedExtension{kind}: "extension:" ++ U32.show(kind)
     case TLS.DuplicateExtension{kind}: "duplicate:" ++ U32.show(kind)
+    case TLS.CertificateFailure{_}: "certificate"
+    case TLS.FinishedMismatch{}: "finished"
 
 def render(result: Result<&2, &1, TLS.Error, TLS.Started>) -> String:
   match result:
@@ -121,8 +124,23 @@ def signatureTranscript(wire: List<&2, U32>, result: Result<&2, &2, SHA.Error, S
     case Fail{_}: "hash-error"
     case Done{transcript}: signatureResult(TLS.certificateSignature(transcript, wire))
 
+def checkedTranscript(result: Result<&2, &2, TLS.Error, SHA.State>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{transcript}: transcriptDigest(SHA.finish(transcript))
+
+def verifyCertificate(cert: List<&2, U32>, bytes: List<&2, U32>, wire: List<&2, U32>) -> Result<&2, &2, TLS.Error, SHA.State>:
+  Result.bind(&2, &2, TLS.Error, X509.Certificate, SHA.State, TLS.certificateResult(X509.Certificate, X509.parse(cert)), certificate =>
+    Result.bind(&2, &2, TLS.Error, X509.PublicKey, SHA.State, TLS.certificateResult(X509.PublicKey, X509.publicKey(certificate)), key =>
+      Result.bind(&2, &2, TLS.Error, SHA.State, SHA.State, TLS.hashResult(SHA.State, SHA.update(bytes,SHA.create())), transcript => TLS.verifyCertificateSignature(key,transcript,wire))))
+
+def verifyFinished(secret: List<&2, U32>, bytes: List<&2, U32>, wire: List<&2, U32>) -> Result<&2, &2, TLS.Error, SHA.State>:
+  Result.bind(&2, &2, TLS.Error, SHA.State, SHA.State, TLS.hashResult(SHA.State, SHA.update(bytes,SHA.create())), transcript => TLS.verifyFinished(secret,transcript,wire))
+
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
+    case "verify" <> cert <> transcript <> wire <> Nil{}: IO.print(checkedTranscript(verifyCertificate(Bytes.bytes(cert),Bytes.bytes(transcript),Bytes.bytes(wire))))
+    case "finished" <> secret <> transcript <> wire <> Nil{}: IO.print(checkedTranscript(verifyFinished(Bytes.bytes(secret),Bytes.bytes(transcript),Bytes.bytes(wire))))
     case "cert" <> wire <> Nil{}: IO.print(certificateResult(TLS.certificates(Bytes.bytes(wire))))
     case "cv" <> transcript <> wire <> Nil{}: IO.print(signatureTranscript(Bytes.bytes(wire), SHA.update(Bytes.bytes(transcript), SHA.create())))
     case "ep" <> host <> seed <> hello <> wire <> Nil{}: IO.print(startParameters(Bytes.bytes(hello), Bytes.bytes(wire), TLS.initialize(name(host), Bytes.bytes(seed))))

@@ -1,7 +1,8 @@
 """TLS handshake framing, negotiation and local OpenSSL interoperability.
 
 Build tests/tls13-handshake.bend to build/tls13-handshake and .js first.
-This checks negotiation and handshake keys, not authenticated TLS completion.
+This checks negotiation, handshake keys, CertificateVerify and Finished.
+Certificate trust and complete connection-state integration are still separate.
 """
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -193,7 +194,7 @@ def verify_keys(line, seed, client_hello, flight):
         clear = AESGCM(expand(server, b'key', b'', 16)).decrypt(nonce, record[5:], record[:5]).rstrip(b'\x00')
         assert clear[-1] == 22
         plaintext.append(clear[:-1])
-    return b''.join(plaintext)
+    return b''.join(plaintext), server
 
 
 def malformed(hello):
@@ -394,13 +395,13 @@ def check_certificates(command):
     return len(cases)
 
 
-def verify_server_evidence(command, prefix, content):
+def verify_server_evidence(command, prefix, content, server_secret):
     messages, cursor = [], Cursor(content)
     while cursor.offset < len(cursor.data):
         kind = cursor.take(1)[0]
         messages.append(handshake_message(kind, cursor.vector(3)))
     assert [m[0] for m in messages] == [8, 11, 15, 20]
-    ee, certificate, cv, _ = messages
+    ee, certificate, cv, finished = messages
     body = Cursor(certificate[4:])
     assert body.vector(1) == b''
     chain = Cursor(body.vector(3))
@@ -426,6 +427,40 @@ def verify_server_evidence(command, prefix, content):
         assert algorithm == '2052'
         key.verify(signature, signed, padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32), hashes.SHA256())
 
+    # The native verifier now checks the same real signature and returns the
+    # transcript with CertificateVerify included only after success.
+    base = 'verify:' + encode(certificates[0]) + ':'
+    tampered = cv[:-1] + bytes([cv[-1] ^ 1])
+    mismatch = cv[:4] + (b'\x08\x04' if algorithm == '1027' else b'\x04\x03') + cv[6:]
+    cases = [(base + encode(transcript) + ':' + encode(cv), encode(hashlib.sha256(transcript + cv).digest())),
+             (base + encode(transcript + b'x') + ':' + encode(cv), 'certificate'),
+             (base + encode(transcript) + ':' + encode(tampered), 'certificate'),
+             (base + encode(transcript) + ':' + encode(mismatch), 'parameters')]
+    transcript += cv
+    expected = hmac.digest(expand(server_secret,b'finished',b'',32),hashlib.sha256(transcript).digest(),'sha256')
+    assert finished == handshake_message(20,expected)
+    base = 'finished:' + encode(server_secret) + ':'
+    cases += [(base + encode(transcript) + ':' + encode(finished), encode(hashlib.sha256(transcript + finished).digest())),
+              (base + encode(transcript+b'x') + ':' + encode(finished), 'finished')]
+    for index in range(32):
+        bad = bytearray(finished)
+        bad[4+index] ^= 1
+        cases.append((base + encode(transcript) + ':' + encode(bad),'finished'))
+    for size in [0,1,31,33,64]:
+        cases.append((base + encode(transcript) + ':' + encode(handshake_message(20,bytes(size))), 'handshake'))
+    for bad in [finished[:-1], finished + b'\x00', bytes([19])+finished[1:]]:
+        cases.append((base + encode(transcript) + ':' + encode(bad),'handshake'))
+    for size in [0,31,33]:
+        cases.append(('finished:' + encode(bytes(size)) + ':' + encode(transcript) + ':' + encode(finished), 'handshake'))
+    cases.append(('finished:' + encode(bytes([server_secret[0]^1]) + server_secret[1:]) + ':' + encode(transcript) + ':' + encode(finished), 'finished'))
+    result = subprocess.run(command + [arg for arg,_ in cases],cwd=ROOT,capture_output=True,text=True,timeout=240)
+    assert result.returncode == 0,result.stderr[-2000:]
+    lines = result.stdout.splitlines()
+    assert len(lines)==len(cases),(len(lines),len(cases))
+    for index,(actual,(_,expected)) in enumerate(zip(lines,cases)):
+        assert actual==expected,(index,actual,expected)
+    return len(cases)
+
 
 with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
     contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa']]
@@ -446,6 +481,7 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
                     flights.append((seed, wire, flight))
         for line, (_, expected) in zip(lines[len(valid_cases):], invalid_cases):
             assert line == expected, (name, line, expected)
+        authentication_count = 0
         for seed, wire, flight in flights:
             hello, encrypted, _, _ = flight
             prefix = 'n:localhost:' + encode(seed) + ':'
@@ -460,8 +496,8 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             assert output.returncode == 0, (name, output.stderr[-2000:])
             results = output.stdout.splitlines()
             assert len(results) == len(args)
-            content = verify_keys(results[0], seed, wire, flight)
-            verify_server_evidence(command, wire[5:] + hello, content)
+            content, server_secret = verify_keys(results[0], seed, wire, flight)
+            authentication_count += verify_server_evidence(command, wire[5:] + hello, content, server_secret)
             size = 4 + int.from_bytes(content[1:4], 'big')
             ee = content[:size]
             assert ee[0] == 8
@@ -478,4 +514,4 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
         certificate_count = check_certificates(command)
         extension_count = check_extensions(command)
         count = check_framing(command)
-        print(f'{name}: {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)
+        print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)

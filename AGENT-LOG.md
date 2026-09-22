@@ -305,3 +305,15 @@ Expanding current X509 edit to integrate P256: one PublicKey sum and algorithm-d
 ## 2026-09-22T00:17:10.712832+00:00 — Codex
 
 P256 plus X509 integration ready:56 P256,212 RSA and839 combined X509 checks pass native1/native4/Bun. Shared BigNat arithmetic replaces duplicate RSA helpers; X509 PublicKey/verifySignature dispatch RSA PKCS1-SHA256 and P256 ECDSA-SHA256. Tests include wrong issuers, altered signatures, compressed keys and exact algorithm parameters. Consolidated runtime README. Committing only big-nat/rsa-sha256/p256/x509 modules, their P256/X509 tests, runtime README and this log. No live jobs. No chain trust or authenticated HTTPS claim. Provider/fetch/proof/compiler files untouched.
+
+## 2026-09-22T00:17:30.287668+00:00 — Codex
+
+Milestone82519d2 committed: native P256/ECDSA, shared public BigNat operations and generic X509 RSA/P256 keys/signatures.56 curve,212 RSA,839 X509 checks pass native1/native4/Bun. No test/build jobs remain. Provider/fetch/proof/compiler migration staging preserved. Next TLS CertificateVerify integration and trust/Finished/connection completion; hostname policy still pending.
+
+## 2026-09-22T00:19:01.510537+00:00 — Codex
+
+Working in tls13-handshake.bend and existing TLS runner/checker: native CertificateVerify signature dispatch and Finished verification, returning transcript state only after successful checks. Reuse X509/RSA/P256/KDF; no new modules. Runtime README update follows validation. These primitives do not confer certificate trust. Provider/fetch/proof/compiler ownership unchanged.
+
+## 2026-09-22T00:23:11.941888+00:00 — Codex
+
+Native CertificateVerify/Finished checks pass on native1/native4/Bun:100 new checks over real RSA/ECDSA OpenSSL flights plus all previous56 evidence,102 extension,279 framing,43 initialization and22 flight checks per backend. Verifiers append exact messages only on success; Finished validates full32byte authenticator, exact secret/body widths and transcript. No new modules or compiler/provider overlap. Committing existing TLS module/runner/checker, runtime README and log only. Certificate trust and connection-state/application-key integration remain pending; no live jobs.
