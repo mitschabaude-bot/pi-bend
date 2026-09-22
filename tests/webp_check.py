@@ -36,7 +36,7 @@ def alpha_expected(method,values):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--photon',default=str(ROOT/'build/photon/photon_rs.js'));p.add_argument('--threads',default='1');args=p.parse_args()
-    runner=['bun',args.runner] if args.runner.endswith('.js') else [args.runner]
+    runner=['bun',args.runner] if args.runner.endswith('.js') else [args.runner,'--threads',args.threads]
     env=dict(os.environ,BEND_THREADS=args.threads)
     cases=[]
     for name,w,h,data,pixels in fixtures():
