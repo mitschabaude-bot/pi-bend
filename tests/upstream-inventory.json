@@ -2393,8 +2393,9 @@
     },
     {
       "source": "packages/coding-agent/test/skills.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/system-prompt.bend", "tests/system_prompt_check.py", "tests/system_prompt_reference.ts"],
+      "notes": "All seven formatSkillsForPrompt cases pass with typed Skill/SourceInfo, XML escaping, filtering and read/Bash instructions. Discovery, validation, frontmatter and loading remain pending. See tests/system-prompt.md.",
       "sha256": "f7d5fe8633df112c10c61c4ee17748ad1f7069f76d71fb8357d7e27a17b2a533"
     },
     {
@@ -2947,14 +2948,16 @@
     },
     {
       "source": "packages/coding-agent/test/system-prompt-updates.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/system-prompt.bend", "tests/system_prompt_check.py", "tests/system_prompt_reference.ts"],
+      "notes": "The two pure section-diff and forced-state cases pass; SDK/session prompt-update integration and event behavior remain pending. See tests/system-prompt.md.",
       "sha256": "fdcbb342c29bb3419bd40794781cab92c2f5423908c60bdc7095ae3b434045d0"
     },
     {
       "source": "packages/coding-agent/test/system-prompt.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": ["tests/system-prompt.bend", "tests/system_prompt_check.py", "tests/system_prompt_reference.ts"],
+      "notes": "All 16 named pure prompt cases pass through typed section/state/text APIs; exact output and 150KB context checks pass Bun/native one/four. Explicit documentation paths and immutable value adaptation are documented in tests/system-prompt.md.",
       "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101"
     },
     {
