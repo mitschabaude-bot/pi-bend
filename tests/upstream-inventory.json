@@ -1905,13 +1905,15 @@
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/read-public.bend",
-        "tests/image_process_check.py"
+        "tests/image_process_check.py",
+        "tests/file-processor.bend",
+        "tests/file_processor_check.py"
       ],
       "sha256": "f77a92109158e558cc26430a80f82351bd1ef4884d494ab643c29652c00bc25c",
-      "notes": "Public read with default native processing returns text-only omission when image processing fails. File-processor caller integration remains pending. Native public read uses isolated O0 correctness builds; focused image functions additionally pass O1."
+      "notes": "Both original caller assertions pass: public read returns text-only omission, and CLI file processing emits omission text with no image attachment. Fixtures exercise real malformed image processing instead of mocking a null resize result. Bun and optimized native one/four-thread checks pass; this suite does not establish image-worker scheduling or complete CLI parity."
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",
