@@ -25,4 +25,12 @@ Other cases exercise all five candidate names, leading/interior BOMs, empty-file
 
 ## Remaining scope
 
-This is explicitly a partial ResourceLoader and FooterDataProvider port. Extension/theme/package discovery, reload orchestration, project trust and `noContextFiles` option wiring, prompt overrides, and footer branch/watch/subscription state remain owned by those future implementations. No placeholder method claims they work. CLI integration can consume the completed context loader directly.
+This is explicitly a partial ResourceLoader and FooterDataProvider port. Extension/theme/package discovery, reload orchestration, project trust, prompt overrides, and footer branch/watch/subscription state remain owned by those future implementations. No placeholder method claims they work. The CLI agent runtime now consumes this loader directly, replacing its capped duplicate walker. `tests/runtime_context_check.py` exercises that actual prompt-construction boundary on Bun/native one/four: global/ancestor ordering, nested-worktree shadowing, disabling context files, and stderr warning plus fallback for malformed UTF-8. Resource diagnostics stay data in the loader and are printed by the runtime boundary.
+
+Runtime integration reproduction:
+
+```sh
+BEND=/path/to/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/runtime-context.bend build/runtime-context
+/path/to/bend2/main.ts tests/runtime-context.bend -o build/runtime-context.js
+python3 tests/runtime_context_check.py
+```

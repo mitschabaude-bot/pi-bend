@@ -2206,9 +2206,17 @@
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4d7043fbae033b5398db34046feea2ac3e910079e8def6a1d198b7c840190fb0"
+      "status": "partial",
+      "ports": [
+        "tests/project-context.bend",
+        "tests/project_context_check.py",
+        "tests/project_context_reference.ts",
+        "tests/runtime-context.bend",
+        "tests/runtime_context_check.py"
+      ],
+      "sha256": "4d7043fbae033b5398db34046feea2ac3e910079e8def6a1d198b7c840190fb0",
+      "implementation": "packages/coding-agent/src/core/resource-loader.bend",
+      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md."
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",

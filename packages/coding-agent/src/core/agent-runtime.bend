@@ -31,13 +31,14 @@ import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/filesystem.bend as FS
-import ../../../runtime/src/utf8.bend as Utf8
 import ../../../runtime/src/posix-path.bend as Path
 import ../utils/paths.bend as Paths
 import ./auth-storage.bend as Storage
 import ./runtime-credentials.bend as Runtime
 import ./model-runtime.bend as Models
 import ./system-prompt.bend as Prompt
+import ./resource-loader.bend as Resources
+import ./diagnostics.bend as Diagnostics
 import ./tools/index.bend as Tools
 import ./tools/file-mutation-queue.bend as Queue
 
@@ -164,64 +165,6 @@ def resolveKeyFor(source: KeySource, +providerId: String) -> IO(Result<&2, &2, E
 def resolveKey(source: KeySource, providerId: String) -> IO(Result<&2, &2, Error(), Maybe<&2, String>>):
   resolveKeyFor(source, providerId)
 
-# Context files
-# -------------
-
-def contextCandidates() -> List<&2, String>: ["AGENTS.override.md", "AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"]
-
-def stripBom(text: String) -> String:
-  match text:
-    case SCon{'\u{FEFF}', rest}: rest
-    case other: other
-
-def contextRead(path: String, bytes: Result<&2, &2, FS.Error, List<&2, U32>>) -> Maybe<&2, Prompt.ContextFile>:
-  match bytes:
-    case Fail{_}: None{}
-    case Done{octets}: Some{Prompt.ContextFile{path, stripBom(Utf8.decodeBytes(octets))}}
-
-def contextFileAt(+path: String, isFile: Result<&1, &1, U32 & String, Bool>) -> IO(Maybe<&2, Prompt.ContextFile>):
-  match isFile:
-    case Done{True{}}:
-      do IO<Maybe<&2, Prompt.ContextFile>>:
-        bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
-        return contextRead(path, bytes)
-    case _: IO.pure(Maybe<&2, Prompt.ContextFile>, None{})
-
-# The first existing candidate in a directory.
-def loadContextFileFromDir(+directory: String, candidates: List<&2, String>, found: Maybe<&2, Prompt.ContextFile>) -> IO(Maybe<&2, Prompt.ContextFile>):
-  match candidates found:
-    case _ Some{file}: IO.pure(Maybe<&2, Prompt.ContextFile>, Some{file})
-    case Nil{} None{}: IO.pure(Maybe<&2, Prompt.ContextFile>, None{})
-    case +name <> rest None{}:
-      do IO<Maybe<&2, Prompt.ContextFile>>:
-        isFile : Result<&1, &1, U32 & String, Bool> <- File.is_file(Path.join(directory, name))
-        file : Maybe<&2, Prompt.ContextFile> <- contextFileAt(Path.join(directory, name), isFile)
-        loadContextFileFromDir(directory, rest, file)
-
-def prepend(found: Maybe<&2, Prompt.ContextFile>, files: List<&2, Prompt.ContextFile>) -> List<&2, Prompt.ContextFile>:
-  match found:
-    case None{}: files
-    case Some{file}: file <> files
-
-# Ancestor directories from the root down to cwd, nearest last.
-def ancestorContextFiles(fuel: Nat, +directory: String, files: List<&2, Prompt.ContextFile>, atRoot: Bool) -> IO(List<&2, Prompt.ContextFile>):
-  match fuel atRoot:
-    case _ True{}: IO.pure(List<&2, Prompt.ContextFile>, files)
-    case 0n False{}: IO.pure(List<&2, Prompt.ContextFile>, files)
-    case 1n+n False{}:
-      +parent = Path.join(directory, "..")
-      do IO<List<&2, Prompt.ContextFile>>:
-        found : Maybe<&2, Prompt.ContextFile> <- loadContextFileFromDir(directory, contextCandidates(), None{})
-        ancestorContextFiles(n, parent, prepend(found, files), String.eq(parent, directory))
-
-# The global context file, then ancestor files from the root down. The git
-# worktree shadowing rule of upstream is not ported.
-def loadProjectContextFiles(cwd: String, agentDir: String) -> IO(List<&2, Prompt.ContextFile>):
-  do IO<List<&2, Prompt.ContextFile>>:
-    global : Maybe<&2, Prompt.ContextFile> <- loadContextFileFromDir(agentDir, contextCandidates(), None{})
-    ancestors : List<&2, Prompt.ContextFile> <- ancestorContextFiles(64n, cwd, Nil{}, False{})
-    return prepend(global, ancestors)
-
 # Services
 # --------
 
@@ -256,19 +199,35 @@ def promptOptions(options: CreateOptions, contextList: List<&2, Prompt.ContextFi
     case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, +names, _}:
       Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, None{}}
 
-def contextFilesFor(options: CreateOptions) -> IO(List<&2, Prompt.ContextFile>):
+def reportContextDiagnostics(issues: List<&2,Diagnostics.ResourceDiagnostic>) -> IO(Unit):
+  match issues:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case Diagnostics.ResourceDiagnostic{_,message,path,_} <> rest:
+      do IO<Unit>:
+        IO.print_err("Warning: " ++ Maybe.default(&2,String,Maybe.map(&2,String,String,value => value ++ ": ",path),"") ++ message)
+        reportContextDiagnostics(rest)
+
+def contextFilesFor(environment: Paths.Environment, options: CreateOptions) -> IO(Resources.ContextFiles):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, True{}}: loadProjectContextFiles(cwd, agentDir)
-    case _: IO.pure(List<&2, Prompt.ContextFile>, Nil{})
+    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, True{}}: Resources.loadProjectContextFiles(environment,Resources.Options{cwd,agentDir})
+    case _: IO.pure(Resources.ContextFiles,Resources.ContextFiles{Nil{},Nil{}})
+
+def contextFilesReported(result: Resources.ContextFiles) -> IO(List<&2,Prompt.ContextFile>):
+  match result:
+    case Resources.ContextFiles{loadedFiles,diagnostics}:
+      do IO<List<&2,Prompt.ContextFile>>:
+        reportContextDiagnostics(diagnostics)
+        return loadedFiles
 
 def promptResult(value: Prompt.ResultOf(String)) -> Result<&2, &2, String, String>:
   match value:
     case Done{text}: Done{text}
     case Fail{Prompt.InvalidSectionName{name}}: Fail{"Invalid system prompt section name: " ++ name}
 
-def systemPromptFor(+options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, String>):
+def systemPromptFor(environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, String>):
   do IO<Result<&2, &2, String, String>>:
-    contextList : List<&2, Prompt.ContextFile> <- contextFilesFor(options)
+    loaded : Resources.ContextFiles <- contextFilesFor(environment,options)
+    contextList : List<&2,Prompt.ContextFile> <- contextFilesReported(loaded)
     return promptResult(Prompt.buildSystemPrompt(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList)))
 
 def levelOf(result: Models.ResolveCliModelResult) -> Maybe<&2, Ai.ModelThinkingLevel>:
@@ -403,7 +362,7 @@ def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>,
     case Some{key} Done{model}: Runtime.setRuntimeApiKey(credentials, Models.modelProvider(model), key)
     case _ _: IO.pure(Unit, Unit{})
 
-def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
+def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
   match transport borrowed:
     case Transport{+authorizer, runtime, +fetch} Tuple{storage, view}:
       do IO<Outcome(AgentRuntime)>:
@@ -414,7 +373,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +models : Models.ModelRuntime <- Models.create(credentialStore, oauth)
         +selected : Result<&2, &2, String, Models.Model()> <- selectModel(models, options)
         applyKey(credentials, apiKey, selected)
-        prompt : Result<&2, &2, String, String> <- systemPromptFor(options, packageDir)
+        prompt : Result<&2, &2, String, String> <- systemPromptFor(paths, options, packageDir)
         withModel(options, Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment) -> IO(Outcome(AgentRuntime)):
