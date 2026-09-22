@@ -2170,7 +2170,7 @@
         "tests/print_cli_check.py"
       ],
       "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7",
-      "notes": "The harness drives the native CLI: help/version/diagnostic exits, session flag conflicts, invalid ids, invalid session files and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events, non-zero exit on request errors and a resumed stored session (header from the file, context seeding, thinking level recorded). Pending: session_shutdown events and message persistence (AgentSession), SIGTERM/SIGHUP exits (no signal primitive)."
+      "notes": "The harness drives the native CLI: help/version/diagnostic exits, session flag conflicts, invalid ids, invalid session files, settings warnings and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence (agent_settled from AgentSession), snapshot-free message_update events, non-zero exit on request errors and a resumed stored session whose prompt and reply are persisted. Pending: session_shutdown (an extension-runner event; extensions are not ported), SIGTERM/SIGHUP exits (no signal primitive)."
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
@@ -2594,9 +2594,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2b940dfac449b6e7dea886ab202051c41520a4580b67de8d3642e849da842561"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "2b940dfac449b6e7dea886ab202051c41520a4580b67de8d3642e849da842561",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'persists message_end assistant replacements to the session manager' is covered end to end by the live stored-session check (assistant entry equals the final message_end message). Session switching, forking and runtime replacement remain pending with the AgentSessionRuntime port."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-tool-result-images.test.ts",
@@ -3431,9 +3435,15 @@
     },
     {
       "source": "packages/tui/test/keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c3c102e5f10c01bc34eeb9a009372f422640988d033d19ae1cecf6ea5d6763f4"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/keybindings.bend",
+        "tests/keybindings.bend",
+        "tests/keybindings_reference.ts",
+        "tests/keybindings_check.py"
+      ],
+      "sha256": "c3c102e5f10c01bc34eeb9a009372f422640988d033d19ae1cecf6ea5d6763f4",
+      "notes": "All seven original named tests / 29 assertions replay against the typed immutable manager on Bun and O1 native one/four; 31,589 source queries across 152 managers also pass. Explicit native semantic key-identity deduplication/conflicts are tested separately from source behavior. Definitions, config replacement, unbinding, matching, descriptions and unknown actions are covered; process globals become explicit owner state. See tests/keybindings.md. Full editor integration remains separate."
     },
     {
       "source": "packages/tui/test/keys.test.ts",
