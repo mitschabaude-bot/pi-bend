@@ -39,6 +39,9 @@ import ./model-runtime.bend as Models
 import ./system-prompt.bend as Prompt
 import ./messages.bend as Messages
 import ./session-manager.bend as S
+import ./settings-manager.bend as Settings
+import ../../../runtime/src/f64.bend as F
+import ../../../runtime/src/u64.bend as W
 import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ./resource-loader.bend as Resources
@@ -180,12 +183,12 @@ def resolveKey(source: KeySource, providerId: String) -> IO(Result<&2, &2, Error
 # What a resumed session contributes: its context messages, the model and
 # thinking level it recorded (None when no thinking_level_change exists).
 type SessionSeed is Data:
-  SessionSeed{messages: List<&2, T.AgentMessage<Unit, Details(), Custom()>>, model: Maybe<&2, S.SessionModel>, thinking: Maybe<&2, String>}
+  SessionSeed{sessionId: String, messages: List<&2, T.AgentMessage<Unit, Details(), Custom()>>, model: Maybe<&2, S.SessionModel>, thinking: Maybe<&2, String>}
 
-def emptySeed() -> SessionSeed: SessionSeed{Nil{}, None{}, None{}}
+def emptySeed() -> SessionSeed: SessionSeed{"", Nil{}, None{}, None{}}
 
 type CreateOptions is Data:
-  CreateOptions{cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, provider: Maybe<&2, String>, model: Maybe<&2, String>, apiKey: Maybe<&2, String>, thinking: Maybe<&2, Ai.ModelThinkingLevel>, systemPrompt: Maybe<&2, String>, appendSystemPrompt: List<&2, String>, tools: List<&2, Tools.ToolName>, contextFiles: Bool, seed: SessionSeed}
+  CreateOptions{cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, provider: Maybe<&2, String>, model: Maybe<&2, String>, apiKey: Maybe<&2, String>, thinking: Maybe<&2, Ai.ModelThinkingLevel>, systemPrompt: Maybe<&2, String>, appendSystemPrompt: List<&2, String>, tools: List<&2, Tools.ToolName>, contextFiles: Bool, seed: SessionSeed, settings: Settings.SettingsManager}
 
 # The model and thinking level the runtime settled on, for the session record.
 type Selection is Data:
@@ -194,12 +197,12 @@ type Selection is Data:
 type AgentRuntime is Type:
   AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Models.Model(), thinking: Ai.ModelThinkingLevel}
 
-def snippets(names: List<&2, Tools.ToolName>, record: R.Record<String>) -> R.Record<String>:
+def snippets(names: List<&2, Tools.ToolName>, +record: R.Record<String>) -> R.Record<String>:
   match names:
     case Nil{}: record
     case +name <> rest: snippets(rest, R.set(String, record, Tools.toolName(name), Tools.promptSnippet(name)))
 
-def guidelines(names: List<&2, Tools.ToolName>, record: R.Record<List<&2, String>>) -> R.Record<List<&2, String>>:
+def guidelines(names: List<&2, Tools.ToolName>, +record: R.Record<List<&2, String>>) -> R.Record<List<&2, String>>:
   match names:
     case Nil{}: record
     case +name <> rest: guidelines(rest, R.set(List<&2, String>, record, Tools.toolName(name), Tools.promptGuidelines(name)))
@@ -216,7 +219,7 @@ def nonemptyAppend(parts: List<&2, String>) -> Maybe<&2, String>:
 
 def promptOptions(options: CreateOptions, contextList: List<&2, Prompt.ContextFile>) -> Prompt.BuildSystemPromptOptions:
   match options:
-    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, +names, _, _}:
+    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, +names, _, _, _}:
       Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, None{}}
 
 def reportContextDiagnostics(issues: List<&2,Diagnostics.ResourceDiagnostic>) -> IO(Unit):
@@ -229,7 +232,7 @@ def reportContextDiagnostics(issues: List<&2,Diagnostics.ResourceDiagnostic>) ->
 
 def contextFilesFor(environment: Paths.Environment, options: CreateOptions) -> IO(Resources.ContextFiles):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, True{}, _}: Resources.loadProjectContextFiles(environment,Resources.Options{cwd,agentDir})
+    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, True{}, _, _}: Resources.loadProjectContextFiles(environment,Resources.Options{cwd,agentDir})
     case _: IO.pure(Resources.ContextFiles,Resources.ContextFiles{Nil{},Nil{}})
 
 def contextFilesReported(result: Resources.ContextFiles) -> IO(List<&2,Prompt.ContextFile>):
@@ -257,25 +260,25 @@ def levelOf(result: Models.ResolveCliModelResult) -> Maybe<&2, Ai.ModelThinkingL
 def noModels() -> String:
   "No models available.\n\nRun pi to log in with a provider, or set an API key environment variable such as OPENAI_API_KEY."
 
-def chosenFrom(models: Models.ModelRuntime, error: Maybe<&2, String>, model: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Models.Model()>):
+def chosenFrom(models: Models.ModelRuntime, +settings: Settings.SettingsManager, error: Maybe<&2, String>, model: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Models.Model()>):
   match error model:
     case Some{message} _: IO.pure(Result<&2, &2, String, Models.Model()>, Fail{message})
     case None{} Some{chosen}: IO.pure(Result<&2, &2, String, Models.Model()>, Done{chosen})
     case None{} None{}:
       do IO<Result<&2, &2, String, Models.Model()>>:
-        initial : Maybe<&2, Models.Model()> <- Models.findInitialModel(models)
+        initial : Maybe<&2, Models.Model()> <- Models.findInitialModel(models, Settings.getDefaultProvider(settings), Settings.getDefaultModel(settings))
         return Maybe.default(&2, Result<&2, &2, String, Models.Model()>, Maybe.map(&2, Models.Model(), Result<&2, &2, String, Models.Model()>, found => Done{found}, initial), Fail{noModels()})
 
-def chosenModel(models: Models.ModelRuntime, resolved: Models.ResolveCliModelResult) -> IO(Result<&2, &2, String, Models.Model()>):
+def chosenModel(models: Models.ModelRuntime, settings: Settings.SettingsManager, resolved: Models.ResolveCliModelResult) -> IO(Result<&2, &2, String, Models.Model()>):
   match resolved:
-    case Models.ResolveCliModelResult{model, _, _, error}: chosenFrom(models, error, model)
+    case Models.ResolveCliModelResult{model, _, _, error}: chosenFrom(models, settings, error, model)
 
 def modelApi(model: Models.Model()) -> Ai.ModelApi:
   match model:
     case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _}: api
 
 # The OpenAI Responses and Codex Responses APIs stream through the modular provider.
-def supportedApi(api: Ai.ModelApi, model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
+def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
   match api:
     case Ai.OpenAIResponsesApi{}: Done{model}
     case Ai.OpenAICodexResponsesApi{}: Done{model}
@@ -299,13 +302,13 @@ def authorizedRestore(+models: Models.ModelRuntime, found: Maybe<&2, Models.Mode
 
 def restoredModel(+models: Models.ModelRuntime, seed: SessionSeed) -> IO(Maybe<&2, Models.Model()>):
   match seed:
-    case SessionSeed{_, None{}, _}: IO.pure(Maybe<&2, Models.Model()>, None{})
-    case SessionSeed{_, Some{S.SessionModel{provider, id}}, _}: authorizedRestore(models, Models.getModel(models, provider, id))
+    case SessionSeed{_, _, None{}, _}: IO.pure(Maybe<&2, Models.Model()>, None{})
+    case SessionSeed{_, _, Some{S.SessionModel{provider, id}}, _}: authorizedRestore(models, Models.getModel(models, provider, id))
 
-def chosenOrRestored(+models: Models.ModelRuntime, provider: Maybe<&2, String>, cliModel: Maybe<&2, String>, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Models.Model()>):
+def chosenOrRestored(+models: Models.ModelRuntime, settings: Settings.SettingsManager, provider: Maybe<&2, String>, cliModel: Maybe<&2, String>, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Models.Model()>):
   match restored:
     case Some{model}: IO.pure(Result<&2, &2, String, Models.Model()>, Done{model})
-    case None{}: chosenModel(models, Models.resolveCliModel(models, provider, cliModel))
+    case None{}: chosenModel(models, settings, Models.resolveCliModel(models, provider, cliModel))
 
 def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> IO(Maybe<&2, Models.Model()>):
   match named:
@@ -314,10 +317,10 @@ def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> I
 
 def selectModel(+models: Models.ModelRuntime, options: CreateOptions) -> IO(Result<&2, &2, String, Models.Model()>):
   match options:
-    case CreateOptions{_, _, _, _, _, +provider, +cliModel, _, _, _, _, _, _, seed}:
+    case CreateOptions{_, _, _, _, _, +provider, +cliModel, _, _, _, _, _, _, seed, settings}:
       do IO<Result<&2, &2, String, Models.Model()>>:
         restored : Maybe<&2, Models.Model()> <- restoreIf(models, Maybe.is_some(&2, String, provider) || Maybe.is_some(&2, String, cliModel), seed)
-        chosen : Result<&2, &2, String, Models.Model()> <- chosenOrRestored(models, provider, cliModel, restored)
+        chosen : Result<&2, &2, String, Models.Model()> <- chosenOrRestored(models, settings, provider, cliModel, restored)
         return Result.bind(&2, &2, String, Models.Model(), Models.Model(), chosen, supported)
 
 def namedLevel(levels: List<&2, Ai.ModelThinkingLevel>, +text: String) -> Maybe<&2, Ai.ModelThinkingLevel>:
@@ -327,31 +330,105 @@ def namedLevel(levels: List<&2, Ai.ModelThinkingLevel>, +text: String) -> Maybe<
 
 def seededThinking(seed: SessionSeed) -> Maybe<&2, Ai.ModelThinkingLevel>:
   match seed:
-    case SessionSeed{_, _, None{}}: None{}
-    case SessionSeed{_, _, Some{text}}: namedLevel(Levels.all(), text)
+    case SessionSeed{_, _, _, None{}}: None{}
+    case SessionSeed{_, _, _, Some{text}}: namedLevel(Levels.all(), text)
 
-# --thinking, else the session's recorded level, else off (no settings yet);
+def hasSessionMessages(seed: SessionSeed) -> Bool:
+  match seed:
+    case SessionSeed{_, Nil{}, _, _}: False{}
+    case _: True{}
+
+# A resumed session restores its recorded level, or the settings default.
+def sessionThinking(+seed: SessionSeed, settingsDefault: Maybe<&2, Ai.ModelThinkingLevel>) -> Maybe<&2, Ai.ModelThinkingLevel>:
+  Bool.pick(Maybe<&2, Ai.ModelThinkingLevel>, hasSessionMessages(seed), Some{Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, seededThinking(seed), settingsDefault), Ai.Off{})}, None{})
+
+# upstream createAgentSession: --thinking, else the resumed session's level,
+# else the settings' per-model level, else the settings default, else off;
 # clamped to the model's levels. The :level model suffix is not applied yet.
-def thinkingLevel(requested: Maybe<&2, Ai.ModelThinkingLevel>, seed: SessionSeed, model: Models.Model()) -> Ai.ModelThinkingLevel:
-  AiModels.clampThinkingLevel(Ai.JsonValue, model, Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, seededThinking(seed)), Ai.Off{}))
+def thinkingLevel(requested: Maybe<&2, Ai.ModelThinkingLevel>, seed: SessionSeed, +model: Models.Model(), +settings: Settings.SettingsManager) -> Ai.ModelThinkingLevel:
+  +settingsDefault = Settings.getDefaultThinkingLevel(settings)
+  +perModel = Settings.getModelThinkingLevel(Models.modelProvider(model), Models.modelId(model), settings)
+  AiModels.clampThinkingLevel(Ai.JsonValue, model, Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, Maybe.or(&2, Ai.ModelThinkingLevel, sessionThinking(seed, settingsDefault), Maybe.or(&2, Ai.ModelThinkingLevel, perModel, settingsDefault))), Ai.Off{}))
 
 def seededMessages(seed: SessionSeed) -> Maybe<&2, List<&2, T.AgentMessage<Unit, Details(), Custom()>>>:
   match seed:
-    case SessionSeed{Nil{}, _, _}: None{}
-    case SessionSeed{messages, _, _}: Some{messages}
+    case SessionSeed{_, Nil{}, _, _}: None{}
+    case SessionSeed{_, messages, _, _}: Some{messages}
 
-# Coding messages convert to LLM messages as upstream's convertToLlm does.
-def convertMessages(env: Unit, messages: T.AgentMessageArray(Unit, Details(), Custom())) -> IO(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>):
-  IO.pure(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, Done{Messages.convertToLlm(Unit, Details(), V.Value, messages)})
+def disabledImage() -> Ai.TextImageContent: Ai.TextImageText{Ai.TextContent{"Image reading is disabled.", None{}}}
 
-def createConverter() -> IO(Converter()):
-  C.create(~Unit, ~T.AgentMessageArray(Unit, Details(), Custom()), ~Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, ~convertMessages, Unit{})
+def isDisabledNotice(block: Ai.TextImageContent) -> Bool:
+  match block:
+    case Ai.TextImageText{Ai.TextContent{"Image reading is disabled.", _}}: True{}
+    case _: False{}
+
+# Images become one placeholder text; consecutive placeholders collapse.
+def withoutImages(blocks: List<&2, Ai.TextImageContent>, +previousNotice: Bool) -> List<&2, Ai.TextImageContent>:
+  match blocks:
+    case Nil{}: Nil{}
+    case Ai.TextImageImage{_} <> rest:
+      +tail = withoutImages(rest, True{})
+      Bool.pick(List<&2, Ai.TextImageContent>, previousNotice, tail, disabledImage() <> tail)
+    case +block <> rest:
+      +notice = isDisabledNotice(block)
+      +tail = withoutImages(rest, notice)
+      Bool.pick(List<&2, Ai.TextImageContent>, notice && previousNotice, tail, block <> tail)
+
+def hasImage(blocks: List<&2, Ai.TextImageContent>) -> Bool:
+  match blocks:
+    case Nil{}: False{}
+    case Ai.TextImageImage{_} <> _: True{}
+    case _ <> rest: hasImage(rest)
+
+def blockedContent(+blocks: List<&2, Ai.TextImageContent>) -> List<&2, Ai.TextImageContent>:
+  Bool.pick(List<&2, Ai.TextImageContent>, hasImage(blocks), withoutImages(blocks, False{}), blocks)
+
+def blockedMessage(message: Ai.Message<V.Value, V.Value, Unit, Details()>) -> Ai.Message<V.Value, V.Value, Unit, Details()>:
+  match message:
+    case Ai.User{Ai.UserMessage{Ai.UserBlocks{blocks}, timestamp}}: Ai.User{Ai.UserMessage{Ai.UserBlocks{blockedContent(blocks)}, timestamp}}
+    case Ai.ToolResult{Ai.ToolResultMessage{id, name, blocks, details, usage, isError, timestamp}}: Ai.ToolResult{Ai.ToolResultMessage{id, name, blockedContent(blocks), details, usage, isError, timestamp}}
+    case other: other
+
+def blockedMessages(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+  match messages:
+    case Nil{}: Nil{}
+    case message <> rest: blockedMessage(message) <> blockedMessages(rest)
+
+def converted(blockImages: Bool, +messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
+  match blockImages:
+    case False{}: messages
+    case True{}: blockedMessages(messages)
+
+# Coding messages convert to LLM messages as upstream's convertToLlm does;
+# with the blockImages setting, images are replaced by a placeholder text.
+def convertMessages(blockImages: Bool, messages: T.AgentMessageArray(Unit, Details(), Custom())) -> IO(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>):
+  IO.pure(Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, Done{converted(blockImages, Messages.convertToLlm(Unit, Details(), V.Value, messages))})
+
+def createConverter(blockImages: Bool) -> IO(Converter()):
+  C.create(~Bool, ~T.AgentMessageArray(Unit, Details(), Custom()), ~Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, ~convertMessages, blockImages)
 
 def disposeConverter(converter: Converter()) -> IO(Unit):
   C.dispose(T.AgentMessageArray(Unit, Details(), Custom()), Result<&2, &2, Error(), List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>>, converter)
 
-def agentOptions(prompt: String, model: Models.Model(), thinking: Ai.ModelThinkingLevel, tools: List<&2, Tools.Tool()>, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), seed: SessionSeed) -> Agent.AgentOptions<Unit, Details(), Custom(), Error(), Unit>:
-  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{prompt}, Some{model}, Some{thinking}, Some{tools}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+def budget(value: Maybe<&2, W.U64>) -> Maybe<&2, F64>: Maybe.map(&2, W.U64, F64, F.fromU64, value)
+
+def thinkingBudgets(value: Maybe<&2, Settings.ThinkingBudgetsSettings>) -> Maybe<&2, Ai.ThinkingBudgets>:
+  match value:
+    case None{}: None{}
+    case Some{Settings.ThinkingBudgetsSettings{minimal, low, medium, high}}: Some{Ai.ThinkingBudgets{budget(minimal), budget(low), budget(medium), budget(high)}}
+
+def maxRetryDelay(value: Settings.ResolvedProviderRetrySettings) -> F64:
+  match value:
+    case Settings.ResolvedProviderRetrySettings{_, _, delay}: F.fromU64(delay)
+
+def seedSessionId(seed: SessionSeed) -> String:
+  match seed:
+    case SessionSeed{id, _, _, _}: id
+
+# upstream createAgentSession's Agent options: the session id, the settings'
+# steering/follow-up modes, transport, thinking budgets and retry delay.
+def agentOptions(prompt: String, model: Models.Model(), thinking: Ai.ModelThinkingLevel, tools: List<&2, Tools.Tool()>, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<Unit, Details(), Custom(), Error(), Unit>:
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{prompt}, Some{model}, Some{thinking}, Some{tools}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
 def environment(paths: Paths.Environment, cwd: String, agentDir: String, queue: Queue.Queue) -> Tools.Environment:
   Tools.Environment{paths, cwd, Path.join(agentDir, "bin"), queue}
@@ -399,14 +476,14 @@ def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cw
         owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, handle), Tools.defaultOptions())
         return (queue, Tools.borrowTools(owners))
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prompt: String, +model: Models.Model(), +thinking: Ai.ModelThinkingLevel, seed: SessionSeed) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prompt: String, +model: Models.Model(), +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
-        result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(prompt, model, thinking, tools, stream, keys, converter, seed), registry, validator, Tools.WriteDetails{})
+        result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(prompt, model, thinking, tools, stream, keys, converter, seed, settings), registry, validator, Tools.WriteDetails{})
         constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, result)
 
-def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
@@ -416,8 +493,8 @@ def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, 
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
-        +converter : Converter() <- createConverter()
-        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingLevel(requested, seed, model), seed)
+        +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
+        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingLevel(requested, seed, model, settings), seed, settings)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
@@ -429,7 +506,7 @@ def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, 
 
 def withModel(options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, _, _, _, apiKey, thinking, _, _, names, _, seed}: withModelFields(cwd, agentDir, apiKey, thinking, seed, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
+    case CreateOptions{cwd, agentDir, _, _, _, _, _, apiKey, thinking, _, _, names, _, seed, settings}: withModelFields(cwd, agentDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
 def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Unit):
   match apiKey selected:
@@ -455,13 +532,13 @@ def withPathsFields(options: CreateOptions, authPath: String, packageDir: String
     storage : Storage.AuthStorageOwner <- Storage.create(authPath)
     storageStep(options, packageDir, apiKey, transport, paths, Storage.borrow(storage))
 
-def withPaths(options: CreateOptions, transport: Transport, paths: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Outcome(AgentRuntime)):
+def withPaths(options: CreateOptions, transport: Transport, +paths: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Outcome(AgentRuntime)):
   match options paths:
     case _ Fail{error}:
       do IO<Outcome(AgentRuntime)>:
         disposeTransport(transport)
         return Fail{pathsError(error)}
-    case CreateOptions{cwd, agentDir, +authPath, bundlePath, +packageDir, provider, model, +apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed} Done{paths}: withPathsFields(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed}, authPath, packageDir, apiKey, transport, paths)
+    case CreateOptions{cwd, agentDir, +authPath, bundlePath, +packageDir, provider, model, +apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings} Done{paths}: withPathsFields(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings}, authPath, packageDir, apiKey, transport, paths)
 
 # --api-key applies to the selected model's provider for this process only.
 def withTransport(+options: CreateOptions, transport: Outcome(Transport)) -> IO(Outcome(AgentRuntime)):
@@ -474,10 +551,10 @@ def withTransport(+options: CreateOptions, transport: Outcome(Transport)) -> IO(
 
 def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed}:
+    case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings}:
       do IO<Outcome(AgentRuntime)>:
         transport : Outcome(Transport) <- createTransport(bundlePath)
-        withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed}, transport)
+        withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings}, transport)
 
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
   match runtime:

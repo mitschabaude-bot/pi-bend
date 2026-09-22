@@ -5,6 +5,7 @@ import ./config.bend as Config
 import ./core/agent-runtime.bend as Runtime
 import ./core/session-manager.bend as S
 import ./core/session-persistence.bend as Sessions
+import ./core/settings-manager.bend as Settings
 import ./core/tools/index.bend as Tools
 import ./modes/json-event.bend as JsonEvent
 import ./modes/print-mode.bend as Print
@@ -136,12 +137,14 @@ def without(names: List<&2, Tools.ToolName>, +excluded: List<&2, Tools.ToolName>
       +tail = without(rest, excluded)
       Bool.pick(List<&2, Tools.ToolName>, containsName(excluded, name), tail, name <> tail)
 
-# --no-tools disables everything; --tools allowlists; --exclude-tools denylists.
-def selectedTools(noTools: Maybe<&2, Bool>, allow: Maybe<&2, List<&2, String>>, exclude: Maybe<&2, List<&2, String>>) -> List<&2, Tools.ToolName>:
-  match noTools allow exclude:
-    case Some{True{}} _ _: Nil{}
-    case _ Some{names} excluded: without(parseNames(names), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
-    case _ None{} excluded: without(Tools.allToolNames(), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
+# --no-tools disables everything; --tools allowlists; --exclude-tools denylists;
+# otherwise the settings' defaultTools, else read/bash/edit/write.
+def selectedTools(noTools: Maybe<&2, Bool>, allow: Maybe<&2, List<&2, String>>, exclude: Maybe<&2, List<&2, String>>, defaults: Maybe<&2, List<&2, String>>) -> List<&2, Tools.ToolName>:
+  match noTools allow exclude defaults:
+    case Some{True{}} _ _ _: Nil{}
+    case _ Some{names} excluded _: without(parseNames(names), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
+    case _ None{} excluded Some{configured}: without(parseNames(configured), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
+    case _ None{} excluded None{}: without(Tools.allToolNames(), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
 
 # Paths
 # -----
@@ -245,12 +248,12 @@ def validateSessionFlags(+flags: SessionFlags) -> Maybe<&2, String>:
     case SessionFlags{_, _, _, _, _, _, _, +sessionId, +fork, _}:
       Maybe.or(&2, String, Maybe.bind(&2, String, String, fork, _ => combined("--fork", conflicts(flags, True{}))), Maybe.or(&2, String, Maybe.bind(&2, String, String, sessionId, _ => combined("--session-id", conflicts(flags, False{}))), validId(sessionId)))
 
-# --session-dir, else PI_CODING_AGENT_SESSION_DIR, else the default (settings are not ported).
-def sessionDirectory(requested: Maybe<&2, String>, env: Result<&1, &1, U32 & String, String>, +home: String, +cwd: String) -> Maybe<&2, String>:
+# --session-dir, else PI_CODING_AGENT_SESSION_DIR, else the settings' sessionDir.
+def sessionDirectory(requested: Maybe<&2, String>, env: Result<&1, &1, U32 & String, String>, +home: String, +cwd: String, configured: Maybe<&2, String>) -> Maybe<&2, String>:
   match requested env:
     case Some{dir} _: Some{Config.expanded(home, cwd, dir)}
     case None{} Done{SCon{first, rest}}: Some{Config.expanded(home, cwd, SCon{first, rest})}
-    case None{} _: None{}
+    case None{} _: configured
 
 type Resolved is Data:
   ResolvedPath{path: String}
@@ -486,25 +489,25 @@ def hasThinkingEntry(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V
     case S.ThinkingLevelChangeEntry{_, _} <> _: True{}
     case _ <> rest: hasThinkingEntry(rest)
 
-def seedOf(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>, branch: Result<&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>>) -> Result<&2, &2, Stop, Runtime.SessionSeed>:
+def seedOf(id: String, context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>, branch: Result<&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>>) -> Result<&2, &2, Stop, Runtime.SessionSeed>:
   match context branch:
     case Fail{error} _: Fail{Failed{"Error: " ++ Sessions.message(Sessions.State{error})}}
     case _ Fail{error}: Fail{Failed{"Error: " ++ Sessions.message(Sessions.State{error})}}
-    case Done{S.SessionContext{messages, thinkingLevel, model}} Done{entries}: Done{Runtime.SessionSeed{messages, model, Bool.pick(Maybe<&2, String>, hasThinkingEntry(entries), Some{thinkingLevel}, None{})}}
+    case Done{S.SessionContext{messages, thinkingLevel, model}} Done{entries}: Done{Runtime.SessionSeed{id, messages, model, Bool.pick(Maybe<&2, String>, hasThinkingEntry(entries), Some{thinkingLevel}, None{})}}
 
 # The session context seeds the agent: its messages, model and thinking level.
 def sessionSeed(+session: Session()) -> Result<&2, &2, Stop, Runtime.SessionSeed>:
   +state = Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session)
-  seedOf(S.sessionContext(Unit, Tools.ToolDetails, V.Value, state), S.getBranch(Unit, Tools.ToolDetails, V.Value, state, S.Latest{}))
+  seedOf(S.getSessionId(Unit, Tools.ToolDetails, V.Value, state), S.sessionContext(Unit, Tools.ToolDetails, V.Value, state), S.getBranch(Unit, Tools.ToolDetails, V.Value, state, S.Latest{}))
 
 def seedMessages(seed: Runtime.SessionSeed) -> Bool:
   match seed:
-    case Runtime.SessionSeed{Nil{}, _, _}: False{}
+    case Runtime.SessionSeed{_, Nil{}, _, _}: False{}
     case _: True{}
 
 def seedThinking(seed: Runtime.SessionSeed) -> Bool:
   match seed:
-    case Runtime.SessionSeed{_, _, Some{_}}: True{}
+    case Runtime.SessionSeed{_, _, _, Some{_}}: True{}
     case _: False{}
 
 def recordedThinking(session: Selected(), thinking: Ai.ModelThinkingLevel) -> IO(Selected()):
@@ -569,18 +572,91 @@ def printSelected(mode: Args.Mode, initial: InitialMessage, session: Session(), 
     case Fail{error}: fail(error)
     case Done{runtime}: printWithSelection(mode, initial, session, hasExisting, hasThinking, Runtime.selectionOf(runtime))
 
-def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed) -> Runtime.CreateOptions:
+def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
     case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, _, _, _, _, _, _, _, _, _, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
-      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), selectedTools(noTools, tools, excludeTools), Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed}
+      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), selectedTools(noTools, tools, excludeTools, Settings.getDefaultTools(settings)), Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings}
 
-def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
+# Settings
+# --------
+
+def segmentText(segment: Decode.Segment) -> String:
+  match segment:
+    case Decode.Field{name}: "." ++ name
+    case Decode.Index{index}: "[" ++ Nat.show(index) ++ "]"
+
+def pathText(path: List<&2, Decode.Segment>) -> String:
+  match path:
+    case Nil{}: ""
+    case segment <> rest: segmentText(segment) ++ pathText(rest)
+
+def decodeText(error: Decode.Error) -> String:
+  match error:
+    case Decode.MissingField{path}: "missing " ++ pathText(path)
+    case Decode.WrongType{path, expected}: "expected " ++ expected ++ " at " ++ pathText(path)
+    case Decode.InvalidValue{path, expected}: "expected " ++ expected ++ " at " ++ pathText(path)
+
+def settingsErrorText(error: Settings.Error) -> String:
+  match error:
+    case Settings.InvalidJson{_}: "invalid JSON"
+    case Settings.InvalidSetting{cause}: decodeText(cause)
+    case Settings.DuplicateSetting{path}: "duplicate setting " ++ path
+    case Settings.UntrustedProject{}: "project settings are not trusted"
+    case Settings.StorageFailure{message}: message
+    case Settings.FileFailure{_}: "could not read the settings file"
+    case Settings.InvalidEncoding{_}: "the settings file is not valid UTF-8"
+    case Settings.LockFailure{_}: "could not lock the settings file"
+    case Settings.CleanupFailure{_, _}: "could not release the settings lock"
+
+def scopeText(scope: Settings.SettingsScope) -> String:
+  match scope:
+    case Settings.Global{}: "global"
+    case Settings.Project{}: "project"
+
+# upstream collectSettingsDiagnostics: each load error is a warning.
+def settingsWarning(error: Settings.SettingsError) -> String:
+  match error:
+    case Settings.SettingsError{_, Some{path}, cause}: "Warning: Invalid settings file " ++ path ++ ": " ++ settingsErrorText(cause)
+    case Settings.SettingsError{scope, None{}, cause}: "Warning: Invalid " ++ scopeText(scope) ++ " settings: " ++ settingsErrorText(cause)
+
+def seenBefore(seen: List<&2, String>, +text: String) -> Bool:
+  match seen:
+    case Nil{}: False{}
+    case previous <> rest: String.eq(previous, text) || seenBefore(rest, text)
+
+# Startup and runtime settings managers can report the same file error once.
+def reportSettings(errors: List<&2, Settings.SettingsError>, +seen: List<&2, String>) -> IO(Unit):
+  match errors:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case error <> +rest:
+      +text = settingsWarning(error)
+      Bool.pick(Unit -> IO(Unit), seenBefore(seen, text), _ => reportSettings(rest, seen), _ => IO.bind(Unit, Unit, IO.print_err(text), unused => reportSettings(rest, text <> seen)))(Unit{})
+
+def drained(loaded: Settings.FileSettingsStorage & Settings.SettingsManager) -> Settings.SettingsManager & List<&2, Settings.SettingsError>:
+  match loaded:
+    case Tuple{_, manager}: Settings.drainErrors(manager)
+
+def reported(pair: Settings.SettingsManager & List<&2, Settings.SettingsError>) -> IO(Settings.SettingsManager):
+  match pair:
+    case Tuple{manager, errors}:
+      do IO<Settings.SettingsManager>:
+        reportSettings(errors, Nil{})
+        return manager
+
+def loadSettings(cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
+  do IO<Settings.SettingsManager>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
+    reported(drained(loaded))
+
+def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
   match seed:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: IO.print(note)
     case Done{+value}:
+      +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
       do IO<Unit>:
-        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session), agentDir, authPath, bundlePath, packageDir, value))
+        settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
+        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, sessionCwd, agentDir, authPath, bundlePath, packageDir, value, settings))
         printSelected(outputMode(mode), initial, session, seedMessages(value), seedThinking(value), created)
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
@@ -614,10 +690,11 @@ def flagSessionDir(flags: SessionFlags) -> Maybe<&2, String>:
   match flags:
     case SessionFlags{_, _, _, _, _, _, _, _, _, sessionDir}: sessionDir
 
-def runConfigured(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
+def runConfigured(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
   +agentDir = located(agentDirLocated, Path.join(cwd, ".pi"))
   do IO<Unit>:
-    selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd), agentDir, Path.join(agentDir, "sessions"))
+    startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
+    selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})), agentDir, Path.join(agentDir, "sessions"))
     runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), envOr(packageDir, cwd))
 
 def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, messages: List<&2, String>, environment: Paths.Environment, files: Files.ResultOf(Files.ProcessedFiles)) -> IO(Unit):

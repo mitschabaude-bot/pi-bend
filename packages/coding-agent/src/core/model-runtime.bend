@@ -114,7 +114,7 @@ def providerRef(provider: Provider) -> Resolve.ProviderRef:
 def unknownProvider(id: String) -> Resolve.ModelsError:
   Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
 
-def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, provider: Maybe<&2, Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
+def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
   match provider:
     case None{}: IO.pure(Resolve.Resolution(), Fail{unknownProvider(id)})
     case Some{provider}: Resolve.resolveProviderAuth(providerRef(provider), credentials, context, overrides)
@@ -338,7 +338,7 @@ type PatternStep is Data:
 def stepOf(+pattern: String, models: List<&2, Model()>) -> PatternStep:
   PatternStep{pattern, tryMatchModel(pattern, models), lastColonSplit(pattern)}
 
-def combined(level: Maybe<&2, Ai.ModelThinkingLevel>, inner: ParsedModelResult, suffix: String, pattern: String, allowFallback: Bool) -> ParsedModelResult:
+def combined(+level: Maybe<&2, Ai.ModelThinkingLevel>, +inner: ParsedModelResult, suffix: String, pattern: String, allowFallback: Bool) -> ParsedModelResult:
   match level allowFallback:
     case Some{level} _: withLevel(inner, level)
     case None{} True{}: withWarning(inner, suffix, pattern)
@@ -398,7 +398,7 @@ def fallbackAcross(cliModel: String, scoped: ResolveCliModelResult, models: List
     case ResolveCliModelResult{None{}, _, _, None{}}: resolveAcross(cliModel, models)
     case other: other
 
-def resolveCandidate(+cliModel: String, provider: Maybe<&2, String>, rest: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveCandidate(+cliModel: String, +provider: Maybe<&2, String>, rest: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
     case None{}: resolveAcross(cliModel, models)
     case Some{+provider}: fallbackAcross(cliModel, resolveWithin(provider, rest, models), models)
@@ -410,7 +410,7 @@ def resolveInferred(+cliModel: String, split: Maybe<&2, Split>, +models: List<&2
     case None{}: resolveAcross(cliModel, models)
     case Some{Split{+head, +rest}}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, models)
 
-def resolveKnown(provider: Maybe<&2, String>, cliProvider: String, cliModel: String, models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveKnown(+provider: Maybe<&2, String>, cliProvider: String, cliModel: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
     case None{}: cliError("Unknown provider \"" ++ cliProvider ++ "\". Use --list-models to see available providers/models.")
     case Some{+provider}: resolveWithin(provider, stripPrefix(cliModel, provider ++ "/"), models)
@@ -435,9 +435,32 @@ def defaultAmong(defaults: List<&2, DefaultModel>, +models: List<&2, Model()>) -
     case Nil{}: List.head(&2, Model(), models)
     case DefaultModel{provider, id} <> rest: Maybe.or(&2, Model(), findModel(models, provider, id), defaultAmong(rest, models))
 
-# Without a CLI model: the first known default whose provider is authenticated,
-# otherwise the first available model.
-def findInitialModel(runtime: ModelRuntime) -> IO(Maybe<&2, Model()>):
+def authorizedModel(+runtime: ModelRuntime, found: Maybe<&2, Model()>) -> IO(Maybe<&2, Model()>):
+  match found:
+    case None{}: IO.pure(Maybe<&2, Model()>, None{})
+    case Some{+model}:
+      do IO<Maybe<&2, Model()>>:
+        configured : Bool <- hasConfiguredAuth(runtime, modelProvider(model))
+        return Bool.pick(Maybe<&2, Model()>, configured, Some{model}, None{})
+
+def savedDefault(+runtime: ModelRuntime, defaultProvider: Maybe<&2, String>, defaultModelId: Maybe<&2, String>) -> IO(Maybe<&2, Model()>):
+  match defaultProvider defaultModelId:
+    case Some{provider} Some{id}: authorizedModel(runtime, getModel(runtime, provider, id))
+    case _ _: IO.pure(Maybe<&2, Model()>, None{})
+
+def firstAvailable(+runtime: ModelRuntime, saved: Maybe<&2, Model()>) -> IO(Maybe<&2, Model()>):
+  match saved:
+    case Some{model}: IO.pure(Maybe<&2, Model()>, Some{model})
+    case None{}:
+      do IO<Maybe<&2, Model()>>:
+        available : List<&2, Model()> <- getAvailable(runtime)
+        return defaultAmong(defaultModelPerProvider(), available)
+
+# Without a CLI model: the settings' saved default when its provider is
+# authenticated, else the first known default whose provider is
+# authenticated, otherwise the first available model (upstream steps 3–4;
+# scoped models are not ported).
+def findInitialModel(+runtime: ModelRuntime, defaultProvider: Maybe<&2, String>, defaultModelId: Maybe<&2, String>) -> IO(Maybe<&2, Model()>):
   do IO<Maybe<&2, Model()>>:
-    available : List<&2, Model()> <- getAvailable(runtime)
-    return defaultAmong(defaultModelPerProvider(), available)
+    saved : Maybe<&2, Model()> <- savedDefault(runtime, defaultProvider, defaultModelId)
+    firstAvailable(runtime, saved)

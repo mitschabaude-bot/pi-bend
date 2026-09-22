@@ -6,7 +6,7 @@ Live checks run when PI_BEND_LIVE=1 and OPENAI_API_KEY are set."""
 import json, os, pathlib, re, subprocess, sys, tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 UPSTREAM = ROOT.parent / 'pi-mono'
-CLI = ROOT / 'build/pi-cli'
+CLI = pathlib.Path(os.environ.get('PI_BEND_CLI', str(ROOT / 'build/pi-cli')))
 
 def source(path):
     return subprocess.check_output(['git', '-C', str(UPSTREAM), 'show', f'46c9de402:packages/coding-agent/{path}'], text=True)
@@ -80,6 +80,15 @@ with tempfile.TemporaryDirectory(prefix='pi-session-file-invalid-') as temp:
 
     unknown = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
     check(unknown.returncode == 1 and b"No session found matching 'no-such-session-id'" in unknown.stderr, 'an unknown --session id exits 1')
+
+    # Settings diagnostics (settings-diagnostics.ts): an invalid settings file is a warning, reported once.
+    (agent_dir / 'settings.json').write_text('{not json')
+    warned = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
+    check(warned.stderr.count(f'Warning: Invalid settings file {agent_dir / "settings.json"}: invalid JSON'.encode()) == 1, 'an invalid settings file is reported once as a warning')
+    (agent_dir / 'settings.json').write_text(json.dumps({'defaultTools': ['read', 'oops']}))
+    typed = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
+    check(b'Warning: Invalid settings file' not in typed.stderr, 'a well-formed settings file loads silently')
+    (agent_dir / 'settings.json').unlink()
 
 if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
     text = run(['--no-tools', '--model', 'gpt-4.1-mini', '-p', 'Reply with exactly the word pong'], timeout=300)
