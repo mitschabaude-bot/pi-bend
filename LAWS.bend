@@ -36,3 +36,5 @@ import ./laws/transform-messages.bend as TransformMessages
 import ./laws/transform-tool-results.bend as TransformToolResults
 import ./laws/validation.bend as Validation
 import ./laws/transcript.bend as Transcript
+import ./laws/simple-options.bend as SimpleOptions
+import ./laws/thinking-levels.bend as ThinkingLevels

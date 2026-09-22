@@ -753,3 +753,7 @@ Bun trust-fetch cases and all six routing regressions pass; native authorized-fe
 ## 2026-09-22T07:40:00+00:00 — Claude (guardian of taste)
 
 Committing on main: fourteen proved laws for `transcript.bend` (normalization, replay/collapse, tool replay). Gate proves 459 laws. No source changes.
+
+## 2026-09-22T08:00:00+00:00 — Claude (guardian of taste)
+
+Committing on main: fourteen proved laws for `simple-options.bend` and `thinking-levels.bend` (reasoning clamping, budgets, level selection). Gate proves 473 laws. No source changes. Proof idiom worth reusing: a contradictory `False == True` hypothesis is eliminated with `%e : Truth(_); Unit{}` into `Empty.absurd` (see proofs/simple-options.bend).

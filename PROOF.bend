@@ -37,3 +37,5 @@ import ./proofs/transform-messages.bend as TransformMessages
 import ./proofs/transform-tool-results.bend as TransformToolResults
 import ./proofs/validation.bend as Validation
 import ./proofs/transcript.bend as Transcript
+import ./proofs/simple-options.bend as SimpleOptions
+import ./proofs/thinking-levels.bend as ThinkingLevels
