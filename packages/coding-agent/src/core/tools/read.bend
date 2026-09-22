@@ -19,9 +19,6 @@ def errorMessage(error: Error) -> String:
     case OffsetBeyondEnd{offset, total}:
       "Offset " ++ Nat.show(offset) ++ " is beyond end of file (" ++ Nat.show(total) ++ " lines total)"
 
-def quotePath(path: String) -> String:
-  "'" ++ String.join(Strings.split(path, '\''), "'\\''") ++ "'"
-
 def continuation(cause: Maybe<&2, Truncate.Limit>) -> String:
   match cause:
     case Some{Truncate.Lines{}}: ""
@@ -41,7 +38,7 @@ def render(path: String, +start: Nat, total: Nat, firstLineBytes: Nat, limited: 
     case Truncate.TruncationResult{_, _, _, _, _, _, _, _, True{}, _, _}:
       +line = Nat.show(1n + start)
       +maximum = Truncate.DEFAULT_MAX_BYTES()
-      TextResult{"[Line " ++ line ++ " is " ++ Truncate.formatSize(firstLineBytes) ++ ", exceeds " ++ Truncate.formatSize(maximum) ++ " limit. Use bash: sed -n '" ++ line ++ "p' -- " ++ quotePath(path) ++ " | head -c " ++ Nat.show(maximum) ++ "]", Some{ReadToolDetails{truncation}}}
+      TextResult{"[Line " ++ line ++ " is " ++ Truncate.formatSize(firstLineBytes) ++ ", exceeds " ++ Truncate.formatSize(maximum) ++ " limit. Use bash: sed -n '" ++ line ++ "p' -- " ++ Strings.quoteShell(path) ++ " | head -c " ++ Nat.show(maximum) ++ "]", Some{ReadToolDetails{truncation}}}
     case Truncate.TruncationResult{content, True{}, cause, _, _, outputLines, _, _, False{}, _, _}:
       +end = start + outputLines
       TextResult{content ++ "\n\n[Showing lines " ++ Nat.show(1n + start) ++ "-" ++ Nat.show(end) ++ " of " ++ Nat.show(total) ++ continuation(cause) ++ ". Use offset=" ++ Nat.show(1n + end) ++ " to continue.]", Some{ReadToolDetails{truncation}}}

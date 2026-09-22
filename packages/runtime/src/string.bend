@@ -54,3 +54,7 @@ def equalFrom(left: String, right: String, same: Bool) -> Bool:
 
 def equal(left: String, right: String) -> Bool:
   equalFrom(left,right,True{})
+
+# Preserve a path as one POSIX shell argument. File IO rejects NUL paths.
+def quoteShell(value: String) -> String:
+  "'" ++ String.join(split(value, '\''), "'\\\''") ++ "'"
