@@ -1483,10 +1483,12 @@
       "status": "partial",
       "ports": [
         "tests/auth-storage.bend",
-        "tests/auth_storage_check.py"
+        "tests/auth_storage_check.py",
+        "tests/auth-storage-lock.bend",
+        "tests/auth_storage_lock_check.py"
       ],
       "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe",
-      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Pending: file-lock contention/compromise, coalesced reloads, cancellation/abort and Models refresh-failure cases; the port takes no cross-process lock."
+      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Interprocess read/modify/delete leases now cover 24 mixed Node/Bend updates, cancellation before/during callbacks and lock waits, compromise-before-write detection, malformed-file cleanup and unrelated-entry preservation on Bun/native one/four. Coalesced revision-based reloads, complete Models refresh-failure cases and the full auth suite remain pending; see tests/auth-storage-lock.md."
     },
     {
       "source": "packages/coding-agent/test/bash-close-hang-windows.test.ts",
