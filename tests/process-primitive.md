@@ -16,7 +16,9 @@ Shell choice, PATH lookup, environment override policy, signal-to-exit-code conv
 # Apply only to an isolated copy of the current toolchain:
 patch -d build/bend-native-toolchain -p1 < patches/bend-process.patch
 patch -d build/bend-native-toolchain -p1 < patches/bend-process-null-stdin.patch
+patch -d build/bend-native-toolchain -p1 < patches/bend-process-null-stdin.patch
 sh scripts/build-pure.sh tests/process-primitive.bend build/process-primitive
+sh scripts/build-pure.sh tests/process-null-stdin.bend build/process-null-stdin
 sh scripts/build-pure.sh tests/process-null-stdin.bend build/process-null-stdin
 python3 tests/process_primitive_check.py
 ```
