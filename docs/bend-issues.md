@@ -996,3 +996,7 @@ The initial DEFLATE octet validator used `valid(head) && validBytes(rest)` and o
 ### Existing issue recurrences during image integration (2026-09-22)
 
 The fixed-decimal formatter hit BEND-012 when its pattern binder `digit` resolved to the existing `number-string.digit` global; using `numeral` avoids the collision without fixing the compiler. The JPEG encoder fixture re-encountered BEND-019 through Base `String.split` on a 44 KB decimal input; it now uses the existing tail-recursive runtime splitter. Neither recurrence introduced a compiler patch or a reduced production input limit.
+
+### Boxed Boolean combined with raw OR during JPEG integration
+
+`tests/repro/bool-pick-or.bend` prints the correct `true` on Bun but `false` on native one/four threads: the emitted generic `Bool.pick` result is boxed and used directly in a raw Boolean OR. [JPEG validation](../tests/jpeg.md#open-compiler-defect-found-during-integration) records toolchain identities and the source workaround; the compiler owner has been notified, and the defect remains open.
