@@ -91,4 +91,23 @@ if os.environ.get('PI_BEND_CODEX_LIVE') == '1':
                 env={'OPENAI_API_KEY': ''}, timeout=300)
     check(codex.returncode == 0 and codex.stdout.decode().strip().lower().rstrip('.') == 'pong' and codex.stderr == b'', 'Codex runs through the existing OAuth login')
 
+if os.environ.get('PI_BEND_FIND_LIVE') == '1':
+    with tempfile.TemporaryDirectory(prefix='pi-native-cli-find-') as folder:
+        root = pathlib.Path(folder)
+        (root / 'nested').mkdir()
+        (root / 'nested' / 'needle.txt').write_text('registry integration fixture\n')
+        (root / '.gitignore').write_text('hidden.txt\n')
+        (root / 'hidden.txt').write_text('must be ignored\n')
+        task = run(['--tools', 'find', '--provider', 'openai-codex', '--model', 'gpt-5.5', '--mode', 'json', '-p',
+                    'Call the find tool exactly once with pattern **/*.txt, path ., and limit 1. Then report the path it returned.'],
+                   cwd=folder, env={'OPENAI_API_KEY': ''}, timeout=300)
+        check(task.returncode == 0 and task.stderr == b'', 'native CLI completes a find-only model request')
+        events = [json.loads(line) for line in task.stdout.decode().splitlines()]
+        completed = [event for event in events if event['type'] == 'tool_execution_end']
+        check(len(completed) == 1 and completed[0]['toolName'] == 'find' and not completed[0]['isError'], 'find executes through the public registry')
+        result = completed[0]['result']
+        check(result['content'][0]['text'].startswith('nested/needle.txt\n\n[1 results limit reached.'), 'find preserves result content and limit notice')
+        check(result['details'] == {'resultLimitReached': 1}, 'JSON events serialize typed find details')
+        check(events[-1]['type'] == 'agent_end', 'find-only tool loop reaches agent_end')
+
 print('print_cli_check: all checks passed', flush=True)
