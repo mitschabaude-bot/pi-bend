@@ -1,6 +1,8 @@
 import Base
 import ./u64.bend as W
+import ./big-nat.bend as B
 import ./u128.bend as Wide
+
 
 # IEEE-754 binary64 storage and arithmetic, round-to-nearest, ties-to-even.
 # No conversion through F32, host arithmetic, or foreign effects.
@@ -282,3 +284,346 @@ def truncated(original: F64, decoded: Decoded) -> F64:
     case _: original
 
 def truncate(+value: F64) -> F64: truncated(value, decode(value))
+
+
+# Reference-quality shortest decimal conversion using exact rounding intervals.
+# All comparisons and divisions are integer operations. No floating estimates,
+# host formatting or precision truncation participate in digit selection.
+# Exponents/decimal positions are stored with bias 400, covering binary64's range.
+type Interval is Data:
+  Interval{lower: B.BigNat, center: B.BigNat, upper: B.BigNat, denominator: B.BigNat, inclusive: Bool, exponent: Nat}
+
+type Decimal is Data:
+  Decimal{digits: String, position: Nat}
+
+def fromWord(word: W.U64) -> B.BigNat:
+  match word:
+    case W.U64{high, low}: B.add(B.shiftLeft(B.fromU32(high), 32n), B.fromU32(low))
+
+def scaleBinary(positive: Bool, exponent: U32, lower: B.BigNat, center: B.BigNat, upper: B.BigNat, inclusive: Bool) -> Interval:
+  match positive:
+    case True{}:
+      +shift = U32.to_nat((exponent - 1077 : U32))
+      Interval{B.shiftLeft(lower, shift), B.shiftLeft(center, shift), B.shiftLeft(upper, shift), B.one(), inclusive, 400n}
+    case False{}: Interval{lower, center, upper, B.shiftLeft(B.one(), U32.to_nat((1077 - exponent : U32))), inclusive, 400n}
+
+# 4*m times 2^(e-2) is the original value. At a normal power-of-two boundary
+# the lower neighbour is half as far away; at the subnormal boundary it is not.
+def interval(+exponent: U32, +significand: W.U64) -> Interval:
+  +center = W.shiftLeft(significand, 2n)
+  lowerGap = Bool.pick(U32, U32.is_gt(exponent, 1) && W.equal(significand, W.U64{1048576, 0}), 1, 2)
+  inclusive = W.equal(W.bitAnd(significand, W.one()), W.zero())
+  scaleBinary(U32.is_ge(exponent, 1077), exponent, fromWord(W.subtract(center, W.fromU32(lowerGap))), fromWord(center), fromWord(W.add(center, W.fromU32(2))), inclusive)
+
+# LT means below one; GT means at least ten; EQ is normalized to [1,10).
+def directionOrders(atOne: Cmp, atTen: Cmp) -> Cmp:
+  match atOne atTen:
+    case LT{} _: LT{}
+    case _ LT{}: EQ{}
+    case _ _: GT{}
+
+def directionOf(state: Interval) -> Cmp:
+  match state:
+    case Interval{_, +center, _, +denominator, _, _}:
+      directionOrders(B.compare(center, denominator), B.compare(center, B.multiplyU32(denominator, 10)))
+
+# The normalization bound is derived from binary64's maximum denominator bit
+# count (1076), which exceeds the required decimal rescalings (at most 324).
+def normalizeDecimal(fuel: Nat, direction: Cmp, state: Interval) -> Maybe<&2, Interval>:
+  match fuel direction state:
+    case _ EQ{} state: Some{state}
+    case 0n _ _: None{}
+    case 1n+n LT{} Interval{lower, center, upper, denominator, inclusive, exponent}:
+      +next = {Interval{B.multiplyU32(lower, 10), B.multiplyU32(center, 10), B.multiplyU32(upper, 10), denominator, inclusive, (exponent - 1n : Nat)} : Interval}
+      normalizeDecimal(n, directionOf(next), next)
+    case 1n+n GT{} Interval{lower, center, upper, denominator, inclusive, exponent}:
+      +next = {Interval{lower, center, upper, B.multiplyU32(denominator, 10), inclusive, (exponent + 1n : Nat)} : Interval}
+      normalizeDecimal(n, directionOf(next), next)
+
+def withinBounds(lower: Cmp, upper: Cmp, inclusive: Bool) -> Bool:
+  match lower upper:
+    case LT{} _: False{}
+    case _ GT{}: False{}
+    case GT{} LT{}: True{}
+    case _ _: inclusive
+
+def admissible(candidate: B.BigNat, state: Interval) -> Bool:
+  match state:
+    case Interval{lower, _, upper, denominator, inclusive, _}:
+      +scaled = B.multiply(candidate, denominator)
+      withinBounds(B.compare(scaled, lower), B.compare(scaled, upper), inclusive)
+
+def even(value: B.BigNat) -> Bool:
+  match value:
+    case B.BigNat{Nil{}}: True{}
+    case B.BigNat{head <> _}: U32.is_eq(U32.and(head, 1), 0)
+
+def nearest(order: Cmp, +down: B.BigNat, up: B.BigNat) -> B.BigNat:
+  match order:
+    case LT{}: down
+    case GT{}: up
+    case EQ{}: Bool.pick(B.BigNat, even(down), down, up)
+
+def chooseCandidates(downValid: Bool, upValid: Bool, down: B.BigNat, up: B.BigNat, remainder: B.BigNat, denominator: B.BigNat) -> Maybe<&2, B.BigNat>:
+  match downValid upValid:
+    case False{} False{}: None{}
+    case True{} False{}: Some{down}
+    case False{} True{}: Some{up}
+    case True{} True{}: Some{nearest(B.compare(B.shiftLeft(remainder, 1n), denominator), down, up)}
+
+def candidates(+state: Interval, denominator: B.BigNat, divided: Maybe<&2, B.Division>) -> Maybe<&2, B.BigNat>:
+  match divided:
+    case None{}: None{}
+    case Some{B.Division{+down, remainder}}:
+      +up = B.add(down, B.one())
+      chooseCandidates(admissible(down, state), admissible(up, state), down, up, remainder, denominator)
+
+def select(+state: Interval) -> Maybe<&2, B.BigNat>:
+  match state:
+    case Interval{_, center, _, +denominator, _, _}: candidates(state, denominator, B.divide(center, denominator))
+
+def stripHead(head: Char, tail: String) -> String:
+  match head tail:
+    case Chr{48} SNil{}: ""
+    case head tail: SCon{head, tail}
+
+def stripTrailingZeros(digits: String) -> String:
+  match digits:
+    case SNil{}: ""
+    case SCon{head, tail}: stripHead(head, stripTrailingZeros(tail))
+
+def decimalResult(coefficient: B.BigNat, places: Nat, exponent: Nat) -> Decimal:
+  +digits = B.toDecimal(coefficient)
+  Decimal{stripTrailingZeros(digits), exponent + 1n + String.length(digits) - places}
+
+# Binary64 always has a round-tripping decimal with at most seventeen digits.
+# An explicit None exposes any violated internal invariant instead of returning
+# a guessed or truncated number. Both adjacent decimal candidates are checked.
+def search(fuel: Nat, places: Nat, state: Interval, candidate: Maybe<&2, B.BigNat>) -> Maybe<&2, Decimal>:
+  match fuel state candidate:
+    case _ Interval{_, _, _, _, _, exponent} Some{coefficient}: Some{decimalResult(coefficient, places, exponent)}
+    case 0n _ None{}: None{}
+    case 1n+n Interval{lower, center, upper, denominator, inclusive, exponent} None{}:
+      +next = {Interval{B.multiplyU32(lower, 10), B.multiplyU32(center, 10), B.multiplyU32(upper, 10), denominator, inclusive, exponent} : Interval}
+      search(n, places + 1n, next, select(next))
+
+def shortest(normalized: Maybe<&2, Interval>) -> Maybe<&2, Decimal>:
+  match normalized:
+    case None{}: None{}
+    case Some{+state}: search(16n, 1n, state, select(state))
+
+def zeros(count: Nat) -> String:
+  match count:
+    case 0n: ""
+    case 1n+n: SCon{Chr{48}, zeros(n)}
+
+def scientificMantissa(digits: String) -> String:
+  match digits:
+    case SNil{}: ""
+    case SCon{head, SNil{}}: SCon{head, SNil{}}
+    case SCon{head, tail}: SCon{head, SCon{Chr{46}, tail}}
+
+def scientific(negative: Bool, digits: String, position: Nat) -> String:
+  match negative:
+    case True{}: scientificMantissa(digits) ++ "e-" ++ Nat.show(401n - position)
+    case False{}: scientificMantissa(digits) ++ "e+" ++ Nat.show(position - 401n)
+
+def positiveFixed(enoughPlaces: Bool, +digits: String, +position: Nat) -> String:
+  match enoughPlaces:
+    case True{}: digits ++ zeros(position - String.length(digits))
+    case False{}: String.take(digits, position) ++ "." ++ String.drop(digits, position)
+
+def renderForm(form: U32, +digits: String, +position: Nat) -> String:
+  match form:
+    case 0: "0." ++ zeros(400n - position) ++ digits
+    case 1: positiveFixed(Nat.is_ge(position - 400n, String.length(digits)), digits, position - 400n)
+    case 2: scientific(True{}, digits, position)
+    case _: scientific(False{}, digits, position)
+
+def render(decimal: Decimal) -> String:
+  match decimal:
+    case Decimal{digits, +position}:
+      form = Bool.pick(U32, Nat.is_le(position, 394n), 2,
+        Bool.pick(U32, Nat.is_le(position, 400n), 0,
+          Bool.pick(U32, Nat.is_le(position, 421n), 1, 3)))
+      renderForm(form, digits, position)
+
+def renderSigned(negative: Bool, result: Maybe<&2, Decimal>) -> Maybe<&2, String>:
+  match result:
+    case None{}: None{}
+    case Some{decimal}: Some{Bool.pick(String, negative, "-", "") ++ render(decimal)}
+
+def finite(zero: Bool, negative: Bool, exponent: U32, significand: W.U64) -> Maybe<&2, String>:
+  match zero:
+    case True{}: Some{"0"}
+    case False{}:
+      +state = interval(exponent, significand)
+      renderSigned(negative, shortest(normalizeDecimal(U32.to_nat(1077), directionOf(state), state)))
+
+def decoded(value: Decoded) -> Maybe<&2, String>:
+  match value:
+    case NotANumber{}: Some{"NaN"}
+    case Infinity{negative}: Some{Bool.pick(String, negative, "-Infinity", "Infinity")}
+    case Finite{negative, exponent, +significand}: finite(W.equal(significand, W.zero()), negative, exponent, significand)
+
+# Base-10 ECMAScript-style number spelling. This is not a locale formatter.
+def toDecimal(value: F64) -> Maybe<&2, String>: decoded(decode(value))
+
+# JSON serializes non-finite numeric values as null. Finite values use the same
+# decimal spelling; negative zero therefore becomes 0 in both public helpers.
+def jsonDecoded(value: Decoded) -> Maybe<&2, String>:
+  match value:
+    case NotANumber{}: Some{"null"}
+    case Infinity{_}: Some{"null"}
+    case value: decoded(value)
+
+def toJsonNumber(value: F64) -> Maybe<&2, String>: jsonDecoded(decode(value))
+
+
+# Bend's native Nat representation is bounded to 48 bits. Decode only a
+# bounded candidate, then require exact numeric equality before returning it.
+# Negative zero becomes zero; negative/fractional/nonfinite/out-of-range values
+# return their original bits in the typed error instead of rounding or wrapping.
+type Error is Data:
+  Unrepresentable{value: F64}
+
+def bounded(value: W.U64) -> W.U64:
+  match value:
+    case W.U64{high, low}: W.U64{U32.and(high, 65535), low}
+
+def candidate(value: Decoded) -> W.U64:
+  match value:
+    case Finite{_, exponent, significand}:
+      bounded(W.shiftRight(significand, U32.to_nat(U32.min((1075 - exponent : U32), 64))))
+    case _: W.zero()
+
+def natural(value: W.U64) -> Nat:
+  match value:
+    case W.U64{high, low}: Nat.add(Nat.mul(U32.to_nat(U32.and(high, 65535)), Nat.mul(65536n, 65536n)), U32.to_nat(low))
+
+def checked(value: F64, word: W.U64, comparison: Maybe<&2, Cmp>) -> Result<&2, &2, Error, Nat>:
+  match comparison:
+    case Some{EQ{}}: Done{natural(word)}
+    case _: Fail{Unrepresentable{value}}
+
+def convert(+value: F64) -> Result<&2, &2, Error, Nat>:
+  +word = candidate(decode(value))
+  checked(value, word, compare(value, fromU64(word)))
+
+
+# Exact rational-to-binary64 rounding, shared by numeric text parsers. Neither
+# numerator nor denominator is first rounded to a floating-point value.
+type Bounds is Data:
+  Bounds{lower: W.U64, upper: W.U64}
+
+def integerWord(word: W.U64) -> B.BigNat:
+  match word:
+    case W.U64{high, low}: B.add(B.shiftLeft(B.fromU32(high), 32n), B.fromU32(low))
+
+# Positive finite values expressed in units of the least positive subnormal.
+# The upper endpoint is a virtual 2^1024 value, whose encoding is infinity.
+# Its midpoint with the largest finite number is the overflow threshold.
+def decodedUnits(value: Decoded) -> B.BigNat:
+  match value:
+    case Finite{_, exponent, significand}: B.shiftLeft(integerWord(significand), U32.to_nat((exponent - 1 : U32)))
+    case Infinity{_}: B.shiftLeft(B.one(), 2098n)
+    case NotANumber{}: B.zero()
+
+def units(bits: W.U64) -> B.BigNat: decodedUnits(decode(F64{bits}))
+
+def narrow(order: Cmp, lower: W.U64, +middle: W.U64, upper: W.U64) -> Bounds:
+  match order:
+    case LT{}: Bounds{lower, middle}
+    case _: Bounds{middle, upper}
+
+# Monotone positive encodings span fewer than 2^63 steps. Sixty-three exact
+# bisections therefore leave adjacent endpoints, including for zero/overflow.
+def bracket(steps: Nat, +target: B.BigNat, +denominator: B.BigNat, bounds: Bounds) -> Bounds:
+  match steps bounds:
+    case 0n bounds: bounds
+    case 1n+n Bounds{+lower, +upper}:
+      +middle = W.shiftRightOne(W.add(lower, upper))
+      order = B.compare(target, B.multiply(units(middle), denominator))
+      bracket(n, target, denominator, narrow(order, lower, middle, upper))
+
+def roundChoice(order: Cmp, +lower: W.U64, upper: W.U64) -> W.U64:
+  match order:
+    case LT{}: lower
+    case GT{}: upper
+    case EQ{}: Bool.pick(W.U64, W.equal(W.bitAnd(lower, W.one()), W.zero()), lower, upper)
+
+def roundedRatio(target: B.BigNat, denominator: B.BigNat, bounds: Bounds) -> F64:
+  match bounds:
+    case Bounds{+lower, +upper}:
+      midpointTwice = B.multiply(B.add(units(lower), units(upper)), denominator)
+      F64{roundChoice(B.compare(B.shiftLeft(target, 1n), midpointTwice), lower, upper)}
+
+def signed(negative: Bool, value: F64) -> F64:
+  match negative:
+    case False{}: value
+    case True{}: negate(value)
+
+def fromRatio(negative: Bool, numerator: B.BigNat, denominator: B.BigNat) -> Maybe<&2, F64>:
+  match denominator:
+    case B.BigNat{Nil{}}: None{}
+    case B.BigNat{head <> tail}:
+      +divisor = {B.BigNat{head <> tail} : B.BigNat}
+      +target = B.shiftLeft(numerator, 1074n)
+      bounds = bracket(63n, target, divisor, Bounds{W.zero(), W.U64{2146435072, 0}})
+      Some{signed(negative, roundedRatio(target, divisor, bounds))}
+
+
+# Binary64 fmod: remainder after truncating the quotient toward zero.
+# Shift/subtract avoids overflow and quotient rounding, even across the full
+# normal/subnormal exponent range. The dividend determines the result sign.
+def subtractOnce(+value: W.U64, +divisor: W.U64) -> W.U64:
+  Bool.pick(W.U64, W.atLeast(W.compare(value, divisor)), W.subtract(value, divisor), value)
+
+def bitsRemainder(steps: Nat, value: W.U64, +divisor: W.U64) -> W.U64:
+  match steps:
+    case Zero{}: subtractOnce(value, divisor)
+    case Succ{rest}: bitsRemainder(rest, W.shiftLeftOne(subtractOnce(value, divisor)), divisor)
+
+def packed(negative: Bool, normalizedRemainder: Normalized) -> F64:
+  match normalizedRemainder:
+    case Normalized{+exponent, value}:
+      roundExtended(U32.is_le(exponent, 2048), negative, exponent, W.shiftLeft(value, 3n))
+
+def resultRemainder(negative: Bool, exponent: U32, +value: W.U64) -> F64:
+  packed(negative, normalizeOperand(52n, W.atLeast(W.compare(value, W.U64{1048576, 0})) || W.equal(value, W.zero()), exponent, value))
+
+def ordered(smaller: Bool, original: F64, negative: Bool, ea: U32, ma: W.U64, +eb: U32, mb: W.U64) -> F64:
+  match smaller:
+    case True{}: original
+    case False{}: resultRemainder(negative, eb, bitsRemainder(U32.to_nat(U32.sub(ea, eb)), ma, mb))
+
+def normalizedRemainder(original: F64, negative: Bool, left: Normalized, right: Normalized) -> F64:
+  match left right:
+    case Normalized{+ea, ma} Normalized{+eb, mb}:
+      ordered(U32.is_lt(ea, eb), original, negative, ea, ma, eb, mb)
+
+def finiteRemainder(zeroDivisor: Bool, original: F64, negative: Bool, ea: U32, ma: W.U64, eb: U32, mb: W.U64) -> F64:
+  match zeroDivisor:
+    case True{}: nan()
+    case False{}: normalizedRemainder(original, negative, normalized(ea, ma), normalized(eb, mb))
+
+def decodedRemainder(original: F64, left: Decoded, right: Decoded) -> F64:
+  match left right:
+    case Finite{negative, ea, ma} Finite{_, eb, +mb}: finiteRemainder(W.equal(mb, W.zero()), original, negative, ea, ma, eb, mb)
+    case Finite{_, _, _} Infinity{_}: original
+    case _ _: nan()
+
+def remainderRemainder(+left: F64, right: F64) -> F64:
+  decodedRemainder(left, decode(left), decode(right))
+
+
+# Rounding toward positive infinity preserves negative zero and non-finite
+# values. Only a positive fractional remainder requires an increment.
+def roundedRound(order: Maybe<&2, Cmp>, integral: F64) -> F64:
+  match order:
+    case Some{GT{}}: add(integral, fromU32(1))
+    case _: integral
+
+def ceil(+value: F64) -> F64:
+  +integral = truncate(value)
+  roundedRound(compare(value, integral), integral)

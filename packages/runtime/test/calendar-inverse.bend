@@ -1,5 +1,5 @@
 import Base
-import ../src/calendar-inverse.bend as I
+import ../src/calendar.bend as I
 import ../src/calendar.bend as C
 import ../src/u64.bend as W
 import ./utf8-runner.bend as H

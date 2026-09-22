@@ -1,5 +1,5 @@
 import Base
-import ../../runtime/src/string-set.bend as Set
+import ../../runtime/src/string.bend as Set
 import ../src/agent.bend as Agent
 import ../src/agent.bend as Options
 import ../src/agent.bend as Run

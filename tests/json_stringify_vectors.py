@@ -84,7 +84,7 @@ def bend(value):
 source = '''import Base
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/utils/json.bend as J
-import ../packages/runtime/src/json-string.bend as S
+import ../packages/runtime/src/json.bend as S
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/f64.bend as F
 

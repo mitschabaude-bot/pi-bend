@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def printed(value: Maybe<&2, Nat>) -> String:

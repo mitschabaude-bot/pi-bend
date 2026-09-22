@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/src/sha256.bend as SHA
 import ../packages/runtime/src/hkdf-sha256.bend as HKDF
 import ../packages/runtime/test/utf8-runner.bend as Bytes

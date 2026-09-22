@@ -1,13 +1,26 @@
 import Base
 
+
+
+# Whitespace accepted by Pi's text and numeric normalization. Keep the
+# classification shared so replay filtering and numeric parsing agree.
+def whitespace(+code: U32) -> Bool:
+  (U32.is_ge(code, 9) && U32.is_le(code, 13)) || U32.is_eq(code, 32) || U32.is_eq(code, 160) || U32.is_eq(code, 5760) || (U32.is_ge(code, 8192) && U32.is_le(code, 8202)) || U32.is_eq(code, 8232) || U32.is_eq(code, 8233) || U32.is_eq(code, 8239) || U32.is_eq(code, 8287) || U32.is_eq(code, 12288) || U32.is_eq(code, 65279)
+
+def blank(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{Chr{code}, rest}: whitespace(code) && blank(rest)
+
+
 # UTF-16 code-unit budgets over native characters. No surrogate characters are
 # manufactured; an indivisible character either fits completely or is omitted.
 type State is Data:
   Taking{remaining: Nat, reversed: String}
-  Stopped{prefix: String, omitted: Nat}
+  Stopped{prefixUnitBudget: String, omitted: Nat}
 
 type Cut is Data:
-  Cut{prefix: String, omitted: Nat}
+  Cut{prefixUnitBudget: String, omitted: Nat}
 
 def width(char: Char) -> Nat:
   match char:
@@ -23,7 +36,7 @@ def feed(+char: Char, state: State) -> State:
     case Taking{+remaining, reversed}:
       +size = width(char)
       room(Nat.is_ge(remaining, size), remaining, size, char, reversed)
-    case Stopped{prefix, omitted}: Stopped{prefix, omitted + width(char)}
+    case Stopped{prefixUnitBudget, omitted}: Stopped{prefixUnitBudget, omitted + width(char)}
 
 def collect(chars: String, state: State) -> State:
   match chars:
@@ -33,12 +46,12 @@ def collect(chars: String, state: State) -> State:
 def finish(state: State) -> Cut:
   match state:
     case Taking{_, reversed}: Cut{String.reverse(reversed), 0n}
-    case Stopped{prefix, omitted}: Cut{prefix, omitted}
+    case Stopped{prefixUnitBudget, omitted}: Cut{prefixUnitBudget, omitted}
 
 def take(text: String, budget: Nat) -> Cut:
   finish(collect(text, Taking{budget, ""}))
 
-def prefix(state: State) -> String:
+def prefixUnitBudget(state: State) -> String:
   match state:
     case Taking{_, reversed}: String.reverse(reversed)
     case Stopped{text, _}: text

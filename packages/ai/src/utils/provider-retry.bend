@@ -2,18 +2,18 @@ import Base
 import ../../../runtime/src/abort.bend as A
 import ../../../runtime/src/socket.bend as S
 import ../../../runtime/src/calendar.bend as Calendar
-import ../../../runtime/src/calendar-inverse.bend as Inverse
+import ../../../runtime/src/calendar.bend as Inverse
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/f64-decimal.bend as Decimal
-import ../../../runtime/src/f64-natural.bend as Natural
-import ../../../runtime/src/f64-round.bend as Round
+import ../../../runtime/src/f64.bend as Decimal
+import ../../../runtime/src/f64.bend as Natural
+import ../../../runtime/src/f64.bend as Round
 import ../../../runtime/src/http-message.bend as HTTP
 import ../../../runtime/src/parse-float.bend as Number
 import ../../../runtime/src/random.bend as Random
-import ../../../runtime/src/random-seed.bend as Seed
-import ../../../runtime/src/timer-delay.bend as Delay
+import ../../../runtime/src/random.bend as Seed
+import ../../../runtime/src/timer.bend as Delay
 import ../../../runtime/src/u64.bend as W
 
 # pi `provider-retry.ts`: the retry policy shared by the provider SDK

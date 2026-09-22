@@ -3,7 +3,7 @@ import ../src/api/openai-responses.bend as P
 import ../src/types.bend as T
 import ../src/utils/schema-json.bend as Convert
 import ../../runtime/src/schema-value.bend as V
-import ../../runtime/src/json-parse.bend as Parse
+import ../../runtime/src/json.bend as Parse
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F
 import ../../runtime/test/utf8-runner.bend as H
@@ -101,7 +101,7 @@ def check(value: V.Value) -> IO(Unit):
       Bool.pick(IO(Unit), V.equal(Data.project(actual), expected), IO.pure(Unit, Unit{}), IO.die(Unit, 1, "Responses params mismatch"))
     case _: IO.die(Unit, 1, "invalid params fixture")
 
-def parsed(value: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
+def parsed(value: Result<&2, &2, Parse.ParseError, V.Value>) -> IO(Unit):
   match value:
     case Done{value}: check(value)
     case _: IO.die(Unit, 1, "invalid params JSON")

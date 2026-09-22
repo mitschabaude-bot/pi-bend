@@ -5,7 +5,7 @@ import ../src/types.bend as T
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F
-import ../../runtime/src/json-parse.bend as Parse
+import ../../runtime/src/json.bend as Parse
 import ../../runtime/test/utf8-runner.bend as H
 import ./json-value-data.bend as Data
 import ./openai-responses-policy-runner.bend as P
@@ -44,7 +44,7 @@ def output(value: Result<&2, &2, Request.BuildError, T.JsonValue>) -> V.Value:
     case Fail{Request.ToolConversion{error}}: V.ObjectValue{R.Record{R.Property{"error", V.Text{Sampling.errorMessage(error)}} <> Nil{}}}
     case Fail{Request.MessageConversion{_}}: V.Text{"message conversion failed"}
 
-def check(actual: V.Value, expected: Result<&2, &2, Parse.Error, V.Value>) -> IO(Unit):
+def check(actual: V.Value, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> IO(Unit):
   match expected:
     case Done{value}: Bool.pick(IO(Unit), V.equal(actual, value), IO.pure(Unit, Unit{}), IO.die(Unit, 1, "Responses request mismatch"))
     case _: IO.die(Unit, 1, "invalid expected JSON")

@@ -8,8 +8,8 @@ import ../utils/transcript.bend as Transcript
 import ../utils/text.bend as Text
 import ./transform-messages.bend as Transform
 import ./constrained-sampling.bend as C
-import ../../../runtime/src/json-parse.bend as Parse
-import ../../../runtime/src/json-string.bend as StringJson
+import ../../../runtime/src/json.bend as Parse
+import ../../../runtime/src/json.bend as StringJson
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/f64.bend as F
@@ -57,7 +57,7 @@ def parsedFields(validVersion: Bool, id: Maybe<&2,V.Value>, phase: Maybe<&2,V.Va
     case True{} Some{V.Text{text}}: Some{T.TextSignatureV1{text,decodedPhase(phase)}}
     case _ _: None{}
 
-def parsedSignature(result: Result<&2,&2,Parse.Error,V.Value>) -> Maybe<&2,T.TextSignatureV1>:
+def parsedSignature(result: Result<&2,&2,Parse.ParseError,V.Value>) -> Maybe<&2,T.TextSignatureV1>:
   match result:
     case Done{V.ObjectValue{+fields}}: parsedFields(version(R.get(V.Value,fields,"v")),R.get(V.Value,fields,"id"),R.get(V.Value,fields,"phase"))
     case _: None{}
@@ -237,7 +237,7 @@ type AssistantItem is Data:
   CustomToolCall{call: Call, input: String}
 
 type AssistantError is Data:
-  InvalidReasoningSignature{error: Parse.Error}
+  InvalidReasoningSignature{error: Parse.ParseError}
   InvalidGrammarInput{error: C.Error}
   InvalidArguments{}
 
@@ -263,7 +263,7 @@ def textItem(signature: Maybe<&2, T.TextSignatureV1>, text: String, fallback: St
     case None{}: OutputMessage{fallback, Unicode.sanitizeSurrogates(text), None{}}
     case Some{T.TextSignatureV1{id, phase}}: OutputMessage{messageId(id, fallback), Unicode.sanitizeSurrogates(text), phase}
 
-def reasoningReplay(result: Result<&2, &2, Parse.Error, V.Value>) -> Result<&2, &2, AssistantError, Maybe<&2, AssistantItem>>:
+def reasoningReplay(result: Result<&2, &2, Parse.ParseError, V.Value>) -> Result<&2, &2, AssistantError, Maybe<&2, AssistantItem>>:
   match result:
     case Fail{error}: Fail{InvalidReasoningSignature{error}}
     case Done{value}: Done{Some{ReasoningReplay{value}}}

@@ -5,7 +5,7 @@ import ../packages/ai/src/api/openai-sse.bend as OpenAISse
 import ../packages/runtime/src/fetch.bend as Fetch
 import ../packages/runtime/src/partial-json.bend as PartialJson
 import ../packages/ai/src/utils/json-parse.bend as AiJsonParse
-import ../packages/runtime/src/json-parse.bend as JsonParse
+import ../packages/runtime/src/json.bend as JsonParse
 import ../packages/ai/src/utils/sanitize-unicode.bend as SanitizeUnicode
 import ../packages/ai/src/api/openai-responses-shared.bend as OpenAIResponsesShared
 import ../packages/ai/src/api/constrained-sampling.bend as ConstrainedSampling
@@ -29,13 +29,13 @@ import ../packages/agent/src/agent-loop.bend as ParallelBatch
 import ../packages/runtime/src/concurrent-all.bend as ConcurrentAll
 import ../packages/agent/src/agent-loop.bend as ToolCall
 import ../packages/agent/src/agent-loop.bend as ToolBatch
-import ../packages/runtime/src/schema-builder.bend as SchemaBuilder
-import ../packages/runtime/src/schema-convert.bend as SchemaConvert
-import ../packages/runtime/src/json-pointer.bend as JsonPointer
+import ../packages/runtime/src/schema.bend as SchemaBuilder
+import ../packages/runtime/src/schema.bend as SchemaConvert
+import ../packages/runtime/src/schema.bend as JsonPointer
 import ../packages/runtime/src/uri-component.bend as UriComponent
 import ../packages/runtime/src/schema.bend as Schema
-import ../packages/runtime/src/schema-load.bend as SchemaLoad
-import ../packages/runtime/src/schema-errors.bend as SchemaErrors
+import ../packages/runtime/src/schema.bend as SchemaLoad
+import ../packages/runtime/src/schema.bend as SchemaErrors
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/models.bend as Models
 import ../packages/ai/src/utils/transcript.bend as Transcript

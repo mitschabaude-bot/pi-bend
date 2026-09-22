@@ -1,6 +1,6 @@
 import Base
 import ../src/api/constrained-sampling.bend as C
-import ../../runtime/src/schema-builder.bend as D
+import ../../runtime/src/schema.bend as D
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/test/schema.bend as Assert
@@ -13,24 +13,24 @@ import ../../runtime/src/f64.bend as F
 import ./api/responses-initial-input.bend as InitialInput
 
 def parameters() -> V.Value:
-  D.schema(D.object(R.Record{
-    R.Property{"path", D.required(D.string())} <>
-    R.Property{"offset", D.optional(D.number())} <>
-    R.Property{"metadata", D.required(D.object(R.Record{R.Property{"enabled", D.optional(D.boolean())} <> Nil{}}))} <>
+  D.schemaBuilder(D.object(R.Record{
+    R.Property{"path", D.requiredBuilder(D.string())} <>
+    R.Property{"offset", D.optional(D.numberBuilder())} <>
+    R.Property{"metadata", D.requiredBuilder(D.object(R.Record{R.Property{"enabled", D.optional(D.boolean())} <> Nil{}}))} <>
     R.Property{"nullable", D.optional(D.union(D.string() <> D.null() <> Nil{}))} <> Nil{}}))
 
 def nullable(schema: V.Value) -> V.Value:
-  V.ObjectValue{R.Record{R.Property{"anyOf", V.ArrayValue{schema <> D.schema(D.null()) <> Nil{}}} <> Nil{}}}
+  V.ObjectValue{R.Record{R.Property{"anyOf", V.ArrayValue{schema <> D.schemaBuilder(D.null()) <> Nil{}}} <> Nil{}}}
 
 def object(properties: List<&2, R.Property<V.Value>>, names: List<&2, V.Value>) -> V.Value:
   V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{properties}}} <> R.Property{"required", V.ArrayValue{names}} <> R.Property{"additionalProperties", V.Boolean{False{}}} <> Nil{}}}
 
 def expected() -> V.Value:
   object(
-    R.Property{"path", D.schema(D.string())} <>
-    R.Property{"offset", nullable(D.schema(D.number()))} <>
-    R.Property{"metadata", object(R.Property{"enabled", nullable(D.schema(D.boolean()))} <> Nil{}, V.Text{"enabled"} <> Nil{})} <>
-    R.Property{"nullable", nullable(D.schema(D.string()))} <> Nil{},
+    R.Property{"path", D.schemaBuilder(D.string())} <>
+    R.Property{"offset", nullable(D.schemaBuilder(D.numberBuilder()))} <>
+    R.Property{"metadata", object(R.Property{"enabled", nullable(D.schemaBuilder(D.boolean()))} <> Nil{}, V.Text{"enabled"} <> Nil{})} <>
+    R.Property{"nullable", nullable(D.schemaBuilder(D.string()))} <> Nil{},
     V.Text{"path"} <> V.Text{"offset"} <> V.Text{"metadata"} <> V.Text{"nullable"} <> Nil{})
 
 def originalRequired(value: Maybe<&2, V.Value>) -> Bool:
@@ -73,7 +73,7 @@ def grammarDeltas() -> IO(Unit):
     Assert.assertion(Grammar.sameBuffer(original, C.GrammarToolInputJsonBuffer{"", False{}, False{}}), "retained grammar buffer remains unchanged")
 
 def sampleParameters() -> V.Value:
-  V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"payload", D.schema(D.string())} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"payload"} <> Nil{}}} <> R.Property{"additionalProperties", V.Boolean{False{}}} <> Nil{}}}
+  V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"payload", D.schemaBuilder(D.string())} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"payload"} <> Nil{}}} <> R.Property{"additionalProperties", V.Boolean{False{}}} <> Nil{}}}
 
 def sampleTool(schema: V.Value, config: Maybe<&2, T.ToolConstrainedSampling>) -> T.Tool<V.Value>:
   T.Tool{"sample_tool", "Sample tool", schema, config}
@@ -132,9 +132,9 @@ def rejectedSchema(+schema: V.Value, +reason: String) -> IO(Unit):
 
 def rejectsUnsafeSchemas() -> IO(Unit):
   do IO<Unit>:
-    rejectedSchema(V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"metadata", V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.new(V.Value)}} <> R.Property{"additionalProperties", D.schema(D.string())} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"metadata"} <> Nil{}}} <> Nil{}}}, "schema-valued or true additionalProperties is unsupported")
-    rejectedSchema(V.ObjectValue{R.Record{R.Property{"allOf", V.ArrayValue{D.schema(D.object(R.Record{R.Property{"a", D.required(D.string())} <> Nil{}})) <> D.schema(D.object(R.Record{R.Property{"b", D.required(D.number())} <> Nil{}})) <> Nil{}}} <> Nil{}}}, "allOf schemas are unsupported")
-    rejectedSchema(D.schema(D.object(R.Record{R.Property{"value", D.required(D.union(D.object(R.Record{R.Property{"nested", D.required(D.string())} <> Nil{}}) <> D.null() <> Nil{}))} <> Nil{}})), "object and array unions are unsupported")
+    rejectedSchema(V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"metadata", V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.new(V.Value)}} <> R.Property{"additionalProperties", D.schemaBuilder(D.string())} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"metadata"} <> Nil{}}} <> Nil{}}}, "schema-valued or true additionalProperties is unsupported")
+    rejectedSchema(V.ObjectValue{R.Record{R.Property{"allOf", V.ArrayValue{D.schemaBuilder(D.object(R.Record{R.Property{"a", D.requiredBuilder(D.string())} <> Nil{}})) <> D.schemaBuilder(D.object(R.Record{R.Property{"b", D.requiredBuilder(D.numberBuilder())} <> Nil{}})) <> Nil{}}} <> Nil{}}}, "allOf schemas are unsupported")
+    rejectedSchema(D.schemaBuilder(D.object(R.Record{R.Property{"value", D.requiredBuilder(D.union(D.object(R.Record{R.Property{"nested", D.requiredBuilder(D.string())} <> Nil{}}) <> D.null() <> Nil{}))} <> Nil{}})), "object and array unions are unsupported")
     rejectedSchema(V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"child", V.ObjectValue{R.Record{R.Property{"$ref", V.Text{"https://example.com/child.json"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"child"} <> Nil{}}} <> Nil{}}}, "$ref schemas are unsupported")
     IO.print("PASS falls back or rejects schemas that cannot be safely converted")
 

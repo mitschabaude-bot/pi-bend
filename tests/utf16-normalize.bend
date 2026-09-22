@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/utf16.bend as UTF16
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def source(parts: List<&2, String>, reversed: String) -> String:

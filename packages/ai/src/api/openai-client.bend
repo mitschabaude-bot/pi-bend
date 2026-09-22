@@ -10,7 +10,7 @@ import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/fetch.bend as Fetch
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/f64-decimal.bend as Decimal
+import ../../../runtime/src/f64.bend as Decimal
 import ../../../runtime/src/http-message.bend as Headers
 import ../../../runtime/src/http-message.bend as H
 import ../../../runtime/src/http-response.bend as Ops
@@ -22,10 +22,10 @@ import ../../../runtime/src/http-response.bend as Stream
 import ../../../runtime/src/http-response.bend as Progress
 import ../../../runtime/src/http-response.bend as Metadata
 import ../../../runtime/src/http-response.bend as Consume
-import ../../../runtime/src/json-parse.bend as Parse
+import ../../../runtime/src/json.bend as Parse
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
-import ../../../runtime/src/timer-milliseconds.bend as Duration
+import ../../../runtime/src/timer.bend as Duration
 import ../../../runtime/src/url.bend as Absolute
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/url.bend as Form
@@ -437,7 +437,7 @@ def selected(fallback: T.JsonValue, value: Maybe<&2, T.JsonValue>) -> T.JsonValu
 def unwrap(+value: T.JsonValue) -> T.JsonValue:
   selected(value, jsonField("error", value))
 
-def parsedDiagnostic(raw: String, value: Result<&2, &2, Parse.Error, V.Value>) -> Diagnostic:
+def parsedDiagnostic(raw: String, value: Result<&2, &2, Parse.ParseError, V.Value>) -> Diagnostic:
   match value:
     case Fail{_}: TextDiagnostic{raw}
     case Done{value}: JSONDiagnostic{unwrap(Convert.toJson(value))}
@@ -506,7 +506,7 @@ def format(value: APIError, provider: String) -> Result<&2, &2, Body.Normalizati
 # -----------
 
 type FetchError<-Reason: Data> is Data:
-  InvalidTimeout{cause: Duration.Error}
+  InvalidTimeout{cause: Duration.MillisecondsError}
   FetchFailure{cause: Scope.FetchScopeError<Reason, Fetch.Error<Reason>>}
 
 type AttemptError<-Reason: Data> is Data:
@@ -520,9 +520,9 @@ def input(-Reason: Data, request: Request, signal: Fetch.Signal(Reason)) -> Fetc
   match request:
     case Request{url, method, headers, body, _}: Fetch.Input{url, String.to_upper(method), headers, body, signal}
 
-def timeout(request: Request) -> Result<&2, &2, Duration.Error, U32>:
+def timeout(request: Request) -> Result<&2, &2, Duration.MillisecondsError, U32>:
   match request:
-    case Request{_, _, _, _, milliseconds}: Duration.milliseconds(milliseconds)
+    case Request{_, _, _, _, milliseconds}: Duration.millisecondsMilliseconds(milliseconds)
 
 def connection(-E: Data, original: E, message: String) -> Retry.RequestFailure<E>:
   Retry.Provider{Retry.ProviderError{original, message, None{}, None{}, None{}, None{}}}
@@ -589,7 +589,7 @@ def scoped(-Reason: Data, result: Result<&2, &1, Scope.FetchScopeError<Reason, F
     case Fail{cause}: Fail{FetchFailure{cause}}
     case Done{response}: Done{response}
 
-def dispatch(-Reason: Data, request: Request, parent: Abort.AbortSignal<Reason>, fetch: Fetch.Fetch(Reason), duration: Result<&2, &2, Duration.Error, U32>) -> IO(Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>):
+def dispatch(-Reason: Data, request: Request, parent: Abort.AbortSignal<Reason>, fetch: Fetch.Fetch(Reason), duration: Result<&2, &2, Duration.MillisecondsError, U32>) -> IO(Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>):
   match duration:
     case Fail{cause}: IO.pure(Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>, Fail{InvalidTimeout{cause}})
     case Done{milliseconds}:

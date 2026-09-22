@@ -1,8 +1,8 @@
 import Base
-import ./text-space.bend as Space
+import ./text.bend as Space
 import ./f64.bend as F
 import ./big-nat.bend as B
-import ./f64-ratio.bend as Ratio
+import ./f64.bend as Ratio
 
 # ECMAScript StringNumericLiteral conversion. This is Number(string), not
 # parseFloat: every non-whitespace character must belong to the grammar.

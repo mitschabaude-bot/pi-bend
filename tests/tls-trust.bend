@@ -1,10 +1,10 @@
 import Base
 import ../packages/runtime/src/tls-trust.bend as Trust
-import ../packages/runtime/src/bounded-file.bend as File
+import ../packages/runtime/src/bounded.bend as File
 import ../packages/runtime/src/x509.bend as X509
 import ../packages/runtime/src/der.bend as DER
 import ../packages/runtime/src/sha256.bend as SHA
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Decimal
 import ./aes128-gcm.bend as Bytes
 

@@ -3,7 +3,7 @@ import ../src/idna.bend as Rules
 import ../src/u32-table.bend as Table
 import ../src/idna.bend as Mapping
 import ../src/unicode.bend as Data
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def text(parts: List<&2, String>, reversed: String) -> String:

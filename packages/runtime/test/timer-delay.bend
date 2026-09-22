@@ -1,7 +1,7 @@
 import Base
 import ../src/u64.bend as W
 import ../src/f64.bend as F
-import ../src/timer-delay.bend as D
+import ../src/timer.bend as D
 import ./utf8-runner.bend as H
 
 def shown(value: Result<&2, &2, D.Error, U32>) -> String:

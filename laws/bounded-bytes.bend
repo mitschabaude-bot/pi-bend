@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/bounded-bytes.bend as Bytes
+import ../packages/runtime/src/bounded.bend as Bytes
 
 law overflow_sticky:
   for input: List<&2, U32>

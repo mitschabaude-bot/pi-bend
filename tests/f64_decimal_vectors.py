@@ -39,7 +39,7 @@ expected = json.loads(subprocess.check_output(
     ['node', '-e', oracle, json.dumps([f'{value:016x}' for value in ordered])], text=True))
 source = '''import Base
 import ../packages/runtime/src/f64.bend as F
-import ../packages/runtime/src/f64-decimal.bend as D
+import ../packages/runtime/src/f64.bend as D
 
 def check(actual: Maybe<&2, String>, +expected: String, label: String) -> IO(Unit):
   match actual:

@@ -1,5 +1,5 @@
 import Base
-import ./string-split.bend as Split
+import ./string.bend as Split
 import ./uri-component.bend as Uri
 import ./utf8.bend as Utf8
 import ./idna.bend as IDNA

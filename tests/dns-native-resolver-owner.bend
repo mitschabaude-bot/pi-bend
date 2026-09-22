@@ -12,7 +12,7 @@ import ./dns-udp-plan.bend as PlanTest
 import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/src/dns-transport.bend as Servers
 import ../packages/runtime/src/dns-message.bend as Search
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ./dns-tcp-servers.bend as ServersTest
 import ./dns-server-rotation.bend as RotationTest
 import ./dns-search-rotation.bend as RotationNetworkTest

@@ -3,7 +3,7 @@ import ../src/http-message.bend as HTTP
 import ../src/url.bend as URL
 import ../src/url.bend as Scheme
 import ../src/url.bend as Host
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Scalar
 
 def scalarText(parts: List<&2, String>, reversed: String) -> String:

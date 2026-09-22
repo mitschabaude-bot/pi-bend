@@ -20,8 +20,8 @@ import ./simple-options.bend as Simple
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/http-response.bend as Scope
-import ../../../runtime/src/json-decode.bend as Decode
-import ../../../runtime/src/json-string.bend as StringJSON
+import ../../../runtime/src/json.bend as Decode
+import ../../../runtime/src/json.bend as StringJSON
 import ../utils/schema-json.bend as Convert
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/date.bend as Date
@@ -32,11 +32,11 @@ import ../../../runtime/src/http-exchange.bend as HTTP
 import ../../../runtime/src/http-response.bend as Response
 import ../../../runtime/src/http-response.bend as Metadata
 import ../../../runtime/src/http-response.bend as Progress
-import ../../../runtime/src/json-parse.bend as JsonParse
-import ../../../runtime/src/random-seed.bend as Seed
+import ../../../runtime/src/json.bend as JsonParse
+import ../../../runtime/src/random.bend as Seed
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
-import ../../../runtime/src/text-space.bend as Space
+import ../../../runtime/src/text.bend as Space
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/u64.bend as Word
 import ../../../runtime/src/http-message.bend as Header
@@ -567,9 +567,9 @@ type Error<-Reason: Data, -E: Data> is Data:
   MissingStopReason{}
   OutputFailure{message: String}
 
-def json(cause: JsonParse.Error) -> String:
+def json(cause: JsonParse.ParseError) -> String:
   match cause:
-    case JsonParse.InvalidValue{}: "invalid value"
+    case JsonParse.ParseInvalidValue{}: "invalid value"
     case JsonParse.InvalidEscape{}: "invalid escape"
     case JsonParse.UnescapedControl{}: "unescaped control character"
     case JsonParse.UnterminatedString{}: "unterminated string"
@@ -621,7 +621,7 @@ def describeRequest(error: Client.RequestError) -> String:
 
 def describeEntropy(error: Seed.SeedError) -> String:
   match error:
-    case Seed.SourceFailure{code, message}: "Could not obtain retry entropy (code " ++ Nat.show(U32.to_nat(code)) ++ "): " ++ message
+    case Seed.SeedSourceFailure{code, message}: "Could not obtain retry entropy (code " ++ Nat.show(U32.to_nat(code)) ++ "): " ++ message
     case Seed.ShortSeed{bytes}: "Retry entropy source returned " ++ Nat.show(bytes) ++ " bytes; expected 8"
 
 # formatProviderError(normalizeProviderError(error), prefix); a diagnostic

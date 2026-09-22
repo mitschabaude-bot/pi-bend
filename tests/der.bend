@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/der.bend as DER
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ./aes128-gcm.bend as Bytes
 
 def error(cause: DER.Error) -> String:

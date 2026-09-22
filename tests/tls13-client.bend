@@ -3,7 +3,7 @@ import ../packages/runtime/src/tls13-client.bend as C
 import ../packages/runtime/src/tls13-handshake.bend as H
 import ../packages/runtime/src/tls13-record.bend as R
 import ../packages/runtime/src/x509.bend as X
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ./aes128-gcm.bend as Bytes
 import ./tls13-handshake.bend as HandshakeTest
 

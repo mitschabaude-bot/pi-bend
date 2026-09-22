@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/ecdsa.bend as P
 import ../packages/runtime/src/big-nat.bend as Big
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ./aes128-gcm.bend as Bytes
 import ../packages/runtime/src/der.bend as DER
 

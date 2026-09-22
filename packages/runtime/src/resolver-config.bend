@@ -1,12 +1,12 @@
 import Base
 import ./dns-message.bend as Search
-import ./string-split.bend as Split
+import ./string.bend as Split
 import ./url.bend as IPv4
 import ./url.bend as IPv6
 import ./file-fold.bend as FileFold
 import ./ipv6-scope.bend as Scope
 import ./socket.bend as Connect
-import ./bounded-file.bend as Bounded
+import ./bounded.bend as Bounded
 
 # Numeric resolver configuration is not URL host syntax. In particular, IPv4
 # uses inet_aton-style parts without URL trailing-dot or empty-hex allowances.
@@ -520,7 +520,7 @@ def decoded(-DecodeError: Data, result: Result<&2, &2, DecodeError, String>) -> 
     case Fail{error}: Fail{Decode{error}}
     case Done{text}: Done{parse(text)}
 
-def parsedFile(-DecodeError: Data, result: Result<&2, &2, Bounded.Error<DecodeError>, String>) -> Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>:
+def parsedFile(-DecodeError: Data, result: Result<&2, &2, Bounded.FileError<DecodeError>, String>) -> Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>:
   match result:
     case Fail{Bounded.File{error}}: Fail{File{error}}
     case Fail{Bounded.TooLarge{}}: Fail{TooLarge{}}
@@ -529,7 +529,7 @@ def parsedFile(-DecodeError: Data, result: Result<&2, &2, Bounded.Error<DecodeEr
 
 def readWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>):
   do IO<Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>>:
-    text : Result<&2, &2, Bounded.Error<DecodeError>, String> <- Bounded.readWith(~DecodeError, ~decode, path, chunkSize, byteLimit)
+    text : Result<&2, &2, Bounded.FileError<DecodeError>, String> <- Bounded.readWith(~DecodeError, ~decode, path, chunkSize, byteLimit)
     return parsedFile(DecodeError, text)
 
 def configured(-DecodeError: Data, overrides: Overrides, result: Result<&2, &2, FileError<DecodeError>, List<&2, Entry>>) -> Result<&2, &2, FileError<DecodeError>, Settings>:

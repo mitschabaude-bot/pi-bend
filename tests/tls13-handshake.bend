@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/tls13-handshake.bend as TLS
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/src/sha256.bend as SHA
 import ../packages/runtime/src/tls13-record.bend as Record
 import ../packages/runtime/test/utf8-runner.bend as Decimal

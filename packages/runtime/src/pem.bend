@@ -1,6 +1,6 @@
 import Base
 import ./base64.bend as Base64
-import ./string-split.bend as Split
+import ./string.bend as Split
 
 # RFC 7468 textual containers. Preamble text and ASCII whitespace are allowed;
 # boundaries must match and payloads must be canonical Base64. No legacy headers

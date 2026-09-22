@@ -2,9 +2,9 @@ import Base
 import ./dns-message.bend as Case
 import ./url.bend as IPv4
 import ./url.bend as IPv6
-import ./string-split.bend as Split
-import ./utf8-strict.bend as UTF8
-import ./bounded-file.bend as File
+import ./string.bend as Split
+import ./utf8.bend as UTF8
+import ./bounded.bend as File
 
 # A hosts entry retains the file's canonical spelling and aliases. Address
 # values are generic so name matching and ordering laws need no socket IO.
@@ -151,7 +151,7 @@ def lookupFamily(family: Family, name: String, entries: List<&2, Entry<Address>>
   select(family, lookup(Address, name, entries))
 
 type LoadError<-DecodeError: Data> is Data:
-  Loading{error: File.Error<DecodeError>}
+  Loading{error: File.FileError<DecodeError>}
   Parsing{error: Failure}
 
 def parsed(-DecodeError: Data, result: Result<&2, &2, Failure, List<&2, Entry<Address>>>) -> Result<&2, &2, LoadError<DecodeError>, List<&2, Entry<Address>>>:
@@ -159,7 +159,7 @@ def parsed(-DecodeError: Data, result: Result<&2, &2, Failure, List<&2, Entry<Ad
     case Fail{error}: Fail{Parsing{error}}
     case Done{entries}: Done{entries}
 
-def loaded(-DecodeError: Data, result: Result<&2, &2, File.Error<DecodeError>, String>) -> Result<&2, &2, LoadError<DecodeError>, List<&2, Entry<Address>>>:
+def loaded(-DecodeError: Data, result: Result<&2, &2, File.FileError<DecodeError>, String>) -> Result<&2, &2, LoadError<DecodeError>, List<&2, Entry<Address>>>:
   match result:
     case Fail{error}: Fail{Loading{error}}
     case Done{text}: parsed(DecodeError, parse(text))
@@ -168,13 +168,13 @@ def loaded(-DecodeError: Data, result: Result<&2, &2, File.Error<DecodeError>, S
 # caller chooses source-order/fallback policy; none implies an empty database.
 def readWith(~DecodeError: Data, ~decode: List<&2, U32> -> Result<&2, &2, DecodeError, String>, path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<DecodeError>, List<&2, Entry<Address>>>):
   do IO<Result<&2, &2, LoadError<DecodeError>, List<&2, Entry<Address>>>>:
-    text : Result<&2, &2, File.Error<DecodeError>, String> <- File.readWith(~DecodeError, ~decode, path, chunkSize, byteLimit)
+    text : Result<&2, &2, File.FileError<DecodeError>, String> <- File.readWith(~DecodeError, ~decode, path, chunkSize, byteLimit)
     return loaded(DecodeError, text)
 
 # The standard entry point rejects malformed UTF-8 and strips one leading BOM.
 # readWith remains available for an explicitly selected decoding policy.
 def read(path: String, chunkSize: U32, byteLimit: Nat) -> IO(Result<&2, &2, LoadError<UTF8.Error>, List<&2, Entry<Address>>>):
-  readWith(~UTF8.Error, ~UTF8.decode, path, chunkSize, byteLimit)
+  readWith(~UTF8.Error, ~UTF8.decodeStrict, path, chunkSize, byteLimit)
 
 # An explicit files-then-network policy over an already loaded snapshot.
 # Source failures are terminal. Only absence of eligible rows permits DNS.

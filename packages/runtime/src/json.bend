@@ -1,13 +1,15 @@
 import Base
 import ./schema-value.bend as V
 import ./record.bend as R
-import ./number-string.bend as Number
 import ./utf16.bend as Utf16
+import ./number-string.bend as Number
+import ./f64.bend as F
+
 
 # Strict JSON decoding into the canonical immutable value tree. Parser errors
 # are language-independent values, not JavaScript engine exception messages.
-type Error is Data:
-  InvalidValue{}
+type ParseError is Data:
+  ParseInvalidValue{}
   InvalidEscape{}
   UnescapedControl{}
   UnterminatedString{}
@@ -20,7 +22,7 @@ type Token is Data:
   Atom{value: V.Value}
   Punctuation{char: Char}
   End{}
-  Invalid{error: Error}
+  Invalid{error: ParseError}
 
 type Lexeme is Data:
   Lexeme{token: Token, remaining: String}
@@ -44,7 +46,7 @@ type StringState is Data:
 type StringStep is Data:
   More{state: StringState, reversed: String}
   Complete{reversed: String}
-  StringError{error: Error}
+  StringError{error: ParseError}
 
 def hexStep(value: Maybe<&2,U32>, remaining: Nat, code: U32, reversed: String) -> StringStep:
   match value remaining:
@@ -136,7 +138,7 @@ def validNumber(text: String, state: NumberState) -> Bool:
 def numberToken(valid: Bool, text: String) -> Token:
   match valid:
     case True{}: Atom{V.Number{Number.toNumber(text)}}
-    case False{}: Invalid{InvalidValue{}}
+    case False{}: Invalid{ParseInvalidValue{}}
 
 def atom(+text: String) -> Token:
   match text:
@@ -189,7 +191,7 @@ type Mode is Data:
   ObjectAfter{fields: R.Record<V.Value>}
   Colon{key: String, fields: R.Record<V.Value>}
   Finished{value: V.Value}
-  Broken{error: Error}
+  Broken{error: ParseError}
 
 type Parser is Data:
   Parser{mode: Mode, stack: List<&2,Frame>}
@@ -230,7 +232,7 @@ def parserStep(parser: Parser, token: Token) -> Parser:
 
 # Each token consumes at least one input character. The input length bounds the
 # transition count, while explicit frames permit arbitrarily nested containers.
-def parseLoop(fuel: Nat, +parser: Parser, input: Lexeme) -> Result<&2,&2,Error,V.Value>:
+def parseLoop(fuel: Nat, +parser: Parser, input: Lexeme) -> Result<&2,&2,ParseError,V.Value>:
   match fuel parser input:
     case 0n _ _: Fail{InputLimit{}}
     case _ Parser{Broken{error},_} _: Fail{error}
@@ -238,5 +240,113 @@ def parseLoop(fuel: Nat, +parser: Parser, input: Lexeme) -> Result<&2,&2,Error,V
     case _ Parser{Finished{_},_} _: Fail{TrailingInput{}}
     case 1n+n _ Lexeme{token,rest}: parseLoop(n,parserStep(parser,token),lex(rest))
 
-def parse(+text: String) -> Result<&2,&2,Error,V.Value>:
+def parse(+text: String) -> Result<&2,&2,ParseError,V.Value>:
   parseLoop(2n+String.length(text),Parser{Value{},Nil{}},lex(text))
+
+
+# Paths carry literal field names, not dot-separated strings or JS properties.
+type Segment is Data:
+  Field{name: String}
+  Index{index: Nat}
+
+type Error is Data:
+  MissingField{path: List<&2, Segment>}
+  WrongType{path: List<&2, Segment>, expected: String}
+  InvalidValue{path: List<&2, Segment>, expected: String}
+
+def at(error: Error, segment: Segment) -> Error:
+  match error:
+    case MissingField{path}: MissingField{segment <> path}
+    case WrongType{path, expected}: WrongType{segment <> path, expected}
+    case InvalidValue{path, expected}: InvalidValue{segment <> path, expected}
+
+def located(-A: Data, result: Result<&2, &2, Error, A>, segment: Segment) -> Result<&2, &2, Error, A>:
+  match result:
+    case Done{value}: Done{value}
+    case Fail{error}: Fail{at(error, segment)}
+
+def object(value: V.Value) -> Result<&2, &2, Error, R.Record<V.Value>>:
+  match value:
+    case V.ObjectValue{fields}: Done{fields}
+    case _: Fail{WrongType{Nil{}, "object"}}
+
+def string(value: V.Value) -> Result<&2, &2, Error, String>:
+  match value:
+    case V.Text{text}: Done{text}
+    case _: Fail{WrongType{Nil{}, "string"}}
+
+def number(value: V.Value) -> Result<&2, &2, Error, F.F64>:
+  match value:
+    case V.Number{scalar}: Done{scalar}
+    case _: Fail{WrongType{Nil{}, "number"}}
+
+def array(value: V.Value) -> Result<&2, &2, Error, List<&2, V.Value>>:
+  match value:
+    case V.ArrayValue{values}: Done{values}
+    case _: Fail{WrongType{Nil{}, "array"}}
+
+def requiredValue(value: Maybe<&2, V.Value>) -> Result<&2, &2, Error, V.Value>:
+  match value:
+    case None{}: Fail{MissingField{Nil{}}}
+    case Some{value}: Done{value}
+
+def required(-A: Data, fields: R.Record<V.Value>, +key: String, decode: V.Value -> Result<&2, &2, Error, A>) -> Result<&2, &2, Error, A>:
+  located(A, Result.bind(&2, &2, Error, V.Value, A, requiredValue(R.get(V.Value, fields, key)), decode), Field{key})
+
+# Nullable protocol fields use Maybe; a wrong non-null type remains an error.
+def optionalValue(-A: Data, value: Maybe<&2, V.Value>, decode: V.Value -> Result<&2, &2, Error, A>) -> Result<&2, &2, Error, Maybe<&2, A>>:
+  match value:
+    case None{}: Done{None{}}
+    case Some{V.Null{}}: Done{None{}}
+    case Some{value}: Result.map(&2, &2, Error, A, Maybe<&2, A>, item => Some{item}, decode(value))
+
+def optional(-A: Data, fields: R.Record<V.Value>, +key: String, decode: V.Value -> Result<&2, &2, Error, A>) -> Result<&2, &2, Error, Maybe<&2, A>>:
+  located(Maybe<&2, A>, optionalValue(A, R.get(V.Value, fields, key), decode), Field{key})
+
+def items(~A: Data, ~decode: V.Value -> Result<&2, &2, Error, A>, values: List<&2, V.Value>, +index: Nat) -> Result<&2, &2, Error, List<&2, A>>:
+  match values:
+    case Nil{}: Done{Nil{}}
+    case head <> tail:
+      do Result<&2, &2, Error, List<&2, A>>:
+        value : A <- located(A, decode(head), Index{index})
+        rest : List<&2, A> <- items(~A, ~decode, tail, index + 1n)
+        return value <> rest
+
+def list(~A: Data, ~decode: V.Value -> Result<&2, &2, Error, A>, value: V.Value) -> Result<&2, &2, Error, List<&2, A>>:
+  do Result<&2, &2, Error, List<&2, A>>:
+    values : List<&2, V.Value> <- array(value)
+    items(~A, ~decode, values, 0n)
+
+
+# Quote a JavaScript-compatible string. Bend may contain Unicode scalars or
+# individual UTF-16 surrogate units. Valid adjacent pairs emit their scalar;
+# unpaired units emit lowercase Unicode escapes, as JSON.stringify does.
+def hex(+value: U32) -> Char:
+  Char.from_u32(Bool.pick(U32, U32.is_lt(value, 10), (48 + value : U32), (87 + value : U32)))
+
+def unicodeEscape(+code: U32) -> String:
+  "\\u" ++ SCon{hex((code / 4096 : U32)), SCon{hex(((code / 256) % 16 : U32)), SCon{hex(((code / 16) % 16 : U32)), SCon{hex((code % 16 : U32)), SNil{}}}}}
+
+def escapeOther(needed: Bool, code: U32) -> String:
+  match needed:
+    case True{}: unicodeEscape(code)
+    case False{}: SCon{Chr{code}, SNil{}}
+
+def escapeCode(+code: U32) -> String:
+  match code:
+    case 34: "\\\""
+    case 92: "\\\\"
+    case 8: "\\b"
+    case 9: "\\t"
+    case 10: "\\n"
+    case 12: "\\f"
+    case 13: "\\r"
+    case _: escapeOther(U32.is_lt(code, 32) || Utf16.highSurrogate(code) || Utf16.lowSurrogate(code), code)
+
+def escaped(chars: String) -> String:
+  match chars:
+    case SNil{}: ""
+    case SCon{Chr{code}, rest}: escapeCode(code) ++ escaped(rest)
+
+def quote(text: String) -> String:
+  "\"" ++ escaped(Utf16.normalize(text)) ++ "\""

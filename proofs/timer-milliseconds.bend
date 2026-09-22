@@ -1,6 +1,6 @@
 import Base
 import ../laws/timer-milliseconds.bend as Laws
-import ../packages/runtime/src/timer-milliseconds.bend as T
+import ../packages/runtime/src/timer.bend as T
 import ../packages/runtime/src/f64.bend as F
 
 def Laws.exact_conversion_retains_duration(value, word): {==}
@@ -13,7 +13,7 @@ law checked_exact:
   for +word: U32
   for +comparison: Maybe<&2, Cmp>
   for equality: {F.compare(value, F.fromU32(word)) == comparison : Maybe<&2, Cmp>}
-  {Laws.exactResult(value, T.checked(value, word, comparison)) == True{} : Bool}
+  {Laws.exactResult(value, T.checkedMilliseconds(value, word, comparison)) == True{} : Bool}
 
 def checked_exact(value, word, comparison, equality):
   match comparison:

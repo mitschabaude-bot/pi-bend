@@ -1,5 +1,5 @@
 import Base
-import ../src/json-pointer.bend as P
+import ../src/schema.bend as P
 import ../src/uri-component.bend as Uri
 import ../src/schema-value.bend as V
 import ../src/record.bend as R

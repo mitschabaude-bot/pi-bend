@@ -2,7 +2,7 @@ import Base
 import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Configuration
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ../packages/runtime/src/dns-resolver.bend as Lookup
 import ../packages/runtime/src/dns-resolver.bend as Answer
 import ../packages/runtime/src/dns-message.bend as Name

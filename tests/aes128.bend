@@ -1,6 +1,6 @@
 import Base
 import ../packages/runtime/src/aes128.bend as AES
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Bytes
 
 def parse(text: String) -> Maybe<&2, AES.Block>:

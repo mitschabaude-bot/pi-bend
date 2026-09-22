@@ -49,6 +49,6 @@ for backend,cmd in [('native 1',['build/abortable-datagram','--threads','1']),('
                     finally:
                         if p.poll() is None:p.kill();p.wait()
     print(f'{backend}: 32 abortable UDP scenarios PASS',flush=True)
-paths=['packages/runtime/src/socket.bend','packages/runtime/src/abort-outcome.bend','tests/abortable-datagram.bend','tests/abortable_datagram_check.py']+[str(p.relative_to(ROOT)) for p in (ROOT/'patches/experimental/udp-bytes').glob('*')]
+paths=['packages/runtime/src/socket.bend','packages/runtime/src/abort.bend','tests/abortable-datagram.bend','tests/abortable_datagram_check.py']+[str(p.relative_to(ROOT)) for p in (ROOT/'patches/experimental/udp-bytes').glob('*')]
 r=dict(scope=__doc__,runs=rows,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={s:json.loads((ROOT/f'build/abortable-datagram-{s}-build.json').read_text()) for s in ['c','js']})
 (ROOT/'build/abortable-datagram-result.json').write_text(json.dumps(r,indent=2)+'\n')

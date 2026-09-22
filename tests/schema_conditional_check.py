@@ -23,7 +23,7 @@ cases=[{'schema':{'type':'object','properties':{'value':schema},'required':['val
 for item in values:
     cases.append({'schema':{'type':'object','$defs':{'number':{'type':'number'},'positive':{'minimum':0}},'properties':{'value':{'if':{'$ref':'#/$defs/number'},'then':{'$ref':'#/$defs/positive'},'else':False}},'required':['value']},'value':{'value':item}})
 expected=json.loads(subprocess.check_output(['node','tests/plain_validation_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
-lines=['import Base','import ../packages/ai/test/plain-validation.bend as T','import ../packages/runtime/test/schema-load.bend as LoadTest','import ../packages/runtime/src/schema-load.bend as L','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+lines=['import Base','import ../packages/ai/test/plain-validation.bend as T','import ../packages/runtime/test/schema-load.bend as LoadTest','import ../packages/runtime/src/schema.bend as L','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(case,result) in enumerate(zip(cases,expected,strict=True)):
     original=value(case['value']);args=f'{original}, {value(case["schema"])}'
     expression=f'T.check({args}, {value(result["value"])}, {original}, "conditional {i}")' if result['ok'] else f'T.reject({args}, {original}, {string(result["message"])}, "conditional {i}")'

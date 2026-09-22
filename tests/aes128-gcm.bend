@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/aes128.bend as AES
 import ../packages/runtime/src/aes128-gcm.bend as GCM
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Bytes
 
 def parse(parts: List<&2, String>, reversed: List<&2, U32>) -> List<&2, U32>:

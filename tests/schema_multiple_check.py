@@ -18,7 +18,7 @@ for divisor in divisors:
 # All numeric failures together verify diagnostic order independent of key order.
 cases.append({'schema':{'type':'object','properties':{'value':{'multipleOf':2,'maximum':1,'minimum':2,'exclusiveMinimum':3,'exclusiveMaximum':0,'type':'number'}}},'value':{'value':1.5}})
 expected=json.loads(subprocess.check_output(['node','tests/plain_validation_reference.mjs'],input=json.dumps(cases),text=True,cwd=ROOT))
-lines=['import Base','import ../packages/ai/test/plain-validation.bend as T','import ../packages/ai/src/utils/validation.bend as Validation','import ../packages/ai/src/types.bend as Ai','import ../packages/runtime/test/schema-builder.bend as BuilderTest','import ../packages/runtime/src/schema-builder.bend as D','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
+lines=['import Base','import ../packages/ai/test/plain-validation.bend as T','import ../packages/ai/src/utils/validation.bend as Validation','import ../packages/ai/src/types.bend as Ai','import ../packages/runtime/test/schema-builder.bend as BuilderTest','import ../packages/runtime/src/schema.bend as D','import ../packages/runtime/src/schema-value.bend as V','import ../packages/runtime/src/record.bend as R','import ../packages/runtime/src/f64.bend as F']
 for i,(case,result) in enumerate(zip(cases,expected,strict=True)):
     original=value(case['value']);args=f'{original}, {value(case["schema"])}'
     expression=f'T.check({args}, {value(result["value"])}, {original}, "multiple {i}")' if result['ok'] else f'T.reject({args}, {original}, {string(result["message"])}, "multiple {i}")'
@@ -31,7 +31,7 @@ for i,(case,result) in enumerate(zip(builders,reference,strict=True),len(cases))
     converted=result['converted']
     if 'number' in converted:output='V.Number{F.fromBits('+', '.join(map(str,converted['number']))+')}'
     else:output=value(converted['scalar'])
-    lines += [f'def case{i}() -> IO(Unit):',f'  BuilderTest.configured(D.withOptions(D.number(), {options}), {value(case["value"])}, {value(result["schema"])}, {output}, '+('True{}' if result['valid'] else 'False{}')+f', "multiple builder {i}")']
+    lines += [f'def case{i}() -> IO(Unit):',f'  BuilderTest.configured(D.withOptions(D.numberBuilder(), {options}), {value(case["value"])}, {value(result["schema"])}, {output}, '+('True{}' if result['valid'] else 'False{}')+f', "multiple builder {i}")']
 count=len(cases)+len(builders)
 for i,bad in enumerate([None,True,'2',[],{}],count):
     lines += [f'def case{i}() -> IO(Unit):',f'  T.schemaFailure(Validation.validatePlainToolArguments(Ai.Tool{{"echo", "", {value({"multipleOf":bad})}, None{{}}}}, Ai.ToolCall{{"id", "echo", V.Null{{}}, None{{}}, None{{}}}}))']

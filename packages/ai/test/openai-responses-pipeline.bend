@@ -15,7 +15,7 @@ import ./openai-responses-wire-runner.bend as WireTest
 import ../../runtime/src/sse.bend as Bytes
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
-import ../../runtime/src/json-parse.bend as Parse
+import ../../runtime/src/json.bend as Parse
 import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/callback.bend as Cb
 import ../../runtime/test/utf8-runner.bend as Codec
@@ -151,7 +151,7 @@ def sinkMode(value: String) -> Harness.Mode:
     case "2": Harness.SinkFails{1n}
     case _: Harness.NoHooks{}
 
-def equal(actual: V.Value, expected: Result<&2, &2, Parse.Error, V.Value>) -> Bool:
+def equal(actual: V.Value, expected: Result<&2, &2, Parse.ParseError, V.Value>) -> Bool:
   match expected:
     case Fail{_}: False{}
     case Done{value}: V.equal(actual, value)

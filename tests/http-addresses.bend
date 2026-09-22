@@ -15,7 +15,7 @@ import ./hosts-file.bend as HostShow
 import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Settings
 import ../packages/runtime/src/resolver-config.bend as Configuration
-import ../packages/runtime/src/random-index.bend as Index
+import ../packages/runtime/src/random.bend as Index
 import ../packages/runtime/src/dns-resolver.bend as SearchIO
 import ../packages/runtime/src/dns-resolver.bend as Pair
 import ../packages/runtime/src/dns-message.bend as Run

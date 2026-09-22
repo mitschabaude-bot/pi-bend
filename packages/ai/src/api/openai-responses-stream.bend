@@ -8,8 +8,8 @@ import ./constrained-sampling.bend as Sampling
 import ./openai-responses-shared.bend as Shared
 import ./transform-messages.bend as Transform
 import ./openai-sse.bend as Sse
-import ../../../runtime/src/json-decode.bend as D
-import ../../../runtime/src/json-parse.bend as JsonParse
+import ../../../runtime/src/json.bend as D
+import ../../../runtime/src/json.bend as JsonParse
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/f64.bend as F
@@ -485,7 +485,7 @@ def selectedSignature(text: String, encrypted: String, fields: R.Record<V.Value>
     case "": encodedSignature(encodeSignature(fields, encrypted))
     case _: Done{text}
 
-def decodedSignature(text: String, encrypted: String, parsed: Result<&2, &2, JsonParse.Error, V.Value>) -> Result<&2, &2, TerminalError, String>:
+def decodedSignature(text: String, encrypted: String, parsed: Result<&2, &2, JsonParse.ParseError, V.Value>) -> Result<&2, &2, TerminalError, String>:
   match parsed:
     case Done{V.ObjectValue{+fields}}: selectedSignature(text, encrypted, fields, textField(R.get(V.Value, fields, "encrypted_content")))
     case _: Fail{InvalidReasoningSignature{}}

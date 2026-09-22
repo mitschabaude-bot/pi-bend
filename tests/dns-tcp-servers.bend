@@ -8,7 +8,7 @@ import ../packages/runtime/src/dns-transport.bend as Session
 import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-tcp-query.bend as QueryTest
 import ./dns-tcp-connection.bend as Test

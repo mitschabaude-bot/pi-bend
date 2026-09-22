@@ -1,10 +1,10 @@
 import Base
-import ../packages/runtime/src/utf8-strict.bend as Strict
+import ../packages/runtime/src/utf8.bend as Strict
 import ./utf8-strict.bend as StrictTest
 import ../packages/runtime/src/hosts.bend as Load
 import ../packages/runtime/src/hosts.bend as Parser
 import ../packages/runtime/src/hosts.bend as Hosts
-import ../packages/runtime/src/bounded-file.bend as File
+import ../packages/runtime/src/bounded.bend as File
 import ../packages/runtime/src/file-fold.bend as Fold
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./hosts-file.bend as Output

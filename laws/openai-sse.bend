@@ -1,7 +1,7 @@
 import Base
 import ../packages/ai/src/api/openai-sse.bend as Sse
 import ../packages/runtime/src/sse.bend as Event
-import ../packages/runtime/src/json-parse.bend as Json
+import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 
@@ -33,7 +33,7 @@ law thread_event_json_failures_target_the_console:
   for event: Maybe<&2, String>
   for data: String
   for raw: List<&2, String>
-  for cause: Json.Error
+  for cause: Json.ParseError
   {Sse.parsed(True{}, synthesize, event, data, raw, Fail{cause}) == Sse.Reject{Sse.InvalidJson{cause, data, raw, Sse.ConsoleLogger{}}} : Sse.Step}
 
 law data_json_failures_target_the_client_logger:
@@ -41,7 +41,7 @@ law data_json_failures_target_the_client_logger:
   for event: Maybe<&2, String>
   for data: String
   for raw: List<&2, String>
-  for cause: Json.Error
+  for cause: Json.ParseError
   {Sse.parsed(False{}, synthesize, event, data, raw, Fail{cause}) == Sse.Reject{Sse.InvalidJson{cause, data, raw, Sse.ClientLogger{}}} : Sse.Step}
 
 law null_error_field_is_a_message:

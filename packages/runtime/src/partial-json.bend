@@ -1,5 +1,5 @@
 import Base
-import ./json-parse.bend as Json
+import ./json.bend as Json
 import ./schema-value.bend as V
 import ./record.bend as R
 import ./f64.bend as F
@@ -42,7 +42,7 @@ def afterValue(cursor: Cursor) -> Cursor:
     case Cursor{SCon{',', rest}, position}: Cursor{rest, position + 1n}
     case other: other
 
-def parsed(result: Result<&2, &2, Json.Error, V.Value>, cursor: Cursor) -> Outcome:
+def parsed(result: Result<&2, &2, Json.ParseError, V.Value>, cursor: Cursor) -> Outcome:
   match result:
     case Done{value}: Parsed{value, cursor}
     case Fail{_}: Rejected{MalformedInput{}, cursor}
@@ -64,7 +64,7 @@ def retryString(prefix: Maybe<&2, String>, cursor: Cursor) -> Outcome:
     case None{}: Rejected{MalformedInput{}, cursor}
     case Some{text}: parsed(Json.parse(text ++ "\""), cursor)
 
-def incompleteString(first: Result<&2, &2, Json.Error, V.Value>, reversed: String, cursor: Cursor) -> Outcome:
+def incompleteString(first: Result<&2, &2, Json.ParseError, V.Value>, reversed: String, cursor: Cursor) -> Outcome:
   match first:
     case Done{value}: Parsed{value, cursor}
     case Fail{_}: retryString(beforeLastSlash(reversed), cursor)
@@ -122,7 +122,7 @@ def orderedRange(ascending: Bool, source: String, +start: Nat, +end: Nat) -> Str
 def between(source: String, +start: Nat, +end: Nat) -> String:
   orderedRange(Nat.is_le(start, end), source, start, end)
 
-def numberFallback(first: Result<&2, &2, Json.Error, V.Value>, text: String, source: String, start: Nat, end: Maybe<&2, Nat>, cursor: Cursor) -> Outcome:
+def numberFallback(first: Result<&2, &2, Json.ParseError, V.Value>, text: String, source: String, start: Nat, end: Maybe<&2, Nat>, cursor: Cursor) -> Outcome:
   match first text:
     case Done{value} _: Parsed{value, cursor}
     case Fail{_} "-": Rejected{UnexpectedEnd{}, cursor}

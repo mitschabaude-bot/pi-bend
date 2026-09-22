@@ -2,7 +2,7 @@ import Base
 import ./unicode.bend as Data
 import ./u32-table.bend as Table
 import ./punycode.bend as Punycode
-import ./string-split.bend as Split
+import ./string.bend as Split
 
 
 # RFC 5893 section 2. The caller applies validity to every label if any label

@@ -12,7 +12,7 @@ import ../../runtime/src/date.bend as Date
 import ../../ai/src/utils/tool-declaration.bend as Declaration
 import ../../runtime/src/record.bend as Record
 import ../../ai/src/utils/transcript.bend as Transcript
-import ../../runtime/src/string-set.bend as Set
+import ../../runtime/src/string.bend as Set
 import ../../runtime/src/deferred.bend as D
 import ../../runtime/src/big-nat.bend as N
 import ../../ai/src/utils/model-api.bend as Api

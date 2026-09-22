@@ -1,5 +1,5 @@
 import Base
-import ../src/json-parse.bend as P
+import ../src/json.bend as P
 import ../src/schema-value.bend as V
 import ../src/f64.bend as F
 import ../src/u64.bend as W
@@ -10,7 +10,7 @@ def numberBits(left: V.Value, right: V.Value) -> Bool:
     case V.Number{a} V.Number{b}: W.equal(F.toBits(a),F.toBits(b))
     case _ _: True{}
 
-def outcome(actual: Result<&2,&2,P.Error,V.Value>, expected: Maybe<&2,V.Value>) -> Bool:
+def outcome(actual: Result<&2,&2,P.ParseError,V.Value>, expected: Maybe<&2,V.Value>) -> Bool:
   match actual expected:
     case Done{+a} Some{+b}: V.equal(a,b) && numberBits(a,b)
     case Fail{_} None{}: True{}

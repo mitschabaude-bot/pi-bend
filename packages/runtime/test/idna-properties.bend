@@ -6,7 +6,7 @@ import ../src/unicode.bend as Bidi
 import ../src/unicode.bend as Joining
 import ../src/idna.bend as Context
 import ../src/idna.bend as Rule
-import ../src/string-split.bend as Split
+import ../src/string.bend as Split
 import ./utf8-runner.bend as Text
 
 def bidiCode(value: Bidi.Class) -> U32:

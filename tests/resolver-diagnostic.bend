@@ -6,8 +6,8 @@ import ../packages/runtime/src/resolver-config.bend as Load
 import ../packages/runtime/src/resolver-config.bend as File
 import ../packages/runtime/src/file-fold.bend as Fold
 import ../packages/runtime/src/resolver-config.bend as Plan
-import ../packages/runtime/src/utf8-strict.bend as UTF8
-import ../packages/runtime/src/json-string.bend as Quote
+import ../packages/runtime/src/utf8.bend as UTF8
+import ../packages/runtime/src/json.bend as Quote
 
 def show(text: String) -> IO(Unit): IO.print(Quote.quote(text))
 

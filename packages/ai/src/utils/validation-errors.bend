@@ -1,8 +1,8 @@
 import Base
 import ../../../runtime/src/schema.bend as Schema
-import ../../../runtime/src/schema-errors.bend as Native
+import ../../../runtime/src/schema.bend as Native
 import ../../../runtime/src/big-nat.bend as B
-import ../../../runtime/src/f64-decimal.bend as Decimal
+import ../../../runtime/src/f64.bend as Decimal
 import ../../../runtime/src/number-string.bend as NumberString
 import ./json.bend as Json
 import ./schema-json.bend as SchemaJson
@@ -135,9 +135,9 @@ def nativeIssue(path: String, reason: Native.Reason) -> Maybe<&2, List<&2, Issue
     case Native.NumericMultipleOf{divisor}: numericText(path, "must be multiple of ", "", Decimal.toDecimal(divisor))
     case Native.NumericMinimum{limit, inclusive}: numericText(path, Bool.pick(String, inclusive, "must be >= ", "must be > "), "", Decimal.toDecimal(limit))
     case Native.NumericMaximum{limit, inclusive}: numericText(path, Bool.pick(String, inclusive, "must be <= ", "must be < "), "", Decimal.toDecimal(limit))
-    case Native.StringLength{actual, bounds}: lengthIssues(actual, bounds, path)
-    case Native.ItemCount{actual, bounds}: countIssues(True{}, actual, bounds, path)
-    case Native.PropertyCount{actual, bounds}: countIssues(False{}, actual, bounds, path)
+    case Native.ErrorsStringLength{actual, bounds}: lengthIssues(actual, bounds, path)
+    case Native.ErrorsItemCount{actual, bounds}: countIssues(True{}, actual, bounds, path)
+    case Native.ErrorsPropertyCount{actual, bounds}: countIssues(False{}, actual, bounds, path)
     # This is the pinned dependency's literal message for each contains keyword,
     # including explicit min/max bounds. Preserve the public diagnostic text.
     case Native.ContainsCount{_, _}: simple(path, "must contain at least 1 valid item")

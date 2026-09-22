@@ -1,5 +1,5 @@
 import Base
-import ../../runtime/src/timer-delay.bend as Delay
+import ../../runtime/src/timer.bend as Delay
 import ../src/utils/provider-retry.bend as S
 import ../src/utils/provider-retry.bend as R
 import ../../runtime/src/abort.bend as A

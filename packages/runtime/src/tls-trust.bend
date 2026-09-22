@@ -1,14 +1,14 @@
 import Base
 import ./x509.bend as X509
 import ./pem.bend as PEM
-import ./bounded-file.bend as File
-import ./utf8-strict.bend as UTF8
+import ./bounded.bend as File
+import ./utf8.bend as UTF8
 
 # Configured certificates are distinct from peer evidence. This layer parses
 # explicit configuration; certificate policy and path validity are checked at
 # connection time. It does not silently choose an OS or bundled trust store.
 type Error is Data:
-  Read{cause: File.Error<UTF8.Error>}
+  Read{cause: File.FileError<UTF8.Error>}
   Text{cause: PEM.Error}
   Certificate{cause: X509.Error}
   UnsupportedLabel{label: String}
@@ -39,7 +39,7 @@ def parsed(result: Result<&2,&2,PEM.Error,List<&2,PEM.Block>>) -> Result<&2,&2,E
 def parse(text: String) -> Result<&2,&2,Error,List<&2,X509.Certificate>>:
   parsed(PEM.decode(text))
 
-def loaded(result: Result<&2,&2,File.Error<UTF8.Error>,String>) -> Result<&2,&2,Error,List<&2,X509.Certificate>>:
+def loaded(result: Result<&2,&2,File.FileError<UTF8.Error>,String>) -> Result<&2,&2,Error,List<&2,X509.Certificate>>:
   match result:
     case Fail{cause}: Fail{Read{cause}}
     case Done{text}: parse(text)
@@ -48,5 +48,5 @@ def loaded(result: Result<&2,&2,File.Error<UTF8.Error>,String>) -> Result<&2,&2,
 # bounded-file closes the descriptor before invoking any certificate decoder.
 def load(path: String, byteLimit: Nat) -> IO(Result<&2,&2,Error,List<&2,X509.Certificate>>):
   do IO<Result<&2,&2,Error,List<&2,X509.Certificate>>>:
-    result : Result<&2,&2,File.Error<UTF8.Error>,String> <- File.readWith(~UTF8.Error,~UTF8.decode,path,4096,byteLimit)
+    result : Result<&2,&2,File.FileError<UTF8.Error>,String> <- File.readWith(~UTF8.Error,~UTF8.decodeStrict,path,4096,byteLimit)
     return loaded(result)

@@ -12,7 +12,7 @@ import ../../runtime/src/idna.bend as Mapping
 import ../../runtime/src/unicode-17-idna-mapping.bend as MappingData
 import ../../runtime/src/unicode-17-normalization.bend as NormalizationData
 import ../../runtime/src/unicode-17-idna-properties.bend as PropertiesData
-import ../../runtime/src/string-split.bend as Split
+import ../../runtime/src/string.bend as Split
 import ../../runtime/test/utf8-runner.bend as Text
 
 def index(value: Nat) -> U32:

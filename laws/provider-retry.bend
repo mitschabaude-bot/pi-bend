@@ -1,7 +1,7 @@
 import Base
-import ../packages/runtime/src/timer-delay.bend as Delay
+import ../packages/runtime/src/timer.bend as Delay
 import ../packages/ai/src/utils/provider-retry.bend as Retry
-import ../packages/runtime/src/f64-natural.bend as N
+import ../packages/runtime/src/f64.bend as N
 import ../packages/runtime/src/f64.bend as F
 import ../packages/runtime/src/abort.bend as A
 

@@ -6,7 +6,7 @@ import ../../ai/src/utils/transcript.bend as Transcript
 import ../../ai/test/model-types.bend as Model
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as Record
-import ../../runtime/src/string-set.bend as Set
+import ../../runtime/src/string.bend as Set
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/callback.bend as C
 import ./main-loop.bend as H

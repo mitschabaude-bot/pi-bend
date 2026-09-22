@@ -1,9 +1,9 @@
 import Base
 import ../types.bend as T
 import ../../../runtime/src/record.bend as R
-import ../../../runtime/src/json-string.bend as S
+import ../../../runtime/src/json.bend as S
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/f64-decimal.bend as Number
+import ../../../runtime/src/f64.bend as Number
 
 # Provider JSON serialization consumes an immutable data tree.
 type Task is Data:

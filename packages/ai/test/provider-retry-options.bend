@@ -1,7 +1,7 @@
 import Base
 import ../src/utils/provider-retry.bend as O
 import ../src/utils/provider-retry.bend as Retry
-import ../../runtime/src/f64-natural.bend as Natural
+import ../../runtime/src/f64.bend as Natural
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/u64.bend as W
 import ../../runtime/test/utf8-runner.bend as H

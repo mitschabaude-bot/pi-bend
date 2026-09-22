@@ -3,7 +3,7 @@ import ../packages/runtime/src/aes128.bend as AES
 import ../packages/runtime/src/aes128-gcm.bend as GCM
 import ../packages/runtime/src/tls13-record.bend as TLS
 import ../packages/runtime/src/u64.bend as Word
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/string.bend as Split
 import ../packages/runtime/test/utf8-runner.bend as Decimal
 import ./aes128-gcm.bend as Bytes
 

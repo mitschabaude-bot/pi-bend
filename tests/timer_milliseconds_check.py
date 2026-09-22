@@ -25,5 +25,5 @@ for backend, command in [('native-1', [str(root/'build/timer-milliseconds'), '--
         assert not result.stderr, result.stderr
     results.append(dict(backend=backend, cases=len(cases)))
     print(backend, len(cases), 'PASS', flush=True)
-sources = [fixture, root/'packages/runtime/src/timer-milliseconds.bend', root/'packages/runtime/src/f64.bend', root/'packages/runtime/src/u64.bend', Path(__file__).resolve()]
+sources = [fixture, root/'packages/runtime/src/timer.bend', root/'packages/runtime/src/f64.bend', root/'packages/runtime/src/u64.bend', Path(__file__).resolve()]
 (root/'build/timer-milliseconds-result.json').write_text(json.dumps(dict(scope='Independent Python binary64 range/integrality oracle; 1,225 finite samples per backend, not a universal arithmetic proof.', sources={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}, results=results, vectors=[dict(bits=c, expected=e) for c,e in zip(cases,expected)]), indent=2)+'\n')

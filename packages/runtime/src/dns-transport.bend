@@ -10,7 +10,7 @@ import ./socket.bend as Interrupt
 import ./socket.bend as Datagram
 import ./datagram-peer.bend as Peer
 import ./ref.bend as Ref
-import ./random-index.bend as Index
+import ./random.bend as Index
 
 type End<-Reason: Data> is Data:
   Active{}
@@ -1225,7 +1225,7 @@ def createWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Index
 # Empty and singleton lists need no entropy. Larger lists receive a uniformly
 # selectedServerInitialize initial position, while disabled choices retain configured order.
 def random(-Server: Data, servers: List<&2, Server>) -> IO(Result<&2, &1, Index.Error, Owner<Server>>):
-  createWith(~Unit, ~Index.word, Server, Unit{}, servers)
+  createWith(~Unit, ~Index.wordIndex, Server, Unit{}, servers)
 
 # Both sources borrow an existing rotation owner. Selection happens inside
 # exchange, after the lookup has drawn an ID and rechecked cancellation.

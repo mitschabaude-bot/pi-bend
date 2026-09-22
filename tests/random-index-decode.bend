@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/random-index.bend as Index
-import ../packages/runtime/src/string-split.bend as Split
+import ../packages/runtime/src/random.bend as Index
+import ../packages/runtime/src/string.bend as Split
 import ./dns-server-rotation.bend as Test
 
 def parsed(text: String, fail: Bool) -> Result<&1, &1, U32 & String, List<&2, U32>>:

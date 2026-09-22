@@ -457,7 +457,7 @@ The same fixture then completed under phase instrumentation: 11 code-generation 
 
 ### BEND-019 recurrence: seeded DNS rotation fixture
 
-The new initial-position fixture passed on native one/four threads but overflowed Bun's stack when its CLI parser used Base `String.split` on an 8,192-server CSV. Replacing only the fixture's splitter with the existing tail-recursive `string-split.bend` made the same cases pass. This is another integration occurrence of the already-reduced `String.split` defect above, not a new compiler issue. The constructor also uses an explicit tail-recursive count rather than introducing Base's separately confirmed non-tail `List.length` limitation. All test sizes and expectations are retained; no compiler patch was installed.
+The new initial-position fixture passed on native one/four threads but overflowed Bun's stack when its CLI parser used Base `String.split` on an 8,192-server CSV. Replacing only the fixture's splitter with the existing tail-recursive the string split section of `string.bend` made the same cases pass. This is another integration occurrence of the already-reduced `String.split` defect above, not a new compiler issue. The constructor also uses an explicit tail-recursive count rather than introducing Base's separately confirmed non-tail `List.length` limitation. All test sizes and expectations are retained; no compiler patch was installed.
 
 ### BEND-001/BEND-016 recurrence: Linux resolver fixture dispatch
 
