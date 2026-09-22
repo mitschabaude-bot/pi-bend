@@ -2,6 +2,7 @@ import Base
 import ./string.bend as Strings
 import ./utf8.bend as Utf8
 import ./file-fold.bend as Fold
+import ./u64.bend as Word
 
 type Error is Data:
   System{code: U32, message: String}
@@ -134,3 +135,14 @@ def readPrefix(path: String, maximum: U32) -> IO(Result<&2, &2, Error, List<&2, 
   do IO<Result<&2, &2, Error, List<&2, U32>>>:
     outcome : Fold.Outcome<List<&2, U32>> <- Fold.read(~List<&2, U32>, ~prefixBytes, path, maximum, Nil{})
     return readResult(outcome)
+
+# stat follows symbolic links and reads no content. Keep the full OS word size.
+def fileSize(result: Result<&1,&1,U32 & String,U32 & U32>) -> Result<&2,&2,Error,Word.U64>:
+  match result:
+    case Fail{(code,message)}: Fail{System{code,message}}
+    case Done{(high,low)}: Done{Word.U64{high,low}}
+
+def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
+  do IO<Result<&2,&2,Error,Word.U64>>:
+    result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
+    return fileSize(result)
