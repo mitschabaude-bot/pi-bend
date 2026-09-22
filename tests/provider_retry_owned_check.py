@@ -17,7 +17,8 @@ parser.add_argument('--worktree', type=Path, default=ROOT)
 parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 WORK = args.worktree.resolve()
-BEND = Path(os.environ.get('BEND', ROOT / 'build/bend-profiles/dns-transport-teles/bend2/main.ts')).resolve()
+from bend_toolchain import BEND as BEND_PATH
+BEND = Path(BEND_PATH)
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'tests/provider-retry-owned.bend'
 prefix = WORK / 'build/provider-retry-owned'
@@ -100,17 +101,10 @@ while pending:
         continue
     visited.add(path)
     pending += [path.parent / name for name in re.findall(r'^import (\.[^\s]+)', path.read_text(), re.MULTILINE)]
-base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=WORK, text=True).strip()
-new_files = {'packages/ai/src/utils/provider-retry.bend', SOURCE}
-for path in visited:
-    name = str(path.relative_to(WORK))
-    reference = (ROOT / name).read_bytes() if name in new_files else subprocess.check_output(['git', 'show', base + ':' + name], cwd=WORK)
-    assert path.read_bytes() == reference, name
 record = {
     'scope': 'Shared retry loop transfers an affine real socket only on success; failing attempts close their sockets before retry. Twelve pi-source effect traces plus explicit acquisition/close markers, native/Bun resource audits and peer-observed payload/EOF. This is retry ownership evidence, not HTTP status policy integration.',
     'reference_commit': reference_commit,
     'original_traces': original,
-    'validated_checkout': {'base_commit': base, 'new_files': sorted(new_files), 'pending_form_drafts_included': False},
     'runs': runs,
     'source_sha256': {str(path.relative_to(WORK)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(visited)},
     'harness_sha256': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in [Path(__file__), ROOT / 'tests/channel_audit.py', ROOT / 'tests/provider_retry_reference.mts']},

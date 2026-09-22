@@ -1,5 +1,5 @@
 import Base
-import ../types.bend as T
+import ../src/types.bend as T
 
 def empty() -> T.GrammarVariants: T.GrammarVariants{None{}, None{}}
 

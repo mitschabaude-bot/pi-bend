@@ -1,6 +1,6 @@
 import Base
 import ../src/utils/provider-retry.bend as P
-import ../src/utils/provider-retry-error.bend as Error
+import ../src/utils/provider-retry.bend as Error
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/u64.bend as W
 import ../../runtime/src/callback.bend as C

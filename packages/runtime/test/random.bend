@@ -4,7 +4,7 @@ import ../src/random-seed.bend as Seed
 import ../src/u64.bend as W
 import ../src/f64.bend as F
 import ../src/callback.bend as C
-import ../../ai/src/utils/provider-retry-random.bend as Retry
+import ../../ai/src/utils/provider-retry.bend as Retry
 import ./utf8-runner.bend as H
 
 def bits(value: W.U64) -> String:
@@ -62,7 +62,7 @@ def callbackCheck(result: Result<&2, &2, Seed.SeedError, R.Generator>) -> IO(Uni
     case Fail{_}: IO.die(Unit, 1, "OS entropy initialization failed")
     case Done{+generator}:
       do IO<Unit>:
-        +callback : C.Callback<Unit, F.F64> <- Retry.create(generator)
+        +callback : C.Callback<Unit, F.F64> <- Retry.randomCallback(generator)
         value : F.F64 <- C.call(Unit, F.F64, callback, Unit{})
         IO.print("random " ++ bits(F.toBits(value)))
         C.dispose(Unit, F.F64, callback)

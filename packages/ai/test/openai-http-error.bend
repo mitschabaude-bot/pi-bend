@@ -3,7 +3,7 @@ import ../src/api/openai-client.bend as Client
 import ../src/types.bend as T
 import ../src/utils/json.bend as JSON
 import ../src/utils/error-body.bend as Body
-import ../src/utils/provider-http-response.bend as Provider
+import ../src/api/openai-client.bend as Provider
 import ../../runtime/src/http-response-metadata.bend as Metadata
 import ../../runtime/src/http-head.bend as Head
 import ../../runtime/src/http-status.bend as Status

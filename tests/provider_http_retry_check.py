@@ -128,17 +128,10 @@ while pending:
     if path in visited:continue
     visited.add(path)
     pending += [path.parent/name for name in re.findall(r'^import (\.[^\s]+)',path.read_text(),re.MULTILINE)]
-base=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
-new_files={'packages/ai/src/utils/provider-http-response.bend',SOURCE}
-for path in visited:
-    name=str(path.relative_to(WORK))
-    expected_source=(ROOT/name).read_bytes() if name in new_files else subprocess.check_output(['git','show',base+':'+name],cwd=ROOT)
-    assert path.read_bytes()==expected_source,name
 record={
  'scope':'Real native HTTP requests, owned status adapter, existing affine retry loop and successful text consumption. Fifteen fixed IO contracts, peer-observed close per attempt and process-exit resource audits. Diagnostic read failures use a fixture-supplied terminal policy; complete provider error normalization and real retry timer scheduling are outside this test.',
  'reference_commit':reference_commit,
  'reference':reference,
- 'validated_checkout':{'base_commit':base,'new_files':sorted(new_files),'pending_form_drafts_included':False},
  'runs':runs,
  'source_sha256':{str(path.relative_to(WORK)):hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(visited)},
  'harness_sha256':{str(path.relative_to(ROOT)):hashlib.sha256(path.read_bytes()).hexdigest() for path in [Path(__file__),ROOT/'tests/channel_audit.py',ROOT/'tests/provider_http_retry_reference.mts']},

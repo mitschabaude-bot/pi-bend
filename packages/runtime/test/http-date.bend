@@ -1,6 +1,6 @@
 import Base
 import ../src/http-date.bend as D
-import ../../ai/src/utils/provider-http-date.bend as P
+import ../../ai/src/utils/provider-retry.bend as P
 import ../src/f64.bend as F
 import ../src/u64.bend as W
 import ../src/callback.bend as Callback
@@ -25,7 +25,7 @@ def show(result: Result<&2, &2, D.Error, D.Instant>) -> String:
 def numeric(text: String, reference: Result<&2, &2, C.CalendarError, W.U64>) -> String:
   match reference:
     case Fail{_}: "reference"
-    case Done{epoch}: words(F.toBits(P.at(epoch, text)))
+    case Done{epoch}: words(F.toBits(P.parseDateAt(epoch, text)))
 
 def parsed(+reference: C.CivilTime, +text: String) -> String:
   show(D.parseAt(reference, text)) ++ "#" ++ numeric(text, C.toEpochMilliseconds(reference))
@@ -46,7 +46,7 @@ def cases(values: List<String>) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +callback : Callback.Callback<String, F.F64> <- P.create()
+    +callback : Callback.Callback<String, F.F64> <- P.dateParser()
     value : F.F64 <- Callback.call(String, F.F64, callback, "Sun, 06 Nov 1994 08:49:37 GMT")
     IO.print("callback:" ++ words(F.toBits(value)))
     values : List<String> <- IO.args()

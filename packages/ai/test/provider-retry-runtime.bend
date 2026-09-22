@@ -1,5 +1,5 @@
 import Base
-import ../src/utils/provider-retry-runtime.bend as Runtime
+import ../src/utils/provider-retry.bend as Runtime
 import ../src/utils/provider-retry.bend as Retry
 import ./provider-retry.bend as T
 import ../../runtime/src/random.bend as Random

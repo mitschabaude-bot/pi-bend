@@ -2,8 +2,6 @@ import Base
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/api/openai-client.bend as Client
 import ../packages/ai/src/utils/error-body.bend as Body
-import ../packages/ai/src/utils/provider-header-state.bend as S
-import ../packages/ai/src/utils/provider-http-response.bend as HTTP
 import ../packages/ai/src/utils/provider-retry.bend as Retry
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
@@ -13,6 +11,15 @@ import ../packages/runtime/src/http-header.bend as H
 import ../packages/runtime/src/http-response-metadata.bend as Metadata
 import ../packages/runtime/src/headers.bend as Headers
 import ../packages/runtime/src/f64.bend as F
+import ../packages/runtime/src/http-transport-callbacks.bend as Ops
+import ../packages/runtime/src/http-response.bend as Response
+import ../packages/runtime/src/http-response-stream.bend as Stream
+import ../packages/runtime/src/http-response-progress.bend as Progress
+import ../packages/runtime/src/http-head.bend as Head
+import ../packages/runtime/src/http-status.bend as Status
+import ../packages/runtime/src/http-header.bend as Header
+import ../packages/runtime/src/record.bend as R
+import ../packages/runtime/src/record.bend as Record
 import ../packages/runtime/src/timer-milliseconds.bend as Duration
 
 # Request headers: the SDK's timeout validation and authentication policy.
@@ -30,12 +37,12 @@ law header_failure_preserves_cause:
   {Client.assembled(Fail{cause}) == Fail{Client.HeaderFailure{cause}} : Result<&2, &2, Client.HeaderError, Headers.Headers>}
 
 law failed_authentication_has_no_headers:
-  for state: S.State
+  for state: Client.HeaderState
   {Client.authenticate(state, False{}) == Fail{Client.MissingAuthentication{}} : Result<&2, &2, Client.HeaderError, Headers.Headers>}
 
 law accepted_authentication_preserves_headers:
-  for state: S.State
-  {Client.authenticate(state, True{}) == Done{S.headers(state)} : Result<&2, &2, Client.HeaderError, Headers.Headers>}
+  for state: Client.HeaderState
+  {Client.authenticate(state, True{}) == Done{Client.wireHeaders(state)} : Result<&2, &2, Client.HeaderError, Headers.Headers>}
 
 law removal_allows_authentication_override:
   for other: Maybe<&2, T.Nullable<String>>
@@ -71,7 +78,7 @@ law diagnostic_read_failure_retains_cause:
   for -E: Data
   for metadata: Metadata.Metadata
   for cause: Consume.TextError<E>
-  {Client.fromResponse(E, HTTP.StatusFailure{metadata, Fail{cause}}) == Fail{Client.DiagnosticReadFailure{metadata, cause}} : Result<&2, &2, Client.ConstructionError<E>, Client.APIError>}
+  {Client.fromResponse(E, Client.StatusFailure{metadata, Fail{cause}}) == Fail{Client.DiagnosticReadFailure{metadata, cause}} : Result<&2, &2, Client.ConstructionError<E>, Client.APIError>}
 
 law construction_retains_diagnostic:
   for -E: Data
@@ -150,3 +157,124 @@ law invalid_timeouts_are_never_retried:
   for -Reason: Data
   for cause: Duration.Error
   {Client.fetchFailure(Reason, Client.InvalidTimeout{cause}) == Retry.Other{Client.TransportFailure{Client.InvalidTimeout{cause}}} : Retry.RequestFailure<Client.AttemptError<Reason>>}
+
+# Header layers: layered configuration composes, removal stays explicit until
+# the wire headers are materialized.
+law layers_partition:
+  for +left: List<&2, Maybe<&2, T.ProviderHeaders()>>
+  for +initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  for +right: List<&2, Maybe<&2, T.ProviderHeaders()>>
+  {Client.layers(List.append(&2, Maybe<&2, T.ProviderHeaders()>, left, right), initial) == Client.layers(right, Client.layers(left, initial)) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+law empty_layers_preserve_result:
+  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  {Client.layers(Nil{}, initial) == initial : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+law absent_layer_preserves_result:
+  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  {Client.applyLayer(None{}, initial) == initial : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+law entries_preserve_first_error:
+  for values: List<&2, R.Property<T.Nullable<String>>>
+  for cause: H.HeaderError
+  {Client.layerEntries(values, Fail{cause}) == Fail{cause} : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+law latest_setting_is_observable:
+  for state: Client.HeaderState
+  for +name: String
+  for +value: T.Nullable<String>
+  {Client.lookup(Client.put(state, name, value), name) == Some{value} : Maybe<&2, T.Nullable<String>>}
+
+law later_setting_replaces_earlier:
+  for +state: Client.HeaderState
+  for +name: String
+  for first: T.Nullable<String>
+  for +second: T.Nullable<String>
+  {Client.put(Client.put(state, name, first), name, second) == Client.put(state, name, second) : Client.HeaderState}
+
+law removal_remains_explicit:
+  for state: Client.HeaderState
+  for +name: String
+  {Client.removed(Client.lookup(Client.put(state, name, T.NullValue{}), name)) == True{} : Bool}
+
+law assignment_clears_removal:
+  for state: Client.HeaderState
+  for +name: String
+  for value: String
+  {Client.removed(Client.lookup(Client.put(state, name, T.PresentValue{value}), name)) == False{} : Bool}
+
+law materialization_partition:
+  for +left: List<&2, R.Property<T.Nullable<String>>>
+  for +right: List<&2, R.Property<T.Nullable<String>>>
+  {Client.materialize(List.append(&2, R.Property<T.Nullable<String>>, left, right)) == List.append(&2, R.Property<List<&2, String>>, Client.materialize(left), Client.materialize(right)) : List<&2, R.Property<List<&2, String>>>}
+
+law removal_has_no_wire_field:
+  for name: String
+  for values: List<&2, R.Property<T.Nullable<String>>>
+  {Client.materialize(R.Property{name, T.NullValue{}} <> values) == Client.materialize(values) : List<&2, R.Property<List<&2, String>>>}
+
+law assignment_retains_wire_value:
+  for name: String
+  for value: String
+  for values: List<&2, R.Property<T.Nullable<String>>>
+  {Client.materialize(R.Property{name, T.PresentValue{value}} <> values) == R.Property{name, value <> Nil{}} <> Client.materialize(values) : List<&2, R.Property<List<&2, String>>>}
+
+law singleton_layer_applies_configuration:
+  for layer: Maybe<&2, T.ProviderHeaders()>
+  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  {Client.layers(layer <> Nil{}, initial) == Client.applyLayer(layer, initial) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+law singleton_entry_applies_field:
+  for state: Client.HeaderState
+  for name: String
+  for value: T.Nullable<String>
+  {Client.layerEntries(R.Property{name, value} <> Nil{}, Done{state}) == Client.layerField(state, name, value) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+law entries_partition:
+  for +left: List<&2, R.Property<T.Nullable<String>>>
+  for +initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  for +right: List<&2, R.Property<T.Nullable<String>>>
+  {Client.layerEntries(List.append(&2, R.Property<T.Nullable<String>>, left, right), initial) == Client.layerEntries(right, Client.layerEntries(left, initial)) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+
+# Status boundary: a successful response has no body IO before hand-off; a
+# failed status consumes its diagnostic first and keeps retry metadata.
+# Any successful metadata predicate hands off any affine body unchanged,
+# without invoking either transport function or applying the diagnostic cap.
+law accepted_owner_has_no_body_io:
+  for -E: Data
+  for -State: Type
+  for read: Ops.Read(E, State)
+  for close: Ops.Close(E, State)
+  for limit: Nat
+  for metadata: Metadata.Metadata
+  for body: Response.Body<State>
+  for accepted: {Metadata.ok(metadata) == True{} : Bool}
+  {Client.accept(E, State, read, close, limit, Response.Response{metadata, body}) == IO.pure(Result<&2, &1, Client.StatusFailure<E>, Response.Response<State>>, Done{Response.Response{metadata, body}}) : IO(Result<&2, &1, Client.StatusFailure<E>, Response.Response<State>>)}
+
+# A failed status runs the owned consumer before producing its typed failure.
+# This is sequencing of IO programs, not a termination claim about the source.
+law rejected_owner_runs_diagnostic_first:
+  for -E: Data
+  for -State: Type
+  for read: Ops.Read(E, State)
+  for close: Ops.Close(E, State)
+  for limit: Nat
+  for metadata: Metadata.Metadata
+  for body: Response.Body<State>
+  for rejected: {Metadata.ok(metadata) == False{} : Bool}
+  {Client.accept(E, State, read, close, limit, Response.Response{metadata, body}) == IO.bind(Result<&2, &2, Consume.TextError<E>, String>, Result<&2, &1, Client.StatusFailure<E>, Response.Response<State>>, Consume.textUsing(E, State, read, close, limit, body), diagnostic => IO.pure(Result<&2, &1, Client.StatusFailure<E>, Response.Response<State>>, Fail{Client.StatusFailure{metadata, diagnostic}})) : IO(Result<&2, &1, Client.StatusFailure<E>, Response.Response<State>>)}
+
+# Arbitrary original errors and rendered messages survive, status comes from
+# the response head, and retry hints use normal Headers value coalescing.
+law retry_metadata_projection:
+  for -E: Data
+  for original: E
+  for message: String
+  for major: U32
+  for minor: U32
+  for status: U32
+  for reason: List<&2, U32>
+  for raw: List<&2, Header.Header>
+  for fields: Record.Record<List<&2, String>>
+  for expose: Bool
+  {Client.retryFailure(E, original, message, Metadata.Metadata{Head.ResponseHead{Status.StatusLine{major, minor, status, reason}, raw}, Headers.Headers{fields}, expose}) == Retry.Provider{Retry.ProviderError{original, message, Some{F.fromU32(status)}, Headers.joined("x-should-retry", Record.get(List<&2, String>, fields, "x-should-retry")), Headers.joined("retry-after-ms", Record.get(List<&2, String>, fields, "retry-after-ms")), Headers.joined("retry-after", Record.get(List<&2, String>, fields, "retry-after"))}} : Retry.RequestFailure<E>}

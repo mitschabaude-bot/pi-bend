@@ -1,6 +1,6 @@
 import Base
 import ../../runtime/src/timer-delay.bend as Delay
-import ../src/utils/provider-retry-sleep.bend as S
+import ../src/utils/provider-retry.bend as S
 import ../src/utils/provider-retry.bend as R
 import ../../runtime/src/abort.bend as A
 import ../../runtime/src/f64.bend as F

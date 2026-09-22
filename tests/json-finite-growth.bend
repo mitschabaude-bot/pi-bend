@@ -1,6 +1,6 @@
 import Base
 import ../packages/ai/src/types.bend as T
-import ../packages/ai/src/utils/json-finite.bend as S
+import ../packages/ai/src/utils/json.bend as S
 import ../packages/runtime/src/record.bend as R
 
 def values(count: Nat, built: List<&2, T.JsonValue>) -> List<&2, T.JsonValue>:
@@ -20,5 +20,5 @@ def check(valid: Bool, label: String) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    check(S.valid(T.JsonArray{values(65536n, Nil{})}), "finite array")
-    check(S.valid(T.JsonObject{R.Record{fields(65536n, Nil{})}}), "finite object")
+    check(S.finite(T.JsonArray{values(65536n, Nil{})}), "finite array")
+    check(S.finite(T.JsonObject{R.Record{fields(65536n, Nil{})}}), "finite object")

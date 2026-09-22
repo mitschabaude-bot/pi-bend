@@ -1,6 +1,6 @@
 import Base
 import ../src/types.bend as T
-import ../src/utils/provider-headers.bend as Provider
+import ../src/utils/headers.bend as Provider
 import ../src/utils/headers.bend as Projection
 import ../src/api/openai-responses.bend as Responses
 import ../../runtime/src/headers.bend as Native

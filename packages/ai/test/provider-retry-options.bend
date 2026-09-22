@@ -1,5 +1,5 @@
 import Base
-import ../src/utils/provider-retry-options.bend as O
+import ../src/utils/provider-retry.bend as O
 import ../src/utils/provider-retry.bend as Retry
 import ../../runtime/src/f64-natural.bend as Natural
 import ../../runtime/src/f64.bend as F
@@ -20,7 +20,7 @@ def limitText(value: Maybe<&2, F.F64>) -> String:
     case None{}: "none"
     case Some{number}: bits(F.toBits(number))
 
-def shown(value: Result<&2, &2, O.Error, Retry.ProviderRetryOptions<String>>) -> String:
+def shown(value: Result<&2, &2, O.OptionsError, Retry.ProviderRetryOptions<String>>) -> String:
   match value:
     case Fail{O.InvalidRetryCount{Natural.Unrepresentable{number}}}: "count:" ++ bits(F.toBits(number))
     case Fail{O.InvalidDelayLimit{number}}: "limit:" ++ bits(F.toBits(number))

@@ -1,7 +1,7 @@
 import Base
-import ../src/utils/provider-retry-error.bend as E
+import ../src/utils/provider-retry.bend as E
 import ../src/utils/provider-retry.bend as R
-import ../src/utils/provider-retry-policy.bend as P
+import ../src/utils/provider-retry.bend as P
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/f64-round.bend as Round
 import ../../runtime/src/u64.bend as W

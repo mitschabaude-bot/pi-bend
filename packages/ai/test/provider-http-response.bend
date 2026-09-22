@@ -1,5 +1,5 @@
 import Base
-import ../src/utils/provider-http-response.bend as Provider
+import ../src/api/openai-client.bend as Provider
 import ../src/utils/provider-retry.bend as Retry
 import ../../runtime/src/http-response.bend as Response
 import ../../runtime/src/http-response-metadata.bend as Metadata
@@ -52,7 +52,7 @@ def useBody(read: Bool, body: Response.Body<Input.State>) -> IO(Unit):
         value : Result<&2, &2, Buffer.Error<String>, List<&2, U32>> <- Consume.bytesWith(~String, ~Input.State, ~Input.read, ~Input.close, 1000n, body)
         IO.print("consumer:" ++ Show.shownBytes(value))
 
-def finished(read: Bool, value: Result<&2, &1, Provider.Failure<String>, Response.Response<Input.State>>) -> IO(Unit):
+def finished(read: Bool, value: Result<&2, &1, Provider.StatusFailure<String>, Response.Response<Input.State>>) -> IO(Unit):
   match value:
     case Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
@@ -79,7 +79,7 @@ def run(parts: List<&2, String>) -> IO(Unit):
       +metadata = Metadata.fromHead(Head.ResponseHead{Status.StatusLine{1, 1, Text.decimal(code, 0), Nil{}}, fields(String.split(headers, '/'))}, True{})
       do IO<Unit>:
         IO.print(projection(Provider.retryFailure(String, "original", "message", metadata)))
-        value : Result<&2, &1, Provider.Failure<String>, Response.Response<Input.State>> <- Provider.acceptWith(~String, ~Input.State, ~Input.read, ~Input.close, U32.to_nat(Text.decimal(limit, 0)), Response.Response{metadata, Response.Open{Input.State{events, String.eq(fails, "1")}, True{}}})
+        value : Result<&2, &1, Provider.StatusFailure<String>, Response.Response<Input.State>> <- Provider.acceptWith(~String, ~Input.State, ~Input.read, ~Input.close, U32.to_nat(Text.decimal(limit, 0)), Response.Response{metadata, Response.Open{Input.State{events, String.eq(fails, "1")}, True{}}})
         finished(String.eq(read, "1"), value)
     case _: IO.die(Unit, 1, "expected code limit cleanup read headers events")
 

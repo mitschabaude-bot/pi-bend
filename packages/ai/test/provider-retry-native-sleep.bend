@@ -1,7 +1,7 @@
 import Base
 import ./provider-retry.bend as T
 import ../src/utils/provider-retry.bend as R
-import ../src/utils/provider-retry-sleep.bend as S
+import ../src/utils/provider-retry.bend as S
 import ../../runtime/src/abort.bend as A
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/callback.bend as C

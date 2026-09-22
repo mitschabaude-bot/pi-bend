@@ -1,5 +1,5 @@
 import Base
-import ../src/utils/provider-retry-policy.bend as P
+import ../src/utils/provider-retry.bend as P
 import ../../runtime/src/parse-float.bend as Parse
 import ../../runtime/src/number-string.bend as Number
 import ../../runtime/src/f64.bend as F

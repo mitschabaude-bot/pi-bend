@@ -2,6 +2,7 @@ import Base
 import ../types.bend as T
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/json-string.bend as S
+import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/f64-decimal.bend as Number
 
 # Provider JSON serialization consumes an immutable data tree.
@@ -56,3 +57,20 @@ def stringify(value: T.JsonValue) -> Maybe<&2, String>:
 # arbitrary indentation coercion is part of the native codec.
 def stringifyPretty(value: T.JsonValue) -> Maybe<&2, String>:
   encode(PrettyValue{value, ""} <> Nil{}, Some{Nil{}})
+
+# Numeric leaves must be finite before serialization (JSON.stringify emits
+# null for NaN/Infinity; the provider rejects the payload instead). A lazily
+# selected continuation keeps the array/object tail a tail call.
+def finiteNumber(value: F.Decoded) -> Bool:
+  match value:
+    case F.Finite{_, _, _}: True{}
+    case _: False{}
+
+def finite(value: T.JsonValue) -> Bool:
+  match value:
+    case T.JsonNumber{value}: finiteNumber(F.decode(value))
+    case T.JsonArray{Nil{}}: True{}
+    case T.JsonArray{head <> rest}: Bool.pick(Unit -> Bool, finite(head), unused => finite(T.JsonArray{rest}), unused => False{})(Unit{})
+    case T.JsonObject{R.Record{Nil{}}}: True{}
+    case T.JsonObject{R.Record{R.Property{_, value} <> rest}}: Bool.pick(Unit -> Bool, finite(value), unused => finite(T.JsonObject{R.Record{rest}}), unused => False{})(Unit{})
+    case _: True{}

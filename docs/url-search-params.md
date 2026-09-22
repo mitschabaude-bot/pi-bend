@@ -20,7 +20,7 @@ The query corpus has 1,141 cases, executed on native one/four threads and Bun (3
 
 The unmodified Node v24.18.0 parser disagrees with that byte-oriented oracle in 31 cases; the raw observations remain in the validation record. A reduced example is `x=%FFé🙂`: the standard yields a replacement character followed by `é🙂`, while raw Node yields two replacement characters followed by `=B`. `tests/url_search_params_node_reproducer.mjs` reproduces this without Bend or networking. Installed Node's `querystring` fallback writes UTF-16 code units into an eight-bit Buffer after `decodeURIComponent` throws; inspection of `internal/url` confirms its form parser calls that unescape function. This accounts for truncation of the literal non-ASCII input. We retain source hashes and do not copy this corruption into Bend.
 
-The strict provider boundary rejects the malformed escape/encoding cases. Neither the oracle adjustment nor the compatibility parser changes that boundary. See [native Responses URLs](openai-responses-url.md).
+The strict provider boundary rejects the malformed escape/encoding cases. Neither the oracle adjustment nor the compatibility parser changes that boundary. See [native Responses URLs](openai-responses.md).
 
 ## Validated milestone
 

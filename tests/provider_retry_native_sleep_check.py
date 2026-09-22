@@ -6,7 +6,7 @@ replace, upstream virtual-clock boundary assertions.
 import hashlib,json,subprocess,sys,tempfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-candidate=Path(sys.argv[1]).resolve()
+candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else ROOT/'build/bend-native-toolchain/bend2').resolve()
 bun=Path.home()/'.bun/bin/bun'
 binary=ROOT/'build/provider-retry-native-sleep'
 if '--no-build' not in sys.argv:

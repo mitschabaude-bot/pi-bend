@@ -1,10 +1,11 @@
 """Native SplitMix64 vectors, exact [0,1) conversion, and seed-source failures."""
 import random,struct,subprocess,sys,tempfile
 from pathlib import Path
+from bend_toolchain import BEND
 ROOT=Path(__file__).resolve().parents[1]
 if '--no-build' not in sys.argv:
  subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/random-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/random.bend','build/random'],cwd=ROOT,check=True)
-subprocess.run([str(Path.home()/'.bend/bin/bend'),'packages/runtime/test/random.bend','-o','build/random.js'],cwd=ROOT,check=True)
+subprocess.run([BEND,'packages/runtime/test/random.bend','-o','build/random.js'],cwd=ROOT,check=True)
 subprocess.run(['clang','-O2','tests/random_reference.c','-o','build/random-reference'],cwd=ROOT,check=True)
 rng=random.Random(64053)
 seeds=[0,1,2**32-1,2**32,2**64-1,*[rng.getrandbits(64) for _ in range(27)]]

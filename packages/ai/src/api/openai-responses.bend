@@ -3,15 +3,10 @@ import ../types.bend as T
 import ../models.bend as Models
 import ../utils/error-body.bend as Body
 import ../utils/event-stream.bend as Events
-import ../utils/headers.bend as HeaderRecords
 import ../utils/model-api.bend as Api
 import ../utils/provider-env.bend as Env
-import ../utils/provider-headers.bend as ProviderHeaders
+import ../utils/headers.bend as ProviderHeaders
 import ../utils/provider-retry.bend as Retry
-import ../utils/provider-retry-error.bend as RetryText
-import ../utils/provider-retry-options.bend as RetryOptions
-import ../utils/provider-retry-runtime.bend as RetryRuntime
-import ../utils/provider-http-date.bend as HTTPDate
 import ../utils/thinking-levels.bend as Thinking
 import ../utils/transcript.bend as Transcript
 import ./constrained-sampling.bend as Sampling
@@ -560,7 +555,7 @@ def applyServiceTierPricing(model: T.Model<T.JsonValue>, serviceTier: Maybe<&2, 
 type Error<-Reason: Data, -E: Data> is Data:
   PreparationFailure{cause: PreparationError}
   HookFailure{cause: E}
-  InvalidRetryOptions{cause: RetryOptions.Error}
+  InvalidRetryOptions{cause: Retry.OptionsError}
   RequestRejected{cause: Client.RequestError}
   InitializationFailure{cause: Fetch.InitError}
   EntropyFailure{cause: Seed.SeedError}
@@ -676,9 +671,9 @@ def describeAttempt(-Reason: Data, error: Client.AttemptError<Reason>, provider:
     case Client.DiagnosticFailure{Client.DiagnosticReadFailure{_, _}}: "Could not read the error response diagnostic."
     case Client.DiagnosticFailure{Client.DiagnosticEncodingFailure{_, _}}: "Could not encode the error response diagnostic."
 
-def describeDelay(result: Result<&2, &2, RetryText.FormattingError, RetryText.RenderedError>) -> String:
+def describeDelay(result: Result<&2, &2, Retry.FormattingError, Retry.RenderedError>) -> String:
   match result:
-    case Done{RetryText.RenderedError{_, message}}: message
+    case Done{Retry.RenderedError{_, message}}: message
     case Fail{_}: "Server requested a retry delay above the configured maximum"
 
 def describeRetry(-Reason: Data, error: Retry.RetryFailure<Client.AttemptError<Reason>>, provider: String) -> String:
@@ -687,7 +682,7 @@ def describeRetry(-Reason: Data, error: Retry.RetryFailure<Client.AttemptError<R
     case Retry.RequestFailed{Retry.Provider{Retry.ProviderError{cause, _, _, _, _, _}}}: describeAttempt(Reason, cause, provider)
     case Retry.RequestAborted{}: "Request aborted"
     case Retry.SleepRejected{_}: "Retry delay is outside the native timer range"
-    case Retry.DelayRejected{cause, message}: describeDelay(RetryText.delayError(cause, message))
+    case Retry.DelayRejected{cause, message}: describeDelay(Retry.delayError(cause, message))
 
 def describeDispatch(error: Sse.DispatchError) -> String:
   match error:
@@ -724,10 +719,10 @@ def describeProcessing(-Reason: Data, error: Stream.Error<ReaderError(Reason)>) 
     case Stream.ContentFailure{cause}: Sampling.errorMessage(cause)
     case Stream.TerminalFailure{cause}: Stream.terminalMessage(cause)
 
-def describeRetryOptions(cause: RetryOptions.Error) -> String:
+def describeRetryOptions(cause: Retry.OptionsError) -> String:
   match cause:
-    case RetryOptions.InvalidRetryCount{_}: "maxRetries must be a non-negative integer within the native natural-number range"
-    case RetryOptions.InvalidDelayLimit{_}: "maxRetryDelayMs must be finite and non-negative"
+    case Retry.InvalidRetryCount{_}: "maxRetries must be a non-negative integer within the native natural-number range"
+    case Retry.InvalidDelayLimit{_}: "maxRetryDelayMs must be finite and non-negative"
 
 # The assistant message's errorMessage. Hook errors are rendered by the caller;
 # every other cause keeps the diagnostic of the stage that produced it.
@@ -891,33 +886,33 @@ def retried(-Reason: Data, -E: Data, result: Result<&2, &1, Retry.RetryFailure<C
 
 # retryProviderRequest around one attempt callback. The retry effects, their
 # entropy and the date parser live only for this loop.
-def attemptWithEffects(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F.F64>, pair: RetryRuntime.Runtime<Reason> & Retry.Effects<Reason>) -> IO(Acquired(Reason, E)):
+def attemptWithEffects(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F.F64>, pair: Retry.Runtime<Reason> & Retry.Effects<Reason>) -> IO(Acquired(Reason, E)):
   match pair:
     case (owner, effects):
       do IO<Acquired(Reason, E)>:
         +request : C.Callback<Unit, Client.Outcome(Reason)> <- C.create(~AttemptEnvironment<Reason>, ~Unit, ~(Client.Outcome(Reason)), ~(attemptBody(~Reason)), environment)
         result : Result<&2, &1, Retry.RetryFailure<Client.AttemptError<Reason>>, Response.Response<Client.State(Reason)>> <- Retry.retryProviderRequestOwned(Reason, Client.AttemptError<Reason>, Response.Response<Client.State(Reason)>, request, effects, retry)
         C.dispose(Unit, Client.Outcome(Reason), request)
-        RetryRuntime.dispose(Reason, owner)
+        Retry.dispose(Reason, owner)
         C.dispose(String, F.F64, date)
         return retried(Reason, E, result)
 
 # retryProviderRequest around one attempt callback. The retry effects, their
 # entropy and the date parser live only for this loop.
-def attempted(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F.F64>, seeded: Result<&2, &1, Seed.SeedError, RetryRuntime.Runtime<Reason>>) -> IO(Acquired(Reason, E)):
+def attempted(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, retry: Retry.ProviderRetryOptions<Reason>, date: C.Callback<String, F.F64>, seeded: Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>>) -> IO(Acquired(Reason, E)):
   match seeded:
     case Fail{cause}:
       do IO<Acquired(Reason, E)>:
         C.dispose(String, F.F64, date)
         return Fail{EntropyFailure{cause}}
-    case Done{runtime}: attemptWithEffects(~Reason, ~E, environment, retry, date, RetryRuntime.borrow(Reason, runtime))
+    case Done{runtime}: attemptWithEffects(~Reason, ~E, environment, retry, date, Retry.borrow(Reason, runtime))
 
 def acquire(~Reason: Data, ~E: Data, config: Config, fetch: Fetch.Fetch(Reason), request: Client.Request, parent: Signal(Reason), retry: Retry.ProviderRetryOptions<Reason>) -> IO(Acquired(Reason, E)):
   match config:
     case Config{_, _, _, _, limit, _}:
       do IO<Acquired(Reason, E)>:
-        +date : C.Callback<String, F.F64> <- HTTPDate.create()
-        seeded : Result<&2, &1, Seed.SeedError, RetryRuntime.Runtime<Reason>> <- RetryRuntime.new(~Reason, date)
+        +date : C.Callback<String, F.F64> <- Retry.dateParser()
+        seeded : Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>> <- Retry.new(~Reason, date)
         attempted(~Reason, ~E, AttemptEnvironment{request, parent, fetch, limit}, retry, date, seeded)
 
 # Hooks
@@ -932,7 +927,7 @@ def payloadHook(-E: Data, +original: T.JsonValue, model: T.Model<T.JsonValue>, h
         return Result.map(&2, &2, E, Maybe<&2, T.JsonValue>, T.JsonValue, replacement => Maybe.default(&2, T.JsonValue, replacement, original), result)
 
 def providerResponse(+metadata: Metadata.Metadata) -> T.ProviderResponse:
-  T.ProviderResponse{F.fromU32(Metadata.status(metadata)), HeaderRecords.headersToRecord(Metadata.headers(metadata))}
+  T.ProviderResponse{F.fromU32(Metadata.status(metadata)), ProviderHeaders.headersToRecord(Metadata.headers(metadata))}
 
 def responseHook(-Reason: Data, -E: Data, model: T.Model<T.JsonValue>, hook: Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, E)>, response: Response.Response<Client.State(Reason)>) -> IO(Response.Response<Client.State(Reason)> & Result<&2, &2, E, Unit>):
   match hook response:
@@ -1138,7 +1133,7 @@ def envelope(config: Config, prepared: Prepared, timeout: Maybe<&2, F.F64>, payl
   match config prepared:
     case Config{url, defaults, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
 
-def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), +prepared: Prepared, retry: Result<&2, &2, RetryOptions.Error, Retry.ProviderRetryOptions<Reason>>, payload: Result<&2, &2, E, T.JsonValue>) -> IO(Outcome<Reason, G, E>):
+def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), +prepared: Prepared, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>, payload: Result<&2, &2, E, T.JsonValue>) -> IO(Outcome<Reason, G, E>):
   match options retry payload:
     case _ _ Fail{cause}: IO.pure(Outcome<Reason, G, E>, Outcome{output, Some{HookFailure{cause}}, None{}})
     case _ Fail{cause} _: IO.pure(Outcome<Reason, G, E>, Outcome{output, Some{InvalidRetryOptions{cause}}, None{}})
@@ -1147,9 +1142,9 @@ def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config
         aborted : Bool <- Abort.aborted(Reason, parent)
         requested(~Reason, ~G, ~E, config, hooks, model, streamOptions(prepared, tier), custom, hook, output, events, parent, resolvedRetry, aborted, envelope(config, prepared, timeout, chosen))
 
-def retryOptions(-Reason: Data, -Telemetry: Data, -E: Data, +parent: Signal(Reason), options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> Result<&2, &2, RetryOptions.Error, Retry.ProviderRetryOptions<Reason>>:
+def retryOptions(-Reason: Data, -Telemetry: Data, -E: Data, +parent: Signal(Reason), options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>:
   match options:
-    case OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, retries, limit, _, _, _, _, _, _, _, _, _, _, _, _}: RetryOptions.resolve(Reason, retries, limit, Some{parent})
+    case OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, retries, limit, _, _, _, _, _, _, _, _, _, _, _, _}: Retry.resolve(Reason, retries, limit, Some{parent})
 
 def preparedRequest(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), result: Result<&2, &2, PreparationError, Prepared>) -> IO(Outcome<Reason, G, E>):
   match options result:

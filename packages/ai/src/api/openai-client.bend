@@ -1,12 +1,9 @@
 import Base
 import ../types.bend as T
 import ../utils/json.bend as JSON
-import ../utils/json-finite.bend as Finite
 import ../utils/schema-json.bend as Convert
 import ../utils/error-body.bend as Body
-import ../utils/provider-headers.bend as Configuration
-import ../utils/provider-header-state.bend as State
-import ../utils/provider-http-response.bend as HTTP
+import ../utils/headers.bend as Configuration
 import ../utils/provider-retry.bend as Retry
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deadline.bend as Deadline
@@ -16,6 +13,7 @@ import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/f64-decimal.bend as Decimal
 import ../../../runtime/src/headers.bend as Headers
 import ../../../runtime/src/http-header.bend as H
+import ../../../runtime/src/http-transport-callbacks.bend as Ops
 import ../../../runtime/src/http-fetch-scope.bend as Scope
 import ../../../runtime/src/http-exchange-response.bend as Head
 import ../../../runtime/src/http-socket-exchange.bend as Exchange
@@ -55,6 +53,80 @@ type HeaderError is Data:
   TimeoutEncodingFailure{value: F.F64}
   HeaderFailure{cause: H.HeaderError}
   MissingAuthentication{}
+
+# Header layers
+# -------------
+
+# The SDK builds headers from layered configuration: defaults, authentication,
+# client, body and request headers, later layers replacing earlier ones and
+# null removing an inherited header. One immutable record retains provenance;
+# removal commands are dropped only when the wire headers are materialized.
+type HeaderState is Data:
+  HeaderState{fields: T.ProviderHeaders()}
+
+def emptyState() -> HeaderState: HeaderState{R.new(T.Nullable<String>)}
+
+def put(state: HeaderState, name: String, value: T.Nullable<String>) -> HeaderState:
+  match state:
+    case HeaderState{fields}: HeaderState{R.set(T.Nullable<String>, fields, name, value)}
+
+def lookup(state: HeaderState, name: String) -> Maybe<&2, T.Nullable<String>>:
+  match state:
+    case HeaderState{fields}: R.get(T.Nullable<String>, fields, name)
+
+def removed(value: Maybe<&2, T.Nullable<String>>) -> Bool:
+  match value:
+    case Some{T.NullValue{}}: True{}
+    case _: False{}
+
+def nonempty(value: Maybe<&2, T.Nullable<String>>) -> Bool:
+  match value:
+    case Some{T.PresentValue{SCon{_, _}}}: True{}
+    case _: False{}
+
+def deleted(state: HeaderState, result: Result<&2, &2, H.HeaderError, String>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{name}: Done{put(state, name, T.NullValue{})}
+
+def assigned(state: HeaderState, result: Result<&2, &2, H.HeaderError, H.Header>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{H.Header{name, value}}: Done{put(state, name, T.PresentValue{value})}
+
+def layerField(state: HeaderState, name: String, value: T.Nullable<String>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  match value:
+    case T.NullValue{}: deleted(state, H.normalizeName(name))
+    case T.PresentValue{text}: assigned(state, H.normalize(name, text))
+
+def layerEntries(values: List<&2, R.Property<T.Nullable<String>>>, result: Result<&2, &2, H.HeaderError, HeaderState>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  match values result:
+    case _ Fail{cause}: Fail{cause}
+    case Nil{} Done{state}: Done{state}
+    case R.Property{name, value} <> rest Done{state}: layerEntries(rest, layerField(state, name, value))
+
+def applyLayer(layer: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, H.HeaderError, HeaderState>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  match layer:
+    case None{}: result
+    case Some{R.Record{values}}: layerEntries(values, result)
+
+def layers(values: List<&2, Maybe<&2, T.ProviderHeaders()>>, result: Result<&2, &2, H.HeaderError, HeaderState>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  match values:
+    case Nil{}: result
+    case head <> rest: layers(rest, applyLayer(head, result))
+
+def build(values: List<&2, Maybe<&2, T.ProviderHeaders()>>) -> Result<&2, &2, H.HeaderError, HeaderState>:
+  layers(values, Done{emptyState()})
+
+def materialize(values: List<&2, R.Property<T.Nullable<String>>>) -> List<&2, R.Property<List<&2, String>>>:
+  match values:
+    case Nil{}: Nil{}
+    case R.Property{_, T.NullValue{}} <> rest: materialize(rest)
+    case R.Property{name, T.PresentValue{text}} <> rest: R.Property{name, text <> Nil{}} <> materialize(rest)
+
+def wireHeaders(state: HeaderState) -> Headers.Headers:
+  match state:
+    case HeaderState{R.Record{values}}: Headers.Headers{R.Record{materialize(values)}}
 
 def nullable(value: Maybe<&2, String>) -> T.Nullable<String>:
   match value:
@@ -111,20 +183,20 @@ def authorization(apiKey: String) -> T.ProviderHeaders():
   R.Record{R.Property{"Authorization", T.PresentValue{"Bearer " ++ apiKey}} <> Nil{}}
 
 def credentialAllows(+value: Maybe<&2, T.Nullable<String>>) -> Bool:
-  State.nonempty(value) || State.removed(value)
+  nonempty(value) || removed(value)
 
 def authenticationAllowed(authorization: Maybe<&2, T.Nullable<String>>, apiKey: Maybe<&2, T.Nullable<String>>) -> Bool:
   credentialAllows(authorization) || credentialAllows(apiKey)
 
-def authenticated(+state: State.State) -> Bool:
-  authenticationAllowed(State.lookup(state, "authorization"), State.lookup(state, "api-key"))
+def authenticated(+state: HeaderState) -> Bool:
+  authenticationAllowed(lookup(state, "authorization"), lookup(state, "api-key"))
 
-def authenticate(state: State.State, accepted: Bool) -> Result<&2, &2, HeaderError, Headers.Headers>:
+def authenticate(state: HeaderState, accepted: Bool) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match accepted:
     case False{}: Fail{MissingAuthentication{}}
-    case True{}: Done{State.headers(state)}
+    case True{}: Done{wireHeaders(state)}
 
-def assembled(result: Result<&2, &2, H.HeaderError, State.State>) -> Result<&2, &2, HeaderError, Headers.Headers>:
+def assembled(result: Result<&2, &2, H.HeaderError, HeaderState>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match result:
     case Fail{cause}: Fail{HeaderFailure{cause}}
     case Done{+state}: authenticate(state, authenticated(state))
@@ -132,7 +204,7 @@ def assembled(result: Result<&2, &2, H.HeaderError, State.State>) -> Result<&2, 
 def layered(configuration: Defaults, apiKey: String, retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, Maybe<&2, String>>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match timeout:
     case Fail{cause}: Fail{cause}
-    case Done{value}: assembled(State.build(Some{defaultHeaders(configuration, retryCount, value)} <> Some{authorization(apiKey)} <> client <> body <> request <> Nil{}))
+    case Done{value}: assembled(build(Some{defaultHeaders(configuration, retryCount, value)} <> Some{authorization(apiKey)} <> client <> body <> request <> Nil{}))
 
 def validated(configuration: Defaults, apiKey: String, retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, F.F64>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match timeout:
@@ -226,7 +298,7 @@ def encodedPayload(payload: T.JsonValue, valid: Bool) -> Result<&2, &2, RequestE
     case True{}: encoding(JSON.stringify(payload))
 
 def serialize(+payload: T.JsonValue) -> Result<&2, &2, RequestError, String>:
-  encodedPayload(payload, Finite.valid(payload))
+  encodedPayload(payload, JSON.finite(payload))
 
 def completed(url: URL.URL, body: String, timeout: F.F64, headers: Result<&2, &2, HeaderError, Headers.Headers>) -> Result<&2, &2, RequestError, Request>:
   match headers:
@@ -252,6 +324,41 @@ def addressed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders
 # hook-selected one; this layer neither invokes nor retries hooks.
 def prepareRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F.F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
   addressed(configuration, apiKey, client, timeout, payload, responsesURL(context, baseUrl))
+
+# Status boundary
+# ---------------
+
+# Like a request with SDK retries disabled: a successful response returns
+# before its body is read; a failed status consumes and closes its diagnostic
+# body before retry handling. The failure keeps metadata and the complete
+# outcome of that consumption.
+type StatusFailure<-E: Data> is Data:
+  StatusFailure{metadata: Metadata.Metadata, body: Result<&2, &2, Consume.TextError<E>, String>}
+
+def select(-E: Data, -St: Type, read: Ops.Read(E, St), close: Ops.Close(E, St), limit: Nat, metadata: Metadata.Metadata, body: Response.Body<St>, successful: Bool) -> IO(Result<&2, &1, StatusFailure<E>, Response.Response<St>>):
+  match successful:
+    case True{}: IO.pure(Result<&2, &1, StatusFailure<E>, Response.Response<St>>, Done{Response.Response{metadata, body}})
+    case False{}:
+      do IO<Result<&2, &1, StatusFailure<E>, Response.Response<St>>>:
+        diagnostic : Result<&2, &2, Consume.TextError<E>, String> <- Consume.textUsing(E, St, read, close, limit, body)
+        return Fail{StatusFailure{metadata, diagnostic}}
+
+def accept(-E: Data, -St: Type, read: Ops.Read(E, St), close: Ops.Close(E, St), diagnosticLimit: Nat, response: Response.Response<St>) -> IO(Result<&2, &1, StatusFailure<E>, Response.Response<St>>):
+  match response:
+    case Response.Response{+metadata, body}: select(E, St, read, close, diagnosticLimit, metadata, body, Metadata.ok(metadata))
+
+def acceptWith(~E: Data, ~St: Type, ~read: St -> IO(St & Result<&2, &2, E, Maybe<&2, Stream.Event>>), ~close: St -> IO(Result<&2, &2, E, Unit>), diagnosticLimit: Nat, response: Response.Response<St>) -> IO(Result<&2, &1, StatusFailure<E>, Response.Response<St>>):
+  Ops.with(~E, ~St, ~Result<&2, &1, StatusFailure<E>, Response.Response<St>>, ~read, ~close, reader => closer => accept(E, St, reader, closer, diagnosticLimit, response))
+
+# Only transport metadata is projected into the retry policy; the provider's
+# original typed error and its rendering are kept intact.
+def retryFields(-E: Data, original: E, message: String, status: U32, headers: Headers.Headers) -> Retry.RequestFailure<E>:
+  match headers:
+    case Headers.Headers{+fields}:
+      Retry.Provider{Retry.ProviderError{original, message, Some{F.fromU32(status)}, Headers.joined("x-should-retry", R.get(List<&2, String>, fields, "x-should-retry")), Headers.joined("retry-after-ms", R.get(List<&2, String>, fields, "retry-after-ms")), Headers.joined("retry-after", R.get(List<&2, String>, fields, "retry-after"))}}
+
+def retryFailure(-E: Data, original: E, message: String, +metadata: Metadata.Metadata) -> Retry.RequestFailure<E>:
+  retryFields(E, original, message, Metadata.status(metadata), Metadata.headers(metadata))
 
 # APIError
 # --------
@@ -366,10 +473,10 @@ def constructed(-E: Data, +metadata: Metadata.Metadata, diagnostic: Diagnostic, 
 def create(-E: Data, metadata: Metadata.Metadata, +diagnostic: Diagnostic) -> Result<&2, &2, ConstructionError<E>, APIError>:
   constructed(E, metadata, diagnostic, detail(diagnostic))
 
-def fromResponse(-E: Data, value: HTTP.Failure<E>) -> Result<&2, &2, ConstructionError<E>, APIError>:
+def fromResponse(-E: Data, value: StatusFailure<E>) -> Result<&2, &2, ConstructionError<E>, APIError>:
   match value:
-    case HTTP.StatusFailure{metadata, Fail{cause}}: Fail{DiagnosticReadFailure{metadata, cause}}
-    case HTTP.StatusFailure{metadata, Done{text}}: create(E, metadata, decode(text))
+    case StatusFailure{metadata, Fail{cause}}: Fail{DiagnosticReadFailure{metadata, cause}}
+    case StatusFailure{metadata, Done{text}}: create(E, metadata, decode(text))
 
 # The SDK puts plain text only in its message; exposing it again as a body
 # would change pi's truncation and message-preservation behavior.
@@ -448,15 +555,15 @@ def fetchFailure(-Reason: Data, failure: FetchError<Reason>) -> Retry.RequestFai
 
 def diagnosticFailure(-Reason: Data, failure: ConstructionError<ReadError(Reason)>) -> Retry.RequestFailure<AttemptError<Reason>>:
   match failure:
-    case DiagnosticReadFailure{+metadata, cause}: HTTP.retryFailure(AttemptError<Reason>, DiagnosticFailure{DiagnosticReadFailure{metadata, cause}}, "Could not read the error response diagnostic.", metadata)
-    case DiagnosticEncodingFailure{+metadata, value}: HTTP.retryFailure(AttemptError<Reason>, DiagnosticFailure{DiagnosticEncodingFailure{metadata, value}}, "Could not encode the error response diagnostic.", metadata)
+    case DiagnosticReadFailure{+metadata, cause}: retryFailure(AttemptError<Reason>, DiagnosticFailure{DiagnosticReadFailure{metadata, cause}}, "Could not read the error response diagnostic.", metadata)
+    case DiagnosticEncodingFailure{+metadata, value}: retryFailure(AttemptError<Reason>, DiagnosticFailure{DiagnosticEncodingFailure{metadata, value}}, "Could not encode the error response diagnostic.", metadata)
 
 def constructedFailure(-Reason: Data, result: Result<&2, &2, ConstructionError<ReadError(Reason)>, APIError>) -> Retry.RequestFailure<AttemptError<Reason>>:
   match result:
     case Fail{cause}: diagnosticFailure(Reason, cause)
-    case Done{APIError{+metadata, value, +message}}: HTTP.retryFailure(AttemptError<Reason>, HTTPFailure{APIError{metadata, value, message}}, message, metadata)
+    case Done{APIError{+metadata, value, +message}}: retryFailure(AttemptError<Reason>, HTTPFailure{APIError{metadata, value, message}}, message, metadata)
 
-def accepted(-Reason: Data, result: Result<&2, &1, HTTP.Failure<ReadError(Reason)>, Response.Response<State(Reason)>>) -> Outcome(Reason):
+def accepted(-Reason: Data, result: Result<&2, &1, StatusFailure<ReadError(Reason)>, Response.Response<State(Reason)>>) -> Outcome(Reason):
   match result:
     case Fail{cause}: Fail{constructedFailure(Reason, fromResponse(ReadError(Reason), cause))}
     case Done{response}: Done{response}
@@ -474,7 +581,7 @@ def fetched(~Reason: Data, diagnosticLimit: Nat, result: Result<&2, &1, FetchErr
     case Fail{cause}: IO.pure(Outcome(Reason), Fail{fetchFailure(Reason, cause)})
     case Done{response}:
       do IO<Outcome(Reason)>:
-        result : Result<&2, &1, HTTP.Failure<ReadError(Reason)>, Response.Response<State(Reason)>> <- HTTP.acceptWith(~(ReadError(Reason)), ~(State(Reason)), ~(read(Reason)), ~(close(Reason)), diagnosticLimit, response)
+        result : Result<&2, &1, StatusFailure<ReadError(Reason)>, Response.Response<State(Reason)>> <- acceptWith(~(ReadError(Reason)), ~(State(Reason)), ~(read(Reason)), ~(close(Reason)), diagnosticLimit, response)
         return accepted(Reason, result)
 
 def scoped(-Reason: Data, result: Result<&2, &1, Scope.Error<Reason, Fetch.Error<Reason>>, Response.Response<State(Reason)>>) -> Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>:

@@ -42,8 +42,8 @@ def fmt(index):
     return 'T.OpenAILark{}' if index == 0 else 'T.OpenAIRegex{}'
 
 source = ['import Base', 'import ../packages/ai/src/types.bend as T',
-          'import ../packages/ai/src/utils/grammar-variants.bend as G',
-          'import ../packages/ai/src/utils/constrained-sampling-json.bend as C',
+          'import ../packages/ai/test/grammar-variants.bend as G',
+          'import ../packages/ai/src/utils/tool-declaration.bend as C',
           'import ../packages/ai/src/utils/json.bend as J',
           'def check(actual: Maybe<&2, String>, expected: String) -> IO(Unit):',
           '  match actual:',
@@ -74,7 +74,7 @@ for i, ((kind, ops, order), result) in enumerate(zip(cases, expected, strict=Tru
     else:
         strict = 'T.Prefer{}' if kind == 'prefer' else 'T.Require{}'
         value = f'T.SamplingConfigured{{T.JsonSchemaSampling{{{strict}}}}}'
-    source.append(f'    check(J.stringify(C.toJson({value})), {string(result["text"])})')
+    source.append(f'    check(J.stringify(C.samplingToJson({value})), {string(result["text"])})')
 source.append(f'    IO.print("PASS {len(cases)} constrained-sampling JSON and grammar-property cases")')
 entry = BUILD / 'constrained-sampling-vectors.bend'
 entry.write_text('\n'.join(source) + '\n')

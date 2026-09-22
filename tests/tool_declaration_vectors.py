@@ -37,7 +37,7 @@ def result(value):
 
 source = ['import Base', 'import ../packages/ai/src/types.bend as T',
           'import ../packages/ai/src/utils/tool-declaration.bend as D',
-          'import ../packages/ai/src/utils/grammar-variants.bend as G',
+          'import ../packages/ai/test/grammar-variants.bend as G',
           'import ../packages/runtime/src/schema-value.bend as V',
           'import ../packages/runtime/src/record.bend as R',
           'import ../packages/runtime/src/f64.bend as F',

@@ -1,5 +1,5 @@
 import Base
-import ../packages/ai/src/utils/provider-http-response.bend as Provider
+import ../packages/ai/src/api/openai-client.bend as Provider
 import ../packages/ai/src/utils/provider-retry.bend as Retry
 import ../packages/ai/test/provider-retry.bend as Reference
 import ../packages/runtime/src/http-exchange-response.bend as HTTP
@@ -21,7 +21,7 @@ import ../packages/runtime/test/utf8-runner.bend as Text
 import ./http-body-consume-native.bend as Show
 
 type Failure is Data:
-  StatusFailure{value: Provider.Failure<Exchange.ReadError<String>>}
+  StatusFailure{value: Provider.StatusFailure<Exchange.ReadError<String>>}
   StartFailure{value: Exchange.StartError<String>}
   HeadFailure{value: Progress.Error<Exchange.ReadError<String>>}
 
@@ -30,7 +30,7 @@ type Environment is Data:
 
 # This fixture supplies a strict policy for diagnostic failures. SDK error
 # normalization is intentionally not supplied by the shared status adapter.
-def statusFailure(value: Provider.Failure<Exchange.ReadError<String>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
+def statusFailure(value: Provider.StatusFailure<Exchange.ReadError<String>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
   match value:
     case Provider.StatusFailure{+metadata, Done{+text}}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
@@ -41,7 +41,7 @@ def statusFailure(value: Provider.Failure<Exchange.ReadError<String>>) -> IO(Res
         IO.print("diagnostic-error:" ++ U32.show(Metadata.status(metadata)) ++ ":" ++ Show.textFailure(cause))
         return Fail{Retry.Other{StatusFailure{Provider.StatusFailure{metadata, Fail{cause}}}}}
 
-def accepted(value: Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
+def accepted(value: Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
   match value:
     case Fail{cause}: statusFailure(cause)
     case Done{response}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Done{response})
@@ -51,7 +51,7 @@ def headed(limit: Nat, value: Result<&2, &1, Progress.Error<Exchange.ReadError<S
     case Fail{cause}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Fail{Retry.Other{HeadFailure{cause}}})
     case Done{response}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        result : Result<&2, &1, Provider.Failure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.close(String)), limit, response)
+        result : Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.close(String)), limit, response)
         accepted(result)
 
 def started(limit: Nat, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
