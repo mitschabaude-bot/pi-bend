@@ -96,7 +96,7 @@ def prepared(mode: U32, family: Bool, port: U32, result: Result<&2, &2, Plan.Err
         created(mode, family, port, owner)
 
 def configured(mode: U32, family: Bool, port: U32, dnsPort: U32) -> IO(Unit):
-  prepared(mode, family, port, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.EndpointV4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.OptionsOptions{1, 1, 1, Nil{}}, Nil{})))
+  prepared(mode, family, port, Settings.prepareConfiguration(Endpoint.Endpoint, Endpoint.EndpointV4{IPv4.Address{2130706433}, dnsPort} <> Nil{}, 1000, 512, Search.prepareSearch(Options.ResolverOptions{1, 1, 1, Nil{}}, Nil{})))
 
 def arguments(args: List<String>) -> IO(Unit):
   match args:

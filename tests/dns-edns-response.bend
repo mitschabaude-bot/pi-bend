@@ -69,7 +69,7 @@ def decoded(result: Result<&2, &2, Response.EdnsResponseError, Response.Response
     case Fail{error}: IO.print(failure(error))
     case Done{extension}: report(Message.Header{0, 0, 0, 0, 0, 0}, Done{Some{extension}})
 
-def direct(result: Result<&2, &2, Name.NameErrorOfMessage, Name.Packet>, start: U32, length: U32, kind: U32, class: U32) -> IO(Unit):
+def direct(result: Result<&2, &2, Name.DomainNameError, Name.Packet>, start: U32, length: U32, kind: U32, class: U32) -> IO(Unit):
   match result:
     case Fail{_}: IO.print("packet")
     case Done{packet}: decoded(Response.decode(packet, Message.Record{Name.Name{Nil{}}, kind, class, 0, start, length}))

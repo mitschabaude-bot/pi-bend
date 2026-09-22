@@ -60,18 +60,18 @@ def overlayStrings(target: T.ProviderHeaders(), source: Maybe<&2, R.Record<Strin
 
 # Configuration values replace earlier HTTP values case-insensitively. Null
 # removes an inherited header; empty strings are replacements, not removals.
-def applyValue(headers: H.Headers, name: String, value: T.Nullable<String>) -> Result<&2, &2, Field.HeaderHeaderError, H.Headers>:
+def applyValue(headers: H.Headers, name: String, value: T.Nullable<String>) -> Result<&2, &2, Field.HeaderSyntaxError, H.Headers>:
   match value:
     case T.NullValue{}: H.delete(headers, name)
     case T.PresentValue{text}: H.set(headers, name, text)
 
-def applyEntries(entries: List<&2, R.Property<T.Nullable<String>>>, result: Result<&2, &2, Field.HeaderHeaderError, H.Headers>) -> Result<&2, &2, Field.HeaderHeaderError, H.Headers>:
+def applyEntries(entries: List<&2, R.Property<T.Nullable<String>>>, result: Result<&2, &2, Field.HeaderSyntaxError, H.Headers>) -> Result<&2, &2, Field.HeaderSyntaxError, H.Headers>:
   match entries result:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{headers}: Done{headers}
     case R.Property{name, value} <> rest Done{headers}: applyEntries(rest, applyValue(headers, name, value))
 
-def apply(headers: H.Headers, configuration: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Field.HeaderHeaderError, H.Headers>:
+def apply(headers: H.Headers, configuration: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Field.HeaderSyntaxError, H.Headers>:
   match configuration:
     case None{}: Done{headers}
     case Some{R.Record{entries}}: applyEntries(entries, Done{headers})

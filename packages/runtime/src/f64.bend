@@ -613,17 +613,17 @@ def decodedRemainder(original: F64, left: Decoded, right: Decoded) -> F64:
     case Finite{_, _, _} Infinity{_}: original
     case _ _: nan()
 
-def remainderRemainder(+left: F64, right: F64) -> F64:
+def remainder(+left: F64, right: F64) -> F64:
   decodedRemainder(left, decode(left), decode(right))
 
 
 # Rounding toward positive infinity preserves negative zero and non-finite
 # values. Only a positive fractional remainder requires an increment.
-def roundedRound(order: Maybe<&2, Cmp>, integral: F64) -> F64:
+def ceilingOf(order: Maybe<&2, Cmp>, integral: F64) -> F64:
   match order:
     case Some{GT{}}: add(integral, fromU32(1))
     case _: integral
 
 def ceil(+value: F64) -> F64:
   +integral = truncate(value)
-  roundedRound(compare(value, integral), integral)
+  ceilingOf(compare(value, integral), integral)

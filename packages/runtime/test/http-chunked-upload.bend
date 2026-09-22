@@ -15,7 +15,7 @@ def hexadecimal(value: Maybe<&2, N.BigNat>) -> String:
     case None{}: "error"
     case Some{length}: Text.fromScalars(Upload.hexadecimal(length))
 
-def show(value: Result<&2, &2, Body.BufferedBodyBodyError, Body.Prepared>) -> String:
+def show(value: Result<&2, &2, Body.BufferedBodyError, Body.Prepared>) -> String:
   match value:
     case Done{Body.Prepared{_, _, Some{content}}}: String.join(Text.showNumbers(Upload.encode(content)), ",")
     case _: "error"

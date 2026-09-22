@@ -176,7 +176,7 @@ def features(+mode: String) -> List<&2, Options.Feature>:
   Options.Rotate{} <> Bool.pick(List<&2, Options.Feature>, String.eq(mode, "forced") || String.eq(mode, "priority"), Options.UseTcp{} <> Nil{}, Bool.pick(List<&2, Options.Feature>, String.eq(mode, "edns"), Options.Edns{} <> Nil{}, Nil{}))
 
 def configured(+mode: String, priority: Pair.Priority, servers: List<&2, Endpoint.Endpoint>) -> IO(Unit):
-  prepared(mode, priority, Settings.prepareConfiguration(Endpoint.Endpoint, servers, Bool.pick(U32, String.eq(mode, "deadline"), 150, 5000), Bool.pick(U32, String.eq(mode, "zero"), 0, 7), Configuration.prepareSearch(Options.OptionsOptions{1, 1, 1, features(mode)}, "x" <> "y" <> Nil{})))
+  prepared(mode, priority, Settings.prepareConfiguration(Endpoint.Endpoint, servers, Bool.pick(U32, String.eq(mode, "deadline"), 150, 5000), Bool.pick(U32, String.eq(mode, "zero"), 0, 7), Configuration.prepareSearch(Options.ResolverOptions{1, 1, 1, features(mode)}, "x" <> "y" <> Nil{})))
 
 def args(values: List<String>) -> IO(Unit):
   match values:

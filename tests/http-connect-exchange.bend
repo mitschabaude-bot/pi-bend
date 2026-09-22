@@ -30,7 +30,7 @@ def request() -> IO(Request.BufferedRequestPrepared):
 
 def failed(next: Exchange.Next<String>) -> IO(Unit):
   match next:
-    case Exchange.Next{exchange, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.SocketAborted{Abort.Supplied{reason}}}}}}}}:
+    case Exchange.Next{exchange, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{SocketIO.Aborted{Abort.Supplied{reason}}}}}}}}:
       do IO<Unit>:
         Consume.close(exchange)
         Test.assertion(String.eq(reason, "stop"), "read lost original abort reason")

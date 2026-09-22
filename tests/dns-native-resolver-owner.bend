@@ -56,7 +56,7 @@ def validated(value: Result<&2, &2, Plan.Error, Settings.Config<Endpoint.Endpoin
 
 def config(ports: String, rotate: Bool, extended: Bool) -> IO(Settings.Config<Endpoint.Endpoint>):
   features = List.append(&2, Policy.Feature, Bool.pick(List<&2, Policy.Feature>, rotate, Policy.Rotate{} <> Nil{}, Nil{}), Bool.pick(List<&2, Policy.Feature>, extended, Policy.Edns{} <> Policy.TrustAd{} <> Nil{}, Nil{}))
-  validated(Settings.prepareConfiguration(Endpoint.Endpoint, endpoints(ServersTest.serverInput("4", ports)), 5000, 7, Configuration.prepareSearch(Policy.OptionsOptions{1, 2, 2, features}, Nil{})))
+  validated(Settings.prepareConfiguration(Endpoint.Endpoint, endpoints(ServersTest.serverInput("4", ports)), 5000, 7, Configuration.prepareSearch(Policy.ResolverOptions{1, 2, 2, features}, Nil{})))
 
 def retained(value: Resolver.Replacement) -> IO(Resolver.Owner):
   match value:

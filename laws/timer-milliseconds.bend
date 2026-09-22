@@ -34,4 +34,4 @@ law unordered_conversion_is_rejected:
 
 law accepted_durations_round_trip:
   for +value: F.F64
-  {exactResult(value, T.millisecondsMilliseconds(value)) == True{} : Bool}
+  {exactResult(value, T.exactMilliseconds(value)) == True{} : Bool}

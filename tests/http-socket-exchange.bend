@@ -25,7 +25,7 @@ def event(capture: Capture, value: Stream.StreamEvent) -> Capture:
 
 def sourceError(value: Source.SocketSourceError<String>) -> String:
   match value:
-    case Source.SocketSourceSocketFailure{Transport.SocketAborted{A.Supplied{reason}}}: "abort:" ++ reason
+    case Source.SocketSourceSocketFailure{Transport.Aborted{A.Supplied{reason}}}: "abort:" ++ reason
     case Source.SocketSourceInvalidReadSize{}: "invalid-size"
     case _: "source-error"
 
@@ -101,7 +101,7 @@ def earlyMode(mode: U32) -> Bool:
 def adopted(mode: U32, result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(String):
   match result:
     case Fail{Exchange.InvalidReadSize{}}: IO.pure(String, "invalid-size")
-    case Fail{Exchange.SocketFailure{Transport.SocketAborted{A.Supplied{why}}}}: IO.pure(String, "start-abort:" ++ why)
+    case Fail{Exchange.SocketFailure{Transport.Aborted{A.Supplied{why}}}}: IO.pure(String, "start-abort:" ++ why)
     case Fail{_}: IO.die(String, 1, "unexpected exchange start failure")
     case Done{exchange}:
       do IO<String>:

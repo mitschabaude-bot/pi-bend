@@ -29,12 +29,12 @@ def content(value: Maybe<&2, Body.Content>) -> String:
     case None{}: "absent"
     case Some{Body.Content{bytes, length}}: N.toDecimal(length) ++ ":" ++ String.join(Text.showNumbers(bytes), ",")
 
-def field(value: Result<&2, &2, H.HeaderHeaderError, Maybe<&2, String>>) -> String:
+def field(value: Result<&2, &2, H.HeaderSyntaxError, Maybe<&2, String>>) -> String:
   match value:
     case Done{Some{text}}: "+" ++ Text.showText(text)
     case _: "-"
 
-def show(value: Result<&2, &2, Body.BufferedBodyBodyError, Body.Prepared>) -> String:
+def show(value: Result<&2, &2, Body.BufferedBodyError, Body.Prepared>) -> String:
   match value:
     case Fail{Body.BufferedBodyInvalidByte{byte}}: "invalid-byte:" ++ U32.show(byte)
     case Fail{_}: "error"

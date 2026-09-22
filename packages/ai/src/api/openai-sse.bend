@@ -298,10 +298,10 @@ def disposeHooks(-E: Data, hooks: Hooks<E>) -> IO(Unit):
 
 def TransportError(-Reason: Data) -> Data: Progress.ResponseProgressError<Client.ReadError(Reason)>
 
-def socketAbort(-Reason: Data, error: Socket.SocketErrorOfSocket<Reason>) -> Bool:
+def socketAbort(-Reason: Data, error: Socket.Error<Reason>) -> Bool:
   match error:
-    case Socket.SocketAborted{_}: True{}
-    case Socket.SocketSocketError{_, _}: False{}
+    case Socket.Aborted{_}: True{}
+    case Socket.SocketError{_, _}: False{}
 
 def sourceAbort(-Reason: Data, error: SocketSource.SocketSourceError<Reason>) -> Bool:
   match error:

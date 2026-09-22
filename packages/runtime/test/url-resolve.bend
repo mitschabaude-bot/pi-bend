@@ -16,7 +16,7 @@ import ./utf8-runner.bend as Scalar
 def show(value: Result<&2, &2, Resolve.ResolveError, Record.URL>) -> String:
   match value:
     case Fail{_}: "invalid"
-    case Done{result}: "+" ++ Scalar.showText(Serialize.serializeSerialize(result, False{}))
+    case Done{result}: "+" ++ Scalar.showText(Serialize.serialize(result, False{}))
 
 def withBase(context: Absolute.Context, result: Result<&2, &2, Absolute.Error, Record.URL>, input: String) -> String:
   match result:

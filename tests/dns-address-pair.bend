@@ -115,14 +115,14 @@ def scoped(+mode: String, count: Ref.Ref<U32>, source: Exchange.Source, scope: D
         reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, Deadline.Scope{controller, lifetime})
         IO.print("deadline:" ++ retained(reason))
 
-def run(+mode: String, pair: Source.Owner<Plan.Attempt<Endpoint.Endpoint>> & Source.ServerSourceSource<Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
+def run(+mode: String, pair: Source.Owner<Plan.Attempt<Endpoint.Endpoint>> & Source.ServerSource<Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
   match pair:
     case (owner, +source):
       do IO<Unit>:
         +parent : Abort.AbortController<String> <- Abort.new(String)
         +count : Ref.Ref<U32> <- Ref.new(U32, 0)
         scope : Deadline.Scope<String> <- Deadline.create(String, Bool.pick(U32, String.eq(mode, "deadline"), 150, 5000), Abort.signal(String, parent))
-        scoped(mode, count, Exchange.Configured{source, Options.OptionsOptions{1, 1, 1, Bool.pick(List<&2, Options.Feature>, String.eq(mode, "forced"), Options.UseTcp{} <> Nil{}, Nil{})}}, scope)
+        scoped(mode, count, Exchange.Configured{source, Options.ResolverOptions{1, 1, 1, Bool.pick(List<&2, Options.Feature>, String.eq(mode, "forced"), Options.UseTcp{} <> Nil{}, Nil{})}}, scope)
         total : U32 <- Ref.dispose(U32, count)
         IO.print("draws:" ++ U32.show(total))
         next : List<&2, Plan.Attempt<Endpoint.Endpoint>> <- Source.chooseServerSource(Plan.Attempt<Endpoint.Endpoint>, source)

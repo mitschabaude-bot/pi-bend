@@ -14,7 +14,7 @@ import ./tcp-bytes-probe.bend as Probe
 
 def observed(next: Exchange.Next<String>) -> IO(Unit):
   match next:
-    case Exchange.Next{Exchange.Closed{}, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{Transport.SocketSocketError{32, _}}}}}}}: IO.print("PASS exchange write failure")
+    case Exchange.Next{Exchange.Closed{}, Fail{Exchange.ResponseFailure{Reader.ResponseReaderPrimaryFailure{Reader.SourceError{Source.SocketSourceSocketFailure{Transport.SocketError{32, _}}}}}}}: IO.print("PASS exchange write failure")
     case Exchange.Next{exchange, _}:
       do IO<Unit>:
         result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.closeSocketExchange(String, exchange)

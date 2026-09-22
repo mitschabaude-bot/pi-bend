@@ -27,7 +27,7 @@ def origin(value: Search.Origin) -> String:
     case Search.Final{}: "final"
     case Search.Suffix{index}: "suffix:" ++ Nat.show(index)
 
-def name(value: Result<&2, &2, Name.NameErrorOfMessage, Name.Name>) -> String:
+def name(value: Result<&2, &2, Name.DomainNameError, Name.Name>) -> String:
   match value:
     case Fail{_}: "invalid"
     case Done{value}: NameTest.wire(Name.encodeName(value))

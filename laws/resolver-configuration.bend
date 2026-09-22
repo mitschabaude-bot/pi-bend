@@ -9,7 +9,7 @@ import ../packages/runtime/src/resolver-config.bend as Plan
 # Search and transport cannot accidentally use different option snapshots.
 law shared_search_settings:
   for -Server: Data
-  for +options: Options.OptionsOptions
+  for +options: Options.ResolverOptions
   for servers: List<&2, Plan.Attempt<Server>>
   for +domains: Domains.Report
   for milliseconds: U32

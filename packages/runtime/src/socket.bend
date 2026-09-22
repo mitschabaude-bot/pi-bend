@@ -121,12 +121,12 @@ def dispose(owner: InterruptOwner) -> IO(Unit):
         value : Maybe<&1, Socket> <- Resource.retire(Maybe<&1, Socket>, resource)
         closeCopy(value)
 
+type Error<-Reason: Data> is Data:
+  Aborted{reason: A.AbortReason<Reason>}
+  SocketError{code: U32, message: String}
+
 # A connection-wide observation, not one watcher/duplicate per byte read.
 # The caller owns the signal and keeps it alive until this owner is closed.
-type SocketErrorOfSocket<-Reason: Data> is Data:
-  SocketAborted{reason: A.AbortReason<Reason>}
-  SocketSocketError{code: U32, message: String}
-
 type Lifetime<-Reason: Data> is Type:
   Lifetime{signal: A.AbortSignal<Reason>, interrupt: InterruptOwner, cancellation: D.Cancellation<A.AbortReason<Reason>>, watcher: Chan(Result<&2, &2, InterruptError, Unit>)}
 
@@ -151,77 +151,77 @@ def watchSocket(-Reason: Data, handle: Handle, ticket: D.Ticket<Maybe<&2, A.Abor
     reason : Maybe<&2, A.AbortReason<Reason>> <- D.wait(Maybe<&2, A.AbortReason<Reason>>, ticket)
     cancelForReasonSocket(Reason, handle, reason)
 
-def observingSocket(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, pair: InterruptOwner & Handle, observation: D.Observation<A.AbortReason<Reason>>) -> IO(Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>):
+def observingSocket(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, pair: InterruptOwner & Handle, observation: D.Observation<A.AbortReason<Reason>>) -> IO(Result<&2, &1, Error<Reason>, Owner<Reason>>):
   match pair observation:
     case (owner, handle) D.Observation{ticket, cancellation}:
-      do IO<Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>>:
+      do IO<Result<&2, &1, Error<Reason>, Owner<Reason>>>:
         watcher : Chan(Result<&2, &2, InterruptError, Unit>) <- IO.fork(Result<&2, &2, InterruptError, Unit>, watchSocket(Reason, handle, ticket))
         return Done{Owner{socket, Lifetime{signal, owner, cancellation, watcher}}}
 
-def acquired(-Reason: Data, +signal: A.AbortSignal<Reason>, pair: Socket & Result<&2, &1, InterruptError, InterruptOwner>) -> IO(Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>):
+def acquired(-Reason: Data, +signal: A.AbortSignal<Reason>, pair: Socket & Result<&2, &1, InterruptError, InterruptOwner>) -> IO(Result<&2, &1, Error<Reason>, Owner<Reason>>):
   match pair:
     case (socket, Fail{InterruptError{code, message}}):
-      do IO<Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>>:
+      do IO<Result<&2, &1, Error<Reason>, Owner<Reason>>>:
         Socket.close(socket)
-        return Fail{SocketSocketError{code, message}}
+        return Fail{SocketError{code, message}}
     case (socket, Done{owner}):
-      do IO<Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>>:
+      do IO<Result<&2, &1, Error<Reason>, Owner<Reason>>>:
         observation : D.Observation<A.AbortReason<Reason>> <- A.observe(Reason, signal)
         observingSocket(Reason, socket, signal, borrow(owner), observation)
 
-def checkedSocket(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>):
+def checkedSocket(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Result<&2, &1, Error<Reason>, Owner<Reason>>):
   match reason:
     case Some{why}:
-      do IO<Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>>:
+      do IO<Result<&2, &1, Error<Reason>, Owner<Reason>>>:
         Socket.close(socket)
-        return Fail{SocketAborted{why}}
+        return Fail{Aborted{why}}
     case None{}:
-      do IO<Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>>:
+      do IO<Result<&2, &1, Error<Reason>, Owner<Reason>>>:
         pair : Socket & Result<&2, &1, InterruptError, InterruptOwner> <- createInterrupt(socket)
         acquired(Reason, signal, pair)
 
 # Takes ownership of an already connected socket, including on failure.
 # Connection establishment itself is outside this scope.
-def create(-Reason: Data, socket: Socket, +signal: A.AbortSignal<Reason>) -> IO(Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>):
-  do IO<Result<&2, &1, SocketErrorOfSocket<Reason>, Owner<Reason>>>:
+def create(-Reason: Data, socket: Socket, +signal: A.AbortSignal<Reason>) -> IO(Result<&2, &1, Error<Reason>, Owner<Reason>>):
+  do IO<Result<&2, &1, Error<Reason>, Owner<Reason>>>:
     reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
     checkedSocket(Reason, socket, signal, reason)
 
-def outcomeSocket(-Reason: Data, -Value: Data, value: Result<&1, &1, U32 & String, Value>, reason: Maybe<&2, A.AbortReason<Reason>>) -> Result<&2, &2, SocketErrorOfSocket<Reason>, Value>:
+def outcomeSocket(-Reason: Data, -Value: Data, value: Result<&1, &1, U32 & String, Value>, reason: Maybe<&2, A.AbortReason<Reason>>) -> Result<&2, &2, Error<Reason>, Value>:
   match value reason:
-    case _ Some{why}: Fail{SocketAborted{why}}
-    case Fail{(code, message)} None{}: Fail{SocketSocketError{code, message}}
+    case _ Some{why}: Fail{Aborted{why}}
+    case Fail{(code, message)} None{}: Fail{SocketError{code, message}}
     case Done{value} None{}: Done{value}
 
-def received(-Reason: Data, -Value: Data, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, pair: Socket & Result<&1, &1, U32 & String, Value>) -> IO(Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>):
+def received(-Reason: Data, -Value: Data, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, pair: Socket & Result<&1, &1, U32 & String, Value>) -> IO(Owner<Reason> & Result<&2, &2, Error<Reason>, Value>):
   match pair:
     case (socket, value):
-      do IO<Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>>:
+      do IO<Owner<Reason> & Result<&2, &2, Error<Reason>, Value>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
         return (Owner{socket, lifetime}, outcomeSocket(Reason, Value, value, reason))
 
-def perform(-Reason: Data, -Value: Data, socket: Socket, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, operation: Socket -> IO(Socket & Result<&1, &1, U32 & String, Value>), reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>):
+def perform(-Reason: Data, -Value: Data, socket: Socket, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, operation: Socket -> IO(Socket & Result<&1, &1, U32 & String, Value>), reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Owner<Reason> & Result<&2, &2, Error<Reason>, Value>):
   match reason:
-    case Some{why}: IO.pure(Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>, (Owner{socket, lifetime}, Fail{SocketAborted{why}}))
+    case Some{why}: IO.pure(Owner<Reason> & Result<&2, &2, Error<Reason>, Value>, (Owner{socket, lifetime}, Fail{Aborted{why}}))
     case None{}:
-      do IO<Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>>:
+      do IO<Owner<Reason> & Result<&2, &2, Error<Reason>, Value>>:
         pair : Socket & Result<&1, &1, U32 & String, Value> <- operation(socket)
         received(Reason, Value, lifetime, signal, pair)
 
 # Observe abort both before IO and after it settles. Local shutdown's EOF or
 # socket error must never hide a retained abort reason. Concurrent abort after
 # the final observation may legitimately follow an already completed operation.
-def run(-Reason: Data, -Value: Data, owner: Owner<Reason>, operation: Socket -> IO(Socket & Result<&1, &1, U32 & String, Value>)) -> IO(Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>):
+def run(-Reason: Data, -Value: Data, owner: Owner<Reason>, operation: Socket -> IO(Socket & Result<&1, &1, U32 & String, Value>)) -> IO(Owner<Reason> & Result<&2, &2, Error<Reason>, Value>):
   match owner:
     case Owner{socket, Lifetime{+signal, interrupt, cancellation, watcher}}:
-      do IO<Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Value>>:
+      do IO<Owner<Reason> & Result<&2, &2, Error<Reason>, Value>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
         perform(Reason, Value, socket, Lifetime{signal, interrupt, cancellation, watcher}, signal, operation, reason)
 
-def recvSocket(-Reason: Data, owner: Owner<Reason>, maximum: U32) -> IO(Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, List<&2, U32>>):
+def recvSocket(-Reason: Data, owner: Owner<Reason>, maximum: U32) -> IO(Owner<Reason> & Result<&2, &2, Error<Reason>, List<&2, U32>>):
   run(Reason, List<&2, U32>, owner, socket => TCP.recv_bytes(socket, maximum))
 
-def sendSocket(-Reason: Data, owner: Owner<Reason>, bytes: List<&2, U32>) -> IO(Owner<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>):
+def sendSocket(-Reason: Data, owner: Owner<Reason>, bytes: List<&2, U32>) -> IO(Owner<Reason> & Result<&2, &2, Error<Reason>, Unit>):
   run(Reason, Unit, owner, socket => TCP.send_bytes(socket, bytes))
 
 # Cancel the observation, join its watcher, then retire both descriptors. A
@@ -239,10 +239,6 @@ def close(-Reason: Data, owner: Owner<Reason>) -> IO(Result<&2, &2, InterruptErr
 type Address is Data:
   V4{value: IPv4.Address}
   V6{value: IPv6.Ipv6Address, scope: U32}
-
-type Error<-Reason: Data> is Data:
-  Aborted{reason: A.AbortReason<Reason>}
-  SocketError{code: U32, message: String}
 
 def begin(address: Address, port: U32) -> IO(Result<&1, &1, U32 & String, Connect & ConnectCancel>):
   match address:
@@ -515,47 +511,47 @@ def send(-Reason: Data, socket: Socket, destination: Endpoint, bytes: List<&2, U
 type Writer<-Reason: Data> is Type:
   Writer{socket: Socket, signal: A.AbortSignal<Reason>}
 
-def duplicated(-Reason: Data, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, pair: Socket & Result<&1, &1, U32 & String, Socket>) -> Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>:
+def duplicated(-Reason: Data, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, pair: Socket & Result<&1, &1, U32 & String, Socket>) -> Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>:
   match pair:
-    case (socket, Fail{(code, message)}): (Owner{socket, lifetime}, Fail{SocketSocketError{code, message}})
+    case (socket, Fail{(code, message)}): (Owner{socket, lifetime}, Fail{SocketError{code, message}})
     case (socket, Done{copy}): (Owner{socket, lifetime}, Done{Writer{copy, signal}})
 
-def checkedWriter(-Reason: Data, socket: Socket, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>):
+def checkedWriter(-Reason: Data, socket: Socket, lifetime: Lifetime<Reason>, signal: A.AbortSignal<Reason>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>):
   match reason:
-    case Some{why}: IO.pure(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>, (Owner{socket, lifetime}, Fail{SocketAborted{why}}))
+    case Some{why}: IO.pure(Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>, (Owner{socket, lifetime}, Fail{Aborted{why}}))
     case None{}:
-      do IO<Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>>:
+      do IO<Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>>:
         pair : Socket & Result<&1, &1, U32 & String, Socket> <- Socket.duplicate(socket)
         return duplicated(Reason, lifetime, signal, pair)
 
 # The read owner is returned on success and failure. The new descriptor pins
 # the same socket independently, allowing an upload to park while reads run.
-def createWriter(-Reason: Data, owner: Owner<Reason>) -> IO(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>):
+def createWriter(-Reason: Data, owner: Owner<Reason>) -> IO(Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>):
   match owner:
     case Owner{socket, Lifetime{+signal, interrupt, cancellation, watcher}}:
-      do IO<Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>>:
+      do IO<Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
         checkedWriter(Reason, socket, Lifetime{signal, interrupt, cancellation, watcher}, signal, reason)
 
-def sent(-Reason: Data, +signal: A.AbortSignal<Reason>, pair: Socket & Result<&1, &1, U32 & String, Unit>) -> IO(Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>):
+def sent(-Reason: Data, +signal: A.AbortSignal<Reason>, pair: Socket & Result<&1, &1, U32 & String, Unit>) -> IO(Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>):
   match pair:
     case (socket, result):
-      do IO<Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>>:
+      do IO<Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
         return (Writer{socket, signal}, outcomeSocket(Reason, Unit, result, reason))
 
-def allowed(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, bytes: List<&2, U32>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>):
+def allowed(-Reason: Data, socket: Socket, signal: A.AbortSignal<Reason>, bytes: List<&2, U32>, reason: Maybe<&2, A.AbortReason<Reason>>) -> IO(Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>):
   match reason:
-    case Some{why}: IO.pure(Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>, (Writer{socket, signal}, Fail{SocketAborted{why}}))
+    case Some{why}: IO.pure(Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>, (Writer{socket, signal}, Fail{Aborted{why}}))
     case None{}:
-      do IO<Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>>:
+      do IO<Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>>:
         pair : Socket & Result<&1, &1, U32 & String, Unit> <- TCP.send_bytes(socket, bytes)
         sent(Reason, signal, pair)
 
-def sendWriter(-Reason: Data, writer: Writer<Reason>, bytes: List<&2, U32>) -> IO(Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>):
+def sendWriter(-Reason: Data, writer: Writer<Reason>, bytes: List<&2, U32>) -> IO(Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>):
   match writer:
     case Writer{socket, +signal}:
-      do IO<Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>>:
+      do IO<Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>>:
         reason : Maybe<&2, A.AbortReason<Reason>> <- A.reason(Reason, signal)
         allowed(Reason, socket, signal, bytes, reason)
 
@@ -569,11 +565,11 @@ def closeWriter(-Reason: Data, writer: Writer<Reason>) -> IO(Unit):
 # not turn the shutdown-induced write error into a failed response.
 type State<-Reason: Data> is Data:
   Active{}
-  Settled{result: Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>, reported: Bool}
+  Settled{result: Result<&2, &2, Error<Reason>, Unit>, reported: Bool}
   Stopped{}
 
 type UploadError<-Reason: Data> is Data:
-  WriteFailure{error: SocketErrorOfSocket<Reason>, cleanup: Maybe<&2, InterruptError>}
+  WriteFailure{error: Error<Reason>, cleanup: Maybe<&2, InterruptError>}
   InterruptFailure{error: InterruptError}
 
 type UploadOwner<-Reason: Data> is Type:
@@ -589,7 +585,7 @@ def borrowConnection(-Reason: Data, owner: Owner<Reason>) -> Owner<Reason> & Han
     case Owner{socket, Lifetime{signal, owner, cancellation, watcher}}:
       borrowedUpload(Reason, socket, signal, cancellation, watcher, borrow(owner))
 
-def settle(-Reason: Data, state: State<Reason>, result: Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>) -> State<Reason> & Bool:
+def settle(-Reason: Data, state: State<Reason>, result: Result<&2, &2, Error<Reason>, Unit>) -> State<Reason> & Bool:
   match state result:
     case Active{} Done{_}: (Settled{Done{Unit{}}, False{}}, False{})
     case Active{} Fail{+error}: (Settled{Fail{error}, False{}}, True{})
@@ -603,7 +599,7 @@ def wake(handle: Handle, needed: Bool) -> IO(Result<&2, &2, InterruptError, Unit
         result : Result<&2, &2, InterruptError, Bool> <- cancelInterrupt(handle)
         return cancelled(result)
 
-def finished(-Reason: Data, state: R.Ref<State<Reason>>, handle: Handle, pair: Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>) -> IO(Result<&2, &2, InterruptError, Unit>):
+def finished(-Reason: Data, state: R.Ref<State<Reason>>, handle: Handle, pair: Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>) -> IO(Result<&2, &2, InterruptError, Unit>):
   match pair:
     case (writer, result):
       do IO<Result<&2, &2, InterruptError, Unit>>:
@@ -611,47 +607,47 @@ def finished(-Reason: Data, state: R.Ref<State<Reason>>, handle: Handle, pair: W
         closeWriter(Reason, writer)
         wake(handle, failed)
 
-def body(-Reason: Data, +state: R.Ref<State<Reason>>, handle: Handle, bytes: List<&2, U32>, pair: Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit>) -> IO(Result<&2, &2, InterruptError, Unit>):
+def body(-Reason: Data, +state: R.Ref<State<Reason>>, handle: Handle, bytes: List<&2, U32>, pair: Writer<Reason> & Result<&2, &2, Error<Reason>, Unit>) -> IO(Result<&2, &2, InterruptError, Unit>):
   match pair:
     case (writer, Fail{error}): finished(Reason, state, handle, (writer, Fail{error}))
     case (writer, Done{_}):
       do IO<Result<&2, &2, InterruptError, Unit>>:
-        result : Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit> <- sendWriter(Reason, writer, bytes)
+        result : Writer<Reason> & Result<&2, &2, Error<Reason>, Unit> <- sendWriter(Reason, writer, bytes)
         finished(Reason, state, handle, result)
 
 def runUpload(-Reason: Data, writer: Writer<Reason>, state: R.Ref<State<Reason>>, handle: Handle, head: List<&2, U32>, bytes: List<&2, U32>) -> IO(Result<&2, &2, InterruptError, Unit>):
   do IO<Result<&2, &2, InterruptError, Unit>>:
-    result : Writer<Reason> & Result<&2, &2, SocketErrorOfSocket<Reason>, Unit> <- sendWriter(Reason, writer, head)
+    result : Writer<Reason> & Result<&2, &2, Error<Reason>, Unit> <- sendWriter(Reason, writer, head)
     body(Reason, state, handle, bytes, result)
 
-def launch(-Reason: Data, writer: Writer<Reason>, head: List<&2, U32>, bytes: List<&2, U32>, pair: Owner<Reason> & Handle) -> IO(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, UploadOwner<Reason>>):
+def launch(-Reason: Data, writer: Writer<Reason>, head: List<&2, U32>, bytes: List<&2, U32>, pair: Owner<Reason> & Handle) -> IO(Owner<Reason> & Result<&2, &1, Error<Reason>, UploadOwner<Reason>>):
   match pair:
     case (connection, +handle):
-      do IO<Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, UploadOwner<Reason>>>:
+      do IO<Owner<Reason> & Result<&2, &1, Error<Reason>, UploadOwner<Reason>>>:
         +state : R.Ref<State<Reason>> <- R.new(State<Reason>, Active{})
         task : Chan(Result<&2, &2, InterruptError, Unit>) <- IO.fork(Result<&2, &2, InterruptError, Unit>, runUpload(Reason, writer, state, handle, head, bytes))
         return (connection, Done{UploadOwner{state, handle, task}})
 
-def created(-Reason: Data, head: List<&2, U32>, bytes: List<&2, U32>, pair: Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>>) -> IO(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, UploadOwner<Reason>>):
+def created(-Reason: Data, head: List<&2, U32>, bytes: List<&2, U32>, pair: Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>>) -> IO(Owner<Reason> & Result<&2, &1, Error<Reason>, UploadOwner<Reason>>):
   match pair:
-    case (connection, Fail{error}): IO.pure(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, UploadOwner<Reason>>, (connection, Fail{error}))
+    case (connection, Fail{error}): IO.pure(Owner<Reason> & Result<&2, &1, Error<Reason>, UploadOwner<Reason>>, (connection, Fail{error}))
     case (connection, Done{writer}): launch(Reason, writer, head, bytes, borrowConnection(Reason, connection))
 
-def startUpload(-Reason: Data, connection: Owner<Reason>, head: List<&2, U32>, bytes: List<&2, U32>) -> IO(Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, UploadOwner<Reason>>):
-  do IO<Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, UploadOwner<Reason>>>:
-    pair : Owner<Reason> & Result<&2, &1, SocketErrorOfSocket<Reason>, Writer<Reason>> <- createWriter(Reason, connection)
+def startUpload(-Reason: Data, connection: Owner<Reason>, head: List<&2, U32>, bytes: List<&2, U32>) -> IO(Owner<Reason> & Result<&2, &1, Error<Reason>, UploadOwner<Reason>>):
+  do IO<Owner<Reason> & Result<&2, &1, Error<Reason>, UploadOwner<Reason>>>:
+    pair : Owner<Reason> & Result<&2, &1, Error<Reason>, Writer<Reason>> <- createWriter(Reason, connection)
     created(Reason, head, bytes, pair)
 
-def observe(-Reason: Data, state: State<Reason>) -> State<Reason> & Maybe<&2, SocketErrorOfSocket<Reason>>:
+def observe(-Reason: Data, state: State<Reason>) -> State<Reason> & Maybe<&2, Error<Reason>>:
   match state:
     case Settled{Fail{+error}, _}: (Settled{Fail{error}, True{}}, Some{error})
     case previous: (previous, None{})
 
-def checkUpload(-Reason: Data, owner: UploadOwner<Reason>) -> IO(UploadOwner<Reason> & Maybe<&2, SocketErrorOfSocket<Reason>>):
+def checkUpload(-Reason: Data, owner: UploadOwner<Reason>) -> IO(UploadOwner<Reason> & Maybe<&2, Error<Reason>>):
   match owner:
     case UploadOwner{+state, interrupt, task}:
-      do IO<UploadOwner<Reason> & Maybe<&2, SocketErrorOfSocket<Reason>>>:
-        error : Maybe<&2, SocketErrorOfSocket<Reason>> <- R.modify(State<Reason>, Maybe<&2, SocketErrorOfSocket<Reason>>, state, value => observe(Reason, value))
+      do IO<UploadOwner<Reason> & Maybe<&2, Error<Reason>>>:
+        error : Maybe<&2, Error<Reason>> <- R.modify(State<Reason>, Maybe<&2, Error<Reason>>, state, value => observe(Reason, value))
         return (UploadOwner{state, interrupt, task}, error)
 
 def stopping(-Reason: Data, state: State<Reason>) -> State<Reason> & Bool:

@@ -10,17 +10,17 @@ def bit(value: Bool) -> String:
     case True{}: "1"
     case False{}: "0"
 
-def bidiLabel(code: U32) -> Label.LabelLabel:
+def bidiLabel(code: U32) -> Label.ValidatedLabel:
   match code:
-    case 97: Label.LabelLabel{"a", False{}, Bidi.Analysis{False{}, True{}}}
-    case 98: Label.LabelLabel{"1", False{}, Bidi.Analysis{False{}, False{}}}
-    case 99: Label.LabelLabel{"א", False{}, Bidi.Analysis{True{}, True{}}}
-    case 100: Label.LabelLabel{"aא", False{}, Bidi.Analysis{True{}, False{}}}
-    case _: Label.LabelLabel{"", True{}, Bidi.Analysis{False{}, False{}}}
+    case 97: Label.ValidatedLabel{"a", False{}, Bidi.Analysis{False{}, True{}}}
+    case 98: Label.ValidatedLabel{"1", False{}, Bidi.Analysis{False{}, False{}}}
+    case 99: Label.ValidatedLabel{"א", False{}, Bidi.Analysis{True{}, True{}}}
+    case 100: Label.ValidatedLabel{"aא", False{}, Bidi.Analysis{True{}, False{}}}
+    case _: Label.ValidatedLabel{"", True{}, Bidi.Analysis{False{}, False{}}}
 
-def bidiLabels(input: String, reversed: List<&2, Label.LabelLabel>) -> List<&2, Label.LabelLabel>:
+def bidiLabels(input: String, reversed: List<&2, Label.ValidatedLabel>) -> List<&2, Label.ValidatedLabel>:
   match input:
-    case SNil{}: List.reverse(&2, Label.LabelLabel, reversed)
+    case SNil{}: List.reverse(&2, Label.ValidatedLabel, reversed)
     case SCon{Chr{code}, rest}: bidiLabels(rest, bidiLabel(code) <> reversed)
 
 def text(parts: List<&2, String>, reversed: String) -> String:

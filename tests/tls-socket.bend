@@ -63,7 +63,7 @@ def transfer(pair: TLS.Connection<String> & TLS.Writer<String>, abrupt: Bool) ->
 
 def cancelled(pair: TLS.Connection<String> & Result<&2, &2, TLS.Error<String>, List<&2, U32>>) -> IO(Unit):
   match pair:
-    case (connection, Fail{TLS.Network{Socket.SocketAborted{Abort.Supplied{why}}}}):
+    case (connection, Fail{TLS.Network{Socket.Aborted{Abort.Supplied{why}}}}):
       do IO<Unit>:
         Check.require(String.eq(why, "stop"), "TLS lost cancellation reason")
         result : Result<&2, &2, TLS.Error<String>, Unit> <- TLS.dispose(String, connection)
@@ -89,7 +89,7 @@ def upload(writer: TLS.Writer<String>, flag: Ref.Ref<Bool>) -> IO(Result<&2, &2,
 
 def uploadCancelled(result: Result<&2, &2, TLS.Error<String>, Unit>) -> IO(Unit):
   match result:
-    case Fail{TLS.Network{Socket.SocketAborted{Abort.Supplied{why}}}}:
+    case Fail{TLS.Network{Socket.Aborted{Abort.Supplied{why}}}}:
       Check.require(String.eq(why, "stop"), "TLS upload lost cancellation reason")
     case _: IO.die(Unit, 1, "TLS upload did not fail with cancellation")
 
@@ -142,7 +142,7 @@ def run(port: U32, certificate: List<&2, U32>, +mode: String) -> IO(Unit):
   do IO<Unit>:
     +controller : Abort.AbortController<String> <- Abort.new(String)
     socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-    adoption : Result<&2, &1, Socket.SocketErrorOfSocket<String>, Socket.Owner<String>> <- Socket.create(String, socket, Abort.signal(String, controller))
+    adoption : Result<&2, &1, Socket.Error<String>, Socket.Owner<String>> <- Socket.create(String, socket, Abort.signal(String, controller))
     owner : Socket.Owner<String> <- Check.opened(adoption)
     initial : Result<&2, &1, TLS.Error<String>, TLS.Connection<String>> <- TLS.start(String, owner, Some{"localhost"}, Client.Authorization{chain => Session.pin(certificate, chain)}, options(String.eq(mode, "limit")))
     opened(initial, controller, mode)

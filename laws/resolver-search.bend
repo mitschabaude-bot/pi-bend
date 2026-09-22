@@ -28,7 +28,7 @@ law preserves_search_policy:
   {cursor(Configuration.plan(configuration, name, dots, absolute)) == Configuration.startSearch(configuration, name, dots, absolute) : Search.SearchCursor}
 
 law rejects_diagnostics:
-  for options: Options.OptionsOptions
+  for options: Options.ResolverOptions
   for +first: Options.Diagnostic
   for +rest: List<&2, Options.Diagnostic>
   for domains: List<&2, String>

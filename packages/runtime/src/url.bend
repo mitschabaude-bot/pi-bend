@@ -645,7 +645,7 @@ def encodeEntries(entries: List<&2, Entry>) -> List<&2, String>:
     case Nil{}: Nil{}
     case entry <> rest: encoded(entry) <> encodeEntries(rest)
 
-def serialize(entries: List<&2, Entry>) -> String:
+def serializeSearchParams(entries: List<&2, Entry>) -> String:
   String.join(encodeEntries(entries), "&")
 
 # Web URL inputs are scalarForm-value strings, preserving BOM and replacing only
@@ -1183,7 +1183,7 @@ def valuesSearchParams(params: URLSearchParams) -> List<&2, String>: contents(en
 def size(params: URLSearchParams) -> Nat:
   List.length(&2, Entry, entries(params))
 
-def toString(params: URLSearchParams) -> String: serialize(entries(params))
+def toString(params: URLSearchParams) -> String: serializeSearchParams(entries(params))
 
 def append(params: URLSearchParams, name: String, value: String) -> URLSearchParams:
   URLSearchParams{List.append(&2, Entry, entries(params), normalize(Entry{name, value}) <> Nil{})}
@@ -1355,7 +1355,7 @@ def fragmentSerialize(exclude: Bool, value: Maybe<&2, String>, reversed: String)
 def suffix(reversed: String, query: Maybe<&2, String>, hash: Maybe<&2, String>, excludeFragment: Bool) -> String:
   String.reverse(fragmentSerialize(excludeFragment, hash, component(query, '?', reversed)))
 
-def serializeSerialize(value: URL, excludeFragment: Bool) -> String:
+def serialize(value: URL, excludeFragment: Bool) -> String:
   match value:
     case URL{scheme, username, password, host, number, urlPath, query, hash}: suffix(body(host, urlPath, username, password, number, SCon{':', appendSerialize(serializeScheme(scheme), "")}), query, hash, excludeFragment)
 

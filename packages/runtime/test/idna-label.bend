@@ -27,7 +27,7 @@ def bit(value: Bool) -> String:
     case True{}: "1"
     case False{}: "0"
 
-def show(value: Result<&2, &2, Label.LabelError, Label.LabelLabel>) -> String:
+def show(value: Result<&2, &2, Label.LabelError, Label.ValidatedLabel>) -> String:
   match value:
     case Fail{Label.ACEError{ACE.NonASCIIEncoding{}}}: "non-ascii"
     case Fail{Label.ACEError{ACE.ASCIIOnlyDecodedLabel{}}}: "ascii-only"
@@ -43,7 +43,7 @@ def show(value: Result<&2, &2, Label.LabelError, Label.LabelLabel>) -> String:
     case Fail{Label.LabelRule{Rules.Dot{}}}: "dot"
     case Fail{Label.LabelRule{Rules.InvalidASCII{code}}}: "ascii;" ++ U32.show(code)
     case Fail{Label.LabelRule{Rules.InvalidStatus{code}}}: "status;" ++ U32.show(code)
-    case Done{Label.LabelLabel{input, empty, Bidi.Analysis{rtl, valid}}}:
+    case Done{Label.ValidatedLabel{input, empty, Bidi.Analysis{rtl, valid}}}:
       "ok;" ++ bit(empty) ++ bit(rtl) ++ bit(valid) ++ ";" ++ Text.showText(input)
 
 def run(parts: List<&2, String>, context: Label.Context) -> String:

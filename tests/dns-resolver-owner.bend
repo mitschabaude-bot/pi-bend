@@ -21,9 +21,9 @@ def requestLabel(request: Query.QueryOptions) -> String:
     case Query.QueryOptions{flags, None{}}: U32.show(flags) ++ ":plain"
     case Query.QueryOptions{flags, Some{_}}: U32.show(flags) ++ ":edns"
 
-def selected(pair: Resolver.TcpResolverOwner & Resolver.TcpResolverResolver) -> IO(Resolver.TcpResolverOwner):
+def selected(pair: Resolver.TcpResolverOwner & Resolver.TcpResolver) -> IO(Resolver.TcpResolverOwner):
   match pair:
-    case (owner, Resolver.TcpResolverResolver{source, _, _, request, _, _}):
+    case (owner, Resolver.TcpResolver{source, _, _, request, _, _}):
       do IO<Resolver.TcpResolverOwner>:
         servers : List<&2, Servers.Server> <- Source.chooseServerSource(Servers.Server, source)
         IO.print(RotationTest.csv(RotationNetworkTest.serverPorts(servers, Nil{}), ""))

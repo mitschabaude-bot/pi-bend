@@ -14,7 +14,7 @@ lines=['import Base','import ../packages/runtime/src/f64.bend as F','import ../p
 for i,(a,b) in enumerate(cases):
     try:expected=math.fmod(number(a),number(b))
     except ValueError:expected=math.nan
-    expression=f'Rem.remainderRemainder({literal(a)}, {literal(b)})'
+    expression=f'Rem.remainder({literal(a)}, {literal(b)})'
     check=f'F.isNaN({expression})' if math.isnan(expected) else f'W.equal(F.toBits({expression}), F.toBits({literal(bits(expected))}))'
     lines += [f'def case{i}() -> IO(Unit):',f'  T.assertion({check}, "remainder {i}")']
 groups=[]

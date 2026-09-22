@@ -363,7 +363,7 @@ def normalized(result: Result<&2, &2, MappingError, String>, tables: Data.Tables
 # UTS #46 mapping followed by NFC. This is input preparation, not a validated
 # domain: label splitting, ACE handling, contextual/Bidi rules and host checks
 # still have to run before a result can be used as a hostname.
-def preparePrepare(context: PrepareContext, mode: Mode, input: String) -> Result<&2, &2, MappingError, String>:
+def prepareInput(context: PrepareContext, mode: Mode, input: String) -> Result<&2, &2, MappingError, String>:
   match context:
     case PrepareContext{mapping, normalization}: normalized(map(mapping, mode, input), normalization)
 
@@ -422,8 +422,8 @@ type LabelError is Data:
   JoinerContext{}
   MissingProperties{code: U32}
 
-type LabelLabel is Data:
-  LabelLabel{text: String, empty: Bool, bidi: Analysis}
+type ValidatedLabel is Data:
+  ValidatedLabel{text: String, empty: Bool, bidi: Analysis}
 
 def isEmpty(text: String) -> Bool:
   match text:
@@ -435,30 +435,30 @@ def effectiveMode(encoded: Bool, mode: Mode) -> Mode:
     case True{}: Nontransitional{}
     case False{}: mode
 
-def contextualResult(analysis: Result<&2, &2, U32, LabelContextAnalysis>, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, LabelLabel>:
+def contextualResult(analysis: Result<&2, &2, U32, LabelContextAnalysis>, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, ValidatedLabel>:
   match analysis checkJoiners:
     case Fail{code} _: Fail{MissingProperties{code}}
     case Done{LabelContextAnalysis{True{}, _, _}} _: Fail{LeadingMark{}}
     case Done{LabelContextAnalysis{False{}, _, False{}}} True{}: Fail{JoinerContext{}}
-    case Done{LabelContextAnalysis{False{}, bidi, _}} _: Done{LabelLabel{text, isEmpty(text), bidi}}
+    case Done{LabelContextAnalysis{False{}, bidi, _}} _: Done{ValidatedLabel{text, isEmpty(text), bidi}}
 
-def afterRules(failure: Maybe<&2, LabelRulesError>, properties: Table.Table<Data.PropertiesEntry>, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, LabelLabel>:
+def afterRules(failure: Maybe<&2, LabelRulesError>, properties: Table.Table<Data.PropertiesEntry>, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, ValidatedLabel>:
   match failure:
     case Some{error}: Fail{LabelRule{error}}
     case None{}: contextualResult(analyzeLabelContext(properties, text), checkJoiners, text)
 
-def afterNFC(normalized: Bool, mapping: Table.Table<Data.Entry>, properties: Table.Table<Data.PropertiesEntry>, rules: LabelRulesOptions, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, LabelLabel>:
+def afterNFC(normalized: Bool, mapping: Table.Table<Data.Entry>, properties: Table.Table<Data.PropertiesEntry>, rules: LabelRulesOptions, checkJoiners: Bool, +text: String) -> Result<&2, &2, LabelError, ValidatedLabel>:
   match normalized:
     case False{}: Fail{NotNFC{}}
     case True{}: afterRules(check(mapping, rules, text), properties, checkJoiners, text)
 
-def validate(context: Context, options: LabelOptions, label: Label) -> Result<&2, &2, LabelError, LabelLabel>:
+def validate(context: Context, options: LabelOptions, label: Label) -> Result<&2, &2, LabelError, ValidatedLabel>:
   match context options label:
     case Context{mapping, normalization, properties} LabelOptions{hyphens, std3, joiners, mode} Label{+text, encoded}:
       afterNFC(String.eq(text, Data.nfc(normalization, text)), mapping, properties,
         LabelRulesOptions{hyphens, std3, effectiveMode(encoded, mode)}, joiners, text)
 
-def afterDecode(result: Result<&2, &2, Error, Label>, context: Context, options: LabelOptions) -> Result<&2, &2, LabelError, LabelLabel>:
+def afterDecode(result: Result<&2, &2, Error, Label>, context: Context, options: LabelOptions) -> Result<&2, &2, LabelError, ValidatedLabel>:
   match result:
     case Fail{error}: Fail{ACEError{error}}
     case Done{label}: validate(context, options, label)
@@ -467,7 +467,7 @@ def afterDecode(result: Result<&2, &2, Error, Label>, context: Context, options:
 # splitting. ACE output is checked without repair. Empty-label/DNS-length and
 # domain-wide Bidi decisions remain with the domain processor; skip Bidi validity
 # for empty labels and apply it to every nonempty label in a Bidi domain.
-def process(context: Context, options: LabelOptions, input: String) -> Result<&2, &2, LabelError, LabelLabel>:
+def process(context: Context, options: LabelOptions, input: String) -> Result<&2, &2, LabelError, ValidatedLabel>:
   afterDecode(decode(input), context, options)
 
 
@@ -477,22 +477,22 @@ type BidiState is Data:
 def bidiStart() -> BidiState:
   BidiState{False{}, True{}}
 
-def bidiPush(state: BidiState, label: LabelLabel) -> BidiState:
+def bidiPush(state: BidiState, label: ValidatedLabel) -> BidiState:
   match state label:
-    case BidiState{rtl, valid} LabelLabel{_, empty, Analysis{labelRTL, labelValid}}:
+    case BidiState{rtl, valid} ValidatedLabel{_, empty, Analysis{labelRTL, labelValid}}:
       BidiState{rtl || labelRTL, valid && (empty || labelValid)}
 
 def bidiFinish(state: BidiState) -> Bool:
   match state:
     case BidiState{rtl, valid}: Bool.not(rtl) || valid
 
-def bidiScan(labels: List<&2, LabelLabel>, state: BidiState) -> Bool:
+def bidiScan(labels: List<&2, ValidatedLabel>, state: BidiState) -> Bool:
   match labels:
     case Nil{}: bidiFinish(state)
     case label <> rest: bidiScan(rest, bidiPush(state, label))
 
 # Every nonempty label participates, regardless of where RTL was encountered.
-def bidiValid(labels: List<&2, LabelLabel>) -> Bool:
+def bidiValid(labels: List<&2, ValidatedLabel>) -> Bool:
   bidiScan(labels, bidiStart())
 
 type Length is Data:
@@ -575,17 +575,17 @@ def encode(ascii: Bool, text: String) -> Result<&2, &2, Punycode.Error, String>:
     case True{}: Done{text}
     case False{}: asciiResult(Punycode.encode(text))
 
-def afterEncoding(result: Result<&2, &2, Punycode.Error, String>, label: LabelLabel, state: DomainState) -> Result<&2, &2, DomainError, DomainState>:
+def afterEncoding(result: Result<&2, &2, Punycode.Error, String>, label: ValidatedLabel, state: DomainState) -> Result<&2, &2, DomainError, DomainState>:
   match result state:
     case Fail{error} DomainState{index, _, _}: Fail{Encoding{index, error}}
     case Done{text} DomainState{index, reversed, bidi}: Done{DomainState{Succ{index}, text <> reversed, bidiPush(bidi, label)}}
 
-def encodeLabel(label: LabelLabel, state: DomainState) -> Result<&2, &2, DomainError, DomainState>:
+def encodeLabel(label: ValidatedLabel, state: DomainState) -> Result<&2, &2, DomainError, DomainState>:
   match label:
-    case LabelLabel{+text, empty, bidi}:
-      afterEncoding(encode(isASCII(text), text), LabelLabel{text, empty, bidi}, state)
+    case ValidatedLabel{+text, empty, bidi}:
+      afterEncoding(encode(isASCII(text), text), ValidatedLabel{text, empty, bidi}, state)
 
-def afterLabel(result: Result<&2, &2, LabelError, LabelLabel>, state: DomainState) -> Result<&2, &2, DomainError, DomainState>:
+def afterLabel(result: Result<&2, &2, LabelError, ValidatedLabel>, state: DomainState) -> Result<&2, &2, DomainError, DomainState>:
   match result state:
     case Fail{error} DomainState{index, _, _}: Fail{InvalidLabel{index, error}}
     case Done{label} previous: encodeLabel(label, previous)
@@ -621,7 +621,7 @@ def prepared(result: Result<&2, &2, MappingError, String>, context: Context, opt
 def prepare(context: Context, options: LabelOptions, input: String) -> Result<&2, &2, MappingError, String>:
   match context options:
     case Context{mapping, normalization, _} LabelOptions{_, _, _, mode}:
-      preparePrepare(PrepareContext{mapping, normalization}, mode, input)
+      prepareInput(PrepareContext{mapping, normalization}, mode, input)
 
 # Strict UTS #46 ToASCII with explicit flags and reusable immutable Unicode
 # tables. No default URL compatibility policy is selected here. URL host parsing

@@ -53,8 +53,8 @@ def Laws.entries_preserve_first_error(values, cause):
     case R.Property{_, _} <> rest: {==}
 
 law empty_entries_preserve_result:
-  for initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
-  {Client.layerEntries(Nil{}, initial) == initial : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
+  for initial: Result<&2, &2, H.HeaderSyntaxError, Client.HeaderState>
+  {Client.layerEntries(Nil{}, initial) == initial : Result<&2, &2, H.HeaderSyntaxError, Client.HeaderState>}
 
 def empty_entries_preserve_result(initial):
   match initial:
@@ -103,7 +103,7 @@ def Laws.entries_partition(left, initial, right):
     case Nil{} Fail{cause}: {==}
     case Nil{} Done{state}: {==}
     case R.Property{_, _} <> rest Fail{cause}:
-      Equal.sym(Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>, Client.layerEntries(right, Fail{cause}), Fail{cause}, Laws.entries_preserve_first_error(right, cause))
+      Equal.sym(Result<&2, &2, H.HeaderSyntaxError, Client.HeaderState>, Client.layerEntries(right, Fail{cause}), Fail{cause}, Laws.entries_preserve_first_error(right, cause))
     case R.Property{name, value} <> rest Done{state}: Laws.entries_partition(rest, Client.layerField(state, name, value), right)
 
 def Laws.accepted_owner_has_no_body_io(E, State, read, close, limit, metadata, body, accepted):

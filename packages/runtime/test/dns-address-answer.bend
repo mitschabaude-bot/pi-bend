@@ -18,7 +18,7 @@ def csv(bytes: List<&2, U32>, acc: String) -> String:
     case Nil{}: acc
     case byte <> rest: csv(rest, acc ++ U32.show(byte) ++ ",")
 
-def encoded(result: Result<&2, &2, Name.NameErrorOfMessage, List<&2, U32>>) -> String:
+def encoded(result: Result<&2, &2, Name.DomainNameError, List<&2, U32>>) -> String:
   match result:
     case Fail{_}: "bad-name"
     case Done{bytes}: csv(bytes, "")

@@ -39,7 +39,7 @@ def url(result: Result<&2, &2, Client.URLError, URL.URL>) -> String:
   match result:
     case Fail{Client.InvalidURL{_}}: "invalid-url"
     case Fail{Client.InvalidQuery{cause}}: failure(cause)
-    case Done{value}: "+" ++ Text.showText(Serialize.serializeSerialize(value, False{}))
+    case Done{value}: "+" ++ Text.showText(Serialize.serialize(value, False{}))
 
 def dispatch(context: Absolute.Context, kind: Char, text: String) -> String:
   match kind:

@@ -31,7 +31,7 @@ def showLabels(values: List<&2, List<&2, U32>>) -> List<&2, String>:
     case Nil{}: Nil{}
     case label <> rest: showBytes(label) <> showLabels(rest)
 
-def nameError(value: Name.NameErrorOfMessage) -> String:
+def nameError(value: Name.DomainNameError) -> String:
   match value:
     case Name.NameInvalidByte{}: "InvalidByte"
     case Name.InvalidLabel{}: "InvalidLabel"

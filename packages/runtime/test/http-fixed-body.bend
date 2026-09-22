@@ -10,12 +10,12 @@ def number(value: W.U64) -> String:
 
 def bytes(values: List<&2, U32>) -> String: String.join(Text.showNumbers(values), ",")
 
-def error(value: Body.FixedBodyBodyError) -> String:
+def error(value: Body.FixedBodyError) -> String:
   match value:
     case Body.FixedBodyInvalidByte{value}: "invalid:" ++ U32.show(value)
     case Body.FixedBodyIncompleteBody{remaining}: "incomplete:" ++ number(remaining)
 
-def finished(result: Result<&2, &2, Body.FixedBodyBodyError, Unit>) -> String:
+def finished(result: Result<&2, &2, Body.FixedBodyError, Unit>) -> String:
   match result:
     case Done{_}: "end"
     case Fail{value}: error(value)

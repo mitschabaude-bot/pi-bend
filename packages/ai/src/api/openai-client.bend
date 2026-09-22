@@ -51,7 +51,7 @@ type HeaderError is Data:
   TimeoutNotInteger{value: F.F64}
   TimeoutNegative{value: F.F64}
   TimeoutEncodingFailure{value: F.F64}
-  HeaderFailure{cause: H.HeaderHeaderError}
+  HeaderFailure{cause: H.HeaderSyntaxError}
   MissingAuthentication{}
 
 # Header layers
@@ -84,38 +84,38 @@ def nonempty(value: Maybe<&2, T.Nullable<String>>) -> Bool:
     case Some{T.PresentValue{SCon{_, _}}}: True{}
     case _: False{}
 
-def deleted(state: HeaderState, result: Result<&2, &2, H.HeaderHeaderError, String>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def deleted(state: HeaderState, result: Result<&2, &2, H.HeaderSyntaxError, String>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   match result:
     case Fail{cause}: Fail{cause}
     case Done{name}: Done{put(state, name, T.NullValue{})}
 
-def assigned(state: HeaderState, result: Result<&2, &2, H.HeaderHeaderError, H.Header>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def assigned(state: HeaderState, result: Result<&2, &2, H.HeaderSyntaxError, H.Header>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   match result:
     case Fail{cause}: Fail{cause}
     case Done{H.Header{name, value}}: Done{put(state, name, T.PresentValue{value})}
 
-def layerField(state: HeaderState, name: String, value: T.Nullable<String>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def layerField(state: HeaderState, name: String, value: T.Nullable<String>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   match value:
     case T.NullValue{}: deleted(state, H.normalizeName(name))
     case T.PresentValue{text}: assigned(state, H.normalize(name, text))
 
-def layerEntries(values: List<&2, R.Property<T.Nullable<String>>>, result: Result<&2, &2, H.HeaderHeaderError, HeaderState>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def layerEntries(values: List<&2, R.Property<T.Nullable<String>>>, result: Result<&2, &2, H.HeaderSyntaxError, HeaderState>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   match values result:
     case _ Fail{cause}: Fail{cause}
     case Nil{} Done{state}: Done{state}
     case R.Property{name, value} <> rest Done{state}: layerEntries(rest, layerField(state, name, value))
 
-def applyLayer(layer: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, H.HeaderHeaderError, HeaderState>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def applyLayer(layer: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, H.HeaderSyntaxError, HeaderState>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   match layer:
     case None{}: result
     case Some{R.Record{values}}: layerEntries(values, result)
 
-def layers(values: List<&2, Maybe<&2, T.ProviderHeaders()>>, result: Result<&2, &2, H.HeaderHeaderError, HeaderState>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def layers(values: List<&2, Maybe<&2, T.ProviderHeaders()>>, result: Result<&2, &2, H.HeaderSyntaxError, HeaderState>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   match values:
     case Nil{}: result
     case head <> rest: layers(rest, applyLayer(head, result))
 
-def build(values: List<&2, Maybe<&2, T.ProviderHeaders()>>) -> Result<&2, &2, H.HeaderHeaderError, HeaderState>:
+def build(values: List<&2, Maybe<&2, T.ProviderHeaders()>>) -> Result<&2, &2, H.HeaderSyntaxError, HeaderState>:
   layers(values, Done{emptyState()})
 
 def materialize(values: List<&2, R.Property<T.Nullable<String>>>) -> List<&2, R.Property<List<&2, String>>>:
@@ -196,7 +196,7 @@ def authenticate(state: HeaderState, accepted: Bool) -> Result<&2, &2, HeaderErr
     case False{}: Fail{MissingAuthentication{}}
     case True{}: Done{wireHeaders(state)}
 
-def assembled(result: Result<&2, &2, H.HeaderHeaderError, HeaderState>) -> Result<&2, &2, HeaderError, Headers.Headers>:
+def assembled(result: Result<&2, &2, H.HeaderSyntaxError, HeaderState>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match result:
     case Fail{cause}: Fail{HeaderFailure{cause}}
     case Done{+state}: authenticate(state, authenticated(state))
@@ -522,7 +522,7 @@ def input(-Reason: Data, request: Request, signal: Fetch.Signal(Reason)) -> Fetc
 
 def timeout(request: Request) -> Result<&2, &2, Duration.MillisecondsError, U32>:
   match request:
-    case Request{_, _, _, _, milliseconds}: Duration.millisecondsMilliseconds(milliseconds)
+    case Request{_, _, _, _, milliseconds}: Duration.exactMilliseconds(milliseconds)
 
 def connection(-E: Data, original: E, message: String) -> Retry.RequestFailure<E>:
   Retry.Provider{Retry.ProviderError{original, message, None{}, None{}, None{}, None{}}}

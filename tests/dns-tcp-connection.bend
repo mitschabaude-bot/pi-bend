@@ -67,9 +67,9 @@ def abortReason(reason: Abort.AbortReason<String>) -> Bool:
     case Abort.Supplied{why}: String.eq(why, "stop")
     case _: False{}
 
-def transportError(kind: String, error: SocketIO.SocketErrorOfSocket<String>) -> Bool:
+def transportError(kind: String, error: SocketIO.Error<String>) -> Bool:
   match error:
-    case SocketIO.SocketAborted{why}: String.eq(kind, "abort") && abortReason(why)
+    case SocketIO.Aborted{why}: String.eq(kind, "abort") && abortReason(why)
     case _: False{}
 
 def framingError(kind: String, error: Frame.TcpFrameError) -> Bool:
@@ -194,7 +194,7 @@ def args(values: List<String>) -> IO(Unit):
         +controller : Abort.AbortController<String> <- Abort.new(String)
         result : Result<&2, &1, Connect.Error<String>, Socket> <- Connect.connect(String, endpoint(family), Scalar.decimal(port, 0), Abort.signal(String, controller))
         socket : Socket <- connected(result)
-        adopted : Result<&2, &1, SocketIO.SocketErrorOfSocket<String>, SocketIO.Owner<String>> <- SocketIO.create(String, socket, Abort.signal(String, controller))
+        adopted : Result<&2, &1, SocketIO.Error<String>, SocketIO.Owner<String>> <- SocketIO.create(String, socket, Abort.signal(String, controller))
         socket : SocketIO.Owner<String> <- Test.opened(adopted)
         run(parseMode(mode), controller, TCP.adopt(String, socket))
         Abort.dispose(String, controller)

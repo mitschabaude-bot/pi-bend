@@ -28,9 +28,9 @@ def budget(entries: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> String:
     case Nil{}: ""
     case Plan.Attempt{_, _, duration} <> rest: U32.show(U32.from_nat(Timeout.seconds(duration))) ++ "," ++ budget(rest)
 
-def transport(options: Options.OptionsOptions, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
+def transport(options: Options.ResolverOptions, servers: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> IO(Unit):
   match options:
-    case Options.OptionsOptions{ndots, +timeout, +attempts, +features}: IO.print("transport:" ++ U32.show(timeout) ++ ":" ++ U32.show(attempts) ++ ":" ++ budget(servers) ++ ":" ++ OptionsTest.flags(OptionsTest.features(), Options.OptionsOptions{ndots, timeout, attempts, features}, ""))
+    case Options.ResolverOptions{ndots, +timeout, +attempts, +features}: IO.print("transport:" ++ U32.show(timeout) ++ ":" ++ U32.show(attempts) ++ ":" ++ budget(servers) ++ ":" ++ OptionsTest.flags(OptionsTest.features(), Options.ResolverOptions{ndots, timeout, attempts, features}, ""))
 
 def config(value: Resolver.Config<Endpoint.Endpoint>) -> IO(Unit):
   match value:
