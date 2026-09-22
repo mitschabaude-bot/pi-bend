@@ -26,7 +26,7 @@ def cases():
         for a in [n, n+1, (1 << bits)-1]:
             for b in [0, 1, n-1, rng.randrange(n)]:
                 result.append((f'm:{bits}:{a}:{b}', str(a*b % n)))
-    for n in PRIMES + [1, 3, 9, 15, 65535, 65537, 65536, 0]:
+    for n in PRIMES + [2**384-1, 2**383+1, 2**256-1, 2**255+1, 2**521-1, 1, 3, 9, 15, 65535, 65537, 65536, 0]:
         for _ in range(30):
             a = rng.randrange(max(n, 1))
             valid = n > 1 and n % 2 and math.gcd(a, n) == 1
