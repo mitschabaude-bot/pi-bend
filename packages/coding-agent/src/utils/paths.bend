@@ -4,6 +4,8 @@ import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/uri-component.bend as URI
 import ../../../runtime/src/text.bend as Text
+import ../../../runtime/src/unicode.bend as Unicode
+import ../../../runtime/src/idna.bend as IDNA
 
 # Pure path-input policy. The host supplies cwd/home and its reusable URL
 # context; no environment lookup or filesystem access is hidden in normalization.
@@ -121,3 +123,39 @@ def loadEnvironment(context: URL.Context) -> IO(Result<&2, &2, FS.Error, Environ
   do IO<Result<&2, &2, FS.Error, Environment>>:
     cwd : Result<&2, &2, FS.Error, String> <- FS.cwd()
     loadHome(context, cwd)
+
+# Pi probes real filenames before trying its macOS screenshot spelling variants.
+def screenshot(path: String, reversed: String) -> String:
+  match path:
+    case SCon{' ',SCon{+a,SCon{+m,SCon{'.',rest}}}}:
+      +amPm = (Char.is_eq(a,'A') || Char.is_eq(a,'a') || Char.is_eq(a,'P') || Char.is_eq(a,'p')) && (Char.is_eq(m,'M') || Char.is_eq(m,'m'))
+      screenshot(rest,SCon{'.',SCon{m,SCon{a,SCon{Bool.pick(Char,amPm,'\u{202f}',' '),reversed}}}})
+    case SCon{char,rest}: screenshot(rest,SCon{char,reversed})
+    case SNil{}: String.reverse(reversed)
+
+def curly(path: String, reversed: String) -> String:
+  match path:
+    case SCon{+char,rest}: curly(rest,SCon{Bool.pick(Char,Char.is_eq(char,'\''),'\u{2019}',char),reversed})
+    case SNil{}: String.reverse(reversed)
+
+def normalization(environment: Environment) -> Unicode.Tables:
+  match environment:
+    case Environment{_,_,URL.Context{IDNA.Context{_,tables,_},_}}: tables
+
+def exists(result: Result<&1,&1,U32 & String,Unit>) -> Bool:
+  match result:
+    case Done{Unit{}}: True{}
+    case Fail{_}: False{}
+
+def findPath(candidates: List<&2,String>, +original: String, found: Maybe<&2,String>) -> IO(String):
+  match candidates found:
+    case _ Some{path}: IO.pure(String,path)
+    case Nil{} None{}: IO.pure(String,original)
+    case +path <> rest None{}:
+      do IO<String>:
+        value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
+        findPath(rest,original,Bool.pick(Maybe<&2,String>,exists(value),Some{path},None{}))
+
+def resolvedReadPath(environment: Environment, +original: String) -> IO(String):
+  +nfd = Unicode.nfd(normalization(environment),original)
+  findPath(original <> screenshot(original,"") <> nfd <> curly(original,"") <> curly(nfd,"") <> Nil{},original,None{})

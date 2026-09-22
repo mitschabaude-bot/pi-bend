@@ -11,9 +11,6 @@ import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/f64.bend as Number
-import ../../../../runtime/src/unicode.bend as Unicode
-import ../../../../runtime/src/url.bend as URL
-import ../../../../runtime/src/idna.bend as IDNA
 import ./truncate.bend as Truncate
 import ../../../../runtime/src/string.bend as Strings
 
@@ -260,42 +257,6 @@ def read(operations: ReadOperations, +absolute: String, input: ReadToolInput, re
               then(List<&2,U32>,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,Callback.call(String,ResultOf(List<&2,U32>),reader,absolute),bytes =>
                 content(input,bytes,detected,resize,processor,note))))))
 
-# Pi probes real filenames before trying its macOS screenshot spelling variants.
-def screenshot(path: String, reversed: String) -> String:
-  match path:
-    case SCon{' ',SCon{+a,SCon{+m,SCon{'.',rest}}}}:
-      +amPm = (Char.is_eq(a,'A') || Char.is_eq(a,'a') || Char.is_eq(a,'P') || Char.is_eq(a,'p')) && (Char.is_eq(m,'M') || Char.is_eq(m,'m'))
-      screenshot(rest,SCon{'.',SCon{m,SCon{a,SCon{Bool.pick(Char,amPm,'\u{202f}',' '),reversed}}}})
-    case SCon{char,rest}: screenshot(rest,SCon{char,reversed})
-    case SNil{}: String.reverse(reversed)
-
-def curly(path: String, reversed: String) -> String:
-  match path:
-    case SCon{+char,rest}: curly(rest,SCon{Bool.pick(Char,Char.is_eq(char,'\''),'\u{2019}',char),reversed})
-    case SNil{}: String.reverse(reversed)
-
-def normalization(environment: Paths.Environment) -> Unicode.Tables:
-  match environment:
-    case Paths.Environment{_,_,URL.Context{IDNA.Context{_,tables,_},_}}: tables
-
-def exists(result: Result<&1,&1,U32 & String,Unit>) -> Bool:
-  match result:
-    case Done{Unit{}}: True{}
-    case Fail{_}: False{}
-
-def findPath(candidates: List<&2,String>, +original: String, found: Maybe<&2,String>) -> IO(String):
-  match candidates found:
-    case _ Some{path}: IO.pure(String,path)
-    case Nil{} None{}: IO.pure(String,original)
-    case +path <> rest None{}:
-      do IO<String>:
-        value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-        findPath(rest,original,Bool.pick(Maybe<&2,String>,exists(value),Some{path},None{}))
-
-def resolvedPath(environment: Paths.Environment, +original: String) -> IO(String):
-  +nfd = Unicode.nfd(normalization(environment),original)
-  findPath(original <> screenshot(original,"") <> nfd <> curly(original,"") <> curly(nfd,"") <> Nil{},original,None{})
-
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
   match value:
     case Done{count}: Done{Some{count}}
@@ -322,7 +283,7 @@ def execute(environment: Invocation, +input: ReadToolInput, note: Maybe<&2,Bool>
     case _ Fail{cause}: IO.pure(ToolResult(),Fail{InvalidPath{cause}})
     case Invocation{paths,_,operations,resize,processor} Done{path}:
       do IO<ToolResult()>:
-        absolute : String <- resolvedPath(paths,path)
+        absolute : String <- Paths.resolvedReadPath(paths,path)
         value : ToolResult() <- read(operations,absolute,input,resize,processor,note,signal)
         settled(Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,signal,value)
 
