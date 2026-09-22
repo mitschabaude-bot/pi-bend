@@ -2416,13 +2416,17 @@
     },
     {
       "source": "packages/coding-agent/test/skills.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/system-prompt.bend",
         "tests/system_prompt_check.py",
-        "tests/system_prompt_reference.ts"
+        "tests/system_prompt_reference.ts",
+        "tests/skills.bend",
+        "tests/skills_check.py",
+        "tests/skills_reference.mjs",
+        "tests/skills_reference.ts"
       ],
-      "notes": "All seven formatSkillsForPrompt cases pass with typed Skill/SourceInfo, XML escaping, filtering and read/Bash instructions. Discovery, validation, frontmatter and loading remain pending. See tests/system-prompt.md.",
+      "notes": "All 28 pinned named assertions are represented: seven formatting cases retain direct system-prompt coverage, and the original loader calls compare complete typed results. Native discovery, metadata validation, ignore precedence, canonical-file deduplication, configured paths and collisions pass 37 complete loader comparisons plus seven explicit native policy cases on Bun/native one/four. Strict metadata and UTF8 rejection, scalar validation lengths, cycle diagnostics and corrected escaped-exclamation ignore handling are documented in tests/skills.md. Resource-loader/CLI wiring and complete YAML dependency grammar remain separate work.",
       "sha256": "f7d5fe8633df112c10c61c4ee17748ad1f7069f76d71fb8357d7e27a17b2a533"
     },
     {
