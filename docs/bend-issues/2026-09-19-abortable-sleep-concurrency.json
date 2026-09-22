@@ -2,7 +2,7 @@
   "scope": "Core cases plus eight broadcasts to 128 sleeps each, repeated abort/reason retention, independent signals and 90 deadline/abort races per process. Creation/cancellation timing may vary. Native exit audit includes all channel rows; Bun audits timers only. Instrumented finite checks, not a performance comparison or exhaustive race proof.",
   "sources": {
     "/home/agent/code/pi-bend/packages/runtime/test/abortable-sleep.bend": "498b4f87040ac1007aa80ac578617378796703d729becd64d59bbc27c54b8708",
-    "/home/agent/code/pi-bend/packages/runtime/src/socket.bend": "5f807931a28691ac2ac07b202acb87a7bf26ab75eb116cc660455d936781eb4e",
+    "/home/agent/code/pi-bend/packages/runtime/src/socket.bend": "386408608b09efeb9f6cb7d6de2478f39a8c792775f1a892d423cdb39e9c73e8",
     "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/base.bend": "75cae8cd69506f74d89545abef3ea48b6e0bd0fd73e79931c9aea7b344e78963",
     "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/effs/timer.c": "b6985cd3adb6ce750d13837594c2b6f2afe88761e48d42734431f92b5592f51a",
     "/home/agent/code/pi-bend/build/bend-native-toolchain/bend2/effs/timer.js": "b299c324486301e5d5bc0fc4bba24c28daf8d711dbc1f6ea9a87c945b532950f"
@@ -11,7 +11,7 @@
     {
       "backend": "native-1",
       "repetition": 0,
-      "seconds": 0.18785066343843937,
+      "seconds": 0.1850621337071061,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -23,7 +23,7 @@
     {
       "backend": "native-1",
       "repetition": 1,
-      "seconds": 0.1910606250166893,
+      "seconds": 0.18518150504678488,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -35,7 +35,7 @@
     {
       "backend": "native-1",
       "repetition": 2,
-      "seconds": 0.19497991353273392,
+      "seconds": 0.1838532341644168,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -47,11 +47,11 @@
     {
       "backend": "native-1",
       "repetition": 3,
-      "seconds": 0.19026273023337126,
+      "seconds": 0.19137512240558863,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
-      "cancelled_parked": 1055,
+      "cancelled_parked": 1056,
       "live": 0,
       "waiting": 0,
       "channels": 0
@@ -59,7 +59,7 @@
     {
       "backend": "native-1",
       "repetition": 4,
-      "seconds": 0.1899832170456648,
+      "seconds": 0.18968575913459063,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -71,7 +71,7 @@
     {
       "backend": "native-1",
       "repetition": 5,
-      "seconds": 0.19163284916430712,
+      "seconds": 0.18448648042976856,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -83,7 +83,7 @@
     {
       "backend": "native-1",
       "repetition": 6,
-      "seconds": 0.1898399069905281,
+      "seconds": 0.18575099762529135,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -95,11 +95,11 @@
     {
       "backend": "native-1",
       "repetition": 7,
-      "seconds": 0.18985731713473797,
+      "seconds": 0.18400735594332218,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
-      "cancelled_parked": 1055,
+      "cancelled_parked": 1056,
       "live": 0,
       "waiting": 0,
       "channels": 0
@@ -107,7 +107,7 @@
     {
       "backend": "native-4",
       "repetition": 0,
-      "seconds": 0.18611190095543861,
+      "seconds": 0.19192729610949755,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -119,7 +119,7 @@
     {
       "backend": "native-4",
       "repetition": 1,
-      "seconds": 0.19625055138021708,
+      "seconds": 0.18761400319635868,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -131,11 +131,11 @@
     {
       "backend": "native-4",
       "repetition": 2,
-      "seconds": 0.2029954269528389,
+      "seconds": 0.18934525549411774,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
-      "cancelled_parked": 1055,
+      "cancelled_parked": 1056,
       "live": 0,
       "waiting": 0,
       "channels": 0
@@ -143,7 +143,7 @@
     {
       "backend": "native-4",
       "repetition": 3,
-      "seconds": 0.19255190528929234,
+      "seconds": 0.18717795982956886,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -155,7 +155,7 @@
     {
       "backend": "native-4",
       "repetition": 4,
-      "seconds": 0.18920438177883625,
+      "seconds": 0.18669946677982807,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -167,7 +167,7 @@
     {
       "backend": "native-4",
       "repetition": 5,
-      "seconds": 0.18849002663046122,
+      "seconds": 0.18526275549083948,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -179,7 +179,7 @@
     {
       "backend": "native-4",
       "repetition": 6,
-      "seconds": 0.1918725213035941,
+      "seconds": 0.18778744339942932,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -191,7 +191,7 @@
     {
       "backend": "native-4",
       "repetition": 7,
-      "seconds": 0.1910913549363613,
+      "seconds": 0.18683482706546783,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -203,19 +203,7 @@
     {
       "backend": "bun",
       "repetition": 0,
-      "seconds": 0.43512093368917704,
-      "created": 1151,
-      "closed": 1151,
-      "peak_live": 128,
-      "cancelled_parked": 1054,
-      "live": 0,
-      "waiting": 0,
-      "channels": null
-    },
-    {
-      "backend": "bun",
-      "repetition": 1,
-      "seconds": 0.3097214810550213,
+      "seconds": 0.2896675821393728,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -226,8 +214,8 @@
     },
     {
       "backend": "bun",
-      "repetition": 2,
-      "seconds": 0.2951898816972971,
+      "repetition": 1,
+      "seconds": 0.2949826717376709,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -238,8 +226,20 @@
     },
     {
       "backend": "bun",
+      "repetition": 2,
+      "seconds": 0.34823604859411716,
+      "created": 1151,
+      "closed": 1151,
+      "peak_live": 128,
+      "cancelled_parked": 1055,
+      "live": 0,
+      "waiting": 0,
+      "channels": null
+    },
+    {
+      "backend": "bun",
       "repetition": 3,
-      "seconds": 0.296648470684886,
+      "seconds": 0.29820726718753576,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -251,7 +251,7 @@
     {
       "backend": "bun",
       "repetition": 4,
-      "seconds": 0.3122002677991986,
+      "seconds": 0.34559052903205156,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -263,7 +263,7 @@
     {
       "backend": "bun",
       "repetition": 5,
-      "seconds": 0.3001325149089098,
+      "seconds": 0.2984498990699649,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -275,7 +275,7 @@
     {
       "backend": "bun",
       "repetition": 6,
-      "seconds": 0.2967702513560653,
+      "seconds": 0.5679506054148078,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
@@ -287,11 +287,11 @@
     {
       "backend": "bun",
       "repetition": 7,
-      "seconds": 0.295886836014688,
+      "seconds": 0.29670786671340466,
       "created": 1151,
       "closed": 1151,
       "peak_live": 128,
-      "cancelled_parked": 1056,
+      "cancelled_parked": 1055,
       "live": 0,
       "waiting": 0,
       "channels": null

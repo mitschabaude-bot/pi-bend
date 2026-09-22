@@ -49,7 +49,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/url.bend` | 32 | `packages/runtime/src/url.bend` |
 | `laws/utf8.bend` | 6 | `packages/runtime/src/utf8.bend` |
 | `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
-| `laws/x509-trust.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
+| `laws/x509.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
 | **Total** | **502** | |
 
 The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.

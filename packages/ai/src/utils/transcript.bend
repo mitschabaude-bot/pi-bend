@@ -190,18 +190,13 @@ def resolveTranscript(-P: Data, -A: Data, -G: Data, -H: Data, context: T.Transcr
     case Some{True{}}: context
     case _: collapseSystemMessages(P, A, G, H, context)
 
-def present(-V: Data, value: Maybe<&2, V>) -> Bool:
-  match value:
-    case None{}: False{}
-    case Some{_}: True{}
-
 def addNames(-P: Data, added: List<&2, T.Tool<P>>, +seen: M.OrderedMap<Unit>) -> M.OrderedMap<Unit> & Bool:
   match added:
     case Nil{}: (seen, False{})
     case reference <> rest:
       tool = {reference : T.Tool<P>}
       +name = {toolName(P, tool) : String}
-      Bool.pick(M.OrderedMap<Unit> & Bool, present(Unit, M.get(Unit, seen, name)), (seen, True{}), addNames(P, rest, M.set(Unit, seen, name, Unit{})))
+      Bool.pick(M.OrderedMap<Unit> & Bool, Maybe.is_some(&2, Unit, M.get(Unit, seen, name)), (seen, True{}), addNames(P, rest, M.set(Unit, seen, name, Unit{})))
 
 def nameChanges(-P: Data, message: T.SystemMessage<P>, seen: M.OrderedMap<Unit>) -> M.OrderedMap<Unit> & Bool:
   match message:

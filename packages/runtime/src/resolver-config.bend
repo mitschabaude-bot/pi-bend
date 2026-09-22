@@ -629,7 +629,6 @@ def checkedRequest(report: OptionsReport) -> Result<&2, &2, List<&2, Diagnostic>
 def prepareStrict(tokens: List<&2, String>) -> Result<&2, &2, List<&2, Diagnostic>, Prepared>:
   checkedRequest(interpretStrict(tokens, defaults()))
 
-# ---- from resolver-searchLocal.bend ----
 # Search consumes ndots/no-TLD only. Keep the complete selected options for
 # transport, response, retry and reload layers rather than discarding flags.
 type Configuration is Data:

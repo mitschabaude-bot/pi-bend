@@ -30,7 +30,7 @@ def messages() -> List<&2, T.Message<Parameters, Arguments, Unit, Unit>>:
 
 def maxTokens(options: T.StreamOptions<Unit, Unit, Unit, Unit, String>) -> Bool:
   match options:
-    case T.StreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, Some{value}, _, _, _, _, _}: E.equalOrder(F.compare(value, F.fromU32(5881)))
+    case T.StreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, Some{value}, _, _, _, _, _}: F.isEqual(F.compare(value, F.fromU32(5881)))
     case _: False{}
 
 def main() -> IO(Unit):

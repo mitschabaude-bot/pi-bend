@@ -2,6 +2,12 @@
 
 Reference: pi-mono `46c9de402`, `packages/agent`. This is a partial library port, separate from the bootstrap CLI. The native Agent owner executes the assembled loop. The broader API, configuration mutation accessors and most named upstream Agent tests remain unfinished.
 
+## Modules
+
+`types.bend` (pi's agent `types.ts`, including the stream lease at the provider boundary), `agent-loop.bend` (`agent-loop.ts`: tool preparation, sequential and parallel execution, event emission, turn completion, tool-change declarations, the main loop and its entries), `agent.bend` (`agent.ts`: immutable state transitions, the two pending queues, continue planning, the synchronized run owner, listeners, failure recovery and the public `Agent`), `stream-fn.bend` (the default stream-function registry) and `harness/utils/truncate.bend`.
+
+## History
+
 `src/types.bend` preserves the typed tool, message, event, context, configuration and hook interfaces. Ordinary records and message/tool lists are immutable values. Custom messages and argument/result types are explicit generic parameters. Reusable callbacks, cancellation and running-agent state are effectful resources; they are not hidden inside ordinary data to reproduce JavaScript aliasing.
 
 `src/providers.bend` connects the modular OpenAI Responses provider to `StreamFn`. Its option projection retains the host's configuration type, and each response carries an affine release action owning its provider run. The loop releases it after consuming the response; no background reaper, shared run slot or transcript conversion is needed. Provider terminal errors remain assistant error messages, while a cleanup failure after success maps into the host's error type. The callback and its borrowed TLS configuration must outlive active runs.

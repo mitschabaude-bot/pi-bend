@@ -1436,21 +1436,6 @@ def hostResult(result: Result<&2, &2, Error, Host>, +schemeAbsolute: Scheme, use
     case Fail{reason}: Fail{reason}
     case Done{value}: portResult(parsedPort(port, schemeAbsolute), schemeAbsolute, credentials(user), value, remainder)
 
-def presentUser(value: Maybe<&2, Credentials>) -> Bool:
-  match value:
-    case None{}: False{}
-    case Some{_}: True{}
-
-def presentPort(value: Maybe<&2, String>) -> Bool:
-  match value:
-    case None{}: False{}
-    case Some{_}: True{}
-
-def empty(text: String) -> Bool:
-  match text:
-    case SNil{}: True{}
-    case _: False{}
-
 def checkedAuthority(missing: Bool, context: Context, +schemeAbsolute: Scheme, text: String, user: Maybe<&2, Credentials>, port: Maybe<&2, String>, remainder: String) -> Result<&2, &2, Error, URL>:
   match missing:
     case True{}: Fail{MissingHost{}}
@@ -1458,7 +1443,7 @@ def checkedAuthority(missing: Bool, context: Context, +schemeAbsolute: Scheme, t
 
 def authorityAbsolute(context: Context, +schemeAbsolute: Scheme, prefix: Prefix) -> Result<&2, &2, Error, URL>:
   match prefix:
-    case Prefix{Tokens{+user, +text, +port}, remainder}: checkedAuthority(empty(text) && (isSpecialScheme(schemeAbsolute) || presentUser(user) || presentPort(port)), context, schemeAbsolute, text, user, port, remainder)
+    case Prefix{Tokens{+user, +text, +port}, remainder}: checkedAuthority(String.is_empty(text) && (isSpecialScheme(schemeAbsolute) || Maybe.is_some(&2, Credentials, user) || Maybe.is_some(&2, String, port)), context, schemeAbsolute, text, user, port, remainder)
 
 def slashes(text: String) -> String:
   match text:
