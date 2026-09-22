@@ -4,6 +4,7 @@ import ../../runtime/src/deferred.bend as Deferred
 import ../../runtime/src/serial-resource.bend as Serial
 import ../../runtime/src/utf8.bend as UTF8
 import ../../runtime/src/string.bend as Strings
+import ../../runtime/src/posix-path.bend as Path
 import ./stdin-buffer.bend as Input
 
 type KeyboardProtocolNegotiationSequence is Data:
@@ -649,18 +650,31 @@ def envText(value: Result<&1,&1,U32 & String,String>) -> String:
     case Fail{_}: ""
 def dimensionFallback(value: Result<&1,&1,U32 & String,String>,fallback: U32) -> U32:
   Maybe.default(&2,U32,escapeTimeoutDigits(envText(value),0,False{}),fallback)
-def logPathKind(+path: String,result: Result<&1,&1,U32 & String,U32>) -> Maybe<&2,String>:
+def logField(+value: U32) -> String:
+  Bool.pick(String,U32.is_lt(value,10),"0","") ++ U32.show(value)
+def logFilename(time: LocalTime,pid: U32) -> String:
+  match time:
+    case LocalTime{year,month,day,hour,minute,second}:
+      "tui-" ++ U32.show(year) ++ "-" ++ logField(month) ++ "-" ++ logField(day) ++ "_" ++ logField(hour) ++ "-" ++ logField(minute) ++ "-" ++ logField(second) ++ "-" ++ U32.show(pid) ++ ".log"
+def directoryLogPath(+path: String,pid: U32,time: Result<&1,&1,U32 & String,LocalTime>) -> Maybe<&2,String>:
+  match time:
+    case Done{time}: Some{Path.join(path,logFilename(time,pid))}
+    case Fail{_}: Some{path}
+def logPathKind(+path: String,result: Result<&1,&1,U32 & String,U32>) -> IO(Maybe<&2,String>):
   match result:
-    case Done{2}: None{}
-    case _: Some{path}
-# Directory naming needs local civil time/PID and remains a separate follow-up.
-def exactLogPath(path: String) -> IO(Maybe<&2,String>):
+    case Done{2}:
+      do IO<Maybe<&2,String>>:
+        pid : U32 <- Process.id()
+        time : Result<&1,&1,U32 & String,LocalTime> <- Clock.localTime()
+        return directoryLogPath(path,pid,time)
+    case _: IO.pure(Maybe<&2,String>,Some{path})
+def resolveLogPath(path: String) -> IO(Maybe<&2,String>):
   match path:
     case SNil{}: IO.pure(Maybe<&2,String>,None{})
     case +path:
       do IO<Maybe<&2,String>>:
         kind : Result<&1,&1,U32 & String,U32> <- File.kind(path)
-        return logPathKind(path,kind)
+        logPathKind(path,kind)
 def processOptions() -> IO(Options):
   do IO<Options>:
     escape : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_TUI_ESC_TIMEOUT")
@@ -669,7 +683,7 @@ def processOptions() -> IO(Options):
     columns : Result<&1,&1,U32 & String,String> <- IO.get_env("COLUMNS")
     rows : Result<&1,&1,U32 & String,String> <- IO.get_env("LINES")
     logging : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_TUI_WRITE_LOG")
-    logPath : Maybe<&2,String> <- exactLogPath(envText(logging))
+    logPath : Maybe<&2,String> <- resolveLogPath(envText(logging))
     return Options{0,1,resolveEscapeTimeoutMs(envText(escape),envText(connection),envText(tty)),Dimensions{dimensionFallback(columns,80),dimensionFallback(rows,24)},logPath}
 def startProcess(input: Callback.Callback<String,Unit>,resize: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   do IO<Result<&2,&1,Error,ProcessTerminal>>:

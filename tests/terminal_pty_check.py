@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Owned Linux PTY tests; no writes or signals target a user's terminal."""
 import argparse
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import errno
 import fcntl
 import json
@@ -169,6 +171,23 @@ def main():
         out,lines=s.finish()
         assert 'write:error' in lines and b'logged ' in out,lines
         count+=1
+    # Directory names follow local wall time and the child PID, including
+    # symlinked directories. File contents retain the public write contract.
+    for zone in ['UTC', 'Pacific/Kiritimati', 'America/New_York']:
+        with tempfile.TemporaryDirectory() as directory:
+            parent=Path(directory)
+            target=parent/'logs';target.mkdir()
+            link=parent/'linked';link.symlink_to(target, target_is_directory=True)
+            before=int(time.time())
+            s=Session(args.threads,'write',env={**os.environ,'TZ':zone,'PI_TUI_WRITE_LOG':str(link)})
+            out,lines=s.finish()
+            after=int(time.time())
+            files=list(target.iterdir())
+            expected={f"tui-{datetime.fromtimestamp(second,ZoneInfo(zone)).strftime('%Y-%m-%d_%H-%M-%S')}-{s.process.pid}.log" for second in range(before,after+1)}
+            assert len(files)==1 and files[0].name in expected,(zone,files,expected)
+            assert files[0].read_text()=='logged Ω',(zone,files[0].read_text())
+            assert 'write:ok' in lines and b'logged ' in out,lines
+            count+=1
     s=Session(args.threads)
     s.send(bytes([255]))
     out,lines=s.finish('error')

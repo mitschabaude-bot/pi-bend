@@ -3598,9 +3598,10 @@
     },
     {
       "source": "packages/tui/test/terminal.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b63dbc3886282a7642c5af452a28ada1888d941352e1e514a1049ff1bed0ced4"
+      "status": "partial",
+      "ports": ["tests/terminal-protocol.bend", "tests/terminal.bend"],
+      "sha256": "b63dbc3886282a7642c5af452a28ada1888d941352e1e514a1049ff1bed0ced4",
+      "notes": "All 21 original source tests execute in the reference harness; 19 recorded pure helper calls and 90 negotiation traces replay on Bun/native one/four. The owned Linux driver passes 35 PTY/file scenarios on native one/four, including descriptor reuse, signals, cleanup, cancellation and directory log naming across time zones. This does not cover native Windows/macOS terminal setup or modifier sensing, socket-backed stdio, or complete interactive TUI integration. See tests/terminal.md."
     },
     {
       "source": "packages/tui/test/truncate-to-width.test.ts",
