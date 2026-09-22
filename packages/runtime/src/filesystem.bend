@@ -146,3 +146,44 @@ def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
   do IO<Result<&2,&2,Error,Word.U64>>:
     result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
     return fileSize(result)
+
+# Metadata inspection never opens the contents of FIFOs, devices or sockets.
+type FileKind is Data:
+  RegularFile{}
+  Directory{}
+  SymbolicLink{}
+  Other{}
+
+type DirectoryEntry is Data:
+  DirectoryEntry{name: String, kind: FileKind}
+
+def fileKindValue(value: U32) -> FileKind:
+  match value:
+    case 1: RegularFile{}
+    case 2: Directory{}
+    case 3: SymbolicLink{}
+    case _: Other{}
+
+# stat follows links; a dangling link reports the underlying OS error.
+def fileKind(path: String) -> IO(Result<&2,&2,Error,FileKind>):
+  do IO<Result<&2,&2,Error,FileKind>>:
+    result : Result<&1,&1,U32 & String,U32> <- File.kind(path)
+    return Result.map(&2,&2,Error,U32,FileKind,fileKindValue,system(U32,result))
+
+def directoryEntries(values: List<(List<&2,U32> & U32)>, reversed: List<&2,DirectoryEntry>) -> Result<&2,&2,Error,List<&2,DirectoryEntry>>:
+  match values:
+    case Nil{}: Done{List.reverse(&2,DirectoryEntry,reversed)}
+    case (bytes,kind) <> rest:
+      Result.bind(&2,&2,Error,String,List<&2,DirectoryEntry>,decoded(Utf8.decodeWith(Utf8.Preserve{},bytes)),name => directoryEntries(rest,DirectoryEntry{name,fileKindValue(kind)} <> reversed))
+
+def directoryResult(result: Result<&1,&1,U32 & String,List<(List<&2,U32> & U32)>>) -> Result<&2,&2,Error,List<&2,DirectoryEntry>>:
+  match result:
+    case Fail{(code,message)}: Fail{System{code,message}}
+    case Done{entries}: directoryEntries(entries,Nil{})
+
+# Entries preserve OS enumeration order. Consumers choose their own sorting;
+# symlink entries are reported as links, and invalid UTF-8 names fail explicitly.
+def readDirectory(path: String) -> IO(Result<&2,&2,Error,List<&2,DirectoryEntry>>):
+  do IO<Result<&2,&2,Error,List<&2,DirectoryEntry>>>:
+    result : Result<&1,&1,U32 & String,List<(List<&2,U32> & U32)>> <- Directory.read_bytes(path)
+    return directoryResult(result)
