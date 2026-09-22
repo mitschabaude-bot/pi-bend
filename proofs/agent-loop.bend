@@ -82,3 +82,14 @@ def Laws.only_length_stops_are_truncated(Arguments, DiagnosticDetails, content, 
     case Ai.Error{}: {==}
     case Ai.Aborted{}: {==}
     case Ai.Deferred{}: {==}
+
+def Laws.a_failed_open_has_nothing_to_release(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, context, emit, error): {==}
+
+def Laws.an_earlier_failure_survives_the_release(Arguments, DiagnosticDetails, ExecutionError, error, cleanup):
+  match cleanup:
+    case Done{unit}: {==}
+    case Fail{failure}: {==}
+
+def Laws.a_release_failure_fails_a_consumed_response(Arguments, DiagnosticDetails, ExecutionError, message, error): {==}
+
+def Laws.a_clean_release_keeps_the_message(Arguments, DiagnosticDetails, ExecutionError, message): {==}

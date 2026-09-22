@@ -5,6 +5,7 @@ import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/utils/diagnostics.bend as Diagnostics
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/f64.bend as F
+import ../packages/runtime/src/ref.bend as Ref
 
 # Tool execution mode: a single sequential tool or a sequential configuration
 # makes the whole assistant batch sequential; otherwise it runs in parallel.
@@ -186,3 +187,46 @@ law only_length_stops_are_truncated:
   for endTurn: Maybe<&2, Bool>
   for timestamp: F.F64
   {Loop.lengthLimited(Arguments, DiagnosticDetails, Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}) == isLength(reason) : Bool}
+
+# The stream lease: a failed open has nothing to release; after a consumed
+# response the release runs once, an earlier failure survives a release
+# failure, and a clean release keeps the message.
+
+law a_failed_open_has_nothing_to_release:
+  for -Parameters: Data
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for -ToolDetails: Data
+  for -Custom: Data
+  for -ValidatedArguments: Data
+  for -Signal: Data
+  for -ExecutionError: Data
+  for -PartialResult: Data
+  for -ExecutionResult: Data
+  for context: Ref.Ref<T.AgentContext<Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError>>
+  for emit: Loop.AgentEventSink(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError)
+  for error: ExecutionError
+  {Loop.openedAssistantResponse(Parameters, Arguments, DiagnosticDetails, ToolDetails, Custom, ValidatedArguments, Signal, ExecutionError, PartialResult, ExecutionResult, context, emit, Fail{error}) == IO.pure(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>, Fail{error}) : IO(Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>)}
+
+law an_earlier_failure_survives_the_release:
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for -ExecutionError: Data
+  for error: ExecutionError
+  for cleanup: Result<&2, &2, ExecutionError, Unit>
+  {Loop.released(Arguments, DiagnosticDetails, ExecutionError, Fail{error}, cleanup) == Fail{error} : Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>}
+
+law a_release_failure_fails_a_consumed_response:
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for -ExecutionError: Data
+  for message: Ai.AssistantMessage<Arguments, DiagnosticDetails>
+  for error: ExecutionError
+  {Loop.released(Arguments, DiagnosticDetails, ExecutionError, Done{message}, Fail{error}) == Fail{error} : Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>}
+
+law a_clean_release_keeps_the_message:
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for -ExecutionError: Data
+  for message: Ai.AssistantMessage<Arguments, DiagnosticDetails>
+  {Loop.released(Arguments, DiagnosticDetails, ExecutionError, Done{message}, Done{Unit{}}) == Done{message} : Result<&2, &2, ExecutionError, Ai.AssistantMessage<Arguments, DiagnosticDetails>>}

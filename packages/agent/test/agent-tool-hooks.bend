@@ -103,7 +103,7 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         push(toolTurn(index), stream)
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def create(capture: ProviderCapture, trace: R.Ref<String>) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~ProviderCapture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)

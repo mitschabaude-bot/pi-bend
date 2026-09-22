@@ -24,7 +24,7 @@ def Config() -> Data: Run.Config(V.Value, Unit, String, String, V.Value, String,
 def Messages() -> Data: List<&2, Run.RunMessage(V.Value, Unit, String, String)>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
 def ProviderInput() -> Data: T.StreamInput<V.Value, V.Value, Unit, String, Unit, Config()>
-def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
+def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<V.Value, Unit, String>>
 def ExecuteInput() -> Data: T.ToolExecutionInput<V.Value, Run.RunSignal(), String>
 def ExecuteOutput() -> Data: Result<&2, &2, String, T.AgentToolResult<String>>
 def identity(value: String) -> String: value
@@ -81,7 +81,7 @@ def provider(capture: Capture, input: ProviderInput()) -> IO(ProviderOutput()):
         +stream : StreamValue() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, providerEvent(index, valid))
-        return Done{stream}
+        return Done{T.borrowedStream(V.Value, Unit, String, stream)}
 def required(result: Result<&2, &2, Provider.MissingDefault, Owner()>) -> IO(Owner()):
   match result:
     case Done{agent}: IO.pure(Owner(), agent)

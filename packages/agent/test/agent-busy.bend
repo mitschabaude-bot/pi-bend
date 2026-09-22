@@ -1,4 +1,5 @@
 import Base
+import ../src/types.bend as T
 import ../src/agent.bend as Agent
 import ../src/agent-loop.bend as Loop
 import ../src/agent.bend as Run
@@ -41,7 +42,7 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         dispatch(mode, stream, entered, release, done, input)
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def create(capture: Capture) -> IO(Signal.Fixture):
   do IO<Signal.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)

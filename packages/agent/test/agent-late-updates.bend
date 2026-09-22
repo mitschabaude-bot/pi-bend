@@ -66,7 +66,7 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneToolUse{}, assistant(mode)})
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def tools(mode: U32, +executor: Named.Executor()) -> List<&2, Named.Tool()>:
   match mode:
     case 0: Declarations.tool("delayed_tool", "Captures progress callbacks", executor) <> Nil{}

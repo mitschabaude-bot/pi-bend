@@ -66,7 +66,7 @@ def provider(capture: ProviderCapture, input: H.ProviderInput()) -> IO(H.Provide
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         SettingsTest.push(index, stream)
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider options missing")
 def create(capture: ProviderCapture) -> IO(Named.Fixture):
   do IO<Named.Fixture>:

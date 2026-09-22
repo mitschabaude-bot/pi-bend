@@ -78,7 +78,7 @@ def checkTranscript(context: Ai.TranscriptContext<Unit, String, Unit, String>) -
       Test.assertion(String.eq(text, "converted"), "provider must receive converted transcript")
     case _: Test.assertion(False{}, "provider transcript shape")
 
-def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
+def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<String, Unit, String>>
 def providerBody(state: ProviderState, input: Input()) -> IO(ProviderOutput()):
   match state input:
     case ProviderState{logValue, +stream} T.StreamInput{_, context, options}:
@@ -89,7 +89,7 @@ def providerBody(state: ProviderState, input: Input()) -> IO(ProviderOutput()):
         Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.Start{message("first", Ai.Pending{})})
         Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.TextDelta{F.fromU32(0), "second", message("second", Ai.Pending{})})
         Stream.push(Ai.AssistantMessageEvent<String, Unit>, Message(), stream, Ai.StreamDone{Ai.DoneStop{}, message("second", Ai.Stop{})})
-        return Done{stream}
+        return Done{T.borrowedStream(String, Unit, String, stream)}
 
 def updateEvent(event: EventValue()) -> Bool:
   match event:

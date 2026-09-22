@@ -53,7 +53,7 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Ai.DoneStop{}, H.assistant()})
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def forbidden(unused: Unit, input: T.ToolExecutionInput<Unit, Run.RunSignal(), Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   IO.die(Result<&2, &2, String, T.AgentToolResult<Unit>>, 1, "declaration-only test must not execute a tool")
 def initial(mode: U32, executor: Named.Executor()) -> Maybe<&2, State.AgentInitialState<Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit>>:

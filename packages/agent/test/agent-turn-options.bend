@@ -43,7 +43,7 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         +stream : H.StreamValue() <- Stream.createAssistantMessageEventStream(~Unit, ~Unit)
         R.modify(List<&2, H.StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         finish(stream, previous)
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def inspectSignal(slot: R.Ref<Bool>, value: Maybe<&2, Run.RunSignal()>) -> IO(Unit):
   match value:
     case Some{signal}:

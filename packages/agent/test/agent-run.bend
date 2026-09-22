@@ -30,7 +30,7 @@ def Config() -> Data: Run.Config(Unit, Unit, Unit, String, Unit, String, Unit, U
 def Converted() -> Data: Result<&2, &2, String, List<&2, Ai.Message<Schema.Value, Unit, Unit, Unit>>>
 def ProviderInput() -> Data: T.StreamInput<Schema.Value, Unit, Unit, Unit, Unit, Config()>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(Unit, Unit)
-def ProviderOutput() -> Data: Result<&2, &2, String, StreamValue()>
+def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<Unit, Unit, String>>
 def Claim() -> Data: Result<&2, &2, Life.ClaimError<String>, Life.Claimed<Plan.Plan<Message()>>>
 def Completion() -> Data: Run.Completed<Unit, Unit, Unit, String, Unit, String, Unit>
 def user(text: String) -> Message(): T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, F.fromU32(0)}}}
@@ -112,7 +112,7 @@ def opened(mode: U32, +tool: Bool, streams: R.Ref<List<&2, StreamValue()>>) -> I
         R.modify(List<&2, StreamValue()>, Unit, streams, old => (stream <> old, Unit{}))
         Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.Start{response(tool)})
         Stream.push(Ai.AssistantMessageEvent<Unit, Unit>, Ai.AssistantMessage<Unit, Unit>, stream, Ai.StreamDone{Bool.pick(Ai.DoneReason, tool, Ai.DoneToolUse{}, Ai.DoneStop{}), response(tool)})
-        return Done{stream}
+        return Done{T.borrowedStream(Unit, Unit, String, stream)}
 def cancelIf(runtime: Owner(), mode: U32) -> IO(Unit):
   match mode:
     case 3: Runtime.abortRuntime(Schema.Value, Unit, Unit, Unit, String, Unit, Run.RunSignal(), String, Unit, runtime)
