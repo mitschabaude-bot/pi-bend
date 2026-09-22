@@ -222,6 +222,17 @@ def shutdownResult(-Reason: Data, interrupt: Result<&2, &2, Socket.InterruptErro
     case Done{_} Fail{cause}: Fail{ShutdownFailure{cause}}
     case Done{_} Done{_}: Done{Unit{}}
 
+# Stop this connection without aborting the caller's shared signal. Pending
+# operations wake with Closed (or the first earlier failure). Join those
+# operations before dispose retires the handles they borrow.
+def cancel(-Reason: Data, handle: Writer<Reason>) -> IO(Result<&2, &2, Error<Reason>, Unit>):
+  match handle:
+    case Writer{shared, interrupt}:
+      do IO<Result<&2, &2, Error<Reason>, Unit>>:
+        Resource.run(State<Reason>, Unit, shared, state => stopState(Reason, state))
+        interrupted : Result<&2, &2, Socket.InterruptError, Bool> <- Socket.cancelInterrupt(interrupt)
+        return shutdownResult(Reason, interrupted, Done{Unit{}})
+
 # Destructive disposal interrupts pending writes before joining their task.
 # Graceful write shutdown is a separate operation, and may await the peer.
 def dispose(-Reason: Data, connection: Connection<Reason>) -> IO(Result<&2, &2, Error<Reason>, Unit>):

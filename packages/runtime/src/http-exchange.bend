@@ -1,4 +1,5 @@
 import Base
+import ./tls-socket.bend as TLS
 import ./dns-resolver.bend as Pair
 import ./http-response.bend as Response
 import ./socket.bend as Connect
@@ -122,6 +123,8 @@ type SocketSourceError<-Reason: Data> is Data:
   CleanupFailure{error: Connect.InterruptError}
   UploadFailure{error: Connect.UploadError<Reason>}
   UploadWithCleanup{error: Connect.UploadError<Reason>, cleanupSocketSource: Connect.InterruptError}
+  TLSSourceFailure{error: TLS.Error<Reason>}
+  TLSWithCleanup{error: TLS.Error<Reason>, cleanup: TLS.Error<Reason>}
   Released{}
   SocketSourceInvalidReadSize{}
 
@@ -129,6 +132,7 @@ type SocketSourceError<-Reason: Data> is Data:
 # connection's watcher and interrupt descriptor can be retired.
 type Lease<-Reason: Data> is Type:
   Lease{connection: Connect.Owner<Reason>, upload: Maybe<&1, Connect.UploadOwner<Reason>>}
+  Secure{connection: TLS.Connection<Reason>, upload: Chan(Result<&2, &2, TLS.Error<Reason>, Unit>), control: TLS.Writer<Reason>, reported: Bool}
 
 type Environment<-Reason: Data> is Data:
   Environment{resource: Resource.Handle<Maybe<&1, Lease<Reason>>>, maximum: U32}
@@ -174,9 +178,19 @@ def readChecked(-Reason: Data, maximum: U32, connection: Connect.Owner<Reason>, 
         result : Connect.Owner<Reason> & Result<&2, &2, Connect.SocketErrorOfSocket<Reason>, List<&2, U32>> <- Connect.recvSocket(Reason, connection, maximum)
         received(Reason, upload, result)
 
+def receivedTLS(-Reason: Data, upload: Chan(Result<&2, &2, TLS.Error<Reason>, Unit>), control: TLS.Writer<Reason>, reported: Bool, pair: TLS.Connection<Reason> & Result<&2, &2, TLS.Error<Reason>, List<&2, U32>>) -> Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>:
+  match pair:
+    case (connection, Fail{error}): (Some{Secure{connection, upload, control, True{}}}, Fail{TLSSourceFailure{error}})
+    case (connection, Done{Nil{}}): (Some{Secure{connection, upload, control, reported}}, Done{None{}})
+    case (connection, Done{bytes}): (Some{Secure{connection, upload, control, reported}}, Done{Some{bytes}})
+
 def readOwned(-Reason: Data, maximum: U32, value: Maybe<&1, Lease<Reason>>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>):
   match value:
     case None{}: IO.pure(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>, (None{}, Fail{Released{}}))
+    case Some{Secure{connection, upload, control, reported}}:
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>>:
+        result : TLS.Connection<Reason> & Result<&2, &2, TLS.Error<Reason>, List<&2, U32>> <- TLS.recv(Reason, connection, maximum)
+        return receivedTLS(Reason, upload, control, reported, result)
     case Some{Lease{connection, upload}}:
       do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>>:
         checked : Maybe<&1, Connect.UploadOwner<Reason>> & Maybe<&2, Connect.SocketErrorOfSocket<Reason>> <- checkUpload(Reason, upload)
@@ -218,9 +232,33 @@ def closedSocketSource(-Reason: Data, upload: Result<&2, &2, Connect.UploadError
     case Fail{error} Done{_}: Fail{UploadFailure{error}}
     case Fail{error} Fail{secondary}: Fail{UploadWithCleanup{error, secondary}}
 
+def tlsCleanup(-Reason: Data, first: Result<&2, &2, TLS.Error<Reason>, Unit>, second: Result<&2, &2, TLS.Error<Reason>, Unit>) -> Result<&2, &2, TLS.Error<Reason>, Unit>:
+  match first:
+    case Fail{error}: Fail{error}
+    case Done{_}: second
+
+def tlsUploadResult(-Reason: Data, reported: Bool, result: Result<&2, &2, TLS.Error<Reason>, Unit>) -> Result<&2, &2, TLS.Error<Reason>, Unit>:
+  match reported result:
+    case True{} _: Done{Unit{}}
+    case _ Fail{TLS.Closed{}}: Done{Unit{}}
+    case _ result: result
+
+def closedTLS(-Reason: Data, primary: Result<&2, &2, TLS.Error<Reason>, Unit>, cleanup: Result<&2, &2, TLS.Error<Reason>, Unit>) -> Result<&2, &2, SocketSourceError<Reason>, Unit>:
+  match primary cleanup:
+    case Done{_} Done{_}: Done{Unit{}}
+    case Fail{error} Done{_}: Fail{TLSSourceFailure{error}}
+    case Done{_} Fail{error}: Fail{TLSSourceFailure{error}}
+    case Fail{error} Fail{cleanup}: Fail{TLSWithCleanup{error, cleanup}}
+
 def closeOwned(-Reason: Data, value: Maybe<&1, Lease<Reason>>) -> IO(Result<&2, &2, SocketSourceError<Reason>, Unit>):
   match value:
     case None{}: IO.pure(Result<&2, &2, SocketSourceError<Reason>, Unit>, Done{Unit{}})
+    case Some{Secure{connection, upload, control, reported}}:
+      do IO<Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        stopped : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.cancel(Reason, control)
+        joined : Result<&2, &2, TLS.Error<Reason>, Unit> <- IO.join(Result<&2, &2, TLS.Error<Reason>, Unit>, upload)
+        disposed : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.dispose(Reason, connection)
+        return closedTLS(Reason, tlsUploadResult(Reason, reported, joined), tlsCleanup(Reason, stopped, disposed))
     case Some{Lease{connection, upload}}:
       do IO<Result<&2, &2, SocketSourceError<Reason>, Unit>>:
         stopped : Result<&2, &2, Connect.UploadError<Reason>, Unit> <- stopUpload(Reason, upload)
@@ -297,11 +335,12 @@ def dispose(-Reason: Data, owner: Owner<Reason>) -> IO(Result<&2, &2, SocketSour
         disposeCallbacks(Reason, source)
         return result
 
-# A dedicated connectedSocketExchange cleartext socket exchange. Connection establishment,
-# TLS, pooling and URL preparation belong to higher transport layers. This
-# upload task runs concurrently with response reads and is joined on release.
+# Dedicated HTTP/1.1 exchanges share one response parser across plain and TLS
+# connections. Request uploads run concurrently with response reads and are
+# joined on release; connection establishment and URL preparation stay separate.
 type StartError<-Reason: Data> is Data:
   InvalidReadSize{}
+  TLSStartFailure{error: TLS.Error<Reason>}
   SocketFailure{error: Connect.SocketErrorOfSocket<Reason>}
   WriteFailure{error: Connect.SocketErrorOfSocket<Reason>, cleanup: Maybe<&2, Connect.InterruptError>}
   SourceFailure{error: SocketSourceError<Reason>}
@@ -363,6 +402,43 @@ def startSocketExchange(~Reason: Data, socket: Socket, signal: Abort.AbortSignal
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         result : Result<&2, &1, Connect.SocketErrorOfSocket<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
         connectedSocketExchange(~Reason, request, size, limits, result)
+
+def sendTLSBody(-Reason: Data, writer: TLS.Writer<Reason>, body: List<&2, U32>, headResult: Result<&2, &2, TLS.Error<Reason>, Unit>) -> IO(Result<&2, &2, TLS.Error<Reason>, Unit>):
+  match headResult:
+    case Fail{error}: IO.pure(Result<&2, &2, TLS.Error<Reason>, Unit>, Fail{error})
+    case Done{_}: TLS.send(Reason, writer, body)
+
+def sendTLSRequest(-Reason: Data, +writer: TLS.Writer<Reason>, head: List<&2, U32>, body: List<&2, U32>) -> IO(Result<&2, &2, TLS.Error<Reason>, Unit>):
+  do IO<Result<&2, &2, TLS.Error<Reason>, Unit>>:
+    sent : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.send(Reason, writer, head)
+    sendTLSBody(Reason, writer, body, sent)
+
+def uploadTLS(~Reason: Data, method: String, maximum: U32, limits: Response.Limits, head: List<&2, U32>, body: List<&2, U32>, pair: TLS.Connection<Reason> & TLS.Writer<Reason>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match pair:
+    case (connection, +writer):
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        upload : Chan(Result<&2, &2, TLS.Error<Reason>, Unit>) <- IO.fork(Result<&2, &2, TLS.Error<Reason>, Unit>, sendTLSRequest(Reason, writer, head, body))
+        owner : Owner<Reason> <- adoptLease(~Reason, maximum, Secure{connection, upload, writer, False{}})
+        return Done{opened(Reason, method, limits, borrow(Reason, owner))}
+
+def authenticatedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, result: Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match request result:
+    case _ Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{TLSStartFailure{error}})
+    case Request.BufferedRequestPrepared{Request.Head{method, head}, body} Done{connection}:
+      uploadTLS(~Reason, method, maximum, limits, head, Request.wireBody(body), TLS.borrowWriter(Reason, connection))
+
+# Consumes a started TLS connection on every path and authenticates it before
+# sending HTTP bytes. Both transports share the response parser and body API.
+def startTLSExchange(~Reason: Data, connection: TLS.Connection<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match maximum:
+    case 0:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        cleanup : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.dispose(Reason, connection)
+        return Fail{InvalidReadSize{}}
+    case size:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        result : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.awaitHandshake(Reason, connection)
+        authenticatedTLS(~Reason, request, size, limits, result)
 
 def outcome(-Reason: Data, primary: Result<&2, &2, Response.ReadError<SocketSourceError<Reason>>, Unit>, disposal: Result<&2, &2, SocketSourceError<Reason>, Unit>) -> Result<&2, &2, ReadError<Reason>, Unit>:
   match primary disposal:

@@ -10,6 +10,7 @@ import shutil
 import socket
 import ssl
 import subprocess
+import sys
 import tempfile
 import threading
 
@@ -23,7 +24,7 @@ def replace(path, old, new):
     path.write_text(source.replace(old, new))
 
 
-def check(command, context, certificate, label):
+def check(command, context, certificate, label, http=False):
     parked, aborted = threading.Event(), threading.Event()
     diagnostics = []
     with socket.socket() as listener, ThreadPoolExecutor(max_workers=2) as pool:
@@ -37,7 +38,7 @@ def check(command, context, certificate, label):
             raw.settimeout(180)
             with context.wrap_socket(raw, server_side=True) as stream:
                 assert parked.wait(180), 'TLS uploader never parked'
-                stream.sendall(b'R')
+                stream.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello' if http else b'R')
                 # Keep the receive window closed until the client's read has
                 # completed and triggered cancellation of the blocked writer.
                 assert aborted.wait(180), 'early response did not unblock client'
@@ -48,11 +49,15 @@ def check(command, context, certificate, label):
                 except (ssl.SSLError, ConnectionResetError):
                     # Cancellation may interrupt an encrypted record.
                     pass
+                if http:
+                    head, received = bytes(received).split(b'\r\n\r\n', 1)
+                    assert head.startswith(b'POST / HTTP/1.1\r\n'), head
+                    assert b'content-length: 65536' in head.lower(), head
                 assert len(received) < 65536, 'whole upload completed'
                 assert received == (bytes(range(256)) * 256)[:len(received)]
 
         server = pool.submit(serve)
-        process = subprocess.Popen(command + [str(listener.getsockname()[1]), encode(certificate), 'backpressure'],
+        process = subprocess.Popen(command + [str(listener.getsockname()[1]), encode(certificate), '4' if http else 'backpressure'],
                                    cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
         def observe():
@@ -70,16 +75,18 @@ def check(command, context, certificate, label):
             observer.result(timeout=10)
             server.result(timeout=10)
             assert process.returncode == 0, (label, output, diagnostics)
-            assert output.strip() == 'PASS', (label, output, diagnostics)
+            assert output.strip() == ('1;;unfinished;early' if http else 'PASS'), (label, output, diagnostics)
             assert parked.is_set() and aborted.is_set(), diagnostics
         finally:
             if process.poll() is None:
                 process.kill()
                 process.wait()
-    print(f'{label}: response during parked TLS upload; cancellation reason and joined cleanup PASS', flush=True)
+    print(f'{label}: response during parked {"HTTPS" if http else "TLS"} upload; {"local stop without parent abort" if http else "cancellation reason"}; joined cleanup PASS', flush=True)
 
 
 if __name__ == '__main__':
+    http = '--http' in sys.argv[1:]
+    source = 'tests/http-tls-exchange.bend' if http else 'tests/tls-socket.bend'
     with tempfile.TemporaryDirectory(prefix='tls-backpressure-', dir=ROOT / 'build') as temporary:
         directory = Path(temporary)
         compiler = directory / 'bend2'
@@ -99,12 +106,12 @@ if __name__ == '__main__':
                 '  process.stderr.write(`SHUT ${socket}\\n`);\n  return io_tup')
         compiler_command = str(compiler / 'main.ts')
         binary, javascript = directory / 'test', directory / 'test.js'
-        subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/tls-socket.bend', str(binary)],
+        subprocess.run(['sh', 'scripts/build-pure.sh', source, str(binary)],
                        cwd=ROOT, env=dict(os.environ, BEND=compiler_command), check=True)
-        subprocess.run([compiler_command, 'tests/tls-socket.bend', '-o', str(javascript)], cwd=ROOT, check=True)
+        subprocess.run([compiler_command, source, '-o', str(javascript)], cwd=ROOT, check=True)
         context, _ = server_context(directory, 'ecdsa')
         context.num_tickets = 2
         certificate = x509.load_pem_x509_certificate((directory / 'certificate.pem').read_bytes()).public_bytes(serialization.Encoding.DER)
         for threads in ['1', '4']:
-            check([str(binary), '--threads', threads], context, certificate, f'native-{threads}')
-        check(['bun', str(javascript)], context, certificate, 'bun')
+            check([str(binary), '--threads', threads], context, certificate, f'native-{threads}', http)
+        check(['bun', str(javascript)], context, certificate, 'bun', http)
