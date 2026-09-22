@@ -36,3 +36,4 @@ import ./proofs/x509-trust.bend as X509Trust
 import ./proofs/transform-messages.bend as TransformMessages
 import ./proofs/transform-tool-results.bend as TransformToolResults
 import ./proofs/validation.bend as Validation
+import ./proofs/transcript.bend as Transcript
