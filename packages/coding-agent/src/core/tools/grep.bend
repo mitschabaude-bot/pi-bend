@@ -1,6 +1,6 @@
 import Base
 import ../../utils/paths.bend as Paths
-import ../../utils/search.bend as Search
+import ../../../../runtime/src/file-search.bend as Search
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value

@@ -1,6 +1,6 @@
 import Base
 import ../../utils/paths.bend as Paths
-import ../../utils/search.bend as Search
+import ../../../../runtime/src/file-search.bend as Search
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value
@@ -106,9 +106,11 @@ def searchResult(value: Search.ResultOf(List<&2,String>)) -> ResultOf(List<&2,St
     case Done{values}: Done{values}
 
 def nativeSearch(environment: Paths.Environment,pattern: String,path: String,limit: Nat,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(List<&2,String>)):
-  do IO<ResultOf(List<&2,String>)>:
-    value : Search.ResultOf(List<&2,String>) <- Search.nativeSearch(environment,pattern,path,limit,signal)
-    return searchResult(value)
+  match environment:
+    case Paths.Environment{_,home,_}:
+      do IO<ResultOf(List<&2,String>)>:
+        value : Search.ResultOf(List<&2,String>) <- Search.nativeSearch(home,pattern,path,limit,signal)
+        return searchResult(value)
 
 def relativized(values: List<&2,String>,+root: String,reversed: List<&2,String>) -> List<&2,String>:
   match values:

@@ -1,15 +1,26 @@
 import Base
-import ./paths.bend as Paths
-import ../../../runtime/src/filesystem.bend as FS
-import ../../../runtime/src/posix-path.bend as Path
-import ../../../runtime/src/path-glob.bend as Glob
-import ../../../runtime/src/ignore.bend as Ignore
-import ../../../runtime/src/string.bend as Strings
-import ../../../runtime/src/utf8.bend as Utf8
-import ../../../runtime/src/abort.bend as Abort
-import ../../../runtime/src/stable-sort.bend as Sort
+import ./text.bend as Text
+import ./filesystem.bend as FS
+import ./posix-path.bend as Path
+import ./path-glob.bend as Glob
+import ./ignore.bend as Ignore
+import ./string.bend as Strings
+import ./utf8.bend as Utf8
+import ./abort.bend as Abort
+import ./stable-sort.bend as Sort
 
-# Shared native filesystem search policy for the find and grep tools.
+def trimStart(text: String) -> String:
+  match text:
+    case SNil{}: ""
+    case SCon{Chr{+code},+rest}: Bool.pick(Unit -> String,Text.whitespace(code),_ => trimStart(rest),_ => SCon{Chr{code},rest})(Unit{})
+def trim(text: String) -> String: String.reverse(trimStart(String.reverse(trimStart(text))))
+def accessExists(value: Result<&1,&1,U32 & String,Unit>) -> Bool:
+  match value:
+    case Done{_}: True{}
+    case Fail{_}: False{}
+
+
+# Shared native filesystem traversal and ignore policy.
 type Error is Data:
   Filesystem{cause: FS.Error}
   Operation{message: String}
@@ -98,7 +109,7 @@ def optionalFile(+path: String) -> IO(ResultOf(Maybe<&2,String>)):
 def localExists(path: String) -> IO(ResultOf(Bool)):
   do IO<ResultOf(Bool)>:
     value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-    return Done{Paths.exists(value)}
+    return Done{accessExists(value)}
 
 def compiledIgnore(path: String,value: Result<&2,&2,Ignore.Error,Ignore.Matcher>) -> ResultOf(Ignore.Matcher):
   match value:
@@ -126,12 +137,12 @@ def linkedGit(root: String,value: Maybe<&2,String>) -> Maybe<&2,String>:
   match value:
     case None{}: None{}
     case Some{text}:
-      +line = Paths.trim(firstLine(text))
+      +line = trim(firstLine(text))
       Bool.pick(Unit -> Maybe<&2,String>,String.starts_with(line,"gitdir: "),_ => Path.resolve(root,String.drop(line,8n)),_ => None{})(Unit{})
 def commonGit(+gitdir: String,value: Maybe<&2,String>) -> String:
   match value:
     case None{}: gitdir
-    case Some{text}: Maybe.default(&2,String,Path.resolve(gitdir,Paths.trim(firstLine(text))),gitdir)
+    case Some{text}: Maybe.default(&2,String,Path.resolve(gitdir,trim(firstLine(text))),gitdir)
 def linkedGitDirectory(value: Maybe<&2,String>) -> IO(ResultOf(Maybe<&2,String>)):
   match value:
     case None{}: IO.pure(ResultOf(Maybe<&2,String>),Done{None{}})
@@ -223,7 +234,7 @@ def configValue(path: String,text: String) -> ResultOf(String):
 def configAssignment(path: String,parts: List<&2,String>) -> ResultOf(Maybe<&2,String>):
   match parts:
     case key <> values:
-      Bool.pick(Unit -> ResultOf(Maybe<&2,String>),Strings.equal(String.to_lower(Paths.trim(key)),"excludesfile"),_ => Result.map(&2,&2,Error,String,Maybe<&2,String>,value => Some{value},configValue(path,Paths.trim(String.join(values,"=")))),_ => Done{None{}})(Unit{})
+      Bool.pick(Unit -> ResultOf(Maybe<&2,String>),Strings.equal(String.to_lower(trim(key)),"excludesfile"),_ => Result.map(&2,&2,Error,String,Maybe<&2,String>,value => Some{value},configValue(path,trim(String.join(values,"=")))),_ => Done{None{}})(Unit{})
     case Nil{}: Done{None{}}
 type ConfigValue is Data:
   ConfigValue{core: Bool, value: Maybe<&2,String>}
@@ -238,7 +249,7 @@ def configLines(lines: List<&2,String>,+path: String,state: ConfigValue) -> Resu
   match lines state:
     case Nil{} ConfigValue{_,value}: Done{value}
     case line <> rest ConfigValue{core,value}:
-      Result.bind(&2,&2,Error,ConfigValue,Maybe<&2,String>,configLine(path,Paths.trim(line),core,value),next => configLines(rest,path,next))
+      Result.bind(&2,&2,Error,ConfigValue,Maybe<&2,String>,configLine(path,trim(line),core,value),next => configLines(rest,path,next))
 def configText(path: String,value: Maybe<&2,String>) -> ResultOf(Maybe<&2,String>):
   match value:
     case None{}: Done{None{}}
@@ -368,15 +379,12 @@ def searchDirectory(path: String,value: Result<&2,&2,FS.Error,FS.FileKind>) -> R
     case Done{_}: Fail{Operation{"Search path is not a directory: " ++ path}}
     case Fail{cause}: Fail{Filesystem{cause}}
 
-def nativeSearch(environment: Paths.Environment,+pattern: String,+path: String,limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(List<&2,String>)):
-  match environment:
-    case Paths.Environment{_,+home,_}:
-      continued(Glob.Pattern,List<&2,String>,patternResult(Glob.compile(preparedPattern(pattern))),compiled =>
-        do IO<ResultOf(List<&2,String>)>:
-          xdg : Result<&1,&1,U32 & String,String> <- IO.get_env("XDG_CONFIG_HOME")
-          kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
-          continued(Unit,List<&2,String>,searchDirectory(path,kind),_ => then(Bool,List<&2,String>,insideGit(ancestors(path),signal),requireGit => then(Cursor,List<&2,String>,create(path,home,nonempty(optionalEnvironment(xdg),Path.join(home,".config")),requireGit,Find{},signal),cursor => then(Step,List<&2,String>,next(cursor),step => findEntries(step,compiled,hasSlash(pattern),limit,0n,Nil{}))))))
-
+def nativeSearch(+home: String,+pattern: String,+path: String,limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(List<&2,String>)):
+  continued(Glob.Pattern,List<&2,String>,patternResult(Glob.compile(preparedPattern(pattern))),compiled =>
+    do IO<ResultOf(List<&2,String>)>:
+      xdg : Result<&1,&1,U32 & String,String> <- IO.get_env("XDG_CONFIG_HOME")
+      kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
+      continued(Unit,List<&2,String>,searchDirectory(path,kind),_ => then(Bool,List<&2,String>,insideGit(ancestors(path),signal),requireGit => then(Cursor,List<&2,String>,create(path,home,nonempty(optionalEnvironment(xdg),Path.join(home,".config")),requireGit,Find{},signal),cursor => then(Step,List<&2,String>,next(cursor),step => findEntries(step,compiled,hasSlash(pattern),limit,0n,Nil{}))))))
 
 def overrideCompiled(negative: Bool,result: Result<&2,&2,Glob.Error,Glob.Pattern>) -> ResultOf(Maybe<&2,Override>):
   match result:
@@ -391,3 +399,4 @@ def compileOverride(value: Maybe<&2,String>) -> ResultOf(Maybe<&2,Override>):
     case Some{SNil{}}: Done{None{}}
     case Some{SCon{'!',rest}}: overrideText(rest,True{})
     case Some{text}: overrideText(text,False{})
+
