@@ -349,3 +349,30 @@ def feed(bytes: List<&2, U32>, result: Result<&2, &1, Error, Step>, outgoing: Li
 
 def receive(client: Client, bytes: List<&2, U32>) -> Reception:
   feed(bytes, Done{Step{client, Nil{}, Nil{}}}, Nil{}, Nil{})
+
+# A transport EOF is clean only after the authenticated close_notify. Keep the
+# writer available after a clean read EOF, as with the closure alert itself.
+def endInput(client: Client) -> Result<&2, &1, Error, Client>:
+  match client:
+    case Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit, input}:
+      Done{Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit, input}}
+    case _: Fail{RecordFailure{R.Truncated{}}}
+
+type Status is Data:
+  Handshaking{}
+  Established{readClosed: Bool, writeClosed: Bool}
+
+def directionClosed(traffic: Maybe<&1, R.Traffic>) -> Maybe<&1, R.Traffic> & Bool:
+  match traffic:
+    case None{}: (None{}, True{})
+    case Some{value}: (Some{value}, False{})
+
+def observedDirections(cs: List<&2, U32>, ss: List<&2, U32>, parameters: H.Parameters, buffer: H.Buffer, limit: U32, input: RecordBuffer, writerState: Maybe<&1, R.Traffic> & Bool, readerState: Maybe<&1, R.Traffic> & Bool) -> Client & Status:
+  match writerState readerState:
+    case Tuple{write, writeClosed} Tuple{read, readClosed}: (Client{Connected{write, read, cs, ss, parameters}, buffer, limit, input}, Established{readClosed, writeClosed})
+
+def observe(client: Client) -> Client & Status:
+  match client:
+    case Client{Connected{write, read, cs, ss, parameters}, buffer, limit, input}:
+      observedDirections(cs, ss, parameters, buffer, limit, input, directionClosed(write), directionClosed(read))
+    case client: (client, Handshaking{})
