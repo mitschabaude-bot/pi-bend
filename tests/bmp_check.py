@@ -130,7 +130,7 @@ def corpus():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--photon',type=Path,default=Path('/home/agent/code/pi-bend-png/build/photon/photon_rs.js'))
+    parser.add_argument('--photon',type=Path,default=ROOT/'build/photon/photon_rs.js')
     parser.add_argument('--no-build',action='store_true')
     parser.add_argument('--prefix',default='build/bmp')
     args=parser.parse_args()
