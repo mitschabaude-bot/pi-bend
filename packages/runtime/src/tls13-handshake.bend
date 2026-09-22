@@ -526,3 +526,79 @@ def clientFinished(+clientHandshakeSecret: List<&2, U32>, transcript: SHA.State)
     Result.bind(&2, &2, Error, SHA.Digest, List<&2, U32>, hashResult(SHA.Digest, SHA.finish(transcript)), hash =>
       Result.bind(&2, &2, Error, SHA.Digest, List<&2, U32>, derivation(SHA.Digest, KDF.finished(clientHandshakeSecret,hash)), mac =>
         Done{20 <> 0 <> 0 <> 32 <> SHA.toBytes(mac)})))
+
+# Post-handshake messages do not extend the authentication transcript. Tickets
+# describe resumption state; a client may validate and discard them when it
+# is not maintaining a resumption cache.
+type NewSessionTicket is Data:
+  NewSessionTicket{lifetime: U32, ageAdd: U32, nonce: List<&2, U32>, ticket: List<&2, U32>, earlyDataLimit: Maybe<&2, U32>}
+
+def networkWord(a: U32, b: U32, c: U32, d: U32) -> U32:
+  (a * 16777216 + b * 65536 + c * 256 + d : U32)
+
+def ticketEarlyData(bytes: List<&2, U32>) -> Result<&2, &2, Error, Maybe<&2, U32>>:
+  match bytes:
+    case a <> b <> c <> d <> Nil{}: Done{Some{networkWord(a, b, c, d)}}
+    case _: Fail{MalformedHandshake{}}
+
+def ticketExtension(extension: ServerExtension, previous: Maybe<&2, U32>) -> Result<&2, &2, Error, Maybe<&2, U32>>:
+  match extension:
+    case ServerExtension{+kind, bytes}:
+      Bool.pick(Unit -> Result<&2, &2, Error, Maybe<&2, U32>>, U32.is_eq(kind, 42),
+        unused => ticketEarlyData(bytes),
+        unused => Bool.pick(Result<&2, &2, Error, Maybe<&2, U32>>, containsKind(0 <> 10 <> 13 <> 16 <> 43 <> 51 <> Nil{}, kind), Fail{RejectedExtension{kind}}, Done{previous}))(Unit{})
+
+def ticketExtensions(extensions: List<&2, ServerExtension>, +kinds: List<&2, U32>, previous: Maybe<&2, U32>) -> Result<&2, &2, Error, Maybe<&2, U32>>:
+  match extensions:
+    case Nil{}: Done{previous}
+    case ServerExtension{+kind, bytes} <> rest:
+      Result.bind(&2, &2, Error, Unit, Maybe<&2, U32>,
+        Bool.pick(Result<&2, &2, Error, Unit>, containsKind(kinds, kind), Fail{DuplicateExtension{kind}}, Done{Unit{}}), unused =>
+          Result.bind(&2, &2, Error, Maybe<&2, U32>, Maybe<&2, U32>, ticketExtension(ServerExtension{kind, bytes}, previous), next => ticketExtensions(rest, kind <> kinds, next)))
+
+def handshakeFragment(result: Result<&2, &2, Record.Error, Record.Fragment>) -> Result<&2, &2, Error, Record.Fragment>:
+  match result:
+    case Fail{_}: Fail{MalformedHandshake{}}
+    case Done{value}: Done{value}
+
+def ticketTail(lifetime: U32, ageAdd: U32, nonce: List<&2, U32>, fragment: Record.Fragment) -> Result<&2, &2, Error, NewSessionTicket>:
+  match fragment:
+    case Record.Fragment{head <> tail, +encodedExtensions}:
+      Result.bind(&2, &2, Error, Unit, NewSessionTicket, require(Nat.is_le(Record.length(encodedExtensions, 0n), 65536n)), unused =>
+        Result.bind(&2, &2, Error, List<&2, ServerExtension>, NewSessionTicket, extensionVector(encodedExtensions), parsed =>
+          Result.bind(&2, &2, Error, Maybe<&2, U32>, NewSessionTicket, ticketExtensions(parsed, Nil{}, None{}), early => Done{NewSessionTicket{lifetime, ageAdd, nonce, head <> tail, early}})))
+    case _: Fail{MalformedHandshake{}}
+
+def ticketValue(lifetime: U32, ageAdd: U32, nonce: List<&2, U32>, bytes: List<&2, U32>) -> Result<&2, &2, Error, NewSessionTicket>:
+  match bytes:
+    case a <> b <> rest:
+      Result.bind(&2, &2, Error, Record.Fragment, NewSessionTicket, handshakeFragment(Record.take(U32.to_nat((a * 256 + b : U32)), rest, Nil{})), fragment => ticketTail(lifetime, ageAdd, nonce, fragment))
+    case _: Fail{MalformedHandshake{}}
+
+def ticketNonce(lifetime: U32, ageAdd: U32, fragment: Record.Fragment) -> Result<&2, &2, Error, NewSessionTicket>:
+  match fragment:
+    case Record.Fragment{nonce, rest}: ticketValue(lifetime, ageAdd, nonce, rest)
+
+def ticketBody(bytes: List<&2, U32>) -> Result<&2, &2, Error, NewSessionTicket>:
+  match bytes:
+    case a <> b <> c <> d <> e <> f <> g <> h <> count <> rest:
+      +lifetime = networkWord(a, b, c, d)
+      Result.bind(&2, &2, Error, Unit, NewSessionTicket, require(U32.is_le(lifetime, 604800)), unused =>
+        Result.bind(&2, &2, Error, Record.Fragment, NewSessionTicket, handshakeFragment(Record.take(U32.to_nat(count), rest, Nil{})), fragment => ticketNonce(lifetime, networkWord(e, f, g, h), fragment)))
+    case _: Fail{MalformedHandshake{}}
+
+def newSessionTicket(wire: List<&2, U32>) -> Result<&2, &2, Error, NewSessionTicket>:
+  Result.bind(&2, &2, Error, List<&2, U32>, NewSessionTicket, messageBody(4, wire), ticketBody)
+
+def keyUpdateBody(bytes: List<&2, U32>) -> Result<&2, &2, Error, Bool>:
+  match bytes:
+    case 0 <> Nil{}: Done{False{}}
+    case 1 <> Nil{}: Done{True{}}
+    case _: Fail{MalformedHandshake{}}
+
+def keyUpdateRequest(wire: List<&2, U32>) -> Result<&2, &2, Error, Bool>:
+  Result.bind(&2, &2, Error, List<&2, U32>, Bool, messageBody(24, wire), keyUpdateBody)
+
+def updateSecret(+secret: List<&2, U32>) -> Result<&2, &2, Error, List<&2, U32>>:
+  Result.bind(&2, &2, Error, Unit, List<&2, U32>, require(Nat.is_eq(Record.length(secret, 0n), 32n)), unused =>
+    derivation(List<&2, U32>, KDF.expandLabel(secret, "traffic upd", Nil{}, 32)))

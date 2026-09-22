@@ -51,6 +51,7 @@ def operation(client: C.Client, text: String) -> C.Reception:
     case SCon{'r', body}: C.receive(client, Bytes.bytes(body))
     case SCon{'s', body}: C.finishInput(Nil{}, Nil{}, C.send(client, Bytes.bytes(body)))
     case SCon{'c', SNil{}}: C.finishInput(Nil{}, Nil{}, C.close(client))
+    case SCon{'u', body}: C.finishInput(Nil{}, Nil{}, C.update(client, String.eq(body, "1")))
     case _: C.Reception{Fail{C.UnexpectedMessage{}}, Nil{}, Nil{}}
 
 def commands(parts: List<&2, String>, result: C.Reception) -> IO(Unit):

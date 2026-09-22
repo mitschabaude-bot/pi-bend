@@ -53,11 +53,13 @@ def secrets_and_messages(hello, flight):
     assert [m[0] for m in messages] == [8, 11, 15, 20]
     master = hmac.digest(expand(secret, b'derived', hashlib.sha256(b'').digest(), 32), bytes(32), 'sha256')
     app = expand(master, b's ap traffic', hashlib.sha256(hello[5:] + flight[0] + clear).digest(), 32)
-    return peer, app, messages
+    return peer, app, messages, expand(master, b'c ap traffic', hashlib.sha256(hello[5:] + flight[0] + clear).digest(), 32)
 
 
-def check(command, algorithm, folder, streaming=False):
+def check(command, algorithm, folder, streaming=False, post=False, live=False):
     context, seen = server_context(folder, algorithm)
+    if post:
+        context.num_tickets = 2
     cert = x509.load_pem_x509_certificate((folder / 'certificate.pem').read_bytes()).public_bytes(serialization.Encoding.DER)
     count = 0
 
@@ -75,7 +77,7 @@ def check(command, algorithm, folder, streaming=False):
     initial, _ = invoke(expected='hello')
     hello = initial[0]
     flight = accepted(context, seen, hello, SEED[64:], 'localhost')
-    peer, app, messages = secrets_and_messages(hello, flight)
+    peer, app, messages, client_app = secrets_and_messages(hello, flight)
     head = record(22, flight[0])
     ccs = record(20, b'\1')
     prefix = ['r' + encode(head), 'r' + encode(ccs)]
@@ -86,6 +88,9 @@ def check(command, algorithm, folder, streaming=False):
     transport_in.write(outgoing[1])
     server.do_handshake()
     assert server.version() == 'TLSv1.3' and server.selected_alpn_protocol() == 'http/1.1'
+    tickets = transport_out.read()
+    assert bool(tickets) == post
+    application_operations = operations + (['r' + encode(tickets)] if post else [])
     for wire, expected in zip(outgoing[2:], [b'ping', b' again']):
         transport_in.write(wire)
         assert server.read() == expected
@@ -94,8 +99,61 @@ def check(command, algorithm, folder, streaming=False):
     reply1 = transport_out.read()
     server.write(b' again')
     reply2 = transport_out.read()
-    replay, data = invoke(operations + ['s' + encode(b'ping'), 's' + encode(b' again'), 'r' + encode(reply1), 'r' + encode(reply2)])
+    replay, data = invoke(application_operations + ['s' + encode(b'ping'), 's' + encode(b' again'), 'r' + encode(reply1), 'r' + encode(reply2)])
     assert replay == outgoing and data == [b'pong', b' again']
+
+    if post:
+        if live:
+            # The live OpenSSL peer has already consumed the two writes above.
+            # Replay their client state, then ask it to rotate both directions.
+            live_operations = application_operations + ['s' + encode(b'ping'), 's' + encode(b' again'), 'u1', 's' + encode(b'after update')]
+            rotated, _ = invoke(live_operations)
+            transport_in.write(rotated[-2] + rotated[-1])
+            assert server.read() == b'after update'
+            server.write(b'fresh server epoch')
+            fresh = transport_out.read()
+            _, received = invoke(live_operations + ['r' + encode(reply1), 'r' + encode(reply2), 'r' + encode(fresh)])
+            assert received == [b'pong', b' again', b'fresh server epoch']
+            return count
+
+        def opened(secret, sequence, wire):
+            nonce = (int.from_bytes(expand(secret, b'iv', b'', 12), 'big') ^ sequence).to_bytes(12, 'big')
+            return AESGCM(expand(secret, b'key', b'', 16)).decrypt(nonce, wire[5:], wire[:5])
+
+        _, data = invoke(['r' + encode(head + ccs + b''.join(flight[3]) + tickets + reply1 + reply2)])
+        assert data == [b'pong', b' again']
+        new_server = expand(app, b'traffic upd', b'', 32)
+        new_client = expand(client_app, b'traffic upd', b'', 32)
+        ku = handshake_message(24, b'\0')
+        requested = handshake_message(24, b'\1')
+        no_request = protected(app, 0, ku)
+        request = protected(app, 0, requested)
+        updated_app = protected(new_server, 0, b'new epoch', 23)
+        records, data = invoke(operations + ['r' + encode(no_request), 'r' + encode(updated_app)])
+        assert records == outgoing[:2] and data == [b'new epoch']
+        records, data = invoke(operations + ['r' + encode(request), 's' + encode(b'new client'), 'r' + encode(updated_app)])
+        assert opened(client_app, 0, records[2]) == ku + b'\x16'
+        assert opened(new_client, 0, records[3]) == b'new client\x17'
+        assert data == [b'new epoch']
+        # Initiated and crossed updates use independent direction secrets.
+        records, data = invoke(operations + ['u1', 'r' + encode(request), 's' + encode(b'crossed'), 'r' + encode(updated_app)])
+        assert opened(client_app, 0, records[2]) == requested + b'\x16'
+        assert opened(new_client, 0, records[3]) == ku + b'\x16'
+        assert opened(expand(new_client, b'traffic upd', b'', 32), 0, records[4]) == b'crossed\x17'
+        assert data == [b'new epoch']
+        invoke(operations + ['r' + encode(updated_app)], expected='error:record:mac')
+        invoke(operations + ['r' + encode(no_request), 'r' + encode(protected(app, 1, b'old', 23))], expected='error:record:mac')
+        invoke(operations + ['r' + encode(protected(app, 0, requested + b'\4'))], expected='error:unexpected')
+        invoke(operations + ['r' + encode(protected(app, 0, handshake_message(24, b'\2')))], expected='error:handshake:handshake')
+        invoke(prefix + ['r' + encode(protected(peer, 0, requested))], expected='error:handshake:handshake')
+        records, data = invoke(operations + ['c', 'r' + encode(request), 'r' + encode(updated_app)], expected='write-closed')
+        assert len(records) == 3 and data == [b'new epoch']
+        # Independently constructed tickets cover extension and length policy.
+        ticket = handshake_message(4, (60).to_bytes(4, 'big') + bytes(4) + b'\0\0\1X\0\0')
+        invoke(operations + ['r' + encode(protected(app, 0, ticket + ticket))])
+        empty_ticket = handshake_message(4, bytes(8) + b'\0\0\0\0\0')
+        invoke(operations + ['r' + encode(protected(app, 0, empty_ticket))], expected='error:handshake:handshake')
+        return count
 
     if streaming:
         # Socket chunking is independent of both record and handshake framing.
@@ -188,8 +246,10 @@ def check(command, algorithm, folder, streaming=False):
 
 if __name__ == '__main__':
     streaming = '--stream' in sys.argv[1:]
-    stem = 'build/tls13-client-stream' if streaming else 'build/tls13-client'
-    selected = [arg for arg in sys.argv[1:] if arg != '--stream']
+    live = '--post-live' in sys.argv[1:]
+    post = '--post' in sys.argv[1:] or live
+    stem = 'build/tls13-client-post' if post else 'build/tls13-client-stream' if streaming else 'build/tls13-client'
+    selected = [arg for arg in sys.argv[1:] if arg not in ['--stream', '--post', '--post-live']]
     with tempfile.TemporaryDirectory(prefix='pi-bend-client-') as temp:
         for backend, command in [('native-1', [stem, '--threads', '1']),
                                  ('native-4', [stem, '--threads', '4']),
@@ -197,9 +257,9 @@ if __name__ == '__main__':
             if selected and selected[0] != backend:
                 continue
             count = 0
-            for algorithm in (['ecdsa'] if streaming else ['rsa', 'ecdsa', 'ecdsa384']):
-                cases = check(command, algorithm, Path(temp), streaming=streaming)
+            for algorithm in (['ecdsa'] if streaming or post else ['rsa', 'ecdsa', 'ecdsa384']):
+                cases = check(command, algorithm, Path(temp), streaming=streaming, post=post, live=live)
                 count += cases
                 print(f'{backend}/{algorithm}: {cases} flows PASS', flush=True)
-            scope = 'socket chunking and prefix preservation' if streaming else 'RSA/P256/P384 authentication and closure'
+            scope = 'live OpenSSL key updates in both directions' if live else 'OpenSSL tickets and traffic key updates' if post else 'socket chunking and prefix preservation' if streaming else 'RSA/P256/P384 authentication and closure'
             print(f'{backend}: {count} session flows; {scope} PASS', flush=True)

@@ -120,6 +120,49 @@ def serverHello(authorization: Authorization, limit: U32, result: Result<&2, &1,
     case Fail{cause}: Fail{HandshakeFailure{cause}}
     case Done{handshake}: Done{Step{Client{Authenticating{handshake, Extensions{authorization}}, H.emptyBuffer(), limit, emptyInput()}, Nil{}, Nil{}}}
 
+def keyUpdateSent(client: Client, result: Result<&2, &1, R.Error, R.Sent>) -> Result<&2, &1, Error, Step>:
+  match result:
+    case Fail{cause}: Fail{RecordFailure{cause}}
+    case Done{R.Sent{_, record}}: Done{Step{client, record <> Nil{}, Nil{}}}
+
+# Send under the old key, then reset the writer's sequence under the next key.
+# This also serves peer requests: the reply never requests another update.
+def updateWriter(read: Maybe<&1, R.Traffic>, ss: List<&2, U32>, parameters: H.Parameters, buffer: H.Buffer, limit: U32, input: RecordBuffer, next: List<&2, U32>, material: H.TrafficKey, result: Result<&2, &1, R.Error, R.Sent>) -> Result<&2, &1, Error, Step>:
+  match material:
+    case H.TrafficKey{key, iv}: keyUpdateSent(Client{Connected{Some{R.create(key, iv)}, read, next, ss, parameters}, buffer, limit, input}, result)
+
+def update(client: Client, requestPeer: Bool) -> Result<&2, &1, Error, Step>:
+  match client:
+    case Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit, input}:
+      Result.bind(&2, &1, Error, List<&2, U32>, Step, checked(List<&2, U32>, H.updateSecret(cs)), +next =>
+        Result.bind(&2, &1, Error, H.TrafficKey, Step, checked(H.TrafficKey, H.deriveKey(next)), material =>
+          updateWriter(read, ss, parameters, buffer, limit, input, next, material,
+            R.send(write, R.Content{R.Handshake{}, 24 <> 0 <> 0 <> 1 <> Bool.pick(U32, requestPeer, 1, 0) <> Nil{}}, 0n))))
+    case _: Fail{UnexpectedMessage{}}
+
+def updateReply(requested: Bool, client: Client) -> Result<&2, &1, Error, Step>:
+  match requested client:
+    case True{} Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit, input}:
+      update(Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit, input}, False{})
+    case _ client: Done{Step{client, Nil{}, Nil{}}}
+
+def updatedReader(requested: Bool, write: Maybe<&1, R.Traffic>, cs: List<&2, U32>, ss: List<&2, U32>, parameters: H.Parameters, buffer: H.Buffer, limit: U32, material: H.TrafficKey) -> Result<&2, &1, Error, Step>:
+  match material:
+    case H.TrafficKey{key, iv}: updateReply(requested, Client{Connected{write, Some{R.create(key, iv)}, cs, ss, parameters}, buffer, limit, emptyInput()})
+
+def updateReader(requested: Bool, phase: Phase, buffer: H.Buffer, limit: U32) -> Result<&2, &1, Error, Step>:
+  match phase:
+    case Connected{write, Some{_}, cs, ss, parameters}:
+      Result.bind(&2, &1, Error, List<&2, U32>, Step, checked(List<&2, U32>, H.updateSecret(ss)), +next =>
+        Result.bind(&2, &1, Error, H.TrafficKey, Step, checked(H.TrafficKey, H.deriveKey(next)), material =>
+          updatedReader(requested, write, cs, next, parameters, buffer, limit, material)))
+    case _: Fail{UnexpectedMessage{}}
+
+def isTicket(wire: List<&2, U32>) -> Bool:
+  match wire:
+    case kind <> _: U32.is_eq(kind, 4)
+    case Nil{}: False{}
+
 # Messages that change traffic keys must end their record (RFC 8446 5.1).
 # A partial following message is just as invalid as a complete following one.
 def messages(wires: List<&2, List<&2, U32>>, phase: Phase, +buffer: H.Buffer, +limit: U32) -> Result<&2, &1, Error, Step>:
@@ -132,6 +175,11 @@ def messages(wires: List<&2, List<&2, U32>>, phase: Phase, +buffer: H.Buffer, +l
       Result.bind(&2, &1, Error, Unit, Step, require(List.is_empty(&2, List<&2, U32>, rest) && H.atBoundary(buffer)), unused => finish(handshake, parameters, wire, limit))
     case wire <> rest Authenticating{handshake, expected}:
       Result.bind(&2, &1, Error, Phase, Step, authenticate(handshake, expected, wire), next => messages(rest, next, buffer, limit))
+    case +wire <> +rest Connected{write, read, cs, ss, parameters}:
+      Bool.pick(Phase -> Result<&2, &1, Error, Step>, isTicket(wire),
+        phase => Result.bind(&2, &1, Error, H.NewSessionTicket, Step, checked(H.NewSessionTicket, H.newSessionTicket(wire)), unused => messages(rest, phase, buffer, limit)),
+        phase => Result.bind(&2, &1, Error, Unit, Step, require(List.is_empty(&2, List<&2, U32>, rest) && H.atBoundary(buffer)), unused =>
+          Result.bind(&2, &1, Error, Bool, Step, checked(Bool, H.keyUpdateRequest(wire)), requested => updateReader(requested, phase, buffer, limit))))(Connected{write, read, cs, ss, parameters})
     case _ _: Fail{UnexpectedMessage{}}
 
 def framed(phase: Phase, limit: U32, result: Result<&2, &2, H.FramingError, H.Batch>) -> Result<&2, &1, Error, Step>:
