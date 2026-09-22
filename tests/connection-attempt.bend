@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/connection-driver.bend as Attempt
 import ../packages/runtime/src/connection-driver.bend as Outcome
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ./abortable-connect.bend as Endpoint

@@ -1,11 +1,11 @@
 import Base
 import ../src/http-response.bend as Response
-import ../src/http-response-progress.bend as Progress
-import ../src/http-response-metadata.bend as Metadata
-import ../src/http-response-stream.bend as Stream
-import ../src/http-head.bend as Head
-import ../src/http-status.bend as Status
-import ../src/http-header.bend as Header
+import ../src/http-response.bend as Progress
+import ../src/http-response.bend as Metadata
+import ../src/http-response.bend as Stream
+import ../src/http-message.bend as Head
+import ../src/http-message.bend as Status
+import ../src/http-message.bend as Header
 import ./utf8-runner.bend as Text
 
 type State is Type:
@@ -14,7 +14,7 @@ type State is Type:
 def head() -> Head.ResponseHead:
   Head.ResponseHead{Status.StatusLine{1, 1, 200, 79 <> 75 <> Nil{}}, Nil{}}
 
-def event(value: String) -> Result<&2, &2, String, Maybe<&2, Stream.Event>>:
+def event(value: String) -> Result<&2, &2, String, Maybe<&2, Stream.StreamEvent>>:
   match value:
     case SCon{'h', _}: Done{Some{Stream.FinalHead{head(), True{}}}}
     case SCon{'z', _}: Done{Some{Stream.FinalHead{head(), False{}}}}
@@ -24,14 +24,14 @@ def event(value: String) -> Result<&2, &2, String, Maybe<&2, Stream.Event>>:
     case SCon{'e', text}: Fail{text}
     case _: Done{None{}}
 
-def read(state: State) -> IO(State & Result<&2, &2, String, Maybe<&2, Stream.Event>>):
+def read(state: State) -> IO(State & Result<&2, &2, String, Maybe<&2, Stream.StreamEvent>>):
   match state:
     case State{Nil{}, cleanup}:
-      do IO<State & Result<&2, &2, String, Maybe<&2, Stream.Event>>>:
+      do IO<State & Result<&2, &2, String, Maybe<&2, Stream.StreamEvent>>>:
         IO.print("read:eof")
         return (State{Nil{}, cleanup}, Done{None{}})
     case State{+value <> rest, cleanup}:
-      do IO<State & Result<&2, &2, String, Maybe<&2, Stream.Event>>>:
+      do IO<State & Result<&2, &2, String, Maybe<&2, Stream.StreamEvent>>>:
         IO.print("read:" ++ value)
         return (State{rest, cleanup}, event(value))
 
@@ -42,20 +42,20 @@ def close(state: State) -> IO(Result<&2, &2, String, Unit>):
         IO.print("close")
         return Bool.pick(Result<&2, &2, String, Unit>, fails, Fail{"cleanup"}, Done{Unit{}})
 
-def primary(value: Progress.PrimaryError<String>) -> String:
+def primary(value: Progress.ResponseProgressPrimaryError<String>) -> String:
   match value:
     case Progress.TransportFailure{text}: "transport:" ++ text
     case Progress.MissingHead{}: "missing-head"
     case Progress.MissingCompletion{}: "missing-completion"
     case Progress.UnexpectedEvent{_}: "unexpected"
 
-def error(value: Progress.Error<String>) -> String:
+def error(value: Progress.ResponseProgressError<String>) -> String:
   match value:
-    case Progress.PrimaryFailure{value}: primary(value)
-    case Progress.CleanupFailure{text}: text
-    case Progress.FailureWithCleanup{value, text}: primary(value) ++ "+" ++ text
+    case Progress.ResponseProgressPrimaryFailure{value}: primary(value)
+    case Progress.ResponseProgressCleanupFailure{text}: text
+    case Progress.ResponseProgressFailureWithCleanup{value, text}: primary(value) ++ "+" ++ text
 
-def result(value: Result<&2, &2, Progress.Error<String>, Maybe<&2, List<&2, U32>>>) -> String:
+def result(value: Result<&2, &2, Progress.ResponseProgressError<String>, Maybe<&2, List<&2, U32>>>) -> String:
   match value:
     case Fail{value}: "error:" ++ error(value)
     case Done{None{}}: "end"
@@ -90,7 +90,7 @@ def actions(todo: String, next: Response.Next<String, State>) -> IO(Unit):
         next : Response.Next<String, State> <- advance(action, body)
         actions(rest, next)
 
-def started(todo: String, value: Result<&2, &1, Progress.Error<String>, Response.Response<State>>) -> IO(Unit):
+def started(todo: String, value: Result<&2, &1, Progress.ResponseProgressError<String>, Response.Response<State>>) -> IO(Unit):
   match todo value:
     case _ Fail{value}: IO.print("start-error:" ++ error(value))
     case SNil{} Done{Response.Response{_, body}}:
@@ -100,7 +100,7 @@ def started(todo: String, value: Result<&2, &1, Progress.Error<String>, Response
         ended(final)
     case SCon{action, rest} Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("head:" ++ U32.show(Metadata.status(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
+        IO.print("head:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Bool.pick(String, Metadata.bodyPresent(metadata), "body", "null"))
         next : Response.Next<String, State> <- advance(action, body)
         actions(rest, next)
 
@@ -108,7 +108,7 @@ def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
     case fails <> todo <> values:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<String>, Response.Response<State>> <- Response.startWith(~String, ~State, ~read, ~close, State{values, String.eq(fails, "1")})
+        value : Result<&2, &1, Progress.ResponseProgressError<String>, Response.Response<State>> <- Response.startWith(~String, ~State, ~read, ~close, State{values, String.eq(fails, "1")})
         started(todo, value)
     case _: IO.die(Unit, 1, "bad response fixture")
 

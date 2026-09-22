@@ -5,15 +5,15 @@ import ./dns-transport.bend as Source
 import ./abort.bend as Abort
 import ./hosts.bend as Hosts
 import ./deadline.bend as Deadline
-import ./socket-endpoint.bend as Endpoint
-import ./abortable-connect.bend as Connect
+import ./socket.bend as Endpoint
+import ./socket.bend as Connect
 import ./random-index.bend as Index
 import ./network-interface.bend as Interface
 import ./url-ipv4.bend as IPv4
 import ./url-ipv6.bend as IPv6
 import ./io-pair.bend as Parallel
-import ./abortable-socket.bend as SocketIO
-import ./abortable-datagram.bend as DatagramIO
+import ./socket.bend as SocketIO
+import ./socket.bend as DatagramIO
 import ./datagram-peer.bend as Peer
 import ./ipv6-scope.bend as IPv6Scope
 import ./file-fold.bend as Fold
@@ -453,7 +453,7 @@ def socketFailure(-Reason: Data, code: U32) -> IO(Id.Outcome<AddressLookupError<
 def exchangeFailure(-Reason: Data, original: AddressLookupError<Reason>, error: Source.TcpQueryError<Reason>) -> IO(Id.Outcome<AddressLookupError<Reason>, Selection>):
   match error:
     case Source.TcpQueryConnection{Connect.SocketError{code, _}}: socketFailure(Reason, code)
-    case Source.Terminated{Source.TcpSessionTransport{Source.Transport{_, SocketIO.SocketError{code, _}}}}: socketFailure(Reason, code)
+    case Source.Terminated{Source.TcpSessionTransport{Source.Transport{_, SocketIO.SocketSocketError{code, _}}}}: socketFailure(Reason, code)
     case Source.Terminated{Source.EndOfStream{}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
     case Source.Terminated{Source.TcpSessionTransport{Source.Framing{Id.IncompleteFrame{}}}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
     case _: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchHalt{original})
@@ -464,10 +464,10 @@ def datagramFailure(-Reason: Data, original: AddressLookupError<Reason>, failure
   match failure:
     case Source.UdpServersRejected{_, Source.ServerFailure{}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.ServerFailure{}})
     case Source.UdpServersRejected{_, _}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
-    case Source.Exchange{Source.UdpQueryTransport{DatagramIO.SocketError{code, _}}}: socketFailure(Reason, code)
+    case Source.Exchange{Source.UdpQueryTransport{DatagramIO.DatagramSocketError{code, _}}}: socketFailure(Reason, code)
     case Source.Exchange{Source.Opening{Peer.Association{code, _}}}: socketFailure(Reason, code)
     case Source.Exchange{Source.Aborted{Abort.Supplied{Deadline.Expired{}}}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
-    case Source.Exchange{Source.UdpQueryTransport{DatagramIO.Aborted{Abort.Supplied{Deadline.Expired{}}}}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
+    case Source.Exchange{Source.UdpQueryTransport{DatagramIO.DatagramAborted{Abort.Supplied{Deadline.Expired{}}}}}: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchRunFailed{Id.TemporaryFailure{}})
     case _: IO.pure(Id.Outcome<AddressLookupError<Reason>, Selection>, Id.SearchHalt{original})
 
 def datagramCompleted(-Reason: Data, original: AddressLookupError<Reason>, report: Source.UdpServersReport<Reason>) -> IO(Id.Outcome<AddressLookupError<Reason>, Selection>):
@@ -1140,8 +1140,8 @@ type SystemConfigError<-DecodeError: Data> is Data:
 # Preserve numeric IPv6 scope IDs and configuredSystemConfig occurrence order.
 def endpoint(server: Source.Server) -> Endpoint.Endpoint:
   match server:
-    case Source.Server{Connect.V4{ip}, port}: Endpoint.V4{ip, port}
-    case Source.Server{Connect.V6{ip, scope}, port}: Endpoint.V6{ip, port, scope}
+    case Source.Server{Connect.V4{ip}, port}: Endpoint.EndpointV4{ip, port}
+    case Source.Server{Connect.V6{ip, scope}, port}: Endpoint.EndpointV6{ip, port, scope}
 
 def endpointsSystemConfig(servers: List<&2, Source.Server>) -> List<&2, Endpoint.Endpoint>:
   match servers:

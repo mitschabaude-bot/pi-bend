@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/abortable-connect.bend as Client
+import ../packages/runtime/src/socket.bend as Client
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6

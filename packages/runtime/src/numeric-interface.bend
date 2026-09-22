@@ -2,7 +2,7 @@ import Base
 import ./numeric-scope.bend as Scope
 import ./network-interface.bend as Interface
 import ./hosts.bend as Family
-import ./abortable-connect.bend as Connect
+import ./socket.bend as Connect
 
 # Resolve a numeric destination through the native interface-index primitive.
 # No DNS, resolver owner, hosts file, port or connection is involved.

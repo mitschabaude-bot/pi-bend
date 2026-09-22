@@ -1,9 +1,9 @@
 import Base
-import ../packages/runtime/src/http-socket-exchange.bend as Exchange
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-header.bend as H
+import ../packages/runtime/src/http-exchange.bend as Exchange
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-message.bend as Headers
+import ../packages/runtime/src/http-message.bend as H
 import ../packages/runtime/src/abort.bend as A
 import ./http-socket-exchange.bend as Fixture
 import ./tcp-bytes-probe.bend as Probe
@@ -21,7 +21,7 @@ def cases(count: Nat, +port: U32, +index: U32) -> IO(Unit):
       do IO<Unit>:
         +controller : A.AbortController<String> <- A.new(String)
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-        result : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Fixture.requested(socket, A.signal(String, controller), 7, Request.prepare("POST", "/", Headers.appendField(Headers.new(), H.Header{"host", "example.test"}), Body.Bytes{Payload.payload(256n, Nil{})}))
+        result : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Fixture.requested(socket, A.signal(String, controller), 7, Request.prepareBufferedRequest("POST", "/", Headers.appendField(Headers.new(), H.Header{"host", "example.test"}), Body.Bytes{Payload.payload(256n, Nil{})}))
         text : String <- Fixture.adopted((index % 5 : U32), result)
         reason : Maybe<&2, A.AbortReason<String>> <- A.reason(String, A.signal(String, controller))
         checkSignal(reason)

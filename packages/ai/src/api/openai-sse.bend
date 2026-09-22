@@ -2,23 +2,23 @@ import Base
 import ./openai-client.bend as Client
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/deadline.bend as Deadline
-import ../../../runtime/src/sse-reader.bend as Bytes
-import ../../../runtime/src/sse-decoder.bend as Event
+import ../../../runtime/src/sse.bend as Bytes
+import ../../../runtime/src/sse.bend as Event
 import ../../../runtime/src/json-parse.bend as Json
 import ../../../runtime/src/json-string.bend as StringJSON
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/record.bend as Record
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/u64.bend as Word
-import ../../../runtime/src/http-abort-classification.bend as Classify
-import ../../../runtime/src/http-body-source.bend as Source
+import ../../../runtime/src/http-response.bend as Classify
+import ../../../runtime/src/http-response.bend as Source
 import ../../../runtime/src/http-response.bend as Response
-import ../../../runtime/src/http-response-progress.bend as Progress
-import ../../../runtime/src/http-response-reader.bend as Reader
-import ../../../runtime/src/http-socket-exchange.bend as Exchange
-import ../../../runtime/src/http-socket-source.bend as SocketSource
-import ../../../runtime/src/abortable-socket.bend as Socket
-import ../../../runtime/src/socket-upload.bend as Upload
+import ../../../runtime/src/http-response.bend as Progress
+import ../../../runtime/src/http-response.bend as Reader
+import ../../../runtime/src/http-exchange.bend as Exchange
+import ../../../runtime/src/http-exchange.bend as SocketSource
+import ../../../runtime/src/socket.bend as Socket
+import ../../../runtime/src/socket.bend as Upload
 
 # The streaming side of the OpenAI SDK client: `Stream.fromSSEResponse` as a
 # pure dispatch policy over decoded server-sent events, an affine cursor that
@@ -150,7 +150,7 @@ type Transition<-E: Data> is Type:
   Transition{reader: Bytes.Cursor<ReadError<E>>, decision: Decision<E>}
 
 def create(-E: Data, source: Bytes.Source<ReadError<E>>, hooks: Hooks<E>, synthesize: Bool) -> Cursor<E>:
-  Cursor{Bytes.create(ReadError<E>, source), hooks, synthesize, Fresh{}}
+  Cursor{Bytes.createReader(ReadError<E>, source), hooks, synthesize, Fresh{}}
 
 def incomplete(state: State) -> Bool:
   match state:
@@ -208,13 +208,13 @@ def finished(-E: Data, +hooks: Hooks<E>, synthesize: Bool, result: Result<&2, &2
   match step:
     case Transition{reader, ReadMore{+state}}:
       do IO<Next<E>>:
-        pulled : Bytes.Next<ReadError<E>> <- Bytes.next(ReadError<E>, reader)
+        pulled : Bytes.Next<ReadError<E>> <- Bytes.nextReader(ReadError<E>, reader)
         drive(E, hooks, synthesize, transition(E, state, synthesize, pulled))
     case Transition{reader, Deliver{message}}: IO.pure(Next<E>, Next{Cursor{reader, hooks, synthesize, Active{}}, Done{Some{message}}})
     case Transition{reader, Finish{result, abort, diagnostic}}:
       do IO<Next<E>>:
         reported : Result<&2, &2, ReadError<E>, Unit> <- diagnose(E, hooks, diagnostic)
-        closed : Bytes.CloseResult<ReadError<E>> <- Bytes.close(ReadError<E>, reader)
+        closed : Bytes.CloseResult<ReadError<E>> <- Bytes.closeReader(ReadError<E>, reader)
         finished(E, hooks, synthesize, diagnosed(E, result, reported), abort, closed)
 
 def next(-E: Data, cursor: Cursor<E>) -> IO(Next<E>):
@@ -240,7 +240,7 @@ def close(-E: Data, cursor: Cursor<E>) -> IO(CloseResult<E>):
   match cursor:
     case Cursor{reader, hooks, synthesize, phase}:
       do IO<CloseResult<E>>:
-        result : Bytes.CloseResult<ReadError<E>> <- Bytes.close(ReadError<E>, reader)
+        result : Bytes.CloseResult<ReadError<E>> <- Bytes.closeReader(ReadError<E>, reader)
         closedCursor(E, hooks, synthesize, phase, result)
 
 # Default hooks
@@ -296,22 +296,22 @@ def disposeHooks(-E: Data, hooks: Hooks<E>) -> IO(Unit):
 # HTTP body streams
 # -----------------
 
-def TransportError(-Reason: Data) -> Data: Progress.Error<Client.ReadError(Reason)>
+def TransportError(-Reason: Data) -> Data: Progress.ResponseProgressError<Client.ReadError(Reason)>
 
-def socketAbort(-Reason: Data, error: Socket.Error<Reason>) -> Bool:
+def socketAbort(-Reason: Data, error: Socket.SocketErrorOfSocket<Reason>) -> Bool:
   match error:
-    case Socket.Aborted{_}: True{}
-    case Socket.SocketError{_, _}: False{}
+    case Socket.SocketAborted{_}: True{}
+    case Socket.SocketSocketError{_, _}: False{}
 
-def sourceAbort(-Reason: Data, error: SocketSource.Error<Reason>) -> Bool:
+def sourceAbort(-Reason: Data, error: SocketSource.SocketSourceError<Reason>) -> Bool:
   match error:
-    case SocketSource.SocketFailure{cause}: socketAbort(Reason, cause)
+    case SocketSource.SocketSourceSocketFailure{cause}: socketAbort(Reason, cause)
     case SocketSource.UploadFailure{Upload.WriteFailure{cause, None{}}}: socketAbort(Reason, cause)
     case _: False{}
 
-def readerAbort(-Reason: Data, error: Reader.ReadError<SocketSource.Error<Reason>>) -> Bool:
+def readerAbort(-Reason: Data, error: Reader.ReadError<SocketSource.SocketSourceError<Reason>>) -> Bool:
   match error:
-    case Reader.PrimaryFailure{Reader.SourceError{cause}}: sourceAbort(Reason, cause)
+    case Reader.ResponseReaderPrimaryFailure{Reader.SourceError{cause}}: sourceAbort(Reason, cause)
     case Reader.ReleaseFailure{cause}: sourceAbort(Reason, cause)
     case _: False{}
 

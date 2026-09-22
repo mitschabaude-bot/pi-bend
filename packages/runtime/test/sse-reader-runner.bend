@@ -1,7 +1,7 @@
 import Base
 import ./sse-reader-support.bend as H
 import ./utf8-runner.bend as Codec
-import ../src/sse-reader.bend as D
+import ../src/sse.bend as D
 
 def inputs(parts: List<&2, String>) -> List<&2, H.Input>:
   match parts:

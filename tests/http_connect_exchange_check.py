@@ -80,6 +80,6 @@ for label, command in [('native 1', ['build/http-connect-exchange', '--threads',
             probe.close()
             run(label, command, 'pending', number, listener.getsockname()[1])
     print(label + ': HTTP connection and abort handoff PASS', flush=True)
-paths = [ROOT / 'packages/runtime/src/http-connect-exchange.bend', ROOT / 'tests/http-connect-exchange.bend', ROOT / 'tests/http_connect_exchange_check.py', ROOT / 'packages/runtime/src/http-buffered-body.bend', ROOT / 'tests/http-request-exchange.bend', candidate / 'comp.ts', candidate / 'base.bend', ROOT / 'build/http-connect-exchange', ROOT / 'build/http-connect-exchange.js']
+paths = [ROOT / 'packages/runtime/src/http-exchange.bend', ROOT / 'tests/http-connect-exchange.bend', ROOT / 'tests/http_connect_exchange_check.py', ROOT / 'packages/runtime/src/http-message.bend', ROOT / 'tests/http-request-exchange.bend', candidate / 'comp.ts', candidate / 'base.bend', ROOT / 'build/http-connect-exchange', ROOT / 'build/http-connect-exchange.js']
 report = dict(scope=__doc__, cases=results, sha256={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths})
 (ROOT / 'build/http-connect-result.json').write_text(json.dumps(report, indent=2) + '\n')

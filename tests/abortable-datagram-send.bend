@@ -1,8 +1,8 @@
 import Base
-import ../packages/runtime/src/abortable-datagram.bend as Datagram
+import ../packages/runtime/src/socket.bend as Datagram
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
@@ -11,16 +11,16 @@ import ./udp-write.bend as Write
 
 def destination(family: U32, port: U32) -> Endpoint.Endpoint:
   match family:
-    case 4: Endpoint.V4{IPv4.Address{2130706433}, port}
-    case _: Endpoint.V6{IPv6.Address{0, 0, 0, 1}, port, 0}
+    case 4: Endpoint.EndpointV4{IPv4.Address{2130706433}, port}
+    case _: Endpoint.EndpointV6{IPv6.Address{0, 0, 0, 1}, port, 0}
 
-def result(pair: Socket & Result<&2, &2, Datagram.Error<Deadline.Cause<String>>, Unit>) -> IO(Socket):
+def result(pair: Socket & Result<&2, &2, Datagram.DatagramError<Deadline.Cause<String>>, Unit>) -> IO(Socket):
   match pair:
-    case (socket, Fail{Datagram.Aborted{why}}):
+    case (socket, Fail{Datagram.DatagramAborted{why}}):
       do IO<Socket>:
         IO.print("abort:" ++ Receive.cause(why))
         return socket
-    case (socket, Fail{Datagram.SocketError{code, _}}):
+    case (socket, Fail{Datagram.DatagramSocketError{code, _}}):
       do IO<Socket>:
         IO.print("error:" ++ U32.show(code))
         return socket
@@ -37,7 +37,7 @@ def scoped(socket: Socket, target: Endpoint.Endpoint, bytes: List<&2, U32>, pair
   match pair:
     case (scope, signal):
       do IO<Socket>:
-        value : Socket & Result<&2, &2, Datagram.Error<Deadline.Cause<String>>, Unit> <- Datagram.send(Deadline.Cause<String>, socket, target, bytes, signal)
+        value : Socket & Result<&2, &2, Datagram.DatagramError<Deadline.Cause<String>>, Unit> <- Datagram.send(Deadline.Cause<String>, socket, target, bytes, signal)
         socket : Socket <- result(value)
         saved : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         IO.print("scope:" ++ Receive.retained(saved))

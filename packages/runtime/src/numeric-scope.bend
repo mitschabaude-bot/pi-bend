@@ -3,7 +3,7 @@ import ./numeric-host.bend as Host
 import ./hosts.bend as Family
 import ./ipv6-scope.bend as Scope
 import ./url-ipv6.bend as IPv6
-import ./abortable-connect.bend as Connect
+import ./socket.bend as Connect
 
 type Error<-LookupError: Data> is Data:
   InvalidInput{error: Host.Error}

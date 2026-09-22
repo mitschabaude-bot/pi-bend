@@ -5,7 +5,7 @@ import ./url-ipv4.bend as IPv4
 import ./url-ipv6.bend as IPv6
 import ./file-fold.bend as FileFold
 import ./ipv6-scope.bend as Scope
-import ./abortable-connect.bend as Connect
+import ./socket.bend as Connect
 import ./bounded-file.bend as Bounded
 
 # Numeric resolver configuration is not URL host syntax. In particular, IPv4

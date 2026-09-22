@@ -4,7 +4,7 @@ import ../packages/runtime/src/numeric-interface.bend as Native
 import ../packages/runtime/src/network-interface.bend as Interface
 import ../packages/runtime/src/numeric-host.bend as Host
 import ../packages/runtime/src/ipv6-scope.bend as Zone
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar

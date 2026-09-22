@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./socket-endpoint.bend as EndpointTest
 import ./udp-bytes.bend as Datagram
@@ -107,7 +107,7 @@ def loop(count: Nat, +mode: String, socket: Socket) -> IO(Socket):
 def run(family: U32, mode: String, count: Nat) -> IO(Unit):
   do IO<Unit>:
     socket : Socket <- IO.try(Socket, UDP.bind_family(family, 0))
-    endpoint : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+    endpoint : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     socket : Socket <- EndpointTest.observed(endpoint)
     socket : Socket <- loop(count, mode, socket)
     IO.print("ready")

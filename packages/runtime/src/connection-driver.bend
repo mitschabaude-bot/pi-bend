@@ -1,5 +1,5 @@
 import Base
-import ./abortable-connect.bend as Connect
+import ./socket.bend as Connect
 import ./abort.bend as Abort
 import ./deadline.bend as Deadline
 import ./hosts.bend as Hosts

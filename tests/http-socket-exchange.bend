@@ -1,14 +1,14 @@
 import Base
-import ../packages/runtime/src/http-socket-source.bend as Source
-import ../packages/runtime/src/http-socket-exchange.bend as Exchange
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-header.bend as H
-import ../packages/runtime/src/http-response-reader.bend as Reader
-import ../packages/runtime/src/http-response-stream.bend as Stream
-import ../packages/runtime/src/http-chunked-body.bend as Chunked
-import ../packages/runtime/src/abortable-socket.bend as Transport
+import ../packages/runtime/src/http-exchange.bend as Source
+import ../packages/runtime/src/http-exchange.bend as Exchange
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-message.bend as Headers
+import ../packages/runtime/src/http-message.bend as H
+import ../packages/runtime/src/http-response.bend as Reader
+import ../packages/runtime/src/http-response.bend as Stream
+import ../packages/runtime/src/http-message.bend as Chunked
+import ../packages/runtime/src/socket.bend as Transport
 import ../packages/runtime/src/abort.bend as A
 import ./tcp-bytes-probe.bend as Probe
 import ../packages/runtime/test/utf8-runner.bend as Text
@@ -16,27 +16,27 @@ import ../packages/runtime/test/utf8-runner.bend as Text
 type Capture is Data:
   Capture{heads: U32, body: List<&2, U32>, completed: Bool}
 
-def event(capture: Capture, value: Stream.Event) -> Capture:
+def event(capture: Capture, value: Stream.StreamEvent) -> Capture:
   match capture value:
     case Capture{heads, body, completed} Stream.FinalHead{_, _}: Capture{(heads + 1 : U32), body, completed}
     case Capture{heads, body, completed} Stream.BodyData{bytes}: Capture{heads, List.append(&2, U32, body, bytes), completed}
     case Capture{heads, body, _} Stream.Completed{_}: Capture{heads, body, True{}}
     case capture _: capture
 
-def sourceError(value: Source.Error<String>) -> String:
+def sourceError(value: Source.SocketSourceError<String>) -> String:
   match value:
-    case Source.SocketFailure{Transport.Aborted{A.Supplied{reason}}}: "abort:" ++ reason
-    case Source.InvalidReadSize{}: "invalid-size"
+    case Source.SocketSourceSocketFailure{Transport.SocketAborted{A.Supplied{reason}}}: "abort:" ++ reason
+    case Source.SocketSourceInvalidReadSize{}: "invalid-size"
     case _: "source-error"
 
-def primary(value: Reader.PrimaryError<Source.Error<String>>) -> String:
+def primary(value: Reader.ResponseReaderPrimaryError<Source.SocketSourceError<String>>) -> String:
   match value:
     case Reader.SourceError{why}: sourceError(why)
     case Reader.DecodeError{_}: "decode"
 
-def failure(value: Reader.ReadError<Source.Error<String>>) -> String:
+def failure(value: Reader.ReadError<Source.SocketSourceError<String>>) -> String:
   match value:
-    case Reader.PrimaryFailure{why}: primary(why)
+    case Reader.ResponseReaderPrimaryFailure{why}: primary(why)
     case Reader.ReleaseFailure{why}: "release:" ++ sourceError(why)
     case Reader.FailureWithRelease{why, _}: "both:" ++ primary(why)
 
@@ -51,7 +51,7 @@ def closeChecked(value: Result<&2, &2, Exchange.ReadError<String>, Unit>) -> IO(
 
 def stop(exchange: Exchange.Exchange<String>, capture: Capture, terminal: String) -> IO(String):
   do IO<String>:
-    result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.close(String, exchange)
+    result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.closeSocketExchange(String, exchange)
     closeChecked(result)
     return summary(capture, terminal)
 
@@ -65,14 +65,14 @@ def retired(next: Exchange.Next<String>) -> IO(Unit):
     case Exchange.Next{Exchange.Closed{}, Done{None{}}}: IO.pure(Unit, Unit{})
     case Exchange.Next{exchange, _}:
       do IO<Unit>:
-        result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.close(String, exchange)
+        result : Result<&2, &2, Exchange.ReadError<String>, Unit> <- Exchange.closeSocketExchange(String, exchange)
         IO.die(Unit, 1, "terminal exchange retained resources")
 
 def ended(exchange: Exchange.Exchange<String>, capture: Capture, text: String) -> IO(String):
   match exchange:
     case Exchange.Closed{}:
       do IO<String>:
-        next : Exchange.Next<String> <- Exchange.next(String, Exchange.Closed{})
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, Exchange.Closed{})
         retired(next)
         return summary(capture, text)
     case value:
@@ -90,7 +90,7 @@ def loop(fuel: Nat, next: Exchange.Next<String>, capture: Capture, early: Bool) 
         case True{}: stop(exchange, event(capture, value), "early")
         case False{}:
           do IO<String>:
-            next : Exchange.Next<String> <- Exchange.next(String, exchange)
+            next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
             loop(rest, next, event(capture, value), False{})
 
 def earlyMode(mode: U32) -> Bool:
@@ -101,23 +101,23 @@ def earlyMode(mode: U32) -> Bool:
 def adopted(mode: U32, result: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(String):
   match result:
     case Fail{Exchange.InvalidReadSize{}}: IO.pure(String, "invalid-size")
-    case Fail{Exchange.SocketFailure{Transport.Aborted{A.Supplied{why}}}}: IO.pure(String, "start-abort:" ++ why)
+    case Fail{Exchange.SocketFailure{Transport.SocketAborted{A.Supplied{why}}}}: IO.pure(String, "start-abort:" ++ why)
     case Fail{_}: IO.die(String, 1, "unexpected exchange start failure")
     case Done{exchange}:
       do IO<String>:
-        next : Exchange.Next<String> <- Exchange.next(String, exchange)
+        next : Exchange.Next<String> <- Exchange.nextSocketExchange(String, exchange)
         loop(256n, next, Capture{0, Nil{}, False{}}, earlyMode(mode))
 
-def requested(socket: Socket, signal: A.AbortSignal<String>, maximum: U32, request: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>):
+def requested(socket: Socket, signal: A.AbortSignal<String>, maximum: U32, request: Result<&2, &2, Request.RequestError, Request.BufferedRequestPrepared>) -> IO(Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>):
   match request:
     case Fail{_}:
       do IO<Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>>:
         Socket.close(socket)
         IO.die(Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>, 1, "invalid fixture request")
-    case Done{value}: Exchange.start(~String, socket, signal, value, maximum, Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
+    case Done{value}: Exchange.startSocketExchange(~String, socket, signal, value, maximum, Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
 
 def start(socket: Socket, signal: A.AbortSignal<String>, maximum: U32) -> IO(Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>):
-  requested(socket, signal, maximum, Request.prepare("GET", "/", Headers.appendField(Headers.new(), H.Header{"host", "example.test"}), Body.Absent{}))
+  requested(socket, signal, maximum, Request.prepareBufferedRequest("GET", "/", Headers.appendField(Headers.new(), H.Header{"host", "example.test"}), Body.Absent{}))
 
 def abortLater(controller: A.AbortController<String>) -> IO(Bool):
   do IO<Bool>:

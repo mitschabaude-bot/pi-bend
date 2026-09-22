@@ -2,12 +2,12 @@ import Base
 import ../src/api/openai-client.bend as Provider
 import ../src/utils/provider-retry.bend as Retry
 import ../../runtime/src/http-response.bend as Response
-import ../../runtime/src/http-response-metadata.bend as Metadata
-import ../../runtime/src/http-head.bend as Head
-import ../../runtime/src/http-status.bend as Status
-import ../../runtime/src/http-header.bend as Header
-import ../../runtime/src/http-body-consume.bend as Consume
-import ../../runtime/src/http-body-buffer.bend as Buffer
+import ../../runtime/src/http-response.bend as Metadata
+import ../../runtime/src/http-message.bend as Head
+import ../../runtime/src/http-message.bend as Status
+import ../../runtime/src/http-message.bend as Header
+import ../../runtime/src/http-response.bend as Consume
+import ../../runtime/src/http-response.bend as Buffer
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/u64.bend as W
 import ../../runtime/test/http-response.bend as Input
@@ -56,10 +56,10 @@ def finished(read: Bool, value: Result<&2, &1, Provider.StatusFailure<String>, R
   match value:
     case Done{Response.Response{+metadata, body}}:
       do IO<Unit>:
-        IO.print("accepted:" ++ U32.show(Metadata.status(metadata)))
+        IO.print("accepted:" ++ U32.show(Metadata.statusResponseMetadata(metadata)))
         useBody(read, body)
     case Fail{Provider.StatusFailure{metadata, body}}:
-      IO.print("rejected:" ++ U32.show(Metadata.status(metadata)) ++ ":" ++ Show.shownText(body))
+      IO.print("rejected:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Show.shownText(body))
 
 def field(parts: List<&2, String>) -> Header.Header:
   match parts:

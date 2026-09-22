@@ -1,10 +1,10 @@
 import Base
-import ../src/http-date-year.bend as Y
-import ../src/http-date-syntax.bend as S
+import ../src/http-message.bend as Y
+import ../src/http-message.bend as S
 import ../src/calendar.bend as C
 import ./utf8-runner.bend as H
 
-def show(result: Result<&2, &2, Y.Error, U32>) -> String:
+def show(result: Result<&2, &2, Y.DateYearError, U32>) -> String:
   match result:
     case Done{year}: U32.show(year)
     case Fail{Y.InvalidShortYear{}}: "short-year"
@@ -19,7 +19,7 @@ def parsed(reference: C.CivilTime, fields: Maybe<&2, S.DateFields>) -> String:
 def run(parts: List<&2, String>) -> String:
   match parts:
     case year <> month <> day <> hour <> minute <> second <> date <> Nil{}:
-      parsed(C.CivilTime{H.decimal(year, 0), H.decimal(month, 0), H.decimal(day, 0), H.decimal(hour, 0), H.decimal(minute, 0), H.decimal(second, 0), 0}, S.parse(date))
+      parsed(C.CivilTime{H.decimal(year, 0), H.decimal(month, 0), H.decimal(day, 0), H.decimal(hour, 0), H.decimal(minute, 0), H.decimal(second, 0), 0}, S.parseDateSyntax(date))
     case _: "arguments"
 
 def cases(values: List<String>) -> IO(Unit):

@@ -3,24 +3,24 @@ import ./abort.bend as Abort
 import ./deadline.bend as Deadline
 import ./callback.bend as C
 import ./url-record.bend as URL
-import ./headers.bend as Headers
-import ./http-buffered-request.bend as Request
-import ./http-buffered-body.bend as Body
-import ./http-resolved-exchange.bend as HTTP
-import ./http-exchange-plan.bend as Plan
-import ./http-exchange-response.bend as Head
-import ./http-socket-exchange.bend as Exchange
-import ./http-socket-source.bend as Source
+import ./http-message.bend as Headers
+import ./http-message.bend as Request
+import ./http-message.bend as Body
+import ./http-exchange.bend as HTTP
+import ./http-message.bend as Plan
+import ./http-exchange.bend as Head
+import ./http-exchange.bend as Exchange
+import ./http-exchange.bend as Source
 import ./http-response.bend as Response
-import ./http-response-progress.bend as Progress
-import ./http-response-reader.bend as Reader
-import ./http-connect.bend as Connect
-import ./http-host-route.bend as Route
+import ./http-response.bend as Progress
+import ./http-response.bend as Reader
+import ./http-exchange.bend as Connect
+import ./http-exchange.bend as Route
 import ./hosts.bend as HostsResolve
 import ./connection-driver.bend as Driver
 import ./connection-driver.bend as Connection
-import ./abortable-socket.bend as Socket
-import ./socket-upload.bend as Upload
+import ./socket.bend as Socket
+import ./socket.bend as Upload
 import ./dns-resolver.bend as Resolver
 import ./dns-resolver.bend as Named
 import ./dns-resolver.bend as DNS
@@ -49,10 +49,10 @@ type Input<-Reason: Data> is Data:
 
 type Error<-Reason: Data> is Data:
   InvalidRequest{cause: Request.URLRequestError}
-  Rejected{cause: Plan.Error}
+  Rejected{cause: Plan.ExchangePlanError}
   Unresolved{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError())}
-  ExchangeFailure{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, cause: HTTP.Error<Deadline.Cause<Reason>>}
-  HeaderFailure{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, cause: Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>}
+  ExchangeFailure{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, cause: HTTP.ResolvedExchangeError<Deadline.Cause<Reason>>}
+  HeaderFailure{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, cause: Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>}
 
 def Result_(-Reason: Data) -> Type: Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>
 def Fetch(-Reason: Data) -> Data: C.Callback<Input<Reason>, Result_(Reason)>
@@ -107,7 +107,7 @@ def dispose(runtime: Runtime) -> IO(Unit):
 type Context is Data:
   Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options}
 
-def headed(-Reason: Data, resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, result: Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>>) -> Result_(Reason):
+def headed(-Reason: Data, resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, result: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>>) -> Result_(Reason):
   match result:
     case Fail{cause}: Fail{HeaderFailure{resolution, attempts, cause}}
     case Done{response}: Done{response}
@@ -119,7 +119,7 @@ def reported(~Reason: Data, report: HTTP.Report<Deadline.Cause<Reason>, SourceEr
     case HTTP.Attempted{resolution, attempts, Fail{cause}}: IO.pure(Result_(Reason), Fail{ExchangeFailure{resolution, attempts, cause}})
     case HTTP.Attempted{resolution, attempts, Done{exchange}}:
       do IO<Result_(Reason)>:
-        result : Result<&2, &1, Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>> <- Head.start(~Deadline.Cause<Reason>, exchange)
+        result : Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>> <- Head.startExchangeResponse(~Deadline.Cause<Reason>, exchange)
         return headed(Reason, resolution, attempts, result)
 
 def prepared(~Reason: Data, context: Context, signal: Signal(Reason), request: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Result_(Reason)):
@@ -127,7 +127,7 @@ def prepared(~Reason: Data, context: Context, signal: Signal(Reason), request: R
     case _ Fail{cause}: IO.pure(Result_(Reason), Fail{InvalidRequest{cause}})
     case Context{resolver, hosts, options} Done{request}:
       do IO<Result_(Reason)>:
-        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.start(~Deadline.Cause<Reason>, ~(SourceError()), resolver, signal, hosts, options, request)
+        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startResolvedExchange(~Deadline.Cause<Reason>, ~(SourceError()), resolver, signal, hosts, options, request)
         reported(~Reason, report)
 
 def invoke(~Reason: Data, context: Context, input: Input<Reason>) -> IO(Result_(Reason)):
@@ -196,21 +196,21 @@ def resolutionCategory(-Reason: Data, report: Connect.Resolution(Deadline.Cause<
     case Done{Route.Named{HostsResolve.FromNetwork{Named.PairHostsResolverCompleted{report}}}}: dnsReport(Reason, report)
     case _: NonRetryable{}
 
-def socket(-Reason: Data, error: Socket.Error<Deadline.Cause<Reason>>) -> Category:
+def socket(-Reason: Data, error: Socket.SocketErrorOfSocket<Deadline.Cause<Reason>>) -> Category:
   match error:
-    case Socket.Aborted{why}: requestAbort(Reason, why)
-    case Socket.SocketError{_, _}: Connection{}
+    case Socket.SocketAborted{why}: requestAbort(Reason, why)
+    case Socket.SocketSocketError{_, _}: Connection{}
 
-def source(-Reason: Data, error: Source.Error<Deadline.Cause<Reason>>) -> Category:
+def source(-Reason: Data, error: Source.SocketSourceError<Deadline.Cause<Reason>>) -> Category:
   match error:
-    case Source.SocketFailure{cause}: socket(Reason, cause)
+    case Source.SocketSourceSocketFailure{cause}: socket(Reason, cause)
     case Source.UploadFailure{Upload.WriteFailure{cause, None{}}}: socket(Reason, cause)
     case _: NonRetryable{}
 
-def reader(-Reason: Data, error: Reader.ReadError<Source.Error<Deadline.Cause<Reason>>>) -> Category:
+def reader(-Reason: Data, error: Reader.ReadError<Source.SocketSourceError<Deadline.Cause<Reason>>>) -> Category:
   match error:
-    case Reader.PrimaryFailure{Reader.SourceError{cause}}: source(Reason, cause)
-    case Reader.PrimaryFailure{Reader.DecodeError{_}}: Connection{}
+    case Reader.ResponseReaderPrimaryFailure{Reader.SourceError{cause}}: source(Reason, cause)
+    case Reader.ResponseReaderPrimaryFailure{Reader.DecodeError{_}}: Connection{}
     case Reader.ReleaseFailure{cause}: source(Reason, cause)
     case Reader.FailureWithRelease{_, _}: NonRetryable{}
 
@@ -220,24 +220,24 @@ def exchangeRead(-Reason: Data, error: Exchange.ReadError<Deadline.Cause<Reason>
     case Exchange.DisposalFailure{cause}: source(Reason, cause)
     case Exchange.ResponseWithDisposal{_, _}: NonRetryable{}
 
-def header(-Reason: Data, error: Progress.Error<Exchange.ReadError<Deadline.Cause<Reason>>>) -> Category:
+def header(-Reason: Data, error: Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>) -> Category:
   match error:
-    case Progress.PrimaryFailure{Progress.TransportFailure{cause}}: exchangeRead(Reason, cause)
-    case Progress.PrimaryFailure{Progress.MissingHead{}}: Connection{}
-    case Progress.PrimaryFailure{Progress.MissingCompletion{}}: Connection{}
-    case Progress.PrimaryFailure{Progress.UnexpectedEvent{_}}: NonRetryable{}
-    case Progress.CleanupFailure{cause}: exchangeRead(Reason, cause)
-    case Progress.FailureWithCleanup{_, _}: NonRetryable{}
+    case Progress.ResponseProgressPrimaryFailure{Progress.TransportFailure{cause}}: exchangeRead(Reason, cause)
+    case Progress.ResponseProgressPrimaryFailure{Progress.MissingHead{}}: Connection{}
+    case Progress.ResponseProgressPrimaryFailure{Progress.MissingCompletion{}}: Connection{}
+    case Progress.ResponseProgressPrimaryFailure{Progress.UnexpectedEvent{_}}: NonRetryable{}
+    case Progress.ResponseProgressCleanupFailure{cause}: exchangeRead(Reason, cause)
+    case Progress.ResponseProgressFailureWithCleanup{_, _}: NonRetryable{}
 
-def exchangeCategory(-Reason: Data, error: HTTP.Error<Deadline.Cause<Reason>>) -> Category:
+def exchangeCategory(-Reason: Data, error: HTTP.ResolvedExchangeError<Deadline.Cause<Reason>>) -> Category:
   match error:
-    case HTTP.ConnectionFailure{Connection.Exhausted{}}: Connection{}
-    case HTTP.ConnectionFailure{Connection.ProgressAborted{why}}: requestAbort(Reason, why)
-    case HTTP.ConnectionFailure{_}: NonRetryable{}
-    case HTTP.ExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
-    case HTTP.ExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
-    case HTTP.ExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
-    case HTTP.ExchangeFailure{_}: NonRetryable{}
+    case HTTP.ResolvedExchangeConnectionFailure{Connection.Exhausted{}}: Connection{}
+    case HTTP.ResolvedExchangeConnectionFailure{Connection.ProgressAborted{why}}: requestAbort(Reason, why)
+    case HTTP.ResolvedExchangeConnectionFailure{_}: NonRetryable{}
+    case HTTP.ResolvedExchangeExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
+    case HTTP.ResolvedExchangeExchangeFailure{_}: NonRetryable{}
 
 def classify(-Reason: Data, error: Error<Reason>) -> Category:
   match error:

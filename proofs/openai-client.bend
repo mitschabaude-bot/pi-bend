@@ -3,9 +3,9 @@ import ../packages/ai/src/api/openai-client.bend as Client
 import ../laws/openai-client.bend as Laws
 import ../packages/ai/src/types.bend as T
 import ../packages/runtime/src/record.bend as R
-import ../packages/runtime/src/http-header.bend as H
+import ../packages/runtime/src/http-message.bend as H
 import ../packages/runtime/src/http-response.bend as Response
-import ../packages/runtime/src/http-response-metadata.bend as Metadata
+import ../packages/runtime/src/http-response.bend as Metadata
 import ../laws/record.bend as RecordLaws
 import ./record.bend as RecordProof
 
@@ -53,8 +53,8 @@ def Laws.entries_preserve_first_error(values, cause):
     case R.Property{_, _} <> rest: {==}
 
 law empty_entries_preserve_result:
-  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
-  {Client.layerEntries(Nil{}, initial) == initial : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  for initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
+  {Client.layerEntries(Nil{}, initial) == initial : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 def empty_entries_preserve_result(initial):
   match initial:
@@ -103,7 +103,7 @@ def Laws.entries_partition(left, initial, right):
     case Nil{} Fail{cause}: {==}
     case Nil{} Done{state}: {==}
     case R.Property{_, _} <> rest Fail{cause}:
-      Equal.sym(Result<&2, &2, H.HeaderError, Client.HeaderState>, Client.layerEntries(right, Fail{cause}), Fail{cause}, Laws.entries_preserve_first_error(right, cause))
+      Equal.sym(Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>, Client.layerEntries(right, Fail{cause}), Fail{cause}, Laws.entries_preserve_first_error(right, cause))
     case R.Property{name, value} <> rest Done{state}: Laws.entries_partition(rest, Client.layerField(state, name, value), right)
 
 def Laws.accepted_owner_has_no_body_io(E, State, read, close, limit, metadata, body, accepted):

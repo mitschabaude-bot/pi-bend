@@ -7,7 +7,7 @@ import ../packages/runtime/src/resolver-config.bend as Address
 import ../packages/runtime/src/network-interface.bend as Interface
 import ../packages/runtime/src/ipv6-scope.bend as Scope
 import ../packages/runtime/src/dns-transport.bend as TCP
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ./resolver-settings.bend as SettingsTest

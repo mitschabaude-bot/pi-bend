@@ -1,19 +1,19 @@
 import Base
-import ../packages/runtime/src/socket-interrupt.bend as Interrupt
+import ../packages/runtime/src/socket.bend as Interrupt
 import ./tcp-bytes-probe.bend as Probe
 import ./tcp-bytes-contract.bend as Contract
 import ./tcp-bytes-backpressure.bend as Payload
 
 # Fixtures use a loopback peer which holds its connection open until shutdown.
-def owner(pair: Socket & Result<&2, &1, Interrupt.Error, Interrupt.Owner>) -> IO(Socket & Interrupt.Owner):
+def owner(pair: Socket & Result<&2, &1, Interrupt.InterruptError, Interrupt.InterruptOwner>) -> IO(Socket & Interrupt.InterruptOwner):
   match pair:
-    case (socket, Done{owner}): IO.pure(Socket & Interrupt.Owner, (socket, owner))
+    case (socket, Done{owner}): IO.pure(Socket & Interrupt.InterruptOwner, (socket, owner))
     case (socket, Fail{_}):
-      do IO<Socket & Interrupt.Owner>:
+      do IO<Socket & Interrupt.InterruptOwner>:
         Socket.close(socket)
-        IO.die(Socket & Interrupt.Owner, 1, "interrupt creation failed")
+        IO.die(Socket & Interrupt.InterruptOwner, 1, "interrupt creation failed")
 
-def winner(value: Result<&2, &2, Interrupt.Error, Bool>) -> IO(Bool):
+def winner(value: Result<&2, &2, Interrupt.InterruptError, Bool>) -> IO(Bool):
   match value:
     case Done{won}: IO.pure(Bool, won)
     case Fail{_}: IO.die(Bool, 1, "shutdown failed")
@@ -26,7 +26,7 @@ def require(value: Bool, text: String) -> IO(Unit):
 def cancelLater(+handle: Interrupt.Handle) -> IO(Bool):
   do IO<Bool>:
     IO.sleep(100)
-    value : Result<&2, &2, Interrupt.Error, Bool> <- Interrupt.cancel(handle)
+    value : Result<&2, &2, Interrupt.InterruptError, Bool> <- Interrupt.cancelInterrupt(handle)
     winner(value)
 
 def eof(pair: Socket & Result<&1, &1, U32 & String, List<&2, U32>>) -> IO(Unit):
@@ -60,7 +60,7 @@ def blocked(socket: Socket, write: Bool) -> IO(Unit):
         sent : Socket & Result<&1, &1, U32 & String, Unit> <- TCP.send_bytes(socket, Payload.payload(256n, Nil{}))
         writeFailed(sent)
 
-def cancelled(socket: Socket, write: Bool, pair: Interrupt.Owner & Interrupt.Handle) -> IO(Unit):
+def cancelled(socket: Socket, write: Bool, pair: Interrupt.InterruptOwner & Interrupt.Handle) -> IO(Unit):
   match pair:
     case (owner, +handle):
       do IO<Unit>:
@@ -70,12 +70,12 @@ def cancelled(socket: Socket, write: Bool, pair: Interrupt.Owner & Interrupt.Han
         +a : Bool <- IO.join(Bool, first)
         +b : Bool <- IO.join(Bool, second)
         require((a || b) && Bool.not(a && b), "expected one cancellation winner")
-        again : Result<&2, &2, Interrupt.Error, Bool> <- Interrupt.cancel(handle)
+        again : Result<&2, &2, Interrupt.InterruptError, Bool> <- Interrupt.cancelInterrupt(handle)
         won : Bool <- winner(again)
         require(Bool.not(won), "repeated cancellation won")
         Interrupt.dispose(owner)
 
-def run(write: Bool, pair: Socket & Interrupt.Owner) -> IO(Unit):
+def run(write: Bool, pair: Socket & Interrupt.InterruptOwner) -> IO(Unit):
   match pair:
     case (socket, owner): cancelled(socket, write, Interrupt.borrow(owner))
 
@@ -85,8 +85,8 @@ def loop(count: Nat, +port: U32, +write: Bool) -> IO(Unit):
     case Succ{rest}:
       do IO<Unit>:
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-        acquired : Socket & Result<&2, &1, Interrupt.Error, Interrupt.Owner> <- Interrupt.create(socket)
-        pair : Socket & Interrupt.Owner <- owner(acquired)
+        acquired : Socket & Result<&2, &1, Interrupt.InterruptError, Interrupt.InterruptOwner> <- Interrupt.createInterrupt(socket)
+        pair : Socket & Interrupt.InterruptOwner <- owner(acquired)
         run(write, pair)
         loop(rest, port, write)
 
@@ -98,7 +98,7 @@ def echo(pair: Socket & Result<&1, &1, U32 & String, List<&2, U32>>) -> IO(Unit)
         Socket.close(socket)
         IO.die(Unit, 1, "normal disposal shut down the connection")
 
-def normal(pair: Socket & Interrupt.Owner) -> IO(Unit):
+def normal(pair: Socket & Interrupt.InterruptOwner) -> IO(Unit):
   match pair:
     case (socket, owner):
       do IO<Unit>:
@@ -110,13 +110,13 @@ def normal(pair: Socket & Interrupt.Owner) -> IO(Unit):
 
 # Keep the interrupt owner after closing the original fd, then open a new
 # connection. Interrupting the old connection must not touch the new one.
-def retainedHandle(port: U32, socket: Socket, pair: Interrupt.Owner & Interrupt.Handle) -> IO(Unit):
+def retainedHandle(port: U32, socket: Socket, pair: Interrupt.InterruptOwner & Interrupt.Handle) -> IO(Unit):
   match pair:
     case (owner, handle):
       do IO<Unit>:
         Socket.close(socket)
         fresh : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-        cancelled : Result<&2, &2, Interrupt.Error, Bool> <- Interrupt.cancel(handle)
+        cancelled : Result<&2, &2, Interrupt.InterruptError, Bool> <- Interrupt.cancelInterrupt(handle)
         won : Bool <- winner(cancelled)
         require(won, "retained interrupt did not run")
         Interrupt.dispose(owner)
@@ -125,7 +125,7 @@ def retainedHandle(port: U32, socket: Socket, pair: Interrupt.Owner & Interrupt.
         read : Socket & Result<&1, &1, U32 & String, List<&2, U32>> <- TCP.recv_bytes(fresh, 1)
         echo(read)
 
-def retained(port: U32, pair: Socket & Interrupt.Owner) -> IO(Unit):
+def retained(port: U32, pair: Socket & Interrupt.InterruptOwner) -> IO(Unit):
   match pair:
     case (socket, owner): retainedHandle(port, socket, Interrupt.borrow(owner))
 
@@ -134,13 +134,13 @@ def main() -> IO(Unit):
     args : List<String> <- IO.args()
     +port : U32 <- IO.pure(U32, Probe.port(args))
     socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-    acquired : Socket & Result<&2, &1, Interrupt.Error, Interrupt.Owner> <- Interrupt.create(socket)
-    pair : Socket & Interrupt.Owner <- owner(acquired)
+    acquired : Socket & Result<&2, &1, Interrupt.InterruptError, Interrupt.InterruptOwner> <- Interrupt.createInterrupt(socket)
+    pair : Socket & Interrupt.InterruptOwner <- owner(acquired)
     normal(pair)
     loop(12n, port, False{})
     loop(12n, port, True{})
     socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-    acquired : Socket & Result<&2, &1, Interrupt.Error, Interrupt.Owner> <- Interrupt.create(socket)
-    pair : Socket & Interrupt.Owner <- owner(acquired)
+    acquired : Socket & Result<&2, &1, Interrupt.InterruptError, Interrupt.InterruptOwner> <- Interrupt.createInterrupt(socket)
+    pair : Socket & Interrupt.InterruptOwner <- owner(acquired)
     retained(port, pair)
     IO.print("PASS socket interruption")

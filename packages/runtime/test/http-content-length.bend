@@ -1,6 +1,6 @@
 import Base
-import ../src/http-content-length.bend as Length
-import ../src/http-header.bend as H
+import ../src/http-message.bend as Length
+import ../src/http-message.bend as H
 import ../src/u64.bend as W
 import ./utf8-runner.bend as Text
 
@@ -24,7 +24,7 @@ def fields(parts: List<&2, String>) -> List<&2, H.Header>:
 
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
-    case "p" <> value <> Nil{}: IO.print(shown(Length.optional(Length.parse(Text.fromScalars(Text.parseNumbers(value))))))
+    case "p" <> value <> Nil{}: IO.print(shown(Length.optional(Length.parseContentLength(Text.fromScalars(Text.parseNumbers(value))))))
     case "f" <> rest: IO.print(shown(Length.fromFields(fields(rest))))
     case _: IO.die(Unit, 1, "invalid length fixture")
 

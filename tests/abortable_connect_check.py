@@ -92,5 +92,5 @@ static void __attribute__((destructor)) abort_connect_audit(void) {
                 probe.setblocking(False);assert probe.connect_ex(listener.getsockname())==errno.EINPROGRESS;assert not select.select([],[probe],[],.05)[1];probe.close()
                 run(label,command,'cancel',number,listener.getsockname()[1])
         print(label+': AbortSignal connect composition PASS',flush=True)
-report={'scope':__doc__,'audited':not args.production,'cases':results,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [ROOT/'packages/runtime/src/abortable-connect.bend',ROOT/'tests/abortable-connect.bend',candidate/'comp.ts',candidate/'base.bend',candidate/'effs/connect.c',candidate/'effs/connect.js',ROOT/'build/abortable-connect',ROOT/'build/abortable-connect.js']}}
+report={'scope':__doc__,'audited':not args.production,'cases':results,'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [ROOT/'packages/runtime/src/socket.bend',ROOT/'tests/abortable-connect.bend',candidate/'comp.ts',candidate/'base.bend',candidate/'effs/connect.c',candidate/'effs/connect.js',ROOT/'build/abortable-connect',ROOT/'build/abortable-connect.js']}}
 (ROOT/('build/abortable-connect-production-result.json' if args.production else 'build/abortable-connect-result.json')).write_text(json.dumps(report,indent=2)+'\n')

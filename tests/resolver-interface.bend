@@ -4,7 +4,7 @@ import ../packages/runtime/src/dns-resolver.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Scope
 import ../packages/runtime/src/ipv6-scope.bend as IPv6Scope
 import ../packages/runtime/src/resolver-config.bend as Address
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 
 def diagnostic(value: Maybe<&2, IPv6Scope.Error<Interface.Error>>) -> String:
   match value:

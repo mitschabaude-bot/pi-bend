@@ -268,7 +268,7 @@ Template (`~`) arguments must be closed in a law, so the lifecycle and transport
 
 ### Provider utilities consolidated (2026-09-22)
 
-`packages/ai/src/utils` follows upstream's module boundaries again: `provider-retry.bend` holds the policy, loop, option validation, rendering and native effects ([design](provider-retry.md)); `headers.bend` holds the header record projections and provider-header overlays; the SDK's layered header state and status boundary moved into `openai-client.bend`, whose laws now include the fourteen header-layer laws (layer/entry partition, first-error preservation, observable latest setting, explicit removal until materialization) and three status-boundary laws (no body IO on success, diagnostic consumption before failure, retry-metadata projection). `laws/provider-retry.bend` absorbs the eight option-validation laws and the no-timer-effect sleep law. The 26 wrapper laws of the deleted hook-map, hook-options, owned-acquire, request, request-error, response-view, retry-config and retry-map layers are gone with those layers. `laws/json.bend` replaces `json-finite` now that the finiteness check lives in `json.bend`.
+`packages/ai/src/utils` follows upstream's module boundaries again: `provider-retry.bend` holds the policy, loop, option validation, rendering and native effects ([design](provider-retry.md)); the headers section of `http-message.bend` holds the header record projections and provider-header overlays; the SDK's layered header state and status boundary moved into `openai-client.bend`, whose laws now include the fourteen header-layer laws (layer/entry partition, first-error preservation, observable latest setting, explicit removal until materialization) and three status-boundary laws (no body IO on success, diagnostic consumption before failure, retry-metadata projection). `laws/provider-retry.bend` absorbs the eight option-validation laws and the no-timer-effect sleep law. The 26 wrapper laws of the deleted hook-map, hook-options, owned-acquire, request, request-error, response-view, retry-config and retry-map layers are gone with those layers. `laws/json.bend` replaces `json-finite` now that the finiteness check lives in `json.bend`.
 
 ### Agent modules merged (2026-09-22)
 
@@ -277,3 +277,7 @@ Template (`~`) arguments must be closed in a law, so the lifecycle and transport
 ### Runtime name resolution merged (2026-09-22)
 
 The 24 law modules for DNS, resolver configuration, hosts and connection scheduling keep their statements and now import the six merged runtime modules; renamed internal names are the only textual change. The audited unsafe drivers moved with their code: `dns-message.bend drive` (search run), `dns-transport.bend driveTcpConnection`/`read`/`readUdpQuery`, `dns-resolver.bend drive` (address lookup). No unsafe definition was added.
+
+### Runtime HTTP family merged (2026-09-22)
+
+The HTTP, SSE, socket and line-decoder laws keep their statements over the five merged modules; the audited unsafe drivers moved with their code (`http-response.bend`: `seek`, `drive`, `driveBodyConsume`, `driveResponseReader`; `sse.bend`: `drive`).

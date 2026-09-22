@@ -1,6 +1,6 @@
 import Base
 import ../src/abort.bend as A
-import ../src/abortable-sleep.bend as S
+import ../src/socket.bend as S
 
 def expectDone(value: Result<&2, &2, A.AbortReason<String>, Unit>) -> IO(Unit):
   match value:

@@ -1,5 +1,5 @@
 import Base
-import ../../runtime/src/sse-reader.bend as D
+import ../../runtime/src/sse.bend as D
 import ../src/api/openai-sse.bend as Sse
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/ref.bend as Ref

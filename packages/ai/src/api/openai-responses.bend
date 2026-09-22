@@ -19,7 +19,7 @@ import ./openai-sse.bend as Sse
 import ./simple-options.bend as Simple
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deadline.bend as Deadline
-import ../../../runtime/src/http-fetch-scope.bend as Scope
+import ../../../runtime/src/http-response.bend as Scope
 import ../../../runtime/src/json-decode.bend as Decode
 import ../../../runtime/src/json-string.bend as StringJSON
 import ../utils/schema-json.bend as Convert
@@ -27,11 +27,11 @@ import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/fetch.bend as Fetch
-import ../../../runtime/src/headers.bend as Headers
-import ../../../runtime/src/http-resolved-exchange.bend as HTTP
+import ../../../runtime/src/http-message.bend as Headers
+import ../../../runtime/src/http-exchange.bend as HTTP
 import ../../../runtime/src/http-response.bend as Response
-import ../../../runtime/src/http-response-metadata.bend as Metadata
-import ../../../runtime/src/http-response-progress.bend as Progress
+import ../../../runtime/src/http-response.bend as Metadata
+import ../../../runtime/src/http-response.bend as Progress
 import ../../../runtime/src/json-parse.bend as JsonParse
 import ../../../runtime/src/random-seed.bend as Seed
 import ../../../runtime/src/record.bend as R
@@ -39,7 +39,7 @@ import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/text-space.bend as Space
 import ../../../runtime/src/url-absolute.bend as URL
 import ../../../runtime/src/u64.bend as Word
-import ../../../runtime/src/http-header.bend as Header
+import ../../../runtime/src/http-message.bend as Header
 
 # The OpenAI Responses provider (pi `openai-responses.ts`). `stream` prepares
 # the request, runs it through the native client with pi's retry policy, folds
@@ -561,7 +561,7 @@ type Error<-Reason: Data, -E: Data> is Data:
   EntropyFailure{cause: Seed.SeedError}
   RequestFailure{cause: Retry.RetryFailure<Client.AttemptError<Reason>>}
   ProcessingFailure{cause: Stream.Error<ReaderError(Reason)>}
-  ReleaseFailure{cause: Progress.Error<Client.ReadError(Reason)>}
+  ReleaseFailure{cause: Progress.ResponseProgressError<Client.ReadError(Reason)>}
   DisposalFailure{cause: Sse.CloseError<Reason>}
   RequestAborted{}
   MissingStopReason{}
@@ -597,7 +597,7 @@ def describePreparation(cause: PreparationError) -> String:
     case GrammarFailure{why}: Sampling.errorMessage(why)
     case PayloadFailure{why}: describePayload(why)
 
-def describeHeaderField(error: Header.HeaderError) -> String:
+def describeHeaderField(error: Header.HeaderHeaderError) -> String:
   match error:
     case Header.InvalidName{}: "Invalid HTTP header name"
     case Header.InvalidValue{}: "Invalid HTTP header value"
@@ -927,7 +927,7 @@ def payloadHook(-E: Data, +original: T.JsonValue, model: T.Model<T.JsonValue>, h
         return Result.map(&2, &2, E, Maybe<&2, T.JsonValue>, T.JsonValue, replacement => Maybe.default(&2, T.JsonValue, replacement, original), result)
 
 def providerResponse(+metadata: Metadata.Metadata) -> T.ProviderResponse:
-  T.ProviderResponse{F.fromU32(Metadata.status(metadata)), ProviderHeaders.headersToRecord(Metadata.headers(metadata))}
+  T.ProviderResponse{F.fromU32(Metadata.statusResponseMetadata(metadata)), ProviderHeaders.headersToRecord(Metadata.headers(metadata))}
 
 def responseHook(-Reason: Data, -E: Data, model: T.Model<T.JsonValue>, hook: Maybe<&2, T.ResponseCallback(T.Model<T.JsonValue>, E)>, response: Response.Response<Client.State(Reason)>) -> IO(Response.Response<Client.State(Reason)> & Result<&2, &2, E, Unit>):
   match hook response:
@@ -1073,7 +1073,7 @@ def process(~Reason: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<
         pair : Sse.Body(Reason) & Sse.Cursor<Sse.TransportError(Reason)> <- Sse.fromBody(~Reason, body, hooks, synthesize)
         opened(~Reason, ~G, ~E, model, options, output, events, pair)
 
-def released(-Reason: Data, -G: Data, -E: Data, output: T.AssistantMessage<V.Value, G>, cause: E, result: Result<&2, &2, Progress.Error<Client.ReadError(Reason)>, Unit>) -> Outcome<Reason, G, E>:
+def released(-Reason: Data, -G: Data, -E: Data, output: T.AssistantMessage<V.Value, G>, cause: E, result: Result<&2, &2, Progress.ResponseProgressError<Client.ReadError(Reason)>, Unit>) -> Outcome<Reason, G, E>:
   match result:
     case Done{_}: Outcome{output, Some{HookFailure{cause}}, None{}}
     case Fail{why}: Outcome{output, Some{HookFailure{cause}}, Some{ReleaseFailure{why}}}
@@ -1084,7 +1084,7 @@ def observed(~Reason: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks
   match pair:
     case (response, Fail{cause}):
       do IO<Outcome<Reason, G, E>>:
-        result : Result<&2, &2, Progress.Error<Client.ReadError(Reason)>, Unit> <- Client.release(Reason, response)
+        result : Result<&2, &2, Progress.ResponseProgressError<Client.ReadError(Reason)>, Unit> <- Client.release(Reason, response)
         return released(Reason, G, E, output, cause, result)
     case (response, Done{_}):
       do IO<Outcome<Reason, G, E>>:

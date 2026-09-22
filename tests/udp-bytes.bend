@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./socket-endpoint.bend as EndpointTest
 
@@ -41,7 +41,7 @@ def opened(limits: List<String>, result: Result<&1, &1, U32 & String, Socket>) -
     case Fail{_}: IO.die(Unit, 1, "bind failed")
     case Done{socket}:
       do IO<Unit>:
-        local : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+        local : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
         socket : Socket <- EndpointTest.observed(local)
         loop(limits, socket)
 

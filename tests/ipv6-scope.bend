@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/resolver-config.bend as Resolver
 import ../packages/runtime/src/resolver-config.bend as Address
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/ipv6-scope.bend as Scope
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar

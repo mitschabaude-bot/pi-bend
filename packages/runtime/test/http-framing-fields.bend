@@ -1,6 +1,6 @@
 import Base
-import ../src/http-body.bend as Body
-import ../src/http-framing-fields.bend as Framing
+import ../src/http-message.bend as Body
+import ../src/http-message.bend as Framing
 import ../src/u64.bend as W
 import ./http-content-length.bend as Input
 
@@ -22,7 +22,7 @@ def mode(value: Body.Framing) -> String:
     case Body.ChunkedEncoding{}: "chunked"
     case Body.UntilClose{}: "close"
 
-def shown(result: Result<&2, &2, Framing.FieldError, Framing.Fields>) -> String:
+def shown(result: Result<&2, &2, Framing.FramingFieldsFieldError, Framing.Fields>) -> String:
   match result:
     case Fail{_}: "error"
     case Done{Framing.Fields{+size, +encoding}}: transfer(encoding) ++ ";" ++ length(size) ++ ";" ++ mode(Framing.bodyFraming(Framing.Fields{size, encoding}))

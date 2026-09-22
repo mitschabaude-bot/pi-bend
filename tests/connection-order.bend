@@ -1,7 +1,7 @@
 import Base
 import ../packages/runtime/src/connection-driver.bend as Order
 import ../packages/runtime/src/connection-driver.bend as Candidates
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/src/string-split.bend as Split

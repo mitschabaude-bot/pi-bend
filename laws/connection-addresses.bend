@@ -2,7 +2,7 @@ import Base
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/src/connection-driver.bend as Candidates
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/hosts.bend as Hosts
 import ../packages/runtime/src/hosts.bend as File
 import ../packages/runtime/src/dns-resolver.bend as DNS

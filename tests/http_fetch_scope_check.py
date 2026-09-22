@@ -79,7 +79,7 @@ static void __attribute__((destructor)) sleep_audit(void) {
                                 peak_live=peak, cancelled_parked=parked, live=live, waiting=waiting,
                                 channels=channels if channels >= 0 else None))
         print(backend, 'PASS', flush=True)
-sources = [fixture, root / 'packages/runtime/src/deadline.bend', root/'packages/runtime/src/http-fetch-scope.bend', root/'packages/runtime/src/http-response.bend', root/'tests/http_fetch_scope_check.py',
+sources = [fixture, root / 'packages/runtime/src/deadline.bend', root/'packages/runtime/src/http-response.bend', root/'packages/runtime/src/http-response.bend', root/'tests/http_fetch_scope_check.py',
            candidate / 'base.bend', candidate / 'effs/timer.c', candidate / 'effs/timer.js']
 (root / 'build/http-fetch-scope-result.json').write_text(json.dumps(dict(
     scope='Injected fetch: pre-abort skips dispatch; dispatch failure and expiry preserve errors; closed responses retire immediately; open bodies retain cancellation after headers and outlive the timeout; cleanup errors retain the read error; repeated close does not release twice. 21 unmodified runs and 84 instrumented runs. Native audits timer/channel rows, Bun timers. Finite IO checks, not universal concurrency proofs.',

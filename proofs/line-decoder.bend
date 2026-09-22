@@ -1,7 +1,7 @@
 import Base
 import ./list-reverse.bend as Reverse
 import ../laws/line-decoder.bend as Laws
-import ../packages/runtime/src/line-decoder.bend as Line
+import ../packages/runtime/src/sse.bend as Line
 
 law prepend_reverse:
   for +lines: List<&2, String>

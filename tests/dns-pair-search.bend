@@ -8,7 +8,7 @@ import ../packages/runtime/src/dns-resolver.bend as Answer
 import ../packages/runtime/src/dns-transport.bend as Exchange
 import ../packages/runtime/src/dns-transport.bend as Source
 import ../packages/runtime/src/resolver-config.bend as Plan
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/resolver-config.bend as Options
 import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/dns-message.bend as Id

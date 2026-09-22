@@ -4,8 +4,8 @@ import ../src/api/openai-client.bend as Client
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json-parse.bend as Parse
 import ../../runtime/src/record.bend as R
-import ../../runtime/src/headers.bend as Headers
-import ../../runtime/src/http-header.bend as H
+import ../../runtime/src/http-message.bend as Headers
+import ../../runtime/src/http-message.bend as H
 import ../../runtime/src/f64.bend as F
 import ../../runtime/test/utf8-runner.bend as Text
 

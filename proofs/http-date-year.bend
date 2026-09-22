@@ -1,7 +1,7 @@
 import Base
 import ../laws/http-date-year.bend as Laws
-import ../packages/runtime/src/http-date-syntax.bend as S
-import ../packages/runtime/src/http-date-year.bend as Y
+import ../packages/runtime/src/http-message.bend as S
+import ../packages/runtime/src/http-message.bend as Y
 import ../packages/runtime/src/calendar.bend as C
 import ../packages/runtime/src/u64.bend as W
 
@@ -13,7 +13,7 @@ law window_weekday:
   for +month: U32
   for +day: U32
   for +clock: S.ClockFields
-  {Y.window(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}) == Y.window(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}) : Result<&2, &2, Y.Error, U32>}
+  {Y.window(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}) == Y.window(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}) : Result<&2, &2, Y.DateYearError, U32>}
 
 def window_weekday(reference, a, b, year, month, day, clock):
   match reference clock:
@@ -28,7 +28,7 @@ law checked_weekday:
   for +day: U32
   for +clock: S.ClockFields
   for +valid: Result<&2, &2, C.CalendarError, W.U64>
-  {Y.checkedReference(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}, valid) == Y.checkedReference(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}, valid) : Result<&2, &2, Y.Error, U32>}
+  {Y.checkedReference(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}, valid) == Y.checkedReference(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}, valid) : Result<&2, &2, Y.DateYearError, U32>}
 
 def checked_weekday(reference, a, b, year, month, day, clock, valid):
   match valid:
@@ -44,7 +44,7 @@ law short_weekday:
   for +day: U32
   for +clock: S.ClockFields
   for +valid: Bool
-  {Y.shortYear(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}, valid) == Y.shortYear(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}, valid) : Result<&2, &2, Y.Error, U32>}
+  {Y.shortYearDateYear(reference, S.DateFields{S.Rfc850{}, a, year, month, day, clock}, valid) == Y.shortYearDateYear(reference, S.DateFields{S.Rfc850{}, b, year, month, day, clock}, valid) : Result<&2, &2, Y.DateYearError, U32>}
 
 def short_weekday(reference, a, b, year, month, day, clock, valid):
   match valid:

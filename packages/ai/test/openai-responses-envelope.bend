@@ -6,7 +6,7 @@ import ./openai-request-headers.bend as H
 import ./openai-responses-url.bend as U
 import ../../runtime/src/url-absolute.bend as Absolute
 import ../../runtime/src/url-serialize.bend as URL
-import ../../runtime/src/headers.bend as Headers
+import ../../runtime/src/http-message.bend as Headers
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
 import ../../runtime/src/f64.bend as F

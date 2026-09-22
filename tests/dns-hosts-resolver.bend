@@ -19,7 +19,7 @@ import ../packages/runtime/src/resolver-config.bend as Options
 import ../packages/runtime/src/resolver-config.bend as Request
 import ../packages/runtime/src/dns-message.bend as Query
 import ../packages/runtime/src/dns-message.bend as Id
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/ref.bend as Ref
@@ -46,8 +46,8 @@ def queryOptions(value: Request.Prepared) -> Query.QueryOptions:
 
 def endpointPort(value: Endpoint.Endpoint) -> U32:
   match value:
-    case Endpoint.V4{_, port}: port
-    case Endpoint.V6{_, port, _}: port
+    case Endpoint.EndpointV4{_, port}: port
+    case Endpoint.EndpointV6{_, port, _}: port
 
 def nextPort(values: List<&2, Plan.Attempt<Endpoint.Endpoint>>) -> U32:
   match values:

@@ -6,18 +6,18 @@ import ../packages/ai/src/utils/provider-retry.bend as Retry
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/fetch.bend as Fetch
-import ../packages/runtime/src/http-body-consume.bend as Consume
-import ../packages/runtime/src/http-header.bend as H
-import ../packages/runtime/src/http-response-metadata.bend as Metadata
-import ../packages/runtime/src/headers.bend as Headers
+import ../packages/runtime/src/http-response.bend as Consume
+import ../packages/runtime/src/http-message.bend as H
+import ../packages/runtime/src/http-response.bend as Metadata
+import ../packages/runtime/src/http-message.bend as Headers
 import ../packages/runtime/src/f64.bend as F
-import ../packages/runtime/src/http-transport-callbacks.bend as Ops
+import ../packages/runtime/src/http-response.bend as Ops
 import ../packages/runtime/src/http-response.bend as Response
-import ../packages/runtime/src/http-response-stream.bend as Stream
-import ../packages/runtime/src/http-response-progress.bend as Progress
-import ../packages/runtime/src/http-head.bend as Head
-import ../packages/runtime/src/http-status.bend as Status
-import ../packages/runtime/src/http-header.bend as Header
+import ../packages/runtime/src/http-response.bend as Stream
+import ../packages/runtime/src/http-response.bend as Progress
+import ../packages/runtime/src/http-message.bend as Head
+import ../packages/runtime/src/http-message.bend as Status
+import ../packages/runtime/src/http-message.bend as Header
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/record.bend as Record
 import ../packages/runtime/src/timer-milliseconds.bend as Duration
@@ -33,7 +33,7 @@ law noninteger_timeout_is_rejected:
   {Client.checkedTimeout(value, False{}) == Fail{Client.TimeoutNotInteger{value}} : Result<&2, &2, Client.HeaderError, F.F64>}
 
 law header_failure_preserves_cause:
-  for cause: H.HeaderError
+  for cause: H.HeaderHeaderError
   {Client.assembled(Fail{cause}) == Fail{Client.HeaderFailure{cause}} : Result<&2, &2, Client.HeaderError, Headers.Headers>}
 
 law failed_authentication_has_no_headers:
@@ -85,7 +85,7 @@ law construction_retains_diagnostic:
   for metadata: Metadata.Metadata
   for diagnostic: Client.Diagnostic
   for text: String
-  {Client.constructed(E, metadata, diagnostic, Some{text}) == Done{Client.APIError{metadata, diagnostic, Client.statusMessage(Metadata.status(metadata), text)}} : Result<&2, &2, Client.ConstructionError<E>, Client.APIError>}
+  {Client.constructed(E, metadata, diagnostic, Some{text}) == Done{Client.APIError{metadata, diagnostic, Client.statusMessage(Metadata.statusResponseMetadata(metadata), text)}} : Result<&2, &2, Client.ConstructionError<E>, Client.APIError>}
 
 law encoding_failure_retains_diagnostic:
   for -E: Data
@@ -112,13 +112,13 @@ law text_normalization_preserves_rendered_message:
   for metadata: Metadata.Metadata
   for text: String
   for message: String
-  {Client.providerFailure(Client.APIError{metadata, Client.TextDiagnostic{text}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.status(metadata))}, message, Nil{}} : Body.ProviderFailure}
+  {Client.providerFailure(Client.APIError{metadata, Client.TextDiagnostic{text}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.statusResponseMetadata(metadata))}, message, Nil{}} : Body.ProviderFailure}
 
 law json_normalization_retains_input:
   for metadata: Metadata.Metadata
   for value: T.JsonValue
   for message: String
-  {Client.providerFailure(Client.APIError{metadata, Client.JSONDiagnostic{value}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.status(metadata))}, message, Body.ParsedBody{value} <> Nil{}} : Body.ProviderFailure}
+  {Client.providerFailure(Client.APIError{metadata, Client.JSONDiagnostic{value}, message}) == Body.ProviderFailure{Some{F.fromU32(Metadata.statusResponseMetadata(metadata))}, message, Body.ParsedBody{value} <> Nil{}} : Body.ProviderFailure}
 
 # Retry classification of an attempt: only connection failures and deadline
 # expiry become retryable provider errors; every original failure survives.
@@ -162,22 +162,22 @@ law invalid_timeouts_are_never_retried:
 # the wire headers are materialized.
 law layers_partition:
   for +left: List<&2, Maybe<&2, T.ProviderHeaders()>>
-  for +initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  for +initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
   for +right: List<&2, Maybe<&2, T.ProviderHeaders()>>
-  {Client.layers(List.append(&2, Maybe<&2, T.ProviderHeaders()>, left, right), initial) == Client.layers(right, Client.layers(left, initial)) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  {Client.layers(List.append(&2, Maybe<&2, T.ProviderHeaders()>, left, right), initial) == Client.layers(right, Client.layers(left, initial)) : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 law empty_layers_preserve_result:
-  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
-  {Client.layers(Nil{}, initial) == initial : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  for initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
+  {Client.layers(Nil{}, initial) == initial : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 law absent_layer_preserves_result:
-  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
-  {Client.applyLayer(None{}, initial) == initial : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  for initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
+  {Client.applyLayer(None{}, initial) == initial : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 law entries_preserve_first_error:
   for values: List<&2, R.Property<T.Nullable<String>>>
-  for cause: H.HeaderError
-  {Client.layerEntries(values, Fail{cause}) == Fail{cause} : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  for cause: H.HeaderHeaderError
+  {Client.layerEntries(values, Fail{cause}) == Fail{cause} : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 law latest_setting_is_observable:
   for state: Client.HeaderState
@@ -221,20 +221,20 @@ law assignment_retains_wire_value:
 
 law singleton_layer_applies_configuration:
   for layer: Maybe<&2, T.ProviderHeaders()>
-  for initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
-  {Client.layers(layer <> Nil{}, initial) == Client.applyLayer(layer, initial) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  for initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
+  {Client.layers(layer <> Nil{}, initial) == Client.applyLayer(layer, initial) : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 law singleton_entry_applies_field:
   for state: Client.HeaderState
   for name: String
   for value: T.Nullable<String>
-  {Client.layerEntries(R.Property{name, value} <> Nil{}, Done{state}) == Client.layerField(state, name, value) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  {Client.layerEntries(R.Property{name, value} <> Nil{}, Done{state}) == Client.layerField(state, name, value) : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 law entries_partition:
   for +left: List<&2, R.Property<T.Nullable<String>>>
-  for +initial: Result<&2, &2, H.HeaderError, Client.HeaderState>
+  for +initial: Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>
   for +right: List<&2, R.Property<T.Nullable<String>>>
-  {Client.layerEntries(List.append(&2, R.Property<T.Nullable<String>>, left, right), initial) == Client.layerEntries(right, Client.layerEntries(left, initial)) : Result<&2, &2, H.HeaderError, Client.HeaderState>}
+  {Client.layerEntries(List.append(&2, R.Property<T.Nullable<String>>, left, right), initial) == Client.layerEntries(right, Client.layerEntries(left, initial)) : Result<&2, &2, H.HeaderHeaderError, Client.HeaderState>}
 
 # Status boundary: a successful response has no body IO before hand-off; a
 # failed status consumes its diagnostic first and keeps retry metadata.

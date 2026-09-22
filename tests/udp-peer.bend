@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./socket-endpoint.bend as Metadata
 import ./udp-bytes.bend as Bytes
@@ -18,9 +18,9 @@ def invalid(mode: String, family: U32, port: U32, socket: Socket) -> IO(Socket):
 def exchange(socket: Socket, +family: U32, +port: U32) -> IO(Socket):
   do IO<Socket>:
     socket : Socket <- connect(socket, family, port, "ok")
-    local : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+    local : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     socket : Socket <- Metadata.observed(local)
-    remote : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
+    remote : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
     socket : Socket <- Metadata.observed(remote)
     sent : Socket & Result<&1, &1, U32 & String, Unit> <- UDP.send_bytes(socket, family, Bool.pick(U32, U32.is_eq(family, 4), 2130706433, 0), 0, 0, Bool.pick(U32, U32.is_eq(family, 6), 1, 0), port, 0, 0 <> 255 <> Nil{})
     socket : Socket <- Write.sent(sent)

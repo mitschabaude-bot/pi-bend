@@ -1,8 +1,8 @@
 import Base
-import ../src/http-body-consume.bend as Consume
-import ../src/http-body-buffer.bend as Buffer
+import ../src/http-response.bend as Consume
+import ../src/http-response.bend as Buffer
 import ../src/http-response.bend as Response
-import ../src/http-response-progress.bend as Progress
+import ../src/http-response.bend as Progress
 import ../src/utf8-strict.bend as UTF8
 import ../src/schema-value.bend as V
 import ../src/record.bend as R
@@ -89,7 +89,7 @@ def consume(mode: String, limit: Nat, body: Response.Body<Input.State>) -> IO(Un
         result : Result<&2, &2, Buffer.Error<String>, List<&2, U32>> <- Consume.bytesWith(~String, ~Input.State, ~Input.read, ~Input.close, limit, body)
         IO.print(shownBytes(result))
 
-def started(mode: String, limit: Nat, value: Result<&2, &1, Progress.Error<String>, Response.Response<Input.State>>) -> IO(Unit):
+def started(mode: String, limit: Nat, value: Result<&2, &1, Progress.ResponseProgressError<String>, Response.Response<Input.State>>) -> IO(Unit):
   match value:
     case Fail{cause}: IO.print("start-error:" ++ Input.error(cause))
     case Done{Response.Response{_, body}}: consume(mode, limit, body)
@@ -98,7 +98,7 @@ def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
     case fails <> mode <> limit <> events:
       do IO<Unit>:
-        value : Result<&2, &1, Progress.Error<String>, Response.Response<Input.State>> <- Response.startWith(~String, ~Input.State, ~Input.read, ~Input.close, Input.State{events, String.eq(fails, "1")})
+        value : Result<&2, &1, Progress.ResponseProgressError<String>, Response.Response<Input.State>> <- Response.startWith(~String, ~Input.State, ~Input.read, ~Input.close, Input.State{events, String.eq(fails, "1")})
         started(mode, U32.to_nat(Text.decimal(limit, 0)), value)
     case _: IO.die(Unit, 1, "expected cleanup mode budget events")
 

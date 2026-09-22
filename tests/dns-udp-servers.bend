@@ -9,15 +9,15 @@ import ../packages/runtime/src/dns-message.bend as Message
 import ../packages/runtime/src/dns-transport.bend as Attempt
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./dns-udp-query.bend as QueryTest
 import ./dns-udp-attempt-scope.bend as ScopeTest
 
 def port(endpoint: Endpoint.Endpoint) -> String:
   match endpoint:
-    case Endpoint.V4{_, value}: U32.show(value)
-    case Endpoint.V6{_, value, _}: U32.show(value)
+    case Endpoint.EndpointV4{_, value}: U32.show(value)
+    case Endpoint.EndpointV6{_, value, _}: U32.show(value)
 
 def failure(value: Servers.UdpServersFailure<String>) -> String:
   match value:

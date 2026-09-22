@@ -14,20 +14,20 @@ import ../packages/runtime/src/dns-transport.bend as Policy
 import ../packages/runtime/src/dns-transport.bend as Datagram
 import ../packages/runtime/src/dns-transport.bend as Scope
 import ../packages/runtime/src/dns-message.bend as Message
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/dns-transport.bend as TCP
 import ../packages/runtime/src/dns-transport.bend as Session
 import ../packages/runtime/src/dns-transport.bend as Servers
-import ../packages/runtime/src/abortable-connect.bend as Connect
-import ../packages/runtime/src/abortable-datagram.bend as SocketIO
-import ../packages/runtime/src/socket-interrupt.bend as Interrupt
+import ../packages/runtime/src/socket.bend as Connect
+import ../packages/runtime/src/socket.bend as SocketIO
+import ../packages/runtime/src/socket.bend as Interrupt
 import ../packages/runtime/src/dns-message.bend as Id
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 
 def udp(failure: UDP.UdpServersFailure<String>, end: Scope.End<String>) -> Result<&2, &2, Lookup.AddressLookupError<String>, Answer.Selection>:
-  Fail{Lookup.Transport{Transport.Datagram{UDP.UdpServersFailed{UDP.UdpServersReport{Endpoint.V4{IPv4.Address{2130706433}, 53}, failure, end}}}}}
+  Fail{Lookup.Transport{Transport.Datagram{UDP.UdpServersFailed{UDP.UdpServersReport{Endpoint.EndpointV4{IPv4.Address{2130706433}, 53}, failure, end}}}}}
 
 def flags(reason: Policy.UdpPolicyRejection) -> U32:
   match reason:
@@ -85,12 +85,12 @@ def selectedInput(mode: InputMode) -> Result<&2, &2, Lookup.AddressLookupError<S
     case UDPParentAbort{}: rejected(Policy.ServerFailure{}, Scope.ParentAborted{Abort.Supplied{Deadline.ParentAbort{Abort.Supplied{"parent marker"}}}})
     case UDPDefaultAbort{}: rejected(Policy.Refused{}, Scope.UnexpectedDefaultAbort{})
     case UDPTimeout{}: udp(UDP.Exchange{Datagram.Aborted{Abort.Supplied{Deadline.Expired{}}}}, Scope.AttemptExpired{})
-    case UDPRefusedSocket{}: udp(UDP.Exchange{Datagram.UdpQueryTransport{SocketIO.SocketError{111, "udp refused marker"}}}, Scope.Active{})
-    case UDPOtherSocket{}: udp(UDP.Exchange{Datagram.UdpQueryTransport{SocketIO.SocketError{110, "udp timeout marker"}}}, Scope.Active{})
+    case UDPRefusedSocket{}: udp(UDP.Exchange{Datagram.UdpQueryTransport{SocketIO.DatagramSocketError{111, "udp refused marker"}}}, Scope.Active{})
+    case UDPOtherSocket{}: udp(UDP.Exchange{Datagram.UdpQueryTransport{SocketIO.DatagramSocketError{110, "udp timeout marker"}}}, Scope.Active{})
     case TCPEOF{}: Fail{Lookup.Transport{Transport.Stream{Servers.Failed{TCP.Completed{Fail{TCP.Terminated{Session.EndOfStream{}}}, Done{Unit{}}}}}}}
     case TCPRefusedSocket{}: Fail{Lookup.Exchange{TCP.TcpQueryConnection{Connect.SocketError{111, "tcp refused marker"}}}}
     case TCPOtherSocket{}: Fail{Lookup.Exchange{TCP.TcpQueryConnection{Connect.SocketError{110, "tcp timeout marker"}}}}
-    case TCPCleanup{}: Fail{Lookup.Transport{Transport.Stream{Servers.Failed{TCP.Completed{Fail{TCP.Terminated{Session.EndOfStream{}}}, Fail{Interrupt.Error{9, "cleanup marker"}}}}}}}
+    case TCPCleanup{}: Fail{Lookup.Transport{Transport.Stream{Servers.Failed{TCP.Completed{Fail{TCP.Terminated{Session.EndOfStream{}}}, Fail{Interrupt.InterruptError{9, "cleanup marker"}}}}}}}
     case ParentAbort{}: Fail{Lookup.Aborted{Abort.Supplied{Deadline.ParentAbort{Abort.Supplied{"abort marker"}}}}}
     case EntropyFailure{}: Fail{Lookup.Identifier{Id.SourceFailure{87, "entropy marker"}}}
     case InvalidAnswer{}: Fail{Lookup.AddressLookupSelection{Answer.AliasLoop{}}}

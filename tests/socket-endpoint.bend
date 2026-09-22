@@ -1,6 +1,6 @@
 import Base
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
@@ -12,10 +12,10 @@ def assertTrue(valid: Bool) -> IO(Unit):
 
 def show(value: Endpoint.Endpoint) -> String:
   match value:
-    case Endpoint.V4{IPv4.Address{a}, port}: "4," ++ U32.show(a) ++ ",0,0,0," ++ U32.show(port) ++ ",0"
-    case Endpoint.V6{IPv6.Address{a,b,c,d},port,scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(port) ++ "," ++ U32.show(scope)
+    case Endpoint.EndpointV4{IPv4.Address{a}, port}: "4," ++ U32.show(a) ++ ",0,0,0," ++ U32.show(port) ++ ",0"
+    case Endpoint.EndpointV6{IPv6.Address{a,b,c,d},port,scope}: "6," ++ U32.show(a) ++ "," ++ U32.show(b) ++ "," ++ U32.show(c) ++ "," ++ U32.show(d) ++ "," ++ U32.show(port) ++ "," ++ U32.show(scope)
 
-def observed(pair: Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint>) -> IO(Socket):
+def observed(pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Socket):
   match pair:
     case (socket, Done{value}):
       do IO<Socket>:
@@ -61,9 +61,9 @@ def repeat(count: Nat, socket: Socket) -> IO(Unit):
         IO.print("PASS socket endpoint")
     case Succ{rest}:
       do IO<Unit>:
-        local : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+        local : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
         socket : Socket <- observed(local)
-        peer : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
+        peer : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
         socket : Socket <- observed(peer)
         rejected : Socket & Result<&1, &1, U32 & String, U32 & U32 & U32 & U32 & U32 & U32 & U32> <- Socket.endpoint(socket, 2)
         socket : Socket <- invalid(rejected)
@@ -73,9 +73,9 @@ def repeat(count: Nat, socket: Socket) -> IO(Unit):
         socket : Socket <- received(read)
         repeat(rest, socket)
 
-def unconnectedResult(code: U32, pair: Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint>) -> IO(Socket):
+def unconnectedResult(code: U32, pair: Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint>) -> IO(Socket):
   match pair:
-    case (socket, Fail{Endpoint.SocketError{actual, _}}):
+    case (socket, Fail{Endpoint.EndpointSocketError{actual, _}}):
       do IO<Socket>:
         assertTrue(U32.is_eq(code, actual))
         return socket
@@ -87,11 +87,11 @@ def unconnectedResult(code: U32, pair: Socket & Result<&2, &2, Endpoint.Error, E
 def udp(code: U32) -> IO(Unit):
   do IO<Unit>:
     socket : Socket <- IO.try(Socket, UDP.bind(0))
-    local : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+    local : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     socket : Socket <- observed(local)
-    peer : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
+    peer : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Peer{})
     socket : Socket <- unconnectedResult(code, peer)
-    local : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+    local : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     socket : Socket <- observed(local)
     Socket.close(socket)
     IO.print("PASS socket endpoint")

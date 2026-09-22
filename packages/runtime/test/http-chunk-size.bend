@@ -1,5 +1,5 @@
 import Base
-import ../src/http-chunk-size.bend as Size
+import ../src/http-message.bend as Size
 import ../src/u64.bend as W
 import ./utf8-runner.bend as Text
 

@@ -1,10 +1,10 @@
 import Base
-import ../src/http-response-reader.bend as D
+import ../src/http-response.bend as D
 import ../src/ref.bend as Ref
 import ../src/callback.bend as Cb
 import ./http-response-stream.bend as Events
-import ../src/http-response-stream.bend as Stream
-import ../src/http-chunked-body.bend as Chunked
+import ../src/http-response.bend as Stream
+import ../src/http-message.bend as Chunked
 import ./utf8-runner.bend as Text
 
 type Input is Data:
@@ -50,7 +50,7 @@ def releaseReason(reason: D.ReleaseReason) -> String:
     case D.CleanEOF{}: "eof"
     case D.ResetEOF{}: "reset"
     case D.DecodeFailure{}: "decode"
-    case D.ReadFailure{}: "read-error"
+    case D.ResponseReaderReadFailure{}: "read-error"
     case D.EarlyClose{}: "early"
 
 def releaseText(request: D.Release) -> String:
@@ -65,26 +65,26 @@ def closeCallback(environment: Environment, request: D.Release) -> IO(Result<&2,
         log(capture, releaseText(request))
         return Bool.pick(Result<&2, &2, String, Unit>, fails, Fail{"close failed"}, Done{Unit{}})
 
-def primary(error: D.PrimaryError<String>) -> String:
+def primary(error: D.ResponseReaderPrimaryError<String>) -> String:
   match error:
     case D.SourceError{error}: "source:" ++ error
     case D.DecodeError{_}: "decode"
 
 def failure(error: D.ReadError<String>) -> String:
   match error:
-    case D.PrimaryFailure{error}: primary(error)
+    case D.ResponseReaderPrimaryFailure{error}: primary(error)
     case D.ReleaseFailure{error}: "release:" ++ error
     case D.FailureWithRelease{error, release}: primary(error) ++ "+release:" ++ release
 
-def showNext(result: Result<&2, &2, D.ReadError<String>, Maybe<&2, Stream.Event>>) -> String:
+def showNext(result: Result<&2, &2, D.ReadError<String>, Maybe<&2, Stream.StreamEvent>>) -> String:
   match result:
     case Fail{error}: "next:error:" ++ failure(error)
     case Done{None{}}: "next:none"
     case Done{Some{event}}: "next:" ++ Events.event(event)
 
-def recordNext(capture: Ref.Ref<Capture>, next: D.Next<String>) -> IO(D.Cursor<String>):
+def recordNext(capture: Ref.Ref<Capture>, next: D.ResponseReaderNext<String>) -> IO(D.Cursor<String>):
   match next:
-    case D.Next{cursor, result}:
+    case D.ResponseReaderNext{cursor, result}:
       do IO<D.Cursor<String>>:
         log(capture, showNext(result))
         return cursor
@@ -106,12 +106,12 @@ def execute(actions: List<&2, Action>, +capture: Ref.Ref<Capture>, cursor: D.Cur
     case Nil{}: IO.pure(D.Cursor<String>, cursor)
     case Pull{} <> rest:
       do IO<D.Cursor<String>>:
-        next : D.Next<String> <- D.next(String, cursor)
+        next : D.ResponseReaderNext<String> <- D.nextResponseReader(String, cursor)
         cursor : D.Cursor<String> <- recordNext(capture, next)
         execute(rest, capture, cursor)
     case Return{} <> rest:
       do IO<D.Cursor<String>>:
-        closed : D.CloseResult<String> <- D.close(String, cursor)
+        closed : D.CloseResult<String> <- D.closeResponseReader(String, cursor)
         cursor : D.Cursor<String> <- recordClose(capture, closed)
         execute(rest, capture, cursor)
 
@@ -124,8 +124,8 @@ def run(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails: Bool) -
     +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{inputs, Nil{}})
     +reader : Cb.Callback<Unit, Result<&2, &2, String, Maybe<&2, List<&2, U32>>>> <- Cb.create(~Environment, ~Unit, ~Result<&2, &2, String, Maybe<&2, List<&2, U32>>>, ~readCallback, Environment{capture, closeFails})
     +closer : Cb.Callback<D.Release, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~D.Release, ~Result<&2, &2, String, Unit>, ~closeCallback, Environment{capture, closeFails})
-    finished : D.Cursor<String> <- execute(actions, capture, D.create(String, D.Source{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
-    cleanup : D.CloseResult<String> <- D.close(String, finished)
+    finished : D.Cursor<String> <- execute(actions, capture, D.createResponseReader(String, D.Source{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
+    cleanup : D.CloseResult<String> <- D.closeResponseReader(String, finished)
     Cb.dispose(Unit, Result<&2, &2, String, Maybe<&2, List<&2, U32>>>, reader)
     Cb.dispose(D.Release, Result<&2, &2, String, Unit>, closer)
     trace : Capture <- Ref.dispose(Capture, capture)
@@ -147,8 +147,8 @@ def runTransport(inputs: List<&2, Input>, actions: List<&2, Action>, +closeFails
     +capture : Ref.Ref<Capture> <- Ref.new(Capture, Capture{inputs, Nil{}})
     +reader : Cb.Callback<Unit, D.ReadResult<String>> <- Cb.create(~Environment, ~Unit, ~D.ReadResult<String>, ~transportCallback, Environment{capture, closeFails})
     +closer : Cb.Callback<D.Release, Result<&2, &2, String, Unit>> <- Cb.create(~Environment, ~D.Release, ~Result<&2, &2, String, Unit>, ~closeCallback, Environment{capture, closeFails})
-    finished : D.Cursor<String> <- execute(actions, capture, D.create(String, D.TransportSource{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
-    cleanup : D.CloseResult<String> <- D.close(String, finished)
+    finished : D.Cursor<String> <- execute(actions, capture, D.createResponseReader(String, D.TransportSource{reader, closer}, "GET", Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}}))
+    cleanup : D.CloseResult<String> <- D.closeResponseReader(String, finished)
     Cb.dispose(Unit, D.ReadResult<String>, reader)
     Cb.dispose(D.Release, Result<&2, &2, String, Unit>, closer)
     trace : Capture <- Ref.dispose(Capture, capture)

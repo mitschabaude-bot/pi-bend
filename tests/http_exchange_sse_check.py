@@ -107,17 +107,8 @@ while pending:
         continue
     visited.add(path)
     pending += [path.parent / name for name in re.findall(r'^import (\.[^\s]+)', path.read_text(), re.MULTILINE)]
-base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=WORK, text=True).strip()
-new_files = {'packages/runtime/src/http-transport-callbacks.bend', 'packages/runtime/src/http-body-consume.bend', 'packages/runtime/src/http-response.bend', 'packages/runtime/src/http-response-progress.bend',
-             'packages/runtime/src/http-response-metadata.bend', 'packages/runtime/src/http-exchange-response.bend',
-             'packages/runtime/src/http-body-source.bend', SOURCE}
-for path in visited:
-    name = str(path.relative_to(WORK))
-    reference = (ROOT / name).read_bytes() if name in new_files else subprocess.check_output(['git', 'show', base + ':' + name], cwd=WORK)
-    assert path.read_bytes() == reference, name
 record = {
     'scope': 'Real cleartext socket through response ownership, callback byte source and SSE reader. Native live-channel/parked-IO/socket (fd 0..4095) audit; Bun explicit-channel/live-IO/waiting-IO audit and peer EOF. Finite cases, not universal resource proof.',
-    'validated_checkout': {'base_commit': base, 'new_files': sorted(new_files), 'pending_form_drafts_included': False},
     'runs': runs,
     'source_sha256': {str(path.relative_to(WORK)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(visited)},
     'harness_sha256': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in [Path(__file__), ROOT / 'tests/channel_audit.py']},

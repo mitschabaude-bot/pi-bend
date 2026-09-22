@@ -9,7 +9,7 @@ import ../packages/runtime/src/resolver-config.bend as Configuration
 import ../packages/runtime/src/dns-transport.bend as Network
 import ../packages/runtime/src/resolver-config.bend as Plan
 import ../packages/runtime/src/resolver-config.bend as Timeout
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/dns-message.bend as Search
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./resolver-system-servers.bend as SourceTest

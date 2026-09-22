@@ -64,7 +64,7 @@ static void __attribute__((destructor)) sleep_audit(void) {
                                 peak_live=peak, cancelled_parked=parked, live=live, waiting=waiting,
                                 channels=channels if channels >= 0 else None))
         print(backend, 'PASS', flush=True)
-sources = [fixture, root / 'packages/runtime/src/abortable-sleep.bend',
+sources = [fixture, root / 'packages/runtime/src/socket.bend',
            candidate / 'base.bend', candidate / 'effs/timer.c', candidate / 'effs/timer.js']
 (root / 'docs/bend-issues/2026-09-19-abortable-sleep-concurrency.json').write_text(json.dumps(dict(
     scope='Core cases plus eight broadcasts to 128 sleeps each, repeated abort/reason retention, independent signals and 90 deadline/abort races per process. Creation/cancellation timing may vary. Native exit audit includes all channel rows; Bun audits timers only. Instrumented finite checks, not a performance comparison or exhaustive race proof.',

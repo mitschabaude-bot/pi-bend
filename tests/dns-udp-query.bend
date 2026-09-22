@@ -6,11 +6,11 @@ import ../packages/runtime/src/dns-message.bend as Name
 import ../packages/runtime/src/dns-message.bend as Edns
 import ../packages/runtime/src/dns-transport.bend as Attempt
 import ../packages/runtime/src/resolver-config.bend as Timeout
-import ../packages/runtime/src/abortable-datagram.bend as Datagram
+import ../packages/runtime/src/socket.bend as Datagram
 import ../packages/runtime/src/datagram-peer.bend as Peer
 import ../packages/runtime/src/deadline.bend as Deadline
 import ../packages/runtime/src/abort.bend as Abort
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/src/url-ipv4.bend as IPv4
 import ../packages/runtime/src/url-ipv6.bend as IPv6
 import ../packages/runtime/test/utf8-runner.bend as Scalar
@@ -18,8 +18,8 @@ import ./dns-udp-attempt-scope.bend as ScopeTest
 
 def destination(family: U32, port: U32) -> Endpoint.Endpoint:
   match family:
-    case 4: Endpoint.V4{IPv4.Address{2130706433}, port}
-    case _: Endpoint.V6{IPv6.Address{0,0,0,1}, port, 0}
+    case 4: Endpoint.EndpointV4{IPv4.Address{2130706433}, port}
+    case _: Endpoint.EndpointV6{IPv6.Address{0,0,0,1}, port, 0}
 
 def request(+mode: String) -> Request.Request:
   Request.Request{Bool.pick(U32, String.eq(mode, "invalid"), 65536, 42), 256, Message.Question{Name.Name{Nil{}}, 1, 1}, Bool.pick(Maybe<&2, Edns.Query>, String.eq(mode, "edns"), Some{Edns.Query{1232, False{}, Nil{}}}, None{})}
@@ -31,8 +31,8 @@ def outcome(result: Result<&2, &2, Query.UdpQueryError<Deadline.Cause<Deadline.C
     case Fail{Query.UdpQueryEncoding{_}}: "invalid"
     case Fail{Query.Opening{Peer.Association{code, _}}}: "association:" ++ U32.show(code)
     case Fail{Query.Aborted{why}}: "abort:" ++ ScopeTest.show(Attempt.classify(String, Some{why}))
-    case Fail{Query.UdpQueryTransport{Datagram.Aborted{why}}}: "abort:" ++ ScopeTest.show(Attempt.classify(String, Some{why}))
-    case Fail{Query.UdpQueryTransport{Datagram.SocketError{code, _}}}: "socket:" ++ U32.show(code)
+    case Fail{Query.UdpQueryTransport{Datagram.DatagramAborted{why}}}: "abort:" ++ ScopeTest.show(Attempt.classify(String, Some{why}))
+    case Fail{Query.UdpQueryTransport{Datagram.DatagramSocketError{code, _}}}: "socket:" ++ U32.show(code)
     case _: "unexpected"
 
 def child(destination: Endpoint.Endpoint, request: Request.Request, pair: Deadline.Scope<Deadline.Cause<String>> & Abort.AbortSignal<Deadline.Cause<Deadline.Cause<String>>>) -> IO(Unit):

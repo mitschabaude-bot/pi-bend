@@ -1,8 +1,8 @@
 import Base
-import ../packages/runtime/src/abortable-datagram.bend as Datagram
+import ../packages/runtime/src/socket.bend as Datagram
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deadline.bend as Deadline
-import ../packages/runtime/src/socket-endpoint.bend as Endpoint
+import ../packages/runtime/src/socket.bend as Endpoint
 import ../packages/runtime/test/utf8-runner.bend as Scalar
 import ./socket-endpoint.bend as EndpointTest
 import ./udp-bytes.bend as Bytes
@@ -19,13 +19,13 @@ def retained(saved: Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>>) -> Str
     case None{}: "none"
     case Some{why}: cause(why)
 
-def result(pair: Socket & Result<&2, &2, Datagram.Error<Deadline.Cause<String>>, Datagram.Packet>) -> IO(Socket):
+def result(pair: Socket & Result<&2, &2, Datagram.DatagramError<Deadline.Cause<String>>, Datagram.Packet>) -> IO(Socket):
   match pair:
-    case (socket, Fail{Datagram.Aborted{why}}):
+    case (socket, Fail{Datagram.DatagramAborted{why}}):
       do IO<Socket>:
         IO.print("abort:" ++ cause(why))
         return socket
-    case (socket, Fail{Datagram.SocketError{code, _}}):
+    case (socket, Fail{Datagram.DatagramSocketError{code, _}}):
       do IO<Socket>:
         IO.print("error:" ++ U32.show(code))
         return socket
@@ -64,7 +64,7 @@ def scoped(socket: Socket, maximum: U32, pair: Deadline.Scope<String> & Abort.Ab
   match pair:
     case (scope, signal):
       do IO<Socket>:
-        packet : Socket & Result<&2, &2, Datagram.Error<Deadline.Cause<String>>, Datagram.Packet> <- Datagram.recv(Deadline.Cause<String>, socket, maximum, signal)
+        packet : Socket & Result<&2, &2, Datagram.DatagramError<Deadline.Cause<String>>, Datagram.Packet> <- Datagram.recv(Deadline.Cause<String>, socket, maximum, signal)
         socket : Socket <- result(packet)
         saved : Maybe<&2, Abort.AbortReason<Deadline.Cause<String>>> <- Deadline.close(String, scope)
         IO.print("scope:" ++ retained(saved))
@@ -87,7 +87,7 @@ def loop(count: Nat, +mode: String, socket: Socket) -> IO(Socket):
 def run(family: U32, mode: String, count: Nat) -> IO(Unit):
   do IO<Unit>:
     socket : Socket <- IO.try(Socket, UDP.bind_family(family, 0))
-    endpoint : Socket & Result<&2, &2, Endpoint.Error, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
+    endpoint : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     socket : Socket <- EndpointTest.observed(endpoint)
     socket : Socket <- loop(count, mode, socket)
     IO.print("ready")

@@ -4,7 +4,7 @@ import ../packages/runtime/src/resolver-config.bend as ResolverOptions
 import ../packages/runtime/src/resolver-config.bend as Config
 import ../packages/runtime/src/string-split.bend as Split
 import ../packages/runtime/src/dns-message.bend as Name
-import ../packages/runtime/src/abortable-connect.bend as Connect
+import ../packages/runtime/src/socket.bend as Connect
 import ../packages/runtime/src/dns-transport.bend as Selector
 import ../packages/runtime/src/dns-transport.bend as Servers
 import ./dns-lookup-options.bend as Options

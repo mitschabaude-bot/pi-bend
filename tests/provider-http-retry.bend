@@ -2,18 +2,18 @@ import Base
 import ../packages/ai/src/api/openai-client.bend as Provider
 import ../packages/ai/src/utils/provider-retry.bend as Retry
 import ../packages/ai/test/provider-retry.bend as Reference
-import ../packages/runtime/src/http-exchange-response.bend as HTTP
+import ../packages/runtime/src/http-exchange.bend as HTTP
 import ../packages/runtime/src/http-response.bend as Response
-import ../packages/runtime/src/http-response-progress.bend as Progress
-import ../packages/runtime/src/http-response-metadata.bend as Metadata
-import ../packages/runtime/src/http-socket-exchange.bend as Exchange
-import ../packages/runtime/src/http-buffered-request.bend as Request
-import ../packages/runtime/src/http-buffered-body.bend as Body
-import ../packages/runtime/src/http-response-stream.bend as Stream
-import ../packages/runtime/src/http-chunked-body.bend as Chunked
-import ../packages/runtime/src/http-body-consume.bend as Consume
-import ../packages/runtime/src/headers.bend as Headers
-import ../packages/runtime/src/http-header.bend as Header
+import ../packages/runtime/src/http-response.bend as Progress
+import ../packages/runtime/src/http-response.bend as Metadata
+import ../packages/runtime/src/http-exchange.bend as Exchange
+import ../packages/runtime/src/http-message.bend as Request
+import ../packages/runtime/src/http-message.bend as Body
+import ../packages/runtime/src/http-response.bend as Stream
+import ../packages/runtime/src/http-message.bend as Chunked
+import ../packages/runtime/src/http-response.bend as Consume
+import ../packages/runtime/src/http-message.bend as Headers
+import ../packages/runtime/src/http-message.bend as Header
 import ../packages/runtime/src/abort.bend as A
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/f64.bend as F
@@ -23,10 +23,10 @@ import ./http-body-consume-native.bend as Show
 type Failure is Data:
   StatusFailure{value: Provider.StatusFailure<Exchange.ReadError<String>>}
   StartFailure{value: Exchange.StartError<String>}
-  HeadFailure{value: Progress.Error<Exchange.ReadError<String>>}
+  HeadFailure{value: Progress.ResponseProgressError<Exchange.ReadError<String>>}
 
 type Environment is Data:
-  Environment{port: U32, controller: A.AbortController<String>, request: Request.Prepared, diagnosticLimit: Nat}
+  Environment{port: U32, controller: A.AbortController<String>, request: Request.BufferedRequestPrepared, diagnosticLimit: Nat}
 
 # This fixture supplies a strict policy for diagnostic failures. SDK error
 # normalization is intentionally not supplied by the shared status adapter.
@@ -34,11 +34,11 @@ def statusFailure(value: Provider.StatusFailure<Exchange.ReadError<String>>) -> 
   match value:
     case Provider.StatusFailure{+metadata, Done{+text}}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        IO.print("diagnostic:" ++ U32.show(Metadata.status(metadata)) ++ ":" ++ Text.showText(text))
+        IO.print("diagnostic:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Text.showText(text))
         return Fail{Provider.retryFailure(Failure, StatusFailure{Provider.StatusFailure{metadata, Done{text}}}, text, metadata)}
     case Provider.StatusFailure{+metadata, Fail{+cause}}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        IO.print("diagnostic-error:" ++ U32.show(Metadata.status(metadata)) ++ ":" ++ Show.textFailure(cause))
+        IO.print("diagnostic-error:" ++ U32.show(Metadata.statusResponseMetadata(metadata)) ++ ":" ++ Show.textFailure(cause))
         return Fail{Retry.Other{StatusFailure{Provider.StatusFailure{metadata, Fail{cause}}}}}
 
 def accepted(value: Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
@@ -46,12 +46,12 @@ def accepted(value: Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<Str
     case Fail{cause}: statusFailure(cause)
     case Done{response}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Done{response})
 
-def headed(limit: Nat, value: Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
+def headed(limit: Nat, value: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
   match value:
     case Fail{cause}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Fail{Retry.Other{HeadFailure{cause}}})
     case Done{response}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        result : Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.close(String)), limit, response)
+        result : Result<&2, &1, Provider.StatusFailure<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- Provider.acceptWith(~(Exchange.ReadError<String>), ~(Exchange.Exchange<String>), ~(HTTP.read(String)), ~(Exchange.closeSocketExchange(String)), limit, response)
         accepted(result)
 
 def started(limit: Nat, value: Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>>) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
@@ -59,7 +59,7 @@ def started(limit: Nat, value: Result<&2, &1, Exchange.StartError<String>, Excha
     case Fail{cause}: IO.pure(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>, Fail{Retry.Other{StartFailure{cause}}})
     case Done{owner}:
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
-        result : Result<&2, &1, Progress.Error<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.start(~String, owner)
+        result : Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<String>>, Response.Response<Exchange.Exchange<String>>> <- HTTP.startExchangeResponse(~String, owner)
         headed(limit, result)
 
 def requestBody(environment: Environment, unused: Unit) -> IO(Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>):
@@ -68,7 +68,7 @@ def requestBody(environment: Environment, unused: Unit) -> IO(Result<&2, &1, Ret
       do IO<Result<&2, &1, Retry.RequestFailure<Failure>, Response.Response<Exchange.Exchange<String>>>>:
         IO.print("request")
         socket : Socket <- IO.try(Socket, TCP.connect("127.0.0.1", port))
-        result : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.start(~String, socket, A.signal(String, controller), request, 7, Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
+        result : Result<&2, &1, Exchange.StartError<String>, Exchange.Exchange<String>> <- Exchange.startSocketExchange(~String, socket, A.signal(String, controller), request, 7, Stream.Limits{4096n, 65536n, 100n, 8n, Chunked.Limits{1024n, 1024n, 16384n, 100n}})
         started(limit, result)
 
 def finished(value: Result<&2, &1, Retry.RetryFailure<Failure>, Response.Response<Exchange.Exchange<String>>>) -> IO(Unit):
@@ -80,11 +80,11 @@ def finished(value: Result<&2, &1, Retry.RetryFailure<Failure>, Response.Respons
     case Fail{Retry.DelayRejected{_, _}}: IO.print("failed:delay")
     case Done{Response.Response{metadata, body}}:
       do IO<Unit>:
-        IO.print("accepted:" ++ U32.show(Metadata.status(metadata)))
+        IO.print("accepted:" ++ U32.show(Metadata.statusResponseMetadata(metadata)))
         result : Result<&2, &2, Consume.TextError<Exchange.ReadError<String>>, String> <- HTTP.text(~String, 1000n, body)
         IO.print(Show.shownText(result))
 
-def run(port: U32, retries: Nat, limit: Nat, prepared: Result<&2, &2, Request.RequestError, Request.Prepared>) -> IO(Unit):
+def run(port: U32, retries: Nat, limit: Nat, prepared: Result<&2, &2, Request.RequestError, Request.BufferedRequestPrepared>) -> IO(Unit):
   match prepared:
     case Fail{_}: IO.die(Unit, 1, "prepare failed")
     case Done{prepared}:
@@ -106,7 +106,7 @@ def run(port: U32, retries: Nat, limit: Nat, prepared: Result<&2, &2, Request.Re
 
 def arguments(values: List<String>) -> IO(Unit):
   match values:
-    case port <> retries <> limit <> Nil{}: run(Text.decimal(port, 0), U32.to_nat(Text.decimal(retries, 0)), U32.to_nat(Text.decimal(limit, 0)), Request.prepare("GET", "/retry", Headers.appendField(Headers.new(), Header.Header{"host", "localhost"}), Body.Absent{}))
+    case port <> retries <> limit <> Nil{}: run(Text.decimal(port, 0), U32.to_nat(Text.decimal(retries, 0)), U32.to_nat(Text.decimal(limit, 0)), Request.prepareBufferedRequest("GET", "/retry", Headers.appendField(Headers.new(), Header.Header{"host", "localhost"}), Body.Absent{}))
     case _: IO.die(Unit, 1, "expected port retries diagnostic-limit")
 
 def main() -> IO(Unit):

@@ -1,5 +1,5 @@
 import Base
-import ../packages/runtime/src/line-decoder.bend as Line
+import ../packages/runtime/src/sse.bend as Line
 
 # Continue collection while retaining the already-emitted lines in the result.
 def continueWith(result: Line.Decoded, bytes: List<&2, U32>) -> Line.Decoded:
@@ -31,9 +31,9 @@ law continuation_output:
 def pendingLines(pending: Line.Pending) -> List<&2, String>:
   match pending:
     case Line.Reading{Nil{}}: Nil{}
-    case Line.Reading{head <> tail}: Line.line(head <> tail) <> Nil{}
-    case Line.AfterCarriageReturn{before, Nil{}}: Line.line(before) <> Nil{}
-    case Line.AfterCarriageReturn{before, head <> tail}: Line.line(before) <> Line.line(head <> tail) <> Nil{}
+    case Line.Reading{head <> tail}: Line.lineDecoder(head <> tail) <> Nil{}
+    case Line.AfterCarriageReturn{before, Nil{}}: Line.lineDecoder(before) <> Nil{}
+    case Line.AfterCarriageReturn{before, head <> tail}: Line.lineDecoder(before) <> Line.lineDecoder(head <> tail) <> Nil{}
 
 law flush_result:
   for +pending: Line.Pending
