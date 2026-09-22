@@ -181,3 +181,11 @@ def decodeWith(mode: BOM, bytes: List<&2, U32>) -> Result<&2, &2, Error, String>
 # rejecting malformed encoding. Preserve is explicitly available via decodeWith.
 def decodeStrict(bytes: List<&2, U32>) -> Result<&2, &2, Error, String>:
   decodeWith(StripLeading{}, bytes)
+
+# Drain completed scalars after a streaming feed, retaining the strict decoder's
+# pending sequence, BOM policy and absolute byte offset without retaining text.
+type Chunk is Data: Chunk{state: State, text: String}
+def drain(state: State) -> Chunk:
+  match state:
+    case State{offset, Accumulator{decoder, reversed}}:
+      Chunk{State{offset, Accumulator{decoder, ""}}, String.reverse(reversed)}

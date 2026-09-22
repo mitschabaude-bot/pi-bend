@@ -2474,21 +2474,42 @@
     },
     {
       "source": "packages/coding-agent/test/settings-manager-bug.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e39903068d13ee29f8d235a485829a418b7ca1613b92058fca8a9b3c7f69e546"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "e39903068d13ee29f8d235a485829a418b7ca1613b92058fca8a9b3c7f69e546",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-manager-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ae8aa7c6425592805b45a4f104908052d9a05f832655428beea78591903bb25c"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "ae8aa7c6425592805b45a4f104908052d9a05f832655428beea78591903bb25c",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "76c00c69d710e7d9ef5b62692166db1d73f6ab203a3648a2c43665f24e644ff1"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "76c00c69d710e7d9ef5b62692166db1d73f6ab203a3648a2c43665f24e644ff1",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",
@@ -3522,10 +3543,12 @@
         "tests/stdin-buffer.bend",
         "tests/stdin_buffer_check.py",
         "tests/stdin_buffer_original.mts",
-        "tests/stdin_buffer_reference.mts"
+        "tests/stdin_buffer_reference.mts",
+        "tests/stdin-buffer-async.bend",
+        "tests/stdin_buffer_async_check.py"
       ],
       "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8",
-      "notes": "All 59 reference tests execute with original assertions; recorded input/flush/clear calls replay as pure Bend transitions. 421 traces plus large control/paste and native Unicode checks pass Bun/native one/four. Owned timer scheduling, cancellation/listener lifecycle, and byte-input conversion remain pending; custom-timeout assertions have not been validated against a Bend driver. See tests/stdin-buffer.md."
+      "notes": "All 59 original reference tests execute with assertions and recorded operations replay as pure transitions (421 traces). An owned asynchronous driver additionally passes 74 real timer/lifecycle/UTF8 scenarios on Bun/native one/four, including Node StringDecoder comparisons and callback reentry/retirement. The explicit async API does not reproduce synchronous EventEmitter callback timing; direct legacy Buffer high-byte Meta conversion and complete terminal integration remain pending. Existing 18,012 strict UTF8 checks pass all three backends. See tests/stdin-buffer.md."
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
