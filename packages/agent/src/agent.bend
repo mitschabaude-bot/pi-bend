@@ -18,7 +18,7 @@ import ../../runtime/src/big-nat.bend as N
 import ../../ai/src/utils/model-api.bend as Api
 import ../../runtime/src/fifo.bend as Fifo
 
-# Pure stateLocal transitions from agent.ts. The Agent owner provides synchronization
+# Pure state transitions from agent.ts. The Agent owner provides synchronization
 # and waits for listeners before applying finishRunState; agent_end alone is not idle.
 type AgentInitialState<-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data> is Data:
   AgentInitialState{systemPromptState: Maybe<&2, String>, model: Maybe<&2, Ai.Model<Value>>, thinkingLevel: Maybe<&2, T.ThinkingLevel()>, tools: Maybe<&2, List<&2, T.AgentTool<Parameters, Validated, Details, Arguments, Signal, Error>>>, messages: Maybe<&2, List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>>}
@@ -43,27 +43,27 @@ def prependInitial(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data
     case None{}: messages
     case Some{value}: T.LlmMessage{Ai.System{value}} <> messages
 
-def initialMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, promptLocal: Maybe<&2, String>, tools: List<&2, Ai.Tool<Parameters>>, messages: List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>) -> List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>:
+def initialMessages(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, initialPrompt: Maybe<&2, String>, tools: List<&2, Ai.Tool<Parameters>>, messages: List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>) -> List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>:
   match messages:
     case T.LlmMessage{Ai.System{value}} <> rest: T.LlmMessage{Ai.System{value}} <> rest
-    case other: prependInitial(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Transcript.createInitialSystemMessage(Parameters, promptLocal, Some{tools}), other)
+    case other: prependInitial(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, Transcript.createInitialSystemMessage(Parameters, initialPrompt, Some{tools}), other)
 
 def createState(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, initial: AgentInitialState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
   match initial:
-    case AgentInitialState{promptLocal, model, thinking, tools, messages}:
+    case AgentInitialState{initialPrompt, model, thinking, tools, messages}:
       +selectedTools = Maybe.default(&2, List<&2, T.AgentTool<Parameters, Validated, Details, Arguments, Signal, Error>>, tools, Nil{})
-      T.AgentState{Maybe.default(&2, Ai.Model<Value>, model, defaultModel(Value)), Maybe.default(&2, T.ThinkingLevel(), thinking, Ai.Off{}), selectedTools, initialMessages(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, promptLocal, declarations(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, selectedTools), Maybe.default(&2, List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, messages, Nil{})), False{}, None{}, Set.empty(), None{}}
+      T.AgentState{Maybe.default(&2, Ai.Model<Value>, model, defaultModel(Value)), Maybe.default(&2, T.ThinkingLevel(), thinking, Ai.Off{}), selectedTools, initialMessages(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, initialPrompt, declarations(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, selectedTools), Maybe.default(&2, List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>, messages, Nil{})), False{}, None{}, Set.empty(), None{}}
 
-def systemPromptState(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, stateLocal: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> String:
-  match stateLocal:
+def systemPromptState(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, agentState: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> String:
+  match agentState:
     case T.AgentState{_, _, _, messages, _, _, _, _}: Transcript.getCurrentSystemPrompt(Parameters, Arguments, DiagnosticDetails, Details, defaultConvertToLlm(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, messages))
 
-def beginRun(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, stateLocal: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
-  match stateLocal:
+def beginRun(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, agentState: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
+  match agentState:
     case T.AgentState{model, thinking, tools, messages, _, _, pending, _}: T.AgentState{model, thinking, tools, messages, True{}, None{}, pending, None{}}
 
-def finishRunState(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, stateLocal: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
-  match stateLocal:
+def finishRunState(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, agentState: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
+  match agentState:
     case T.AgentState{model, thinking, tools, messages, _, _, _, error}: T.AgentState{model, thinking, tools, messages, False{}, None{}, Set.empty(), error}
 
 def nonemptyError(previous: Maybe<&2, String>, incoming: Maybe<&2, String>) -> Maybe<&2, String>:
@@ -76,8 +76,8 @@ def turnError(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -De
     case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, error, _, _, _}}}: nonemptyError(previous, error)
     case _: previous
 
-def processEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, -PartialResult: Data, -ExecutionResult: Data, stateLocal: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>, event: T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
-  match stateLocal event:
+def processEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, -PartialResult: Data, -ExecutionResult: Data, agentState: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>, event: T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, PartialResult, ExecutionResult>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
+  match agentState event:
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} T.MessageStart{message}: T.AgentState{model, thinking, tools, messages, streaming, Some{message}, pending, error}
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} T.MessageUpdate{message, _}: T.AgentState{model, thinking, tools, messages, streaming, Some{message}, pending, error}
     case T.AgentState{model, thinking, tools, messages, streaming, partial, pending, error} T.MessageEnd{message}: T.AgentState{model, thinking, tools, List.append(&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>, messages, message <> Nil{}), streaming, None{}, pending, error}
@@ -89,13 +89,13 @@ def processEvent(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, 
 
 # Replays the transcript baseline, retaining model/thinking and executable tools.
 # The synchronized owner rejects reset during a run and clears both queues.
-def stateReset(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, stateLocal: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
-  match stateLocal:
+def stateReset(-Parameters: Data, -Arguments: Data, -DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Validated: Data, -Signal: Data, -Error: Data, -Value: Data, agentState: T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>) -> T.AgentState<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value>:
+  match agentState:
     case T.AgentState{model, thinking, tools, messages, _, _, _, _}:
       baseline = Transcript.getCurrentSystemMessage(Parameters, Arguments, DiagnosticDetails, Details, defaultConvertToLlm(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, messages))
       T.AgentState{model, thinking, tools, prependInitial(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, Value, baseline, Nil{}), False{}, None{}, Set.empty(), None{}}
 
-# User-editable stateLocal is an explicit value transition. Runtime fields remain
+# User-editable state is an explicit value transition. Runtime fields remain
 # owned by the run lifecycle, including when an update occurs during delivery.
 type StateChange<-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
   SetModel{model: Ai.Model<J>}
@@ -103,8 +103,8 @@ type StateChange<-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S:
   SetTools{tools: List<&2, T.AgentTool<P, V, D, A, S, E>>}
   ReplaceMessages{messages: List<&2, T.AgentMessage<P, A, G, D, M>>}
   AppendMessage{message: T.AgentMessage<P, A, G, D, M>}
-def applyChange(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, stateLocal: T.AgentState<P, A, G, D, M, V, S, E, J>, change: StateChange<P, A, G, D, M, V, S, E, J>) -> T.AgentState<P, A, G, D, M, V, S, E, J>:
-  match stateLocal change:
+def applyChange(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, agentState: T.AgentState<P, A, G, D, M, V, S, E, J>, change: StateChange<P, A, G, D, M, V, S, E, J>) -> T.AgentState<P, A, G, D, M, V, S, E, J>:
+  match agentState change:
     case T.AgentState{_, thinking, tools, messages, streaming, current, pending, error} SetModel{model}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
     case T.AgentState{model, _, tools, messages, streaming, current, pending, error} SetThinkingLevel{thinking}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
     case T.AgentState{model, thinking, _, messages, streaming, current, pending, error} SetTools{tools}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
@@ -113,7 +113,7 @@ def applyChange(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: 
 
 
 # Immutable counterpart of agent.ts PendingMessageQueue. The Agent owner
-# commits these transitions atomically with its other runtime stateLocal.
+# commits these transitions atomically with its other runtime state.
 type PendingMessageQueue<-Message: Data> is Data:
   PendingMessageQueue{mode: T.QueueMode, messages: Fifo.Queue<Message>}
 
@@ -149,45 +149,45 @@ def drainPending(-M: Data, queue: PendingMessageQueue<M>) -> PendingMessageQueue
 
 
 type Queues<-M: Data> is Data:
-  Queues{steering: PendingMessageQueue<M>, followUpLocal: PendingMessageQueue<M>}
+  Queues{steering: PendingMessageQueue<M>, followUp: PendingMessageQueue<M>}
 type QueueKind is Data:
   QueuesSteering{}
   FollowUp{}
 
-def newQueues(-M: Data, steering: T.QueueMode, followUpLocal: T.QueueMode) -> Queues<M>:
-  Queues{newPending(M, steering), newPending(M, followUpLocal)}
+def newQueues(-M: Data, steering: T.QueueMode, followUps: T.QueueMode) -> Queues<M>:
+  Queues{newPending(M, steering), newPending(M, followUps)}
 def defaultQueues(-M: Data) -> Queues<M>: newQueues(M, T.OneAtATime{}, T.OneAtATime{})
 def enqueueQueues(-M: Data, queues: Queues<M>, kind: QueueKind, message: M) -> Queues<M>:
   match queues kind:
-    case Queues{steering, followUpLocal} QueuesSteering{}: Queues{enqueuePending(M, steering, message), followUpLocal}
-    case Queues{steering, followUpLocal} FollowUp{}: Queues{steering, enqueuePending(M, followUpLocal, message)}
+    case Queues{steering, followUps} QueuesSteering{}: Queues{enqueuePending(M, steering, message), followUps}
+    case Queues{steering, followUps} FollowUp{}: Queues{steering, enqueuePending(M, followUps, message)}
 def setModeQueues(-M: Data, queues: Queues<M>, kind: QueueKind, mode: T.QueueMode) -> Queues<M>:
   match queues kind:
-    case Queues{steering, followUpLocal} QueuesSteering{}: Queues{setModePending(M, steering, mode), followUpLocal}
-    case Queues{steering, followUpLocal} FollowUp{}: Queues{steering, setModePending(M, followUpLocal, mode)}
+    case Queues{steering, followUps} QueuesSteering{}: Queues{setModePending(M, steering, mode), followUps}
+    case Queues{steering, followUps} FollowUp{}: Queues{steering, setModePending(M, followUps, mode)}
 def clearQueues(-M: Data, queues: Queues<M>, kind: QueueKind) -> Queues<M>:
   match queues kind:
-    case Queues{steering, followUpLocal} QueuesSteering{}: Queues{clearPending(M, steering), followUpLocal}
-    case Queues{steering, followUpLocal} FollowUp{}: Queues{steering, clearPending(M, followUpLocal)}
+    case Queues{steering, followUps} QueuesSteering{}: Queues{clearPending(M, steering), followUps}
+    case Queues{steering, followUps} FollowUp{}: Queues{steering, clearPending(M, followUps)}
 def clearAll(-M: Data, queues: Queues<M>) -> Queues<M>:
   match queues:
-    case Queues{steering, followUpLocal}: Queues{clearPending(M, steering), clearPending(M, followUpLocal)}
+    case Queues{steering, followUps}: Queues{clearPending(M, steering), clearPending(M, followUps)}
 def queuesHaveMessages(-M: Data, queues: Queues<M>) -> Bool:
   match queues:
-    case Queues{steering, followUpLocal}: hasItems(M, steering) || hasItems(M, followUpLocal)
+    case Queues{steering, followUps}: hasItems(M, steering) || hasItems(M, followUps)
 def drainedQueues(-M: Data, kind: QueueKind, other: PendingMessageQueue<M>, result: PendingMessageQueue<M> & List<&2, M>) -> Queues<M> & List<&2, M>:
   match kind result:
     case QueuesSteering{} Tuple{remaining, messages}: (Queues{remaining, other}, messages)
     case FollowUp{} Tuple{remaining, messages}: (Queues{other, remaining}, messages)
 def drainQueues(-M: Data, queues: Queues<M>, kind: QueueKind) -> Queues<M> & List<&2, M>:
   match queues kind:
-    case Queues{steering, followUpLocal} QueuesSteering{}: drainedQueues(M, QueuesSteering{}, followUpLocal, drainPending(M, steering))
-    case Queues{steering, followUpLocal} FollowUp{}: drainedQueues(M, FollowUp{}, steering, drainPending(M, followUpLocal))
+    case Queues{steering, followUps} QueuesSteering{}: drainedQueues(M, QueuesSteering{}, followUps, drainPending(M, steering))
+    case Queues{steering, followUps} FollowUp{}: drainedQueues(M, FollowUp{}, steering, drainPending(M, followUps))
 
 def getModeQueues(-M: Data, queues: Queues<M>, kind: QueueKind) -> T.QueueMode:
   match queues kind:
     case Queues{steering, _} QueuesSteering{}: getModePending(M, steering)
-    case Queues{_, followUpLocal} FollowUp{}: getModePending(M, followUpLocal)
+    case Queues{_, followUps} FollowUp{}: getModePending(M, followUps)
 
 
 # A pure decision consumed by the Agent owner when it claims the next run.
@@ -243,7 +243,7 @@ def planContinue(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, active: Bool,
     case False{}: planTail(T.AgentMessage<P, A, G, D, C>, queues, tail(P, A, G, D, C, messages, False{}))
 
 
-# The owner stores Agent stateLocal and queues together in State. Claiming a run and
+# The owner stores Agent state and queues together in State. Claiming a run and
 # its pure preparation therefore share one transaction, with no effectful callback under
 # the lock. ActiveRun handles are borrowed until the owner's final disposal.
 type ActiveRun is Data:
@@ -253,7 +253,7 @@ type Cell<-State: Data> is Data:
 type Lifecycle<-State: Data> is Data:
   Lifecycle{cell: R.Ref<Cell<State>>}
 type Prepared<-State: Data, -Value: Data> is Data:
-  Prepared{stateLocal: State, value: Value}
+  Prepared{state: State, value: Value}
 type ClaimError<-Error: Data> is Data:
   LifeBusy{}
   Rejected{error: Error}
@@ -308,7 +308,7 @@ def modified(-State: Data, -Value: Type, active: Maybe<&2, ActiveRun>, retired: 
     case Tuple{next, value}: (Cell{next, active, retired}, value)
 def modifyState(-State: Data, -Value: Type, cell: Cell<State>, transform: State -> Maybe<&2, ActiveRun> -> State & Value) -> Cell<State> & Value:
   match cell:
-    case Cell{stateLocal, +active, retired}: modified(State, Value, active, retired, transform(stateLocal, active))
+    case Cell{agentState, +active, retired}: modified(State, Value, active, retired, transform(agentState, active))
 # Event reductions, queue updates and reset share the run-claim transaction.
 def modify(-State: Data, -Value: Type, owner: Lifecycle<State>, transform: State -> Maybe<&2, ActiveRun> -> State & Value) -> IO(Value):
   match owner:
@@ -397,7 +397,7 @@ def executeClaim(-State: Data, -Error: Data, -Value: Data, owner: Lifecycle<Stat
         finished : Bool <- finishLife(State, owner, run, reduce)
         return runResult(Error, recovered)
 # Like Agent.runWithLifecycle: recovery handles executor failure, and final
-# stateLocal/idle settlement happens even when recovery itself returns an error.
+# state/idle settlement happens even when recovery itself returns an error.
 def runWithLifecycle(-State: Data, -Error: Data, -Value: Data, +owner: Lifecycle<State>, prepare: State -> Result<&2, &2, Error, Prepared<State, Value>>, execute: Claimed<Value> -> IO(Result<&2, &2, Error, Unit>), recover: ActiveRun -> Error -> IO(Result<&2, &2, Error, Unit>), reduce: State -> State) -> IO(Result<&2, &2, RunError<Error>, Unit>):
   do IO<Result<&2, &2, RunError<Error>, Unit>>:
     result : Result<&2, &2, ClaimError<Error>, Claimed<Value>> <- claimLife(State, Error, Value, owner, prepare)
@@ -428,10 +428,10 @@ def disposeLife(-State: Data, owner: Lifecycle<State>) -> IO(State):
 
 
 # P/A/G/D/C are schema/arguments/diagnostics/details/custom message values;
-# V/S/E/J are validated arguments/tool signalLocal/tool error/model metadata.
+# V/S/E/J are validated arguments/tool signal/tool error/model metadata.
 # One synchronized owner couples transcript, queues and active-run status.
 type OwnedState<-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
-  OwnedState{stateLocal: T.AgentState<P, A, G, D, C, V, S, E, J>, queues: Queues<T.AgentMessage<P, A, G, D, C>>}
+  OwnedState{state: T.AgentState<P, A, G, D, C, V, S, E, J>, queues: Queues<T.AgentMessage<P, A, G, D, C>>}
 type OwnedRuntime<-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
   OwnedRuntime{lifecycle: Lifecycle<OwnedState<P, A, G, D, C, V, S, E, J>>}
 
@@ -444,18 +444,18 @@ def snapshotRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, 
     case OwnedRuntime{lifecycle}: readLife(OwnedState<P, A, G, D, C, V, S, E, J>, lifecycle)
 def stateValue(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>) -> T.AgentState<P, A, G, D, C, V, S, E, J>:
   match owned:
-    case OwnedState{stateLocal, _}: stateLocal
+    case OwnedState{agentState, _}: agentState
 def readRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>) -> IO(T.AgentState<P, A, G, D, C, V, S, E, J>):
   do IO<T.AgentState<P, A, G, D, C, V, S, E, J>>:
     owned : OwnedState<P, A, G, D, C, V, S, E, J> <- snapshotRuntime(P, A, G, D, C, V, S, E, J, runtime)
     return stateValue(P, A, G, D, C, V, S, E, J, owned)
-def history(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, stateLocal: T.AgentState<P, A, G, D, C, V, S, E, J>) -> List<&2, T.AgentMessage<P, A, G, D, C>>:
-  match stateLocal:
+def history(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, agentState: T.AgentState<P, A, G, D, C, V, S, E, J>) -> List<&2, T.AgentMessage<P, A, G, D, C>>:
+  match agentState:
     case T.AgentState{_, _, _, messages, _, _, _, _}: messages
 
 def enqueueState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>, kind: QueueKind, message: T.AgentMessage<P, A, G, D, C>) -> OwnedState<P, A, G, D, C, V, S, E, J> & Unit:
   match owned:
-    case OwnedState{stateLocal, queues}: (OwnedState{stateLocal, enqueueQueues(T.AgentMessage<P, A, G, D, C>, queues, kind, message)}, Unit{})
+    case OwnedState{agentState, queues}: (OwnedState{agentState, enqueueQueues(T.AgentMessage<P, A, G, D, C>, queues, kind, message)}, Unit{})
 def enqueueRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, kind: QueueKind, message: T.AgentMessage<P, A, G, D, C>) -> IO(Unit):
   match runtime:
     case OwnedRuntime{lifecycle}: modify(OwnedState<P, A, G, D, C, V, S, E, J>, Unit, lifecycle, owned => active => enqueueState(P, A, G, D, C, V, S, E, J, owned, kind, message))
@@ -463,41 +463,41 @@ def steerRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S:
 def followUpRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, message: T.AgentMessage<P, A, G, D, C>) -> IO(Unit): enqueueRuntime(P, A, G, D, C, V, S, E, J, runtime, FollowUp{}, message)
 def updatedQueues(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>, update: Queues<T.AgentMessage<P, A, G, D, C>> -> Queues<T.AgentMessage<P, A, G, D, C>>) -> OwnedState<P, A, G, D, C, V, S, E, J> & Unit:
   match owned:
-    case OwnedState{stateLocal, queues}: (OwnedState{stateLocal, update(queues)}, Unit{})
+    case OwnedState{agentState, queues}: (OwnedState{agentState, update(queues)}, Unit{})
 def updateQueues(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, update: Queues<T.AgentMessage<P, A, G, D, C>> -> Queues<T.AgentMessage<P, A, G, D, C>>) -> IO(Unit):
   match runtime:
     case OwnedRuntime{lifecycle}: modify(OwnedState<P, A, G, D, C, V, S, E, J>, Unit, lifecycle, owned => active => updatedQueues(P, A, G, D, C, V, S, E, J, owned, update))
 def clearQueue(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, kind: QueueKind) -> IO(Unit): updateQueues(P, A, G, D, C, V, S, E, J, runtime, queues => clearQueues(T.AgentMessage<P, A, G, D, C>, queues, kind))
 def clearAllRuntimeQueues(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>) -> IO(Unit): updateQueues(P, A, G, D, C, V, S, E, J, runtime, queues => clearAll(T.AgentMessage<P, A, G, D, C>, queues))
 def setQueueMode(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, kind: QueueKind, mode: T.QueueMode) -> IO(Unit): updateQueues(P, A, G, D, C, V, S, E, J, runtime, queues => setModeQueues(T.AgentMessage<P, A, G, D, C>, queues, kind, mode))
-def drainedRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, stateLocal: T.AgentState<P, A, G, D, C, V, S, E, J>, result: Queues<T.AgentMessage<P, A, G, D, C>> & List<&2, T.AgentMessage<P, A, G, D, C>>) -> OwnedState<P, A, G, D, C, V, S, E, J> & List<&2, T.AgentMessage<P, A, G, D, C>>:
+def drainedRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, agentState: T.AgentState<P, A, G, D, C, V, S, E, J>, result: Queues<T.AgentMessage<P, A, G, D, C>> & List<&2, T.AgentMessage<P, A, G, D, C>>) -> OwnedState<P, A, G, D, C, V, S, E, J> & List<&2, T.AgentMessage<P, A, G, D, C>>:
   match result:
-    case Tuple{queues, messages}: (OwnedState{stateLocal, queues}, messages)
+    case Tuple{queues, messages}: (OwnedState{agentState, queues}, messages)
 def drainState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>, kind: QueueKind) -> OwnedState<P, A, G, D, C, V, S, E, J> & List<&2, T.AgentMessage<P, A, G, D, C>>:
   match owned:
-    case OwnedState{stateLocal, queues}: drainedRuntime(P, A, G, D, C, V, S, E, J, stateLocal, drainQueues(T.AgentMessage<P, A, G, D, C>, queues, kind))
+    case OwnedState{agentState, queues}: drainedRuntime(P, A, G, D, C, V, S, E, J, agentState, drainQueues(T.AgentMessage<P, A, G, D, C>, queues, kind))
 def drainRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, kind: QueueKind) -> IO(List<&2, T.AgentMessage<P, A, G, D, C>>):
   match runtime:
     case OwnedRuntime{lifecycle}: modify(OwnedState<P, A, G, D, C, V, S, E, J>, List<&2, T.AgentMessage<P, A, G, D, C>>, lifecycle, owned => active => drainState(P, A, G, D, C, V, S, E, J, owned, kind))
 
 def resetState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>, active: Maybe<&2, ActiveRun>) -> OwnedState<P, A, G, D, C, V, S, E, J> & Result<&2, &2, String, Unit>:
   match owned active:
-    case OwnedState{stateLocal, queues} None{}: (OwnedState{stateReset(P, A, G, D, C, V, S, E, J, stateLocal), clearAll(T.AgentMessage<P, A, G, D, C>, queues)}, Done{Unit{}})
-    case OwnedState{stateLocal, queues} Some{_}: (OwnedState{stateLocal, queues}, Fail{"Agent is already processing. Wait for completion before resetting."})
+    case OwnedState{agentState, queues} None{}: (OwnedState{stateReset(P, A, G, D, C, V, S, E, J, agentState), clearAll(T.AgentMessage<P, A, G, D, C>, queues)}, Done{Unit{}})
+    case OwnedState{agentState, queues} Some{_}: (OwnedState{agentState, queues}, Fail{"Agent is already processing. Wait for completion before resetting."})
 def resetRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>) -> IO(Result<&2, &2, String, Unit>):
   match runtime:
     case OwnedRuntime{lifecycle}: modify(OwnedState<P, A, G, D, C, V, S, E, J>, Result<&2, &2, String, Unit>, lifecycle, owned => active => resetState(P, A, G, D, C, V, S, E, J, owned, active))
 
 def preparePrompt(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>, messages: List<&2, T.AgentMessage<P, A, G, D, C>>) -> Result<&2, &2, String, Prepared<OwnedState<P, A, G, D, C, V, S, E, J>, Plan<T.AgentMessage<P, A, G, D, C>>>>:
   match owned:
-    case OwnedState{stateLocal, queues}: Done{Prepared{OwnedState{beginRun(P, A, G, D, C, V, S, E, J, stateLocal), queues}, Prompt{messages, False{}}}}
-def planned(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, stateLocal: T.AgentState<P, A, G, D, C, V, S, E, J>, result: Queues<T.AgentMessage<P, A, G, D, C>> & Result<&2, &2, ContinueError, Plan<T.AgentMessage<P, A, G, D, C>>>) -> Result<&2, &2, String, Prepared<OwnedState<P, A, G, D, C, V, S, E, J>, Plan<T.AgentMessage<P, A, G, D, C>>>>:
+    case OwnedState{agentState, queues}: Done{Prepared{OwnedState{beginRun(P, A, G, D, C, V, S, E, J, agentState), queues}, Prompt{messages, False{}}}}
+def planned(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, agentState: T.AgentState<P, A, G, D, C, V, S, E, J>, result: Queues<T.AgentMessage<P, A, G, D, C>> & Result<&2, &2, ContinueError, Plan<T.AgentMessage<P, A, G, D, C>>>) -> Result<&2, &2, String, Prepared<OwnedState<P, A, G, D, C, V, S, E, J>, Plan<T.AgentMessage<P, A, G, D, C>>>>:
   match result:
     case Tuple{_, Fail{error}}: Fail{errorMessage(error)}
-    case Tuple{queues, Done{plan}}: Done{Prepared{OwnedState{beginRun(P, A, G, D, C, V, S, E, J, stateLocal), queues}, plan}}
+    case Tuple{queues, Done{plan}}: Done{Prepared{OwnedState{beginRun(P, A, G, D, C, V, S, E, J, agentState), queues}, plan}}
 def prepareContinue(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>) -> Result<&2, &2, String, Prepared<OwnedState<P, A, G, D, C, V, S, E, J>, Plan<T.AgentMessage<P, A, G, D, C>>>>:
   match owned:
-    case OwnedState{+stateLocal, queues}: planned(P, A, G, D, C, V, S, E, J, stateLocal, planContinue(P, A, G, D, C, False{}, history(P, A, G, D, C, V, S, E, J, stateLocal), queues))
+    case OwnedState{+agentState, queues}: planned(P, A, G, D, C, V, S, E, J, agentState, planContinue(P, A, G, D, C, False{}, history(P, A, G, D, C, V, S, E, J, agentState), queues))
 def beginPrompt(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, messages: List<&2, T.AgentMessage<P, A, G, D, C>>) -> IO(Result<&2, &2, ClaimError<String>, Claimed<Plan<T.AgentMessage<P, A, G, D, C>>>>):
   match runtime:
     case OwnedRuntime{lifecycle}: claimLife(OwnedState<P, A, G, D, C, V, S, E, J>, String, Plan<T.AgentMessage<P, A, G, D, C>>, lifecycle, owned => preparePrompt(P, A, G, D, C, V, S, E, J, owned, messages))
@@ -506,7 +506,7 @@ def beginContinue(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S
     case OwnedRuntime{lifecycle}: claimLife(OwnedState<P, A, G, D, C, V, S, E, J>, String, Plan<T.AgentMessage<P, A, G, D, C>>, lifecycle, owned => prepareContinue(P, A, G, D, C, V, S, E, J, owned))
 def ended(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>) -> OwnedState<P, A, G, D, C, V, S, E, J>:
   match owned:
-    case OwnedState{stateLocal, queues}: OwnedState{finishRunState(P, A, G, D, C, V, S, E, J, stateLocal), queues}
+    case OwnedState{agentState, queues}: OwnedState{finishRunState(P, A, G, D, C, V, S, E, J, agentState), queues}
 def finishRunRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, run: ActiveRun) -> IO(Bool):
   match runtime:
     case OwnedRuntime{lifecycle}: finishLife(OwnedState<P, A, G, D, C, V, S, E, J>, lifecycle, run, owned => ended(P, A, G, D, C, V, S, E, J, owned))
@@ -517,9 +517,9 @@ def listenerRun(active: Maybe<&2, ActiveRun>) -> Result<&2, &2, String, ActiveRu
     case Some{run}: Done{run}
 def eventState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Partial: Data, -Execution: Data, owned: OwnedState<P, A, G, D, C, V, S, E, J>, active: Maybe<&2, ActiveRun>, event: T.AgentEvent<P, A, G, D, C, Partial, Execution>) -> OwnedState<P, A, G, D, C, V, S, E, J> & Result<&2, &2, String, ActiveRun>:
   match owned:
-    case OwnedState{stateLocal, queues}: (OwnedState{processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, stateLocal, event), queues}, listenerRun(active))
+    case OwnedState{agentState, queues}: (OwnedState{processEvent(P, A, G, D, C, V, S, E, J, Partial, Execution, agentState, event), queues}, listenerRun(active))
 # Reduction happens before listener dispatch, including the source's error for
-# an event outside a run. The returned handle carries the active signalLocal.
+# an event outside a run. The returned handle carries the active signal.
 def recordEvent(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Partial: Data, -Execution: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, event: T.AgentEvent<P, A, G, D, C, Partial, Execution>) -> IO(Result<&2, &2, String, ActiveRun>):
   match runtime:
     case OwnedRuntime{lifecycle}: modify(OwnedState<P, A, G, D, C, V, S, E, J>, Result<&2, &2, String, ActiveRun>, lifecycle, owned => active => eventState(P, A, G, D, C, V, S, E, J, Partial, Execution, owned, active, event))
@@ -535,7 +535,7 @@ def disposeRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -
 
 def changedState(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, owned: OwnedState<P, A, G, D, M, V, S, E, J>, change: StateChange<P, A, G, D, M, V, S, E, J>) -> OwnedState<P, A, G, D, M, V, S, E, J> & Unit:
   match owned:
-    case OwnedState{stateLocal, queues}: (OwnedState{applyChange(P, A, G, D, M, V, S, E, J, stateLocal, change), queues}, Unit{})
+    case OwnedState{agentState, queues}: (OwnedState{applyChange(P, A, G, D, M, V, S, E, J, agentState, change), queues}, Unit{})
 def updateStateRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, M, V, S, E, J>, change: StateChange<P, A, G, D, M, V, S, E, J>) -> IO(Unit):
   match runtime:
     case OwnedRuntime{lifecycle}: modify(OwnedState<P, A, G, D, M, V, S, E, J>, Unit, lifecycle, owned => active => changedState(P, A, G, D, M, V, S, E, J, owned, change))
@@ -545,7 +545,7 @@ def updateStateRuntime(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Dat
 # run outside the lock. Each dispatch observes removals/additions before it
 # selects the next listener, preserving the source's awaited live dispatch.
 type Input<-Event: Data, -Signal: Data> is Data:
-  Input{event: Event, signalLocal: Signal}
+  Input{event: Event, signal: Signal}
 def Handler(-Event: Data, -Signal: Data, -Error: Data) -> Data:
   C.Callback<Input<Event, Signal>, Loop.Emission<Error>>
 type Entry<-Event: Data, -Signal: Data, -Error: Data> is Data:
@@ -553,14 +553,14 @@ type Entry<-Event: Data, -Signal: Data, -Error: Data> is Data:
 type State<-Event: Data, -Signal: Data, -Error: Data> is Data:
   State{next: N.BigNat, entries: List<&2, Entry<Event, Signal, Error>>}
 type Listeners<-Event: Data, -Signal: Data, -Error: Data> is Data:
-  Listeners{stateLocal: R.Ref<State<Event, Signal, Error>>}
+  Listeners{state: R.Ref<State<Event, Signal, Error>>}
 type Subscription<-Event: Data, -Signal: Data, -Error: Data> is Data:
   Subscription{listeners: Listeners<Event, Signal, Error>, callback: Handler(Event, Signal, Error)}
 
 def newListeners(-Event: Data, -Signal: Data, -Error: Data) -> IO(Listeners<Event, Signal, Error>):
   do IO<Listeners<Event, Signal, Error>>:
-    stateLocal : R.Ref<State<Event, Signal, Error>> <- R.new(State<Event, Signal, Error>, State{N.zero(), Nil{}})
-    return Listeners{stateLocal}
+    agentState : R.Ref<State<Event, Signal, Error>> <- R.new(State<Event, Signal, Error>, State{N.zero(), Nil{}})
+    return Listeners{agentState}
 def contains(-Event: Data, -Signal: Data, -Error: Data, entries: List<&2, Entry<Event, Signal, Error>>, +callback: Handler(Event, Signal, Error)) -> Bool:
   match entries:
     case Nil{}: False{}
@@ -569,26 +569,26 @@ def added(-Event: Data, -Signal: Data, -Error: Data, +next: N.BigNat, entries: L
   match exists:
     case True{}: State{next, entries}
     case False{}: State{N.add(next, N.one()), List.append(&2, Entry<Event, Signal, Error>, entries, Entry{next, callback} <> Nil{})}
-def addState(-Event: Data, -Signal: Data, -Error: Data, stateLocal: State<Event, Signal, Error>, +callback: Handler(Event, Signal, Error)) -> State<Event, Signal, Error> & Unit:
-  match stateLocal:
+def addState(-Event: Data, -Signal: Data, -Error: Data, agentState: State<Event, Signal, Error>, +callback: Handler(Event, Signal, Error)) -> State<Event, Signal, Error> & Unit:
+  match agentState:
     case State{next, +entries}: (added(Event, Signal, Error, next, entries, callback, contains(Event, Signal, Error, entries, callback)), Unit{})
 def subscribeListeners(-Event: Data, -Signal: Data, -Error: Data, +listeners: Listeners<Event, Signal, Error>, +callback: Handler(Event, Signal, Error)) -> IO(Subscription<Event, Signal, Error>):
   match listeners:
-    case Listeners{+stateLocal}:
+    case Listeners{+agentState}:
       do IO<Subscription<Event, Signal, Error>>:
-        R.modify(State<Event, Signal, Error>, Unit, stateLocal, current => addState(Event, Signal, Error, current, callback))
-        return Subscription{Listeners{stateLocal}, callback}
+        R.modify(State<Event, Signal, Error>, Unit, agentState, current => addState(Event, Signal, Error, current, callback))
+        return Subscription{Listeners{agentState}, callback}
 def remove(-Event: Data, -Signal: Data, -Error: Data, entries: List<&2, Entry<Event, Signal, Error>>, +callback: Handler(Event, Signal, Error)) -> List<&2, Entry<Event, Signal, Error>>:
   match entries:
     case Nil{}: Nil{}
     case Entry{position, +other} <> +rest:
       Bool.pick(List<&2, Entry<Event, Signal, Error>>, C.same(Input<Event, Signal>, Loop.Emission<Error>, callback, other), rest, Entry{position, other} <> remove(Event, Signal, Error, rest, callback))
-def removeState(-Event: Data, -Signal: Data, -Error: Data, stateLocal: State<Event, Signal, Error>, callback: Handler(Event, Signal, Error)) -> State<Event, Signal, Error> & Unit:
-  match stateLocal:
+def removeState(-Event: Data, -Signal: Data, -Error: Data, agentState: State<Event, Signal, Error>, callback: Handler(Event, Signal, Error)) -> State<Event, Signal, Error> & Unit:
+  match agentState:
     case State{next, entries}: (State{next, remove(Event, Signal, Error, entries, callback)}, Unit{})
 def unsubscribe(-Event: Data, -Signal: Data, -Error: Data, subscription: Subscription<Event, Signal, Error>) -> IO(Unit):
   match subscription:
-    case Subscription{Listeners{stateLocal}, callback}: R.modify(State<Event, Signal, Error>, Unit, stateLocal, current => removeState(Event, Signal, Error, current, callback))
+    case Subscription{Listeners{agentState}, callback}: R.modify(State<Event, Signal, Error>, Unit, agentState, current => removeState(Event, Signal, Error, current, callback))
 def less(order: Cmp) -> Bool:
   match order:
     case LT{}: True{}
@@ -602,23 +602,23 @@ def nextEntry(-Event: Data, -Signal: Data, -Error: Data, entries: List<&2, Entry
     case Nil{}: None{}
     case Entry{+position, callback} <> rest:
       Bool.pick(Maybe<&2, Entry<Event, Signal, Error>>, eligible(position, cursor), Some{Entry{position, callback}}, nextEntry(Event, Signal, Error, rest, cursor))
-def selectedListeners(-Event: Data, -Signal: Data, -Error: Data, stateLocal: State<Event, Signal, Error>, cursor: Maybe<&2, N.BigNat>) -> Maybe<&2, Entry<Event, Signal, Error>>:
-  match stateLocal:
+def selectedListeners(-Event: Data, -Signal: Data, -Error: Data, agentState: State<Event, Signal, Error>, cursor: Maybe<&2, N.BigNat>) -> Maybe<&2, Entry<Event, Signal, Error>>:
+  match agentState:
     case State{_, entries}: nextEntry(Event, Signal, Error, entries, cursor)
 # Phase/result arguments avoid mutual recursion: each callback settles before
 # the next selection. Failure immediately stops this event's delivery.
 @unsafe def dispatch(-Event: Data, -Signal: Data, -Error: Data, +listeners: Listeners<Event, Signal, Error>, +input: Input<Event, Signal>, cursor: Maybe<&2, N.BigNat>, result: Result<&2, &2, Error, Unit>, next: Maybe<&2, Entry<Event, Signal, Error>>, select: Bool) -> IO(Result<&2, &2, Error, Unit>):
   match listeners result next select:
     case Listeners{_} Fail{error} _ _: IO.pure(Result<&2, &2, Error, Unit>, Fail{error})
-    case Listeners{+stateLocal} Done{_} _ True{}:
+    case Listeners{+agentState} Done{_} _ True{}:
       do IO<Result<&2, &2, Error, Unit>>:
-        current : State<Event, Signal, Error> <- R.read(State<Event, Signal, Error>, stateLocal)
-        dispatch(Event, Signal, Error, Listeners{stateLocal}, input, None{}, Done{Unit{}}, selectedListeners(Event, Signal, Error, current, cursor), False{})
-    case Listeners{stateLocal} Done{_} Some{Entry{position, callback}} False{}:
+        current : State<Event, Signal, Error> <- R.read(State<Event, Signal, Error>, agentState)
+        dispatch(Event, Signal, Error, Listeners{agentState}, input, None{}, Done{Unit{}}, selectedListeners(Event, Signal, Error, current, cursor), False{})
+    case Listeners{agentState} Done{_} Some{Entry{position, callback}} False{}:
       do IO<Result<&2, &2, Error, Unit>>:
         delivery : Loop.Emission<Error> <- C.call(Input<Event, Signal>, Loop.Emission<Error>, callback, input)
         outcome : Result<&2, &2, Error, Unit> <- Loop.wait(Error, delivery)
-        dispatch(Event, Signal, Error, Listeners{stateLocal}, input, Some{position}, outcome, None{}, True{})
+        dispatch(Event, Signal, Error, Listeners{agentState}, input, Some{position}, outcome, None{}, True{})
     case Listeners{_} Done{_} None{} False{}: IO.pure(Result<&2, &2, Error, Unit>, Done{Unit{}})
 # The first callback starts inline, before returning ownership of pending
 # delivery. Subsequent callbacks remain live-selected after each completion.
@@ -633,23 +633,23 @@ def startSelected(-Event: Data, -Signal: Data, -Error: Data, listeners: Listener
       do IO<Loop.Emission<Error>>:
         delivery : Loop.Emission<Error> <- C.call(Input<Event, Signal>, Loop.Emission<Error>, callback, input)
         Loop.startEmission(Error, resume(Event, Signal, Error, listeners, input, position, delivery))
-def start(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, event: Event, signalLocal: Signal) -> IO(Loop.Emission<Error>):
+def start(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, event: Event, abortSignal: Signal) -> IO(Loop.Emission<Error>):
   match listeners:
-    case Listeners{+stateLocal}:
+    case Listeners{+agentState}:
       do IO<Loop.Emission<Error>>:
-        current : State<Event, Signal, Error> <- R.read(State<Event, Signal, Error>, stateLocal)
-        startSelected(Event, Signal, Error, Listeners{stateLocal}, Input{event, signalLocal}, selectedListeners(Event, Signal, Error, current, None{}))
-def emitListeners(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, event: Event, signalLocal: Signal) -> IO(Result<&2, &2, Error, Unit>):
+        current : State<Event, Signal, Error> <- R.read(State<Event, Signal, Error>, agentState)
+        startSelected(Event, Signal, Error, Listeners{agentState}, Input{event, abortSignal}, selectedListeners(Event, Signal, Error, current, None{}))
+def emitListeners(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>, event: Event, abortSignal: Signal) -> IO(Result<&2, &2, Error, Unit>):
   do IO<Result<&2, &2, Error, Unit>>:
-    delivery : Loop.Emission<Error> <- start(Event, Signal, Error, listeners, event, signalLocal)
+    delivery : Loop.Emission<Error> <- start(Event, Signal, Error, listeners, event, abortSignal)
     Loop.wait(Error, delivery)
 # Callbacks are borrowed. Drain in-flight dispatches before disposing the
 # registry, then retire callback handles according to their own ownership.
 def disposeListeners(-Event: Data, -Signal: Data, -Error: Data, listeners: Listeners<Event, Signal, Error>) -> IO(Unit):
   match listeners:
-    case Listeners{stateLocal}:
+    case Listeners{agentState}:
       do IO<Unit>:
-        previous : State<Event, Signal, Error> <- R.dispose(State<Event, Signal, Error>, stateLocal)
+        previous : State<Event, Signal, Error> <- R.dispose(State<Event, Signal, Error>, agentState)
         return Unit{}
 
 
@@ -692,8 +692,8 @@ def messageFailure(-A: Data, -G: Data, -J: Data, model: Ai.Model<J>, aborted: Bo
   match model:
     case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}:
       Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"", None{}}} <> Nil{}, Api.name(api), provider, id, None{}, None{}, None{}, None{}, emptyUsage(), Bool.pick(Ai.StopReason, aborted, Ai.Aborted{}, Ai.Error{}), None{}, Some{error}, None{}, None{}, timestamp}
-def fromState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, stateLocal: T.AgentState<P, A, G, D, C, V, S, E, J>, aborted: Bool, error: String, timestamp: F.F64) -> T.AgentMessage<P, A, G, D, C>:
-  match stateLocal:
+def fromState(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, agentState: T.AgentState<P, A, G, D, C, V, S, E, J>, aborted: Bool, error: String, timestamp: F.F64) -> T.AgentMessage<P, A, G, D, C>:
+  match agentState:
     case T.AgentState{model, _, _, _, _, _, _, _}: T.LlmMessage{Ai.Assistant{messageFailure(A, G, J, model, aborted, error, timestamp)}}
 def events(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -Partial: Data, -Execution: Data, +messageFailure: T.AgentMessage<P, A, G, D, C>) -> List<&2, T.AgentEvent<P, A, G, D, C, Partial, Execution>>:
   T.MessageStart{messageFailure} <> T.MessageEnd{messageFailure} <> T.TurnEnd{messageFailure, Nil{}} <> T.AgentEnd{messageFailure <> Nil{}} <> Nil{}
@@ -708,13 +708,13 @@ def deliver(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data
 # Explicit timestamp supports deterministic tests; production uses Date.now.
 def handleRunFailureAt(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Partial: Data, -Execution: Data, -Failure: Data, +runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, listeners: Listeners<T.AgentEvent<P, A, G, D, C, Partial, Execution>, Abort.AbortSignal<Unit>, Failure>, error: String, aborted: Bool, timestamp: F.F64) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   do IO<Result<&2, &2, DeliveryError<Failure>, Unit>>:
-    stateLocal : T.AgentState<P, A, G, D, C, V, S, E, J> <- readRuntime(P, A, G, D, C, V, S, E, J, runtime)
-    deliver(P, A, G, D, C, V, S, E, J, Partial, Execution, Failure, runtime, listeners, events(P, A, G, D, C, Partial, Execution, fromState(P, A, G, D, C, V, S, E, J, stateLocal, aborted, error, timestamp)), Done{Unit{}})
+    agentState : T.AgentState<P, A, G, D, C, V, S, E, J> <- readRuntime(P, A, G, D, C, V, S, E, J, runtime)
+    deliver(P, A, G, D, C, V, S, E, J, Partial, Execution, Failure, runtime, listeners, events(P, A, G, D, C, Partial, Execution, fromState(P, A, G, D, C, V, S, E, J, agentState, aborted, error, timestamp)), Done{Unit{}})
 def handleRunFailure(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Partial: Data, -Execution: Data, -Failure: Data, +runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, listeners: Listeners<T.AgentEvent<P, A, G, D, C, Partial, Execution>, Abort.AbortSignal<Unit>, Failure>, error: String, aborted: Bool) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   do IO<Result<&2, &2, DeliveryError<Failure>, Unit>>:
-    stateLocal : T.AgentState<P, A, G, D, C, V, S, E, J> <- readRuntime(P, A, G, D, C, V, S, E, J, runtime)
+    agentState : T.AgentState<P, A, G, D, C, V, S, E, J> <- readRuntime(P, A, G, D, C, V, S, E, J, runtime)
     timestamp : F.F64 <- Date.now()
-    deliver(P, A, G, D, C, V, S, E, J, Partial, Execution, Failure, runtime, listeners, events(P, A, G, D, C, Partial, Execution, fromState(P, A, G, D, C, V, S, E, J, stateLocal, aborted, error, timestamp)), Done{Unit{}})
+    deliver(P, A, G, D, C, V, S, E, J, Partial, Execution, Failure, runtime, listeners, events(P, A, G, D, C, Partial, Execution, fromState(P, A, G, D, C, V, S, E, J, agentState, aborted, error, timestamp)), Done{Unit{}})
 def recover(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Partial: Data, -Execution: Data, -Failure: Data, runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, listeners: Listeners<T.AgentEvent<P, A, G, D, C, Partial, Execution>, Abort.AbortSignal<Unit>, Failure>, run: ActiveRun, result: Result<&2, &2, Failure, Unit>, renderError: Failure -> String) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   match result:
     case Done{_}: IO.pure(Result<&2, &2, DeliveryError<Failure>, Unit>, Done{Unit{}})
@@ -723,7 +723,7 @@ def recover(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data
         aborted : Bool <- Abort.aborted(Unit, signalLife(run))
         handleRunFailure(P, A, G, D, C, V, S, E, J, Partial, Execution, Failure, runtime, listeners, renderError(error), aborted)
 # The prepared run is already claimed. Recovery is awaited as part of that
-# run; even a recovery-listener failure reaches the final stateLocal/idle cleanup.
+# run; even a recovery-listener failure reaches the final state/idle cleanup.
 def runClaimedFailure(-P: Data, -A: Data, -G: Data, -D: Data, -C: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Partial: Data, -Execution: Data, -Failure: Data, -Value: Data, +runtime: OwnedRuntime<P, A, G, D, C, V, S, E, J>, listeners: Listeners<T.AgentEvent<P, A, G, D, C, Partial, Execution>, Abort.AbortSignal<Unit>, Failure>, claimed: Claimed<Value>, execute: Claimed<Value> -> IO(Result<&2, &2, Failure, Unit>), renderError: Failure -> String) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   match claimed:
     case Claimed{+run, value}:
@@ -755,29 +755,29 @@ def signalHooks(-State: Data, lifecycle: Lifecycle<State>) -> IO(Maybe<&2, Hooks
   do IO<Maybe<&2, HooksSignal()>>:
     active : Maybe<&2, ActiveRun> <- activeRun(State, lifecycle)
     return Maybe.map(&2, ActiveRun, HooksSignal(), run => signalLife(run), active)
-def stopBody(-State: Data, -Turn: Data, -Error: Data, capture: StopCapture<State, Turn, Error>, contextLocal: Turn) -> IO(Result<&2, &2, Error, Bool>):
+def stopBody(-State: Data, -Turn: Data, -Error: Data, capture: StopCapture<State, Turn, Error>, turnContext: Turn) -> IO(Result<&2, &2, Error, Bool>):
   match capture:
     case StopCapture{lifecycle, hook}:
       do IO<Result<&2, &2, Error, Bool>>:
         active : Maybe<&2, HooksSignal()> <- signalHooks(State, lifecycle)
-        C.call(T.ToolHookInput<Turn, HooksSignal()>, Result<&2, &2, Error, Bool>, hook, T.ToolHookInput{contextLocal, active})
-def prepareSelected(-State: Data, -Turn: Data, -Update: Data, -Error: Data, lifecycle: Lifecycle<State>, hooks: Hooks<Turn, Update, Error>, contextLocal: Turn) -> IO(PrepareResult(Update, Error)):
+        C.call(T.ToolHookInput<Turn, HooksSignal()>, Result<&2, &2, Error, Bool>, hook, T.ToolHookInput{turnContext, active})
+def prepareSelected(-State: Data, -Turn: Data, -Update: Data, -Error: Data, lifecycle: Lifecycle<State>, hooks: Hooks<Turn, Update, Error>, turnContext: Turn) -> IO(PrepareResult(Update, Error)):
   match hooks:
     case Hooks{_, _, Some{hook}}:
       do IO<PrepareResult(Update, Error)>:
         active : Maybe<&2, HooksSignal()> <- signalHooks(State, lifecycle)
-        C.call(T.ToolHookInput<Turn, HooksSignal()>, PrepareResult(Update, Error), hook, T.ToolHookInput{contextLocal, active})
+        C.call(T.ToolHookInput<Turn, HooksSignal()>, PrepareResult(Update, Error), hook, T.ToolHookInput{turnContext, active})
     case Hooks{_, Some{hook}, None{}}:
       do IO<PrepareResult(Update, Error)>:
         active : Maybe<&2, HooksSignal()> <- signalHooks(State, lifecycle)
         C.call(Maybe<&2, HooksSignal()>, PrepareResult(Update, Error), hook, active)
     case Hooks{_, None{}, None{}}: IO.pure(PrepareResult(Update, Error), Done{None{}})
-def prepareBody(-State: Data, -Turn: Data, -Update: Data, -Error: Data, capture: PrepareCapture<State, Turn, Update, Error>, contextLocal: Turn) -> IO(PrepareResult(Update, Error)):
+def prepareBody(-State: Data, -Turn: Data, -Update: Data, -Error: Data, capture: PrepareCapture<State, Turn, Update, Error>, turnContext: Turn) -> IO(PrepareResult(Update, Error)):
   match capture:
     case PrepareCapture{lifecycle, hooks}:
       do IO<PrepareResult(Update, Error)>:
         selected : Hooks<Turn, Update, Error> <- R.read(Hooks<Turn, Update, Error>, hooks)
-        prepareSelected(State, Turn, Update, Error, lifecycle, selected, contextLocal)
+        prepareSelected(State, Turn, Update, Error, lifecycle, selected, turnContext)
 def createStop(~State: Data, ~Turn: Data, ~Error: Data, lifecycle: Lifecycle<State>, hook: Maybe<&2, StopHook(Turn, Error)>) -> IO(Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>>):
   match hook:
     case None{}: IO.pure(Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>>, None{})
@@ -824,7 +824,7 @@ def disposeHooks(-Turn: Data, -Update: Data, -Error: Data, adapters: Adapters<Tu
 type BindingSteering<-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
   BindingSteering{runtime: OwnedRuntime<P, A, G, D, M, V, S, E, J>, skip: R.Ref<Bool>}
 type BindingPollers<-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data> is Data:
-  BindingPollers{steering: C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>>, followUpLocal: C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>>, skip: R.Ref<Bool>}
+  BindingPollers{steering: C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>>, followUp: C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>>, skip: R.Ref<Bool>}
 def queue(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, runtime: OwnedRuntime<P, A, G, D, M, V, S, E, J>, kind: QueueKind) -> IO(Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>):
   do IO<Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>>:
     messages : List<&2, T.AgentMessage<P, A, G, D, M>> <- drainRuntime(P, A, G, D, M, V, S, E, J, runtime, kind)
@@ -844,40 +844,40 @@ def newBinding(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~M: Data, ~V: Data, ~S: D
   do IO<BindingPollers<P, A, G, D, M, V, S, E, J>>:
     +skip : R.Ref<Bool> <- R.new(Bool, skipInitialSteeringPoll)
     steering : C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>> <- C.create(~BindingSteering<P, A, G, D, M, V, S, E, J>, ~Unit, ~Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, ~(steeringBody(P, A, G, D, M, V, S, E, J)), BindingSteering{runtime, skip})
-    followUpLocal : C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>> <- C.create(~OwnedRuntime<P, A, G, D, M, V, S, E, J>, ~Unit, ~Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, ~(followUpBody(P, A, G, D, M, V, S, E, J)), runtime)
-    return BindingPollers{steering, followUpLocal, skip}
+    followUps : C.Callback<Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>> <- C.create(~OwnedRuntime<P, A, G, D, M, V, S, E, J>, ~Unit, ~Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, ~(followUpBody(P, A, G, D, M, V, S, E, J)), runtime)
+    return BindingPollers{steering, followUps, skip}
 def thinkingReasoning(thinking: T.ThinkingLevel()) -> Maybe<&2, Ai.ThinkingLevel>:
   match thinking:
     case Ai.Off{}: None{}
     case Ai.Thinking{level}: Some{level}
-def context(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, stateLocal: T.AgentState<P, A, G, D, M, V, S, E, J>) -> T.AgentContext<P, A, G, D, M, V, S, E>:
-  match stateLocal:
+def context(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, agentState: T.AgentState<P, A, G, D, M, V, S, E, J>) -> T.AgentContext<P, A, G, D, M, V, S, E>:
+  match agentState:
     case T.AgentState{_, _, tools, messages, _, _, _, _}: T.AgentContext{messages, Some{tools}}
 # Keep the configured options/hooks while taking model/thinking and transcript
 # from one immutable Agent snapshot. The public options adapter builds the base.
-def bind(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, stateLocal: T.AgentState<P, A, G, D, M, V, S, E, J>, base: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>, readers: BindingPollers<P, A, G, D, M, V, S, E, J>) -> T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>:
-  match stateLocal base readers:
-    case T.AgentState{currentModel, thinking, _, _, _, _, _, _} T.AgentLoopConfig{signalLocal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} BindingPollers{steering, followUpLocal, _}:
-      T.AgentLoopConfig{signalLocal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, thinkingReasoning(thinking), deferred, thinkingBudgets, currentModel, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, Some{steering}, Some{followUpLocal}, toolExecution, beforeToolCall, afterToolCall}
+def bind(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agentState: T.AgentState<P, A, G, D, M, V, S, E, J>, base: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>, readers: BindingPollers<P, A, G, D, M, V, S, E, J>) -> T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>:
+  match agentState base readers:
+    case T.AgentState{currentModel, thinking, _, _, _, _, _, _} T.AgentLoopConfig{abortSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} BindingPollers{steering, followUps, _}:
+      T.AgentLoopConfig{abortSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, thinkingReasoning(thinking), deferred, thinkingBudgets, currentModel, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, Some{steering}, Some{followUps}, toolExecution, beforeToolCall, afterToolCall}
 type Snapshot<-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data> is Data:
-  Snapshot{contextLocal: T.AgentContext<P, A, G, D, M, V, S, E>, config: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>}
+  Snapshot{context: T.AgentContext<P, A, G, D, M, V, S, E>, config: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>}
 def snapshotBinding(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, runtime: OwnedRuntime<P, A, G, D, M, V, S, E, J>, base: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>, readers: BindingPollers<P, A, G, D, M, V, S, E, J>) -> IO(Snapshot<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>):
   do IO<Snapshot<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>>:
-    +stateLocal : T.AgentState<P, A, G, D, M, V, S, E, J> <- readRuntime(P, A, G, D, M, V, S, E, J, runtime)
-    return Snapshot{context(P, A, G, D, M, V, S, E, J, stateLocal), bind(P, A, G, D, M, V, S, E, J, Telemetry, Fetch, stateLocal, base, readers)}
+    +agentState : T.AgentState<P, A, G, D, M, V, S, E, J> <- readRuntime(P, A, G, D, M, V, S, E, J, runtime)
+    return Snapshot{context(P, A, G, D, M, V, S, E, J, agentState), bind(P, A, G, D, M, V, S, E, J, Telemetry, Fetch, agentState, base, readers)}
 def disposeBinding(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, readers: BindingPollers<P, A, G, D, M, V, S, E, J>) -> IO(Unit):
   match readers:
-    case BindingPollers{steering, followUpLocal, skip}:
+    case BindingPollers{steering, followUps, skip}:
       do IO<Unit>:
         C.dispose(Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, steering)
-        C.dispose(Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, followUpLocal)
+        C.dispose(Unit, Result<&2, &2, E, List<&2, T.AgentMessage<P, A, G, D, M>>>, followUps)
         ignored : Bool <- R.dispose(Bool, skip)
         return Unit{}
 
 # The run owns these wrappers; public hooks and option storage stay borrowed.
 def applyHooks(-P: Data, -A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -S: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, base: T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>, adapters: Adapters<T.ShouldStopAfterTurnContext<P, A, G, D, M, V, S, E>, T.AgentLoopTurnUpdate<P, A, G, D, M, V, S, E, J>, E>) -> T.AgentLoopConfig<P, A, G, D, M, V, S, E, J, Telemetry, Fetch>:
   match base adapters:
-    case T.AgentLoopConfig{signalLocal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} Adapters{stop, prepare}: T.AgentLoopConfig{signalLocal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, stop, prepare, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{abortSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} Adapters{stop, prepare}: T.AgentLoopConfig{abortSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets, model, convertToLlm, transformContext, getApiKey, stop, prepare, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 
 def RunSignal() -> Data: Abort.AbortSignal<Unit>
@@ -916,8 +916,8 @@ def emitBody(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Dat
       do IO<Loop.Emission<E>>:
         delivery : Loop.Emission<DeliveryError<E>> <- startEvents(Schema.Value, A, G, D, M, V, RunSignal(), E, J, T.AgentToolResult<D>, T.AgentToolResult<D>, E, runtime, listeners, event)
         Loop.startEmission(E, finishEmission(E, fromString, delivery))
-def isAborted(unused: Unit, signalLocal: Maybe<&2, RunSignal()>) -> IO(Bool):
-  match signalLocal:
+def isAborted(unused: Unit, abortSignal: Maybe<&2, RunSignal()>) -> IO(Bool):
+  match abortSignal:
     case None{}: IO.pure(Bool, False{})
     case Some{value}: Abort.aborted(Unit, value)
 def skipInitial(-A: Data, -G: Data, -D: Data, -M: Data, plan: Plan<RunMessage(A, G, D, M)>) -> Bool:
@@ -935,8 +935,8 @@ def allocate(~A: Data, ~G: Data, ~D: Data, ~M: Data, ~V: Data, ~E: Data, ~J: Dat
     return Resources{pollers, emit, sink, cancelled, updates, batches}
 def executePlan(~A: Data, ~G: Data, ~D: Data, ~M: Data, ~V: Data, ~E: Data, ~J: Data, ~Telemetry: Data, ~Fetch: Data, ~renderError: E -> String, ~fromString: String -> E, ~declarationError: Declaration.DeclarationError -> E, plan: Plan<RunMessage(A, G, D, M)>, snapshot: Snapshot<Schema.Value, A, G, D, M, V, RunSignal(), E, J, Telemetry, Fetch>, capture: Loop.EntryCapture<A, G, D, M, V, RunSignal(), E, J, Telemetry, Fetch>) -> IO(Outcome(A, G, D, M, E)):
   match plan snapshot:
-    case Prompt{messages, _} Snapshot{contextLocal, config}: Loop.runAgentLoop(~A, ~G, ~D, ~M, ~V, ~RunSignal(), ~E, ~J, ~Telemetry, ~Fetch, ~renderError, ~declarationError, ~(missing(E, fromString)), messages, contextLocal, config, capture)
-    case Continue{} Snapshot{contextLocal, config}: Loop.runAgentLoopContinue(~A, ~G, ~D, ~M, ~V, ~RunSignal(), ~E, ~J, ~Telemetry, ~Fetch, ~renderError, ~declarationError, ~(missing(E, fromString)), ~(invalidEntry(E, fromString)), contextLocal, config, capture)
+    case Prompt{messages, _} Snapshot{turnContext, config}: Loop.runAgentLoop(~A, ~G, ~D, ~M, ~V, ~RunSignal(), ~E, ~J, ~Telemetry, ~Fetch, ~renderError, ~declarationError, ~(missing(E, fromString)), messages, turnContext, config, capture)
+    case Continue{} Snapshot{turnContext, config}: Loop.runAgentLoopContinue(~A, ~G, ~D, ~M, ~V, ~RunSignal(), ~E, ~J, ~Telemetry, ~Fetch, ~renderError, ~declarationError, ~(missing(E, fromString)), ~(invalidEntry(E, fromString)), turnContext, config, capture)
 def execute(~A: Data, ~G: Data, ~D: Data, ~M: Data, ~V: Data, ~E: Data, ~J: Data, ~Telemetry: Data, ~Fetch: Data, ~renderError: E -> String, ~fromString: String -> E, ~declarationError: Declaration.DeclarationError -> E, runtime: RunRuntime(A, G, D, M, V, E, J), options: Options<A, G, D, M, V, E, J, Telemetry, Fetch>, resources: Resources<A, G, D, M, V, E, J>, claimed: Claimed<Plan<RunMessage(A, G, D, M)>>) -> IO(Outcome(A, G, D, M, E)):
   match options resources claimed:
     case Options{base, provider, validate, emptyDetails} Resources{pollers, emit, sink, cancelled, updates, batches} Claimed{run, plan}:
@@ -1484,7 +1484,7 @@ def getAfterToolCall(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data,
 
 def changedShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: TurnHooks(A, G, D, M, V, E, J), value: Maybe<&2, StopHook(Turn(A, G, D, M, V, E), E)>) -> TurnHooks(A, G, D, M, V, E, J) & Unit:
   match hooks:
-    case Hooks{_, legacy, contextLocal}: (Hooks{value, legacy, contextLocal}, Unit{})
+    case Hooks{_, legacy, turnContext}: (Hooks{value, legacy, turnContext}, Unit{})
 def setShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, StopHook(Turn(A, G, D, M, V, E), E)>) -> IO(Unit):
   match agent:
     case Agent{_, _, _, hooks, _, _}: R.modify(TurnHooks(A, G, D, M, V, E, J), Unit, hooks, current => changedShouldStopAfterTurn(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))
@@ -1500,7 +1500,7 @@ def getShouldStopAfterTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E:
 
 def changedPrepareNextTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, hooks: TurnHooks(A, G, D, M, V, E, J), value: Maybe<&2, LegacyHook(Update(A, G, D, M, V, E, J), E)>) -> TurnHooks(A, G, D, M, V, E, J) & Unit:
   match hooks:
-    case Hooks{stop, _, contextLocal}: (Hooks{stop, value, contextLocal}, Unit{})
+    case Hooks{stop, _, turnContext}: (Hooks{stop, value, turnContext}, Unit{})
 def setPrepareNextTurn(-A: Data, -G: Data, -D: Data, -M: Data, -V: Data, -E: Data, -J: Data, -Telemetry: Data, -Fetch: Data, agent: Agent<A, G, D, M, V, E, J, Telemetry, Fetch>, value: Maybe<&2, LegacyHook(Update(A, G, D, M, V, E, J), E)>) -> IO(Unit):
   match agent:
     case Agent{_, _, _, hooks, _, _}: R.modify(TurnHooks(A, G, D, M, V, E, J), Unit, hooks, current => changedPrepareNextTurn(A, G, D, M, V, E, J, Telemetry, Fetch, current, value))

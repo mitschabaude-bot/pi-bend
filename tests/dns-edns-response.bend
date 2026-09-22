@@ -77,7 +77,7 @@ def direct(result: Result<&2, &2, Name.DomainNameError, Name.Packet>, start: U32
 def args(values: List<String>) -> IO(Unit):
   match values:
     case data <> Nil{}: parsed(Message.parse(unhex(data, Nil{})))
-    case data <> start <> length <> kind <> class <> Nil{}: direct(Name.packet(unhex(data, Nil{})), Scalar.decimal(start, 0), Scalar.decimal(length, 0), Scalar.decimal(kind, 0), Scalar.decimal(class, 0))
+    case data <> start <> length <> kind <> class <> Nil{}: direct(Name.parsePacket(unhex(data, Nil{})), Scalar.decimal(start, 0), Scalar.decimal(length, 0), Scalar.decimal(kind, 0), Scalar.decimal(class, 0))
     case _: IO.die(Unit, 1, "expected packet hex or bytes start length kind class")
 
 def main() -> IO(Unit):

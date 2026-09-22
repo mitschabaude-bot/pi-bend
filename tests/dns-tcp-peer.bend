@@ -52,9 +52,9 @@ def exchange(+route: Peer.Route, connection: TCP.Connection<String>) -> IO(Unit)
     connection : TCP.Connection<String> <- Test.send(connection, 1)
     connection : TCP.Connection<String> <- Test.send(connection, 2)
     next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 3)
-    connection : TCP.Connection<String> <- frame(route, Peer.transaction(route, 2, 0, Message.Question{Name.Name{Nil{}}, 1, 1}), next)
+    connection : TCP.Connection<String> <- frame(route, Peer.buildTransaction(route, 2, 0, Message.Question{Name.Name{Nil{}}, 1, 1}), next)
     next : TCP.Next<String> <- TCP.receiveTcpConnection(String, connection, 3)
-    connection : TCP.Connection<String> <- frame(route, Peer.transaction(route, 1, 0, Message.Question{Name.Name{Nil{}}, 1, 1}), next)
+    connection : TCP.Connection<String> <- frame(route, Peer.buildTransaction(route, 1, 0, Message.Question{Name.Name{Nil{}}, 1, 1}), next)
     Test.finished("eof", connection)
 
 def opened(result: Result<&2, &1, Peer.TcpPeerError<String>, Peer.Peer<String>>) -> IO(Unit):

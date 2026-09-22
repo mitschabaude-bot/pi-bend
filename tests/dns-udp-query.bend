@@ -26,7 +26,7 @@ def request(+mode: String) -> Request.Request:
 
 def outcome(result: Result<&2, &2, Query.UdpQueryError<Deadline.Cause<Deadline.Cause<String>>>, Query.UdpQueryReply>) -> String:
   match result:
-    case Done{Query.UdpQueryAnswer{Message.Message{+packet, Message.Header{_, flags, _, _, _, _}, _, _, _, _}}}: "answer:" ++ U32.show(flags) ++ ":" ++ U32.show(Message.size(packet)) ++ ":" ++ U32.show(Name.byte(packet, (Message.size(packet) - 1 : U32)))
+    case Done{Query.UdpQueryAnswer{Message.Message{+packet, Message.Header{_, flags, _, _, _, _}, _, _, _, _}}}: "answer:" ++ U32.show(flags) ++ ":" ++ U32.show(Message.packetSize(packet)) ++ ":" ++ U32.show(Name.byteAt(packet, (Message.packetSize(packet) - 1 : U32)))
     case Done{Query.UdpQueryTruncated{_}}: "truncated"
     case Fail{Query.UdpQueryEncoding{_}}: "invalid"
     case Fail{Query.Opening{Peer.Association{code, _}}}: "association:" ++ U32.show(code)

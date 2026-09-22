@@ -47,7 +47,7 @@ def closeUdpAttemptScope(-Reason: Data, scope: Deadline.Scope<Deadline.Cause<Rea
 
 type UdpQueryReply is Data:
   UdpQueryAnswer{message: Message.Message}
-  UdpQueryTruncated{headerLocal: Message.Header}
+  UdpQueryTruncated{header: Message.Header}
 
 type UdpQueryError<-Reason: Data> is Data:
   UdpQueryEncoding{error: Message.EdnsError}
@@ -74,7 +74,7 @@ type UdpQueryReading<-Reason: Data> is Type:
 def inspectedUdpQuery(-Reason: Data, socket: Socket, decision: Message.Decision) -> UdpQueryReading<Reason>:
   match decision:
     case Message.Ignore{_}: UdpQueryContinue{socket}
-    case Message.ResponseTruncated{headerLocal}: UdpQueryFinish{socket, Done{UdpQueryTruncated{headerLocal}}}
+    case Message.ResponseTruncated{header}: UdpQueryFinish{socket, Done{UdpQueryTruncated{header}}}
     case Message.Matched{message}: UdpQueryFinish{socket, Done{UdpQueryAnswer{message}}}
 
 def receivedUdpQuery(-Reason: Data, expected: Message.Transaction, local: Endpoint.Endpoint, pair: Socket & Result<&2, &2, Datagram.DatagramError<Reason>, Datagram.Packet>) -> UdpQueryReading<Reason>:
@@ -139,7 +139,7 @@ def preparedUdpQuery(-Reason: Data, destination: Endpoint.Endpoint, +signal: Abo
 def exchangeRequestUdpQuery(-Reason: Data, destination: Endpoint.Endpoint, signal: Abort.AbortSignal<Reason>, +request: Message.Request) -> IO(Result<&2, &2, UdpQueryError<Reason>, UdpQueryReply>):
   preparedUdpQuery(Reason, destination, signal, request, encode(request))
 
-# This policy runs only after transactionLocal matching. A retryable RCODE takes
+# This policy runs only after transaction matching. A retryable RCODE takes
 # precedence over truncation. Complete messages use validated EDNS status.
 type Status is Data:
   Success{}
@@ -192,9 +192,9 @@ def headerCode(code: U32, value: Message.Header, ignoreTruncation: Bool) -> UdpP
     case Message.Header{_, +flags, _, answers, _, additional}:
       decide(statusUdpPolicy(code), U32.is_eq(answers, 0) && U32.is_eq(U32.and(flags, 1152), 0) && U32.is_eq(additional, 0), U32.is_ne(U32.and(flags, 512), 0), ignoreTruncation)
 
-# Only a validated truncated headerLocal is available on the incomplete-message
+# Only a validated truncated header is available on the incomplete-message
 # path. Complete responses instead enter message() to validate the OPT record.
-def header(+value: Message.Header, ignoreTruncation: Bool) -> UdpPolicyDecision:
+def headerPolicy(+value: Message.Header, ignoreTruncation: Bool) -> UdpPolicyDecision:
   headerCode(Message.responseCode(value, None{}), value, ignoreTruncation)
 
 def inspectedUdpPolicy(+fields: Message.Header, ignoreTruncation: Bool, extension: Result<&2, &2, Message.EdnsResponseError, Maybe<&2, Message.Response>>) -> Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>:
@@ -211,7 +211,7 @@ def messageUdpPolicy(+value: Message.Message, ignoreTruncation: Bool) -> Result<
 
 type UdpServersFailure<-Reason: Data> is Data:
   InvalidExtension{error: Message.EdnsResponseError}
-  UdpServersRejected{headerLocal: Message.Header, reason: UdpPolicyRejection}
+  UdpServersRejected{header: Message.Header, reason: UdpPolicyRejection}
   InvalidDestination{}
   InvalidBudget{error: Plan.MillisecondsError}
   Exchange{error: UdpQueryError<Deadline.Cause<Deadline.Cause<Reason>>>}
@@ -256,34 +256,34 @@ def failedUdpServers(-Reason: Data, endpoint: Endpoint.Endpoint, +error: UdpQuer
     case UnexpectedDefaultAbort{}: UdpServersStop{UdpServersReport{endpoint, Exchange{error}, UnexpectedDefaultAbort{}}}
     case other: retryUdpServers(Reason, retryableUdpServers(Reason, error), UdpServersReport{endpoint, Exchange{error}, other})
 
-def rejected(-Reason: Data, endpoint: Endpoint.Endpoint, headerLocal: Message.Header, reason: UdpPolicyRejection, end: End<Reason>) -> UdpServersDecision<Reason>:
+def rejected(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reason: UdpPolicyRejection, end: End<Reason>) -> UdpServersDecision<Reason>:
   match end:
-    case ParentAborted{why}: UdpServersStop{UdpServersReport{endpoint, UdpServersRejected{headerLocal, reason}, ParentAborted{why}}}
-    case UnexpectedDefaultAbort{}: UdpServersStop{UdpServersReport{endpoint, UdpServersRejected{headerLocal, reason}, UnexpectedDefaultAbort{}}}
-    case other: UdpServersNext{Some{UdpServersReport{endpoint, UdpServersRejected{headerLocal, reason}, other}}}
+    case ParentAborted{why}: UdpServersStop{UdpServersReport{endpoint, UdpServersRejected{header, reason}, ParentAborted{why}}}
+    case UnexpectedDefaultAbort{}: UdpServersStop{UdpServersReport{endpoint, UdpServersRejected{header, reason}, UnexpectedDefaultAbort{}}}
+    case other: UdpServersNext{Some{UdpServersReport{endpoint, UdpServersRejected{header, reason}, other}}}
 
-def selectedUdpServers(-Reason: Data, endpoint: Endpoint.Endpoint, headerLocal: Message.Header, reply: UdpQueryReply, end: End<Reason>, decision: UdpPolicyDecision) -> UdpServersDecision<Reason>:
+def selectedUdpServers(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reply: UdpQueryReply, end: End<Reason>, decision: UdpPolicyDecision) -> UdpServersDecision<Reason>:
   match decision:
-    case Retry{reason}: rejected(Reason, endpoint, headerLocal, reason, end)
+    case Retry{reason}: rejected(Reason, endpoint, header, reason, end)
     case _: UdpServersAnswer{UdpServersReply{endpoint, reply}}
 
 def responseHeader(reply: UdpQueryReply) -> Message.Header:
   match reply:
-    case UdpQueryTruncated{headerLocal}: headerLocal
-    case UdpQueryAnswer{Message.Message{_, headerLocal, _, _, _, _}}: headerLocal
+    case UdpQueryTruncated{header}: header
+    case UdpQueryAnswer{Message.Message{_, header, _, _, _, _}}: header
 
 def disposition(reply: UdpQueryReply) -> Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>:
   match reply:
     case UdpQueryAnswer{message}: messageUdpPolicy(message, False{})
-    case UdpQueryTruncated{headerLocal}: Done{header(headerLocal, False{})}
+    case UdpQueryTruncated{header}: Done{headerPolicy(header, False{})}
 
-def assessed(-Reason: Data, endpoint: Endpoint.Endpoint, headerLocal: Message.Header, reply: UdpQueryReply, end: End<Reason>, result: Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>) -> UdpServersDecision<Reason>:
+def assessed(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, reply: UdpQueryReply, end: End<Reason>, result: Result<&2, &2, Message.EdnsResponseError, UdpPolicyDecision>) -> UdpServersDecision<Reason>:
   match result:
     case Fail{error}: UdpServersStop{UdpServersReport{endpoint, InvalidExtension{error}, end}}
-    case Done{decision}: selectedUdpServers(Reason, endpoint, headerLocal, reply, end, decision)
+    case Done{decision}: selectedUdpServers(Reason, endpoint, header, reply, end, decision)
 
-def answered(-Reason: Data, endpoint: Endpoint.Endpoint, headerLocal: Message.Header, +reply: UdpQueryReply, end: End<Reason>) -> UdpServersDecision<Reason>:
-  assessed(Reason, endpoint, headerLocal, reply, end, disposition(reply))
+def answered(-Reason: Data, endpoint: Endpoint.Endpoint, header: Message.Header, +reply: UdpQueryReply, end: End<Reason>) -> UdpServersDecision<Reason>:
+  assessed(Reason, endpoint, header, reply, end, disposition(reply))
 
 # An accepted reply remains a reply even when scope
 # closure observes a later expiry. UdpServersFailed attempts retain cleanup-time reasons.
@@ -457,7 +457,7 @@ def sendFrame(-Reason: Data, connection: Connection<Reason>, result: Result<&2, 
 
 # Encoding failure leaves the connection untouched. A transport write failure
 # may follow a partial write; the caller must close rather than retry that frame.
-# Multiple sends before receive support pipelining; transactionLocal IDs are managed
+# Multiple sends before receive support pipelining; transaction IDs are managed
 # above this layer, and frames are returned in their actual arrival order.
 def send(-Reason: Data, connection: Connection<Reason>, bytes: List<&2, U32>) -> IO(Connection<Reason> & Result<&2, &2, TcpConnectionError<Reason>, Unit>):
   sendFrame(Reason, connection, Message.encodeTcpFrame(bytes))
@@ -513,7 +513,7 @@ def createTcpPeer(-Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reaso
     result : Socket & Result<&2, &2, Endpoint.EndpointError, Endpoint.Endpoint> <- Endpoint.get(socket, Endpoint.Local{})
     localTcpPeer(Reason, signal, result)
 
-def transaction(route: Route, id: U32, opcode: U32, question: Message.Question) -> Message.Transaction:
+def buildTransaction(route: Route, id: U32, opcode: U32, question: Message.Question) -> Message.Transaction:
   match route:
     case Route{sentFrom, sentTo}: Message.Transaction{sentFrom, sentTo, id, opcode, question}
 
@@ -531,10 +531,10 @@ type Ticket is Data:
   Ticket{id: U32, serial: U32}
 
 type Entry<-Token: Data> is Data:
-  Entry{transactionLocal: Message.Transaction, token: Token, ticket: Ticket}
+  Entry{transaction: Message.Transaction, token: Token, ticket: Ticket}
 
 type Pending<-Token: Data> is Data:
-  Pending{entriesLocal: Map<&2, Entry<Token>>, next: Maybe<&2, U32>}
+  Pending{entries: Map<&2, Entry<Token>>, next: Maybe<&2, U32>}
 
 type RegistrationError is Data:
   InvalidId{}
@@ -552,7 +552,7 @@ type Rejection is Data:
 type Delivery<-Token: Data> is Data:
   Ignored{reason: Rejection}
   Answer{token: Token, message: Message.Message}
-  Truncated{token: Token, headerLocal: Message.Header}
+  Truncated{token: Token, header: Message.Header}
 
 type Received<-Token: Data> is Data:
   Received{pending: Pending<Token>, delivery: Delivery<Token>}
@@ -570,29 +570,29 @@ def nextSerial(last: Bool, value: U32) -> Maybe<&2, U32>:
 
 def inserted(-Token: Data, +serial: U32, +ticket: Ticket, key: String, entry: Entry<Token>, pair: Map<&2, Entry<Token>> & Bool) -> Registered<Token>:
   match pair:
-    case (entriesLocal, True{}): Registered{Pending{entriesLocal, Some{serial}}, Fail{DuplicateId{}}}
-    case (entriesLocal, False{}): Registered{Pending{Map.set(&2, Entry<Token>, entriesLocal, key, entry), nextSerial(U32.is_eq(serial, 4294967295), serial)}, Done{ticket}}
+    case (pendingEntries, True{}): Registered{Pending{pendingEntries, Some{serial}}, Fail{DuplicateId{}}}
+    case (pendingEntries, False{}): Registered{Pending{Map.set(&2, Entry<Token>, pendingEntries, key, entry), nextSerial(U32.is_eq(serial, 4294967295), serial)}, Done{ticket}}
 
-def registerId(-Token: Data, valid: Bool, pending: Pending<Token>, +id: U32, transactionLocal: Message.Transaction, token: Token) -> Registered<Token>:
+def registerId(-Token: Data, valid: Bool, pending: Pending<Token>, +id: U32, transaction: Message.Transaction, token: Token) -> Registered<Token>:
   match valid pending:
     case False{} pending: Registered{pending, Fail{InvalidId{}}}
-    case True{} Pending{entriesLocal, None{}}: Registered{Pending{entriesLocal, None{}}, Fail{Exhausted{}}}
-    case True{} Pending{entriesLocal, Some{+serial}}: inserted(Token, serial, Ticket{id, serial}, Message.key(id), Entry{transactionLocal, token, Ticket{id, serial}}, Map.has(&2, Entry<Token>, entriesLocal, Message.key(id)))
+    case True{} Pending{pendingEntries, None{}}: Registered{Pending{pendingEntries, None{}}, Fail{Exhausted{}}}
+    case True{} Pending{pendingEntries, Some{+serial}}: inserted(Token, serial, Ticket{id, serial}, Message.key(id), Entry{transaction, token, Ticket{id, serial}}, Map.has(&2, Entry<Token>, pendingEntries, Message.key(id)))
 
 # Register before sending. Duplicate IDs never replace an outstanding query.
 # Random ID allocation, retries and deadlines belong to the transport driver.
-def register(-Token: Data, pending: Pending<Token>, transactionLocal: Message.Transaction, token: Token) -> Registered<Token>:
-  match transactionLocal:
+def register(-Token: Data, pending: Pending<Token>, transaction: Message.Transaction, token: Token) -> Registered<Token>:
+  match transaction:
     case Message.Transaction{from, to, +id, opcode, question}: registerId(Token, U32.is_le(id, 65535), pending, id, Message.Transaction{from, to, id, opcode, question}, token)
 
 def removed(-Token: Data, next: Maybe<&2, U32>, pair: Map<&2, Entry<Token>> & Maybe<&2, Entry<Token>>) -> Removed<Token>:
   match pair:
-    case (entriesLocal, entry): Removed{Pending{entriesLocal, next}, entry}
+    case (pendingEntries, entry): Removed{Pending{pendingEntries, next}, entry}
 
 def removeId(-Token: Data, valid: Bool, pending: Pending<Token>, id: U32) -> Removed<Token>:
   match valid pending:
     case False{} pending: Removed{pending, None{}}
-    case True{} Pending{entriesLocal, next}: removed(Token, next, Map.pop(&2, Entry<Token>, entriesLocal, Message.key(id)))
+    case True{} Pending{pendingEntries, next}: removed(Token, next, Map.pop(&2, Entry<Token>, pendingEntries, Message.key(id)))
 
 # The owner serializes registration/removal; an ID alone is not a capability
 # for cancelling a later query after that ID has been reused.
@@ -603,19 +603,19 @@ def decided(-Token: Data, original: Pending<Token>, remaining: Pending<Token>, t
   match decision:
     case Message.Ignore{reason}: Received{original, Ignored{Mismatch{reason}}}
     case Message.Matched{message}: Received{remaining, Answer{token, message}}
-    case Message.ResponseTruncated{headerLocal}: Received{remaining, Truncated{token, headerLocal}}
+    case Message.ResponseTruncated{header}: Received{remaining, Truncated{token, header}}
 
 def selectedPending(-Token: Data, original: Pending<Token>, id: U32, source: Message.Endpoint, destination: Message.Endpoint, wire: List<&2, U32>, value: Removed<Token>) -> Received<Token>:
   match value:
     case Removed{_, None{}}: Received{original, Ignored{UnknownId{id}}}
-    case Removed{remaining, Some{Entry{transactionLocal, token, _}}}: decided(Token, original, remaining, token, Message.inspectStream(transactionLocal, source, destination, wire))
+    case Removed{remaining, Some{Entry{transaction, token, _}}}: decided(Token, original, remaining, token, Message.inspectStream(transaction, source, destination, wire))
 
 def identified(-Token: Data, valid: Bool, +pending: Pending<Token>, +id: U32, source: Message.Endpoint, destination: Message.Endpoint, wire: List<&2, U32>) -> Received<Token>:
   match valid:
     case False{}: Received{pending, Ignored{MissingId{}}}
     case True{}: selectedPending(Token, pending, id, source, destination, wire, remove(Token, pending, id))
 
-# Read only the two ID octets to choose the expected transactionLocal. The existing
+# Read only the two ID octets to choose the expected transaction. The existing
 # matcher then validates the complete response once. Ignored frames leave the
 # table unchanged; accepted replies/truncation settle precisely one entry.
 def receive(-Token: Data, pending: Pending<Token>, source: Message.Endpoint, destination: Message.Endpoint, wire: List<&2, U32>) -> Received<Token>:
@@ -625,14 +625,14 @@ def receive(-Token: Data, pending: Pending<Token>, source: Message.Endpoint, des
 
 # Connection-wide settlement returns every still-pending correlation exactly
 # once to the driver. Ordering is deliberately not a request-order guarantee.
-def values(-Token: Data, entriesLocal: List<&2, Sigma<&2, &2, String, _ => Entry<Token>>>, reversed: List<&2, Entry<Token>>) -> List<&2, Entry<Token>>:
-  match entriesLocal:
+def values(-Token: Data, pendingEntries: List<&2, Sigma<&2, &2, String, _ => Entry<Token>>>, reversed: List<&2, Entry<Token>>) -> List<&2, Entry<Token>>:
+  match pendingEntries:
     case Nil{}: List.reverse(&2, Entry<Token>, reversed)
     case (_, entry) <> rest: values(Token, rest, entry <> reversed)
 
 def drain(-Token: Data, pending: Pending<Token>) -> List<&2, Entry<Token>>:
   match pending:
-    case Pending{entriesLocal, _}: values(Token, Map.to_list(&2, Entry<Token>, entriesLocal), Nil{})
+    case Pending{pendingEntries, _}: values(Token, Map.to_list(&2, Entry<Token>, pendingEntries), Nil{})
 
 
 def cancelMatch(-Token: Data, equal: Bool, original: Pending<Token>, remaining: Pending<Token>, entry: Entry<Token>) -> Removed<Token>:
@@ -643,7 +643,7 @@ def cancelMatch(-Token: Data, equal: Bool, original: Pending<Token>, remaining: 
 def cancelled(-Token: Data, original: Pending<Token>, serial: U32, value: Removed<Token>) -> Removed<Token>:
   match value:
     case Removed{_, None{}}: Removed{original, None{}}
-    case Removed{remaining, Some{Entry{transactionLocal, token, Ticket{id, +actual}}}}: cancelMatch(Token, U32.is_eq(serial, actual), original, remaining, Entry{transactionLocal, token, Ticket{id, actual}})
+    case Removed{remaining, Some{Entry{transaction, token, Ticket{id, +actual}}}}: cancelMatch(Token, U32.is_eq(serial, actual), original, remaining, Entry{transaction, token, Ticket{id, actual}})
 
 # Stale or repeated cancellation is a no-op, including after ID reuse. This
 # does not retract bytes already sent or prevent an indistinguishable delayed
@@ -702,7 +702,7 @@ def registered(-Reason: Data, -Token: Data, route: Route, connection: Connection
 def encoded(-Reason: Data, -Token: Data, +route: Route, connection: Connection<Reason>, pending: Pending<Token>, id: U32, flags: U32, question: Message.Question, token: Token, result: Result<&2, &2, Message.Error, List<&2, U32>>) -> IO(TcpSessionStep<Reason, Token>):
   match result:
     case Fail{error}: IO.pure(TcpSessionStep<Reason, Token>, TcpSessionStep{Session{route, connection, pending, None{}}, Rejected{Query{error}}})
-    case Done{wire}: registered(Reason, Token, route, connection, wire, register(Token, pending, transaction(route, id, (flags / 2048 % 16 : U32), question), token))
+    case Done{wire}: registered(Reason, Token, route, connection, wire, register(Token, pending, buildTransaction(route, id, (flags / 2048 % 16 : U32), question), token))
 
 # The affine session serializes operations. Several queries can be submitted
 # before receiving; registration precedes the first byte written. A failed
@@ -763,7 +763,7 @@ def receiveTcpSession(-Reason: Data, -Token: Data, session: Session<Reason, Toke
     case size: readTcpSession(Reason, Token, session, size)
 
 # Close is required even after TcpSessionEnded. It joins the connection watcher and
-# returns any unsettled entriesLocal rather than silently abandoning callers.
+# returns any unsettled entries rather than silently abandoning callers.
 def closeTcpSession(-Reason: Data, -Token: Data, session: Session<Reason, Token>) -> IO(Closed<Token>):
   match session:
     case Session{_, connection, pending, _}:
@@ -784,7 +784,7 @@ def cancelTcpSession(-Reason: Data, -Token: Data, session: Session<Reason, Token
 
 type Reply is Data:
   TcpQueryAnswer{message: Message.Message}
-  TcpQueryTruncated{headerLocal: Message.Header}
+  TcpQueryTruncated{header: Message.Header}
 
 type TcpQueryError<-Reason: Data> is Data:
   TcpQueryInvalidReadSize{}
@@ -819,7 +819,7 @@ def receivedTcpQuery(-Reason: Data, step: TcpSessionStep<Deadline.Cause<Reason>,
   match step:
     case TcpSessionStep{session, Response{Ignored{_}}}: TcpQueryContinue{session}
     case TcpSessionStep{session, Response{Answer{_, message}}}: Finish{session, Done{TcpQueryAnswer{message}}}
-    case TcpSessionStep{session, Response{Truncated{_, headerLocal}}}: Finish{session, Done{TcpQueryTruncated{headerLocal}}}
+    case TcpSessionStep{session, Response{Truncated{_, header}}}: Finish{session, Done{TcpQueryTruncated{header}}}
     case TcpSessionStep{session, TcpSessionEnded{failure, _}}: Finish{session, Fail{Terminated{failure}}}
     case TcpSessionStep{session, Rejected{error}}: Finish{session, Fail{Submission{error}}}
     case TcpSessionStep{session, _}: Finish{session, Fail{InvalidState{}}}

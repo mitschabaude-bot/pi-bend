@@ -17,7 +17,7 @@ def cases(values: List<String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case flags <> answers <> additional <> ignore <> +other <> rest:
       do IO<Unit>:
-        IO.print(show(Policy.header(Message.Header{Scalar.decimal(other, 0), Scalar.decimal(flags, 0), Scalar.decimal(other, 0), Scalar.decimal(answers, 0), Scalar.decimal(other, 0), Scalar.decimal(additional, 0)}, String.eq(ignore, "1"))))
+        IO.print(show(Policy.headerPolicy(Message.Header{Scalar.decimal(other, 0), Scalar.decimal(flags, 0), Scalar.decimal(other, 0), Scalar.decimal(answers, 0), Scalar.decimal(other, 0), Scalar.decimal(additional, 0)}, String.eq(ignore, "1"))))
         cases(rest)
     case _: IO.die(Unit, 1, "expected groups: flags answers additional ignore other")
 
