@@ -1,0 +1,69 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -223,6 +223,17 @@
+ def IO.unixMilliseconds() -> IO(U32 & U32):
+   import "./effs/unix_milliseconds.c"
+   import "./effs/unix_milliseconds.js"
++
++# Local civil time under the host TZ, with one-based month/day and seconds 0..60.
++# Years outside U32 fail with EOVERFLOW; no path/string formatting in this effect.
++type LocalTime is Data:
++  LocalTime{year: U32, month: U32, day: U32, hour: U32, minute: U32, second: U32}
++def Clock.localTime() -> IO(Result<&1,&1,U32 & String,LocalTime>):
++  import "./effs/clock_local_time.c"
++  import "./effs/clock_local_time.js"
++def Process.id() -> IO(U32):
++  import "./effs/process_id.c"
++  import "./effs/process_id.js"
+ 
+ # Whether a file descriptor (0 stdin, 1 stdout, 2 stderr) is a terminal.
+ def IO.isTerminal(descriptor: U32) -> IO(Bool):
+--- /dev/null
++++ b/bend2/effs/process_id.c
+@@ -0,0 +1,4 @@
++Term process_id_run(Env e, Term* f, IoWork* w) {
++  return (u32)getpid();
++}
++static void __attribute__((constructor)) process_id_use(void) { io_eff(CID_PROCESS_ID,process_id_run,0); }
+--- /dev/null
++++ b/bend2/effs/process_id.js
+@@ -0,0 +1 @@
++function process_id() { return process.pid; }
+--- /dev/null
++++ b/bend2/effs/clock_local_time.c
+@@ -0,0 +1,27 @@
++#include <time.h>
++static void clock_localtime_call(IoWork* w) {
++  struct timespec now;
++  struct tm* local=(struct tm*)w->data;
++  w->code=0;
++  if (clock_gettime(CLOCK_REALTIME,&now)<0) { w->code=errno; return; }
++  errno=0;
++  if (!localtime_r(&now.tv_sec,local)) { w->code=errno ? errno : EOVERFLOW; return; }
++  int64_t year=(int64_t)local->tm_year+1900;
++  if (year<0 || year>UINT32_MAX) { w->code=EOVERFLOW; return; }
++  w->word=(u32)year;
++}
++static Term clock_localtime_pack(Env e, IoWork* w) {
++  if (w->code) { free(w->data); return io_fail(e,w->code,NULL); }
++  struct tm* local=(struct tm*)w->data;
++  Loc at=heap_alloc(e,cls_fit(6));
++  e.mem[at]=w->word; e.mem[at+1]=(u32)local->tm_mon+1;
++  e.mem[at+2]=(u32)local->tm_mday; e.mem[at+3]=(u32)local->tm_hour;
++  e.mem[at+4]=(u32)local->tm_min; e.mem[at+5]=(u32)local->tm_sec;
++  free(w->data);
++  return io_done(e,term_ctr(CID_LOCALTIME,at));
++}
++Term clock_localtime_run(Env e, Term* f, IoWork* w) {
++  w->data=io_mem(malloc(sizeof(struct tm)));
++  return io_work(w,clock_localtime_call,clock_localtime_pack);
++}
++static void __attribute__((constructor)) clock_localtime_use(void) { io_eff(CID_CLOCK_LOCALTIME,clock_localtime_run,0); }
+--- /dev/null
++++ b/bend2/effs/clock_local_time.js
+@@ -0,0 +1,5 @@
++function clock_localtime() {
++  const now=new Date(), year=now.getFullYear();
++  if (!Number.isFinite(now.getTime()) || year<0 || year>0xffffffff) return io_fail(75);
++  return io_done({$: 'LocalTime',year,month:now.getMonth()+1,day:now.getDate(),hour:now.getHours(),minute:now.getMinutes(),second:now.getSeconds()});
++}
