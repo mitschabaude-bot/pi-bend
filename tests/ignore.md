@@ -29,3 +29,5 @@ python3 tests/ignore_check.py -- bun build/ignore.js -- --
 python3 tests/ignore_check.py -- build/ignore --threads 1 --
 python3 tests/ignore_check.py -- build/ignore --threads 4 --
 ```
+
+`testEntry(matcher, path, isDirectory)` matches only the given relative entry, without a trailing slash. It preserves rule ordering and directory-only rules but does not reject matches because an ancestor was excluded. Native directory walkers perform that pruning themselves; this distinction permits an explicitly selected search root inside an ignored directory. Five focused contracts cover ignored/unignored descendants and file-versus-directory treatment, alongside the unchanged full matcher suite on all three backends.

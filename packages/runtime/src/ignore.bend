@@ -166,6 +166,21 @@ def testSplit(matcher: Matcher,path: String,parts: List<&2,String>) -> Result<&2
     case parts: testParts(matcher,path,parts,False{})
 def test(matcher: Matcher,+path: String) -> Result<&2,&2,Error,Decision>:
   testSplit(matcher,path,List.reverse(&2,String,S.split(path,'/')))
+# Directory walkers already prune excluded ancestors. Matching only this entry
+# also allows an explicitly selected search root inside an ignored directory.
+def entryWalk(parts: List<&2,String>,state: WalkState,+directory: Bool,+insensitive: Bool) -> Decision:
+  match parts state:
+    case Nil{} WalkState{_,decision}: Maybe.default(&2,Decision,decision,Decision{False{},False{}})
+    case part <> Nil{} WalkState{cursors,_}: entryWalk(Nil{},advanceCursors(cursors,part,directory,insensitive,Nil{},None{}),directory,insensitive)
+    case part <> rest WalkState{cursors,_}: entryWalk(rest,advanceCursors(cursors,part,True{},insensitive,Nil{},None{}),directory,insensitive)
+def entryParts(matcher: Matcher,+path: String,+parts: List<&2,String>,directory: Bool) -> Result<&2,&2,Error,Decision>:
+  match matcher:
+    case Matcher{insensitive,rules}:
+      Bool.pick(Unit -> Result<&2,&2,Error,Decision>,validParts(parts) && Bool.not(S.equal(path,"")) && Bool.not(hasNul(path)),
+        _ => Done{entryWalk(parts,WalkState{initialCursors(rules,Nil{}),None{}},directory,insensitive)},_ => Fail{InvalidPath{path}})(Unit{})
+# Path is relative to the matcher root, without a trailing slash.
+def testEntry(matcher: Matcher,+path: String,directory: Bool) -> Result<&2,&2,Error,Decision>:
+  entryParts(matcher,path,S.split(path,'/'),directory)
 def ignores(matcher: Matcher,path: String) -> Result<&2,&2,Error,Bool>:
   Result.map(&2,&2,Error,Decision,Bool,isIgnored,test(matcher,path))
 
