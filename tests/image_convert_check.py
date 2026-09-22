@@ -59,6 +59,16 @@ for w, h in [(1, 1), (1, 7), (9, 1), (2, 3), (7, 9), (16, 13)]:
     for kind, image in [('png', png(w, h, rgba)), ('bmp', bmp(w, h, rgba, False)), ('bmp', bmp(w, h, rgba, True))]:
         fixtures.append((w, h, kind, image))
 
+# Exercise GIF conversion, including its transparent palette entry. Broader
+# LZW/frame/interlace behavior is covered by the standalone GIF oracle suite.
+for transparent in [False, True]:
+    image = (b'GIF89a' + struct.pack('<HHBBB', 1, 1, 128, 0, 0)
+             + bytes([20, 40, 60, 255, 255, 255])
+             + (bytes([33, 249, 4, 1, 0, 0, 0, 0]) if transparent else b'')
+             + b',' + struct.pack('<HHHHB', 0, 0, 1, 1, 0)
+             + bytes([2, 2, 68, 1, 0, 59]))
+    fixtures.append((1, 1, 'gif', image))
+
 
 def run_backend(backend, requests):
     prefix = ROOT / args.prefix
