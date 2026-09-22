@@ -41,8 +41,8 @@ def config(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> P.Confi
 def model(name: String, base: String) -> T.Model<T.JsonValue>:
   T.Model{name, "Live integration", T.OpenAIResponsesApi{}, "openai", base, False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, F.fromU32(128000), F.fromU32(128), None{}, None{}, None{}}
 
-def options(key: String) -> P.OpenAIResponsesOptions<String, Unit, String>:
-  P.fromStreamOptions(String, Unit, String,
+def options(key: String) -> P.OpenAIResponsesOptions<Unit, Unit, String>:
+  P.fromStreamOptions(Unit, Unit, String,
     T.StreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(0)}, None{}, None{}, None{}, Some{F.fromU32(128)}, None{}, None{}, None{}, None{}, None{}},
     P.ResponsesSettings{None{}, None{}, None{}, None{}})
 
@@ -56,7 +56,7 @@ def message(value: T.AssistantMessage<V.Value, Unit>) -> String:
   match value:
     case T.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: text(content)
 
-def headerPrimary(cause: Response.ResponseProgressPrimaryError<HTTP.ReadError<Deadline.Cause<String>>>) -> String:
+def headerPrimary(cause: Response.ResponseProgressPrimaryError<HTTP.ReadError<Deadline.Cause<Unit>>>) -> String:
   match cause:
     case Response.TransportFailure{HTTP.ResponseFailure{Response.ResponseReaderPrimaryFailure{Response.SourceError{HTTP.TLSSourceFailure{TLS.Protocol{detail}}}}}}: "TLS read " ++ TLSTest.renderError(detail)
     case Response.TransportFailure{HTTP.ResponseFailure{Response.ResponseReaderPrimaryFailure{Response.SourceError{HTTP.TLSSourceFailure{TLS.Network{_}}}}}}: "TLS read network failure"
@@ -65,34 +65,34 @@ def headerPrimary(cause: Response.ResponseProgressPrimaryError<HTTP.ReadError<De
     case Response.TransportFailure{HTTP.ResponseFailure{Response.ResponseReaderPrimaryFailure{Response.DecodeError{Response.IncompleteResponse{}}}}}: "HTTP response truncated"
     case _: "HTTP header primary failure"
 
-def headerError(cause: Response.ResponseProgressError<HTTP.ReadError<Deadline.Cause<String>>>) -> String:
+def headerError(cause: Response.ResponseProgressError<HTTP.ReadError<Deadline.Cause<Unit>>>) -> String:
   match cause:
     case Response.ResponseProgressPrimaryFailure{primary}: headerPrimary(primary)
     case Response.ResponseProgressFailureWithCleanup{primary, _}: headerPrimary(primary)
     case _: "HTTP header cleanup failure"
 
-def transportError(cause: Client.FetchError<String>) -> String:
+def transportError(cause: Client.FetchError<Unit>) -> String:
   match cause:
     case Client.FetchFailure{Response.DispatchFailure{Fetch.ExchangeFailure{_, _, HTTP.ResolvedExchangeFailure{HTTP.TLSStartFailure{TLS.Protocol{detail}}}}, _}}: "TLS " ++ TLSTest.renderError(detail)
     case Client.FetchFailure{Response.DispatchFailure{Fetch.ExchangeFailure{_, _, HTTP.ResolvedExchangeFailure{HTTP.TLSStartFailure{_}}}, _}}: "TLS transport failed"
     case Client.FetchFailure{Response.DispatchFailure{Fetch.HeaderFailure{_, _, detail}, _}}: headerError(detail)
     case Client.FetchFailure{Response.DispatchFailure{Fetch.Unresolved{_}, _}}: "DNS resolution failed"
     case Client.FetchFailure{Response.DispatchFailure{Fetch.ExchangeFailure{_, _, _}, _}}: "connection setup failed"
-    case other: P.describeTransport(String, other)
+    case other: P.describeTransport(Unit, other)
 
-def attemptError(cause: Client.AttemptError<String>) -> String:
+def attemptError(cause: Client.AttemptError<Unit>) -> String:
   match cause:
     case Client.TransportFailure{detail}: transportError(detail)
     case Client.HTTPFailure{Client.APIError{metadata, _, _}}: "HTTP " ++ U32.show(Response.statusResponseMetadata(metadata))
     case _: "error-response decoding failed"
 
-def requestError(cause: Retry.RetryFailure<Client.AttemptError<String>>) -> String:
+def requestError(cause: Retry.RetryFailure<Client.AttemptError<Unit>>) -> String:
   match cause:
     case Retry.RequestFailed{Retry.Provider{Retry.ProviderError{original, _, _, _, _, _}}}: attemptError(original)
     case Retry.RequestFailed{Retry.Other{original}}: attemptError(original)
     case _: "retry failed"
 
-def error(cause: P.Error<String, String>) -> String:
+def error(cause: P.Error<Unit, String>) -> String:
   match cause:
     case P.PreparationFailure{_}: "preparation failed"
     case P.RequestRejected{_}: "request rejected"
@@ -102,7 +102,7 @@ def error(cause: P.Error<String, String>) -> String:
     case P.RequestAborted{}: "request aborted"
     case _: "provider failed"
 
-def report(result: P.RunResult<String, Unit, String>) -> IO(Unit):
+def report(result: P.RunResult<Unit, Unit, String>) -> IO(Unit):
   match result:
     case P.RunResult{P.Successful{_, output}, None{}}: IO.print(message(output))
     case P.RunResult{P.Failed{_, _, cause}, _}: IO.die(Unit, 1, error(cause))
@@ -115,8 +115,8 @@ def request(name: String, base: String, prompt: String, certificates: Result<&2,
       do IO<Unit>:
         +authorizer : C.Callback<URL.Host, TLSClient.Authorization> <- Trust.newSAN(Trust.SANPolicy{anchors, 256n})
         key : String <- IO.try(String, IO.get_env("OPENAI_API_KEY"))
-        run : P.Run<String, Unit, String> <- P.stream(~String, ~Unit, ~Unit, ~Unit, ~String, ~identity, config(authorizer), model(name, base), T.TranscriptContext{T.User{T.UserMessage{T.UserText{prompt}, F.fromU32(0)}} <> Nil{}}, options(key))
-        result : P.RunResult<String, Unit, String> <- P.dispose(String, Unit, String, run)
+        run : P.Run<Unit, Unit, String> <- P.stream(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~identity, config(authorizer), model(name, base), T.TranscriptContext{T.User{T.UserMessage{T.UserText{prompt}, F.fromU32(0)}} <> Nil{}}, options(key))
+        result : P.RunResult<Unit, Unit, String> <- P.dispose(Unit, Unit, String, run)
         C.dispose(URL.Host, TLSClient.Authorization, authorizer)
         report(result)
 

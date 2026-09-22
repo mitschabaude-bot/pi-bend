@@ -13,7 +13,6 @@ import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/abort.bend as Abort
-import ../packages/runtime/src/fetch.bend as Fetch
 import ../packages/runtime/src/f64.bend as F
 import ../packages/runtime/src/tls-trust.bend as Trust
 import ../packages/runtime/src/tls13-client.bend as TLS
@@ -22,27 +21,27 @@ import ../packages/runtime/src/x509.bend as X509
 import ./native-openai.bend as Native
 
 # An integration entry point for the real modular loop, not a second agent.
-def Signal() -> Data: Abort.AbortSignal<String>
-def Messages() -> Data: Loop.Messages(V.Value, Unit, Unit, Unit)
+def Signal() -> Data: Abort.AbortSignal<Unit>
+def Messages() -> Data: Loop.Messages(Unit, Unit, Unit)
 def Converted() -> Data: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, Unit>>>
-def Config() -> Data: T.AgentLoopConfig<V.Value, V.Value, Unit, Unit, Unit, V.Value, Signal(), String, Ai.JsonValue, Unit, Fetch.Fetch(String)>
-def ToolInput() -> Data: T.ToolExecutionInput<V.Value, Signal(), Unit>
+def Config() -> Data: T.AgentLoopConfig<Unit, Unit, Unit, String, Unit>
+def ToolInput() -> Data: T.ToolExecutionInput<Unit>
 def ToolOutput() -> Data: Result<&2, &2, String, T.AgentToolResult<Unit>>
-def Run() -> Data: Loop.StreamRun<V.Value, Unit, Unit, Unit, V.Value, Signal(), String>
-def EventValue() -> Data: Loop.LoopEvent(V.Value, Unit, Unit, Unit)
-def Outcome() -> Data: Loop.StreamOutcome(V.Value, Unit, Unit, Unit, String)
+def Run() -> Data: Loop.StreamRun<Unit, Unit, Unit, String>
+def EventValue() -> Data: Loop.LoopEvent(Unit, Unit, Unit)
+def Outcome() -> Data: Loop.StreamOutcome(Unit, Unit, Unit, String)
 def Cursor() -> Data: Stream.Iterator<EventValue(), Outcome()>
 
-def project(config: Config()) -> Responses.SimpleStreamOptions(String, Unit, String):
-  T.toSimpleStreamOptions(V.Value, V.Value, Unit, Unit, Unit, V.Value, Signal(), String, Ai.JsonValue, Unit, Fetch.Fetch(String), config)
+def project(config: Config()) -> Responses.SimpleStreamOptions(Unit, Unit, String):
+  T.toSimpleStreamOptions(Unit, Unit, Unit, String, Unit, config)
 
 def convert(unused: Unit, messages: Messages()) -> IO(Converted()):
-  IO.pure(Converted(), Done{Loop.llmMessages(V.Value, Unit, Unit, Unit, messages)})
+  IO.pure(Converted(), Done{Loop.llmMessages(Unit, Unit, Unit, messages)})
 
 def isAborted(unused: Unit, signal: Maybe<&2, Signal()>) -> IO(Bool):
   match signal:
     case None{}: IO.pure(Bool, False{})
-    case Some{signal}: Abort.aborted(String, signal)
+    case Some{signal}: Abort.aborted(Unit, signal)
 
 def validationError(error: Validation.ToolValidationError) -> String:
   Maybe.default(&2, String, Validation.formatToolValidationError(error), "Tool schema validation failed")
@@ -66,7 +65,7 @@ def echo(counter: Ref.Ref<U32>, input: ToolInput()) -> IO(ToolOutput()):
     case _: IO.pure(ToolOutput(), Fail{"echo expects an object"})
 
 def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callback<Messages(), Converted()>) -> Config():
-  T.AgentLoopConfig{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(0)}, None{}, None{}, None{}, Some{F.fromU32(128)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(0)}, None{}, None{}, None{}, Some{F.fromU32(128)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 # Print the event sequence separately from the tool execution count, so the
 # oracle can check ordering without depending on worker scheduling.
@@ -79,7 +78,7 @@ def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callb
     case Some{Stream.End{}}: IO.pure(Unit, Unit{})
     case Some{Stream.Yield{value}}:
       do IO<Unit>:
-        IO.print("event " ++ T.eventType(V.Value, V.Value, Unit, Unit, Unit, T.AgentToolResult<Unit>, T.AgentToolResult<Unit>, value))
+        IO.print("event " ++ T.eventType(Unit, Unit, Unit, T.AgentToolResult<Unit>, T.AgentToolResult<Unit>, value))
         events(cursor, None{})
 
 def reportMessages(messages: Messages()) -> IO(Unit):
@@ -99,22 +98,22 @@ def report(result: Outcome()) -> IO(Unit):
 def run(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String) -> IO(Unit):
   do IO<Unit>:
     +authorizer : C.Callback<URL.Host, TLS.Authorization> <- Trust.newSAN(Trust.SANPolicy{bundle, 256n})
-    +provider : T.StreamFn(V.Value, V.Value, Unit, Unit, Ai.JsonValue, Config(), String) <- Providers.responses(~Config(), ~String, ~Unit, ~Unit, ~Unit, ~String, ~project, ~Native.identity, ~Native.error, Native.config(authorizer))
+    +provider : T.StreamFn(Unit, Unit, Config(), String) <- Providers.responses(~Config(), ~Unit, ~Unit, ~Unit, ~String, ~project, ~Native.identity, ~Native.error, Native.config(authorizer))
     +converter : C.Callback<Messages(), Converted()> <- C.create(~Unit, ~Messages(), ~Converted(), ~convert, Unit{})
     +validator : Loop.Validator(String) <- Loop.createPlain(~String, ~validationError)
     +cancel : C.Callback<Maybe<&2, Signal()>, Bool> <- C.create(~Unit, ~Maybe<&2, Signal()>, ~Bool, ~isAborted, Unit{})
     +counter : Ref.Ref<U32> <- Ref.new(U32, 0)
     +execute : C.Callback<ToolInput(), ToolOutput()> <- C.create(~Ref.Ref<U32>, ~ToolInput(), ~ToolOutput(), ~echo, counter)
     key : String <- IO.try(String, IO.get_env("OPENAI_API_KEY"))
-    tool : T.AgentTool<V.Value, V.Value, Unit, V.Value, Signal(), String> = T.AgentTool{"echo", "Return the input text unchanged", schema(), None{}, "Echo", None{}, execute, None{}, None{}}
-    context : T.AgentContext<V.Value, V.Value, Unit, Unit, Unit, V.Value, Signal(), String> = T.AgentContext{Nil{}, Some{tool <> Nil{}}}
+    tool : T.AgentTool<Unit, String> = T.AgentTool{"echo", "Return the input text unchanged", schema(), None{}, "Echo", None{}, execute, None{}, None{}}
+    context : T.AgentContext<Unit, Unit, Unit, String> = T.AgentContext{Nil{}, Some{tool <> Nil{}}}
     prompts : Messages() = T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{prompt}, F.fromU32(0)}}} <> Nil{}
-    +owner : Run() <- Loop.agentLoop(~V.Value, ~Unit, ~Unit, ~Unit, ~V.Value, ~Signal(), ~String, ~Ai.JsonValue, ~Unit, ~Fetch.Fetch(String), ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
-    +cursor : Cursor() <- Loop.iterator(V.Value, Unit, Unit, Unit, V.Value, Signal(), String, owner)
+    +owner : Run() <- Loop.agentLoop(~Unit, ~Unit, ~Unit, ~String, ~Unit, ~Native.identity, ~declarationError, ~Selection.errorMessage, ~Loop.errorMessage, prompts, context, configuration(Native.model(name, base), key, converter), Loop.Options{None{}, validator, cancel, Unit{}, Selection.Explicit{provider}})
+    +cursor : Cursor() <- Loop.iterator(Unit, Unit, Unit, String, owner)
     events(cursor, None{})
     Stream.disposeIterator(EventValue(), Outcome(), cursor)
-    result : Outcome() <- Loop.resultStream(V.Value, Unit, Unit, Unit, V.Value, Signal(), String, owner)
-    Loop.disposeStreamRun(V.Value, Unit, Unit, Unit, V.Value, Signal(), String, owner)
+    result : Outcome() <- Loop.resultStream(Unit, Unit, Unit, String, owner)
+    Loop.disposeStreamRun(Unit, Unit, Unit, String, owner)
     C.dispose(Providers.Input(Config(), Unit, Unit), Providers.Output(Unit, String), provider)
     C.dispose(Messages(), Converted(), converter)
     Loop.disposeValidation(String, validator)
