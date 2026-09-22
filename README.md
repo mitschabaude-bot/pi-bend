@@ -2,7 +2,7 @@
 
 Bend compiler/runtime defects and performance problems are tracked in [the Bend issue log](docs/bend-issues.md). Missing primitives are implementation work in this project, with design and validation records alongside the code. Workarounds remain open investigations until their causes are understood.
 
-Native Bend port of pi, based on `earendil-works/pi` revision `46c9de402` (0.85.1). The current executable is a bootstrap prototype. A faithful port of the modular libraries, types and APIs is in progress under `packages/`; see [architecture fidelity](docs/architecture.md).
+Native Bend port of pi, based on `earendil-works/pi` revision `46c9de402` (0.85.1). The modular libraries under `packages/` now carry pi's print mode end to end: `BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli` builds the entry point, and `./build/pi-cli -- -p "prompt"` (or `--mode json`) runs the agent loop with the public read/bash/edit/write tools against the OpenAI Responses or Codex Responses APIs using pi's `auth.json` and environment keys. Interactive/RPC modes, sessions, extensions and skills are not ported yet; `src/` remains the bootstrap prototype until they are. See [architecture fidelity](docs/architecture.md) and the [parity record](docs/parity.md).
 
 The final libraries and complex dependencies must use pure Bend. The bootstrap executable still uses C adapters for networking and Unicode; replacing them is required work. Pure-Bend numeric foundations are under [packages/runtime](packages/runtime/README.md). JavaScript/TypeScript extension compatibility is intentionally excluded; extensions will use Bend.
 
