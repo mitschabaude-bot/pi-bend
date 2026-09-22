@@ -1006,3 +1006,7 @@ The fixed-decimal formatter hit BEND-012 when its pattern binder `digit` resolve
 ### Boxed Boolean combined with raw OR during JPEG integration
 
 `tests/repro/bool-pick-or.bend` prints the correct `true` on Bun but `false` on native one/four threads: the emitted generic `Bool.pick` result is boxed and used directly in a raw Boolean OR. [JPEG validation](../tests/jpeg.md#open-compiler-defect-found-during-integration) records toolchain identities and the source workaround; the compiler owner has been notified, and the defect remains open.
+
+### Parallel translation units miss one-line effect functions (2026-09-22)
+
+The native four-tool fixture failed to link with `BEND_TUS=8`: four process effect entry points had duplicate external definitions. The linkage rewrite in `bend2/comp.ts` matches definition lines ending at the opening brace, so single-line bodies miss `BEND_WEAK`. The isolated effect-only [compatibility patch](../patches/bend-process-tu.patch) uses ordinary multiline definitions; both process fixtures then build with eight translation units and pass the full native one/four-thread lifecycle checks. This fixes our effect definitions; the compiler restriction remains open. Evidence and reproduction commands are in [process primitive validation](../tests/process-primitive.md).
