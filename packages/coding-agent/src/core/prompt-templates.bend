@@ -3,6 +3,16 @@ import ./skills.bend as Skills
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/text.bend as Text
 
+import ./diagnostics.bend as Diagnostics
+import ../utils/frontmatter.bend as Frontmatter
+import ../utils/paths.bend as Paths
+import ../../../runtime/src/filesystem.bend as FS
+import ../../../runtime/src/posix-path.bend as Path
+import ../../../runtime/src/record.bend as Record
+import ../../../runtime/src/stable-sort.bend as Sort
+import ../../../runtime/src/utf8.bend as Utf8
+import ../../../runtime/src/yaml.bend as Yaml
+
 type PromptTemplate is Data:
   PromptTemplate{name: String, description: String, argumentHint: Maybe<&2,String>, content: String, sourceInfo: Skills.SourceInfo, filePath: String}
 
@@ -180,3 +190,193 @@ def expandPromptTemplate(+text: String, templates: List<&2,PromptTemplate>) -> R
   match text:
     case SCon{'/',rest}: expandCommand(text,templates,commandName(rest,""))
     case _: Done{text}
+
+type LoadPromptTemplatesOptions is Data:
+  LoadPromptTemplatesOptions{cwd: String, agentDir: String, promptPaths: List<&2,String>, includeDefaults: Bool}
+type LoadResult is Data:
+  LoadResult{templates: List<&2,PromptTemplate>, diagnostics: List<&2,Diagnostics.ResourceDiagnostic>}
+type Roots is Data:
+  Roots{global: String, project: String}
+
+# During loading both lists are reversed; reverse only once at the boundary.
+def loadProblem(state: LoadResult, path: String, message: String) -> LoadResult:
+  match state:
+    case LoadResult{templates,diagnostics}: LoadResult{templates,Diagnostics.ResourceDiagnostic{Diagnostics.Error{},message,Some{path},None{}} <> diagnostics}
+
+def fileProblem(state: LoadResult, path: String, cause: FS.Error) -> LoadResult:
+  match cause:
+    case FS.System{2,_}: state
+    case FS.System{_,message}: loadProblem(state,path,message)
+    case FS.InvalidPathEncoding{_}: loadProblem(state,path,"Invalid UTF-8 directory entry")
+    case FS.ReadAndClose{_,readMessage,_,closeMessage}: loadProblem(state,path,"Read failed: " ++ readMessage ++ "; close failed: " ++ closeMessage)
+    case FS.WriteAndClose{_,writeMessage,_,closeMessage}: loadProblem(state,path,"Write failed: " ++ writeMessage ++ "; close failed: " ++ closeMessage)
+
+# Input paths are already absolute and normalized. This split does not resolve
+# symlinks: resource names and scopes describe the selected lexical path.
+def location(reversedPath: String, name: String) -> String & String:
+  match reversedPath:
+    case SNil{}: (name,"/")
+    case SCon{'/',SNil{}}: (name,"/")
+    case SCon{'/',rest}: (name,String.reverse(rest))
+    case SCon{char,rest}: location(rest,SCon{char,name})
+
+def stem(reversed: String) -> String:
+  match reversed:
+    case SCon{'d',SCon{'m',SCon{'.',rest}}}: String.reverse(rest)
+    case other: String.reverse(other)
+
+def under(+path: String, +root: String) -> Bool:
+  Strings.equal(path,root) || String.starts_with(path,root ++ "/")
+
+def sourceInfo(roots: Roots, +path: String, parent: String) -> Skills.SourceInfo:
+  match roots:
+    case Roots{+global,+project}:
+      Bool.pick(Unit -> Skills.SourceInfo,under(path,global),
+        _ => Skills.SourceInfo{path,"local",Skills.User{},Skills.TopLevel{},Some{global}},
+        _ => Bool.pick(Skills.SourceInfo,under(path,project),Skills.SourceInfo{path,"local",Skills.Project{},Skills.TopLevel{},Some{project}},Skills.SourceInfo{path,"local",Skills.Temporary{},Skills.TopLevel{},Some{parent}}))(Unit{})
+
+def fieldText(value: Maybe<&2,Yaml.Value>, name: String) -> Result<&2,&2,String,Maybe<&2,String>>:
+  match value:
+    case None{}: Done{None{}}
+    case Some{Yaml.Text{SNil{}}}: Done{None{}}
+    case Some{Yaml.Text{text}}: Done{Some{text}}
+    case _: Fail{"Frontmatter field " ++ name ++ " must be a string"}
+
+def descriptionCut(cut: Text.Cut) -> String:
+  match cut:
+    case Text.Cut{prefix,0n}: prefix
+    case Text.Cut{prefix,_}: prefix ++ "..."
+
+def firstDescription(lines: List<&2,String>) -> String:
+  match lines:
+    case Nil{}: ""
+    case +line <> rest:
+      Bool.pick(Unit -> String,String.is_empty(Paths.trim(line)),_ => firstDescription(rest),_ => descriptionCut(Text.take(line,60n)))(Unit{})
+
+def templateDescription(description: Maybe<&2,String>, body: String) -> String:
+  match description:
+    case Some{value}: value
+    case None{}: firstDescription(Strings.split(body,'\n'))
+
+def templateFields(+path: String, roots: Roots, state: LoadResult, +body: String, description: Result<&2,&2,String,Maybe<&2,String>>, hint: Result<&2,&2,String,Maybe<&2,String>>, place: String & String) -> LoadResult:
+  match state description hint place:
+    case previous Fail{message} _ _: loadProblem(previous,path,message)
+    case previous _ Fail{message} _: loadProblem(previous,path,message)
+    case LoadResult{templates,diagnostics} Done{description} Done{hint} Tuple{name,parent}:
+      LoadResult{PromptTemplate{stem(String.reverse(name)),templateDescription(description,body),hint,body,sourceInfo(roots,path,parent),path} <> templates,diagnostics}
+
+def parsedTemplate(+path: String, roots: Roots, state: LoadResult, parsed: Result<&2,&2,Yaml.Error,Frontmatter.Frontmatter>) -> LoadResult:
+  match parsed:
+    case Fail{cause}: loadProblem(state,path,Yaml.errorMessage(cause))
+    case Done{Frontmatter.Frontmatter{+frontmatter,body}}:
+      templateFields(path,roots,state,body,fieldText(Record.get(Yaml.Value,frontmatter,"description"),"description"),fieldText(Record.get(Yaml.Value,frontmatter,"argument-hint"),"argument-hint"),location(String.reverse(path),""))
+
+def decodedTemplate(path: String, roots: Roots, state: LoadResult, decoded: Result<&2,&2,Utf8.Error,String>) -> LoadResult:
+  match decoded:
+    case Fail{_}: loadProblem(state,path,"Invalid UTF-8 prompt template")
+    case Done{content}: parsedTemplate(path,roots,state,Frontmatter.parseFrontmatter(content))
+
+def readTemplate(path: String, roots: Roots, state: LoadResult, result: Result<&2,&2,FS.Error,List<&2,U32>>) -> LoadResult:
+  match result:
+    case Fail{cause}: fileProblem(state,path,cause)
+    case Done{bytes}: decodedTemplate(path,roots,state,Utf8.decodeStrict(bytes))
+
+def loadTemplateFromFile(+path: String, roots: Roots, state: LoadResult) -> IO(LoadResult):
+  do IO<LoadResult>:
+    result : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
+    return readTemplate(path,roots,state,result)
+
+def entryOrder(left: FS.DirectoryEntry, right: FS.DirectoryEntry) -> Bool:
+  match left right:
+    case FS.DirectoryEntry{a,_} FS.DirectoryEntry{b,_}: String.is_le(a,b)
+
+def loadLink(path: String, roots: Roots, state: LoadResult, kind: Result<&2,&2,FS.Error,FS.FileKind>) -> IO(LoadResult):
+  match kind:
+    case Fail{cause}: IO.pure(LoadResult,fileProblem(state,path,cause))
+    case Done{FS.RegularFile{}}: loadTemplateFromFile(path,roots,state)
+    case _: IO.pure(LoadResult,state)
+
+def loadEntry(+path: String, roots: Roots, state: LoadResult, kind: FS.FileKind) -> IO(LoadResult):
+  match kind:
+    case FS.RegularFile{}: loadTemplateFromFile(path,roots,state)
+    case FS.SymbolicLink{}:
+      do IO<LoadResult>:
+        kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
+        loadLink(path,roots,state,kind)
+    case _: IO.pure(LoadResult,state)
+
+def loadEntries(entries: List<&2,FS.DirectoryEntry>, +directory: String, +roots: Roots, +state: LoadResult) -> IO(LoadResult):
+  match entries:
+    case Nil{}: IO.pure(LoadResult,state)
+    case FS.DirectoryEntry{+name,kind} <> rest:
+      do IO<LoadResult>:
+        next : LoadResult <- Bool.pick(Unit -> IO(LoadResult),String.ends_with(name,".md"),_ => loadEntry(Path.join(directory,name),roots,state,kind),_ => IO.pure(LoadResult,state))(Unit{})
+        loadEntries(rest,directory,roots,next)
+
+def loadedDirectory(path: String, roots: Roots, state: LoadResult, entries: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>) -> IO(LoadResult):
+  match entries:
+    case Fail{cause}: IO.pure(LoadResult,fileProblem(state,path,cause))
+    case Done{values}: loadEntries(Sort.sort(~FS.DirectoryEntry,~entryOrder,values),path,roots,state)
+
+def loadTemplatesFromDir(+directory: String, roots: Roots, state: LoadResult) -> IO(LoadResult):
+  do IO<LoadResult>:
+    entries : Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>> <- FS.readDirectory(directory)
+    loadedDirectory(directory,roots,state,entries)
+
+def loadPathKind(+path: String, roots: Roots, +state: LoadResult, kind: Result<&2,&2,FS.Error,FS.FileKind>) -> IO(LoadResult):
+  match kind:
+    case Fail{cause}: IO.pure(LoadResult,fileProblem(state,path,cause))
+    case Done{FS.Directory{}}: loadTemplatesFromDir(path,roots,state)
+    case Done{FS.RegularFile{}}: Bool.pick(Unit -> IO(LoadResult),String.ends_with(path,".md"),_ => loadTemplateFromFile(path,roots,state),_ => IO.pure(LoadResult,state))(Unit{})
+    case _: IO.pure(LoadResult,state)
+
+def loadResolvedPath(raw: String, roots: Roots, state: LoadResult, resolved: Result<&2,&2,Paths.Error,String>) -> IO(LoadResult):
+  match resolved:
+    case Fail{_}: IO.pure(LoadResult,loadProblem(state,raw,"Invalid prompt template path"))
+    case Done{+path}:
+      do IO<LoadResult>:
+        kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
+        loadPathKind(path,roots,state,kind)
+
+def loadExplicit(paths: List<&2,String>, +environment: Paths.Environment, +cwd: String, +roots: Roots, state: LoadResult) -> IO(LoadResult):
+  match paths:
+    case Nil{}: IO.pure(LoadResult,state)
+    case +raw <> rest:
+      do IO<LoadResult>:
+        next : LoadResult <- loadResolvedPath(raw,roots,state,Paths.resolvePath(environment,raw,cwd,Paths.PathInputOptions{True{},True{},None{},False{},False{}}))
+        loadExplicit(rest,environment,cwd,roots,next)
+
+def finishLoad(state: LoadResult) -> LoadResult:
+  match state:
+    case LoadResult{templates,diagnostics}: LoadResult{List.reverse(&2,PromptTemplate,templates),List.reverse(&2,Diagnostics.ResourceDiagnostic,diagnostics)}
+
+def loadDefaults(enabled: Bool, +roots: Roots) -> IO(LoadResult):
+  match enabled roots:
+    case False{} _: IO.pure(LoadResult,LoadResult{Nil{},Nil{}})
+    case True{} Roots{global,project}:
+      do IO<LoadResult>:
+        globalState : LoadResult <- loadTemplatesFromDir(global,roots,LoadResult{Nil{},Nil{}})
+        loadTemplatesFromDir(project,roots,globalState)
+
+def loadAt(environment: Paths.Environment, +cwd: String, paths: List<&2,String>, defaults: Bool, +roots: Roots) -> IO(LoadResult):
+  do IO<LoadResult>:
+    state : LoadResult <- loadDefaults(defaults,roots)
+    result : LoadResult <- loadExplicit(paths,environment,cwd,roots,state)
+    return finishLoad(result)
+
+def loadRoots(environment: Paths.Environment, configDirName: String, paths: List<&2,String>, defaults: Bool, cwd: Result<&2,&2,Paths.Error,String>, agentDir: Result<&2,&2,Paths.Error,String>) -> IO(Result<&2,&2,Paths.Error,LoadResult>):
+  match cwd agentDir:
+    case Fail{cause} _: IO.pure(Result<&2,&2,Paths.Error,LoadResult>,Fail{cause})
+    case _ Fail{cause}: IO.pure(Result<&2,&2,Paths.Error,LoadResult>,Fail{cause})
+    case Done{+directory} Done{agent}:
+      do IO<Result<&2,&2,Paths.Error,LoadResult>>:
+        result : LoadResult <- loadAt(environment,directory,paths,defaults,Roots{Path.join(agent,"prompts"),Path.join(Path.join(directory,configDirName),"prompts")})
+        return Done{result}
+
+# The host supplies package configuration and path-resolution context. Invalid
+# files are reported individually; successfully loaded templates retain order
+# and duplicates, as upstream does (expansion picks the first matching name).
+def loadPromptTemplates(+environment: Paths.Environment, configDirName: String, options: LoadPromptTemplatesOptions) -> IO(Result<&2,&2,Paths.Error,LoadResult>):
+  match options:
+    case LoadPromptTemplatesOptions{cwd,agentDir,paths,defaults}:
+      loadRoots(environment,configDirName,paths,defaults,Paths.resolvePath(environment,cwd,"",Paths.defaults()),Paths.resolvePath(environment,agentDir,"",Paths.defaults()))
