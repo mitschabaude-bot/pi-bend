@@ -20,3 +20,5 @@ python3 tests/grapheme_check.py
 ```
 
 The private worktree used the existing native toolchain through `build/bend-native-toolchain`; no effect, compiler, allocator or global-install changes. TUI width/wrap consumers remain a separate task. A useful future generic law is that concatenating segments reconstructs the input and all returned clusters are nonempty; no proof is claimed in this conformance-tested handoff.
+
+Root integration regenerated and checked the pinned data, rebuilt both artifacts with the unchanged shared compiler, and independently passed the complete conformance, independent-comparison and long-input corpus on Bun/native one/four. No compiler or host segmentation dependency was added.
