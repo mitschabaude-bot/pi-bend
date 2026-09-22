@@ -360,6 +360,10 @@ def publication(accumulator: OutputAccumulator, accepting: Bool, dirty: Bool, +w
     case OutputAccumulator{+state,storage}:
       (StreamState{OutputAccumulator{state,storage},accepting,False{},wake,timer},Publication{Bool.pick(Maybe<&2,OutputSnapshot>,dirty,Some{peek(state)},None{}),wake})
 
+def persistedPublication(accepting: Bool, dirty: Bool, wake: Maybe<&2,Deferred.Deferred<Unit>>, timer: Maybe<&2,TimerCancel>, outcome: Outcome<OutputSnapshot>) -> StreamState & Publication:
+  match outcome:
+    case Outcome{accumulator,_}: publication(accumulator,accepting,dirty,wake,timer)
+
 # The worker has consumed the old observation. The lock prevents a producer
 # from resolving an old wake after it is replaced and disposed.
 def publishLocked(stream: StreamState) -> IO(StreamState & Publication):
@@ -371,7 +375,8 @@ def publishLocked(stream: StreamState) -> IO(StreamState & Publication):
           _ => do IO<Maybe<&2,Deferred.Deferred<Unit>>>:
             signal : Deferred.Deferred<Unit> <- Deferred.new(Unit)
             return Some{signal},_ => IO.pure(Maybe<&2,Deferred.Deferred<Unit>>,None{}))(Unit{})
-        return publication(accumulator,accepting,dirty,next,timer)
+        persisted : Outcome<OutputSnapshot> <- snapshot(True{},accumulator)
+        return persistedPublication(accepting,dirty,next,timer,persisted)
     case stream: IO.pure(StreamState & Publication,(stream,Publication{None{},None{}}))
 
 def timerStarted(accumulator: OutputAccumulator, accepting: Bool, dirty: Bool, wake: Maybe<&2,Deferred.Deferred<Unit>>, pair: Timer & TimerCancel) -> StreamState & Maybe<&1,Timer>:
@@ -489,12 +494,26 @@ def streamResult(view: OutputSnapshot, last: Nat, previous: Result<&2,&2,Error,U
     case Fail{cause} Outcome{_,Done{Unit{}}}: Fail{cause}
     case Done{Unit{}} Outcome{_,Done{Unit{}}}: Done{(view,last)}
 
-def closeStream(previous: Result<&2,&2,Error,Unit>, stream: StreamState) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
-  match stream:
-    case StreamState{OutputAccumulator{+state,storage},_,_,_,_}:
+def persistedStatus(previous: Result<&2,&2,Error,Unit>, result: Result<&2,&2,Error,OutputSnapshot>) -> Result<&2,&2,Error,Unit>:
+  match previous result:
+    case Fail{cause} _: Fail{cause}
+    case Done{Unit{}} Fail{cause}: Fail{cause}
+    case Done{Unit{}} Done{_}: Done{Unit{}}
+
+def closeSnapshot(previous: Result<&2,&2,Error,Unit>, outcome: Outcome<OutputSnapshot>) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
+  match outcome:
+    case Outcome{OutputAccumulator{+state,storage},result}:
+      +checked = persistedStatus(previous,result)
       do IO<Result<&2,&1,Error,OutputSnapshot & Nat>>:
         closed : Outcome<Unit> <- closeTempFile(OutputAccumulator{state,storage})
-        return streamResult(peek(state),lastLineBytes(state),previous,closed)
+        return streamResult(peek(state),lastLineBytes(state),checked,closed)
+
+def closeStream(previous: Result<&2,&2,Error,Unit>, stream: StreamState) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
+  match stream:
+    case StreamState{accumulator,_,_,_,_}:
+      do IO<Result<&2,&1,Error,OutputSnapshot & Nat>>:
+        persisted : Outcome<OutputSnapshot> <- snapshot(True{},accumulator)
+        closeSnapshot(previous,persisted)
 
 def finishBorrowed(done: Maybe<&2,Chan(Unit)>, pair: Serial.Owner<StreamState> & Serial.Handle<StreamState>) -> IO(Result<&2,&1,Error,OutputSnapshot & Nat>):
   match pair:

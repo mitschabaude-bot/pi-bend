@@ -15,6 +15,12 @@ def main():
         result=subprocess.run(runner,text=True,capture_output=True,timeout=30)
         assert result.returncode==0 and result.stdout.splitlines()==EXPECTED and not result.stderr,(result.returncode,result.stdout,result.stderr)
     with tempfile.TemporaryDirectory() as tmp:
+        for mode,count in [('lines',1),('lines-observed',2)]:
+            result=subprocess.run([*runner,mode],text=True,capture_output=True,env=dict(os.environ,TMPDIR=tmp),timeout=30)
+            paths=result.stdout.splitlines()
+            assert result.returncode==0 and not result.stderr and len(paths)==count,(result.stdout,result.stderr)
+            assert len(set(paths))==1 and Path(paths[0]).read_bytes()==b'x\n'*2500
+            Path(paths[0]).unlink()
         base=Path(tmp);c,js=hooks();(base/'fault.c').write_text(c);(base/'fault.cjs').write_text(js)
         subprocess.run(['cc','-shared','-fPIC','-O2',str(base/'fault.c'),'-ldl','-o',str(base/'fault.so')],check=True)
         for fault,expected in [('1',['ok','close:5']),('2',['ok','close:4']),('3',['write:28','write-close:28:5'])]:

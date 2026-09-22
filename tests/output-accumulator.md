@@ -38,3 +38,5 @@ python3 tests/output_stream_check.py --runner build/output-stream.js
 python3 tests/output_stream_check.py --runner build/output-stream --threads 1
 python3 tests/output_stream_check.py --runner build/output-stream --threads 4
 ```
+
+Streaming snapshots persist line-truncated output even below the raw-byte spill threshold, matching Bash’s `snapshot(true)` policy. The stream harness checks 2,500-line / 5 KB output with and without an observer, verifies the callback and final result share one path, and compares all saved bytes.

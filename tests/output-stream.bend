@@ -309,8 +309,59 @@ def faultCase(pair: Output.StreamOwner & Output.StreamHandle) -> IO(Unit):
         final : Result<&2,&1,Output.Error,Output.OutputSnapshot & Nat> <- Output.finishStream(owner)
         IO.print(finishedError(final))
 
+def newlines(n: Nat, bytes: List<&2,U32>) -> List<&2,U32>:
+  match n:
+    case 0n: bytes
+    case 1n+n: newlines(n,120 <> 10 <> bytes)
+
+def printPath(view: Output.OutputSnapshot) -> IO(Unit):
+  match view:
+    case Output.OutputSnapshot{_,_,Some{path}}: IO.print(path)
+    case _: IO.die(Unit,1,"line-truncated output has no persisted path")
+
+def persistedObserver(signal: Chan(Unit), view: Output.OutputSnapshot) -> IO(Unit):
+  do IO<Unit>:
+    printPath(view)
+    sent : Bool <- Chan.send(Unit,signal,Unit{})
+    return Unit{}
+
+def lineFinish(value: Result<&2,&1,Output.Error,Output.OutputSnapshot & Nat>) -> IO(Unit):
+  match value:
+    case Done{(view,_)}: printPath(view)
+    case Fail{_}: IO.die(Unit,1,"line-only persistence failed")
+
+def awaitLine(signal: Maybe<&2,Chan(Unit)>) -> IO(Unit):
+  match signal:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{channel}:
+      do IO<Unit>:
+        received : Maybe<&1,Unit> <- Chan.recv(Unit,channel)
+        return Unit{}
+
+def lineCase(signal: Maybe<&2,Chan(Unit)>, pair: Output.StreamOwner & Output.StreamHandle) -> IO(Unit):
+  match pair:
+    case (owner,handle):
+      do IO<Unit>:
+        result : Result<&2,&2,Output.Error,Unit> <- Output.appendStream(handle,newlines(2500n,Nil{}))
+        checkResult(result)
+        awaitLine(signal)
+        final : Result<&2,&1,Output.Error,Output.OutputSnapshot & Nat> <- Output.finishStream(owner)
+        lineFinish(final)
+
 def run(arguments: List<String>) -> IO(Unit):
   match arguments:
+    case "lines" <> Nil{}:
+      do IO<Unit>:
+        owner : Output.StreamOwner <- Output.createStream(Output.defaults(),None{})
+        lineCase(None{},Output.borrowStream(owner))
+    case "lines-observed" <> Nil{}:
+      do IO<Unit>:
+        +signal : Chan(Unit) <- Chan.new(Unit,8)
+        +observer : Callback.Callback<Output.OutputSnapshot,Unit> <- Callback.create(~Chan(Unit),~Output.OutputSnapshot,~Unit,~persistedObserver,signal)
+        owner : Output.StreamOwner <- Output.createStream(Output.defaults(),Some{observer})
+        lineCase(Some{signal},Output.borrowStream(owner))
+        Callback.dispose(Output.OutputSnapshot,Unit,observer)
+        Chan.close(Unit,signal)
     case "fault" <> Nil{}:
       do IO<Unit>:
         owner : Output.StreamOwner <- Output.createStream(Output.OutputAccumulatorOptions{Some{1n},Some{1n},Some{"pi-bend-output-test"}},None{})
