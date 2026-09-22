@@ -1860,9 +1860,14 @@
     },
     {
       "source": "packages/coding-agent/test/frontmatter.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "88309e13d75cec874a1fa43b921c4bb3dbcbce55c6ace5acf9742e81667ad2dd"
+      "status": "ported",
+      "ports": [
+        "tests/frontmatter.bend",
+        "tests/frontmatter_check.py",
+        "tests/frontmatter_reference.ts"
+      ],
+      "sha256": "88309e13d75cec874a1fa43b921c4bb3dbcbce55c6ace5acf9742e81667ad2dd",
+      "notes": "All eight pinned named cases and their nine outputs pass on Bun/native one/four, plus BOM/newline and strict fence/nonmapping adaptations (13 outputs total). 198 supplemental YAML comparisons pass. Typed parser errors preserve the asserted line/column; complete-line fences and mapping metadata reject malformed cases. This suite status does not claim full YAML grammar parity; remaining dependency gaps are explicit in tests/frontmatter.md."
     },
     {
       "source": "packages/coding-agent/test/git-merge-and-resolve-extension.test.ts",
@@ -2160,14 +2165,15 @@
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/prompt-templates.bend",
         "tests/prompt_templates_check.py",
+        "tests/prompt_templates_load_check.py",
         "tests/prompt_templates_reference.ts"
       ],
       "sha256": "b926313ab33852fe61bbbfe4813d0806dabe2cdbd9d0a697ebcb913b6aec84c3",
-      "notes": "Pure parseCommandArgs/substituteArgs/expandPromptTemplate assertions ported: 127 captured upstream calls and 436 supplemental comparisons pass Bun/native one/four. Typed errors reject unfinished quotes; replacement values/defaults never rescan. 200KB replacement and unfinished-default cases pass. Template filesystem loading/frontmatter assertions remain pending; see tests/prompt-templates.md."
+      "notes": "All pinned pure assertions (127 captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md."
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
