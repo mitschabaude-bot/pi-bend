@@ -631,8 +631,7 @@
         "tests/error_body_check.py",
         "tests/error_body_reference.mts",
         "packages/ai/test/openai-http-error.bend",
-        "tests/openai_http_error_check.py",
-        "tests/openai_http_error_native_check.py"
+        "tests/openai_http_error_check.py"
       ],
       "sha256": "1f1a91106e10f8d9f5cec797a3cc2dc69f834e435fbc95f391b4ac94e90c2be1",
       "notes": "306 actual-pi normalization/formatting comparisons pass on one/four native threads, including exact-name mapping of all 16 original scenarios at the typed transport-data boundary. Typed text/parsed/unavailable bodies replace SDK reflection and exclude streams/private state. OpenAI HTTP status/body construction also has typed SDK/pi comparisons and native socket integration. Other provider adapters and final catch paths remain pending, so supplied status in the generic fixtures does not validate those adapters. Two supplemental split-surrogate truncation cases use whole native characters and an accurate discarded-unit count; all 16 original named cases are unchanged."

@@ -92,7 +92,7 @@ Two laws quantify over arbitrary reason, failure and value types. A retained abo
 
 ## Relationship to pi and existing tests
 
-The FIFO supports `packages/agent/src/pending-message-queue.bend`, corresponding to `PendingMessageQueue` in pinned pi-mono `packages/agent/src/agent.ts:140`. Six pending-queue laws now establish initialization, enqueue order, changing mode without changing messages, clearing without changing mode, mode-dependent delivery, and the equivalence of `hasItems` with a nonempty message sequence. The delivery specification uses list head/tail semantics: All emits everything and empties the queue; OneAtATime emits exactly the oldest message, or nothing for an empty queue. Both preserve the mode.
+The FIFO supports the pending-queue section of `packages/agent/src/agent.bend`, corresponding to `PendingMessageQueue` in pinned pi-mono `packages/agent/src/agent.ts:140`. Six pending-queue laws now establish initialization, enqueue order, changing mode without changing messages, clearing without changing mode, mode-dependent delivery, and the equivalence of `hasItems` with a nonempty message sequence. The delivery specification uses list head/tail semantics: All emits everything and empties the queue; OneAtATime emits exactly the oldest message, or nothing for an empty queue. Both preserve the mode.
 
 Eight paired-queue laws cover enqueue, clear, mode changes and drain. Each operation has a selected-queue contract and an isolation contract: its effect matches the pending-queue operation, and the other queue stays unchanged. These apply to either queue kind and arbitrary initial states. The selected-queue contracts compose with the pending-queue laws; they do not merely assert that an operation equals itself.
 
