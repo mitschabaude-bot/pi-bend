@@ -1,5 +1,8 @@
 import Base
 import ../../../runtime/src/callback.bend as Callback
+import ../../../runtime/src/abort.bend as Abort
+import ../../../runtime/src/deferred.bend as Deferred
+import ../../../runtime/src/utf8.bend as Utf8
 
 # The process owner stays unreaped until the caller has retired its timeout
 # and abort observers. Pipe readers and idle timers finish before this returns.
@@ -214,3 +217,256 @@ def waitForChildProcess(owner: Process, +control: ProcessControl, stdout: Pipe &
         report : Report <- drive(Context{events,control,outCancel,errCancel,onData},State{2,False{},None{},Nil{},False{},0n,None{},0n})
         process : Process <- IO.join(Process,owners)
         return (process,report)
+
+# Execution owns the process and its cancellation observers. The caller owns
+# the parent signal and output callback, both of which remain borrowed.
+type ExecutionError is Data:
+  InvalidTimeout{}
+  ExecutionAborted{}
+  ExecutionTimedOut{}
+  ExecutionFailed{errors: List<&2,Error>}
+
+type ExecutionOptions is Data:
+  ExecutionOptions{signal: Maybe<&2,Abort.AbortSignal<Unit>>, milliseconds: Maybe<&2,U32>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>}
+
+type Started is Type:
+  Started{owner: Process, control: ProcessControl, input: Maybe<&1,Pipe & PipeCancel>, output: Pipe & PipeCancel, error: Pipe & PipeCancel}
+
+type WatchResult is Data:
+  WatchResult{triggered: Bool, errors: List<&2,Error>}
+
+type Observer is Type:
+  Observer{cancel: IO(Unit), task: Chan(WatchResult)}
+
+type InputWriter is Type:
+  InputWriter{cancel: PipeCancel, task: Chan(List<&2,Error>)}
+
+def timeoutChecked(valid: Bool, milliseconds: F64) -> Result<&2,&2,ExecutionError,U32>:
+  match valid:
+    case False{}: Fail{InvalidTimeout{}}
+    case True{}: Done{U32.max(1,F64.to_u32(F64.floor(milliseconds)))}
+
+# Validate the original positive seconds and unrounded milliseconds, then use
+# Node's floor/minimum-one millisecond timer quantization (including underflow).
+def timeoutMilliseconds(+seconds: F64) -> Result<&2,&2,ExecutionError,U32>:
+  +ms = F64.mul(seconds,U32.to_f64(1000))
+  timeoutChecked(F64.is_lt(U32.to_f64(0),seconds) && F64.is_le(ms,U32.to_f64(2147483647)),ms)
+
+def optionalTimeout(value: Maybe<&2,F64>) -> Result<&2,&2,ExecutionError,Maybe<&2,U32>>:
+  match value:
+    case None{}: Done{None{}}
+    case Some{seconds}: Result.map(&2,&2,ExecutionError,U32,Maybe<&2,U32>,n => Some{n},timeoutMilliseconds(seconds))
+
+def parentAborted(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool,False{})
+    case Some{value}: Abort.aborted(Unit,value)
+
+def signalResult(triggered: Bool, result: Result<&1,&1,U32 & String,Bool>) -> WatchResult:
+  match result:
+    case Done{_}: WatchResult{triggered,Nil{}}
+    case Fail{(code,message)}: WatchResult{triggered,Error{"process signal",code,message} <> Nil{}}
+
+def interruptProcess(triggered: Bool, control: ProcessControl) -> IO(WatchResult):
+  match triggered:
+    case False{}: IO.pure(WatchResult,WatchResult{False{},Nil{}})
+    case True{}:
+      do IO<WatchResult>:
+        result : Result<&1,&1,U32 & String,Bool> <- Process.signal(control,9)
+        return signalResult(True{},result)
+
+def watchAbort(control: ProcessControl, ticket: Deferred.Ticket<Maybe<&2,Abort.AbortReason<Unit>>>) -> IO(WatchResult):
+  do IO<WatchResult>:
+    reason : Maybe<&2,Abort.AbortReason<Unit>> <- Deferred.wait(Maybe<&2,Abort.AbortReason<Unit>>,ticket)
+    interruptProcess(Bool.not(Maybe.is_none(&2,Abort.AbortReason<Unit>,reason)),control)
+
+def cancelAbort(cancellation: Deferred.Cancellation<Abort.AbortReason<Unit>>) -> IO(Unit):
+  do IO<Unit>:
+    removed : Bool <- Deferred.cancel(Abort.AbortReason<Unit>,cancellation)
+    return Unit{}
+
+def abortObserver(control: ProcessControl, observation: Deferred.Observation<Abort.AbortReason<Unit>>) -> IO(Maybe<&1,Observer>):
+  match observation:
+    case Deferred.Observation{ticket,cancellation}:
+      do IO<Maybe<&1,Observer>>:
+        task : Chan(WatchResult) <- IO.fork(WatchResult,watchAbort(control,ticket))
+        return Some{Observer{cancelAbort(cancellation),task}}
+
+def observeAbort(signal: Maybe<&2,Abort.AbortSignal<Unit>>, control: ProcessControl) -> IO(Maybe<&1,Observer>):
+  match signal:
+    case None{}: IO.pure(Maybe<&1,Observer>,None{})
+    case Some{value}:
+      do IO<Maybe<&1,Observer>>:
+        observation : Deferred.Observation<Abort.AbortReason<Unit>> <- Abort.observe(Unit,value)
+        abortObserver(control,observation)
+
+def deadlineElapsed(control: ProcessControl, result: Timer & Bool) -> IO(WatchResult):
+  match result:
+    case (owner,elapsed):
+      do IO<WatchResult>:
+        Timer.close(owner)
+        interruptProcess(elapsed,control)
+
+def watchDeadline(control: ProcessControl, owner: Timer) -> IO(WatchResult):
+  do IO<WatchResult>:
+    result : Timer & Bool <- Timer.wait(owner)
+    deadlineElapsed(control,result)
+
+def deadlineObserver(control: ProcessControl, pair: Timer & TimerCancel) -> IO(Maybe<&1,Observer>):
+  match pair:
+    case (owner,handle):
+      do IO<Maybe<&1,Observer>>:
+        task : Chan(WatchResult) <- IO.fork(WatchResult,watchDeadline(control,owner))
+        return Some{Observer{cancelTimer(Some{handle}),task}}
+
+def observeDeadline(milliseconds: Maybe<&2,U32>, control: ProcessControl) -> IO(Maybe<&1,Observer>):
+  match milliseconds:
+    case None{}: IO.pure(Maybe<&1,Observer>,None{})
+    case Some{value}:
+      do IO<Maybe<&1,Observer>>:
+        pair : Timer & TimerCancel <- Timer.new(value)
+        deadlineObserver(control,pair)
+
+# Cancel both registrations before joining either completion. A completion that
+# already won is retained, and no observer can signal after owner retirement.
+def cancelObserver(observer: Maybe<&1,Observer>) -> IO(Maybe<&2,Chan(WatchResult)>):
+  match observer:
+    case None{}: IO.pure(Maybe<&2,Chan(WatchResult)>,None{})
+    case Some{Observer{cancel,task}}:
+      do IO<Maybe<&2,Chan(WatchResult)>>:
+        cancel
+        return Some{task}
+
+def joinObserver(task: Maybe<&2,Chan(WatchResult)>) -> IO(WatchResult):
+  match task:
+    case None{}: IO.pure(WatchResult,WatchResult{False{},Nil{}})
+    case Some{value}: IO.join(WatchResult,value)
+
+def inputClosed(pipe: Pipe, failed: List<&2,Error>) -> IO(List<&2,Error>):
+  do IO<List<&2,Error>>:
+    result : Result<&1,&1,U32 & String,Unit> <- Pipe.close_checked(pipe)
+    return List.append(&2,Error,failed,errors("stdin close",result))
+
+# A shell may exit before consuming its whole script. EPIPE matches upstream's
+# ignored stdin error; our deliberate retirement also cancels a blocked writer.
+def inputResult(next: Pipe -> List<&2,U32> -> IO(List<&2,Error>), bytes: List<&2,U32>, result: Pipe & Result<&1,&1,U32 & String,U32>) -> IO(List<&2,Error>):
+  match result:
+    case (pipe,Fail{(32,_)}): inputClosed(pipe,Nil{})
+    case (pipe,Fail{(125,_)}): inputClosed(pipe,Nil{})
+    case (pipe,Fail{(code,message)}): inputClosed(pipe,Error{"stdin write",code,message} <> Nil{})
+    case (pipe,Done{0}): inputClosed(pipe,Error{"stdin write",0,"write made no progress"} <> Nil{})
+    case (pipe,Done{count}): next(pipe,List.drop(&2,U32,bytes,U32.to_nat(count)))
+
+# Each successful write removes at least one byte, so the initial byte length
+# bounds the number of iterations even when the OS accepts partial writes.
+def writeInput(fuel: Nat, pipe: Pipe, bytes: List<&2,U32>) -> IO(List<&2,Error>):
+  match fuel bytes:
+    case _ Nil{}: inputClosed(pipe,Nil{})
+    case 0n _: inputClosed(pipe,[Error{"stdin write",0,"write progress exhausted"}])
+    case 1n+rest +bytes:
+      do IO<List<&2,Error>>:
+        result : Pipe & Result<&1,&1,U32 & String,U32> <- Pipe.write(pipe,List.take(&2,U32,bytes,65536n))
+        inputResult(next => pending => writeInput(rest,next,pending),bytes,result)
+
+def startInput(input: Maybe<&1,Pipe & PipeCancel>, command: String) -> IO(Maybe<&1,InputWriter>):
+  match input:
+    case None{}: IO.pure(Maybe<&1,InputWriter>,None{})
+    case Some{(pipe,cancel)}:
+      do IO<Maybe<&1,InputWriter>>:
+        +bytes : List<&2,U32> = Utf8.encode(command)
+        task : Chan(List<&2,Error>) <- IO.fork(List<&2,Error>,writeInput(List.length(&2,U32,bytes),pipe,bytes))
+        return Some{InputWriter{cancel,task}}
+
+def finishInput(input: Maybe<&1,InputWriter>) -> IO(List<&2,Error>):
+  match input:
+    case None{}: IO.pure(List<&2,Error>,Nil{})
+    case Some{InputWriter{cancel,task}}:
+      do IO<List<&2,Error>>:
+        stopped : Bool <- Pipe.cancel(cancel)
+        IO.join(List<&2,Error>,task)
+
+def executionResult(aborted: Bool, expired: Bool, failed: List<&2,Error>, status: Maybe<&2,ProcessStatus>) -> Result<&2,&2,ExecutionError,U32>:
+  match aborted expired failed status:
+    case True{} _ _ _: Fail{ExecutionAborted{}}
+    case _ True{} _ _: Fail{ExecutionTimedOut{}}
+    case _ _ error <> rest _: Fail{ExecutionFailed{error <> rest}}
+    case _ _ Nil{} Some{ProcessExited{code}}: Done{code}
+    case _ _ Nil{} Some{ProcessSignalled{signal}}: Done{(128 + signal : U32)}
+    case _ _ Nil{} None{}: Fail{ExecutionFailed{[Error{"process status",0,"missing exit status"}]}}
+
+def finishExecution(signal: Maybe<&2,Abort.AbortSignal<Unit>>, input: Maybe<&1,InputWriter>, owner: Process, report: Report, parent: WatchResult, deadline: WatchResult) -> IO(Result<&2,&2,ExecutionError,U32>):
+  match report parent deadline:
+    case Report{status,failed} WatchResult{_,parentErrors} WatchResult{expired,timerErrors}:
+      do IO<Result<&2,&2,ExecutionError,U32>>:
+        inputErrors : List<&2,Error> <- finishInput(input)
+        closed : Result<&1,&1,U32 & String,Unit> <- Process.close_checked(owner)
+        aborted : Bool <- parentAborted(signal)
+        allErrors : List<&2,Error> = List.concat(&2,Error,[failed,parentErrors,timerErrors,inputErrors,errors("process close",closed)])
+        return executionResult(aborted,expired,allErrors,status)
+
+def retireExecution(signal: Maybe<&2,Abort.AbortSignal<Unit>>, input: Maybe<&1,InputWriter>, parent: Maybe<&1,Observer>, deadline: Maybe<&1,Observer>, result: Process & Report) -> IO(Result<&2,&2,ExecutionError,U32>):
+  match result:
+    case (owner,report):
+      do IO<Result<&2,&2,ExecutionError,U32>>:
+        parentTask : Maybe<&2,Chan(WatchResult)> <- cancelObserver(parent)
+        timerTask : Maybe<&2,Chan(WatchResult)> <- cancelObserver(deadline)
+        parentResult : WatchResult <- joinObserver(parentTask)
+        timerResult : WatchResult <- joinObserver(timerTask)
+        finishExecution(signal,input,owner,report,parentResult,timerResult)
+
+def withInput(result: Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)>) -> Result<&1,&1,U32 & String,Started>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{(owner,(control,(input,(output,error))))}: Done{Started{owner,control,Some{input},output,error}}
+
+def withoutInput(result: Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel)>) -> Result<&1,&1,U32 & String,Started>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{(owner,(control,(output,error)))}: Done{Started{owner,control,None{},output,error}}
+
+def spawnShell(stdin: Bool, shell: String, args: List<String>, command: String, cwd: String, env: List<String>) -> IO(Result<&1,&1,U32 & String,Started>):
+  match stdin:
+    case True{}:
+      do IO<Result<&1,&1,U32 & String,Started>>:
+        result : Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)> <- Process.spawn(shell,args,cwd,env)
+        return withInput(result)
+    case False{}:
+      do IO<Result<&1,&1,U32 & String,Started>>:
+        result : Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel)> <- Process.spawn_null_stdin(shell,List.append(&1,String,args,[command]),cwd,env)
+        return withoutInput(result)
+
+def executeStarted(options: ExecutionOptions, command: String, result: Result<&1,&1,U32 & String,Started>) -> IO(Result<&2,&2,ExecutionError,U32>):
+  match options result:
+    case ExecutionOptions{signal,_,_} Fail{(code,message)}:
+      do IO<Result<&2,&2,ExecutionError,U32>>:
+        aborted : Bool <- parentAborted(signal)
+        return executionResult(aborted,False{},[Error{"spawn",code,message}],None{})
+    case ExecutionOptions{+signal,milliseconds,onData} Done{Started{owner,+control,input,output,error}}:
+      do IO<Result<&2,&2,ExecutionError,U32>>:
+        parent : Maybe<&1,Observer> <- observeAbort(signal,control)
+        deadline : Maybe<&1,Observer> <- observeDeadline(milliseconds,control)
+        writer : Maybe<&1,InputWriter> <- startInput(input,command)
+        result : Process & Report <- waitForChildProcess(owner,control,output,error,onData)
+        retireExecution(signal,writer,parent,deadline,result)
+
+def executeChecked(aborted: Bool, stdin: Bool, shell: String, args: List<String>, +command: String, cwd: String, env: List<String>, options: ExecutionOptions) -> IO(Result<&2,&2,ExecutionError,U32>):
+  match aborted:
+    case True{}: IO.pure(Result<&2,&2,ExecutionError,U32>,Fail{ExecutionAborted{}})
+    case False{}:
+      do IO<Result<&2,&2,ExecutionError,U32>>:
+        result : Result<&1,&1,U32 & String,Started> <- spawnShell(stdin,shell,args,command,cwd,env)
+        executeStarted(options,command,result)
+
+def executeValidated(stdin: Bool, shell: String, args: List<String>, command: String, cwd: String, env: List<String>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>, timeout: Result<&2,&2,ExecutionError,Maybe<&2,U32>>) -> IO(Result<&2,&2,ExecutionError,U32>):
+  match timeout:
+    case Fail{error}: IO.pure(Result<&2,&2,ExecutionError,U32>,Fail{error})
+    case Done{milliseconds}:
+      do IO<Result<&2,&2,ExecutionError,U32>>:
+        aborted : Bool <- parentAborted(signal)
+        executeChecked(aborted,stdin,shell,args,command,cwd,env,ExecutionOptions{signal,milliseconds,onData})
+
+def execute(shell: String, args: List<String>, command: String, cwd: String, env: List<String>, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeoutSeconds: Maybe<&2,F64>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,ExecutionError,U32>):
+  executeValidated(False{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))
+
+def executeStdin(shell: String, args: List<String>, command: String, cwd: String, env: List<String>, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeoutSeconds: Maybe<&2,F64>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,ExecutionError,U32>):
+  executeValidated(True{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))
