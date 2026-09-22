@@ -230,10 +230,12 @@ def advance(done: Bool, +size: U32, state: Encoded) -> Progress:
 
 # Every token consumes at least one byte. Match length never exceeds remaining
 # input, and insertion advances every consumed position, including overlap.
-@unsafe def tokenize(+size: U32, state: Progress) -> Encoded:
-  match state:
-    case Complete{encoded}: encoded
-    case Continue{Encoded{store,+position,tokens,bits}}: tokenize(size,advance(U32.is_eq(position,size),size,Encoded{store,position,tokens,bits}))
+# Starting with size + 1 fuel reaches Complete before fuel can run out.
+def tokenize(fuel: Nat, +size: U32, state: Progress) -> Encoded:
+  match fuel state:
+    case _ Complete{encoded}: encoded
+    case 0n Continue{encoded}: encoded
+    case 1n+n Continue{Encoded{store,+position,tokens,bits}}: tokenize(n,size,advance(U32.is_eq(position,size),size,Encoded{store,position,tokens,bits}))
 
 type Stored is Type:
   Stored{bytes: Array<U32>, position: U32, output: Output}
@@ -286,7 +288,7 @@ def wrapped(zlib: Bool, checksum: U32, result: Result<&2,&2,Error,List<&2,U32>>)
 def loaded(zlib: Bool, limit: Nat, state: Loaded) -> Result<&2,&2,Error,List<&2,U32>>:
   match state:
     case Loaded{bytes,+size,checksum}:
-      wrapped(zlib,checksum,finished(size,limit,tokenize(size,Continue{Encoded{Store{bytes,Array.new(U32,15n,0),Array.new(U32,15n,0)},0,Nil{},10n}})))
+      wrapped(zlib,checksum,finished(size,limit,tokenize(1n + U32.to_nat(size),size,Continue{Encoded{Store{bytes,Array.new(U32,15n,0),Array.new(U32,15n,0)},0,Nil{},10n}})))
 
 def capacityDepth(fuel: Nat, +size: U32, +capacity: U32, +depth: Nat) -> Nat:
   match fuel:
