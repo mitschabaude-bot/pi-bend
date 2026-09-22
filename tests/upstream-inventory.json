@@ -3334,9 +3334,14 @@
     },
     {
       "source": "packages/tui/test/fuzzy.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5945d422c5728860dff14331a69f56a30f781d0343c87ab18b4e1a2454766798"
+      "status": "ported",
+      "ports": [
+        "tests/fuzzy.bend",
+        "tests/fuzzy_check.py",
+        "tests/fuzzy_reference.mts"
+      ],
+      "sha256": "5945d422c5728860dff14331a69f56a30f781d0343c87ab18b4e1a2454766798",
+      "notes": "All 14 original named tests (18 public calls) plus 1,988 total differential comparisons pass Bun/native one/four. Unicode scalar positions and simple folding replace UTF16 positions and JS lowercasing; stable ranking, token conjunction and alphanumeric fallback preserved. See tests/fuzzy.md. No terminal selector or model-listing integration claimed."
     },
     {
       "source": "packages/tui/test/input.test.ts",
