@@ -1,7 +1,8 @@
-"""Native conversion entry points: BMP/PNG pixels, MIME dispatch and budgets."""
+"""Native image conversion: decoded pixels, MIME dispatch and budgets."""
 import argparse
 import base64
 import json
+import re
 from pathlib import Path
 import struct
 import subprocess
@@ -70,6 +71,18 @@ for transparent in [False, True]:
     fixtures.append((1, 1, 'gif', image))
 
 
+upstream_tests = subprocess.check_output(['git','-C',str(ROOT.parent/'pi-mono'),'show',
+    '46c9de402bddf46b03c3b9f46487b777aaa41861:packages/coding-agent/test/image-processing.test.ts'],text=True)
+original = dict(re.findall(r'const (TINY_PNG|TINY_JPEG|TINY_JPEG_2X1)\s*=\s*"([^"]+)"',upstream_tests))
+fixtures += [(2,2,'png',base64.b64decode(original['TINY_PNG'])),
+             (2,2,'jpeg',base64.b64decode(original['TINY_JPEG']))]
+def app1(payload): return b'\xff\xe1'+struct.pack('>H',len(payload)+2)+payload
+jpeg = base64.b64decode(original['TINY_JPEG_2X1'])
+xmp = app1(b'http://ns.adobe.com/xap/1.0/\0<x:xmpmeta xmlns:x="adobe:ns:meta/"/>')
+exif = app1(b'Exif\0\0'+bytes.fromhex('49492a0008000000010012010300010000000600000000000000'))
+oriented_jpeg = jpeg[:2]+xmp+exif+jpeg[2:]
+
+
 def run_backend(backend, requests):
     prefix = ROOT / args.prefix
     command = ['bun', str(prefix)+'.js'] if backend == 'bun' else [str(prefix), '--threads', backend[-1]]
@@ -110,4 +123,11 @@ with tempfile.TemporaryDirectory(prefix='image-convert-') as directory:
             bounds.append(f'convert:{mime}:{data}')
             want.append(output)
         assert run_backend(backend, bounds) == want, backend
-        print(f'{backend}: {len(actual)} conversion pixel comparisons and {len(bounds)} budget/pass-through/error checks PASS', flush=True)
+        original_results = run_backend(backend, [f"convert:image/png:{original['TINY_PNG']}",
+            f"convert:image/jpeg:{original['TINY_JPEG']}", f"convert:image/jpeg:{b64(oriented_jpeg)}"])
+        assert original_results[0] == 'image/png:'+original['TINY_PNG'], backend
+        for output, dimensions in zip(original_results[1:], [(2,2),(1,2)]):
+            assert output.startswith('image/png:'), (backend,output)
+            decoded = base64.b64decode(output.removeprefix('image/png:'),validate=True)
+            assert decoded.startswith(b'\x89PNG\r\n\x1a\n') and struct.unpack('>II',decoded[16:24])==dimensions,backend
+        print(f'{backend}: {len(actual)} conversion pixel comparisons, {len(bounds)} budget/pass-through/error checks, and 3 original conversion cases PASS', flush=True)

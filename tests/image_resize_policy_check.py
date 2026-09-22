@@ -4,6 +4,7 @@ import base64
 import json
 from pathlib import Path
 import random
+import re
 import struct
 import subprocess
 import tempfile
@@ -44,6 +45,21 @@ data = base64.b64encode(png(64, 48, 98)).decode()
 for limit in [6000, 4000, 2000, 1200, 900, 800]:
     for quality in [80, 40]:
         cases.append({'data': data, 'mime': 'image/png', 'options': {'maxBytes': limit, 'jpegQuality': quality}})
+
+
+# Replay the original suite's exact image fixtures and options as well as the
+# broader generated corpus above. Obtain fixtures from the pinned source.
+upstream_tests = subprocess.check_output(['git', '-C', str(ROOT.parent/'pi-mono'), 'show',
+    f'{PIN}:packages/coding-agent/test/image-processing.test.ts'], text=True)
+original = dict(re.findall(r'const (TINY_PNG|TINY_JPEG|MEDIUM_PNG_100x100|LARGE_PNG_200x200)\s*=\s*"([^"]+)"', upstream_tests))
+for name, mime, options in [
+    ('TINY_PNG', 'image/png', {'maxWidth':100,'maxHeight':100,'maxBytes':1048576}),
+    ('MEDIUM_PNG_100x100', 'image/png', {'maxWidth':50,'maxHeight':50,'maxBytes':1048576}),
+    ('LARGE_PNG_200x200', 'image/png', {'maxWidth':2000,'maxHeight':2000,'maxBytes':len(original['LARGE_PNG_200x200'])*9//10}),
+    ('LARGE_PNG_200x200', 'image/png', {'maxWidth':2000,'maxHeight':2000,'maxBytes':1}),
+    ('TINY_JPEG', 'image/jpeg', {'maxWidth':100,'maxHeight':100,'maxBytes':1048576}),
+]:
+    cases.append({'data':original[name], 'mime':mime, 'options':options})
 
 
 def command(case):

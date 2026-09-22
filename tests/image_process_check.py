@@ -8,6 +8,8 @@ import struct
 import subprocess
 import tempfile
 import zlib
+from webp_lossless_check import constant, webp
+from webp_check import animated
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = '46c9de402bddf46b03c3b9f46487b777aaa41861'
@@ -44,6 +46,9 @@ def app1(payload): return b'\xff\xe1'+struct.pack('>H',len(payload)+2)+payload
 xmp = app1(b'http://ns.adobe.com/xap/1.0/\0<x:xmpmeta xmlns:x="adobe:ns:meta/"/>')
 exif = app1(b'Exif\0\0'+bytes.fromhex('49492a0008000000010012010300010000000600000000000000'))
 files += [('tiny.jpg',jpeg,'image/jpeg'),('oriented.jpg',jpeg[:2]+xmp+exif+jpeg[2:],'image/jpeg')]
+files += [('tiny.webp',webp(constant(3,2,0x12345678)),'image/webp'),
+          ('large.webp',webp(constant(2010,3,0x123456ff)),'image/webp'),
+          ('animated.webp',animated(8,6,2,2,2,2,0x12345678,True,True),'image/webp')]
 cases = []
 for _, data, mime in files:
     for resize in [True, False]:
