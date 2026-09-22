@@ -56,7 +56,7 @@ def secrets_and_messages(hello, flight):
     return peer, app, messages
 
 
-def check(command, algorithm, folder):
+def check(command, algorithm, folder, streaming=False):
     context, seen = server_context(folder, algorithm)
     cert = x509.load_pem_x509_certificate((folder / 'certificate.pem').read_bytes()).public_bytes(serialization.Encoding.DER)
     count = 0
@@ -96,6 +96,36 @@ def check(command, algorithm, folder):
     reply2 = transport_out.read()
     replay, data = invoke(operations + ['s' + encode(b'ping'), 's' + encode(b' again'), 'r' + encode(reply1), 'r' + encode(reply2)])
     assert replay == outgoing and data == [b'pong', b' again']
+
+    if streaming:
+        # Socket chunking is independent of both record and handshake framing.
+        stream = head + ccs + b''.join(flight[3]) + reply1 + reply2
+        expected_out, expected_in = outgoing[:2], [b'pong', b' again']
+        for widths in [[len(stream)], [1], [2, 3, 5, 7, 11, 13], [4096]]:
+            chunks, offset, index = [], 0, 0
+            while offset < len(stream):
+                width = widths[index % len(widths)]
+                chunks.append(stream[offset:offset + width])
+                offset += width
+                index += 1
+            actual_out, actual_in = invoke(['r' + encode(chunk) for chunk in chunks])
+            assert (actual_out, actual_in) == (expected_out, expected_in)
+        # A send between two pieces of an incoming record preserves its buffer.
+        actual_out, actual_in = invoke(operations + ['r' + encode(reply1[:7]), 's' + encode(b'ping'),
+                                                     'r' + encode(reply1[7:])])
+        assert actual_out == outgoing[:3] and actual_in == [b'pong']
+        # A later invalid record must not erase valid records in the same read.
+        bad = bytearray(reply2); bad[-1] ^= 1
+        actual_out, actual_in = invoke(['r' + encode(head + ccs + b''.join(flight[3]) + reply1 + bad)], expected='error:record:mac')
+        assert (actual_out, actual_in) == (expected_out, [b'pong'])
+        # Reject oversized advertised lengths before receiving their bodies.
+        invoke(['r23,3,3,65,1'], expected='error:record')
+        invoke(['r22,3,3,64,1'], expected='error:record')
+        invoke(['r22,3,3,0,1,256'], expected='error:record')
+        invoke(['r'], expected='hello')
+        _, actual_in = invoke(['r' + encode(stream + protected(app, 2, b'\1\0', 21) + b'garbage')], expected='read-closed')
+        assert actual_in == expected_in
+        return count
 
     # The same handshake succeeds with different legal record boundaries.
     for chunks in [[b''.join(messages)], messages,
@@ -157,15 +187,19 @@ def check(command, algorithm, folder):
 
 
 if __name__ == '__main__':
+    streaming = '--stream' in sys.argv[1:]
+    stem = 'build/tls13-client-stream' if streaming else 'build/tls13-client'
+    selected = [arg for arg in sys.argv[1:] if arg != '--stream']
     with tempfile.TemporaryDirectory(prefix='pi-bend-client-') as temp:
-        for backend, command in [('native-1', ['build/tls13-client', '--threads', '1']),
-                                 ('native-4', ['build/tls13-client', '--threads', '4']),
-                                 ('bun', ['bun', 'build/tls13-client.js'])]:
-            if len(sys.argv) > 1 and sys.argv[1] != backend:
+        for backend, command in [('native-1', [stem, '--threads', '1']),
+                                 ('native-4', [stem, '--threads', '4']),
+                                 ('bun', ['bun', stem + '.js'])]:
+            if selected and selected[0] != backend:
                 continue
             count = 0
-            for algorithm in ['rsa', 'ecdsa', 'ecdsa384']:
-                cases = check(command, algorithm, Path(temp))
+            for algorithm in (['ecdsa'] if streaming else ['rsa', 'ecdsa', 'ecdsa384']):
+                cases = check(command, algorithm, Path(temp), streaming=streaming)
                 count += cases
                 print(f'{backend}/{algorithm}: {cases} flows PASS', flush=True)
-            print(f'{backend}: {count} session flows; RSA/P256/P384 OpenSSL handshakes, bidirectional traffic, authorization and epoch checks PASS', flush=True)
+            scope = 'socket chunking and prefix preservation' if streaming else 'RSA/P256/P384 authentication and closure'
+            print(f'{backend}: {count} session flows; {scope} PASS', flush=True)

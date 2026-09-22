@@ -6,8 +6,8 @@ import ./x509.bend as X509
 
 # A connection owns both traffic epochs and its certificate authorizer. The
 # authorizer must check the chain and intended identity; there is no implicit
-# trust policy. Input is one complete TLS record. Handshake messages may span
-# records. Failure consumes the connection and its sequence numbers.
+# trust policy. Input is arbitrary socket chunks. TLS records and handshake
+# messages are buffered independently with explicit size bounds. Failure consumes the connection and its sequence numbers.
 type Error is Data:
   HandshakeFailure{cause: H.Error}
   RecordFailure{cause: R.Error}
@@ -29,8 +29,15 @@ type Phase is Type:
   Authenticating{handshake: H.Handshake, expected: Authentication}
   Connected{write: Maybe<&1, R.Traffic>, read: Maybe<&1, R.Traffic>, clientSecret: List<&2, U32>, serverSecret: List<&2, U32>, parameters: H.Parameters}
 
+type RecordBuffer is Data:
+  RecordHeader{reverse: List<&2, U32>, needed: U32}
+  RecordBody{reverse: List<&2, U32>, remaining: U32}
+
+def emptyInput() -> RecordBuffer:
+  RecordHeader{Nil{}, 5}
+
 type Client is Type:
-  Client{phase: Phase, fragments: H.Buffer, messageLimit: U32}
+  Client{phase: Phase, fragments: H.Buffer, messageLimit: U32, input: RecordBuffer}
 
 type Step is Type:
   Step{client: Client, outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U32>>}
@@ -49,7 +56,7 @@ def started(authorization: Authorization, limit: U32, result: Result<&2, &1, H.E
   match result:
     case Fail{cause}: Fail{HandshakeFailure{cause}}
     case Done{H.Started{pending, record}}:
-      Done{Step{Client{Hello{pending, authorization}, H.emptyBuffer(), limit}, record <> Nil{}, Nil{}}}
+      Done{Step{Client{Hello{pending, authorization}, H.emptyBuffer(), limit, emptyInput()}, record <> Nil{}, Nil{}}}
 
 def initialize(name: Maybe<&2, String>, entropy: List<&2, U32>, authorization: Authorization, limit: U32) -> Result<&2, &1, Error, Step>:
   started(authorization, limit, H.initialize(name, entropy))
@@ -98,7 +105,7 @@ def connected(parameters: H.Parameters, secrets: H.Secrets, limit: U32, result: 
   match secrets result:
     case _ Fail{cause}: Fail{RecordFailure{cause}}
     case H.Secrets{_, _, client, server, H.TrafficKey{wk, wi}, H.TrafficKey{rk, ri}} Done{R.Sent{_, record}}:
-      Done{Step{Client{Connected{Some{R.create(wk, wi)}, Some{R.create(rk, ri)}, client, server, parameters}, H.emptyBuffer(), limit}, record <> Nil{}, Nil{}}}
+      Done{Step{Client{Connected{Some{R.create(wk, wi)}, Some{R.create(rk, ri)}, client, server, parameters}, H.emptyBuffer(), limit, emptyInput()}, record <> Nil{}, Nil{}}}
 
 def finish(handshake: H.Handshake, parameters: H.Parameters, wire: List<&2, U32>, limit: U32) -> Result<&2, &1, Error, Step>:
   match handshake:
@@ -111,13 +118,13 @@ def finish(handshake: H.Handshake, parameters: H.Parameters, wire: List<&2, U32>
 def serverHello(authorization: Authorization, limit: U32, result: Result<&2, &1, H.Error, H.Handshake>) -> Result<&2, &1, Error, Step>:
   match result:
     case Fail{cause}: Fail{HandshakeFailure{cause}}
-    case Done{handshake}: Done{Step{Client{Authenticating{handshake, Extensions{authorization}}, H.emptyBuffer(), limit}, Nil{}, Nil{}}}
+    case Done{handshake}: Done{Step{Client{Authenticating{handshake, Extensions{authorization}}, H.emptyBuffer(), limit, emptyInput()}, Nil{}, Nil{}}}
 
 # Messages that change traffic keys must end their record (RFC 8446 5.1).
 # A partial following message is just as invalid as a complete following one.
 def messages(wires: List<&2, List<&2, U32>>, phase: Phase, +buffer: H.Buffer, +limit: U32) -> Result<&2, &1, Error, Step>:
   match wires phase:
-    case Nil{} phase: Done{Step{Client{phase, buffer, limit}, Nil{}, Nil{}}}
+    case Nil{} phase: Done{Step{Client{phase, buffer, limit, emptyInput()}, Nil{}, Nil{}}}
     case +wire <> rest Hello{pending, authorization}:
       Result.bind(&2, &1, Error, Unit, Step, require(List.is_empty(&2, List<&2, U32>, rest) && H.atBoundary(buffer)), unused =>
         serverHello(authorization, limit, H.acceptServerHello(pending, wire)))
@@ -134,15 +141,15 @@ def framed(phase: Phase, limit: U32, result: Result<&2, &2, H.FramingError, H.Ba
 
 def handshakeRecord(client: Client, bytes: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{phase, buffer, +limit}: framed(phase, limit, H.feed(limit, buffer, bytes))
+    case Client{phase, buffer, +limit, input}: framed(phase, limit, H.feed(limit, buffer, bytes))
 
 def alert(client: Client, bytes: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client bytes:
-    case Client{Connected{write, _, cs, ss, parameters}, +buffer, limit} _ <> 0 <> Nil{}:
+    case Client{Connected{write, _, cs, ss, parameters}, +buffer, limit, input} _ <> 0 <> Nil{}:
       Result.bind(&2, &1, Error, Unit, Step, require(H.atBoundary(buffer)), unused =>
-        Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit}, Nil{}, Nil{}}})
-    case Client{phase, +buffer, limit} _ <> 90 <> Nil{}:
-      Result.bind(&2, &1, Error, Unit, Step, require(H.atBoundary(buffer)), unused => Done{Step{Client{phase, buffer, limit}, Nil{}, Nil{}}})
+        Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit, emptyInput()}, Nil{}, Nil{}}})
+    case Client{phase, +buffer, limit, input} _ <> 90 <> Nil{}:
+      Result.bind(&2, &1, Error, Unit, Step, require(H.atBoundary(buffer)), unused => Done{Step{Client{phase, buffer, limit, emptyInput()}, Nil{}, Nil{}}})
     case _ _ <> description <> Nil{}: Fail{PeerAlert{description}}
     case _ _: Fail{UnexpectedMessage{}}
 
@@ -150,9 +157,9 @@ def content(client: Client, message: R.Content) -> Result<&2, &1, Error, Step>:
   match client message:
     case client R.Content{R.Handshake{}, bytes}: handshakeRecord(client, bytes)
     case client R.Content{R.Alert{}, bytes}: alert(client, bytes)
-    case Client{Connected{write, read, cs, ss, parameters}, +buffer, limit} R.Content{R.Application{}, bytes}:
+    case Client{Connected{write, read, cs, ss, parameters}, +buffer, limit, input} R.Content{R.Application{}, bytes}:
       Result.bind(&2, &1, Error, Unit, Step, require(H.atBoundary(buffer)), unused =>
-        Done{Step{Client{Connected{write, read, cs, ss, parameters}, buffer, limit}, Nil{}, bytes <> Nil{}}})
+        Done{Step{Client{Connected{write, read, cs, ss, parameters}, buffer, limit, emptyInput()}, Nil{}, bytes <> Nil{}}})
     case _ _: Fail{UnexpectedMessage{}}
 
 def recorded(-A: Type, result: Result<&2, &1, R.Error, A>) -> Result<&2, &1, Error, A>:
@@ -167,28 +174,28 @@ def decrypted(result: R.Received, resume: R.Traffic -> Client) -> Result<&2, &1,
 
 def encrypted(client: Client, wire: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Authenticating{H.Handshake{name, transcript, secret, cs, ss, write, read}, expected}, buffer, limit}:
+    case Client{Authenticating{H.Handshake{name, transcript, secret, cs, ss, write, read}, expected}, buffer, limit, input}:
       Result.bind(&2, &1, Error, R.Received, Step, recorded(R.Received, R.receive(read, wire)), received =>
-        decrypted(received, next => Client{Authenticating{H.Handshake{name, transcript, secret, cs, ss, write, next}, expected}, buffer, limit}))
-    case Client{Connected{write, Some{read}, cs, ss, parameters}, buffer, limit}:
+        decrypted(received, next => Client{Authenticating{H.Handshake{name, transcript, secret, cs, ss, write, next}, expected}, buffer, limit, emptyInput()}))
+    case Client{Connected{write, Some{read}, cs, ss, parameters}, buffer, limit, input}:
       Result.bind(&2, &1, Error, R.Received, Step, recorded(R.Received, R.receive(read, wire)), received =>
-        decrypted(received, next => Client{Connected{write, Some{next}, cs, ss, parameters}, buffer, limit}))
+        decrypted(received, next => Client{Connected{write, Some{next}, cs, ss, parameters}, buffer, limit, emptyInput()}))
     case _: Fail{UnexpectedMessage{}}
 
 def compatibility(client: Client) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Hello{pending, authorization}, buffer, limit}: Done{Step{Client{Hello{pending, authorization}, buffer, limit}, Nil{}, Nil{}}}
-    case Client{Authenticating{handshake, expected}, buffer, limit}: Done{Step{Client{Authenticating{handshake, expected}, buffer, limit}, Nil{}, Nil{}}}
+    case Client{Hello{pending, authorization}, buffer, limit, input}: Done{Step{Client{Hello{pending, authorization}, buffer, limit, input}, Nil{}, Nil{}}}
+    case Client{Authenticating{handshake, expected}, buffer, limit, input}: Done{Step{Client{Authenticating{handshake, expected}, buffer, limit, input}, Nil{}, Nil{}}}
     case _: Fail{UnexpectedMessage{}}
 
 def plaintext(client: Client, bytes: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Hello{pending, authorization}, buffer, limit}: handshakeRecord(Client{Hello{pending, authorization}, buffer, limit}, bytes)
+    case Client{Hello{pending, authorization}, buffer, limit, input}: handshakeRecord(Client{Hello{pending, authorization}, buffer, limit, input}, bytes)
     case _: Fail{UnexpectedMessage{}}
 
 def plaintextAlert(client: Client, bytes: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Hello{pending, authorization}, buffer, limit}: alert(Client{Hello{pending, authorization}, buffer, limit}, bytes)
+    case Client{Hello{pending, authorization}, buffer, limit, input}: alert(Client{Hello{pending, authorization}, buffer, limit, input}, bytes)
     case _: Fail{UnexpectedMessage{}}
 
 # legacy_record_version is authenticated as AAD but has no negotiation role.
@@ -204,10 +211,10 @@ def receiveRecord(client: Client, +wire: List<&2, U32>) -> Result<&2, &1, Error,
       Result.bind(&2, &1, Error, Unit, Step, require(U32.is_le(major, 255) && U32.is_le(minor, 255) && Nat.is_eq(R.length(bytes, 0n), U32.to_nat((a * 256 + b : U32))) && U32.is_le(a, 64) && U32.is_le(b, 255) && Nat.is_gt(R.length(bytes, 0n), 0n) && Nat.is_le(R.length(bytes, 0n), 16384n)), unused => plaintext(client, bytes))
     case _: Fail{UnexpectedMessage{}}
 
-def receive(client: Client, wire: List<&2, U32>) -> Result<&2, &1, Error, Step>:
+def receiveComplete(client: Client, wire: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit}:
-      Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit}, Nil{}, Nil{}}}
+    case Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit, input}:
+      Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, buffer, limit, emptyInput()}, Nil{}, Nil{}}}
     case client: receiveRecord(client, wire)
 
 def writer(closing: Bool, traffic: R.Traffic) -> Maybe<&1, R.Traffic>:
@@ -215,20 +222,82 @@ def writer(closing: Bool, traffic: R.Traffic) -> Maybe<&1, R.Traffic>:
     case False{}: Some{traffic}
     case True{}: None{}
 
-def sent(closing: Bool, read: Maybe<&1, R.Traffic>, cs: List<&2, U32>, ss: List<&2, U32>, parameters: H.Parameters, buffer: H.Buffer, limit: U32, result: Result<&2, &1, R.Error, R.Sent>) -> Result<&2, &1, Error, Step>:
+def sent(closing: Bool, read: Maybe<&1, R.Traffic>, cs: List<&2, U32>, ss: List<&2, U32>, parameters: H.Parameters, buffer: H.Buffer, limit: U32, input: RecordBuffer, result: Result<&2, &1, R.Error, R.Sent>) -> Result<&2, &1, Error, Step>:
   match result:
     case Fail{cause}: Fail{RecordFailure{cause}}
-    case Done{R.Sent{write, record}}: Done{Step{Client{Connected{writer(closing, write), read, cs, ss, parameters}, buffer, limit}, record <> Nil{}, Nil{}}}
+    case Done{R.Sent{write, record}}: Done{Step{Client{Connected{writer(closing, write), read, cs, ss, parameters}, buffer, limit, input}, record <> Nil{}, Nil{}}}
 
 def send(client: Client, bytes: List<&2, U32>) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit}: sent(False{}, read, cs, ss, parameters, buffer, limit, R.send(write, R.Content{R.Application{}, bytes}, 0n))
+    case Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit, input}: sent(False{}, read, cs, ss, parameters, buffer, limit, input, R.send(write, R.Content{R.Application{}, bytes}, 0n))
     case _: Fail{UnexpectedMessage{}}
 
 # Closing the writer preserves the reader. Peer close_notify closes only the
 # reader; the application may still finish pending writes before closing them.
 def close(client: Client) -> Result<&2, &1, Error, Step>:
   match client:
-    case Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit}: sent(True{}, read, cs, ss, parameters, buffer, limit, R.send(write, R.Content{R.Alert{}, 1 <> 0 <> Nil{}}, 0n))
-    case Client{Connected{None{}, read, cs, ss, parameters}, buffer, limit}: Done{Step{Client{Connected{None{}, read, cs, ss, parameters}, buffer, limit}, Nil{}, Nil{}}}
+    case Client{Connected{Some{write}, read, cs, ss, parameters}, buffer, limit, input}: sent(True{}, read, cs, ss, parameters, buffer, limit, input, R.send(write, R.Content{R.Alert{}, 1 <> 0 <> Nil{}}, 0n))
+    case Client{Connected{None{}, read, cs, ss, parameters}, buffer, limit, input}: Done{Step{Client{Connected{None{}, read, cs, ss, parameters}, buffer, limit, input}, Nil{}, Nil{}}}
     case _: Fail{UnexpectedMessage{}}
+
+# Outer framing keeps each byte once in reverse order until its record is
+# complete. No append/reparse of a growing socket buffer, and no allocation
+# based on an unchecked peer-supplied length.
+type BufferedRecord is Data:
+  BufferedRecord{buffer: RecordBuffer, record: Maybe<&2, List<&2, U32>>}
+
+def recordBody(size: U32, reverse: List<&2, U32>) -> BufferedRecord:
+  match size:
+    case 0: BufferedRecord{emptyInput(), Some{List.reverse(&2, U32, reverse)}}
+    case size: BufferedRecord{RecordBody{reverse, size}, None{}}
+
+def recordHeader(+reverse: List<&2, U32>) -> Result<&2, &1, Error, BufferedRecord>:
+  match reverse:
+    case low <> high <> _ <> _ <> +kind <> Nil{}:
+      +size = (high * 256 + low : U32)
+      maximum = Bool.pick(U32, U32.is_eq(kind, 23), 16640, 16384)
+      Result.bind(&2, &1, Error, Unit, BufferedRecord,
+        Bool.pick(Result<&2, &1, Error, Unit>, U32.is_le(size, maximum), Done{Unit{}}, Fail{RecordFailure{R.RecordOverflow{}}}), unused =>
+          Done{recordBody(size, reverse)})
+    case _: Fail{UnexpectedMessage{}}
+
+def inputByte(buffer: RecordBuffer, byte: U32) -> Result<&2, &1, Error, BufferedRecord>:
+  match buffer:
+    case RecordHeader{reverse, 1}: recordHeader(byte <> reverse)
+    case RecordHeader{reverse, needed}: Done{BufferedRecord{RecordHeader{byte <> reverse, (needed - 1 : U32)}, None{}}}
+    case RecordBody{reverse, 1}: Done{BufferedRecord{emptyInput(), Some{List.reverse(&2, U32, byte <> reverse)}}}
+    case RecordBody{reverse, remaining}: Done{BufferedRecord{RecordBody{byte <> reverse, (remaining - 1 : U32)}, None{}}}
+
+def buffered(client: Client, record: BufferedRecord) -> Result<&2, &1, Error, Step>:
+  match client record:
+    case Client{phase, fragments, limit, _} BufferedRecord{input, None{}}: Done{Step{Client{phase, fragments, limit, input}, Nil{}, Nil{}}}
+    case Client{phase, fragments, limit, _} BufferedRecord{_, Some{wire}}: receiveComplete(Client{phase, fragments, limit, emptyInput()}, wire)
+
+# Accepted records are observable even if a later record in this same socket
+# chunk fails. Otherwise transport chunk boundaries would decide which valid
+# application bytes or generated replies the caller gets to see.
+type Reception is Type:
+  Reception{client: Result<&2, &1, Error, Client>, outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U32>>}
+
+def finishInput(outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U32>>, result: Result<&2, &1, Error, Step>) -> Reception:
+  match result:
+    case Fail{cause}: Reception{Fail{cause}, List.reverse(&2, List<&2, U32>, outgoing), List.reverse(&2, List<&2, U32>, incoming)}
+    case Done{Step{client, outbound, inbound}}:
+      Reception{Done{client}, List.reverse(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, outbound, outgoing)), List.reverse(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, inbound, incoming))}
+
+def feed(bytes: List<&2, U32>, result: Result<&2, &1, Error, Step>, outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U32>>) -> Reception:
+  match bytes result:
+    case Nil{} result: finishInput(outgoing, incoming, result)
+    case _ Fail{cause}: finishInput(outgoing, incoming, Fail{cause})
+    case _ Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, fragments, limit, input}, outbound, inbound}}:
+      finishInput(outgoing, incoming, Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, fragments, limit, input}, outbound, inbound}})
+    case +byte <> rest Done{Step{Client{phase, fragments, limit, input}, outbound, inbound}}:
+      feed(rest,
+        Result.bind(&2, &1, Error, Unit, Step,
+          Bool.pick(Result<&2, &1, Error, Unit>, U32.is_le(byte, 255), Done{Unit{}}, Fail{RecordFailure{R.InvalidByte{}}}), unused =>
+            Result.bind(&2, &1, Error, BufferedRecord, Step, inputByte(input, byte), record =>
+              buffered(Client{phase, fragments, limit, emptyInput()}, record))),
+        List.reverse.go(&2, List<&2, U32>, outbound, outgoing), List.reverse.go(&2, List<&2, U32>, inbound, incoming))
+
+def receive(client: Client, bytes: List<&2, U32>) -> Reception:
+  feed(bytes, Done{Step{client, Nil{}, Nil{}}}, Nil{}, Nil{})
