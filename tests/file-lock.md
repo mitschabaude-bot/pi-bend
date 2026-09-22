@@ -13,7 +13,7 @@ The single heartbeat worker compares the observed mtime with the lease's last mt
 
 ## Timestamp precision and minimal effects
 
-`patches/bend-file-lock-effects.patch` adds four POSIX filesystem effects, with corresponding hosted implementations: `Directory.create`, `Directory.remove`, `File.modified_time`, and `File.set_times_milliseconds`. It changes no compiler or existing effect implementation. The tested private toolchain is `build/bend-lock-toolchain/bend2/main.ts`; the patch has not been globally installed.
+`patches/bend-file-lock-effects.patch` adds four POSIX filesystem effects, with corresponding hosted implementations: `Directory.create`, `Directory.remove`, `File.modified_time`, and `File.set_times_milliseconds`. It changes no compiler or existing effect implementation. The isolated toolchain is `build/bend-lock-toolchain/bend2/main.ts`. Integration also applied the patch to `build/bend-process-files/bend2/main.ts` and rebuilt the fixtures there; Bun and native one/four workers passed the same 34/46/46 checks. The patch has not been globally installed.
 
 `File.modified_time` returns signed Unix seconds as high/low words plus exact nanoseconds. Native uses `stat`; hosted uses bigint `statSync`. `File.set_times_milliseconds` accepts a signed high/low millisecond pair and sets both atime and mtime using `utimensat`/`utimesSync`. It rejects embedded NUL paths and timestamps outside ±8,640,000,000,000,000 ms, the shared representable Date range, instead of silently narrowing them. Actual filesystem timestamp range/precision remains observable through stat.
 
@@ -35,8 +35,8 @@ Native fault injection adds initial probe failures, retained primary plus cleanu
 
 ```sh
 npm install --prefix build/reference --no-save proper-lockfile@4.1.2
-build/bend-native-toolchain/bend2/main.ts tests/file-lock.bend -o build/file-lock.js
-sh scripts/build-pure.sh tests/file-lock.bend build/file-lock
+build/bend-process-files/bend2/main.ts tests/file-lock.bend -o build/file-lock.js
+BEND=build/bend-process-files/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/file-lock.bend build/file-lock
 python3 tests/file_lock_check.py --runner build/file-lock.js --proper-lockfile /path/to/proper-lockfile
 python3 tests/file_lock_check.py --runner build/file-lock --threads 1 --proper-lockfile /path/to/proper-lockfile
 python3 tests/file_lock_check.py --runner build/file-lock --threads 4 --proper-lockfile /path/to/proper-lockfile
