@@ -3437,9 +3437,15 @@
     },
     {
       "source": "packages/tui/test/keys.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a5fd7e9285669f79a5ee5d242e05e5d5b90e9fc358913f3175b9d393461750d9"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/keys.bend",
+        "tests/keys.bend",
+        "tests/keys_reference.ts",
+        "tests/keys_check.py"
+      ],
+      "sha256": "a5fd7e9285669f79a5ee5d242e05e5d5b90e9fc358913f3175b9d393461750d9",
+      "notes": "All 250 actual assertions across all 60 pinned named tests replay on Bun and O1 native one/four. Additional 59,984 separate API comparisons, 1,576 boundaries and four long scans pass. Typed KeyId and explicit terminal context replace string-union/global state; documented malformed-input and non-BMP truncation corrections are in tests/keys.md. This covers keyboard parsing/matching, not the complete terminal/editor."
     },
     {
       "source": "packages/tui/test/latex.test.ts",

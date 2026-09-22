@@ -41,3 +41,5 @@ python3 tests/keys_check.py -- build/keys --threads 4
 ```
 
 The checked native artifact uses the installed compiler/effects copied into the private lock toolchain, normal `-O1`, and explicit thread arguments. Production source SHA-256: `44e3115d045968f593e9783e89aa223c47af8b71534f7d62414755b5f4977293`. No compiler changes, runtime dependency additions, or host-language production adapters were needed.
+
+Root integration rebuilt the unchanged source using `build/bend-process-files/bend2/main.ts`; all original, differential, boundary and long-input checks pass on Bun/native one/four. The pinned keys.test.ts inventory entry is ported; terminal ownership, keybinding configuration and editor integration are separate components.
