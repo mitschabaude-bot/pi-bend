@@ -137,8 +137,35 @@ def verifyCertificate(cert: List<&2, U32>, bytes: List<&2, U32>, wire: List<&2, 
 def verifyFinished(secret: List<&2, U32>, bytes: List<&2, U32>, wire: List<&2, U32>) -> Result<&2, &2, TLS.Error, SHA.State>:
   Result.bind(&2, &2, TLS.Error, SHA.State, SHA.State, TLS.hashResult(SHA.State, SHA.update(bytes,SHA.create())), transcript => TLS.verifyFinished(secret,transcript,wire))
 
+def sealResult(kind: Record.ContentType, bytes: List<&2, U32>, result: Result<&2, &2, TLS.Error, TLS.TrafficKey>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{TLS.TrafficKey{key,iv}}: sent(Record.send(Record.create(key,iv),Record.Content{kind,bytes},0n))
+
+def seal(key: List<&2, U32>, kind: Record.ContentType, bytes: List<&2, U32>) -> String:
+  sealResult(kind,bytes,TLS.deriveKey(key))
+
+def finishRecord(secret: List<&2, U32>, result: Result<&2, &2, TLS.Error, List<&2, U32>>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{wire}: seal(secret,Record.Handshake{},wire)
+
+def applicationResult(+clientHandshake: List<&2, U32>, incoming: List<&2, U32>, result: Result<&2, &2, TLS.Error, TLS.Secrets>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{TLS.Secrets{transcript,master,+client,server,_,TLS.TrafficKey{key,iv}}}:
+      finished = TLS.clientFinished(clientHandshake,transcript)
+      Bytes.show(SHA.toBytes(master)) ++ "|" ++ Bytes.show(client) ++ "|" ++ Bytes.show(server) ++ "|" ++
+        finishRecord(clientHandshake,finished) ++ "|" ++ seal(client,Record.Application{},TLS.ascii("ping")) ++ "|" ++ received(Record.receive(Record.create(key,iv),incoming))
+
+def application(secret: List<&2, U32>, client: List<&2, U32>, incoming: List<&2, U32>, result: Result<&2, &2, SHA.Error, SHA.State>) -> String:
+  match result:
+    case Fail{_}: "hash-error"
+    case Done{transcript}: applicationResult(client,incoming,TLS.applicationSecrets(secret,transcript))
+
 def run(parts: List<&2, String>) -> IO(Unit):
   match parts:
+    case "application" <> secret <> client <> transcript <> incoming <> Nil{}: IO.print(application(Bytes.bytes(secret),Bytes.bytes(client),Bytes.bytes(incoming),SHA.update(Bytes.bytes(transcript),SHA.create())))
     case "verify" <> cert <> transcript <> wire <> Nil{}: IO.print(checkedTranscript(verifyCertificate(Bytes.bytes(cert),Bytes.bytes(transcript),Bytes.bytes(wire))))
     case "finished" <> secret <> transcript <> wire <> Nil{}: IO.print(checkedTranscript(verifyFinished(Bytes.bytes(secret),Bytes.bytes(transcript),Bytes.bytes(wire))))
     case "cert" <> wire <> Nil{}: IO.print(certificateResult(TLS.certificates(Bytes.bytes(wire))))

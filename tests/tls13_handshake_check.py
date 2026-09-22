@@ -124,6 +124,7 @@ def server_context(folder, algorithm):
     context.minimum_version = context.maximum_version = ssl.TLSVersion.TLSv1_3
     context.set_ecdh_curve('X25519')
     context.set_alpn_protocols(['http/1.1'])
+    context.num_tickets = 0
     context.load_cert_chain(certificate, private)
     seen = []
     context.set_servername_callback(lambda connection, name, context: seen.append(name))
@@ -165,7 +166,7 @@ def accepted(context, seen, wire, session, host):
         else:
             assert header[0] == 20 and body == b'\x01'
     assert protected, 'server sent no protected handshake record'
-    return server_hello, protected[0], selected[51][4:], protected
+    return server_hello, protected[0], selected[51][4:], protected, server, incoming, outgoing
 
 
 def expand(secret, label, context, size):
@@ -175,7 +176,7 @@ def expand(secret, label, context, size):
 
 
 def verify_keys(line, seed, client_hello, flight):
-    server_hello, encrypted, point, protected = flight
+    server_hello, encrypted, point, protected, _, _, _ = flight
     shared = x25519.X25519PrivateKey.from_private_bytes(seed[32:64]).exchange(x25519.X25519PublicKey.from_public_bytes(point))
     early = hmac.digest(bytes(32), bytes(32), 'sha256')
     secret = hmac.digest(expand(early, b'derived', hashlib.sha256(b'').digest(), 32), shared, 'sha256')
@@ -194,7 +195,7 @@ def verify_keys(line, seed, client_hello, flight):
         clear = AESGCM(expand(server, b'key', b'', 16)).decrypt(nonce, record[5:], record[:5]).rstrip(b'\x00')
         assert clear[-1] == 22
         plaintext.append(clear[:-1])
-    return b''.join(plaintext), server
+    return b''.join(plaintext), secret, client, server
 
 
 def malformed(hello):
@@ -462,6 +463,46 @@ def verify_server_evidence(command, prefix, content, server_secret):
     return len(cases)
 
 
+def complete_handshake(command, flight, transcript, handshake_secret, client_secret):
+    server, incoming, outgoing = flight[4:]
+    master = hmac.digest(expand(handshake_secret,b'derived',hashlib.sha256(b'').digest(),32),bytes(32),'sha256')
+    client = expand(master,b'c ap traffic',hashlib.sha256(transcript).digest(),32)
+    peer = expand(master,b's ap traffic',hashlib.sha256(transcript).digest(),32)
+    argument = 'application:' + encode(handshake_secret) + ':' + encode(client_secret) + ':' + encode(transcript) + ':'
+    def run(record):
+        result = subprocess.run(command+[argument+encode(record)],cwd=ROOT,capture_output=True,text=True,timeout=90)
+        assert result.returncode == 0,result.stderr[-2000:]
+        fields = result.stdout.strip().split('|')
+        assert len(fields) == 6,fields
+        assert list(map(octets,fields[:3])) == [master,client,peer]
+        return fields
+    fields = run(b'')
+    assert fields[-1] == 'receive-error'
+    finished, application = map(octets,fields[3:5])
+    expected = handshake_message(20,hmac.digest(expand(client_secret,b'finished',b'',32),hashlib.sha256(transcript).digest(),'sha256'))
+    clear = AESGCM(expand(client_secret,b'key',b'',16)).decrypt(expand(client_secret,b'iv',b'',12),finished[5:],finished[:5])
+    assert clear == expected + b'\x16'
+    incoming.write(finished)
+    server.do_handshake()
+    assert server.version() == 'TLSv1.3'
+    assert outgoing.pending == 0
+    incoming.write(application)
+    assert server.read() == b'ping'
+    assert server.write(b'pong') == 4
+    reply = outgoing.read()
+    again = run(reply)
+    assert again[3:5] == fields[3:5]
+    assert again[-1] == '23:' + encode(b'pong')
+    # New application keys use sequence zero, independently of the consumed
+    # handshake record sequence. OpenSSL accepts the epoch switch above.
+    clear = AESGCM(expand(client,b'key',b'',16)).decrypt(expand(client,b'iv',b'',12),application[5:],application[:5])
+    assert clear == b'ping\x17'
+    bad_args = ['application:' + encode(bytes(size)) + ':' + encode(client_secret) + ':' + encode(transcript) + ':' for size in [0,31,33]]
+    malformed = subprocess.run(command+bad_args,cwd=ROOT,capture_output=True,text=True,timeout=90)
+    assert malformed.returncode == 0,malformed.stderr[-2000:]
+    assert malformed.stdout.splitlines() == ['handshake']*3
+
+
 with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
     contexts = [server_context(Path(temp), algorithm) for algorithm in ['rsa', 'ecdsa']]
     for name, command in [('native-1', ['build/tls13-handshake', '--threads', '1']),
@@ -483,7 +524,7 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             assert line == expected, (name, line, expected)
         authentication_count = 0
         for seed, wire, flight in flights:
-            hello, encrypted, _, _ = flight
+            hello, encrypted, _, _, _, _, _ = flight
             prefix = 'n:localhost:' + encode(seed) + ':'
             probes = [hello]
             # Accept either legal ordering of the two ServerHello extensions.
@@ -496,8 +537,9 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
             assert output.returncode == 0, (name, output.stderr[-2000:])
             results = output.stdout.splitlines()
             assert len(results) == len(args)
-            content, server_secret = verify_keys(results[0], seed, wire, flight)
+            content, handshake_secret, client_secret, server_secret = verify_keys(results[0], seed, wire, flight)
             authentication_count += verify_server_evidence(command, wire[5:] + hello, content, server_secret)
+            complete_handshake(command,flight,wire[5:]+hello+content,handshake_secret,client_secret)
             size = 4 + int.from_bytes(content[1:4], 'big')
             ee = content[:size]
             assert ee[0] == 8
@@ -514,4 +556,4 @@ with tempfile.TemporaryDirectory(prefix='pi-bend-tls-') as temp:
         certificate_count = check_certificates(command)
         extension_count = check_extensions(command)
         count = check_framing(command)
-        print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; native bidirectional keys and ServerHello rejection checks PASS', flush=True)
+        print(f'{name}: {authentication_count} native signature/Finished checks; {certificate_count} certificate evidence checks; {extension_count} extension checks; {count} framing cases; {len(commands)} initialization checks; {len(valid_cases) * 2} OpenSSL flights; completed OpenSSL handshakes and native bidirectional application records PASS', flush=True)

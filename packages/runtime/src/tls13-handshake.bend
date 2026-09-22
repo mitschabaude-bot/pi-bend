@@ -499,3 +499,25 @@ def verifyFinished(+secret: List<&2, U32>, +transcript: SHA.State, +wire: List<&
         Result.bind(&2, &2, Error, SHA.Digest, SHA.State, derivation(SHA.Digest, KDF.finished(secret, hash)), expected =>
           Result.bind(&2, &2, Error, Unit, SHA.State, finishedMatch(RSA.equal(body, SHA.toBytes(expected), 0)), unused =>
             hashResult(SHA.State, SHA.update(wire, transcript)))))))
+
+# Application traffic uses the transcript through server Finished. The returned
+# Secrets are key-schedule material, not proof of a trusted peer. The connection
+# layer must authorize the certificate and verify the server flight first.
+def applicationSecrets(+handshakeSecret: List<&2, U32>, +transcript: SHA.State) -> Result<&2, &2, Error, Secrets>:
+  Result.bind(&2, &2, Error, Unit, Secrets, require(Nat.is_eq(Record.length(handshakeSecret,0n),32n)), unused =>
+    Result.bind(&2, &2, Error, SHA.Digest, Secrets, derivation(SHA.Digest, KDF.advance(handshakeSecret, X.small(0))), +master =>
+      Result.bind(&2, &2, Error, SHA.Digest, Secrets, hashResult(SHA.Digest, SHA.finish(transcript)), +hash =>
+        Result.bind(&2, &2, Error, List<&2, U32>, Secrets, derivation(List<&2, U32>, KDF.deriveSecret(SHA.toBytes(master), "c ap traffic", hash)), +client =>
+          Result.bind(&2, &2, Error, List<&2, U32>, Secrets, derivation(List<&2, U32>, KDF.deriveSecret(SHA.toBytes(master), "s ap traffic", hash)), +server =>
+            Result.bind(&2, &2, Error, TrafficKey, Secrets, deriveKey(client), write =>
+              Result.bind(&2, &2, Error, TrafficKey, Secrets, deriveKey(server), read =>
+                Done{Secrets{transcript,master,client,server,write,read}})))))))
+
+# No client certificate was requested in this flow. Encrypt this message with
+# the client handshake traffic key before switching the writer to application
+# traffic. Application secrets exclude it; the resumption transcript includes it.
+def clientFinished(+clientHandshakeSecret: List<&2, U32>, transcript: SHA.State) -> Result<&2, &2, Error, List<&2, U32>>:
+  Result.bind(&2, &2, Error, Unit, List<&2, U32>, require(Nat.is_eq(Record.length(clientHandshakeSecret,0n),32n)), unused =>
+    Result.bind(&2, &2, Error, SHA.Digest, List<&2, U32>, hashResult(SHA.Digest, SHA.finish(transcript)), hash =>
+      Result.bind(&2, &2, Error, SHA.Digest, List<&2, U32>, derivation(SHA.Digest, KDF.finished(clientHandshakeSecret,hash)), mac =>
+        Done{20 <> 0 <> 0 <> 32 <> SHA.toBytes(mac)})))
