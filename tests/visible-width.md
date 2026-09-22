@@ -42,3 +42,5 @@ python3 tests/visible_width_check.py -- build/visible-width --threads 4
 Dependency: grapheme handoff `57f7f7d` (equivalent local cherry-pick `59dc8a1`). Checked `utils.bend` SHA-256: `52af6d0d6c192f45b52d4c4865e7421fda03088c7ee54a02c472f750af5208ef`; generated display module SHA-256: `6ead8de34f3226b622741088a99773c3ef6e2d64f897b4026bb5f3700797397f`. No compiler patches or global toolchain changes were needed.
 
 Final validation: Bun and optimized native explicit one/four threads pass every original observation, full-property digest, 27,533 differential cases, three corrected-control cases and four long scans above.
+
+Root integration independently regenerated the display data and rebuilt the shared-compiler Bun/native artifacts. All three backends pass the full original-observation, property-digest, differential, corrected-control and long-input checks.

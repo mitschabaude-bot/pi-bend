@@ -372,17 +372,17 @@ def arrayDepth(fuel: Nat,count: U32,depth: Nat) -> Nat:
 # accidentally treat a chunk boundary as the end of the haystack.
 type Cursor is Type:
   Matched{}
-  LiteralCursor{count: U32,table: Table.Table<LiteralRow>,insensitive: Bool,prefix: U32}
+  LiteralCursor{count: U32,table: Table.Table<LiteralRow>,insensitive: Bool,first: Char,prefix: U32}
   NfaCursor{start: U32,count: U32,table: Table.Table<Instruction>,stamp: U32,left: Maybe<&2,Char>,pending: List<&2,U32>,seen: Array<U32>}
 
 def create(regex: Regex) -> Cursor:
   match regex:
     case LiteralRegex{0,_,_}: Matched{}
-    case LiteralRegex{count,table,insensitive}: LiteralCursor{count,table,insensitive,0}
+    case LiteralRegex{count,+table,insensitive}: LiteralCursor{count,table,insensitive,rowChar(literalRow(Table.get(LiteralRow,table,0))),0}
     case Regex{start,+count,table}: NfaCursor{start,count,table,1,None{},Nil{},Array.new(U32,arrayDepth(32n,(count - 1 : U32),Zero{}),0)}
 
-def afterLiteral(+prefix: U32,+count: U32,table: Table.Table<LiteralRow>,insensitive: Bool) -> Cursor:
-  Bool.pick(Cursor,U32.is_eq(prefix,count),Matched{},LiteralCursor{count,table,insensitive,prefix})
+def afterLiteral(+prefix: U32,+count: U32,table: Table.Table<LiteralRow>,insensitive: Bool,first: Char) -> Cursor:
+  Bool.pick(Cursor,U32.is_eq(prefix,count),Matched{},LiteralCursor{count,table,insensitive,first,prefix})
 
 def afterChar(+char: Char,+start: U32,+count: U32,+table: Table.Table<Instruction>,+stamp: U32,state: Frontier) -> Cursor:
   match state:
@@ -397,7 +397,10 @@ def afterChar(+char: Char,+start: U32,+count: U32,+table: Table.Table<Instructio
 def feedChar(cursor: Cursor,+char: Char) -> Cursor:
   match cursor:
     case Matched{}: Matched{}
-    case LiteralCursor{+count,+table,+insensitive,prefix}: afterLiteral(literalAdvance(U32.to_nat(count) + 1n,table,char,prefix,insensitive),count,table,insensitive)
+    # Most literal-search input never starts a candidate. Avoid a prefix-table
+    # lookup there; once a candidate starts, the ordinary KMP transitions apply.
+    case LiteralCursor{+count,table,+insensitive,+first,0}: afterLiteral(Bool.pick(U32,sameLiteral(first,char,insensitive),1,0),count,table,insensitive,first)
+    case LiteralCursor{+count,+table,+insensitive,first,prefix}: afterLiteral(literalAdvance(U32.to_nat(count) + 1n,table,char,prefix,insensitive),count,table,insensitive,first)
     case NfaCursor{+start,+count,+table,+stamp,left,pending,seen}: afterChar(char,start,count,table,stamp,closure(U32.to_nat(count) * 3n + 2n,Frontier{seen,start <> pending,Nil{},False{}},stamp,table,left,Some{char}))
 
 def feed(text: String,cursor: Cursor) -> Cursor:
@@ -413,7 +416,7 @@ def finalFrontier(state: Frontier) -> Bool:
 def finish(cursor: Cursor) -> Bool:
   match cursor:
     case Matched{}: True{}
-    case LiteralCursor{_,_,_,_}: False{}
+    case LiteralCursor{_,_,_,_,_}: False{}
     case NfaCursor{start,+count,table,stamp,left,pending,seen}: finalFrontier(closure(U32.to_nat(count) * 3n + 2n,Frontier{seen,start <> pending,Nil{},False{}},stamp,table,left,None{}))
 
 def isMatch(regex: Regex,text: String) -> Bool: finish(feed(text,create(regex)))
