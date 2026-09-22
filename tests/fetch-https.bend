@@ -47,7 +47,7 @@ def consumed(result: Result<&2, &2, Response.TextError<HTTP.ReadError<Deadline.C
 def response(result: Fetch.Result_(String), mode: String) -> IO(Unit):
   match result:
     case Fail{Fetch.Rejected{Message.TLSRequired{}}}: Check.require(String.eq(mode, "disabled"), "unexpected TLS rejection")
-    case Fail{Fetch.ExchangeFailure{_, _, HTTP.ResolvedExchangeExchangeFailure{HTTP.TLSStartFailure{TLS.Protocol{Client.HandshakeFailure{_}}}}}}:
+    case Fail{Fetch.ExchangeFailure{_, _, HTTP.ResolvedExchangeFailure{HTTP.TLSStartFailure{TLS.Protocol{Client.HandshakeFailure{_}}}}}}:
       Check.require(String.eq(mode, "denied"), "unexpected authorization failure")
     case Fail{Fetch.ExchangeFailure{_, _, HTTP.ResolvedExchangeConnectionFailure{Connect.Exhausted{}}}}:
       Check.require(String.eq(mode, "unreachable"), "unexpected connection failure")

@@ -593,7 +593,7 @@ def openedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: 
     case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{TLSStartFailure{error}})
     case Done{connection}: startTLSExchange(~Reason, connection, request, maximum, limits)
 
-def adoptedTLS(~Reason: Data, +host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, adoption: Result<&2, &1, Connect.SocketErrorOfSocket<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def adoptedTLS(~Reason: Data, +host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, adoption: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match adoption:
     case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{SocketFailure{error}})
     case Done{owner}:
@@ -607,7 +607,7 @@ def startProtocol(~Reason: Data, selected: Protocol, socket: Socket, signal: Abo
     case Cleartext{}: startSocketExchange(~Reason, socket, signal, request, maximum, limits)
     case Encrypted{host, authorize, options}:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
-        adoption : Result<&2, &1, Connect.SocketErrorOfSocket<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
+        adoption : Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
         adoptedTLS(~Reason, host, authorize, options, request, maximum, limits, adoption)
 
 # Socket adoption consumes the socket on all paths and rechecks the retained
