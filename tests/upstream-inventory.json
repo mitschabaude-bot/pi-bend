@@ -2309,9 +2309,14 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/build-context.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e4f1c5ef931609100a5350129151d147f7d58bea4df0d9e1676fe60d06aed6c0"
+      "status": "ported",
+      "ports": [
+        "tests/session-context.bend",
+        "tests/session_context_check.py",
+        "tests/session_context_reference.ts"
+      ],
+      "sha256": "e4f1c5ef931609100a5350129151d147f7d58bea4df0d9e1676fe60d06aed6c0",
+      "notes": "All 16 original cases and 37 captured public calls pass on Bun/native one/four. 505 total context comparisons, 156 raw paths, strict invalid-tree/timestamp checks and 10,000-entry context pass. Full-path settings, branch selection, latest compaction, retained prefix and captured system messages preserved. Duplicate/empty IDs and cycles return typed errors; original missing-leaf fallback and orphan truncation retained. Persistence, migrations and other SessionManager methods remain pending; tests/session-context.md records scope."
     },
     {
       "source": "packages/coding-agent/test/session-manager/custom-session-id.test.ts",

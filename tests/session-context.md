@@ -1,6 +1,6 @@
 # Session entry and context layer
 
-`core/session-manager.bend` ports the pure typed entry/path/context portion of Pi `46c9de402`, `core/session-manager.ts`. It includes header/options, all entry variants, file/tree/context/session-info records, checked indexing, parent paths, latest compaction lookup, context entry selection, message projection and settings. Persistence, migration, filesystem discovery, label resolution/tree construction and the `SessionManager` class are not implemented here. The whole session-manager suite remains partial.
+`core/session-manager.bend` ports the pure typed entry/path/context portion of Pi `46c9de402`, `core/session-manager.ts`. It includes header/options, all entry variants, file/tree/context/session-info records, checked indexing, parent paths, latest compaction lookup, context entry selection, message projection and settings. Persistence, migration, filesystem discovery, label resolution/tree construction and the `SessionManager` class are not implemented here. The pinned build-context suite is ported; the other session-manager suites remain pending.
 
 A shared `SessionEntryBase` contains identity, parent and timestamp. Entry variants preserve their meaningful fields. `CompactionEntry<C>` is separately nameable because latest-compaction lookup must return that narrower type. The `D/T/C` parameters are the agent's diagnostic/tool/extension payload types; extension data is not represented as generic JSON. Native `AgentMessage` and `core/messages.bend` provide all message payloads.
 
