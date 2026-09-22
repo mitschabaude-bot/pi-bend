@@ -1014,3 +1014,7 @@ The native four-tool fixture failed to link with `BEND_TUS=8`: four process effe
 ### BEND-019 recurrence: Base64 octet validation (2026-09-22)
 
 Public Bash testing isolated a Bun stack overflow to `base64.octets`: eager `valid(head) && octets(rest)` retained one frame per byte. The production validator now uses a lazy branch with a tail call, preserving strict octet rejection. `tests/base64_check.py` adds an in-core 192 KiB valid input and the same prefix followed by an invalid octet; all 9,195 codec checks pass on Bun and native one/four workers. No compiler change or input limit was introduced.
+
+### Duplicated bindings in overlapping nested patterns (2026-09-22)
+
+The live native agent hit a confirmed checker defect while implementing glob parsing: `+first`/`+last` bindings in overlapping nested character patterns produce `cannot infer` on the literal hyphen, even with explicit `Chr{45}` syntax. The seven-line [valid-source reproducer](../tests/repro/overlapping-pattern-duplication.bend) isolates it; the [positive workaround](../tests/repro/overlapping-pattern-duplication-local.bend) binds normally and duplicates explicitly with `+first = {first: Char}` in the branch body. Both simple deep patterns and plain bindings check, so nesting alone is insufficient to trigger it. No compiler patch or rejection-expecting test was added. The private compiler frontend `bend.ts` SHA256 is `ab4d244ca0c199856ffdc00ab9f88e50fd50b17ba0b73132f3775fd2f087f951`; `comp.ts` is `41f93a65b9b8aa9d17a7bda069f0fb1b23f0d423da06266ca097c04b2db04992`.
