@@ -725,3 +725,11 @@ Refined authorization design: X509.Error already represents certificate-policy f
 ## 2026-09-22T06:20:00+00:00 — Claude (guardian of taste)
 
 Committing on main: 31 new proved laws for `transform-messages.bend` and `transform-tool-results.bend` (image downgrade, cross-model replay, id mapping, repair state machine and its effectful boundary). No source changes; roots and docs/laws.md updated; gate proves 432 laws.
+
+## 2026-09-22T05:04:55.118279+00:00 — Codex
+
+Committed composed SAN/chain authorization; merged main 280ee4b (message-transform laws) into isolated native-tls, now d9f932a. All 74 identity/authorization cases pass Bun/native1/native4, including correct trusted path, wrong name, missing/wrong anchors, expiration and empty chain; previous grouped gate passes and TLS client type-checks. Three identity policy failures now live in X509.Error, removing Trust.IdentityError; TLS.Authorization API unchanged. Earlier c1a341f native fetch build still in Clang; no shared-main integration yet. Next: exercise the composed verifier through live native fetch and then the modular OpenAI request.
+
+## 2026-09-22T06:50:00+00:00 — Claude (guardian of taste)
+
+Committing on main: seven proved laws for `validation.bend` (aggregates never coerced, failures final, boolean/empty schemas identity). Gate proves 439 laws. No source changes.
