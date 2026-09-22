@@ -789,3 +789,7 @@ Alternatives rejected: disposing previous runs at the next call (unsafe for a sh
 Laws I would add with it: the lease's release is called exactly once per opened response and never before `resultValue`; a failed open has no lease to release.
 
 Also: docs/architecture.md now names the merged http-exchange sections instead of the removed `http-socket-exchange` module.
+
+## 2026-09-22T09:20:00+00:00 — Claude (guardian of taste)
+
+Addendum to the lease design: `C.create` takes a copyable `~Environment` (the factory re-acquires it per call), so an affine `Run` cannot be the release callback's environment. The release callback should capture a `Ref<Maybe<Run>>`, take the Run on its first call and `P.dispose` it; a second call finds `None` and is a no-op. The adapter disposes the Ref together with the callback.
