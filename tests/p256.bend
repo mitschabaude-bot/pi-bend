@@ -59,6 +59,7 @@ def hashAlgorithm(selected: P.Curve) -> P.HashAlgorithm:
 
 def run(+selected: P.Curve,parts: List<&2,String>) -> String:
   match parts:
+    case "w" <> bytes <> Nil{}: Bytes.show(P.windowDigits(Bytes.bytes(bytes)))
     case "a" <> left <> right <> Nil{}:
       addition(selected,Result.bind(&2,&2,P.Error,P.Point,Maybe<&2,P.Point>,P.publicKey(selected,Bytes.bytes(left)), l =>
         Result.bind(&2,&2,P.Error,P.Point,Maybe<&2,P.Point>,P.publicKey(selected,Bytes.bytes(right)), r => Done{added(selected,l,r)})))

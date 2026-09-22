@@ -246,22 +246,36 @@ def publicKey(+selected: Curve, +bytes: List<&2,U32>) -> Result<&2,&2,Error,Poin
 
 # Width-5 non-adjacent form has odd digits in [-15,15], separated by at
 # least four zero digits. Digits 17..31 encode -15..-1 modulo 32.
-def windowDigit(value: Big.BigNat) -> U32:
-  match value:
-    case Big.BigNat{Nil{}}: 0
-    case Big.BigNat{+head <> _}: Bool.pick(U32,U32.is_eq(U32.and(head,1),1),U32.and(head,31),0)
+type Recoding is Data:
+  Recoding{word: U32, digits: List<&2,U32>}
 
-def windowRemainder(negative: Bool, +digit: U32, value: Big.BigNat) -> Big.BigNat:
-  match negative:
-    case True{}: Modular.half(Big.add(value,Big.fromU32((32 - digit : U32))))
-    case False{}: Modular.half(difference(value,Big.fromU32(digit)))
-
-def windowDigits(fuel: Nat, +value: Big.BigNat, digits: List<&2,U32>) -> List<&2,U32>:
+def windowByte(fuel: Nat, +word: U32, digits: List<&2,U32>) -> Recoding:
   match fuel:
-    case 0n: digits
+    case 0n: Recoding{word,digits}
     case 1n+n:
-      +digit = windowDigit(value)
-      windowDigits(n,windowRemainder(U32.is_gt(digit,16),digit,value),digit <> digits)
+      +digit = Bool.pick(U32,U32.is_eq(U32.and(word,1),1),U32.and(word,31),0)
+      remainder = Bool.pick(U32,U32.is_gt(digit,16),(word + 32 - digit : U32),(word - digit : U32))
+      windowByte(n,U32.shr(remainder),digit <> digits)
+
+def windowFinal(state: Recoding) -> List<&2,U32>:
+  match state:
+    case Recoding{carry,digits}: carry <> digits
+
+# One byte of lookahead supplies every five-bit digit, even at a byte
+# boundary. After eight steps the remaining word is in [0,256], so adding
+# the next byte preserves a possible carry without any big-integer work.
+def windowBytes(bytes: List<&2,U32>, state: Recoding) -> List<&2,U32>:
+  match bytes state:
+    case Nil{} Recoding{word,digits}: windowFinal(windowByte(8n,word,digits))
+    case next <> rest Recoding{word,digits}: windowBytes(rest,windowByte(8n,(word + U32.shln(next,8n) : U32),digits))
+
+def windowLittle(bytes: List<&2,U32>) -> List<&2,U32>:
+  match bytes:
+    case Nil{}: 0 <> Nil{}
+    case first <> rest: windowBytes(rest,Recoding{first,Nil{}})
+
+def windowDigits(bytes: List<&2,U32>) -> List<&2,U32>:
+  windowLittle(List.reverse(&2,U32,bytes))
 
 type Normalization is Data:
   Normalization{point: Jacobian, prefix: Field.Field}
@@ -337,8 +351,7 @@ def jointSized(+selected: Curve, sameWidth: Bool, +a: List<&2,U32>, +b: List<&2,
   match sameWidth:
     case False{}: infinity()
     case True{}:
-      +count = List.length(&2,U32,a) * 8n + 1n
-      jointWindows(selected,windowDigits(count,Big.fromBigEndian(a),Nil{}),windowDigits(count,Big.fromBigEndian(b),Nil{}),oddTable(selected,generator(selected)),oddTable(selected,base),infinity())
+      jointWindows(selected,windowDigits(a),windowDigits(b),oddTable(selected,generator(selected)),oddTable(selected,base),infinity())
 
 def joint(+selected: Curve, +a: List<&2,U32>, +b: List<&2,U32>, base: Point) -> Jacobian:
   jointSized(selected,Nat.is_eq(List.length(&2,U32,a),List.length(&2,U32,b)),a,b,base)
