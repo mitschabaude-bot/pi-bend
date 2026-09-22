@@ -2,6 +2,7 @@ import Base
 import ../laws/agent-loop.bend as Laws
 import ../packages/agent/src/types.bend as T
 import ../packages/agent/src/agent-loop.bend as Loop
+import ../packages/ai/src/types.bend as Ai
 import ./absurd.bend as Absurd
 
 def Laws.configured_sequential_mode_wins(Parameters, Arguments, Details, RawArguments, Signal, ExecutionError, calls, tools): {==}
@@ -60,3 +61,24 @@ def Laws.a_blocking_hook_with_an_empty_reason_uses_the_default_message(terminate
     case None{}: {==}
     case Some{False{}}: {==}
     case Some{True{}}: {==}
+
+def Laws.an_empty_batch_never_terminates(State, Message, Error, state, allTerminate): {==}
+
+def Laws.a_batch_terminates_only_when_every_call_opted_in(State, Message, Error, state, message, rest, allTerminate):
+  match allTerminate:
+    case True{}: {==}
+    case False{}: {==}
+
+def Laws.queued_messages_continue_the_run_without_ending_it(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, completed, sink, head, tail): {==}
+
+def Laws.a_failed_queue_read_fails_the_turn(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, completed, sink, error): {==}
+
+def Laws.only_length_stops_are_truncated(Arguments, DiagnosticDetails, content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp):
+  match reason:
+    case Ai.Pending{}: {==}
+    case Ai.Stop{}: {==}
+    case Ai.Length{}: {==}
+    case Ai.ToolUse{}: {==}
+    case Ai.Error{}: {==}
+    case Ai.Aborted{}: {==}
+    case Ai.Deferred{}: {==}

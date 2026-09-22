@@ -2,6 +2,9 @@ import Base
 import ../packages/agent/src/types.bend as T
 import ../packages/agent/src/agent-loop.bend as Loop
 import ../packages/ai/src/types.bend as Ai
+import ../packages/ai/src/utils/diagnostics.bend as Diagnostics
+import ../packages/runtime/src/callback.bend as C
+import ../packages/runtime/src/f64.bend as F
 
 # Tool execution mode: a single sequential tool or a sequential configuration
 # makes the whole assistant batch sequential; otherwise it runs in parallel.
@@ -109,3 +112,77 @@ law a_blocking_hook_without_a_reason_uses_the_default_message:
 law a_blocking_hook_with_an_empty_reason_uses_the_default_message:
   for terminate: Maybe<&2, Bool>
   {Loop.beforeToolCallDecision(False{}, Some{T.BeforeToolCallResult{Some{True{}}, Some{""}, terminate}}) == Loop.RejectToolCall{"Tool execution was blocked", Maybe.default(&2, Bool, terminate, False{})} : Loop.BeforeToolCallDecision}
+
+# Batch completion and the next turn.
+
+law an_empty_batch_never_terminates:
+  for -State: Data
+  for -Message: Data
+  for -Error: Data
+  for state: State
+  for allTerminate: Bool
+  {Loop.finishBatch(State, Message, Error, state, Nil{}, allTerminate) == IO.pure(Result<&2, &2, Error, Loop.Batch<State, Message>>, Done{Loop.Batch{state, Nil{}, False{}}}) : IO(Result<&2, &2, Error, Loop.Batch<State, Message>>)}
+
+law a_batch_terminates_only_when_every_call_opted_in:
+  for -State: Data
+  for -Message: Data
+  for -Error: Data
+  for state: State
+  for message: Message
+  for +rest: List<&2, Message>
+  for allTerminate: Bool
+  {Loop.finishBatch(State, Message, Error, state, message <> rest, allTerminate) == IO.pure(Result<&2, &2, Error, Loop.Batch<State, Message>>, Done{Loop.Batch{state, List.reverse(&2, Message, message <> rest), allTerminate}}) : IO(Result<&2, &2, Error, Loop.Batch<State, Message>>)}
+
+law queued_messages_continue_the_run_without_ending_it:
+  for -Parameters: Data
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for -Details: Data
+  for -Custom: Data
+  for -Validated: Data
+  for -Signal: Data
+  for -Error: Data
+  for completed: T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>
+  for sink: C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>
+  for head: T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>
+  for tail: List<&2, T.AgentMessage<Parameters, Arguments, DiagnosticDetails, Details, Custom>>
+  {Loop.followed(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, completed, sink, Done{head <> tail}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>>, Done{Loop.CompletionContinue{completed, head <> tail}}) : IO(Result<&2, &2, Error, Loop.NextTurn<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>>)}
+
+law a_failed_queue_read_fails_the_turn:
+  for -Parameters: Data
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for -Details: Data
+  for -Custom: Data
+  for -Validated: Data
+  for -Signal: Data
+  for -Error: Data
+  for completed: T.ShouldStopAfterTurnContext<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>
+  for sink: C.Callback<T.AgentEvent<Parameters, Arguments, DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>
+  for error: Error
+  {Loop.followed(Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error, completed, sink, Fail{error}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>>, Fail{error}) : IO(Result<&2, &2, Error, Loop.NextTurn<Parameters, Arguments, DiagnosticDetails, Details, Custom, Validated, Signal, Error>>)}
+
+def isLength(reason: Ai.StopReason) -> Bool:
+  match reason:
+    case Ai.Length{}: True{}
+    case _: False{}
+
+law only_length_stops_are_truncated:
+  for -Arguments: Data
+  for -DiagnosticDetails: Data
+  for content: List<&2, Ai.AssistantContent<Arguments>>
+  for api: String
+  for provider: String
+  for model: String
+  for responseModel: Maybe<&2, String>
+  for responseId: Maybe<&2, String>
+  for level: Maybe<&2, String>
+  for diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>
+  for usage: Ai.Usage
+  for reason: Ai.StopReason
+  for deferred: Maybe<&2, Ai.DeferredHandle>
+  for error: Maybe<&2, String>
+  for rawReason: Maybe<&2, String>
+  for endTurn: Maybe<&2, Bool>
+  for timestamp: F.F64
+  {Loop.lengthLimited(Arguments, DiagnosticDetails, Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}) == isLength(reason) : Bool}
