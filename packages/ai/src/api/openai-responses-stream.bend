@@ -197,14 +197,14 @@ def blockStep(block: Block, input: Input) -> Result<&2, &2, Sampling.Error, Bloc
 # block. Wire indices retain fixed-size binary64 values; sparse/large numeric
 # keys never allocate unary naturals in proportion to their magnitude.
 type Slot is Data:
-  Slot{outputIndex: F.F64, contentIndex: Nat, block: Block}
+  Slot{outputIndex: F64, contentIndex: Nat, block: Block}
 
 type State<-G: Data> is Data:
   State{output: T.AssistantMessage<V.Value, G>, slots: List<&2, Slot>, reasoningBlocks: R.Record<Nat>, grammarProperties: R.Record<String>}
 
 type ContentEvent is Data:
-  Added{outputIndex: F.F64, item: OutputItem}
-  Changed{outputIndex: F.F64, input: Input}
+  Added{outputIndex: F64, item: OutputItem}
+  Changed{outputIndex: F64, input: Input}
 
 type Update<-G: Data> is Data:
   Update{state: State<G>, events: List<&2, T.AssistantMessageEvent<V.Value, G>>, error: Maybe<&2, Sampling.Error>}
@@ -229,17 +229,17 @@ def count(values: List<&2, T.AssistantContent<V.Value>>) -> Nat:
     case Nil{}: 0n
     case _ <> rest: 1n + count(rest)
 
-def numericIndex(index: Nat) -> F.F64:
+def numericIndex(index: Nat) -> F64:
   match index:
     case 0n: F.fromU32(0)
     case 1n+rest: F.add(F.fromU32(1), numericIndex(rest))
 
-def findSlot(slots: List<&2, Slot>, +index: F.F64) -> Maybe<&2, Slot>:
+def findSlot(slots: List<&2, Slot>, +index: F64) -> Maybe<&2, Slot>:
   match slots:
     case Nil{}: None{}
     case Slot{+key, position, block} <> rest: Bool.pick(Maybe<&2, Slot>, V.equal(V.Number{key}, V.Number{index}), Some{Slot{key, position, block}}, findSlot(rest, index))
 
-def removeSlot(slots: List<&2, Slot>, +index: F.F64) -> List<&2, Slot>:
+def removeSlot(slots: List<&2, Slot>, +index: F64) -> List<&2, Slot>:
   match slots:
     case Nil{}: Nil{}
     case Slot{+key, position, block} <> rest:
@@ -267,19 +267,19 @@ def applyMessagePhaseStopReason(-G: Data, state: State<G>, item: OutputItem) -> 
     case State{message, slots, reasoning, properties} MessageItem{_, Some{T.FinalAnswer{}}, _}: State{withStopReason(G, message, T.Stop{}), slots, reasoning, properties}
     case other _: other
 
-def startedEvent(-G: Data, index: F.F64, message: T.AssistantMessage<V.Value, G>, content: T.AssistantContent<V.Value>) -> T.AssistantMessageEvent<V.Value, G>:
+def startedEvent(-G: Data, index: F64, message: T.AssistantMessage<V.Value, G>, content: T.AssistantContent<V.Value>) -> T.AssistantMessageEvent<V.Value, G>:
   match content:
     case T.AssistantText{_}: T.TextStart{index, message}
     case T.AssistantThinking{_}: T.ThinkingStart{index, message}
     case T.AssistantToolCall{_}: T.ToolcallStart{index, message}
 
-def deltaEvent(-G: Data, index: F.F64, message: T.AssistantMessage<V.Value, G>, content: T.AssistantContent<V.Value>, delta: String) -> T.AssistantMessageEvent<V.Value, G>:
+def deltaEvent(-G: Data, index: F64, message: T.AssistantMessage<V.Value, G>, content: T.AssistantContent<V.Value>, delta: String) -> T.AssistantMessageEvent<V.Value, G>:
   match content:
     case T.AssistantText{_}: T.TextDelta{index, delta, message}
     case T.AssistantThinking{_}: T.ThinkingDelta{index, delta, message}
     case T.AssistantToolCall{_}: T.ToolcallDelta{index, delta, message}
 
-def endedEvent(-G: Data, index: F.F64, message: T.AssistantMessage<V.Value, G>, content: T.AssistantContent<V.Value>) -> T.AssistantMessageEvent<V.Value, G>:
+def endedEvent(-G: Data, index: F64, message: T.AssistantMessage<V.Value, G>, content: T.AssistantContent<V.Value>) -> T.AssistantMessageEvent<V.Value, G>:
   match content:
     case T.AssistantText{T.TextContent{text, _}}: T.TextEnd{index, text, message}
     case T.AssistantThinking{T.ThinkingContent{text, _, _}}: T.ThinkingEnd{index, text, message}
@@ -311,7 +311,7 @@ def emitAll(-G: Data, signals: List<&2, Signal>, +index: Nat, current: Emission<
     case Nil{}: current
     case head <> tail: emitAll(G, tail, index, emitOne(G, index, current, head))
 
-def slotsAfter(slots: List<&2, Slot>, +key: F.F64, position: Nat, block: Block, finished: Bool) -> List<&2, Slot>:
+def slotsAfter(slots: List<&2, Slot>, +key: F64, position: Nat, block: Block, finished: Bool) -> List<&2, Slot>:
   match finished:
     case True{}: removeSlot(slots, key)
     case False{}: Slot{key, position, block} <> removeSlot(slots, key)
@@ -325,23 +325,23 @@ def committed(-G: Data, slots: List<&2, Slot>, refs: R.Record<Nat>, properties: 
   match emission:
     case Emission{message, reversed}: Update{State{withBlock(G, message, position, blockContent(block)), slots, refs, properties}, List.reverse(&2, T.AssistantMessageEvent<V.Value, G>, reversed), None{}}
 
-def applyUpdate(-G: Data, state: State<G>, key: F.F64, +position: Nat, item: Maybe<&2, OutputItem>, update: BlockUpdate) -> Update<G>:
+def applyUpdate(-G: Data, state: State<G>, key: F64, +position: Nat, item: Maybe<&2, OutputItem>, update: BlockUpdate) -> Update<G>:
   match state update:
     case State{message, slots, refs, properties} BlockUpdate{+block, signals, +finished}:
       committed(G, slotsAfter(slots, key, position, block, finished), reasoningAfter(refs, position, finished, item), properties, position, block, emitAll(G, signals, position, Emission{message, Nil{}}))
 
 def unchangedState(-G: Data, state: State<G>) -> Update<G>: Update{state, Nil{}, None{}}
 
-def createdSlot(-G: Data, +state: State<G>, key: F.F64, value: Maybe<&2, BlockUpdate>) -> Update<G>:
+def createdSlot(-G: Data, +state: State<G>, key: F64, value: Maybe<&2, BlockUpdate>) -> Update<G>:
   match value:
     case None{}: unchangedState(G, state)
     case Some{update}: applyUpdate(G, state, key, count(messageBlocks(G, stateOutput(G, state))), None{}, update)
 
-def addSlot(-G: Data, state: State<G>, key: F.F64, item: OutputItem) -> Update<G>:
+def addSlot(-G: Data, state: State<G>, key: F64, item: OutputItem) -> Update<G>:
   match state:
     case State{message, slots, refs, +properties}: createdSlot(G, State{message, slots, refs, properties}, key, startBlock(item, properties))
 
-def appliedStep(-G: Data, state: State<G>, key: F.F64, position: Nat, item: Maybe<&2, OutputItem>, result: Result<&2, &2, Sampling.Error, BlockUpdate>) -> Update<G>:
+def appliedStep(-G: Data, state: State<G>, key: F64, position: Nat, item: Maybe<&2, OutputItem>, result: Result<&2, &2, Sampling.Error, BlockUpdate>) -> Update<G>:
   match result:
     case Fail{error}: Update{state, Nil{}, Some{error}}
     case Done{update}: applyUpdate(G, state, key, position, item, update)
@@ -356,7 +356,7 @@ def changeExisting(-G: Data, state: State<G>, slot: Maybe<&2, Slot>, +input: Inp
     case None{}: unchangedState(G, state)
     case Some{Slot{key, position, block}}: appliedStep(G, state, key, position, doneItem(input), blockStep(block, input))
 
-def changeSlot(-G: Data, state: State<G>, key: F.F64, input: Input) -> Update<G>:
+def changeSlot(-G: Data, state: State<G>, key: F64, input: Input) -> Update<G>:
   match state:
     case State{message, +slots, refs, properties}: changeExisting(G, State{message, slots, refs, properties}, findSlot(slots, key), input)
 
@@ -364,12 +364,12 @@ def prependEvents(-G: Data, earlier: List<&2, T.AssistantMessageEvent<V.Value, G
   match update:
     case Update{state, events, error}: Update{state, List.append(&2, T.AssistantMessageEvent<V.Value, G>, earlier, events), error}
 
-def finishCreated(-G: Data, key: F.F64, item: OutputItem, update: Update<G>) -> Update<G>:
+def finishCreated(-G: Data, key: F64, item: OutputItem, update: Update<G>) -> Update<G>:
   match update:
     case Update{state, events, _}: prependEvents(G, events, changeSlot(G, state, key, ItemDone{item}))
 
 # output_item.done for an unknown slot creates it first (getOrCreateSlot).
-def finishSlot(-G: Data, state: State<G>, +key: F.F64, +item: OutputItem, slot: Maybe<&2, Slot>) -> Update<G>:
+def finishSlot(-G: Data, state: State<G>, +key: F64, +item: OutputItem, slot: Maybe<&2, Slot>) -> Update<G>:
   match slot:
     case None{}: finishCreated(G, key, item, addSlot(G, state, key, item))
     case some: changeExisting(G, state, some, ItemDone{item})
@@ -386,7 +386,7 @@ def contentStep(-G: Data, state: State<G>, input: ContentEvent) -> Update<G>:
 # Missing usage fields are distinct from an absent usage record: the latter
 # retains previous accounting, but both paths recalculate cost.
 type ResponseUsage is Data:
-  ResponseUsage{input: Maybe<&2, F.F64>, output: Maybe<&2, F.F64>, cached: Maybe<&2, F.F64>, cacheWrite: Maybe<&2, F.F64>, reasoning: Maybe<&2, F.F64>, total: Maybe<&2, F.F64>}
+  ResponseUsage{input: Maybe<&2, F64>, output: Maybe<&2, F64>, cached: Maybe<&2, F64>, cacheWrite: Maybe<&2, F64>, reasoning: Maybe<&2, F64>, total: Maybe<&2, F64>}
 
 type Response is Data:
   Response{id: Maybe<&2, String>, status: Maybe<&2, String>, incompleteReason: Maybe<&2, String>, output: List<&2, OutputItem>, usage: Maybe<&2, ResponseUsage>, serviceTier: Maybe<&2, String>}
@@ -430,25 +430,25 @@ def withUsage(-G: Data, message: T.AssistantMessage<V.Value, G>, usage: T.Usage)
     case T.AssistantMessage{content, api, provider, model, responseModel, id, thinking, diagnostics, _, stop, deferred, error, raw, endTurn, time}:
       T.AssistantMessage{content, api, provider, model, responseModel, id, thinking, diagnostics, usage, stop, deferred, error, raw, endTurn, time}
 
-def normalizedNumber(+number: F.F64, compared: Maybe<&2, Cmp>) -> F.F64:
+def normalizedNumber(+number: F64, compared: Maybe<&2, Cmp>) -> F64:
   match compared:
     case None{}: F.fromU32(0)
     case Some{EQ{}}: F.fromU32(0)
     case _: number
 
-def usageNumber(value: Maybe<&2, F.F64>) -> F.F64:
+def usageNumber(value: Maybe<&2, F64>) -> F64:
   match value:
     case None{}: F.fromU32(0)
     case Some{+amount}: normalizedNumber(amount, F.compare(amount, F.fromU32(0)))
 
-def nonnegative(value: F.F64, compared: Maybe<&2, Cmp>) -> F.F64:
+def nonnegative(value: F64, compared: Maybe<&2, Cmp>) -> F64:
   match compared:
     case Some{LT{}}: F.fromU32(0)
     case Some{EQ{}}: F.fromU32(0)
     case _: value
 
 # OpenAI includes cached and cache-write tokens in input_tokens: subtract both.
-def inputTokens(input: F.F64, cached: F.F64, written: F.F64) -> F.F64:
+def inputTokens(input: F64, cached: F64, written: F64) -> F64:
   +remaining = F.subtract(F.subtract(input, cached), written)
   nonnegative(remaining, F.compare(remaining, F.fromU32(0)))
 
@@ -719,15 +719,15 @@ def details(fields: Maybe<&2, R.Record<V.Value>>) -> R.Record<V.Value>:
 def decodeUsage(value: V.Value) -> Result<&2, &2, D.Error, ResponseUsage>:
   do Result<&2, &2, D.Error, ResponseUsage>:
     +fields : R.Record<V.Value> <- D.object(value)
-    input : Maybe<&2, F.F64> <- D.optional(F.F64, fields, "input_tokens", D.number)
-    output : Maybe<&2, F.F64> <- D.optional(F.F64, fields, "output_tokens", D.number)
-    total : Maybe<&2, F.F64> <- D.optional(F.F64, fields, "total_tokens", D.number)
+    input : Maybe<&2, F64> <- D.optional(F64, fields, "input_tokens", D.number)
+    output : Maybe<&2, F64> <- D.optional(F64, fields, "output_tokens", D.number)
+    total : Maybe<&2, F64> <- D.optional(F64, fields, "total_tokens", D.number)
     inputDetails : Maybe<&2, R.Record<V.Value>> <- D.optional(R.Record<V.Value>, fields, "input_tokens_details", D.object)
     outputDetails : Maybe<&2, R.Record<V.Value>> <- D.optional(R.Record<V.Value>, fields, "output_tokens_details", D.object)
     +inputFields : R.Record<V.Value> = details(inputDetails)
-    cached : Maybe<&2, F.F64> <- D.located(Maybe<&2, F.F64>, D.optional(F.F64, inputFields, "cached_tokens", D.number), D.Field{"input_tokens_details"})
-    written : Maybe<&2, F.F64> <- D.located(Maybe<&2, F.F64>, D.optional(F.F64, inputFields, "cache_write_tokens", D.number), D.Field{"input_tokens_details"})
-    reasoning : Maybe<&2, F.F64> <- D.located(Maybe<&2, F.F64>, D.optional(F.F64, details(outputDetails), "reasoning_tokens", D.number), D.Field{"output_tokens_details"})
+    cached : Maybe<&2, F64> <- D.located(Maybe<&2, F64>, D.optional(F64, inputFields, "cached_tokens", D.number), D.Field{"input_tokens_details"})
+    written : Maybe<&2, F64> <- D.located(Maybe<&2, F64>, D.optional(F64, inputFields, "cache_write_tokens", D.number), D.Field{"input_tokens_details"})
+    reasoning : Maybe<&2, F64> <- D.located(Maybe<&2, F64>, D.optional(F64, details(outputDetails), "reasoning_tokens", D.number), D.Field{"output_tokens_details"})
     return ResponseUsage{input, output, cached, written, reasoning, total}
 
 def decodeReason(value: V.Value) -> Result<&2, &2, D.Error, Maybe<&2, String>>:
@@ -814,13 +814,13 @@ def classifyEvent(value: Maybe<&2, String>) -> EventKind:
 
 def decodeAdded(+fields: R.Record<V.Value>) -> Result<&2, &2, D.Error, ResponseStreamEvent>:
   do Result<&2, &2, D.Error, ResponseStreamEvent>:
-    index : F.F64 <- D.required(F.F64, fields, "output_index", D.number)
+    index : F64 <- D.required(F64, fields, "output_index", D.number)
     item : OutputItem <- D.required(OutputItem, fields, "item", decodeItem)
     return ContentEvent{Added{index, item}}
 
 def decodeChanged(+fields: R.Record<V.Value>, input: R.Record<V.Value> -> Result<&2, &2, D.Error, Input>) -> Result<&2, &2, D.Error, ResponseStreamEvent>:
   do Result<&2, &2, D.Error, ResponseStreamEvent>:
-    index : F.F64 <- D.required(F.F64, fields, "output_index", D.number)
+    index : F64 <- D.required(F64, fields, "output_index", D.number)
     value : Input <- input(fields)
     return ContentEvent{Changed{index, value}}
 

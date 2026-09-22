@@ -15,7 +15,7 @@ def field(value: V.Value, key: String) -> Maybe<&2, V.Value>:
     case V.ObjectValue{fields}: R.get(V.Value, fields, key)
     case _: None{}
 
-def scalar(value: Maybe<&2, V.Value>) -> Maybe<&2, F.F64>:
+def scalar(value: Maybe<&2, V.Value>) -> Maybe<&2, F64>:
   match value:
     case Some{V.Number{scalar}}: Some{scalar}
     case _: None{}

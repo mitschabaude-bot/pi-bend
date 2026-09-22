@@ -37,6 +37,23 @@ for base, exponent in [(0, 0), (0, 1), (1, 1074), (2, 1074), (5, 1074), (65535, 
     source.append(f'    H.assertion(B.equal(B.power(B.fromU32({base}), U32.to_nat({exponent})), {big(base**exponent)}), "power {base}^{exponent}")')
 for value in [0, 1, 65535, 65536, 2**32-1]:
     source.append(f'    H.assertion(B.equal(B.fromU32({value}), {big(value)}), "fromU32 {value}")')
+# Modular exponentiation against Python's pow: odd moduli take the Montgomery
+# ladder (RSA sizes, prime fields, base at or above the modulus, exponents 0
+# and 1, modulus 1), even moduli the bit-serial reduction.
+def bytes_of(exponent):
+    digits = []
+    while exponent:
+        digits.append(str(exponent & 255))
+        exponent >>= 8
+    return ' <> '.join(list(reversed(digits)) + ['Nil{}']) if digits else 'Nil{}'
+prime256 = 2**256 - 2**224 + 2**192 + 2**96 - 1
+modexp = [(2, 10, 1000), (3, 0, 7), (3, 1, 7), (5, 3, 1), (2**70 + 3, 65537, 2**64 + 13),
+          (2**64 + 13 + 5, 65537, 2**64 + 13), (7, 2**33, 2**66), (7, 2**33 + 1, 2**66 + 2),
+          (rng.getrandbits(255), prime256 - 2, prime256), (rng.getrandbits(2047), 65537, rng.getrandbits(2048) | (1 << 2047) | 1),
+          (rng.getrandbits(1023), rng.getrandbits(1024), rng.getrandbits(1024) | (1 << 1023) | 1), (65536, 65536, 65536 * 3)]
+for i, (base, exponent, modulus) in enumerate(modexp):
+    source.append(f'    H.assertion(B.equal(B.powerMod({bytes_of(exponent)}, {big(base)}, {big(modulus)}), {big(pow(base, exponent, modulus))}), "powerMod {i}")')
+
 for invalid in ['', '+1', '-1', ' 1', '1 ', '1.0', '1e2', '1x', '١']:
     source.append(f'    H.assertion(H.sameMaybe(B.fromDecimal("{invalid}"), None{{}}), "reject decimal {invalid}")')
 source.append('    H.assertion(H.sameMaybe(B.fromDecimal("000000123"), Some{B.fromU32(123)}), "leading zeros")')

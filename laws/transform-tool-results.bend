@@ -9,7 +9,7 @@ import ../packages/runtime/src/f64.bend as F
 # Template arguments must be closed, so the effectful laws fix the message
 # type parameters and use a frozen clock.
 
-def frozen(unused: Unit) -> IO(F.F64): IO.pure(F.F64, F.fromU32(0))
+def frozen(unused: Unit) -> IO(F64): IO.pure(F64, F.fromU32(0))
 
 def Messages() -> Data: Repair.Messages(Unit, String, Unit, Unit)
 def State() -> Data: Repair.State<Unit, String, Unit, Unit>
@@ -32,7 +32,7 @@ law errored_assistant_turns_are_not_replayed:
   for error: Maybe<&2, String>
   for rawReason: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   for output: Repair.Messages(P, A, G, D)
   {Repair.assistantState(P, A, G, D, Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, Ai.Error{}, deferred, error, rawReason, endTurn, timestamp}, output) == Repair.State{Nil{}, Nil{}, Nil{}, output} : Repair.State<P, A, G, D>}
 
@@ -54,7 +54,7 @@ law aborted_assistant_turns_are_not_replayed:
   for error: Maybe<&2, String>
   for rawReason: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   for output: Repair.Messages(P, A, G, D)
   {Repair.assistantState(P, A, G, D, Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, Ai.Aborted{}, deferred, error, rawReason, endTurn, timestamp}, output) == Repair.State{Nil{}, Nil{}, Nil{}, output} : Repair.State<P, A, G, D>}
 
@@ -77,7 +77,7 @@ law replayable_assistant_turns_track_their_tool_calls:
   for error: Maybe<&2, String>
   for rawReason: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   for output: Repair.Messages(P, A, G, D)
   for replayable: {Repair.replayable(reason) == True{} : Bool}
   {Repair.assistantState(P, A, G, D, Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}, output) == Repair.State{Repair.toolCalls(A, content), Nil{}, Nil{}, Ai.Assistant{Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}} <> output} : Repair.State<P, A, G, D>}
@@ -93,7 +93,7 @@ law tool_results_answer_their_call:
   for details: Maybe<&2, D>
   for usage: Maybe<&2, Ai.Usage>
   for isError: Bool
-  for timestamp: F.F64
+  for timestamp: F64
   for pending: List<&2, Ai.ToolCall<A>>
   for seen: List<&2, String>
   for held: Repair.Messages(P, A, G, D)

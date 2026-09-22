@@ -4,12 +4,12 @@ import ../../../runtime/src/f64.bend as F
 
 # Preserve binary64 evaluation order from models.ts calculateCost. Tier rates
 # apply to the entire request, not just tokens above the selected threshold.
-def chooseTier(tier: T.ModelCostTier, +inputTokens: F.F64, +matched: F.F64, rates: T.ModelCostRates) -> F.F64 & T.ModelCostRates:
+def chooseTier(tier: T.ModelCostTier, +inputTokens: F64, +matched: F64, rates: T.ModelCostRates) -> F64 & T.ModelCostRates:
   match tier:
     case T.ModelCostTier{input, output, cacheRead, cacheWrite, +threshold}:
-      Bool.pick(F.F64 & T.ModelCostRates, F.isGreater(F.compare(inputTokens, threshold)) && F.isGreater(F.compare(threshold, matched)), (threshold, T.ModelCostRates{input, output, cacheRead, cacheWrite}), (matched, rates))
+      Bool.pick(F64 & T.ModelCostRates, F.isGreater(F.compare(inputTokens, threshold)) && F.isGreater(F.compare(threshold, matched)), (threshold, T.ModelCostRates{input, output, cacheRead, cacheWrite}), (matched, rates))
 
-def tiers(remaining: List<&2, T.ModelCostTier>, +inputTokens: F.F64, state: F.F64 & T.ModelCostRates) -> T.ModelCostRates:
+def tiers(remaining: List<&2, T.ModelCostTier>, +inputTokens: F64, state: F64 & T.ModelCostRates) -> T.ModelCostRates:
   match remaining state:
     case Nil{} Tuple{_, rates}: rates
     case head <> tail Tuple{matched, rates}: tiers(tail, inputTokens, chooseTier(head, inputTokens, matched, rates))
@@ -19,16 +19,16 @@ def optionalTiers(value: Maybe<&2, List<&2, T.ModelCostTier>>) -> List<&2, T.Mod
     case None{}: Nil{}
     case Some{values}: values
 
-def rates(cost: T.ModelCost, inputTokens: F.F64) -> T.ModelCostRates:
+def rates(cost: T.ModelCost, inputTokens: F64) -> T.ModelCostRates:
   match cost:
     case T.ModelCost{input, output, cacheRead, cacheWrite, levels}: tiers(optionalTiers(levels), inputTokens, (F.negate(F.fromU32(1)), T.ModelCostRates{input, output, cacheRead, cacheWrite}))
 
-def optionalNumber(value: Maybe<&2, F.F64>) -> F.F64:
+def optionalNumber(value: Maybe<&2, F64>) -> F64:
   match value:
     case None{}: F.fromU32(0)
     case Some{number}: number
 
-def atRates(selected: T.ModelCostRates, input: F.F64, output: F.F64, cacheRead: F.F64, cacheWrite: F.F64, +longWrite: F.F64) -> T.UsageCost:
+def atRates(selected: T.ModelCostRates, input: F64, output: F64, cacheRead: F64, cacheWrite: F64, +longWrite: F64) -> T.UsageCost:
   match selected:
     case T.ModelCostRates{+inputRate, outputRate, readRate, writeRate}:
       +million = F.fromU32(1000000)

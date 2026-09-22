@@ -56,14 +56,14 @@ def ordered(value: Maybe<&2, Cmp>) -> Bool:
     case Some{GT{}}: False{}
     case None{}: False{}
     case _: True{}
-def live(messages: List<&2, NativeMessage()>, before: F.F64, after: F.F64) -> IO(Unit):
+def live(messages: List<&2, NativeMessage()>, before: F64, after: F64) -> IO(Unit):
   match messages:
     case T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{Ai.TextImageText{Ai.TextContent{"live", _}} <> Nil{}}, +stamp}}} <> Nil{}:
       Test.assertion(ordered(F.compare(before, stamp)) && ordered(F.compare(stamp, after)), "normal text prompts use the current Unix wall clock")
     case _: Test.assertion(False{}, "unexpected live prompt content")
 def wallClock() -> IO(Unit):
   do IO<Unit>:
-    before : F.F64 <- Date.now()
+    before : F64 <- Date.now()
     messages : List<&2, NativeMessage()> <- Agent.normalizePromptInput(Unit, Unit, String, Agent.Text{"live", Nil{}})
-    after : F.F64 <- Date.now()
+    after : F64 <- Date.now()
     live(messages, before, after)

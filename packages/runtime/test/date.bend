@@ -10,5 +10,5 @@ def requireText(value: Maybe<&2, String>) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    value : F.F64 <- Date.now()
+    value : F64 <- Date.now()
     requireText(Decimal.toDecimal(value))

@@ -57,7 +57,7 @@ def scenario(+failAt: String, configured: Maybe<&2, T.ToolExecutionMode>, toolMo
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
     +schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, toolMode} <> T.AgentTool{"echo", "", schema, None{}, "Duplicate", None{}, executor, None{}, Some{T.Sequential{}}} <> T.AgentTool{"badtool", "", schema, None{}, "Bad", None{}, executor, None{}, lateMode} <> T.AgentTool{"unused", "", schema, None{}, "Unused", None{}, executor, None{}, Some{T.Sequential{}}} <> Nil{}}}
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{content(empty), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{}, None{}, None{}, None{}, None{}, zero}
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     capture : Call.CallCapture<Unit, String, String, String, Unit> = Call.CallCapture{assistant, configuration(configured, converter, beforeHook, hook), Some{Abort.signal(Unit, controller)}, validator, abort, emitter, sink, owners, "empty"}

@@ -46,12 +46,12 @@ def nestedValue(depth: Nat) -> V.Value:
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +negativeZero : F.F64 = F.fromBits(2147483648, 0)
+    +negativeZero : F64 = F.fromBits(2147483648, 0)
     T.assertion(W.equal(F.toBits(F.truncate(F.negate(F.divide(F.fromU32(1), F.fromU32(2))))), F.toBits(negativeZero)), "truncate preserves negative zero")
     T.assertion(Bool.not(same(V.ArrayValue{V.Number{negativeZero} <> Nil{}}, V.ArrayValue{V.Number{F.fromU32(0)} <> Nil{}})), "conversion oracle distinguishes nested signed zero")
-    +special : F.F64 = F.fromBits(2146959412, 12345)
+    +special : F64 = F.fromBits(2146959412, 12345)
     T.assertion(W.equal(F.toBits(F.truncate(special)), F.toBits(special)), "truncate preserves NaN payload bits")
-    +infinity : F.F64 = F.infinity(True{})
+    +infinity : F64 = F.infinity(True{})
     T.assertion(W.equal(F.toBits(F.truncate(infinity)), F.toBits(infinity)), "truncate preserves infinity")
     converted(C.convertPrimitive(C.ToString{}, V.Number{special}), V.Text{"NaN"}, "builder numeric string conversion")
     converted(C.convertPrimitive(C.ToString{}, V.Number{infinity}), V.Text{"-Infinity"}, "builder infinite string conversion")

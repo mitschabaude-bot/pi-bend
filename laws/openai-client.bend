@@ -25,12 +25,12 @@ import ../packages/runtime/src/timer.bend as Duration
 # Request headers: the SDK's timeout validation and authentication policy.
 
 law explicit_timeout_is_retained:
-  for value: F.F64
-  {Client.effectiveTimeout(Some{value}) == value : F.F64}
+  for value: F64
+  {Client.effectiveTimeout(Some{value}) == value : F64}
 
 law noninteger_timeout_is_rejected:
-  for value: F.F64
-  {Client.checkedTimeout(value, False{}) == Fail{Client.TimeoutNotInteger{value}} : Result<&2, &2, Client.HeaderError, F.F64>}
+  for value: F64
+  {Client.checkedTimeout(value, False{}) == Fail{Client.TimeoutNotInteger{value}} : Result<&2, &2, Client.HeaderError, F64>}
 
 law header_failure_preserves_cause:
   for cause: H.HeaderSyntaxError

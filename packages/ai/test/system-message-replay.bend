@@ -23,9 +23,9 @@ def assertion(ok: Bool, label: String) -> IO(Unit):
     case True{}: IO.pure(Unit, Unit{})
     case False{}: IO.die(Unit, 1, label)
 
-def sameNumber(a: N.F64, b: N.F64) -> Bool:
+def sameNumber(a: F64, b: F64) -> Bool:
   match a b:
-    case N.F64{bitsA} N.F64{bitsB}: U.equal(bitsA, bitsB)
+    case F64{highA, lowA} F64{highB, lowB}: U32.is_eq(highA, highB) && U32.is_eq(lowA, lowB)
 
 def sameSchema(parameters: S.Value) -> Bool:
   S.equal(parameters, ToolState.emptyObjectSchema())
@@ -130,7 +130,7 @@ def createFixture() -> IO(Fixture):
     user : T.UserMessage = T.UserMessage{T.UserText{"hello"}, N.fromU32(11)}
     append : T.SystemMessage<S.Value> = T.SystemMessage{T.SystemText{"also do this"}, None{}, None{}, None{}, N.fromU32(12)}
     +text : T.TextContent = T.TextContent{"ok", None{}}
-    +zero : N.F64 = N.fromU32(0)
+    +zero : F64 = N.fromU32(0)
     +cost : T.UsageCost = T.UsageCost{zero, zero, zero, zero, zero}
     contents : List<&2, T.AssistantContent<Unit>> = T.AssistantText{text} <> Nil{}
     usage : T.Usage = T.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}
@@ -224,7 +224,7 @@ def checkReplayText(value: T.TextContent) -> IO(Unit):
     case T.TextContent{text, None{}}: assertion(String.eq(text, "ok"), "collapsed assistant text changed")
     case _: assertion(False{}, "collapsed assistant text signature changed")
 
-def checkReplayContents(value: List<&2, T.AssistantContent<Unit>>, timestamp: N.F64) -> IO(Unit):
+def checkReplayContents(value: List<&2, T.AssistantContent<Unit>>, timestamp: F64) -> IO(Unit):
   match value:
     case T.AssistantText{text} <> Nil{}:
       do IO<Unit>:

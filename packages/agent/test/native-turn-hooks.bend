@@ -75,7 +75,7 @@ def main() -> IO(Unit):
     checkQueue(pending, "already pending")
     followup : QueueResult() <- Loop.pollFollowUpMessages(Unit, String, String, String, Unit, config)
     checkQueue(followup, "queued")
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     +context : H.Context() = T.AgentContext{Nil{}, None{}}
     +completed : H.Turn() = T.ShouldStopAfterTurnContext{Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}), Nil{}, context, Nil{}}
     decision : StopResult() <- Loop.shouldStopAfterTurn(Unit, String, String, String, Unit, config, completed)

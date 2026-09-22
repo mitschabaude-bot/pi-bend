@@ -9,7 +9,7 @@ import ../../runtime/test/schema.bend as Assert
 import ./api/context-estimate.bend as Check
 import ./api/thinking-options.bend as NumberTest
 
-def usage(+total: F.F64) -> T.Usage:
+def usage(+total: F64) -> T.Usage:
   +zero = F.fromU32(0)
   T.Usage{total, zero, zero, zero, None{}, None{}, total, T.UsageCost{zero, zero, zero, zero, zero}}
 

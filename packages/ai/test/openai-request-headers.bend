@@ -50,7 +50,7 @@ def platformFields(value: Maybe<&2, V.Value>) -> R.Record<String>:
     case Some{V.ObjectValue{R.Record{fields}}}: R.Record{platformProperties(fields)}
     case _: R.new(String)
 
-def milliseconds(value: Maybe<&2, V.Value>) -> Maybe<&2, F.F64>:
+def milliseconds(value: Maybe<&2, V.Value>) -> Maybe<&2, F64>:
   match value:
     case Some{V.Number{number}}: Some{number}
     case _: None{}

@@ -22,7 +22,7 @@ type Action is Data:
 type Run is Data:
   Run{state: D.State<Unit>, events: List<&2, T.AssistantMessageEvent<V.Value, Unit>>, terminal: Bool, error: Maybe<&2, D.TerminalError>}
 
-def optionalNumber(fields: R.Record<V.Value>, key: String, value: Maybe<&2, F.F64>) -> R.Record<V.Value>:
+def optionalNumber(fields: R.Record<V.Value>, key: String, value: Maybe<&2, F64>) -> R.Record<V.Value>:
   match value:
     case None{}: fields
     case Some{number}: R.set(V.Value, fields, key, V.Number{number})

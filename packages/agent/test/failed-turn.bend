@@ -49,7 +49,7 @@ def check(result: Outcome(), expected: String) -> IO(Unit):
 
 def run(reason: Ai.StopReason, failAt: U32, expected: String, expectedTrace: String, expectedCalls: U32) -> IO(Unit):
   do IO<Unit>:
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     message : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), reason)
     +messages : H.Messages() = T.CustomMessage{"extra"} <> Nil{}
     +trace : R.Ref<String> <- R.new(String, "")

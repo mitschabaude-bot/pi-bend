@@ -9,7 +9,7 @@ import ../../runtime/src/abort.bend as A
 import ../../runtime/test/utf8-runner.bend as H
 
 type Config is Data:
-  Config{failures: U32, retries: Maybe<&2, Nat>, error: P.RequestFailure<String>, cap: Maybe<&2, F.F64>, preAbort: Bool, abortSleep: Bool}
+  Config{failures: U32, retries: Maybe<&2, Nat>, error: P.RequestFailure<String>, cap: Maybe<&2, F64>, preAbort: Bool, abortSleep: Bool}
 
 def failure(status: U32, retry: Maybe<&2, String>, ms: Maybe<&2, String>, seconds: Maybe<&2, String>) -> P.RequestFailure<String>:
   P.Provider{P.ProviderError{"original", "provider message", Some{F.fromU32(status)}, retry, ms, seconds}}
@@ -47,18 +47,18 @@ def requestBody(environment: RequestEnvironment, unused: Unit) -> IO(Result<&2, 
         IO.print("request")
         return requestResult(U32.is_lt(count, failures), error)
 
-def randomBody(environment: Unit, unused: Unit) -> IO(F.F64):
-  do IO<F.F64>:
+def randomBody(environment: Unit, unused: Unit) -> IO(F64):
+  do IO<F64>:
     IO.print("random")
     return F.fromU32(0)
 
-def dateBody(environment: Unit, text: String) -> IO(F.F64):
-  do IO<F.F64>:
+def dateBody(environment: Unit, text: String) -> IO(F64):
+  do IO<F64>:
     IO.print("date " ++ text)
     return F.nan()
 
-def nowBody(environment: Unit, unused: Unit) -> IO(F.F64):
-  do IO<F.F64>:
+def nowBody(environment: Unit, unused: Unit) -> IO(F64):
+  do IO<F64>:
     IO.print("now")
     return F.fromU32(1000)
 
@@ -108,15 +108,15 @@ def runWithSleep(+configuration: Config, sleep: C.Callback<P.SleepInput<String>,
         +controller : A.AbortController<String> <- A.new(String)
         preAbort(aborted, controller)
         +request : C.Callback<Unit, Result<&2, &2, P.RequestFailure<String>, String>> <- C.create(~RequestEnvironment, ~Unit, ~Result<&2, &2, P.RequestFailure<String>, String>, ~requestBody, RequestEnvironment{counter, configuration})
-        +random : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~randomBody, Unit{})
-        +date : C.Callback<String, F.F64> <- C.create(~Unit, ~String, ~F.F64, ~dateBody, Unit{})
-        +now : C.Callback<Unit, F.F64> <- C.create(~Unit, ~Unit, ~F.F64, ~nowBody, Unit{})
+        +random : C.Callback<Unit, F64> <- C.create(~Unit, ~Unit, ~F64, ~randomBody, Unit{})
+        +date : C.Callback<String, F64> <- C.create(~Unit, ~String, ~F64, ~dateBody, Unit{})
+        +now : C.Callback<Unit, F64> <- C.create(~Unit, ~Unit, ~F64, ~nowBody, Unit{})
         result : Result<&2, &2, P.RetryFailure<String>, String> <- P.retryProviderRequest(String, String, String, request, P.Effects{random, date, now, sleep}, P.ProviderRetryOptions{retries, cap, Some{A.signal(String, controller)}})
         show(result)
         C.dispose(Unit, Result<&2, &2, P.RequestFailure<String>, String>, request)
-        C.dispose(Unit, F.F64, random)
-        C.dispose(String, F.F64, date)
-        C.dispose(Unit, F.F64, now)
+        C.dispose(Unit, F64, random)
+        C.dispose(String, F64, date)
+        C.dispose(Unit, F64, now)
         count : U32 <- R.dispose(U32, counter)
         A.dispose(String, controller)
         return Unit{}

@@ -46,9 +46,9 @@ def cases(values: List<String>) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    +callback : Callback.Callback<String, F.F64> <- P.dateParser()
-    value : F.F64 <- Callback.call(String, F.F64, callback, "Sun, 06 Nov 1994 08:49:37 GMT")
+    +callback : Callback.Callback<String, F64> <- P.dateParser()
+    value : F64 <- Callback.call(String, F64, callback, "Sun, 06 Nov 1994 08:49:37 GMT")
     IO.print("callback:" ++ words(F.toBits(value)))
     values : List<String> <- IO.args()
     cases(values)
-    Callback.dispose(String, F.F64, callback)
+    Callback.dispose(String, F64, callback)

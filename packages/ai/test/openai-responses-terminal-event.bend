@@ -51,7 +51,7 @@ def equalComparison(order: Maybe<&2, Cmp>) -> Bool:
     case Some{EQ{}}: True{}
     case _: False{}
 
-def sameNumber(value: F.F64, expected: U32) -> Bool:
+def sameNumber(value: F64, expected: U32) -> Bool:
   equalComparison(F.compare(value, F.fromU32(expected)))
 
 def usageIs(usage: T.Usage, input: U32, output: U32, read: U32, write: U32, total: U32) -> Bool:

@@ -48,9 +48,9 @@ type Defaults is Data:
   Defaults{userAgent: String, platform: R.Record<String>, organization: Maybe<&2, String>, project: Maybe<&2, String>}
 
 type HeaderError is Data:
-  TimeoutNotInteger{value: F.F64}
-  TimeoutNegative{value: F.F64}
-  TimeoutEncodingFailure{value: F.F64}
+  TimeoutNotInteger{value: F64}
+  TimeoutNegative{value: F64}
+  TimeoutEncodingFailure{value: F64}
   HeaderFailure{cause: H.HeaderSyntaxError}
   MissingAuthentication{}
 
@@ -133,7 +133,7 @@ def nullable(value: Maybe<&2, String>) -> T.Nullable<String>:
     case None{}: T.NullValue{}
     case Some{text}: T.PresentValue{text}
 
-def effectiveTimeout(value: Maybe<&2, F.F64>) -> F.F64:
+def effectiveTimeout(value: Maybe<&2, F64>) -> F64:
   match value:
     case None{}: F.fromU32(600000)
     case Some{milliseconds}: milliseconds
@@ -143,26 +143,26 @@ def negative(value: Maybe<&2, Cmp>) -> Bool:
     case Some{LT{}}: True{}
     case _: False{}
 
-def checkedTimeout(+value: F.F64, integral: Bool) -> Result<&2, &2, HeaderError, F.F64>:
+def checkedTimeout(+value: F64, integral: Bool) -> Result<&2, &2, HeaderError, F64>:
   match integral:
     case False{}: Fail{TimeoutNotInteger{value}}
-    case True{}: Bool.pick(Result<&2, &2, HeaderError, F.F64>, negative(F.compare(value, F.fromU32(0))), Fail{TimeoutNegative{value}}, Done{value})
+    case True{}: Bool.pick(Result<&2, &2, HeaderError, F64>, negative(F.compare(value, F.fromU32(0))), Fail{TimeoutNegative{value}}, Done{value})
 
-def validateTimeout(+value: F.F64) -> Result<&2, &2, HeaderError, F.F64>:
+def validateTimeout(+value: F64) -> Result<&2, &2, HeaderError, F64>:
   checkedTimeout(value, F.isInteger(value))
 
-def encodedTimeout(value: F.F64, encoded: Maybe<&2, String>) -> Result<&2, &2, HeaderError, Maybe<&2, String>>:
+def encodedTimeout(value: F64, encoded: Maybe<&2, String>) -> Result<&2, &2, HeaderError, Maybe<&2, String>>:
   match encoded:
     case None{}: Fail{TimeoutEncodingFailure{value}}
     case Some{text}: Done{Some{text}}
 
 # X-Stainless-Timeout carries whole seconds; a zero timeout sends no header.
-def timeoutField(+value: F.F64, ordering: Maybe<&2, Cmp>) -> Result<&2, &2, HeaderError, Maybe<&2, String>>:
+def timeoutField(+value: F64, ordering: Maybe<&2, Cmp>) -> Result<&2, &2, HeaderError, Maybe<&2, String>>:
   match ordering:
     case Some{EQ{}}: Done{None{}}
     case _: encodedTimeout(value, Decimal.toDecimal(F.truncate(F.divide(value, F.fromU32(1000)))))
 
-def timeoutHeader(original: Maybe<&2, F.F64>) -> Result<&2, &2, HeaderError, Maybe<&2, String>>:
+def timeoutHeader(original: Maybe<&2, F64>) -> Result<&2, &2, HeaderError, Maybe<&2, String>>:
   match original:
     case None{}: Done{None{}}
     case Some{+value}: timeoutField(value, F.compare(value, F.fromU32(0)))
@@ -206,7 +206,7 @@ def layered(configuration: Defaults, apiKey: String, retryCount: Nat, client: Ma
     case Fail{cause}: Fail{cause}
     case Done{value}: assembled(build(Some{defaultHeaders(configuration, retryCount, value)} <> Some{authorization(apiKey)} <> client <> body <> request <> Nil{}))
 
-def validated(configuration: Defaults, apiKey: String, retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, F.F64>) -> Result<&2, &2, HeaderError, Headers.Headers>:
+def validated(configuration: Defaults, apiKey: String, retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match timeout:
     case Fail{cause}: Fail{cause}
     case Done{+value}: layered(configuration, apiKey, retryCount, client, body, request, timeoutField(value, F.compare(value, F.fromU32(0))))
@@ -214,7 +214,7 @@ def validated(configuration: Defaults, apiKey: String, retryCount: Nat, client: 
 # SDK request order: defaults/platform, credentials, client defaults, serializer
 # headers, per-request overrides, then authentication validation. Pi disables
 # SDK retries, so its adapter supplies retryCount = 0.
-def buildHeaders(configuration: Defaults, apiKey: String, retryCount: Nat, timeout: Maybe<&2, F.F64>, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, HeaderError, Headers.Headers>:
+def buildHeaders(configuration: Defaults, apiKey: String, retryCount: Nat, timeout: Maybe<&2, F64>, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   validated(configuration, apiKey, retryCount, client, body, request, validateTimeout(effectiveTimeout(timeout)))
 
 # URL
@@ -276,7 +276,7 @@ def responsesURL(context: Absolute.Context, base: String) -> Result<&2, &2, URLE
 
 # An immutable, unframed request works with either custom fetch or native HTTP.
 type Request is Data:
-  Request{url: URL.URL, method: String, headers: Headers.Headers, body: String, timeout: F.F64}
+  Request{url: URL.URL, method: String, headers: Headers.Headers, body: String, timeout: F64}
 
 type RequestError is Data:
   URLFailure{cause: URLError}
@@ -300,29 +300,29 @@ def encodedPayload(payload: T.JsonValue, valid: Bool) -> Result<&2, &2, RequestE
 def serialize(+payload: T.JsonValue) -> Result<&2, &2, RequestError, String>:
   encodedPayload(payload, JSON.finite(payload))
 
-def completed(url: URL.URL, body: String, timeout: F.F64, headers: Result<&2, &2, HeaderError, Headers.Headers>) -> Result<&2, &2, RequestError, Request>:
+def completed(url: URL.URL, body: String, timeout: F64, headers: Result<&2, &2, HeaderError, Headers.Headers>) -> Result<&2, &2, RequestError, Request>:
   match headers:
     case Fail{cause}: Fail{HeaderRejected{cause}}
     case Done{fields}: Done{Request{url, "post", fields, body, timeout}}
 
-def serialized(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), url: URL.URL, timeout: F.F64, original: Maybe<&2, F.F64>, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
+def serialized(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), url: URL.URL, timeout: F64, original: Maybe<&2, F64>, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
   match body:
     case Fail{cause}: Fail{cause}
     case Done{text}: completed(url, text, timeout, layered(configuration, apiKey, 0n, Some{client}, Some{bodyHeaders()}, None{}, timeoutHeader(original)))
 
-def timed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), url: URL.URL, payload: T.JsonValue, original: Maybe<&2, F.F64>, timeout: Result<&2, &2, HeaderError, F.F64>) -> Result<&2, &2, RequestError, Request>:
+def timed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), url: URL.URL, payload: T.JsonValue, original: Maybe<&2, F64>, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, RequestError, Request>:
   match timeout:
     case Fail{cause}: Fail{HeaderRejected{cause}}
     case Done{value}: serialized(configuration, apiKey, client, url, value, original, serialize(payload))
 
-def addressed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), +timeout: Maybe<&2, F.F64>, payload: T.JsonValue, url: Result<&2, &2, URLError, URL.URL>) -> Result<&2, &2, RequestError, Request>:
+def addressed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), +timeout: Maybe<&2, F64>, payload: T.JsonValue, url: Result<&2, &2, URLError, URL.URL>) -> Result<&2, &2, RequestError, Request>:
   match url:
     case Fail{cause}: Fail{URLFailure{cause}}
     case Done{value}: timed(configuration, apiKey, client, value, payload, timeout, validateTimeout(effectiveTimeout(timeout)))
 
 # SDK preparation order is URL, timeout, body, headers. The payload is the
 # hook-selected one; this layer neither invokes nor retries hooks.
-def prepareRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F.F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
+def prepareRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
   addressed(configuration, apiKey, client, timeout, payload, responsesURL(context, baseUrl))
 
 # Status boundary

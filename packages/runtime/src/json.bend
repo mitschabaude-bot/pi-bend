@@ -275,7 +275,7 @@ def string(value: V.Value) -> Result<&2, &2, Error, String>:
     case V.Text{text}: Done{text}
     case _: Fail{WrongType{Nil{}, "string"}}
 
-def number(value: V.Value) -> Result<&2, &2, Error, F.F64>:
+def number(value: V.Value) -> Result<&2, &2, Error, F64>:
   match value:
     case V.Number{scalar}: Done{scalar}
     case _: Fail{WrongType{Nil{}, "number"}}

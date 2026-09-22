@@ -7,7 +7,7 @@ import ./f64.bend as F
 type Value is Data:
   Null{}
   Boolean{value: Bool}
-  Number{value: F.F64}
+  Number{value: F64}
   Text{value: String}
   ArrayValue{values: List<&2, Value>}
   ObjectValue{properties: R.Record<Value>}

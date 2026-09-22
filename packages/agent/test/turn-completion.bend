@@ -132,7 +132,7 @@ def scenario(+tools: Bool, terminate: Bool, stopMode: U32, steeringMode: U32, fo
     +emitter : C.Callback<H.EventValue(), E.Emission<String>> <- C.create(~Recording, ~H.EventValue(), ~E.Emission<String>, ~emit, Recording{recording, failAt, tools})
     +sink : C.Callback<H.EventValue(), Result<&2, &2, String, Unit>> <- Loop.createAwaitedEventSink(~Unit, ~String, ~String, ~T.AgentToolResult<String>, ~T.AgentToolResult<String>, ~String, emitter)
     +owners : Call.Owners(String, String) <- Call.newOwners(String, String)
-    +zero : F.F64 = F.fromU32(0)
+    +zero : F64 = F.fromU32(0)
     +assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{content(tools), "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}, None{}, None{}, None{}, None{}, zero}
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = T.AgentContext{T.CustomMessage{"old"} <> T.LlmMessage{Ai.Assistant{assistant}} <> Nil{}, Some{T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}

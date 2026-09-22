@@ -13,7 +13,7 @@ def optionalText(value: Maybe<&2, String>) -> V.Value:
     case None{}: V.Null{}
     case Some{text}: V.Text{text}
 
-def optionalNumber(value: Maybe<&2, F.F64>) -> V.Value:
+def optionalNumber(value: Maybe<&2, F64>) -> V.Value:
   match value:
     case None{}: V.Null{}
     case Some{number}: V.Number{number}

@@ -20,7 +20,7 @@ import ./message-events.bend as Test
 
 def budgets() -> Ai.ThinkingBudgets:
   Ai.ThinkingBudgets{Some{F.fromU32(1)}, Some{F.fromU32(2)}, Some{F.fromU32(3)}, Some{F.fromU32(4)}}
-def number(value: F.F64, expected: U32) -> Bool: Schema.equal(Schema.Number{value}, Schema.Number{F.fromU32(expected)})
+def number(value: F64, expected: U32) -> Bool: Schema.equal(Schema.Number{value}, Schema.Number{F.fromU32(expected)})
 def initial(value: Settings.Settings) -> Bool:
   match value:
     case Settings.Settings{None{}, None{}, Ai.AutoTransport{}, None{}, T.Parallel{}}: True{}
@@ -38,7 +38,7 @@ def read(+agent: Owner.Owner()) -> IO(Settings.Settings):
     session : Maybe<&2, String> <- Agent.getSessionId(Unit, Unit, String, String, Unit, agent)
     thinking : Maybe<&2, Ai.ThinkingBudgets> <- Agent.getThinkingBudgets(Unit, Unit, String, String, Unit, agent)
     transport : Ai.Transport <- Agent.getTransport(Unit, Unit, String, String, Unit, agent)
-    delay : Maybe<&2, F.F64> <- Agent.getMaxRetryDelayMs(Unit, Unit, String, String, Unit, agent)
+    delay : Maybe<&2, F64> <- Agent.getMaxRetryDelayMs(Unit, Unit, String, String, Unit, agent)
     execution : T.ToolExecutionMode <- Agent.getToolExecution(Unit, Unit, String, String, Unit, agent)
     return Settings.Settings{session, thinking, transport, delay, execution}
 def configure(+agent: Owner.Owner()) -> IO(Unit):

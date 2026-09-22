@@ -44,7 +44,7 @@ def messages(tags: List<&2, String>) -> Messages():
   match tags:
     case Nil{}: Nil{}
     case tag <> rest: fixtureMessage(tag) <> messages(rest)
-def time(value: F.F64, expected: U32) -> Bool:
+def time(value: F64, expected: U32) -> Bool:
   W.equal(F.toBits(value), F.toBits(F.fromU32(expected)))
 def validTag(ok: Bool, tag: String) -> String: Bool.pick(String, ok, tag, "INVALID")
 def none(-A: Data, value: Maybe<&2, A>) -> Bool:
@@ -57,7 +57,7 @@ def stopped(value: Ai.StopReason) -> Bool:
     case _: False{}
 def usageOk(usage: Ai.Usage) -> Bool:
   match usage:
-    case Ai.Usage{_, _, _, _, h, r, total, _}: none(F.F64, h) && none(F.F64, r) && time(total, 42)
+    case Ai.Usage{_, _, _, _, h, r, total, _}: none(F64, h) && none(F64, r) && time(total, 42)
 def contentTag(content: List<&2, Ai.AssistantContent<String>>) -> String:
   match content:
     case Ai.AssistantText{Ai.TextContent{+tag, signature}} <> rest:
@@ -75,7 +75,7 @@ def systemTag(system: Ai.SystemMessage<Unit>) -> String:
   match system:
     case Ai.SystemMessage{Ai.SystemText{text}, None{}, None{}, None{}, timestamp}: validTag(String.eq(text, "system") && time(timestamp, 45), "s")
     case _: "INVALID"
-def resultContent(error: Bool, content: List<&2, Ai.TextImageContent>, details: Maybe<&2, String>, timestamp: F.F64) -> Bool:
+def resultContent(error: Bool, content: List<&2, Ai.TextImageContent>, details: Maybe<&2, String>, timestamp: F64) -> Bool:
   match error:
     case True{}: Images.sameContent(content, Ai.TextImageText{Ai.TextContent{"No result provided", None{}}} <> Nil{}) && none(String, details) && time(timestamp, 1000)
     case False{}: Images.sameContent(content, Ai.TextImageText{Ai.TextContent{"ok", Some{"result-signature"}}} <> Nil{}) && Images.sameOptional(details, Some{"original"}) && time(timestamp, 44)
@@ -98,7 +98,7 @@ def equal(actual: List<&2, String>, expected: List<&2, String>) -> Bool:
     case Nil{} Nil{}: True{}
     case a <> xs b <> ys: String.eq(a, b) && equal(xs, ys)
     case _ _: False{}
-def clock(unused: Unit) -> IO(F.F64): IO.pure(F.F64, F.fromU32(1000))
+def clock(unused: Unit) -> IO(F64): IO.pure(F64, F.fromU32(1000))
 def check(input: List<&2, String>, expected: List<&2, String>, label: String) -> IO(Unit):
   do IO<Unit>:
     result : Messages() <- Repair.repairWith(~Unit, ~String, ~Unit, ~String, ~clock, messages(input))

@@ -1,0 +1,396 @@
+--- a/base.bend	2026-09-22 13:43:50.249650058 +0200
++++ b/base.bend	2026-09-22 14:48:55.711274679 +0200
+@@ -1639,6 +1639,122 @@
+   for s: String
+   Maybe<&2, F32>
+ 
++# F64
++# ---
++
++# A binary64 value as its IEEE 754 bits, high word first. Arithmetic,
++# comparison and conversion are native; NaN compares unequal to itself.
++type F64 is Data:
++  F64{high: U32, low: U32}
++
++law U32.to_f64:
++  for a: U32
++  F64
++
++law F64.to_u32:
++  for a: F64
++  U32
++
++law F64.add:
++  for a: F64
++  for b: F64
++  F64
++
++law F64.sub:
++  for a: F64
++  for b: F64
++  F64
++
++law F64.mul:
++  for a: F64
++  for b: F64
++  F64
++
++law F64.div:
++  for a: F64
++  for b: F64
++  F64
++
++law F64.mod:
++  for a: F64
++  for b: F64
++  F64
++
++law F64.pow:
++  for a: F64
++  for b: F64
++  F64
++
++law F64.neg:
++  for a: F64
++  F64
++
++law F64.abs:
++  for a: F64
++  F64
++
++law F64.sqrt:
++  for a: F64
++  F64
++
++law F64.floor:
++  for a: F64
++  F64
++
++law F64.ceil:
++  for a: F64
++  F64
++
++law F64.trunc:
++  for a: F64
++  F64
++
++law F64.is_eq:
++  for a: F64
++  for b: F64
++  Bool
++
++law F64.is_ne:
++  for a: F64
++  for b: F64
++  Bool
++
++law F64.is_lt:
++  for a: F64
++  for b: F64
++  Bool
++
++law F64.is_le:
++  for a: F64
++  for b: F64
++  Bool
++
++law F64.is_gt:
++  for a: F64
++  for b: F64
++  Bool
++
++law F64.is_ge:
++  for a: F64
++  for b: F64
++  Bool
++
++# The shortest decimal that reads back exactly, laid out as JavaScript's
++# Number.prototype.toString: nan, inf, -inf and -0 are spelled so.
++law F64.show:
++  for +a: F64
++  String
++
++law F64.read:
++  for s: String
++  Maybe<&2, F64>
++
++def F64.min(+a: F64, +b: F64) -> F64:
++  Bool.pick(F64, F64.is_lt(a, b), a, b)
++
++def F64.max(+a: F64, +b: F64) -> F64:
++  Bool.pick(F64, F64.is_lt(a, b), b, a)
++
+ def F32.min(+a: F32, +b: F32) -> F32:
+   Bool.pick(F32, F32.is_lt(a, b), a, b)
+ 
+--- a/comp.ts	2026-09-22 14:43:43.599311149 +0200
++++ b/comp.ts	2026-09-22 14:57:10.284379668 +0200
+@@ -284,6 +284,51 @@
+     C:  "$0",
+     JS: "f32_bits($0)",
+   },
++  // F64: two u32 words a value, computed once into a scratch bits word.
++  u32_to_f64: {
++    C:  ["!f64_bits((f64_t)(u32)($0))", "f64_hi($1)", "f64_lo($1)"],
++    JS: "f64_new($0)",
++  },
++  f64_to_u32: {
++    C:  "f64_to_u32(f64_of(e, $0, $1))",
++    JS: "f64_to_u32(f64_val($0))",
++  },
++  ...Object.fromEntries("add:+ sub:- mul:* div:/".split(" ").map((p) => {
++    const [n, o] = p.split(":");
++    return [`f64_${n}`, {
++      C:  [`!f64_bits(f64_of(e, $0, $1) ${o} f64_of(e, $2, $3))`, "f64_hi($4)", "f64_lo($4)"],
++      JS: `f64_new(f64_val($0) ${o} f64_val($1))`,
++    }];
++  })),
++  ...Object.fromEntries("mod:fmod pow:pow".split(" ").map((p) => {
++    const [n, f] = p.split(":");
++    return [`f64_${n}`, {
++      C:  [`!f64_bits(${f}(f64_of(e, $0, $1), f64_of(e, $2, $3)))`, "f64_hi($4)", "f64_lo($4)"],
++      JS: n === "mod" ? "f64_new(f64_val($0) % f64_val($1))" : "f64_new(Math.pow(f64_val($0), f64_val($1)))",
++    }];
++  })),
++  f64_neg: {
++    C:  ["((u64)($0) ^ 0x80000000ull)", "$1"],
++    JS: "f64_new(-f64_val($0))",
++  },
++  f64_abs: {
++    C:  ["((u64)($0) & 0x7FFFFFFFull)", "$1"],
++    JS: "f64_new(Math.abs(f64_val($0)))",
++  },
++  ...Object.fromEntries("sqrt floor ceil trunc".split(" ").map((f) => [`f64_${f}`, {
++    C:  [`!f64_bits(${f}(f64_of(e, $0, $1)))`, "f64_hi($2)", "f64_lo($2)"],
++    JS: `f64_new(Math.${f}(f64_val($0)))`,
++  }])),
++  ...tpl_ops("f64_", CMPS, "((u64)(f64_of(e, $0, $1) $o f64_of(e, $2, $3)))",
++    "(f64_val($0) $o f64_val($1))"),
++  f64_show: {
++    C:  "f64_show(e, $0, $1)",
++    JS: "f64_show(f64_val($0))",
++  },
++  f64_read: {
++    C:  "f64_read(e, $0)",
++    JS: "f64_read($0)",
++  },
+   f32_show: {
+     C:    "f32_show(e, $0)",
+     call: true,
+@@ -475,6 +520,36 @@
+   return v >= 0.0f && v < 4294967296.0f ? (u32)v : 0;
+ }
+ 
++// Metal has no double: an F64 operation on that device fail-stops as a
++// function the device does not hold. CUDA and the host compute natively.
++#ifdef __METAL_VERSION__
++typedef float f64_t;
++INLINE f64_t f64_of(Env e, u64 hi, u64 lo) {
++  err_post(e.mem, ERR_FIDS);
++  return 0.0f;
++}
++INLINE u64 f64_bits(f64_t d) {
++  return 0;
++}
++#else
++typedef double f64_t;
++INLINE f64_t f64_of(Env e, u64 hi, u64 lo) {
++  union { u64 u; double d; } p = { ((u64)(u32)hi << 32) | (u64)(u32)lo };
++  return p.d;
++}
++INLINE u64 f64_bits(f64_t d) {
++  union { double d; u64 u; } p = { d };
++  return p.u;
++}
++#endif
++
++#define f64_hi(b) ((u64)((b) >> 32))
++#define f64_lo(b) ((u64)((u32)(b)))
++
++INLINE U32 f64_to_u32(f64_t v) {
++  return v >= 0.0 && v < 4294967296.0 ? (u32)v : 0;
++}
++
+ INLINE Nat nat_chk(Env e, Nat n) {
+   if (n > NAT_IMM) {
+     err_post(e.mem, ERR_NATS);
+@@ -491,11 +566,15 @@
+ 
+ #define f32_show(e, x) (err_post(e.mem, ERR_FIDS), 0)
+ #define f32_read(e, s) (err_post(e.mem, ERR_FIDS), 0)
++#define f64_show(e, h, l) (err_post(e.mem, ERR_FIDS), 0)
++#define f64_read(e, s) (err_post(e.mem, ERR_FIDS), 0)
+ 
+ #else
+ 
+ static Term f32_show(Env e, Term x);
+ static Term f32_read(Env e, Term s);
++static Term f64_show(Env e, Term h, Term l);
++static Term f64_read(Env e, Term s);
+ 
+ #endif
+ `.slice(1),
+@@ -545,6 +624,90 @@
+   free(text);
+   return out;
+ }
++
++// At a power of two the interval that reads back as v is lopsided, so the
++// nearest p-digit decimal can miss while its neighbour lands: try the
++// mantissa one unit up or down in its last digit (a carry past the leading
++// digit means a shorter spelling, found at a smaller p).
++static int f64_nudge(char* buf, int dir, double v) {
++  char alt[40];
++  strcpy(alt, buf);
++  char* ep = strchr(alt, 'e');
++  for (char* d = ep - 1; d >= alt; d -= 1) {
++    if (*d == '.' || *d == '-') {
++      continue;
++    }
++    *d += dir;
++    if (*d >= '0' && *d <= '9') {
++      if (strtod(alt, NULL) == v) {
++        strcpy(buf, alt);
++        return 1;
++      }
++      return 0;
++    }
++    *d = dir > 0 ? '0' : '9';
++  }
++  return 0;
++}
++
++// The fewest significant digits that read back exactly (at most 17), laid
++// out as JavaScript does: exponential at or above 1e21 and below 1e-6.
++static int f64_text(char* buf, double v) {
++  int n = 0;
++  int p = 0;
++  if (v != v) {
++    return sprintf(buf, "nan");
++  }
++  if (v == 1.0 / 0.0 || v == -1.0 / 0.0) {
++    return sprintf(buf, v < 0 ? "-inf" : "inf");
++  }
++  if (v == 0.0) {
++    return sprintf(buf, signbit(v) ? "-0" : "0");
++  }
++  for (; p < 17; p += 1) {
++    n = snprintf(buf, 40, "%.*e", p, v);
++    if (strtod(buf, NULL) == v || f64_nudge(buf, 1, v) || f64_nudge(buf, -1, v)) {
++      break;
++    }
++    n = snprintf(buf, 40, "%.*e", p, v);
++  }
++  n = (int)strlen(buf);
++  char* ep = strchr(buf, 'e');
++  int ex = atoi(ep + 1);
++  if (ex >= 21 || ex <= -7) {
++    n = (int)(ep - buf) + sprintf(ep, "e%c%d", ex < 0 ? '-' : '+', abs(ex));
++  } else if (ex < 0) {
++    n = snprintf(buf, 40, "%.*f", p - ex, v);
++  } else if (ex < p) {
++    n = snprintf(buf, 40, "%.*f", p - ex, v);
++  } else {
++    int s = *buf == '-';
++    memmove(buf + s + 1, buf + s + 2, p);
++    memset(buf + s + 1 + p, '0', ex - p);
++    n = s + 1 + ex;
++    buf[n] = 0;
++  }
++  return n;
++}
++
++static Term f64_show(Env e, Term h, Term l) {
++  char buf[40];
++  return io_str(e, buf, f64_text(buf, f64_of(e, h, l)));
++}
++
++static Term f64_read(Env e, Term s) {
++  u64 n = 0;
++  char* text = io_cstr(e, s, &n);
++  char* end;
++  double v = strtod(text, &end);
++  Term out = term_pak(CID_NONE, 0);
++  if (n > 0 && (u64)(end - text) == n && strpbrk(text, "xX(") == NULL) {
++    u64 b = f64_bits(v);
++    out = io_box(e, CID_SOME, io_node(e, CID_F64, f64_hi(b), f64_lo(b), 0), 0);
++  }
++  free(text);
++  return out;
++}
+ `.slice(1),
+   JS: String.raw`
+ function word_to_u32(w) {
+@@ -600,6 +763,39 @@
+   return new Uint32Array(new Float32Array([x]).buffer)[0];
+ }
+ 
++const F64_VIEW = new DataView(new ArrayBuffer(8));
++
++function f64_new(x) {
++  F64_VIEW.setFloat64(0, x);
++  return {$: "F64", high: F64_VIEW.getUint32(0), low: F64_VIEW.getUint32(4)};
++}
++
++function f64_val(o) {
++  F64_VIEW.setUint32(0, o.high);
++  F64_VIEW.setUint32(4, o.low);
++  return F64_VIEW.getFloat64(0);
++}
++
++function f64_to_u32(x) {
++  return x >= 0 && x < 4294967296 ? Math.trunc(x) : 0;
++}
++
++function f64_show(x) {
++  if (x !== x) {
++    return "nan";
++  }
++  if (!Number.isFinite(x) || Object.is(x, -0)) {
++    return x < 0 ? "-inf" : x === 0 ? "-0" : "inf";
++  }
++  return String(x);
++}
++
++function f64_read(s) {
++  const re = /^\s*[+-]?((\d+\.?\d*|\.\d+)(e[+-]?\d+)?|inf(inity)?|nan)$/i;
++  const v = Number(s.replace(/inf\w*/i, "Infinity"));
++  return re.test(s) ? {$: "Some", value: f64_new(v)} : {$: "None"};
++}
++
+ function f32_from_bits(u) {
+   return new Float32Array(new Uint32Array([u]).buffer)[0];
+ }
+@@ -2314,15 +2510,19 @@
+     ty_adt(fl.book, m.all[0]) ?? die("an open Array element type");
+     return arr_op(fl, op, lay_of(fl.book, m.all[0]), args);
+   }
+-  const ws = args.map((v) => (val_own(fl, v), val_word(v)));
++  const ws = args.flatMap((v) => val_own(fl, v));
+   if (Array.isArray(it.C)) {
++    // Each template sees the argument words, then the words computed so
++    // far; a template starting with "!" is scratch, not part of the result.
+     const as = ws.map((z) => emit_alias(fl, z, "a"));
+     const vs: string[] = [];
++    const scratch = new Set<number>();
+     for (const p of it.C) {
+-      vs.push(emit_alias(fl, tpl(p, [...as, ...vs]), "a"));
++      if (p.startsWith("!")) scratch.add(vs.length);
++      vs.push(emit_alias(fl, tpl(p.replace(/^!/, ""), [...as, ...vs]), "a"));
+     }
+-    return val_new(vs, lay_of(fl.book, ty ?? tele_unbind(fl.book,
+-      (fl.book.tlds[k] as Bend.Def).T).ret));
++    return val_new(vs.filter((_, i) => !scratch.has(i)), lay_of(fl.book,
++      ty ?? tele_unbind(fl.book, (fl.book.tlds[k] as Bend.Def).T).ret));
+   }
+   const dup = typeof it.C === "string" && /\$(\d)[^]*\$\1/.test(it.C);
+   const out = tpl(it.C as Gen, dup ? ws.map((a) => emit_alias(fl, a, "a")) : ws);
+@@ -2928,7 +3128,7 @@
+ const TABLES = ["CID_ARITY_T", "FID_ARITY_T", "FID_FLAG_T", "FID_RESW_T"];
+ 
+ // The datatypes whose constructors the runtime or the elaborator lays itself.
+-const RUNTIME_ADTS = ["Sigma", "String", "Word.Con", "IO.OP", "Result",
++const RUNTIME_ADTS = ["Sigma", "String", "Word.Con", "IO.OP", "Result", "F64",
+   "Maybe", "Bool", "Unit"];
+ 
+ function compile_tables(fl: File, entries: Seg[]): string[] {

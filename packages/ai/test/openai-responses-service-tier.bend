@@ -9,12 +9,12 @@ def bits(value: W.U64) -> String:
   match value:
     case W.U64{high, low}: U32.show(high) ++ ":" ++ U32.show(low)
 
-def number(value: F.F64, decoded: F.Decoded) -> String:
+def number(value: F64, decoded: F.Decoded) -> String:
   match decoded:
     case F.NotANumber{}: "nan"
     case _: bits(F.toBits(value))
 
-def shownNumber(+value: F.F64) -> String: number(value, F.decode(value))
+def shownNumber(+value: F64) -> String: number(value, F.decode(value))
 
 def shown(usage: T.Usage) -> String:
   match usage:
@@ -25,7 +25,7 @@ def model(modelId: String) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
   T.Model{modelId, "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
-def values(modelId: String, serviceTier: Maybe<&2, String>, input: Maybe<&2, F.F64>, output: Maybe<&2, F.F64>, read: Maybe<&2, F.F64>, write: Maybe<&2, F.F64>, total: Maybe<&2, F.F64>) -> IO(Unit):
+def values(modelId: String, serviceTier: Maybe<&2, String>, input: Maybe<&2, F64>, output: Maybe<&2, F64>, read: Maybe<&2, F64>, write: Maybe<&2, F64>, total: Maybe<&2, F64>) -> IO(Unit):
   match input output read write total:
     case Some{a} Some{b} Some{c} Some{d} Some{e}:
       IO.print(shown(P.applyServiceTierPricing(model(modelId), serviceTier, T.Usage{F.fromU32(13), F.fromU32(17), F.fromU32(19), F.fromU32(23), Some{F.fromU32(29)}, None{}, F.fromU32(31), T.UsageCost{a, b, c, d, e}})))

@@ -126,7 +126,7 @@ def checkPatched(+original: T.AgentToolResult<Payload>, outcome: Loop.ExecutedTo
 
 def run(contentIndex: U32, detailsIndex: U32, +flags: U32, expectedDetails: U32, expectedContent: String, newUsage: Bool, expectedTerminate: Maybe<&2, Bool>, expectedError: Bool) -> IO(Unit):
   do IO<Unit>:
-    +zero : N.F64 = N.fromU32(0)
+    +zero : F64 = N.fromU32(0)
     +oldCost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +newCost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +oldDetails : String <- IO.pure(String, "old")

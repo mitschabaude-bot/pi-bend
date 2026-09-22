@@ -21,7 +21,7 @@ def step(seed: W.U64) -> W.U64 & W.U64:
 
 # Exactly 53 random bits, scaled by 2^-53. All intermediate integers are
 # representable; the result is in [0,1), including zero and excluding one.
-def unit(value: W.U64) -> F.F64:
+def unit(value: W.U64) -> F64:
   F.multiply(F.fromU64(W.shiftRight(value, 11n)), F.fromBits(1017118720, 0))
 
 def seeded(seed: W.U64) -> IO(Generator):
@@ -33,8 +33,8 @@ def nextWord(generator: Generator) -> IO(W.U64):
   match generator:
     case Generator{state}: R.modify(W.U64, W.U64, state, value => step(value))
 
-def random(generator: Generator) -> IO(F.F64):
-  do IO<F.F64>:
+def random(generator: Generator) -> IO(F64):
+  do IO<F64>:
     word : W.U64 <- nextWord(generator)
     return unit(word)
 

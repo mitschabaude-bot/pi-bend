@@ -662,7 +662,7 @@ def assembled(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameter
     case Fail{error}: Fail{error}
     case Done{messages}: assemble(~P, ~A, ~G, ~D, ~J, ~encodeParameters, ~encodeArguments, messages, model, config, True{}, Done{AssemblyState{Nil{}, 0n}})
 
-def convertResolved(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, ~now: Unit -> IO(F.F64), +model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, providers: List<&2, String>, options: ConvertResponsesMessagesOptions) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
+def convertResolved(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, ~now: Unit -> IO(F64), +model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, providers: List<&2, String>, options: ConvertResponsesMessagesOptions) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
   match context:
     case T.TranscriptContext{+messages}:
       do IO<Result<&2, &2, MessageError, List<&2, ResponseInputItem>>>:
@@ -677,7 +677,7 @@ def midConversation(options: ConvertResponsesMessagesOptions) -> Maybe<&2, Bool>
 
 # The callback belongs to this invocation and is retired after transformation,
 # including typed failures. Application types remain intact until serialization.
-def convertResponsesMessagesWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, ~now: Unit -> IO(F.F64), model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, allowedToolCallProviders: List<&2, String>, options: Maybe<&2, ConvertResponsesMessagesOptions>) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
+def convertResponsesMessagesWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~J: Data, ~encodeParameters: P -> V.Value, ~encodeArguments: A -> V.Value, ~now: Unit -> IO(F64), model: T.Model<J>, context: T.TranscriptContext<P, A, G, D>, allowedToolCallProviders: List<&2, String>, options: Maybe<&2, ConvertResponsesMessagesOptions>) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
   +configured = messageOptions(options)
   convertResolved(~P, ~A, ~G, ~D, ~J, ~encodeParameters, ~encodeArguments, ~now, model, Transcript.resolveTranscript(P, A, G, D, context, midConversation(configured)), allowedToolCallProviders, configured)
 
@@ -685,7 +685,7 @@ def parameterValue(value: V.Value) -> V.Value: value
 
 def argumentRecord(value: R.Record<V.Value>) -> V.Value: V.ObjectValue{value}
 
-def conversionClock(unused: Unit) -> IO(F.F64): Date.now()
+def conversionClock(unused: Unit) -> IO(F64): Date.now()
 
 def convertResponsesMessages(~G: Data, ~D: Data, ~J: Data, model: T.Model<J>, context: T.TranscriptContext<V.Value, R.Record<V.Value>, G, D>, allowedToolCallProviders: List<&2, String>, options: Maybe<&2, ConvertResponsesMessagesOptions>) -> IO(Result<&2, &2, MessageError, List<&2, ResponseInputItem>>):
   convertResponsesMessagesWith(~V.Value, ~R.Record<V.Value>, ~G, ~D, ~J, ~parameterValue, ~argumentRecord, ~conversionClock, model, context, allowedToolCallProviders, options)
@@ -708,7 +708,7 @@ def toolsToJson(tools: List<&2, OpenAITool>) -> T.JsonValue:
 def resultToJson(kind: String, callId: String, output: ToolResultOutput) -> T.JsonValue:
   T.JsonObject{R.Record{R.Property{"type", T.JsonString{kind}} <> R.Property{"call_id", T.JsonString{callId}} <> R.Property{"output", outputToJson(output)} <> Nil{}}}
 
-def nameCount(names: List<&2, String>) -> F.F64:
+def nameCount(names: List<&2, String>) -> F64:
   match names:
     case Nil{}: F.fromU32(0)
     case _ <> rest: F.add(F.fromU32(1), nameCount(rest))

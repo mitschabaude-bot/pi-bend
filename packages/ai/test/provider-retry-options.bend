@@ -15,7 +15,7 @@ def countText(value: Maybe<&2, Nat>) -> String:
     case None{}: "none"
     case Some{number}: Nat.show(number)
 
-def limitText(value: Maybe<&2, F.F64>) -> String:
+def limitText(value: Maybe<&2, F64>) -> String:
   match value:
     case None{}: "none"
     case Some{number}: bits(F.toBits(number))
@@ -26,7 +26,7 @@ def shown(value: Result<&2, &2, O.OptionsError, Retry.ProviderRetryOptions<Strin
     case Fail{O.InvalidDelayLimit{number}}: "limit:" ++ bits(F.toBits(number))
     case Done{Retry.ProviderRetryOptions{retries, limit, _}}: "ok:" ++ countText(retries) ++ ":" ++ limitText(limit)
 
-def optional(parts: List<&2, String>) -> Maybe<&2, F.F64>:
+def optional(parts: List<&2, String>) -> Maybe<&2, F64>:
   match parts:
     case hi <> lo <> Nil{}: Some{F.fromBits(H.decimal(hi, 0), H.decimal(lo, 0))}
     case _: None{}

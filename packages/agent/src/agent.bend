@@ -689,11 +689,11 @@ def processEvents(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execu
 def emptyUsage() -> Ai.Usage:
   +zero = F.fromU32(0)
   Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, Ai.UsageCost{zero, zero, zero, zero, zero}}
-def failureMessage(-G: Data, model: Ai.Model<Ai.JsonValue>, aborted: Bool, error: String, timestamp: F.F64) -> Ai.AssistantMessage<Schema.Value, G>:
+def failureMessage(-G: Data, model: Ai.Model<Ai.JsonValue>, aborted: Bool, error: String, timestamp: F64) -> Ai.AssistantMessage<Schema.Value, G>:
   match model:
     case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}:
       Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"", None{}}} <> Nil{}, Api.name(api), provider, id, None{}, None{}, None{}, None{}, emptyUsage(), Bool.pick(Ai.StopReason, aborted, Ai.Aborted{}, Ai.Error{}), None{}, Some{error}, None{}, None{}, timestamp}
-def fromState(-G: Data, -D: Data, -C: Data, -E: Data, agentState: T.AgentState<G, D, C, E>, aborted: Bool, error: String, timestamp: F.F64) -> T.AgentMessage<G, D, C>:
+def fromState(-G: Data, -D: Data, -C: Data, -E: Data, agentState: T.AgentState<G, D, C, E>, aborted: Bool, error: String, timestamp: F64) -> T.AgentMessage<G, D, C>:
   match agentState:
     case T.AgentState{model, _, _, _, _, _, _, _}: T.LlmMessage{Ai.Assistant{failureMessage(G, model, aborted, error, timestamp)}}
 def events(-G: Data, -D: Data, -C: Data, -Partial: Data, -Execution: Data, +message: T.AgentMessage<G, D, C>) -> List<&2, T.AgentEvent<G, D, C, Partial, Execution>>:
@@ -707,14 +707,14 @@ def deliver(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execution: 
         outcome : Result<&2, &2, DeliveryError<Failure>, Unit> <- processEvents(G, D, C, E, Partial, Execution, Failure, runtime, listeners, event)
         deliver(G, D, C, E, Partial, Execution, Failure, runtime, listeners, rest, outcome)
 # Explicit timestamp supports deterministic tests; production uses Date.now.
-def handleRunFailureAt(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execution: Data, -Failure: Data, +runtime: OwnedRuntime<G, D, C, E>, listeners: Listeners<T.AgentEvent<G, D, C, Partial, Execution>, Failure>, error: String, aborted: Bool, timestamp: F.F64) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
+def handleRunFailureAt(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execution: Data, -Failure: Data, +runtime: OwnedRuntime<G, D, C, E>, listeners: Listeners<T.AgentEvent<G, D, C, Partial, Execution>, Failure>, error: String, aborted: Bool, timestamp: F64) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   do IO<Result<&2, &2, DeliveryError<Failure>, Unit>>:
     agentState : T.AgentState<G, D, C, E> <- readRuntime(G, D, C, E, runtime)
     deliver(G, D, C, E, Partial, Execution, Failure, runtime, listeners, events(G, D, C, Partial, Execution, fromState(G, D, C, E, agentState, aborted, error, timestamp)), Done{Unit{}})
 def handleRunFailure(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execution: Data, -Failure: Data, +runtime: OwnedRuntime<G, D, C, E>, listeners: Listeners<T.AgentEvent<G, D, C, Partial, Execution>, Failure>, error: String, aborted: Bool) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   do IO<Result<&2, &2, DeliveryError<Failure>, Unit>>:
     agentState : T.AgentState<G, D, C, E> <- readRuntime(G, D, C, E, runtime)
-    timestamp : F.F64 <- Date.now()
+    timestamp : F64 <- Date.now()
     deliver(G, D, C, E, Partial, Execution, Failure, runtime, listeners, events(G, D, C, Partial, Execution, fromState(G, D, C, E, agentState, aborted, error, timestamp)), Done{Unit{}})
 def recover(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execution: Data, -Failure: Data, runtime: OwnedRuntime<G, D, C, E>, listeners: Listeners<T.AgentEvent<G, D, C, Partial, Execution>, Failure>, run: ActiveRun, result: Result<&2, &2, Failure, Unit>, renderError: Failure -> String) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
   match result:
@@ -978,7 +978,7 @@ def Update(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: T.AgentLoopTurnUpdat
 def TurnHooks(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: Hooks<Turn(G, D, M, E), Update(G, D, M, E), E>
 # streamFn is optional only for the source's legacy default-provider fallback.
 type AgentOptions<-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data> is Data:
-  AgentOptions{initialState: Maybe<&2, AgentInitialState<G, D, M, E>>, convertToLlm: Maybe<&2, Converter(G, D, M, E)>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, streamFn: Maybe<&2, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, shouldStopAfterTurn: Maybe<&2, StopHook(Turn(G, D, M, E), E)>, prepareNextTurn: Maybe<&2, LegacyHook(Update(G, D, M, E), E)>, prepareNextTurnWithContext: Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>, steeringMode: Maybe<&2, T.QueueMode>, followUpMode: Maybe<&2, T.QueueMode>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F.F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>}
+  AgentOptions{initialState: Maybe<&2, AgentInitialState<G, D, M, E>>, convertToLlm: Maybe<&2, Converter(G, D, M, E)>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, streamFn: Maybe<&2, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, shouldStopAfterTurn: Maybe<&2, StopHook(Turn(G, D, M, E), E)>, prepareNextTurn: Maybe<&2, LegacyHook(Update(G, D, M, E), E)>, prepareNextTurnWithContext: Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>, steeringMode: Maybe<&2, T.QueueMode>, followUpMode: Maybe<&2, T.QueueMode>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>}
 def defaultAgentOptions(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data) -> AgentOptions<G, D, M, E, Telemetry>:
   AgentOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 type Resolved<-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data> is Data:
@@ -998,7 +998,7 @@ def providerSelection(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, 
   match callback:
     case Some{value}: Provider.Explicit{value}
     case None{}: Provider.Fallback{fallback}
-def finishOptions(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, initial: Maybe<&2, AgentInitialState<G, D, M, E>>, converted: Converted<G, D, M, E>, stream: T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E), hooks: TurnHooks(G, D, M, E), steering: Maybe<&2, T.QueueMode>, follow: Maybe<&2, T.QueueMode>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F.F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
+def finishOptions(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, initial: Maybe<&2, AgentInitialState<G, D, M, E>>, converted: Converted<G, D, M, E>, stream: T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E), hooks: TurnHooks(G, D, M, E), steering: Maybe<&2, T.QueueMode>, follow: Maybe<&2, T.QueueMode>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
   match converted:
     case Converted{callback, owned}: IO.pure(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>, Done{Resolved{Maybe.default(&2, AgentInitialState<G, D, M, E>, initial, AgentInitialState{None{}, None{}, None{}, None{}, None{}}), T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, onPayload, onResponse, None{}, None{}, None{}, maxRetryDelayMs, None{}, None{}, None{}, Some{Maybe.default(&2, Ai.Transport, transport, Ai.AutoTransport{})}, None{}, sessionId, None{}, None{}, None{}, None{}, None{}, thinkingBudgets}, defaultModel(Ai.JsonValue), callback, transformContext, getApiKey, None{}, None{}, None{}, None{}, Some{Maybe.default(&2, T.ToolExecutionMode, toolExecution, T.Parallel{})}, beforeToolCall, afterToolCall}, stream, hooks, Maybe.default(&2, T.QueueMode, steering, T.OneAtATime{}), Maybe.default(&2, T.QueueMode, follow, T.OneAtATime{}), owned}})
 def resolvedOptions(~G: Data, ~D: Data, ~M: Data, ~E: Data, ~Telemetry: Data, options: AgentOptions<G, D, M, E, Telemetry>, provider: Result<&2, &2, Provider.MissingDefault, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
@@ -1019,12 +1019,12 @@ def resolve(~G: Data, ~D: Data, ~M: Data, ~E: Data, ~Telemetry: Data, +options: 
 
 # Immutable public request settings; each run captures its own value.
 type Settings is Data:
-  Settings{sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Ai.Transport, maxRetryDelayMs: Maybe<&2, F.F64>, toolExecution: T.ToolExecutionMode}
+  Settings{sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Ai.Transport, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: T.ToolExecutionMode}
 type SettingsChange is Data:
   SetSessionId{value: Maybe<&2, String>}
   SetThinkingBudgets{value: Maybe<&2, Ai.ThinkingBudgets>}
   SetTransport{value: Ai.Transport}
-  SetMaxRetryDelayMs{value: Maybe<&2, F.F64>}
+  SetMaxRetryDelayMs{value: Maybe<&2, F64>}
   SetToolExecution{value: T.ToolExecutionMode}
 
 def apply(settings: Settings, change: SettingsChange) -> Settings:
@@ -1043,7 +1043,7 @@ def getThinkingBudgetsSettings(settings: Settings) -> Maybe<&2, Ai.ThinkingBudge
 def getTransportSettings(settings: Settings) -> Ai.Transport:
   match settings:
     case Settings{_, _, value, _, _}: value
-def getMaxRetryDelayMsSettings(settings: Settings) -> Maybe<&2, F.F64>:
+def getMaxRetryDelayMsSettings(settings: Settings) -> Maybe<&2, F64>:
   match settings:
     case Settings{_, _, _, value, _}: value
 def getToolExecutionSettings(settings: Settings) -> T.ToolExecutionMode:
@@ -1185,7 +1185,7 @@ def imageBlocks(images: List<&2, Ai.ImageContent>) -> List<&2, Ai.TextImageConte
   match images:
     case Nil{}: Nil{}
     case image <> rest: Ai.TextImageImage{image} <> imageBlocks(rest)
-def normalizePromptInputAt(-G: Data, -D: Data, -M: Data, input: PromptInput<G, D, M>, timestamp: F.F64) -> List<&2, RunMessage(G, D, M)>:
+def normalizePromptInputAt(-G: Data, -D: Data, -M: Data, input: PromptInput<G, D, M>, timestamp: F64) -> List<&2, RunMessage(G, D, M)>:
   match input:
     case Text{text, images}: T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{Ai.TextImageText{Ai.TextContent{text, None{}}} <> imageBlocks(images)}, timestamp}}} <> Nil{}
     case Message{message}: message <> Nil{}
@@ -1194,7 +1194,7 @@ def normalizePromptInput(-G: Data, -D: Data, -M: Data, input: PromptInput<G, D, 
   match input:
     case Text{text, images}:
       do IO<List<&2, RunMessage(G, D, M)>>:
-        timestamp : F.F64 <- Date.now()
+        timestamp : F64 <- Date.now()
         return normalizePromptInputAt(G, D, M, Text{text, images}, timestamp)
     case Message{message}: IO.pure(List<&2, RunMessage(G, D, M)>, message <> Nil{})
     case Messages{messages}: IO.pure(List<&2, RunMessage(G, D, M)>, messages)
@@ -1295,10 +1295,10 @@ def getTransport(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent
   do IO<Ai.Transport>:
     settings : Settings <- getSettings(G, D, M, E, Telemetry, agent)
     return getTransportSettings(settings)
-def setMaxRetryDelayMs(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, F.F64>) -> IO(Unit):
+def setMaxRetryDelayMs(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, F64>) -> IO(Unit):
   updateSettings(G, D, M, E, Telemetry, agent, SetMaxRetryDelayMs{value})
-def getMaxRetryDelayMs(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, F.F64>):
-  do IO<Maybe<&2, F.F64>>:
+def getMaxRetryDelayMs(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, F64>):
+  do IO<Maybe<&2, F64>>:
     settings : Settings <- getSettings(G, D, M, E, Telemetry, agent)
     return getMaxRetryDelayMsSettings(settings)
 def setToolExecution(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: T.ToolExecutionMode) -> IO(Unit):

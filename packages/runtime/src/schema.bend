@@ -78,9 +78,9 @@ type Schema is Data:
   One{schemas: List<&2, Schema>}
   Not{schema: Schema}
   Conditional{condition: Schema, consequent: Schema, alternative: Schema}
-  Minimum{limit: F.F64, inclusive: Bool}
-  Maximum{limit: F.F64, inclusive: Bool}
-  MultipleOf{divisor: F.F64}
+  Minimum{limit: F64, inclusive: Bool}
+  Maximum{limit: F64, inclusive: Bool}
+  MultipleOf{divisor: F64}
   UniqueItems{}
   StringLength{bounds: CountBounds}
   ItemCount{bounds: CountBounds}
@@ -198,14 +198,14 @@ def upperBound(order: Maybe<&2, Cmp>, inclusive: Bool) -> Bool:
 
 # Match the pinned validator's absolute remainder tolerance, including its
 # integer/reciprocal shortcut. All arithmetic remains native binary64.
-def nearMultiple(+value: F.F64) -> Bool:
+def nearMultiple(+value: F64) -> Bool:
   +tolerance = F.fromBits(1037794527, 3654794683)
   lowerBound(F.compare(value, F.negate(tolerance)), False{}) && upperBound(F.compare(value, tolerance), False{})
 
-def multipleRemainder(+remainder: F.F64, +divisor: F.F64) -> Bool:
+def multipleRemainder(+remainder: F64, +divisor: F64) -> Bool:
   nearMultiple(remainder) || nearMultiple(F.subtract(remainder, divisor)) || nearMultiple(F.add(remainder, divisor))
 
-def multipleOf(+value: F.F64, +divisor: F.F64) -> Bool:
+def multipleOf(+value: F64, +divisor: F64) -> Bool:
   (F.isInteger(value) && F.isInteger(F.divide(F.fromU32(1), divisor))) || multipleRemainder(F.remainder(value, divisor), divisor)
 
 def containsTests(values: List<&2, V.Value>, +schema: Schema) -> List<&2, Test>:
@@ -281,9 +281,9 @@ type Reason is Data:
   ExpectedEnumeration{allowed: List<&2, V.Value>}
   MissingFields{keys: List<&2, String>}
   AdditionalFields{keys: List<&2, String>}
-  NumericMinimum{limit: F.F64, inclusive: Bool}
-  NumericMaximum{limit: F.F64, inclusive: Bool}
-  NumericMultipleOf{divisor: F.F64}
+  NumericMinimum{limit: F64, inclusive: Bool}
+  NumericMaximum{limit: F64, inclusive: Bool}
+  NumericMultipleOf{divisor: F64}
   ErrorsStringLength{actual: B.BigNat, bounds: CountBounds}
   ErrorsItemCount{actual: B.BigNat, bounds: CountBounds}
   ErrorsPropertyCount{actual: B.BigNat, bounds: CountBounds}
@@ -544,7 +544,7 @@ def booleanNumber(result: Maybe<&2, V.Value>, fallback: Maybe<&2, V.Value>) -> M
     case Some{V.Boolean{flag}}: Some{V.Number{F.fromU32(Bool.pick(U32, flag, 1, 0))}}
     case _: fallback
 
-def parsedNumber(finite: Bool, parsed: F.F64, +text: String) -> Maybe<&2, V.Value>:
+def parsedNumber(finite: Bool, parsed: F64, +text: String) -> Maybe<&2, V.Value>:
   match finite:
     case True{}: Some{V.Number{parsed}}
     case False{}: booleanNumber(booleanText(text), bigintLiteral(text))
@@ -603,7 +603,7 @@ def convertPrimitive(primitive: Primitive, +value: V.Value) -> Converted():
 # are outside JSON tool arguments; there is no host-language bigint value here.
 type LiteralValue is Data:
   BooleanLiteral{value: Bool}
-  NumberLiteral{value: F.F64}
+  NumberLiteral{value: F64}
   StringLiteral{value: String}
 
 def literalValue(value: LiteralValue) -> V.Value:
@@ -1017,7 +1017,7 @@ def decodedCount(value: F.Decoded) -> B.BigNat:
     case F.Finite{_, +exponent, significand}: scaledInteger(U32.is_ge(exponent, 1075), exponent, significand)
     case _: B.zero()
 
-def acceptedCount(valid: Bool, value: F.F64, path: List<&2, String>) -> Result<&2, &2, LoadError, B.BigNat>:
+def acceptedCount(valid: Bool, value: F64, path: List<&2, String>) -> Result<&2, &2, LoadError, B.BigNat>:
   match valid:
     case True{}: Done{decodedCount(F.decode(value))}
     case False{}: invalid(B.BigNat, path, "a nonnegative finite integer")

@@ -105,7 +105,7 @@ def step(index: U32, state: Value()) -> Value():
         Test.assertion(String.eq(key(next), value), "native Agent state differs from pinned initialization/event reducer")
         checkSteps((index + 1 : U32), next, rest)
 
-def zero(value: F.F64) -> Bool: V.equal(V.Number{value}, V.Number{F.fromU32(0)})
+def zero(value: F64) -> Bool: V.equal(V.Number{value}, V.Number{F.fromU32(0)})
 def defaultModelMatches(model: Ai.Model<Ai.JsonValue>) -> Bool:
   match model:
     case Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, maximum, None{}, None{}, None{}}:

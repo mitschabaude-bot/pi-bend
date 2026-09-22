@@ -10,7 +10,7 @@ def bitText(value: W.U64) -> String:
   match value:
     case W.U64{hi, lo}: U32.show(hi) ++ ":" ++ U32.show(lo)
 
-def numberText(+value: F.F64) -> String:
+def numberText(+value: F64) -> String:
   Bool.pick(String, F.isNaN(value), "nan", bitText(F.toBits(value)))
 
 def optionalText(value: String) -> Maybe<&2, String>:
@@ -18,17 +18,17 @@ def optionalText(value: String) -> Maybe<&2, String>:
     case "-": None{}
     case other: Some{H.fromScalars(H.parseNumbers(other))}
 
-def optionalNumber(value: String) -> Maybe<&2, F.F64>:
+def optionalNumber(value: String) -> Maybe<&2, F64>:
   match value:
     case "-": None{}
     case other: Some{Number.toNumber(other)}
 
-def delayResult(value: Result<&2, &2, P.DelayError, F.F64>) -> String:
+def delayResult(value: Result<&2, &2, P.DelayError, F64>) -> String:
   match value:
     case Done{scalar}: "ok:" ++ numberText(scalar)
     case Fail{P.ServerDelayTooLong{delay, maximum}}: "limit:" ++ numberText(delay) ++ ":" ++ numberText(maximum)
 
-def sourceResult(source: P.DelaySource, maximum: Maybe<&2, F.F64>, index: Nat, random: F.F64) -> String:
+def sourceResult(source: P.DelaySource, maximum: Maybe<&2, F64>, index: Nat, random: F64) -> String:
   match source:
     case P.Backoff{}: "backoff:" ++ numberText(P.backoffDelay(index, random))
     case P.ServerMilliseconds{value}: delayResult(P.validateServerRetryDelayMs(value, maximum))

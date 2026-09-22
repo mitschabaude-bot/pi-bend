@@ -23,11 +23,11 @@ def new() -> IO(Clock):
 
 # Subtract exact ticks before binary64 conversion, preserving small intervals
 # even when the absolute monotonic counter exceeds binary64 integer precision.
-def elapsed(clock: Clock, current: W.U64) -> F.F64:
+def elapsed(clock: Clock, current: W.U64) -> F64:
   match clock:
     case Clock{origin}: F.divide(F.fromU64(W.subtract(current, origin)), F.fromU32(1000000))
 
-def now(clock: Clock) -> IO(F.F64):
-  do IO<F.F64>:
+def now(clock: Clock) -> IO(F64):
+  do IO<F64>:
     current : W.U64 <- ticks()
     return elapsed(clock, current)

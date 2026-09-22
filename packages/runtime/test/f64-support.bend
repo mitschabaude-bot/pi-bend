@@ -3,14 +3,14 @@ import ../src/u64.bend as W
 import ../src/f64.bend as F
 
 type Case is Data:
-  Case{name: String, a: F.F64, b: F.F64, sum: F.F64, difference: F.F64, product: F.F64, quotient: F.F64, ordering: U32, integer: W.U64, converted: F.F64}
+  Case{name: String, a: F64, b: F64, sum: F64, difference: F64, product: F64, quotient: F64, ordering: U32, integer: W.U64, converted: F64}
 
 def assertion(ok: Bool, label: String) -> IO(Unit):
   match ok:
     case True{}: IO.pure(Unit, Unit{})
     case False{}: IO.die(Unit, 1, label)
 
-def checkValue(+actual: F.F64, +expected: F.F64, label: String) -> IO(Unit):
+def checkValue(+actual: F64, +expected: F64, label: String) -> IO(Unit):
   assertion(W.equal(F.toBits(actual), F.toBits(expected)) || (F.isNaN(actual) && F.isNaN(expected)), label)
 
 def orderCode(order: Maybe<&2, Cmp>) -> U32:

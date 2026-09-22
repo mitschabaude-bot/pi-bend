@@ -60,7 +60,7 @@ law stop_mapping_preserves_message_fields:
   for error: Maybe<&2, String>
   for raw: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   for reason: T.StopReason
   for message: Maybe<&2, String>
   {D.withStop(G, T.AssistantMessage{content, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, stop, deferred, error, raw, endTurn, timestamp}, D.MappedStop{reason, message}) == T.AssistantMessage{content, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, D.toolStop(reason, D.hasToolCall(content)), deferred, message, raw, endTurn, timestamp} : T.AssistantMessage<V.Value, G>}

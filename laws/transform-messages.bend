@@ -175,7 +175,7 @@ law replay_identity_needs_all_three_identifiers:
   for error: Maybe<&2, String>
   for rawReason: Maybe<&2, String>
   for endTurn: Maybe<&2, Bool>
-  for timestamp: F.F64
+  for timestamp: F64
   {Transform.sameModel(A, G, Transform.Target{api, provider, id}, Ai.AssistantMessage{content, api, provider, id, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}) == True{} : Bool}
 
 # Tool-call identifier mapping between normalized calls and their results.

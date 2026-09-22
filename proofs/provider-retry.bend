@@ -31,7 +31,7 @@ law completed_signal:
   for -Reason: Data
   for retries: Maybe<&2, Nat>
   for signal: Maybe<&2, A.AbortSignal<Reason>>
-  for value: Result<&2, &2, Retry.OptionsError, Maybe<&2, F.F64>>
+  for value: Result<&2, &2, Retry.OptionsError, Maybe<&2, F64>>
   {Retry.completed(Reason, retries, signal, value) == Laws.withSignal(Reason, signal, Retry.completed(Reason, retries, None{}, value)) : Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>}
 
 def completed_signal(Reason, retries, signal, value):
@@ -41,7 +41,7 @@ def completed_signal(Reason, retries, signal, value):
 
 law counted_signal:
   for -Reason: Data
-  for limit: Maybe<&2, F.F64>
+  for limit: Maybe<&2, F64>
   for signal: Maybe<&2, A.AbortSignal<Reason>>
   for value: Result<&2, &2, Retry.OptionsError, Maybe<&2, Nat>>
   {Retry.counted(Reason, limit, signal, value) == Laws.withSignal(Reason, signal, Retry.counted(Reason, limit, None{}, value)) : Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>}
