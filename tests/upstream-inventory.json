@@ -2170,7 +2170,7 @@
         "tests/print_cli_check.py"
       ],
       "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7",
-      "notes": "The harness drives the native CLI: help/version/diagnostic exits and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events and non-zero exit on request errors. Pending: session_shutdown events (no session layer), SIGTERM/SIGHUP exits (no signal primitive)."
+      "notes": "The harness drives the native CLI: help/version/diagnostic exits, session flag conflicts, invalid ids, invalid session files and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence, snapshot-free message_update events, non-zero exit on request errors and a resumed stored session (header from the file, context seeding, thinking level recorded). Pending: session_shutdown events and message persistence (AgentSession), SIGTERM/SIGHUP exits (no signal primitive)."
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
@@ -2310,15 +2310,24 @@
     },
     {
       "source": "packages/coding-agent/test/session-cwd.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2e8d17d803f72089efbd6aff8458c9307532425952060515bde2052d3f8e8089"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py",
+        "tests/session_file_check.py"
+      ],
+      "sha256": "2e8d17d803f72089efbd6aff8458c9307532425952060515bde2052d3f8e8089",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The missing stored cwd is detected and reported with the upstream message before the runtime is created (print mode exits 1), and open() honours a cwd override (session harness). The AgentSessionRuntime factory case is pending with that module."
     },
     {
       "source": "packages/coding-agent/test/session-file-invalid.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f4bb8926eace65475052884f90f3358da758c60e04bc80783ad44279dfb7eddb"
+      "status": "ported",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "f4bb8926eace65475052884f90f3358da758c60e04bc80783ad44279dfb7eddb",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The native CLI run with --session on a non-session file exits 1 with 'Error: Session file is not a valid pi session: <path>', prints no stack, and leaves the file unchanged."
     },
     {
       "source": "packages/coding-agent/test/session-id-readonly.test.ts",

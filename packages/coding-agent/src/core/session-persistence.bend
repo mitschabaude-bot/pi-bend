@@ -431,11 +431,11 @@ def sessionFiles(+dir: String) -> IO(Maybe<&2, List<&2, String>>):
     return listedFiles(dir, result)
 
 type Timed is Data:
-  Timed{path: String, modified: W.U64}
+  Timed{path: String, modified: F64}
 
 def newerFirst(left: Timed, right: Timed) -> Bool:
   match left right:
-    case Timed{_, a} Timed{_, b}: W.atLeast(W.compare(a, b))
+    case Timed{_, a} Timed{_, b}: F.isAtLeast(F.compare(a, b))
 
 def matchesCwd(cwd: Maybe<&2, String>, header: S.SessionHeader) -> Bool:
   match cwd:
@@ -447,8 +447,8 @@ def timedIf(+path: String, accepted: Bool, +reversed: List<&2, Timed>) -> IO(Lis
     case False{}: IO.pure(List<&2, Timed>, reversed)
     case True{}:
       do IO<List<&2, Timed>>:
-        modified : Result<&2, &2, FS.Error, W.U64> <- FS.modified(path)
-        return Maybe.default(&2, List<&2, Timed>, Maybe.map(&2, W.U64, List<&2, Timed>, time => Timed{path, time} <> reversed, SJ.maybeOf(FS.Error, W.U64, modified)), reversed)
+        modified : Result<&2, &2, FS.Error, F64> <- FS.modified(path)
+        return Maybe.default(&2, List<&2, Timed>, Maybe.map(&2, F64, List<&2, Timed>, time => Timed{path, time} <> reversed, SJ.maybeOf(FS.Error, F64, modified)), reversed)
 
 def timedFiles(files: List<&2, String>, +cwd: Maybe<&2, String>, +reversed: List<&2, Timed>) -> IO(List<&2, Timed>):
   match files:
@@ -620,15 +620,15 @@ def infoOf(path: String, summary: Summary, mtime: F64) -> Maybe<&2, S.SessionInf
       Some{S.SessionInfo{path, id, cwd, name, parentSession, Maybe.default(&2, F64, created, F.nan()), modifiedTime(activity, created, mtime), count, Bool.pick(String, String.is_empty(first), "(no messages)", first), String.join(List.reverse(&2, String, texts), " ")}}
     case _: None{}
 
-def summarized(path: String, bytes: Result<&2, &2, FS.Error, List<&2, U32>>, modified: Result<&2, &2, FS.Error, W.U64>) -> Maybe<&2, S.SessionInfo>:
+def summarized(path: String, bytes: Result<&2, &2, FS.Error, List<&2, U32>>, modified: Result<&2, &2, FS.Error, F64>) -> Maybe<&2, S.SessionInfo>:
   match bytes modified:
     case Done{content} Done{mtime}:
-      Maybe.bind(&2, String, S.SessionInfo, decodedText(content), text => infoOf(path, summarize(SJ.parsedLines(String.split(text, '\n'), Nil{}), emptySummary()), Date.fromMilliseconds(mtime)))
+      Maybe.bind(&2, String, S.SessionInfo, decodedText(content), text => infoOf(path, summarize(SJ.parsedLines(String.split(text, '\n'), Nil{}), emptySummary()), mtime))
     case _ _: None{}
 
 def buildSessionInfo(+path: String) -> IO(Maybe<&2, S.SessionInfo>):
   do IO<Maybe<&2, S.SessionInfo>>:
-    modified : Result<&2, &2, FS.Error, W.U64> <- FS.modified(path)
+    modified : Result<&2, &2, FS.Error, F64> <- FS.modified(path)
     bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
     return summarized(path, bytes, modified)
 

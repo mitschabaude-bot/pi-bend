@@ -43,12 +43,15 @@ def parseToolName(text: String) -> Maybe<&2, ToolName>:
     case "find": Some{FindTool{}}
     case _: None{}
 
+# RawDetails holds tool details restored from a session file: upstream stores
+# them untyped, and a stored value is kept as JSON rather than guessed at.
 type ToolDetails is Data:
   ReadDetails{value: Maybe<&2, Read.ReadToolDetails>}
   BashDetails{value: Maybe<&2, Bash.BashToolDetails>}
   EditDetails{value: Edit.EditToolDetails}
   WriteDetails{}
   FindDetails{value: Maybe<&2, Find.FindToolDetails>}
+  RawDetails{value: V.Value}
 
 # Failure carries loop-level messages (validation, declaration, provider)
 # that upstream raises as plain Errors alongside tool failures.

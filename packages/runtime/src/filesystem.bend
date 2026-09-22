@@ -3,6 +3,7 @@ import ./string.bend as Strings
 import ./utf8.bend as Utf8
 import ./file-fold.bend as Fold
 import ./u64.bend as Word
+import ./f64.bend as F
 
 type Error is Data:
   System{code: U32, message: String}
@@ -163,11 +164,23 @@ def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
     result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
     return fileSize(result)
 
-# Modification time in milliseconds since the epoch, as Node's stat.mtime.
-def modified(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
-  do IO<Result<&2,&2,Error,Word.U64>>:
-    result : Result<&1,&1,U32 & String,U32 & U32> <- File.modified(path)
-    return fileSize(result)
+# Node's Stats.mtime.getTime(): the exact modification time (signed seconds
+# high/low, nanoseconds) as milliseconds, rounded to the nearest integer.
+def modifiedMilliseconds(value: U32 & U32 & U32) -> F64:
+  match value:
+    case (high,(low,nanos)):
+      +raw = F64.add(F64.mul(F.fromU64(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
+      F64.floor(F64.add(raw,F64.div(U32.to_f64(1),U32.to_f64(2))))
+
+def modifiedResult(result: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Result<&2,&2,Error,F64>:
+  match result:
+    case Fail{(code,message)}: Fail{System{code,message}}
+    case Done{value}: Done{modifiedMilliseconds(value)}
+
+def modified(path: String) -> IO(Result<&2,&2,Error,F64>):
+  do IO<Result<&2,&2,Error,F64>>:
+    result : Result<&1,&1,U32 & String,U32 & U32 & U32> <- File.modified_time(path)
+    return modifiedResult(result)
 
 # Metadata inspection never opens the contents of FIFOs, devices or sockets.
 type FileKind is Data:

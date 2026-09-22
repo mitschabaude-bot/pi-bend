@@ -5,7 +5,6 @@ import ../../../agent/src/types.bend as T
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/utils/json.bend as Json
 import ../../../ai/src/utils/schema-json.bend as SchemaJson
-import ../../../ai/src/utils/uuid.bend as Uuid
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
@@ -14,6 +13,8 @@ import ../core/agent-runtime.bend as Runtime
 import ../core/tools/index.bend as Tools
 import ../cli/args.bend as Args
 import ./json-event.bend as JsonEvent
+import ../core/session-manager.bend as S
+import ../core/session-json.bend as SessionJson
 
 # Print mode (single-shot): send prompts, output the result, exit.
 #   pi -p "prompt"          text output
@@ -21,7 +22,7 @@ import ./json-event.bend as JsonEvent
 # SIGTERM/SIGHUP exits (143/129) need a signal primitive the runtime lacks.
 
 type PrintModeOptions is Data:
-  PrintModeOptions{mode: Args.Mode, messages: List<&2, String>, initialMessage: Maybe<&2, String>, initialImages: List<&2, Ai.ImageContent>}
+  PrintModeOptions{mode: Args.Mode, messages: List<&2, String>, initialMessage: Maybe<&2, String>, initialImages: List<&2, Ai.ImageContent>, header: S.SessionHeader}
 
 def SessionEvent() -> Data: JsonEvent.SessionEvent()
 def Emission() -> Type: Loop.Emission<Runtime.Error()>
@@ -48,18 +49,10 @@ def emit(mode: Args.Mode, input: Agent.Input<SessionEvent()>) -> IO(Emission()):
 def field(key: String, value: V.Value, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   R.Property{key, value} <> rest
 
-# The session header line: an ephemeral in-memory session still has one.
-def headerLine(cwd: String, id: Result<&2, &2, String, String>, timestamp: Maybe<&2, String>) -> IO(Unit):
-  match id timestamp:
-    case Done{id} Some{timestamp}: IO.write(line(V.ObjectValue{R.Record{field("type", V.Text{"session"}, field("version", V.Number{U32.to_f64(3)}, field("id", V.Text{id}, field("timestamp", V.Text{timestamp}, field("cwd", V.Text{cwd}, Nil{})))))}}))
-    case Fail{error} _: IO.print_err(error)
-    case _ None{}: IO.print_err("Could not format the session timestamp")
-
-def header(cwd: String) -> IO(Unit):
-  do IO<Unit>:
-    id : Result<&2, &2, String, String> <- Uuid.generate()
-    now : F64 <- Date.now()
-    headerLine(cwd, id, Date.formatIso(now))
+# The session header line: the session manager's header, as JSON.stringify
+# renders it; an in-memory session has one too.
+def header(value: S.SessionHeader) -> IO(Unit):
+  IO.write(line(SessionJson.header(value)))
 
 def promptError(error: Agent.AgentError<Runtime.Error()>) -> String:
   match error:
@@ -72,13 +65,13 @@ def settled(agent: Runtime.Owner(), result: Result<&2, &2, Agent.AgentError<Runt
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{promptError(error)})
     case Done{Unit{}}:
       do IO<Result<&2, &2, String, Unit>>:
-        Agent.waitForIdle(Unit, Runtime.Details(), Unit, Runtime.Error(), Unit, agent)
+        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         return Done{Unit{}}
 
 # Each prompt runs to completion before the next, as session.prompt awaits.
 def send(+agent: Runtime.Owner(), text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Unit, ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Text{text, images})
+    result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Text{text, images})
     settled(agent, result)
 
 def sendAll(+agent: Runtime.Owner(), messages: List<&2, String>, previous: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
@@ -95,14 +88,14 @@ def sendInitial(+agent: Runtime.Owner(), initial: Maybe<&2, String>, images: Lis
     case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
     case Some{text}: send(agent, text, images)
 
-def Message() -> Data: T.AgentMessage<Unit, Runtime.Details(), Unit>
+def Message() -> Data: T.AgentMessage<Unit, Runtime.Details(), Runtime.Custom()>
 
 def lastAssistant(last: Maybe<&2, Message()>) -> Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>:
   match last:
     case Some{T.LlmMessage{Ai.Assistant{message}}}: Some{message}
     case _: None{}
 
-def stateMessages(state: T.AgentState<Unit, Runtime.Details(), Unit, Runtime.Error()>) -> List<&2, Message()>:
+def stateMessages(state: T.AgentState<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> List<&2, Message()>:
   match state:
     case T.AgentState{_, _, _, messages, _, _, _, _}: messages
 
@@ -140,22 +133,22 @@ def finish(mode: Args.Mode, agent: Runtime.Owner(), sent: Result<&2, &2, String,
         return 1
     case Args.Text{} Done{Unit{}}:
       do IO<U32>:
-        state : T.AgentState<Unit, Runtime.Details(), Unit, Runtime.Error()> <- Agent.state(Unit, Runtime.Details(), Unit, Runtime.Error(), Unit, agent)
+        state : T.AgentState<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()> <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         textOutput(lastAssistant(List.last(&2, Message(), stateMessages(state))))
     case _ Done{Unit{}}: IO.pure(U32, 0)
 
-def writeHeader(mode: Args.Mode, cwd: String) -> IO(Unit):
+def writeHeader(mode: Args.Mode, value: S.SessionHeader) -> IO(Unit):
   match mode:
-    case Args.Json{}: header(cwd)
+    case Args.Json{}: header(value)
     case _: IO.pure(Unit, Unit{})
 
-def runPrintMode(+agent: Runtime.Owner(), cwd: String, options: PrintModeOptions) -> IO(U32):
+def runPrintMode(+agent: Runtime.Owner(), options: PrintModeOptions) -> IO(U32):
   match options:
-    case PrintModeOptions{+mode, messages, initialMessage, initialImages}:
+    case PrintModeOptions{+mode, messages, initialMessage, initialImages, sessionHeader}:
       do IO<U32>:
-        writeHeader(mode, cwd)
+        writeHeader(mode, sessionHeader)
         +listener : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~Args.Mode, ~Agent.Input<SessionEvent()>, ~Emission(), ~emit, mode)
-        subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Unit, Runtime.Error(), Unit, agent, listener)
+        subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, listener)
         first : Result<&2, &2, String, Unit> <- sendInitial(agent, initialMessage, initialImages)
         sent : Result<&2, &2, String, Unit> <- sendAll(agent, messages, first)
         code : U32 <- finish(mode, agent, sent)

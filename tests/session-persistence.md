@@ -14,9 +14,9 @@
 - Session listings summarize files one after another; upstream loads ten concurrently.
 - Session ids are validated by a character walk equivalent to `/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/`; short entry ids are eight hex digits from four OS-random bytes, collision-checked against the index, with a UUIDv7 after 100 collisions, as upstream.
 
-## Primitive
+## Primitives
 
-`File.modified(path)` (`patches/bend-file-modified.patch`) reports the modification time in milliseconds for `findMostRecentSession` and `SessionInfo.modified`; `FS.modified`, `FS.appendFile` and `FS.writeFileExclusive` wrap it and the existing open modes.
+Modification times come from `File.modified_time` (native-tls's `bend-file-lock-effects.patch`, exact seconds and nanoseconds), rounded to milliseconds as Node's `Stats.mtime.getTime()` by `FS.modified`; `FS.appendFile` and `FS.writeFileExclusive` wrap the existing open modes.
 
 ## Validation
 
@@ -31,3 +31,8 @@ python3 tests/session_file_check.py --runner build/session-file.js
 python3 tests/session_file_check.py --runner build/session-file --threads 1
 python3 tests/session_file_check.py --runner build/session-file --threads 4
 ```
+
+## CLI
+
+`packages/coding-agent/src/main.bend` ports upstream's `createSessionManager`, `validateForkFlags`, `validateSessionIdFlags`, `getMissingSessionCwdIssue` and the `--name` handling; the agent runtime (`core/agent-runtime.bend`) takes a `SessionSeed` (context messages, recorded model, recorded thinking level) and records the chosen model and thinking level on the session as the SDK does. The agent's custom message type is now pi's coding message union (`Messages.CodingMessage`, converted by `convertToLlm`), so restored bash executions and extension messages survive a resume; tool details restored from a file stay `RawDetails` JSON. `--session` for a session of another project asks "Fork this session into current directory? [y/N]" and reads the answer from standard input to its end (there is no line primitive). `--resume` reports that the interactive selector is not ported. `tests/print_cli_check.py` covers the flag conflicts, the invalid id, the not-a-session file (session-file-invalid.test.ts), the missing stored cwd and an unknown id offline, and with `PI_BEND_LIVE=1` a run against a stored session (header from the file, thinking level recorded, no new messages yet).
+
