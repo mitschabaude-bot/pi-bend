@@ -818,12 +818,13 @@ def complete(~Reason: Data, ~E: Data, ~render: E -> String, -G: Data, provider: 
 # -------------
 
 # Native runtime settings that upstream obtains from the host platform.
+# TLS authorizer callbacks in security are borrowed for the entire run.
 type Config is Data:
-  Config{url: URL.Context, defaults: Client.Defaults, files: Fetch.Files, transport: HTTP.Options, diagnosticLimit: Nat, synthesize: Bool}
+  Config{url: URL.Context, defaults: Client.Defaults, files: Fetch.Files, transport: HTTP.Options, security: HTTP.Security, diagnosticLimit: Nat, synthesize: Bool}
 
 def userAgent(config: Config) -> String:
   match config:
-    case Config{_, Client.Defaults{name, _, _, _}, _, _, _, _}: name
+    case Config{_, Client.Defaults{name, _, _, _}, _, _, _, _, _}: name
 
 # Transport
 # ---------
@@ -851,21 +852,21 @@ def nativePair(-Reason: Data, pair: Fetch.Runtime & Fetch.Fetch(Reason)) -> Tran
   match pair:
     case (runtime, fetch): Native{runtime, fetch}
 
-def nativeTransport(~Reason: Data, -E: Data, result: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(Result<&2, &1, Error<Reason, E>, Transport<Reason>>):
+def nativeTransport(~Reason: Data, -E: Data, security: HTTP.Security, result: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(Result<&2, &1, Error<Reason, E>, Transport<Reason>>):
   match result:
     case Fail{cause}: IO.pure(Result<&2, &1, Error<Reason, E>, Transport<Reason>>, Fail{InitializationFailure{cause}})
     case Done{runtime}:
       do IO<Result<&2, &1, Error<Reason, E>, Transport<Reason>>>:
-        pair : Fetch.Runtime & Fetch.Fetch(Reason) <- Fetch.callback(~Reason, runtime)
+        pair : Fetch.Runtime & Fetch.Fetch(Reason) <- Fetch.callbackWithSecurity(~Reason, runtime, security)
         return Done{nativePair(Reason, pair)}
 
 def openTransport(~Reason: Data, ~E: Data, config: Config, custom: Maybe<&2, Fetch.Fetch(Reason)>) -> IO(Result<&2, &1, Error<Reason, E>, Transport<Reason>>):
   match config custom:
     case _ Some{fetch}: IO.pure(Result<&2, &1, Error<Reason, E>, Transport<Reason>>, Done{Custom{fetch}})
-    case Config{_, _, files, transport, _, _} None{}:
+    case Config{_, _, files, transport, security, _, _} None{}:
       do IO<Result<&2, &1, Error<Reason, E>, Transport<Reason>>>:
         runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.create(files, transport)
-        nativeTransport(~Reason, E, runtime)
+        nativeTransport(~Reason, E, security, runtime)
 
 # Acquisition
 # -----------
@@ -909,7 +910,7 @@ def attempted(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, 
 
 def acquire(~Reason: Data, ~E: Data, config: Config, fetch: Fetch.Fetch(Reason), request: Client.Request, parent: Signal(Reason), retry: Retry.ProviderRetryOptions<Reason>) -> IO(Acquired(Reason, E)):
   match config:
-    case Config{_, _, _, _, limit, _}:
+    case Config{_, _, _, _, _, limit, _}:
       do IO<Acquired(Reason, E)>:
         +date : C.Callback<String, F.F64> <- Retry.dateParser()
         seeded : Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>> <- Retry.new(~Reason, date)
@@ -1068,7 +1069,7 @@ def opened(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<T.JsonValue>, optio
 # body borrowed. The transport outlives the body.
 def process(~Reason: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, options: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), response: Response.Response<Client.State(Reason)>) -> IO(Outcome<Reason, G, E>):
   match config response:
-    case Config{_, _, _, _, _, synthesize} Response.Response{_, body}:
+    case Config{_, _, _, _, _, _, synthesize} Response.Response{_, body}:
       do IO<Outcome<Reason, G, E>>:
         pair : Sse.Body(Reason) & Sse.Cursor<Sse.TransportError(Reason)> <- Sse.fromBody(~Reason, body, hooks, synthesize)
         opened(~Reason, ~G, ~E, model, options, output, events, pair)
@@ -1131,7 +1132,7 @@ def streamOptions(prepared: Prepared, tier: Maybe<&2, T.Nullable<ServiceTier>>) 
 
 def envelope(config: Config, prepared: Prepared, timeout: Maybe<&2, F.F64>, payload: T.JsonValue) -> Result<&2, &2, Client.RequestError, Client.Request>:
   match config prepared:
-    case Config{url, defaults, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
+    case Config{url, defaults, _, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
 
 def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), +prepared: Prepared, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>, payload: Result<&2, &2, E, T.JsonValue>) -> IO(Outcome<Reason, G, E>):
   match options retry payload:

@@ -7,6 +7,8 @@ import ./url.bend as URL
 import ./string.bend as Split
 import ./rsa-sha256.bend as RSA
 import ./u64.bend as W
+import ./callback.bend as C
+import ./tls13-client.bend as TLS
 
 # Configured certificates are distinct from peer evidence. This layer parses
 # explicit configuration; certificate policy and path validity are checked at
@@ -172,3 +174,21 @@ def verifySAN(steps: Nat, now: W.U64, host: URL.Host, chain: List<&2, X509.Certi
     case +leaf <> peers:
       Result.bind(&2, &2, X509.Error, Unit, X509.PublicKey, checkSAN(host, leaf), unused =>
         X509.verifyChain(steps, now, leaf, peers, anchors))
+
+type SANPolicy is Data:
+  SANPolicy{anchors: List<&2, X509.Certificate>, steps: Nat}
+
+def atTime(policy: SANPolicy, host: URL.Host, now: U32 & U32) -> TLS.Authorization:
+  match policy now:
+    case SANPolicy{anchors, steps} Tuple{high, low}:
+      TLS.Authorization{chain => verifySAN(steps, W.U64{high, low}, host, chain, anchors)}
+
+def authorizeSAN(policy: SANPolicy, host: URL.Host) -> IO(TLS.Authorization):
+  do IO<TLS.Authorization>:
+    now : U32 & U32 <- IO.unixMilliseconds()
+    return atTime(policy, host, now)
+
+# The factory owns its policy and lends per-connection verifiers to fetch.
+# Dispose it only after all fetch callbacks and requests borrowing it retire.
+def newSAN(policy: SANPolicy) -> IO(C.Callback<URL.Host, TLS.Authorization>):
+  C.create(~SANPolicy, ~URL.Host, ~TLS.Authorization, ~authorizeSAN, policy)
