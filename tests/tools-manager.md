@@ -32,10 +32,10 @@
 - bin-directory and `fdfind` lookup;
 - offline mode and the missing transport.
 
-`PI_BEND_DOWNLOAD_LIVE=1` adds a live install of the latest ripgrep from GitHub through the CLI's own HTTPS transport, verified with `rg --version`. It runs on one worker only: on several workers a single HTTPS request exceeds upstream's 10 s version-check budget (BEND-033).
+`PI_BEND_DOWNLOAD_LIVE=1` adds a live install of the latest ripgrep from GitHub through the CLI's own HTTPS transport, verified with `rg --version`.
 
 ```sh
 BEND=build/bend-process-files/bend2/main.ts BEND_TUS=4 sh scripts/build-pure.sh tests/tools-manager.bend build/tools-manager
 python3 tests/tools_manager_check.py native-1 native-4
-PI_BEND_DOWNLOAD_LIVE=1 python3 tests/tools_manager_check.py native-1
+PI_BEND_DOWNLOAD_LIVE=1 python3 tests/tools_manager_check.py native-1 native-4
 ```

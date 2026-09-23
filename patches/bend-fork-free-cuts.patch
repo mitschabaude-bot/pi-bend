@@ -1,0 +1,13 @@
+--- a/bend2/comp.ts	2026-09-23 12:26:44.672064346 +0200
++++ b/bend2/comp.ts	2026-09-23 12:26:44.673064352 +0200
+@@ -2892,7 +2892,9 @@
+     if (fork) {
+       frame();
+     } else {
+-      emit_chain(fl, () => "seq", [frame, () => {
++      // A fork-free callee returns on this stack even in parallel: only a
++      // callee that may fork needs its continuation as a task.
++      emit_chain(fl, () => c.bang ? "seq" : `seq || fid_nofk(${seg_fid(c.k)})`, [frame, () => {
+         file_push(fl, `WL_CONT = term_tsk(${seg_fid(kn)}, ${
+           emit_task(fl, seg_fid(kn), 1, ws)});`);
+         file_push(fl, `WL_IDX = ${ws.length};`);

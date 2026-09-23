@@ -152,8 +152,7 @@ for backend in a.backends:
         assert run('ensure', str(bindir), 'fd', env={'PATH': str(base / 'nowhere'), 'PI_OFFLINE': 'Yes'}) == [('warning', 'fd not found. Offline mode enabled, skipping download.'), ('none', '')]
         assert run('ensure', str(bindir), 'fd', env={'PATH': str(base / 'nowhere'), 'PI_OFFLINE': '0'}) == [('info', 'fd not found. Downloading...'), ('warning', 'Failed to download fd: fetch failed: no network transport'), ('none', '')]
         # Live: the latest rg release from GitHub through the CLI's transport.
-        # Only one worker meets upstream's 10 s version-check budget (BEND-033).
-        if os.environ.get('PI_BEND_DOWNLOAD_LIVE') == '1' and backend == 'native-1':
+        if os.environ.get('PI_BEND_DOWNLOAD_LIVE') == '1':
             bindir = base / 'live'
             bundle = os.environ.get('SSL_CERT_FILE', '/etc/ssl/certs/ca-certificates.crt')
             # PATH offers tar and gzip for the extraction but no rg.

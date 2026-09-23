@@ -126,3 +126,19 @@ The print-CLI worktree toolchain (`build/cli-toolchain`) also carries `bend-dire
 `bend-js-explicit-stack.patch` resolves BEND-019 in the JS backend's emitter (`js_stackify`, a post-pass over each def's emitted lines). A def whose arms call itself outside tail position — `h <> f(t)`, `nat_chk(f(t) + 1n)`, `h + (sep + f(t))`, a self-call nested in another call's arguments — is emitted as a `while (true)` loop with a heap array of continuation frames: a non-tail self-call pushes the remainder of its arm as a closure and continues with the callee's arguments (each iteration rebinds the parameters as fresh constants so frames capture that iteration's values), a tail self-call continues, every other return breaks out, and the frames are applied innermost first through the existing `run_loop` trampoline. Closures inside an arm and second self-calls of the same arm keep ordinary recursion. The C backend is untouched. `tests/js_explicit_stack.py` runs the two reproducers (List.append doubling to 65,536 elements; `List.length`/`String.split`/`String.join` over 200,000/50,000/20,000 elements) on Bun and checks the native build agrees; the JS build of the coding-agent CLI rewrites 821 defs, grows 3% and starts in the same 0.15 s.
 
 `bend-file-rename-chmod-unlink.patch` (2026-09-23) adds `File.rename`, `File.chmod` (permission bits up to 0o7777, otherwise EINVAL), `File.unlink` and `File.link_kind`. These are thin effects over rename(2), chmod(2), unlink(2) and lstat(2), with Node `fs` equivalents for the JS backend. The tools-manager needs them for its binary installation, as upstream uses `renameSync`, `chmodSync` and `rmSync`. Recursive and forced removal remain Bend policy. The patch adds one Base block and eight effect files, and changes no compiler or runtime-core code. It is installed in `build/bend-process-files/bend2`. A scratch program checked success, EINVAL and ENOENT on Bun and native. `tests/tools_manager_check.py` exercises the installation path. `File.link_kind` (lstat) was added for `FS.remove`, which must not follow links. `tests/shell.bend` emits byte-identical C against an unpatched copy. Three alternating compiles took 0.47/0.49/0.47 s unpatched and 0.45/0.48/0.48 s patched; this is shared-host noise, not a performance claim.
+
+`bend-fork-free-cuts.patch` (2026-09-23) fixes BEND-033. With more than one worker, a task runs in parallel mode. Every non-tail call (a "cut") then allocated its continuation as a heap task and returned through `FID_EXIT`, even when the callee can never fork. One HTTPS request made about 735M such task exits: the handshake's BigNat limb loops. The emitted cut now takes the ordinary stack-frame path when `seq || fid_nofk(callee)`. `fid_nofk` comes from the existing constant `FID_FLAG_T`, which marks segments that neither fork nor reach a fork or closure application. Calls that may fork, and IO ("bang") calls, keep the task path. The patch is one emitted condition; the runtime is unchanged. It is installed in `build/bend-process-files/bend2`.
+
+Measurements on the shared host:
+- **HTTPS request pair** (`tests/https-thread-cliff.bend`): 25.9 s → 7.0 s on 4 threads; 6.8 s vs 7.0 s on 1 thread (unchanged).
+- **Full CLI C generation:** 90.0 s / 8.34 GiB → 89.2 s / 8.23 GiB; C output 68.48 MB → 68.91 MB (+0.6%, the added conditions).
+
+These are single measurements, not a guarantee.
+
+Validation with the patched compiler, all passing:
+- runtime concurrency suites on 1 and 4 threads;
+- 112 parallel tool-batch schedules;
+- child-execute (50) and child-process;
+- agent-session (95, 1 and 4 threads);
+- grep (112) and find (84), native 1/4;
+- tools-manager, including the live GitHub download on 4 threads.
