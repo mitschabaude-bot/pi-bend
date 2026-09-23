@@ -1,18 +1,19 @@
 import Base
 import ../../utils/paths.bend as Paths
-import ../../../../runtime/src/file-search.bend as Search
+import ../../utils/tools-manager.bend as Tools
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/posix-path.bend as Path
-import ../../../../runtime/src/path-glob.bend as Glob
-import ../../../../runtime/src/ignore.bend as Ignore
+import ../../../../runtime/src/child-process.bend as Child
+import ../../../../runtime/src/utf8.bend as Utf8
+import ../../../../runtime/src/text.bend as Text
+import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/abort.bend as Abort
-import ../../../../runtime/src/stable-sort.bend as Sort
 import ./truncate.bend as Truncate
 
 type FindToolInput is Data:
@@ -29,10 +30,6 @@ type Error is Data:
   InvalidArguments{}
   InvalidPath{cause: Paths.Error}
   PathNotFound{path: String}
-  InvalidPattern{cause: Glob.Error}
-  InvalidIgnore{path: String, cause: Ignore.Error}
-  InvalidEncoding{path: String}
-  InvalidGitConfig{path: String}
   Aborted{}
 
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
@@ -52,18 +49,11 @@ type ToolOwner is Type:
 
 def errorMessage(error: Error) -> String:
   match error:
-    case Filesystem{FS.System{code,message}}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case Filesystem{FS.InvalidPathEncoding{_}}: "Invalid UTF-8 path"
-    case Filesystem{FS.ReadAndClose{_,read,_,close}}: read ++ "; close: " ++ close
-    case Filesystem{FS.WriteAndClose{_,write,_,close}}: write ++ "; close: " ++ close
+    case Filesystem{cause}: FS.errorMessage(cause)
     case Operation{message}: message
     case InvalidArguments{}: "Find tool input is invalid. Expected a pattern, optional path and natural limit."
     case InvalidPath{_}: "Invalid file path"
     case PathNotFound{path}: "Path not found: " ++ path
-    case InvalidPattern{_}: "Error parsing glob pattern"
-    case InvalidIgnore{path,cause}: path ++ ": " ++ Ignore.errorMessage(cause)
-    case InvalidEncoding{path}: path ++ ": invalid UTF-8"
-    case InvalidGitConfig{path}: path ++ ": invalid Git configuration"
     case Aborted{}: "Operation aborted"
 
 def continued(-A: Data,-B: Data,result: ResultOf(A),next: A -> IO(ResultOf(B))) -> IO(ResultOf(B)):
@@ -82,35 +72,9 @@ def check(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Unit)):
 def settled(-A: Data,signal: Maybe<&2,Abort.AbortSignal<Unit>>,value: ResultOf(A)) -> IO(ResultOf(A)):
   then(Unit,A,check(signal),_ => IO.pure(ResultOf(A),value))
 
-def localExists(path: String) -> IO(ResultOf(Bool)):
-  do IO<ResultOf(Bool)>:
-    found : Bool <- FS.accessible(path,0)
-    return Done{found}
-
 def relativizeFindResultPath(+resultPath: String,searchPath: String) -> String:
-  +value = Bool.pick(Unit -> String,Path.isAbsolute(resultPath),_ => Search.relative(searchPath,resultPath),_ => resultPath)(Unit{})
+  +value = Bool.pick(Unit -> String,Path.isAbsolute(resultPath),_ => Path.relative(searchPath,resultPath),_ => resultPath)(Unit{})
   value ++ Bool.pick(String,String.ends_with(resultPath,"/") && Bool.not(String.ends_with(value,"/")),"/","")
-def searchError(error: Search.Error) -> Error:
-  match error:
-    case Search.Filesystem{cause}: Filesystem{cause}
-    case Search.Operation{message}: Operation{message}
-    case Search.InvalidPattern{cause}: InvalidPattern{cause}
-    case Search.InvalidIgnore{path,cause}: InvalidIgnore{path,cause}
-    case Search.InvalidEncoding{path}: InvalidEncoding{path}
-    case Search.InvalidGitConfig{path}: InvalidGitConfig{path}
-    case Search.Aborted{}: Aborted{}
-
-def searchResult(value: Search.ResultOf(List<&2,String>)) -> ResultOf(List<&2,String>):
-  match value:
-    case Fail{error}: Fail{searchError(error)}
-    case Done{values}: Done{values}
-
-def nativeSearch(environment: Paths.Environment,pattern: String,path: String,limit: Nat,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(List<&2,String>)):
-  match environment:
-    case Paths.Environment{_,home,_}:
-      do IO<ResultOf(List<&2,String>)>:
-        value : Search.ResultOf(List<&2,String>) <- Search.nativeSearch(home,pattern,path,limit,signal)
-        return searchResult(value)
 
 def relativized(values: List<&2,String>,+root: String,reversed: List<&2,String>) -> List<&2,String>:
   match values:
@@ -125,11 +89,12 @@ def rendered(+limit: Nat,custom: Bool,+reached: Bool,+value: Truncate.Truncation
       byteNotice = Bool.pick(String,cut,Truncate.formatSize(Truncate.DEFAULT_MAX_BYTES()) ++ " limit reached","")
       notices = entryNotice ++ Bool.pick(String,reached && cut,". ","") ++ byteNotice
       resultText(content ++ Bool.pick(String,reached || cut,"\n\n[" ++ notices ++ "]",""),Bool.pick(Maybe<&2,FindToolDetails>,reached || cut,Some{FindToolDetails{Bool.pick(Maybe<&2,Truncate.TruncationResult>,cut,Some{value},None{}),Bool.pick(Maybe<&2,Nat>,reached,Some{limit},None{})}},None{}))
-def render(+values: List<&2,String>,root: String,+limit: Nat,custom: Bool) -> ToolResult():
+def listed(+values: List<&2,String>,root: String,+limit: Nat,custom: Bool) -> ToolResult():
+  rendered(limit,custom,Nat.is_ge(List.length(&2,String,values),limit),Truncate.truncateHead(String.join(relativized(values,root,Nil{}),"\n"),Truncate.TruncationOptions{Some{4294967295n},None{}}))
+def render(values: List<&2,String>,root: String,limit: Nat) -> ToolResult():
   match values:
     case Nil{}: resultText("No files found matching pattern",None{})
-    case values:
-      rendered(limit,custom,Nat.is_ge(Sort.length(String,values,0n),limit),Truncate.truncateHead(String.join(relativized(values,root,Nil{}),"\n"),Truncate.TruncationOptions{Some{4294967295n},None{}}))
+    case values: listed(values,root,limit,True{})
 
 def customSearch(operations: FindOperations,pattern: String,+path: String,limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(List<&2,String>)):
   match operations:
@@ -138,16 +103,153 @@ def customSearch(operations: FindOperations,pattern: String,+path: String,limit:
         then(Unit,List<&2,String>,check(signal),_ => Bool.pick(Unit -> IO(ResultOf(List<&2,String>)),found,
           _ => Callback.call(FindGlobInput,ResultOf(List<&2,String>),glob,FindGlobInput{pattern,path,FindGlobOptions{"**/node_modules/**" <> "**/.git/**" <> Nil{},limit}}),
           _ => IO.pure(ResultOf(List<&2,String>),Fail{PathNotFound{path}}))(Unit{})))
+
+# fd
+# --
+
+# The search path and its ancestors, nearest first.
+def ancestors(+parts: List<&2,String>) -> List<&2,String>:
+  match parts:
+    case Nil{}: ["/"]
+    case _ <> +rest: Path.absolute(List.reverse(&2,String,parts)) <> ancestors(rest)
+
+def anyGit(directories: List<&2,String>) -> IO(Bool):
+  match directories:
+    case Nil{}: IO.pure(Bool,False{})
+    case directory <> rest:
+      do IO<Bool>:
+        found : Bool <- FS.accessible(Path.join(directory,".git"),0)
+        Bool.pick(IO(Bool),found,IO.pure(Bool,True{}),anyGit(rest))
+
+# fd honours .gitignore outside a repository only with --no-require-git;
+# inside one, its git-aware default stops parent rules at nested repositories.
+def insideGitRepo(path: String) -> IO(Bool):
+  anyGit(ancestors(Path.components(String.split(path,'/'),Nil{},True{})))
+
+def pathPattern(+pattern: String) -> String:
+  Bool.pick(String,String.starts_with(pattern,"/") || String.starts_with(pattern,"**/") || String.eq(pattern,"**"),pattern,"**/" ++ pattern)
+
+# fd --glob matches basenames unless --full-path, which matches the absolute
+# path, so a pattern with a directory needs a leading **/.
+def fdArguments(insideGit: Bool,+limit: Nat,+pattern: String,+path: String) -> List<String>:
+  +full = String.contains(pattern,"/")
+  List.concat(&1,String,[["--glob","--color=never","--hidden"],Bool.pick(List<String>,insideGit,[],["--no-require-git"]),["--max-results",Nat.show(limit)],Bool.pick(List<String>,full,["--full-path"],[]),["--",Bool.pick(String,full,pathPattern(pattern),pattern),path]])
+
+type Captured is Data:
+  Captured{stdout: List<&2,U32>,stderr: List<&2,U32>}
+
+def appendOut(bytes: List<&2,U32>,captured: Captured) -> Captured & Unit:
+  match captured:
+    case Captured{stdout,stderr}: (Captured{List.append(&2,U32,List.reverse(&2,U32,bytes),stdout),stderr},Unit{})
+def appendErr(bytes: List<&2,U32>,captured: Captured) -> Captured & Unit:
+  match captured:
+    case Captured{stdout,stderr}: (Captured{stdout,List.append(&2,U32,List.reverse(&2,U32,bytes),stderr)},Unit{})
+def onStdout(state: Ref.Ref<Captured>,bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    Ref.modify(Captured,Unit,state,captured => appendOut(bytes,captured))
+    return Done{Unit{}}
+def onStderr(state: Ref.Ref<Captured>,bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    Ref.modify(Captured,Unit,state,captured => appendErr(bytes,captured))
+    return Done{Unit{}}
+
+type Run is Data:
+  Run{result: Result<&2,&2,Child.ExecutionError,U32>,captured: Captured}
+
+# fd runs in the process's own working directory and environment; the abort
+# signal stops it.
+def runFd(fdPath: String,args: List<String>,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Run):
+  do IO<Run>:
+    +state : Ref.Ref<Captured> <- Ref.new(Captured,Captured{Nil{},Nil{}})
+    +stdout : Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- Callback.create(~Ref.Ref<Captured>,~List<&2,U32>,~Result<&2,&2,String,Unit>,~onStdout,state)
+    +stderr : Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- Callback.create(~Ref.Ref<Captured>,~List<&2,U32>,~Result<&2,&2,String,Unit>,~onStderr,state)
+    cwd : Result<&2,&2,FS.Error,String> <- FS.cwd()
+    env : List<String> <- IO.environment()
+    result : Result<&2,&2,Child.ExecutionError,U32> <- Child.spawn(fdPath,args,Result.default(&2,&2,FS.Error,String,cwd,"."),env,Child.signalList(signal),stdout,stderr)
+    Callback.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,stdout)
+    Callback.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,stderr)
+    captured : Captured <- Ref.dispose(Captured,state)
+    return Run{result,captured}
+
+# readline's lines: \n, \r\n and a lone \r end a line; a final empty line is
+# not one.
+def lastLine(current: String,reversed: List<&2,String>) -> List<&2,String>:
+  match current:
+    case SNil{}: reversed
+    case line: String.reverse(line) <> reversed
+def splitLines(text: String,current: String,reversed: List<&2,String>) -> List<&2,String>:
+  match text:
+    case SNil{}: List.reverse(&2,String,lastLine(current,reversed))
+    case SCon{'\r',SCon{'\n',rest}}: splitLines(rest,"",String.reverse(current) <> reversed)
+    case SCon{'\r',rest}: splitLines(rest,"",String.reverse(current) <> reversed)
+    case SCon{'\n',rest}: splitLines(rest,"",String.reverse(current) <> reversed)
+    case SCon{char,rest}: splitLines(rest,SCon{char,current},reversed)
+
+def kept(value: String,rest: List<&2,String>) -> List<&2,String>:
+  match value:
+    case SNil{}: rest
+    case line: line <> rest
+def trimmed(lines: List<&2,String>) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case line <> rest: kept(Text.trim(line),trimmed(rest))
+
+def fdFailure(fdPath: String,errors: List<&2,Child.Error>) -> String:
+  match errors:
+    case Child.Error{"spawn",code,_} <> _: "spawn " ++ fdPath ++ " " ++ Child.errnoName(code)
+    case Child.Error{operation,_,message} <> _: operation ++ ": " ++ message
+    case Nil{}: "unknown error"
+
+def exitFailure(+code: U32,stderr: List<&2,U32>) -> String:
+  +message = Text.trim(Utf8.decodeBuffer(List.reverse(&2,U32,stderr)))
+  Bool.pick(String,String.is_empty(message),"fd exited with code " ++ U32.show(code),message)
+
+# A failing exit still lists what fd printed; without output it reports fd's
+# stderr.
+def fdOutput(output: String,+code: U32,lines: List<&2,String>,stderr: List<&2,U32>,root: String,limit: Nat) -> ToolResult():
+  match output:
+    case SNil{}: Bool.pick(ToolResult(),U32.is_eq(code,0),resultText("No files found matching pattern",None{}),Fail{Operation{exitFailure(code,stderr)}})
+    case _: listed(trimmed(lines),root,limit,False{})
+def fdResult(code: U32,+lines: List<&2,String>,stderr: List<&2,U32>,root: String,limit: Nat) -> ToolResult():
+  fdOutput(String.join(lines,"\n"),code,lines,stderr,root,limit)
+
+def finished(fdPath: String,aborted: Bool,+root: String,+limit: Nat,run: Run) -> ToolResult():
+  match aborted run:
+    case True{} _: Fail{Aborted{}}
+    case _ Run{Fail{Child.ExecutionFailed{errors}},_}: Fail{Operation{"Failed to run fd: " ++ fdFailure(fdPath,errors)}}
+    case _ Run{Fail{_},_}: Fail{Aborted{}}
+    case _ Run{Done{code},Captured{stdout,stderr}}: fdResult(code,splitLines(Utf8.decodeBuffer(List.reverse(&2,U32,stdout)),"",Nil{}),stderr,root,limit)
+
+def searched(+fdPath: String,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,+root: String,+limit: Nat,run: Run) -> IO(ToolResult()):
+  do IO<ToolResult()>:
+    aborted : Bool <- Child.parentAborted(signal)
+    return finished(fdPath,aborted,root,limit,run)
+
+def withFd(+pattern: String,+path: String,+limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,+fdPath: String) -> IO(ToolResult()):
+  do IO<ToolResult()>:
+    insideGit : Bool <- insideGitRepo(path)
+    run : Run <- runFd(fdPath,fdArguments(insideGit,limit,pattern,path),signal)
+    searched(fdPath,signal,path,limit,run)
+
+def fdAvailable(fdPath: Maybe<&2,String>) -> ResultOf(String):
+  match fdPath:
+    case None{}: Fail{Operation{"fd is not available and could not be downloaded"}}
+    case Some{path}: Done{path}
+
+def ensureFd(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(String)):
+  do IO<ResultOf(String)>:
+    fdPath : Maybe<&2,String> <- Tools.ensureTool(Tools.Fd{},None{})
+    aborted : Bool <- Child.parentAborted(signal)
+    return Bool.pick(ResultOf(String),aborted,Fail{Aborted{}},fdAvailable(fdPath))
+
 def execute(environment: Invocation,pattern: String,+path: String,+limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match environment:
     case Invocation{_,_,Some{operations}}:
       do IO<ToolResult()>:
         values : ResultOf(List<&2,String>) <- customSearch(operations,pattern,path,limit,signal)
-        then(List<&2,String>,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,settled(List<&2,String>,signal,values),results => IO.pure(ToolResult(),render(results,path,limit,True{})))
-    case Invocation{paths,_,None{}}:
-      do IO<ToolResult()>:
-        values : ResultOf(List<&2,String>) <- then(Bool,List<&2,String>,localExists(path),found => Bool.pick(Unit -> IO(ResultOf(List<&2,String>)),found,_ => nativeSearch(paths,pattern,path,limit,signal),_ => IO.pure(ResultOf(List<&2,String>),Fail{PathNotFound{path}}))(Unit{}))
-        then(List<&2,String>,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,settled(List<&2,String>,signal,values),results => IO.pure(ToolResult(),render(results,path,limit,False{})))
+        then(List<&2,String>,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,settled(List<&2,String>,signal,values),results => IO.pure(ToolResult(),render(results,path,limit)))
+    case Invocation{_,_,None{}}:
+      then(String,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,ensureFd(signal),fdPath => withFd(pattern,path,limit,signal,fdPath))
 
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
   match value:
@@ -174,7 +276,7 @@ def resolved(environment: Invocation,pattern: String,limit: Nat,signal: Maybe<&2
 def invokeInput(+environment: Invocation,context: FindContext,signal: Maybe<&2,Abort.AbortSignal<Unit>>,input: FindToolInput) -> IO(ToolResult()):
   match environment context input:
     case Invocation{paths,cwd,_} FindContext{override} FindToolInput{pattern,path,limit}:
-      resolved(environment,pattern,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT()),signal,Paths.resolveToCwd(paths,Search.nonempty(path,"."),Search.nonempty(override,cwd)))
+      resolved(environment,pattern,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT()),signal,Paths.resolveToCwd(paths,Text.orElse(path,"."),Text.orElse(override,cwd)))
 def invokeWithContext(environment: Invocation,context: FindContext,request: Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_,arguments,+signal,_}:

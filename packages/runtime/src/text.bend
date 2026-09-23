@@ -24,6 +24,12 @@ def asciiLower(text: String) -> String:
     case SCon{Chr{+code}, rest}:
       SCon{Chr{Bool.pick(U32, U32.is_ge(code, 65) && U32.is_le(code, 90), (code + 32 : U32), code)}, asciiLower(rest)}
 
+# JavaScript's `value || fallback` for an optional string.
+def orElse(value: Maybe<&2, String>, +fallback: String) -> String:
+  match value:
+    case Some{SCon{first, rest}}: SCon{first, rest}
+    case _: fallback
+
 def blank(text: String) -> Bool:
   match text:
     case SNil{}: True{}

@@ -39,20 +39,7 @@ def check(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Unit)):
       do IO<ResultOf(Unit)>:
         aborted : Bool <- Abort.aborted(Unit,signal)
         return Bool.pick(ResultOf(Unit),aborted,Fail{Aborted{}},Done{Unit{}})
-def common(a: List<&2,String>,b: List<&2,String>) -> List<&2,String> & List<&2,String>:
-  match a b:
-    case +first <> +restA +second <> +restB:
-      Bool.pick(Unit -> List<&2,String> & List<&2,String>,Strings.equal(first,second),_ => common(restA,restB),_ => (first <> restA,second <> restB))(Unit{})
-    case a b: (a,b)
-def parents(parts: List<&2,String>,tail: List<&2,String>) -> List<&2,String>:
-  match parts:
-    case Nil{}: tail
-    case _ <> rest: parents(rest,".." <> tail)
-def relativeParts(pair: List<&2,String> & List<&2,String>) -> String:
-  match pair:
-    case (left,right): String.join(parents(left,right),"/")
-def relative(+root: String,+path: String) -> String:
-  relativeParts(common(List.reverse(&2,String,Path.components(Strings.split(root,'/'),Nil{},True{})),List.reverse(&2,String,Path.components(Strings.split(path,'/'),Nil{},True{}))))
+def relative(+root: String,+path: String) -> String: Path.relative(root,path)
 def dirnameParts(parts: List<&2,String>) -> String:
   match parts:
     case _ <> rest: Path.absolute(List.reverse(&2,String,rest))

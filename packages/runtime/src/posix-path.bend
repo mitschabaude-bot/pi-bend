@@ -21,7 +21,7 @@ def components(parts: List<&2, String>, reversed: List<&2, String>, +root: Bool)
 def absolute(parts: List<&2, String>) -> String:
   "/" ++ String.join(List.reverse(&2, String, components(parts, Nil{}, True{})), "/")
 
-def relative(base: String, path: String) -> Maybe<&2, String>:
+def under(base: String, path: String) -> Maybe<&2, String>:
   match base:
     case SCon{'/', rest}: Some{absolute(Strings.split(rest ++ "/" ++ path, '/'))}
     case _: None{}
@@ -29,7 +29,26 @@ def relative(base: String, path: String) -> Maybe<&2, String>:
 def resolve(base: String, path: String) -> Maybe<&2, String>:
   match path:
     case SCon{'/', rest}: Some{absolute(Strings.split(rest, '/'))}
-    case value: relative(base, value)
+    case value: under(base, value)
+
+def common(a: List<&2, String>, b: List<&2, String>) -> List<&2, String> & List<&2, String>:
+  match a b:
+    case +first <> +restA +second <> +restB:
+      Bool.pick(Unit -> List<&2, String> & List<&2, String>, Strings.equal(first, second), _ => common(restA, restB), _ => (first <> restA, second <> restB))(Unit{})
+    case a b: (a, b)
+
+def parents(parts: List<&2, String>, tail: List<&2, String>) -> List<&2, String>:
+  match parts:
+    case Nil{}: tail
+    case _ <> rest: parents(rest, ".." <> tail)
+
+def relativeParts(pair: List<&2, String> & List<&2, String>) -> String:
+  match pair:
+    case (left, right): String.join(parents(left, right), "/")
+
+# Node's path.relative for absolute paths: the way from one to the other.
+def relative(+from: String, +to: String) -> String:
+  relativeParts(common(List.reverse(&2, String, components(Strings.split(from, '/'), Nil{}, True{})), List.reverse(&2, String, components(Strings.split(to, '/'), Nil{}, True{}))))
 
 # POSIX normalize/join retain relative parent components and trailing slashes.
 def rendered(parts: List<&2, String>, root: Bool, trailing: Bool) -> String:

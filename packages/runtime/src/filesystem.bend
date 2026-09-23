@@ -210,6 +210,11 @@ type FileKind is Data:
   SymbolicLink{}
   Other{}
 
+def isDirectory(kind: FileKind) -> Bool:
+  match kind:
+    case Directory{}: True{}
+    case _: False{}
+
 type DirectoryEntry is Data:
   DirectoryEntry{name: String, kind: FileKind}
 

@@ -1,7 +1,7 @@
 import Base
 import ../../utils/paths.bend as Paths
 import ../../utils/tools-manager.bend as Tools
-import ../../../../runtime/src/file-search.bend as Search
+import ../../../../runtime/src/posix-path.bend as Path
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value
@@ -171,7 +171,7 @@ def isDirectory(operations: Maybe<&2,GrepOperations>,+path: String) -> IO(Result
     case None{}:
       do IO<ResultOf(Bool)>:
         result : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
-        return foundDirectory(path,Result.map(&2,&2,Error,FS.FileKind,Bool,Search.isDirectory,fsResult(FS.FileKind,result)))
+        return foundDirectory(path,Result.map(&2,&2,Error,FS.FileKind,Bool,FS.isDirectory,fsResult(FS.FileKind,result)))
 
 def nativeText(+path: String) -> IO(ResultOf(String)):
   do IO<ResultOf(String)>:
@@ -210,7 +210,7 @@ def contextBlock(lines: List<&2,String>,+number: Nat,+context: Nat,path: String,
     case Nil{} Output{reversed,truncated}: Output{(path ++ ":" ++ Nat.show(number) ++ ": (unable to read file)") <> reversed,truncated}
     case lines output: block(lines,1n,Nat.max(1n,number - context),number + context,number,path,output)
 def displayPath(+path: String,+root: String,directory: Bool) -> String:
-  +relative = Search.relative(root,path)
+  +relative = Path.relative(root,path)
   Bool.pick(String,directory && Bool.not(String.is_empty(relative)) && Bool.not(String.starts_with(relative,"..")),relative,Maybe.default(&2,String,List.head(&2,String,List.reverse(&2,String,Strings.split(path,'/'))),""))
 
 def getLines(cached: Maybe<&2,List<&2,String>>,operations: Maybe<&2,GrepOperations>,path: String) -> IO(List<&2,String>):
@@ -426,7 +426,7 @@ def resolved(environment: Invocation,input: GrepToolInput,signal: Maybe<&2,Abort
 def invokeInput(+environment: Invocation,context: GrepContext,signal: Maybe<&2,Abort.AbortSignal<Unit>>,+input: GrepToolInput) -> IO(ToolResult()):
   match environment context input:
     case Invocation{paths,cwd,_} GrepContext{override} GrepToolInput{_,path,_,_,_,_,_}:
-      resolved(environment,input,signal,Paths.resolveToCwd(paths,Search.nonempty(path,"."),Search.nonempty(override,cwd)))
+      resolved(environment,input,signal,Paths.resolveToCwd(paths,Text.orElse(path,"."),Text.orElse(override,cwd)))
 def invokeWithContext(environment: Invocation,context: GrepContext,request: Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_,arguments,+signal,_}:
