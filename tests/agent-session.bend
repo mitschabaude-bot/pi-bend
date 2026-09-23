@@ -447,6 +447,13 @@ def compactAction(+session: Session.AgentSession, action: String) -> IO(Unit):
     case "abort": interrupted(session, True{}, "next prompt" <> Nil{})
     case _: IO.pure(Unit, Unit{})
 
+# "queued" queues a follow-up before the prompts, so the run continues past
+# its first turn.
+def beforePrompts(session: Session.AgentSession, action: String) -> IO(Unit):
+  match action:
+    case "queued": Session.followUp(session, "later", Nil{})
+    case _: IO.pure(Unit, Unit{})
+
 def promptsOf(+prompts: String) -> List<&2, String>:
   Bool.pick(List<&2, String>, String.eq(prompts, "-"), Nil{}, String.split(prompts, ';'))
 
@@ -455,8 +462,10 @@ def compactScenario(+dir: String, +agentDir: String, prompts: String, responses:
     created : Sessions.Outcome(Session.Session()) <- Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
+    +chosen : String = action
+    beforePrompts(sessionOf(value), chosen)
     promptAll(sessionOf(value), promptsOf(prompts))
-    compactAction(sessionOf(value), action)
+    compactAction(sessionOf(value), chosen)
     reportRemaining(responsesOf(value))
     reportMessages(sessionOf(value))
     reportEntries(sessionOf(value))
@@ -471,7 +480,7 @@ def run(args: List<String>) -> IO(Unit):
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
     case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
-    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|none>")
+    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
 
 def main() -> IO(Unit):
   do IO<Unit>:

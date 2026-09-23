@@ -146,6 +146,15 @@ def compaction_checks(runner, threads, work):
     assert end['result']['tokensBefore'] == 5000 and only(events, 'remaining')['count'] == 0
     assert [e['type'] for e in events if e['type'] in ('agent_end', 'compaction_start', 'compaction_end', 'agent_settled', 'prompt_done')][-5:] == ['agent_end', 'compaction_start', 'compaction_end', 'agent_settled', 'prompt_done']
     checks += 3
+    # the next-turn refresh compacts at the threshold before the next assistant response of the same run (_compactBeforeNextAssistantResponse)
+    events = run_compact(runner, threads, work, threshold, 'one', 'a1#5000;prefix summary;a2', 'queued')
+    order = [e['type'] for e in events if e['type'] in ('turn_start', 'turn_end', 'compaction_start', 'compaction_end', 'agent_end')]
+    assert order == ['turn_start', 'turn_end', 'compaction_start', 'compaction_end', 'turn_start', 'turn_end', 'agent_end'], order
+    end = only(events, 'compaction_end')
+    assert end['reason'] == 'threshold' and end['willRetry'] is False and end['result']['tokensBefore'] == 5000, end
+    assert [m['role'] for m in only(events, 'messages')['messages']] == ['compactionSummary', 'assistant', 'user', 'assistant'], 'the follow-up turn runs on the compacted context'
+    assert only(events, 'last_assistant_text')['text'] == 'a2' and only(events, 'remaining')['count'] == 0
+    checks += 4
     # does not trigger threshold compaction below the threshold or when disabled
     events = run_compact(runner, threads, work, threshold, 'one', 'a1#10;unused', 'none')
     assert not [e for e in events if e['type'].startswith('compaction_')] and only(events, 'remaining')['count'] == 1

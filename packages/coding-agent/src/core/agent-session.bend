@@ -203,8 +203,19 @@ type CompactionState is Data:
 type Shared is Data:
   Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: Bool, lastAssistant: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, retry: RetryState, compaction: CompactionState}
 
+def Turn() -> Data: Agent.Turn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
+def TurnUpdate() -> Data: Agent.Update(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
+def TurnResult() -> Data: Agent.PrepareResult(TurnUpdate(), Runtime.Error())
+def NextTurnHook() -> Data: Agent.ContextHook(Turn(), TurnUpdate(), Runtime.Error())
+def LegacyTurnHook() -> Data: Agent.LegacyHook(TurnUpdate(), Runtime.Error())
+
+# The session's handles on the agent: its event subscription and the
+# next-turn hook that replaced the agent's own (restored on dispose).
+type SessionHooks is Data:
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>}
+
 type AgentSession is Data:
-  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), settings: Settings.SettingsManager, cwd: String}
+  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: Settings.SettingsManager, cwd: String}
 
 def sharedSession(state: Shared) -> Session():
   match state:
@@ -454,14 +465,7 @@ def handleAgentEvent(shared: R.Ref<Shared>, input: Agent.Input<SessionEvent()>) 
 
 # Lifecycle
 # ---------
-
-def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String) -> IO(AgentSession):
-  do IO<AgentSession>:
-    initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}})
-    +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
-    subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
-    return AgentSession{agent, shared, subscription, handler, settings, cwd}
+# create follows the compaction section, whose next-turn hook it installs.
 
 # Listeners are the caller's callbacks: unsubscribe returns them to the caller.
 def addListener(state: Shared, listener: Listener()) -> Shared:
@@ -470,7 +474,7 @@ def addListener(state: Shared, listener: Listener()) -> Shared:
 
 def subscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: R.modify(Shared, Unit, shared, current => (addListener(current, listener), Unit{}))
+    case AgentSession{_, shared, _, _, _}: R.modify(Shared, Unit, shared, current => (addListener(current, listener), Unit{}))
 
 def withoutListener(listeners: List<&2, Listener()>, +listener: Listener()) -> List<&2, Listener()>:
   match listeners:
@@ -483,7 +487,7 @@ def removedListener(state: Shared, listener: Listener()) -> Shared:
 
 def unsubscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: R.modify(Shared, Unit, shared, current => (removedListener(current, listener), Unit{}))
+    case AgentSession{_, shared, _, _, _}: R.modify(Shared, Unit, shared, current => (removedListener(current, listener), Unit{}))
 
 def sleepingOf(retry: RetryState) -> Maybe<&2, A.AbortController<Unit>>:
   match retry:
@@ -523,13 +527,15 @@ def abortCompactions(shared: R.Ref<Shared>) -> IO(Unit):
 # Abort the agent and disconnect; the agent itself belongs to the runtime.
 def dispose(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{agent, +shared, subscription, handler, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced}, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         Agent.unsubscribe(SessionEvent(), Runtime.Error(), subscription)
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
+        Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
+        C.dispose(T.ToolHookInput<Turn()>, TurnResult(), nextTurn)
         released : Shared <- R.dispose(Shared, shared)
         return Unit{}
 
@@ -538,14 +544,14 @@ def dispose(session: AgentSession) -> IO(Unit):
 
 def agentOf(session: AgentSession) -> Runtime.Owner():
   match session:
-    case AgentSession{agent, _, _, _, _, _}: agent
+    case AgentSession{agent, _, _, _, _}: agent
 
 def state(session: AgentSession) -> IO(AgentState()):
   Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 def sessionOf(session: AgentSession) -> IO(Session()):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _}:
       do IO<Session()>:
         current : Shared <- R.read(Shared, shared)
         return sharedSession(current)
@@ -561,7 +567,7 @@ def runActiveOf(value: Shared) -> Bool:
 
 def isStreaming(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _}:
       do IO<Bool>:
         current : Shared <- R.read(Shared, shared)
         return runActiveOf(current)
@@ -1051,6 +1057,103 @@ def compactBeforePrompt(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings
     current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     checkLastAssistant(agent, shared, settings, lastAssistantIn(stateMessages(current), None{}))
 
+# Next-turn refresh
+# -----------------
+# upstream _installAgentNextTurnRefresh: before each further assistant
+# response the context compacts at the threshold, a hook the agent had before
+# the session still runs, and the turn picks up the agent's current model,
+# thinking level and tools. The system-prompt and tool-loadout refresh is not
+# ported.
+
+def Context() -> Data: T.AgentContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
+
+type NextTurnEnv is Data:
+  NextTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>}
+
+def turnContext(turn: Turn()) -> Context():
+  match turn:
+    case T.ShouldStopAfterTurnContext{_, _, context, _}: context
+
+def withTurnContext(turn: Turn(), context: Context()) -> Turn():
+  match turn:
+    case T.ShouldStopAfterTurnContext{message, toolResults, _, newMessages}: T.ShouldStopAfterTurnContext{message, toolResults, context, newMessages}
+
+def withContextMessages(context: Context(), messages: List<&2, Message()>) -> Context():
+  match context:
+    case T.AgentContext{_, tools}: T.AgentContext{messages, tools}
+
+def withContextTools(context: Context(), tools: List<&2, T.AgentTool<Runtime.Details(), Runtime.Error()>>) -> Context():
+  match context:
+    case T.AgentContext{kept, _}: T.AgentContext{kept, Some{tools}}
+
+def stateTools(value: AgentState()) -> List<&2, T.AgentTool<Runtime.Details(), Runtime.Error()>>:
+  match value:
+    case T.AgentState{_, _, tools, _, _, _, _, _}: tools
+
+def contextMessagesIn(context: Context()) -> List<&2, Message()>:
+  match context:
+    case T.AgentContext{kept, _}: kept
+
+def overThreshold(settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, messages: List<&2, Message()>) -> Bool:
+  +contextWindow = modelContextWindow(model)
+  Bool.and(F.isGreater(F.compare(contextWindow, F.fromU32(0))), Compaction.shouldCompact(Compaction.estimateTokensOf(Compaction.estimateContextTokens(Unit, Tools.ToolDetails, V.Value, messages)), contextWindow, compactionSettingsFor(settings, model)))
+
+def compactIfOver(over: Bool, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>, +context: Context()) -> IO(Context()):
+  match over:
+    case False{}: IO.pure(Context(), context)
+    case True{}:
+      do IO<Context()>:
+        continued : Bool <- runAutoCompaction(agent, shared, settings, model, Threshold{}, False{})
+        after : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        return withContextMessages(context, stateMessages(after))
+
+# upstream _compactBeforeNextAssistantResponse: the context is estimated
+# before the next request, not from the last response's usage.
+def compactBeforeNextResponse(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +context: Context()) -> IO(Context()):
+  do IO<Context()>:
+    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +model : Ai.Model<Ai.JsonValue> = stateModel(current)
+    compactIfOver(overThreshold(settings, model, contextMessagesIn(context)), agent, shared, settings, model, context)
+
+# A hook given to the agent before the session runs next, with precedence
+# for the context-aware one as in upstream Agent.
+def previousUpdate(previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, turn: Turn(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(TurnResult()):
+  match previous legacy:
+    case Some{hook} _: C.call(T.ToolHookInput<Turn()>, TurnResult(), hook, T.ToolHookInput{turn, signal})
+    case None{} Some{hook}: C.call(Maybe<&2, Agent.HooksSignal()>, TurnResult(), hook, signal)
+    case None{} None{}: IO.pure(TurnResult(), Done{None{}})
+
+# The turn continues with the agent's current model, thinking level and tools.
+def refreshedUpdate(+context: Context(), +current: AgentState(), result: TurnResult()) -> TurnResult():
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{None{}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(context, stateTools(current))}, None{}, Some{stateModel(current)}, Some{stateThinking(current)}}}}
+    case Done{Some{T.AgentLoopTurnUpdate{replaced, added, _, _}}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(Maybe.default(&2, Context(), replaced, context), stateTools(current))}, added, Some{stateModel(current)}, Some{stateThinking(current)}}}}
+
+def refreshTurn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, +turn: Turn(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(TurnResult()):
+  do IO<TurnResult()>:
+    +context : Context() <- compactBeforeNextResponse(agent, shared, settings, turnContext(turn))
+    result : TurnResult() <- previousUpdate(previous, legacy, withTurnContext(turn, context), signal)
+    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    return refreshedUpdate(context, current, result)
+
+# Callback bodies cannot copy their environment; the copy happens inside.
+def nextTurnHook(env: NextTurnEnv, input: T.ToolHookInput<Turn()>) -> IO(TurnResult()):
+  match env input:
+    case NextTurnEnv{agent, shared, settings, previous, legacy} T.ToolHookInput{turn, signal}: refreshTurn(agent, shared, settings, previous, legacy, turn, signal)
+
+def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String) -> IO(AgentSession):
+  do IO<AgentSession>:
+    initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}})
+    +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
+    subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
+    +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settings, replaced, legacy})
+    Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced}, settings, cwd}
+
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
   match stopReason:
@@ -1110,7 +1213,7 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
 
 def runAgentPrompt(session: AgentSession, input: Agent.PromptInput<Unit, Runtime.Details(), Runtime.Custom()>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, _, +settings, _}:
+    case AgentSession{+agent, +shared, _, +settings, _}:
       do IO<Result<&2, &2, String, Unit>>:
         compactBeforePrompt(agent, shared, settings)
         setRunActive(shared, True{})
@@ -1149,7 +1252,7 @@ def queueAt(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +behavior: Streaming
 
 def queue(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
   match session:
-    case AgentSession{agent, shared, _, _, _, _}:
+    case AgentSession{agent, shared, _, _, _}:
       do IO<Unit>:
         now : F64 <- Date.now()
         queueAt(agent, shared, behavior, text, images, now)
@@ -1175,18 +1278,18 @@ def prompt(+session: AgentSession, text: String, images: List<&2, Ai.ImageConten
 
 def abortRetry(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: abortSleeping(shared)
+    case AgentSession{_, shared, _, _, _}: abortSleeping(shared)
 
 def isRetrying(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, sleepingOf(retryOf(state))))
 
 def abortCompaction(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: abortCompactions(shared)
+    case AgentSession{_, shared, _, _, _}: abortCompactions(shared)
 
 def hasController(compaction: CompactionState) -> Bool:
   match compaction:
@@ -1194,7 +1297,7 @@ def hasController(compaction: CompactionState) -> Bool:
 
 def isCompacting(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return hasController(compactionOf(state))
@@ -1203,7 +1306,7 @@ def isCompacting(session: AgentSession) -> IO(Bool):
 # wait until it is idle.
 def abort(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, _, _, _, _}:
+    case AgentSession{+agent, +shared, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -1242,7 +1345,7 @@ def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Result<
 # is returned, a failure or cancellation is reported in compaction_end.
 def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match session:
-    case AgentSession{+agent, +shared, _, _, +settings, _}:
+    case AgentSession{+agent, +shared, _, +settings, _}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -1288,7 +1391,7 @@ def applyThinking(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +chosen: Ai.Mo
 
 def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, shared, _, _, _, _}:
+    case AgentSession{+agent, shared, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         applyThinking(agent, shared, clamped(current, level))
@@ -1297,7 +1400,7 @@ def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(
 # range, record the change (extension model_select events are not ported).
 def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, _, _, _}:
+    case AgentSession{+agent, +shared, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -1310,7 +1413,7 @@ def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Resul
 # upstream setSessionName: record the name and notify.
 def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{_, +shared, _, _, _, _}:
+    case AgentSession{_, +shared, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         stored : Shared <- R.read(Shared, shared)
         outcome : Sessions.Outcome(Appended()) <- recordName(sharedSession(stored), name)
