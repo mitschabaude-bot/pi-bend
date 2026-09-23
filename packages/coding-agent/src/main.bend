@@ -857,6 +857,24 @@ def catalogOf(services: Services) -> IO(Services & Catalog):
 def catalogModels(catalog: Catalog) -> List<&2,Models.Model()>:
   match catalog: case Catalog{available,_}: available
 
+type InteractiveRebind is Data:
+  InteractiveRebind{current: Ref.Ref<AgentSession.AgentSession>,hook: Ref.Ref<Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>>}
+def callInteractiveRebind(callback: Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,live: AgentSession.AgentSession) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}: Callback.call(AgentSession.AgentSession,Unit,value,live)
+def rebindInteractiveCopied(binding: InteractiveRebind,+live: AgentSession.AgentSession) -> IO(Unit):
+  match binding:
+    case InteractiveRebind{current,hook}:
+      do IO<Unit>:
+        Ref.write(AgentSession.AgentSession,current,live)
+        callback : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,hook)
+        callInteractiveRebind(callback,live)
+def rebindInteractive(binding: InteractiveRebind,live: AgentSession.AgentSession) -> IO(Unit):
+  rebindInteractiveCopied(binding,live)
+def newInteractive(host: Host(),_: Unit) -> IO(Result<&2,&2,String,Unit>):
+  SessionRuntime.newSession(Services,host,None{})
+
 def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
@@ -864,7 +882,17 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager, AgentSession.settingsOf(live))
     home : Result<&2,&2,FS.Error,String> <- FS.homedir()
     catalog : Catalog <- SessionRuntime.withServices(Services,Catalog,host,catalogOf,Catalog{Nil{},Nil{}})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    +current : Ref.Ref<AgentSession.AgentSession> <- Ref.new(AgentSession.AgentSession,live)
+    +onRebind : Ref.Ref<Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,None{})
+    +rebinder : Callback.Callback<AgentSession.AgentSession,Unit> <- Callback.create(~InteractiveRebind,~AgentSession.AgentSession,~Unit,~rebindInteractive,InteractiveRebind{current,onRebind})
+    +startNew : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Unit,~Result<&2,&2,String,Unit>,~newInteractive,host)
+    SessionRuntime.setRebindSession(Services,host,Some{rebinder})
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,startNew,onRebind},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    SessionRuntime.setRebindSession(Services,host,None{})
+    Callback.dispose(Unit,Result<&2,&2,String,Unit>,startNew)
+    Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
+    oldHook : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,onRebind)
+    oldSession : AgentSession.AgentSession <- Ref.dispose(AgentSession.AgentSession,current)
     SessionRuntime.dispose(Services, host)
     interactiveFinished(result)
 

@@ -48,7 +48,7 @@ def scenario(threads):
         try:
             until(b"theme-fixture")
             cases = [
-                ("/help", b"Commands: /model [search], /thinking [level], /compact [instructions], /exit"),
+                ("/help", b"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /exit"),
                 ("/thinking", b"Thinking level: off. Available: off"),
                 ("/thinking OFF", b"Thinking level: off"),
                 ("/thinking medium", b'Unknown thinking level "medium". Available levels: off.'),

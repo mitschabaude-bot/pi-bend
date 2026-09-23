@@ -25,7 +25,7 @@ type SubmissionFailure is Data:
 type SubmissionInput is Data:
   SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
 type CommandSink is Data:
-  CommandSink{failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Session.AgentSession,models: List<&2,Models.Model()>}
+  CommandSink{failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: List<&2,Models.Model()>}
 type Startup is Data:
   Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
 
@@ -100,7 +100,10 @@ def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
         commandStatus(failure,CommandNotice{"Model: " ++ Models.reference(model)})
         requestRender(redraw)
         return True{}
-    case CommandSink{failure,redraw,picker,session,models} Commands.OpenModelPicker{search}: openPickerResult(failure,redraw,picker,session,models,search)
+    case CommandSink{failure,redraw,picker,session,models} Commands.OpenModelPicker{search}:
+      do IO<Bool>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        openPickerResult(failure,redraw,picker,live,models,search)
     case _ _: IO.pure(Bool,False{})
 def act(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,command: Commands.Command) -> IO(Unit):
   match command:
