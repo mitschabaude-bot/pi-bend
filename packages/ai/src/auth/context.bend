@@ -21,18 +21,10 @@ def expanded(home: Result<&2, &2, FS.Error, String>, rest: String) -> Maybe<&2, 
     case Fail{_}: None{}
     case Done{directory}: Some{directory ++ rest}
 
-def accessible(result: Result<&1, &1, U32 & String, Unit>) -> Bool:
-  match result:
-    case Done{Unit{}}: True{}
-    case Fail{_}: False{}
-
 def accessed(path: Maybe<&2, String>) -> IO(Bool):
   match path:
     case None{}: IO.pure(Bool, False{})
-    case Some{value}:
-      do IO<Bool>:
-        result : Result<&1, &1, U32 & String, Unit> <- File.access(value, 0)
-        return accessible(result)
+    case Some{value}: FS.accessible(value, 0)
 
 def fileExists(unused: Unit, path: String) -> IO(Bool):
   match path:

@@ -182,16 +182,6 @@ def fileTimestamp(timestamp: String) -> String:
 def sessionFileName(timestamp: String, id: String) -> String:
   fileTimestamp(timestamp) ++ "_" ++ id ++ ".jsonl"
 
-def exists(result: Result<&1, &1, U32 & String, Unit>) -> Bool:
-  match result:
-    case Done{Unit{}}: True{}
-    case Fail{_}: False{}
-
-def fileExists(path: String) -> IO(Bool):
-  do IO<Bool>:
-    result : Result<&1, &1, U32 & String, Unit> <- File.access(path, 0)
-    return exists(result)
-
 def fileError(-A: Data, path: String, result: Result<&2, &2, FS.Error, A>) -> Outcome(A):
   match result:
     case Done{value}: Done{value}
@@ -313,7 +303,7 @@ def loadExisting(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D
 # final newline gains one, so later appends start on their own line.
 def loadFileWith(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +path: String, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
   do IO<Outcome(Loaded<D, T, C>)>:
-    present : Bool <- fileExists(path)
+    present : Bool <- FS.accessible(path, 0)
     loadExisting(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, present, migrate)
 
 def loadFile(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), path: String) -> IO(Outcome(Loaded<D, T, C>)):
@@ -1051,7 +1041,7 @@ def existingFile(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool:
 # start a new session that will be written there.
 def setSessionFile(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), session: Session<D, T, C>, +path: String, preloaded: Maybe<&2, Loaded<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
-    present : Bool <- fileExists(path)
+    present : Bool <- FS.accessible(path, 0)
     existingFile(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, session, path, preloaded, present)
 
 # Constructors
@@ -1136,7 +1126,7 @@ def opened(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> 
 # the file's parent.
 def open(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +path: String, sessionDir: Maybe<&2, String>, +cwdOverride: Maybe<&2, String>, processCwd: String) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
-    present : Bool <- fileExists(path)
+    present : Bool <- FS.accessible(path, 0)
     found : Outcome(Discovery<D, T, C>) <- discovered(~D, ~T, ~C, ~diagnosticIn, ~toolIn, ~customIn, path, cwdOverride, present)
     opened(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, Path.normalize(path), sessionDir, cwdOverride, processCwd, found)
 

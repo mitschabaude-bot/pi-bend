@@ -16,11 +16,6 @@ type Error is Data:
 
 def bash(shell: String) -> ShellConfig: ShellConfig{shell,"-c" <> Nil{},None{}}
 
-def exists(result: Result<&1,&1,U32 & String,Unit>) -> Bool:
-  match result:
-    case Done{Unit{}}: True{}
-    case Fail{_}: False{}
-
 # X_OK alone also accepts directories and executable special files. stat's
 # regular-file predicate follows symlinks without opening their content.
 def executableFile(+path: String, accessible: Bool) -> IO(Bool):
@@ -33,8 +28,8 @@ def executableFile(+path: String, accessible: Bool) -> IO(Bool):
 
 def executable(+path: String) -> IO(Bool):
   do IO<Bool>:
-    accessible : Result<&1,&1,U32 & String,Unit> <- File.access(path,1)
-    executableFile(path,exists(accessible))
+    accessible : Bool <- FS.accessible(path,1)
+    executableFile(path,accessible)
 
 # PATH is ordered, and an empty component denotes the current directory.
 # Candidates remain paths, never strings interpolated into a shell command.
@@ -68,12 +63,12 @@ def getShellConfigWith(customShellPath: Maybe<&2,String>, +defaultBash: String, 
     case Some{SCon{+first,+rest}}:
       +path = {SCon{first,rest} : String}
       do IO<Result<&2,&2,Error,ShellConfig>>:
-        found : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-        return Bool.pick(Result<&2,&2,Error,ShellConfig>,exists(found),Done{bash(path)},Fail{CustomShellNotFound{path}})
+        found : Bool <- FS.accessible(path,0)
+        return Bool.pick(Result<&2,&2,Error,ShellConfig>,found,Done{bash(path)},Fail{CustomShellNotFound{path}})
     case _:
       do IO<Result<&2,&2,Error,ShellConfig>>:
-        found : Result<&1,&1,U32 & String,Unit> <- File.access(defaultBash,0)
-        defaultShell(defaultBash,paths,exists(found))
+        found : Bool <- FS.accessible(defaultBash,0)
+        defaultShell(defaultBash,paths,found)
 
 def pathEntries(result: Result<&1,&1,U32 & String,String>) -> List<&2,String>:
   match result:

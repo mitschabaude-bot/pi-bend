@@ -9,10 +9,6 @@ import ./utf8.bend as Utf8
 import ./abort.bend as Abort
 import ./stable-sort.bend as Sort
 
-def accessExists(value: Result<&1,&1,U32 & String,Unit>) -> Bool:
-  match value:
-    case Done{_}: True{}
-    case Fail{_}: False{}
 
 
 # Shared native filesystem traversal and ignore policy.
@@ -103,8 +99,8 @@ def optionalFile(+path: String) -> IO(ResultOf(Maybe<&2,String>)):
     optionalKind(path,kind)
 def localExists(path: String) -> IO(ResultOf(Bool)):
   do IO<ResultOf(Bool)>:
-    value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-    return Done{accessExists(value)}
+    found : Bool <- FS.accessible(path,0)
+    return Done{found}
 
 def compiledIgnore(path: String,value: Result<&2,&2,Ignore.Error,Ignore.Matcher>) -> ResultOf(Ignore.Matcher):
   match value:

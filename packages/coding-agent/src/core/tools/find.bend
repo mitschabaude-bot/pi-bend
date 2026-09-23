@@ -84,8 +84,8 @@ def settled(-A: Data,signal: Maybe<&2,Abort.AbortSignal<Unit>>,value: ResultOf(A
 
 def localExists(path: String) -> IO(ResultOf(Bool)):
   do IO<ResultOf(Bool)>:
-    value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-    return Done{Paths.exists(value)}
+    found : Bool <- FS.accessible(path,0)
+    return Done{found}
 
 def relativizeFindResultPath(+resultPath: String,searchPath: String) -> String:
   +value = Bool.pick(Unit -> String,Path.isAbsolute(resultPath),_ => Search.relative(searchPath,resultPath),_ => resultPath)(Unit{})

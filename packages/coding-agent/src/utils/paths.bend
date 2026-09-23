@@ -134,19 +134,14 @@ def normalization(environment: Environment) -> Unicode.Tables:
   match environment:
     case Environment{_,_,URL.Context{IDNA.Context{_,tables,_},_}}: tables
 
-def exists(result: Result<&1,&1,U32 & String,Unit>) -> Bool:
-  match result:
-    case Done{Unit{}}: True{}
-    case Fail{_}: False{}
-
 def findPath(candidates: List<&2,String>, +original: String, found: Maybe<&2,String>) -> IO(String):
   match candidates found:
     case _ Some{path}: IO.pure(String,path)
     case Nil{} None{}: IO.pure(String,original)
     case +path <> rest None{}:
       do IO<String>:
-        value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-        findPath(rest,original,Bool.pick(Maybe<&2,String>,exists(value),Some{path},None{}))
+        found : Bool <- FS.accessible(path,0)
+        findPath(rest,original,Bool.pick(Maybe<&2,String>,found,Some{path},None{}))
 
 def resolvedReadPath(environment: Environment, +original: String) -> IO(String):
   +nfd = Unicode.nfd(normalization(environment),original)

@@ -155,6 +155,18 @@ def readPrefix(path: String, maximum: U32) -> IO(Result<&2, &2, Error, List<&2, 
     return readResult(outcome)
 
 # stat follows symbolic links and reads no content. Keep the full OS word size.
+def granted(result: Result<&1,&1,U32 & String,Unit>) -> Bool:
+  match result:
+    case Done{Unit{}}: True{}
+    case Fail{_}: False{}
+
+# Node's fs.access as a predicate: mode 0 checks existence, 1 execution,
+# 2 writing, 4 reading, and their sums combine the checks.
+def accessible(path: String, mode: U32) -> IO(Bool):
+  do IO<Bool>:
+    result : Result<&1,&1,U32 & String,Unit> <- File.access(path, mode)
+    return granted(result)
+
 def fileSize(result: Result<&1,&1,U32 & String,U32 & U32>) -> Result<&2,&2,Error,Word.U64>:
   match result:
     case Fail{(code,message)}: Fail{System{code,message}}

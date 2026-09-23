@@ -65,8 +65,8 @@ def errorMessage(error: Error) -> String:
 
 def localExists(environment: Unit, path: String) -> IO(ResultOf(Bool)):
   do IO<ResultOf(Bool)>:
-    value : Result<&1,&1,U32 & String,Unit> <- File.access(path,0)
-    return Done{Paths.exists(value)}
+    found : Bool <- FS.accessible(path,0)
+    return Done{found}
 
 def statResult(result: Result<&2,&2,FS.Error,FS.FileKind>) -> ResultOf(LsStat):
   match result:
