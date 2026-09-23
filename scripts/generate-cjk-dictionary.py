@@ -68,7 +68,7 @@ def generate(check=False):
     notices=[]
     for line in data.decode('utf-8-sig').splitlines():
         if line.split('#')[0].strip():break
-        notices.append(line)
+        notices.append(line.rstrip())
     license += ('\nComplete cjdict.txt source notices:\n'+'\n'.join(notices)+'\n').encode()
     target=ROOT/'packages/runtime/data/icu78-cjk.LICENSE'
     if check:assert target.read_bytes()==license
