@@ -3,7 +3,9 @@ import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/auth/types.bend as Auth
 import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
+import ../../../ai/src/auth/oauth/anthropic.bend as AnthropicOAuth
 import ../../../ai/src/api/openai-responses.bend as Responses
+import ./anthropic-provider.bend as Anthropic
 import ../../../ai/src/api/openai-client.bend as Client
 import ../../../ai/src/utils/tool-declaration.bend as Declaration
 import ../../../ai/src/utils/validation.bend as Validation
@@ -153,8 +155,28 @@ def project(config: LoopConfig()) -> Responses.SimpleStreamOptions(Unit, Unit, E
 def failure(cause: Responses.Error<Unit, Error()>) -> Error():
   Tools.Failure{Responses.describe(~Unit, ~Error(), ~render, "openai", cause)}
 
-def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> IO(Stream()):
-  Providers.responses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, providerConfig(authorizer))
+def modelApi(model: Models.Model()) -> Ai.ModelApi:
+  match model:
+    case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _, _, _}: api
+
+type ProviderStreams is Data:
+  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit)}
+
+def selectedOptions(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Responses.SimpleStreamOptions(Unit, Unit, Error())>:
+  Maybe.map(&2, LoopConfig(), Responses.SimpleStreamOptions(Unit, Unit, Error()), project, options)
+
+def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
+  match api:
+    case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
+    case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, options})
+
+def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
+  match config input:
+    case ProviderStreams{responses, fetch} T.StreamInput{+model, context, options}:
+      selectedProvider(responses, fetch, model, context, options, modelApi(model))
+
+def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit)) -> IO(Stream()):
+  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer), fetch})
 
 # Request auth
 # ------------
@@ -280,16 +302,13 @@ def chosenModel(models: Models.ModelRuntime, settings: Settings.SettingsManager,
   match resolved:
     case Models.ResolveCliModelResult{model, _, _, error}: chosenFrom(models, settings, error, model)
 
-def modelApi(model: Models.Model()) -> Ai.ModelApi:
-  match model:
-    case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _, _, _}: api
-
-# The OpenAI Responses and Codex Responses APIs stream through the modular provider.
+# The registered APIs stream through their native providers.
 def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
   match api:
     case Ai.OpenAIResponsesApi{}: Done{model}
     case Ai.OpenAICodexResponsesApi{}: Done{model}
-    case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet (openai-responses and openai-codex-responses)."}
+    case Ai.AnthropicMessagesApi{}: Done{model}
+    case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet."}
 
 def supportedModel(+model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
   supportedApi(modelApi(model), model)
@@ -498,7 +517,7 @@ def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, 
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, fetch, Queue.borrow(queue))
-        +stream : Stream() <- createStream(authorizer)
+        +stream : Stream() <- createStream(authorizer, fetch)
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
@@ -530,7 +549,8 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +credentials : Runtime.RuntimeCredentials <- Runtime.create(storageStore)
         +credentialStore : Auth.CredentialStore <- Runtime.store(credentials)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
-        +models : Models.ModelRuntime <- Models.create(credentialStore, oauth)
+        anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
         +selected : Result<&2, &2, String, Models.Model()> <- selectModel(models, options)
         applyKey(credentials, apiKey, selected)
         prompt : Result<&2, &2, String, Prompt.SystemPromptSections()> <- systemPromptFor(paths, options, packageDir)

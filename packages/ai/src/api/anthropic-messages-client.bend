@@ -57,10 +57,15 @@ def layer(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, na
     case Fail{cause}: Fail{cause}
     case Done{current}: Headers.set(current, name, value)
 
+def deleted(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, name: String) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  match fields:
+    case Fail{cause}: Fail{cause}
+    case Done{current}: Headers.delete(current, name)
+
 def customHeaders(values: List<&2, R.Property<T.Nullable<String>>>, fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
   match values:
     case Nil{}: fields
-    case R.Property{_, T.NullValue{}} <> rest: customHeaders(rest, fields)
+    case R.Property{name, T.NullValue{}} <> rest: customHeaders(rest, deleted(fields, name))
     case R.Property{name, T.PresentValue{value}} <> rest: customHeaders(rest, layer(fields, name, value))
 
 def configuredHeaders(base: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
@@ -86,8 +91,34 @@ def requestHeadersWith(base: Result<&2, &2, Headers.HeaderSyntaxError, Headers.H
     case None{}: configuredHeaders(base, custom)
     case Some{+value}: configuredHeaders(layer(base, authHeader(value), authValue(value)), custom)
 
-def requestHeaders(key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
-  requestHeadersWith(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "content-type", "application/json"), "anthropic-version", "2023-06-01"), key, custom)
+def betaStrings(values: List<&2, T.JsonValue>) -> List<&2, String>:
+  match values:
+    case Nil{}: Nil{}
+    case T.JsonString{value} <> rest: value <> betaStrings(rest)
+    case _ <> rest: betaStrings(rest)
+
+def betaValue(value: Maybe<&2, T.JsonValue>) -> Maybe<&2, String>:
+  match value:
+    case Some{T.JsonArray{values}}: Some{String.join(betaStrings(values), ",")}
+    case _: None{}
+
+def betaHeader(payload: T.JsonValue) -> Maybe<&2, String>:
+  match payload:
+    case T.JsonObject{fields}: betaValue(R.get(T.JsonValue, fields, "betas"))
+    case _: None{}
+
+def wirePayload(payload: T.JsonValue) -> T.JsonValue:
+  match payload:
+    case T.JsonObject{fields}: T.JsonObject{R.remove(T.JsonValue, fields, "betas")}
+    case other: other
+
+def withBeta(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, beta: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  match beta:
+    case None{}: fields
+    case Some{value}: layer(fields, "anthropic-beta", value)
+
+def requestHeaders(key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>, beta: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  requestHeadersWith(withBeta(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "content-type", "application/json"), "anthropic-version", "2023-06-01"), beta), key, custom)
 
 def encoded(-Reason: Data, url: URL.URL, fields: Headers.Headers, body: Maybe<&2, String>) -> Result<&2, &2, Error<Reason>, Request>:
   match body:
@@ -113,7 +144,7 @@ def prepare(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, +model: 
   match model:
     case T.Model{_, _, _, _, +base, _, _, _, _, _, _, _, _, _, _, _}:
       +payload = Messages.buildParams(G, D, model, context, options)
-      Bool.pick(Result<&2, &2, Error<Reason>, Request>, authPresent(custom) || isSome(String, key), withURL(Reason, JsonWire.stringify(payload), requestHeaders(key, custom), URL.parse(urlContext, address(base))), Fail{MissingAuth{}})
+      Bool.pick(Result<&2, &2, Error<Reason>, Request>, authPresent(custom) || isSome(String, key), withURL(Reason, JsonWire.stringify(wirePayload(payload)), requestHeaders(key, custom, betaHeader(payload)), URL.parse(urlContext, address(base))), Fail{MissingAuth{}})
 
 def publish(-G: Data, +callback: Events(G), events: List<&2, T.AssistantMessageEvent<V.Value, G>>) -> IO(Unit):
   match events:

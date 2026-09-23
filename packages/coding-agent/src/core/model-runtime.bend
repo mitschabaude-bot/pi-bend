@@ -6,6 +6,7 @@ import ../../../ai/src/auth/context.bend as Context
 import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../ai/src/providers/openai.models.bend as OpenAI
 import ../../../ai/src/providers/openai-codex.models.bend as Codex
+import ../../../ai/src/providers/anthropic.models.bend as Anthropic
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/string.bend as Strings
 
@@ -29,12 +30,21 @@ def openaiProvider() -> IO(Provider):
 def openaiCodexProvider(oauth: Auth.OAuthAuth) -> Provider:
   Provider{"openai-codex", "OpenAI Codex", "https://chatgpt.com/backend-api", Auth.ProviderAuth{None{}, Some{oauth}}, Codex.OPENAI_CODEX_MODELS()}
 
+def anthropicProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Provider):
+  do IO<Provider>:
+    apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Anthropic API key", ["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])
+    return Provider{"anthropic", "Anthropic", "https://api.anthropic.com", Auth.ProviderAuth{Some{apiKey}, oauth}, Anthropic.ANTHROPIC_MODELS()}
+
 # The credential store is borrowed; the OAuth handler is owned from here on.
-def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(ModelRuntime):
+def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     openai : Provider <- openaiProvider()
+    anthropic : Provider <- anthropicProvider(anthropicOAuth)
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
-    return ModelRuntime{[openai, openaiCodexProvider(codex)], credentials, context}
+    return ModelRuntime{[openai, openaiCodexProvider(codex), anthropic], credentials, context}
+
+def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(ModelRuntime):
+  createWithAnthropic(credentials, codex, None{})
 
 def disposeProviders(providers: List<&2, Provider>) -> IO(Unit):
   match providers:
@@ -155,7 +165,7 @@ type DefaultModel is Data:
   DefaultModel{provider: String, id: String}
 
 def defaultModelPerProvider() -> List<&2, DefaultModel>:
-  [DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"openai-codex", "gpt-5.5"}]
+  [DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"openai-codex", "gpt-5.5"}, DefaultModel{"anthropic", "claude-sonnet-5"}]
 
 # A split text; tuples are affine types, so pairs of strings are data.
 type Split is Data:
