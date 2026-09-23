@@ -39,8 +39,10 @@ def event_oracle(payload, simple=False):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     bodies = []
+    request_headers = []
     response = b""
     status = 200
+    statuses = []
     tool_mode = False
     tool_start = b""
     tool_finish = b""
@@ -48,6 +50,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         self.bodies.append((self.path, self.headers.get("x-goog-api-key"), body))
+        self.request_headers.append(self.headers)
         response = self.response
         if self.tool_mode:
             is_result = any(
@@ -56,7 +59,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 for part in item["parts"]
             )
             response = self.tool_finish if is_result else self.tool_start
-        self.send_response(self.status)
+        self.send_response(self.statuses.pop(0) if self.statuses else self.status)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Content-Length", str(len(response)))
         self.end_headers()
@@ -100,7 +103,7 @@ def main():
 
         for kind, name, command in commands:
             if kind == "signed":
-                for mode in ("signed", "strict", "strict-prefer", "legacy-image", "modern-image"):
+                for mode in ("signed", "strict", "strict-prefer", "legacy-image", "modern-image", "system-update"):
                     result = subprocess.run([*command, mode], capture_output=True, text=True, timeout=30, check=True)
                     assert json.loads(result.stdout) == oracle(mode), (mode, result.stdout)
                 result = subprocess.run([*command, "strict-unsupported"], capture_output=True, text=True, timeout=30, check=True)
@@ -131,6 +134,7 @@ def main():
                 expected = oracle("basic" if commands[index][0] == "client" else "simple-basic")
                 assert body == expected, (body, expected)
             Handler.bodies.clear()
+            Handler.request_headers.clear()
             Handler.response = b'data: {"responseId":"thought-1","candidates":[{"content":{"parts":[{"text":"Why","thought":true,"thoughtSignature":"c2ln"},{"text":"Hello"}]},"finishReason":"STOP"}]}\n\n'
             for kind, name, command in commands:
                 if kind in ("signed", "catalog"):
@@ -154,6 +158,36 @@ def main():
                 invoke(command, base, "error", 1 if kind == "client" else 0)
                 print(f"{kind} {name}: HTTP failure surfaces terminal error")
             Handler.status = 200
+
+            Handler.response = b'data: {"responseId":"retry-ok","candidates":[{"content":{"parts":[{"text":"recovered"}]},"finishReason":"STOP"}]}\n\n'
+            for kind, name, command in commands:
+                if kind == "provider":
+                    Handler.statuses = [429, 200]
+                    start = len(Handler.bodies)
+                    invoke(command, base, event_oracle(Handler.response, simple=True), mode="retry")
+                    assert len(Handler.bodies) - start == 2, Handler.bodies[start:]
+                    assert Handler.bodies[start][2] == Handler.bodies[start + 1][2]
+                    print(f"{kind} {name}: 429 retries once before SSE events")
+
+                    Handler.statuses = [400]
+                    start = len(Handler.bodies)
+                    invoke(command, base, "error", mode="retry")
+                    assert len(Handler.bodies) - start == 1
+                    print(f"{kind} {name}: 400 is not retried")
+
+                    start = len(Handler.bodies)
+                    invoke(command, base, event_oracle(Handler.response, simple=True), mode="hook")
+                    assert len(Handler.bodies) - start == 1
+                    assert Handler.bodies[start][2] == oracle("hook"), (Handler.bodies[start][2], oracle("hook"))
+                    print(f"{kind} {name}: onPayload replacement changes the live request")
+
+                    start = len(Handler.bodies)
+                    invoke(command, base, event_oracle(Handler.response, simple=True), mode="headers")
+                    assert len(Handler.bodies) - start == 1
+                    headers = Handler.request_headers[start]
+                    assert headers.get("User-Agent") == "custom-agent", headers
+                    assert headers.get("X-Google-Test") == "option", headers
+                    print(f"{kind} {name}: caller headers override request defaults")
 
             Handler.tool_start = b'data: {"responseId":"tool-1","candidates":[{"content":{"parts":[{"functionCall":{"id":"call-1","name":"lookup","args":{"value":"42"}}}]},"finishReason":"STOP"}]}\n\n'
             Handler.tool_finish = b'data: {"responseId":"tool-2","candidates":[{"content":{"parts":[{"text":"found"}]},"finishReason":"STOP"}]}\n\n'

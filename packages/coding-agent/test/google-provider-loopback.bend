@@ -30,6 +30,36 @@ def continued(first: Ai.AssistantMessage<V.Value, Unit>) -> Google.Context():
 def options() -> Google.Options():
   Ai.withApiKey(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Google.Error(), Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Google.Error()), Some{"test-google-key"})
 
+def retriedOptions(value: Google.Options()) -> Google.Options():
+  match value:
+    case Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, _, delay, temperature, sampling, maximum, transport, cache, session, websocket, metadata, choice, reasoning, deferred, budgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, Some{F.fromU32(1)}, delay, temperature, sampling, maximum, transport, cache, session, websocket, metadata, choice, reasoning, deferred, budgets}
+
+def retryOptions() -> Google.Options(): retriedOptions(options())
+
+def configuredHeaders(value: Google.Options()) -> Google.Options():
+  match value:
+    case Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, _, timeout, retries, delay, temperature, sampling, maximum, transport, cache, session, websocket, metadata, choice, reasoning, deferred, budgets}:
+      +headers = {R.Record{R.Property{"User-Agent", Ai.PresentValue{"custom-agent"}} <> R.Property{"X-Google-Test", Ai.PresentValue{"option"}} <> Nil{}} : Ai.ProviderHeaders()}
+      Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, Some{headers}, timeout, retries, delay, temperature, sampling, maximum, transport, cache, session, websocket, metadata, choice, reasoning, deferred, budgets}
+
+def headerOptions() -> Google.Options(): configuredHeaders(options())
+
+def updatedConfig(value: Ai.JsonValue) -> Ai.JsonValue:
+  match value:
+    case Ai.JsonObject{fields}: Ai.JsonObject{R.set(Ai.JsonValue, fields, "temperature", Ai.JsonNumber{F.divide(F.fromU32(1), F.fromU32(4))})}
+    case _: value
+
+def updatedPayload(+fields: R.Record<Ai.JsonValue>) -> Ai.JsonValue:
+  +config = Maybe.default(&2, Ai.JsonValue, R.get(Ai.JsonValue, fields, "config"), Ai.JsonObject{R.new(Ai.JsonValue)})
+  Ai.JsonObject{R.set(Ai.JsonValue, fields, "config", updatedConfig(config))}
+
+def payloadHook(unused: Unit, input: Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>):
+  match input:
+    case Ai.PayloadInput{Ai.JsonObject{fields}, _}:
+      IO.pure(Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, Done{Some{updatedPayload(fields)}})
+    case _: IO.pure(Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, Done{None{}})
+
 @unsafe def drain(next: Events.Iteration<Ai.AssistantMessageEvent<V.Value, Unit>>, +cursor: Events.Iterator<Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
   match next:
     case Events.Yield{event}:
@@ -56,8 +86,38 @@ def request(fetch: Fetch.Fetch(Unit), base: String, context: Google.Context()) -
     result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context, Some{options()})
     opened(result)
 
+def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context(), Some{retryOptions()})
+    opened(result)
+
+def hookRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    +hook : Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Google.Error()) <- C.create(~Unit, ~Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, ~Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, ~payloadHook, Unit{})
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context(), Some{Ai.withOnPayload(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Google.Error(), options(), Some{hook})})
+    message : Ai.AssistantMessage<V.Value, Unit> <- opened(result)
+    C.dispose(Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, hook)
+    return message
+
+def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context(), Some{headerOptions()})
+    opened(result)
+
 def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit):
   match mode:
+    case "headers":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- headerRequest(fetch, base)
+        return Unit{}
+    case "hook":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- hookRequest(fetch, base)
+        return Unit{}
+    case "retry":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- retryRequest(fetch, base)
+        return Unit{}
     case "tool":
       do IO<Unit>:
         first : Ai.AssistantMessage<V.Value, Unit> <- request(fetch, base, toolContext())

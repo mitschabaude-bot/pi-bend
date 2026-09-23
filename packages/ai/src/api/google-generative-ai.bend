@@ -23,6 +23,46 @@ def maybe(fields: Fields(), name: String, value: Maybe<&2, J()>) -> Fields():
     case None{}: fields
     case Some{item}: add(fields, name, item)
 
+# The public onPayload callback sees Google SDK GenerateContentParameters,
+# before the SDK separates config fields into HTTP wire members.
+def configFields(+fields: Fields(), generation: J()) -> Fields():
+  match generation:
+    case T.JsonObject{base}:
+      +a = maybe(base, "systemInstruction", R.get(J(), fields, "systemInstruction"))
+      +b = maybe(a, "tools", R.get(J(), fields, "tools"))
+      maybe(b, "toolConfig", R.get(J(), fields, "toolConfig"))
+    case _: R.new(J())
+
+def sdkParams(id: String, wire: J()) -> J():
+  match wire:
+    case T.JsonObject{+fields}:
+      +contents = Maybe.default(&2, J(), R.get(J(), fields, "contents"), T.JsonArray{Nil{}})
+      +generation = Maybe.default(&2, J(), R.get(J(), fields, "generationConfig"), obj(R.new(J())))
+      obj(R.Record{field("model", str(id)) <> field("contents", contents) <> field("config", obj(configFields(fields, generation))) <> Nil{}})
+    case _: wire
+
+def wireConfig(fields: Fields()) -> Fields():
+  R.remove(J(), R.remove(J(), R.remove(J(), fields, "systemInstruction"), "tools"), "toolConfig")
+
+def sdkWireFields(fields: Fields(), config: J()) -> Fields():
+  match config:
+    case T.JsonObject{+settings}:
+      +base = {R.Record{field("contents", Maybe.default(&2, J(), R.get(J(), fields, "contents"), T.JsonArray{Nil{}})) <> field("generationConfig", obj(wireConfig(settings))) <> Nil{}} : Fields()}
+      +a = maybe(base, "systemInstruction", R.get(J(), settings, "systemInstruction"))
+      +b = maybe(a, "tools", R.get(J(), settings, "tools"))
+      maybe(b, "toolConfig", R.get(J(), settings, "toolConfig"))
+    case _: R.Record{field("contents", Maybe.default(&2, J(), R.get(J(), fields, "contents"), T.JsonArray{Nil{}})) <> field("generationConfig", obj(R.new(J()))) <> Nil{}}
+
+def wireFromConfig(fields: Fields(), config: Maybe<&2, J()>) -> Maybe<&2, J()>:
+  match config:
+    case None{}: None{}
+    case Some{settings}: Some{obj(sdkWireFields(fields, settings))}
+
+def wireParams(params: J()) -> Maybe<&2, J()>:
+  match params:
+    case T.JsonObject{+fields}: wireFromConfig(fields, R.get(J(), fields, "config"))
+    case _: None{}
+
 type Thinking is Data:
   NoThinking{}
   DisabledThinking{level: Maybe<&2, String>}

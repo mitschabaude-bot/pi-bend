@@ -125,6 +125,14 @@ def requestHeaders(value: Options()) -> Maybe<&2, Ai.ProviderHeaders()>:
   match value:
     case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: headers
 
+def retryCount(value: Options()) -> Maybe<&2, F64>:
+  match value:
+    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, retries, _, _, _, _, _, _, _, _, _, _, _, _, _}: retries
+
+def retryDelay(value: Options()) -> Maybe<&2, F64>:
+  match value:
+    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, delay, _, _, _, _, _, _, _, _, _, _, _, _}: delay
+
 def parentSignal(value: Options()) -> Maybe<&2, Abort.AbortSignal<Unit>>:
   match value:
     case Ai.SimpleStreamOptions{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: signal
@@ -145,17 +153,42 @@ def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
     case None{}: Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
     case Some{selected}: selected
 
-def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), model: Ai.Model<Ai.JsonValue>, timestamp: F64, value: Result<&2, &2, Client.Error<Unit>, Client.Request>) -> IO(Unit):
+def preparedRequest(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, value: Result<&2, &2, Client.Error<Unit>, Client.Request>) -> IO(Unit):
   match value:
     case Fail{Client.InvalidToolConfig{message}}: pushFailure(stream, model, timestamp, message)
+    case Fail{Client.UnsupportedPayloadModel{}}: pushFailure(stream, model, timestamp, "Google onPayload cannot change the model in the native adapter")
     case Fail{_}: pushFailure(stream, model, timestamp, "Could not prepare Google request")
     case Done{request}:
       do IO<Unit>:
-        result : Result<&2, &2, Client.Error<Unit>, Ai.AssistantMessage<V.Value, Unit>> <- Client.run(~Unit, ~Unit, fetch, signal, callback, model, request, timestamp)
+        result : Result<&2, &2, Client.Error<Unit>, Ai.AssistantMessage<V.Value, Unit>> <- Client.runWithRetry(~Unit, ~Unit, fetch, signal, callback, model, request, timestamp, retries, delay)
         return Unit{}
 
+def hookedPayload(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), +model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, request: Client.Request, result: Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>) -> IO(Unit):
+  match result:
+    case Fail{cause}: pushFailure(stream, model, timestamp, Tools.errorMessage(cause))
+    case Done{None{}}: preparedRequest(stream, callback, fetch, signal, model, timestamp, retries, delay, Done{request})
+    case Done{Some{payload}}: preparedRequest(stream, callback, fetch, signal, model, timestamp, retries, delay, Client.replacePayload(Unit, request, payload, modelId(model)))
+
+def preparedPayload(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), +model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, request: Client.Request, payload: Ai.JsonValue, hook: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Error())>) -> IO(Unit):
+  match hook:
+    case None{}: preparedRequest(stream, callback, fetch, signal, model, timestamp, retries, delay, Done{request})
+    case Some{selected}:
+      do IO<Unit>:
+        result : Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>> <- C.call(Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>, selected, Ai.PayloadInput{payload, model})
+        hookedPayload(stream, callback, fetch, signal, model, timestamp, retries, delay, request, result)
+
+def preparedWithHook(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), +model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, value: Client.Prepared, hook: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Error())>) -> IO(Unit):
+  match value:
+    case Client.Prepared{request, payload}: preparedPayload(stream, callback, fetch, signal, model, timestamp, retries, delay, request, payload, hook)
+
+def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, hook: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Error())>, value: Result<&2, &2, Client.Error<Unit>, Client.Prepared>) -> IO(Unit):
+  match value:
+    case Fail{Client.InvalidToolConfig{message}}: pushFailure(stream, model, timestamp, message)
+    case Fail{_}: pushFailure(stream, model, timestamp, "Could not prepare Google request")
+    case Done{detailed}: preparedWithHook(stream, callback, fetch, signal, model, timestamp, retries, delay, detailed, hook)
+
 def exchange(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Options(), timestamp: F64) -> IO(Unit):
-  prepared(stream, callback, fetch, signal, model, timestamp, Client.prepare(Unit, Unit, Details(), urlContext, model, context, requestOptions(model, context, options), requestKey(options), requestHeaders(options)))
+  prepared(stream, callback, fetch, signal, model, timestamp, retryCount(options), retryDelay(options), Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), options), Client.prepareDetailed(Unit, Unit, Details(), urlContext, model, context, requestOptions(model, context, options), requestKey(options), requestHeaders(options)))
 
 def borrowed(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Options(), timestamp: F64, pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(Unit):
   match pair:

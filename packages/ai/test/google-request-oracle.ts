@@ -19,7 +19,8 @@ const strictTool = { name: "lookup", description: "Look up a value", parameters:
 const strictMessages = [{ role: "system", content: "Use lookup.", toolsAdded: [strictTool], timestamp: 1 }, user];
 const imageAssistant = { role: "assistant", content: [{ type: "toolCall", id: "call-img", name: "lookup", arguments: {} }, { type: "toolCall", id: "call-text", name: "lookup", arguments: {} }], api: "google-generative-ai", provider: "google", model: model.id, usage, stopReason: "toolUse", timestamp: 2 };
 const imageMessages = [{ role: "user", content: "ping", timestamp: 1 }, imageAssistant, { role: "toolResult", toolCallId: "call-img", toolName: "lookup", content: [{ type: "image", data: "aGVsbG8=", mimeType: "image/png" }], isError: false, timestamp: 3 }, { role: "toolResult", toolCallId: "call-text", toolName: "lookup", content: [{ type: "text", text: "found" }], isError: false, timestamp: 4 }];
-const messages = mode === "basic" || mode === "simple-basic" ? [{ role: "user", content: "ping", timestamp: 1 }] : mode === "signed" ? [{ role: "user", content: "ping", timestamp: 1 }, signedAssistant] : mode === "tool-first" ? [system, user] : mode.startsWith("strict") ? strictMessages : mode.endsWith("image") ? imageMessages : [system, user, assistant, result];
+const updatedMessages = [{ role: "system", content: "Base rule.", toolsAdded: [{ name: "old", description: "Old tool", parameters: strictSchema }], timestamp: 1 }, { role: "user", content: "ping", timestamp: 2 }, { role: "system", content: "Second rule.", toolsAdded: [{ name: "lookup", description: "Look up a value", parameters: strictSchema }], toolsRemoved: [{ name: "old" }], timestamp: 3 }, { role: "user", content: "after update", timestamp: 4 }];
+const messages = mode === "basic" || mode === "simple-basic" || mode === "hook" ? [{ role: "user", content: "ping", timestamp: 1 }] : mode === "signed" ? [{ role: "user", content: "ping", timestamp: 1 }, signedAssistant] : mode === "tool-first" ? [system, user] : mode.startsWith("strict") ? strictMessages : mode.endsWith("image") ? imageMessages : mode === "system-update" ? updatedMessages : [system, user, assistant, result];
 const context = normalizeContext({ messages });
 let payload: unknown;
 const original = globalThis.fetch;
@@ -28,7 +29,7 @@ globalThis.fetch = async (_input, init) => {
   return new Response('data: {"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}\n\n', { headers: { "content-type": "text/event-stream" } });
 };
 try {
-  const response = await (mode === "basic" || mode === "signed" || mode.startsWith("strict") || mode.endsWith("image") ? stream(model, context, { apiKey: "test-google-key" }) : streamSimple(model, context, { apiKey: "test-google-key" })).result();
+  const response = await (mode === "hook" ? streamSimple(model, context, { apiKey: "test-google-key", onPayload: (params) => ({ ...params, config: { ...params.config, temperature: 0.25 } }) }) : mode === "basic" || mode === "signed" || mode === "system-update" || mode.startsWith("strict") || mode.endsWith("image") ? stream(model, context, { apiKey: "test-google-key" }) : streamSimple(model, context, { apiKey: "test-google-key" })).result();
   console.log(JSON.stringify(mode === "strict-unsupported" ? { error: response.errorMessage } : payload));
 } finally {
   globalThis.fetch = original;

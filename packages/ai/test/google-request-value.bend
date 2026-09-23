@@ -40,6 +40,9 @@ def imageAssistant(id: String) -> T.AssistantMessage<V.Value, Unit>:
 def imageContext(id: String) -> T.TranscriptContext<V.Value, V.Value, Unit, Unit>:
   T.TranscriptContext{T.User{T.UserMessage{T.UserText{"ping"}, F.fromU32(1)}} <> T.Assistant{imageAssistant(id)} <> T.ToolResult{T.ToolResultMessage{"call-img", "lookup", T.TextImageImage{T.ImageContent{"aGVsbG8=", "image/png"}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> T.ToolResult{T.ToolResultMessage{"call-text", "lookup", T.TextImageText{T.TextContent{"found", None{}}} <> Nil{}, None{}, None{}, False{}, F.fromU32(4)}} <> Nil{}}
 
+def updatedContext() -> T.TranscriptContext<V.Value, V.Value, Unit, Unit>:
+  T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"Base rule."}, None{}, Some{T.Tool{"old", "Old tool", strictSchema(), None{}} <> Nil{}}, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"ping"}, F.fromU32(2)}} <> T.System{T.SystemMessage{T.SystemText{"Second rule."}, None{}, Some{T.Tool{"lookup", "Look up a value", strictSchema(), None{}} <> Nil{}}, Some{T.ToolReference{"old"} <> Nil{}}, F.fromU32(3)}} <> T.User{T.UserMessage{T.UserText{"after update"}, F.fromU32(4)}} <> Nil{}}
+
 def display(result: Result<&2, &2, Constrained.Error, T.JsonValue>) -> IO(Unit):
   match result:
     case Done{value}: IO.print(Maybe.default(&2, String, Wire.stringify(value), ""))
@@ -54,6 +57,7 @@ def run(mode: String) -> IO(Unit):
     case "strict-unsupported": display(Google.buildParams(Unit, Unit, model(), strictContext(strictSchema(), T.Require{}), options()))
     case "legacy-image": display(Google.buildParams(Unit, Unit, model(), imageContext("gemini-2.5-flash"), options()))
     case "modern-image": display(Google.buildParams(Unit, Unit, gemini3(), imageContext("gemini-3-flash-preview"), options()))
+    case "system-update": display(Google.buildParams(Unit, Unit, model(), updatedContext(), options()))
     case _: display(Google.buildParams(Unit, Unit, model(), context(), options()))
 
 def arguments(args: List<String>) -> IO(Unit):

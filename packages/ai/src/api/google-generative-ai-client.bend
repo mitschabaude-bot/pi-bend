@@ -3,6 +3,7 @@ import ../types.bend as T
 import ../utils/json.bend as JsonWire
 import ../utils/json-parse.bend as JsonRepair
 import ../utils/headers.bend as HeaderUtils
+import ../utils/provider-retry.bend as Retry
 import ./google-generative-ai.bend as Google
 import ./constrained-sampling.bend as Constrained
 import ./google-generative-ai-stream.bend as Stream
@@ -15,8 +16,10 @@ import ../../../runtime/src/http-message.bend as Headers
 import ../../../runtime/src/http-response.bend as Response
 import ../../../runtime/src/json.bend as JsonParse
 import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/random.bend as Seed
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/sse.bend as SSE
+import ../../../runtime/src/timer.bend as Timer
 import ../../../runtime/src/url.bend as URL
 
 def Transport(-Reason: Data) -> Type: Fetch.Transport(Reason)
@@ -27,6 +30,7 @@ type Error<-Reason: Data> is Data:
   InvalidURL{cause: URL.Error}
   InvalidHeader{cause: Headers.HeaderSyntaxError}
   InvalidPayload{}
+  UnsupportedPayloadModel{}
   InvalidToolConfig{message: String}
   MissingAuth{}
   FetchFailure{cause: Fetch.Error<Reason>}
@@ -34,9 +38,53 @@ type Error<-Reason: Data> is Data:
   ReadFailure{cause: ReadError(Reason)}
   MalformedEvent{data: String}
   ProviderFailure{message: String}
+  RetryAborted{}
+  RetryDelayRejected{cause: Retry.DelayError}
+  RetrySleepRejected{cause: Timer.Error}
+  RetryEntropyFailure{cause: Seed.SeedError}
+  RetryOptionsFailure{cause: Retry.OptionsError}
+
+type AttemptError<-Reason: Data> is Data:
+  AttemptTransport{cause: Fetch.Error<Reason>}
+  AttemptHTTP{status: U32}
 
 type Request is Data:
   Request{url: URL.URL, headers: Headers.Headers, body: String}
+
+type Prepared is Data:
+  Prepared{request: Request, payload: T.JsonValue}
+
+def replacedRequest(-Reason: Data, request: Request, body: String) -> Result<&2, &2, Error<Reason>, Request>:
+  match request:
+    case Request{url, headers, _}: Done{Request{url, headers, body}}
+
+def replaced(-Reason: Data, request: Request, value: Maybe<&2, String>) -> Result<&2, &2, Error<Reason>, Request>:
+  match value:
+    case None{}: Fail{InvalidPayload{}}
+    case Some{body}: replacedRequest(Reason, request, body)
+
+def wireBody(value: Maybe<&2, T.JsonValue>) -> Maybe<&2, String>:
+  match value:
+    case None{}: None{}
+    case Some{payload}: JsonWire.stringify(payload)
+
+def modelField(value: Maybe<&2, T.JsonValue>) -> Maybe<&2, String>:
+  match value:
+    case Some{T.JsonString{id}}: Some{id}
+    case _: None{}
+
+def payloadModel(params: T.JsonValue) -> Maybe<&2, String>:
+  match params:
+    case T.JsonObject{fields}: modelField(R.get(T.JsonValue, fields, "model"))
+    case _: None{}
+
+def validPayloadModel(-Reason: Data, request: Request, payload: T.JsonValue, original: String, selected: Maybe<&2, String>) -> Result<&2, &2, Error<Reason>, Request>:
+  match selected:
+    case Some{id}: Bool.pick(Result<&2, &2, Error<Reason>, Request>, String.eq(id, original), replaced(Reason, request, wireBody(Google.wireParams(payload))), Fail{UnsupportedPayloadModel{}})
+    case None{}: Fail{InvalidPayload{}}
+
+def replacePayload(-Reason: Data, request: Request, +payload: T.JsonValue, original: String) -> Result<&2, &2, Error<Reason>, Request>:
+  validPayloadModel(Reason, request, payload, original, payloadModel(payload))
 
 def addressEnd(base: String, reversed: String, id: String) -> String:
   match reversed:
@@ -77,21 +125,34 @@ def validURL(-Reason: Data, body: Maybe<&2, String>, headers: Result<&2, &2, Hea
     case Fail{cause}: Fail{InvalidURL{cause}}
     case Done{parsedUrl}: validHeaders(Reason, parsedUrl, body, headers)
 
-def encodedPayload(-Reason: Data, urlContext: URL.Context, base: String, id: String, key: String, headers: Maybe<&2, R.Record<String>>, custom: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, Constrained.Error, T.JsonValue>) -> Result<&2, &2, Error<Reason>, Request>:
+def included(-Reason: Data, id: String, payload: T.JsonValue, result: Result<&2, &2, Error<Reason>, Request>) -> Result<&2, &2, Error<Reason>, Prepared>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{request}: Done{Prepared{request, Google.sdkParams(id, payload)}}
+
+def encodedPayload(-Reason: Data, urlContext: URL.Context, base: String, +id: String, key: String, headers: Maybe<&2, R.Record<String>>, custom: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, Constrained.Error, T.JsonValue>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match result:
     case Fail{cause}: Fail{InvalidToolConfig{Constrained.errorMessage(cause)}}
-    case Done{payload}: validURL(Reason, JsonWire.stringify(payload), withHeaders(baseHeaders(key), headers, custom), URL.parse(urlContext, address(base, id)))
+    case Done{+payload}: included(Reason, id, payload, validURL(Reason, JsonWire.stringify(payload), withHeaders(baseHeaders(key), headers, custom), URL.parse(urlContext, address(base, id))))
 
-def keyValue(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: String, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Request>:
+def keyValue(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: String, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match model:
     case T.Model{id, _, _, _, base, _, _, _, _, _, _, _, _, _, headers, _}:
       encodedPayload(Reason, urlContext, base, id, key, headers, custom, Google.buildParams(G, D, model, context, options))
 
-def prepare(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Request>:
+def prepareDetailed(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match key:
     case None{}: Fail{MissingAuth{}}
     case Some{SNil{}}: Fail{MissingAuth{}}
     case Some{value}: keyValue(Reason, G, D, urlContext, model, context, options, value, custom)
+
+def requestOf(-Reason: Data, value: Result<&2, &2, Error<Reason>, Prepared>) -> Result<&2, &2, Error<Reason>, Request>:
+  match value:
+    case Fail{cause}: Fail{cause}
+    case Done{Prepared{request, _}}: Done{request}
+
+def prepare(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Request>:
+  requestOf(Reason, prepareDetailed(Reason, G, D, urlContext, model, context, options, key, custom))
 
 def publish(-G: Data, +callback: Events(G), events: List<&2, T.AssistantMessageEvent<V.Value, G>>) -> IO(Unit):
   match events:
@@ -229,9 +290,105 @@ def receivedFetch(~Reason: Data, ~G: Data, callback: Events(G), +model: T.Model<
         return Fail{FetchFailure{cause}}
     case Done{value}: received(~Reason, ~G, callback, model, Stream.create(G, model, timestamp), value)
 
+type AttemptEnvironment<-Reason: Data> is Data:
+  AttemptEnvironment{request: Request, fetch: Fetch.Fetch(Reason), signal: Fetch.Signal(Reason)}
+
+def attemptedStatus(~Reason: Data, metadata: Response.Metadata, body: Response.Body<Transport(Reason)>, +status: U32, success: Bool) -> IO(Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>):
+  match success:
+    case True{}: IO.pure(Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>, Done{Response.Response{metadata, body}})
+    case False{}:
+      do IO<Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>>:
+        owner : Response.Owner<Transport(Reason), ReadError(Reason)> <- Exchange.responseSource(~(Deadline.Cause<Reason>), ~ReadError(Reason), ~identity(Reason), body)
+        released : Result<&2, &2, ReadError(Reason), Unit> <- Response.dispose(Transport(Reason), ReadError(Reason), owner)
+        return Fail{Retry.Provider{Retry.ProviderError{AttemptHTTP{status}, "Google HTTP request failed", Some{F.fromU32(status)}, None{}, None{}, None{}}}}
+
+def attemptedResponse(~Reason: Data, response: Response.Response<Transport(Reason)>) -> IO(Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>):
+  match response:
+    case Response.Response{+metadata, body}:
+      +status = Response.metadataStatus(metadata)
+      attemptedStatus(~Reason, metadata, body, status, Response.successful(status))
+
+def attemptedFetch(~Reason: Data, value: Fetch.Result_(Reason)) -> IO(Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>):
+  match value:
+    case Fail{cause}: IO.pure(Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>, Fail{Retry.Other{AttemptTransport{cause}}})
+    case Done{response}: attemptedResponse(~Reason, response)
+
+def attemptBody(~Reason: Data, environment: AttemptEnvironment<Reason>, unused: Unit) -> IO(Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>):
+  match environment:
+    case AttemptEnvironment{Request{url, headers, body}, fetch, signal}:
+      do IO<Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>>:
+        response : Fetch.Result_(Reason) <- C.call(Fetch.Input<Reason>, Fetch.Result_(Reason), fetch, Fetch.Input{url, "POST", headers, Headers.Text{body}, signal})
+        attemptedFetch(~Reason, response)
+
+def attemptError(-Reason: Data, value: AttemptError<Reason>) -> Error<Reason>:
+  match value:
+    case AttemptTransport{cause}: FetchFailure{cause}
+    case AttemptHTTP{status}: HTTPFailure{status}
+
+def retryError(-Reason: Data, value: Retry.RetryFailure<AttemptError<Reason>>) -> Error<Reason>:
+  match value:
+    case Retry.RequestFailed{failure}: attemptError(Reason, Retry.original(AttemptError<Reason>, failure))
+    case Retry.RequestAborted{}: RetryAborted{}
+    case Retry.DelayRejected{cause, _}: RetryDelayRejected{cause}
+    case Retry.SleepRejected{cause}: RetrySleepRejected{cause}
+
+def retried(-Reason: Data, value: Result<&2, &1, Retry.RetryFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>) -> Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>:
+  match value:
+    case Fail{cause}: Fail{retryError(Reason, cause)}
+    case Done{response}: Done{response}
+
+def attemptWithEffects(~Reason: Data, environment: AttemptEnvironment<Reason>, options: Retry.ProviderRetryOptions<Deadline.Cause<Reason>>, date: C.Callback<String, F64>, pair: Retry.Runtime<Deadline.Cause<Reason>> & Retry.Effects<Deadline.Cause<Reason>>) -> IO(Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>):
+  match pair:
+    case (owner, effects):
+      do IO<Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>>:
+        +request : C.Callback<Unit, Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>> <- C.create(~AttemptEnvironment<Reason>, ~Unit, ~Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>, ~(attemptBody(~Reason)), environment)
+        result : Result<&2, &1, Retry.RetryFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>> <- Retry.retryProviderRequestOwned(Deadline.Cause<Reason>, AttemptError<Reason>, Response.Response<Transport(Reason)>, request, effects, options)
+        C.dispose(Unit, Result<&2, &1, Retry.RequestFailure<AttemptError<Reason>>, Response.Response<Transport(Reason)>>, request)
+        Retry.dispose(Deadline.Cause<Reason>, owner)
+        C.dispose(String, F64, date)
+        return retried(Reason, result)
+
+def seeded(~Reason: Data, environment: AttemptEnvironment<Reason>, options: Retry.ProviderRetryOptions<Deadline.Cause<Reason>>, date: C.Callback<String, F64>, result: Result<&2, &1, Seed.SeedError, Retry.Runtime<Deadline.Cause<Reason>>>) -> IO(Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>):
+  match result:
+    case Fail{cause}:
+      do IO<Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>>:
+        C.dispose(String, F64, date)
+        return Fail{RetryEntropyFailure{cause}}
+    case Done{runtime}: attemptWithEffects(~Reason, environment, options, date, Retry.borrow(Deadline.Cause<Reason>, runtime))
+
+def acquire(~Reason: Data, fetch: Fetch.Fetch(Reason), signal: Fetch.Signal(Reason), request: Request, options: Retry.ProviderRetryOptions<Deadline.Cause<Reason>>) -> IO(Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>):
+  do IO<Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>>:
+    +date : C.Callback<String, F64> <- Retry.dateParser()
+    runtime : Result<&2, &1, Seed.SeedError, Retry.Runtime<Deadline.Cause<Reason>>> <- Retry.new(~(Deadline.Cause<Reason>), date)
+    seeded(~Reason, AttemptEnvironment{request, fetch, signal}, options, date, runtime)
+
+def receivedRetry(~Reason: Data, ~G: Data, callback: Events(G), +model: T.Model<T.JsonValue>, timestamp: F64, result: Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>) -> IO(Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>):
+  match result:
+    case Fail{cause}:
+      do IO<Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>>:
+        publish(G, callback, emitted(G, Stream.failed(G, Stream.create(G, model, timestamp), "Google request failed")))
+        return Fail{cause}
+    case Done{response}: received(~Reason, ~G, callback, model, Stream.create(G, model, timestamp), response)
+
+def resolvedRetry(~Reason: Data, ~G: Data, fetch: Fetch.Fetch(Reason), signal: Fetch.Signal(Reason), callback: Events(G), model: T.Model<T.JsonValue>, request: Request, timestamp: F64, result: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Deadline.Cause<Reason>>>) -> IO(Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>):
+  match result:
+    case Fail{cause}:
+      do IO<Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>>:
+        publish(G, callback, emitted(G, Stream.failed(G, Stream.create(G, model, timestamp), "Invalid Google retry options")))
+        return Fail{RetryOptionsFailure{cause}}
+    case Done{options}:
+      do IO<Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>>:
+        response : Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>> <- acquire(~Reason, fetch, signal, request, options)
+        receivedRetry(~Reason, ~G, callback, model, timestamp, response)
+
 def run(~Reason: Data, ~G: Data, fetch: Fetch.Fetch(Reason), signal: Fetch.Signal(Reason), callback: Events(G), model: T.Model<T.JsonValue>, request: Request, timestamp: F64) -> IO(Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>):
   match request:
     case Request{url, headers, body}:
       do IO<Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>>:
         response : Fetch.Result_(Reason) <- C.call(Fetch.Input<Reason>, Fetch.Result_(Reason), fetch, Fetch.Input{url, "POST", headers, Headers.Text{body}, signal})
         receivedFetch(~Reason, ~G, callback, model, timestamp, response)
+
+def runWithRetry(~Reason: Data, ~G: Data, fetch: Fetch.Fetch(Reason), +signal: Fetch.Signal(Reason), callback: Events(G), model: T.Model<T.JsonValue>, request: Request, timestamp: F64, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>) -> IO(Result<&2, &2, Error<Reason>, T.AssistantMessage<V.Value, G>>):
+  match maxRetries:
+    case None{}: run(~Reason, ~G, fetch, signal, callback, model, request, timestamp)
+    case Some{count}: resolvedRetry(~Reason, ~G, fetch, signal, callback, model, request, timestamp, Retry.resolve(Deadline.Cause<Reason>, Some{count}, maxRetryDelayMs, Some{signal}))
