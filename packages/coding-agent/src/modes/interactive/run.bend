@@ -8,6 +8,7 @@ import ../../../../runtime/src/filesystem.bend as Filesystem
 import ../../../../runtime/src/f64.bend as F
 import ../../../../runtime/src/posix-path.bend as Path
 import ../../../../runtime/src/record.bend as Record
+import ../../../../runtime/src/text.bend as Text
 import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/schema-value.bend as Schema
 import ../../../../runtime/src/word-segmenter.bend as Words
@@ -24,8 +25,12 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../core/session-manager.bend as Tree
+import ../../core/tools/index.bend as Tools
+import ../../core/settings-manager.bend as Settings
 import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
+import ./components/session-selector.bend as Selector
 import ./theme/color.bend as Color
 import ./theme/markdown-theme.bend as MarkdownTheme
 import ./theme/theme.bend as Theme
@@ -219,27 +224,136 @@ type ThemeStartup is Data:
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
 type Interaction is Data:
-  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>}
+  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>}
 type ThemeContext is Data:
-  ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,setting: Maybe<&2,String>,builtinDir: String,customDir: String,interaction: Interaction}
+  ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Session.AgentSession,setting: Maybe<&2,String>,builtinDir: String,customDir: String,interaction: Interaction}
 type KeyInput is Data:
-  KeyInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,lastClear: Ref.Ref<Maybe<&2,F64>>}
+  KeyInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,session: Session.AgentSession,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ControlSink is Data:
   ControlSink{editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+type SelectionSink is Data:
+  SelectionSink{session: Session.AgentSession,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footerRef: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>}
+def selectionText(result: Controller.SelectionResult) -> Maybe<&2,String>:
+  match result:
+    case Controller.Navigated{Session.Navigation{text,_}}: text
+    case Controller.Forked{Session.Fork{text,_,_}}: Some{text}
+    case Controller.SelectionFailed{_}: None{}
+def setSelectedDraft(target: Maybe<&2,Live.Handle>,value: String) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}: Live.setText(handle,value)
+def updateSelectionEditor(editor: Ref.Ref<Maybe<&2,Live.Handle>>,text: Maybe<&2,String>) -> IO(Unit):
+  match text:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}:
+      do IO<Unit>:
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        setSelectedDraft(target,value)
+def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
+  match sink:
+    case SelectionSink{+session,+transcript,editor,footerRef,failure,redraw,cwd,home}:
+      do IO<Unit>:
+        +messages : List<&2,Session.Message()> <- Session.messages(session)
+        Transcript.clear(transcript)
+        Transcript.seed(Unit,Runtime.Details(),Runtime.Custom(),transcript,messages)
+        agentState : Session.AgentState() <- Session.state(session)
+        Ref.write(Footer.State,footerRef,initialFooter(agentState,messages,cwd,home))
+        updateSelectionEditor(editor,selectionText(result))
+        Interactive.requestRender(redraw)
+def failedSelection(sink: SelectionSink,message: String) -> IO(Unit):
+  match sink:
+    case SelectionSink{_,_,_,_,failure,redraw,_,_}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.PromptFailure{message}})
+        Interactive.requestRender(redraw)
+def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
+  match result:
+    case Controller.Navigated{navigation}: refreshSelection(sink,Controller.Navigated{navigation})
+    case Controller.Forked{fork}: refreshSelection(sink,Controller.Forked{fork})
+    case Controller.SelectionFailed{message}: failedSelection(sink,message)
+type SelectInput is Data: SelectInput{queue: Controller.Handle,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+def selectionJob(mode: Selector.Mode,id: String) -> Controller.Selection:
+  match mode:
+    case Selector.TreeMode{}: Controller.Navigate{id}
+    case Selector.ForkMode{}: Controller.Fork{id}
+def chosenSelection(input: SelectInput,choice: Selector.Choice) -> IO(Unit):
+  match input choice:
+    case SelectInput{queue,failure,redraw} Selector.Choice{mode,id}:
+      do IO<Unit>:
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,selectionJob(mode,id))
+        Interactive.submittedResult(failure,result)
+def selectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Selector.Host>>:
+  match interaction: case Interaction{_,_,_,selector}: selector
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
-  match context: case ThemeContext{theme,_,_,_,_,_}: theme
+  match context: case ThemeContext{theme,_,_,_,_,_,_}: theme
 def contextInteraction(context: ThemeContext) -> Interaction:
-  match context: case ThemeContext{_,_,_,_,_,interaction}: interaction
+  match context: case ThemeContext{_,_,_,_,_,_,interaction}: interaction
 def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
-  match interaction: case Interaction{_,lastClear}: lastClear
+  match interaction: case Interaction{_,lastClear,_,_}: lastClear
 def recordEditor(interaction: Interaction,handle: Live.Handle) -> IO(Unit):
-  match interaction: case Interaction{editor,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+  match interaction: case Interaction{editor,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+def contextSession(context: ThemeContext) -> Session.AgentSession:
+  match context: case ThemeContext{_,_,session,_,_,_,_}: session
+def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,interaction: Interaction,session: Session.AgentSession,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> KeyInput:
+  match interaction:
+    case Interaction{_,lastClear,lastEscape,selector}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw}
+def selectorNotice(failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,message: String) -> IO(Unit):
+  Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
+def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{host}: Selector.open(host,state)
+def openCandidate(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,+state: Selector.State,empty: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),Selector.hasRows(state),_ => do IO<Unit>:
+    target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
+    openTree(target,state),_ => selectorNotice(failure,empty))(Unit{})
+def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>) -> IO(Unit):
+  match result:
+    case Fail{_}: selectorNotice(failure,"Cannot load session tree")
+    case Done{nodes}: openCandidate(selector,failure,Selector.create(nodes,leaf,Selector.TreeMode{},24n),"No entries in session")
+def selectorFromState(mode: Selector.Mode,+state: Session.State(),selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>) -> IO(Unit):
+  match mode:
+    case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state))
+    case Selector.ForkMode{}: openCandidate(selector,failure,Selector.createFork(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state),24n),"No user messages found")
+def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,failure,_,_,selector,session,_}:
+      do IO<Unit>:
+        current : Session.Session() <- Session.sessionOf(session)
+        selectorFromState(mode,Session.stateOf(current),selector,failure)
+def actionDouble(input: KeyInput,action: Settings.DoubleEscapeAction) -> IO(Unit):
+  match action:
+    case Settings.Tree{}: openedTree(input,Selector.TreeMode{})
+    case Settings.Fork{}: openedTree(input,Selector.ForkMode{})
+    case Settings.NoDoubleEscape{}: IO.pure(Unit,Unit{})
+def triggerDouble(+input: KeyInput) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,_,_,lastEscape,_,session,_}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,F64>,lastEscape,None{})
+        actionDouble(input,Session.doubleEscapeAction(session))
+def doubleEscape(input: KeyInput,previous: Maybe<&2,F64>,now: F64) -> IO(Unit):
+  match previous:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{earlier}:
+      Bool.pick(Unit -> IO(Unit),F64.is_lt(F.subtract(now,earlier),U32.to_f64(500)),_ => triggerDouble(input),_ => IO.pure(Unit,Unit{}))(Unit{})
+def idleEscape(input: KeyInput,lastEscape: Ref.Ref<Maybe<&2,F64>>) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    previous : Maybe<&2,F64> <- Ref.swap(Maybe<&2,F64>,lastEscape,Some{now})
+    doubleEscape(input,previous,now)
 def keyControl(input: KeyInput,control: Controller.Control) -> IO(Unit):
   match input:
-    case KeyInput{queue,_,failure,_}:
+    case KeyInput{queue,_,failure,_,_,_,_,_}:
       do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitControl(queue,control)
         Interactive.submittedResult(failure,result)
+def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,_,_,lastEscape,_,session,_}:
+      do IO<Unit>:
+        active : Bool <- Session.isStreaming(session)
+        Bool.pick(Unit -> IO(Unit),active,_ => keyControl(input,Controller.Interrupt{text}),_ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => idleEscape(input,lastEscape),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{})
 def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) -> IO(Unit):
   match previous:
     case Some{earlier}: Bool.pick(Unit -> IO(Unit),F64.is_lt(F.subtract(now,earlier),U32.to_f64(500)),_ => do IO<Unit>:
@@ -248,26 +362,26 @@ def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) 
     case None{}: IO.pure(Unit,Unit{})
 def cleared(input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,stop,_,lastClear}:
+    case KeyInput{_,stop,_,lastClear,_,_,_,_}:
       do IO<Unit>:
         +now : F64 <- Date.now()
         previous : Maybe<&2,F64> <- Ref.swap(Maybe<&2,F64>,lastClear,Some{now})
         doubleClear(previous,now,stop)
 def queuedFollowUp(input: KeyInput,+text: String) -> IO(Unit):
   match input:
-    case KeyInput{queue,_,failure,_}:
+    case KeyInput{queue,_,failure,_,_,_,_,_}:
       Bool.pick(Unit -> IO(Unit),String.is_empty(text),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submit(queue,Controller.Submission{text,Nil{},Some{Session.FollowUp{}}})
         Interactive.submittedResult(failure,result))(Unit{})
 def exited(input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,stop,_,_}:
+    case KeyInput{_,stop,_,_,_,_,_,_}:
       do IO<Unit>:
         settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
         return Unit{}
 def keyAction(input: KeyInput,action: Editor.EditorAction) -> IO(Unit):
   match action:
-    case Editor.Interrupt{text}: keyControl(input,Controller.Interrupt{text})
+    case Editor.Interrupt{text}: interrupted(input,text)
     case Editor.Dequeue{text}: keyControl(input,Controller.Dequeue{text})
     case Editor.Clear{}: cleared(input)
     case Editor.Exit{}: exited(input)
@@ -287,14 +401,16 @@ def controlResult(sink: ControlSink,result: Controller.ControlResult) -> IO(Unit
         Interactive.requestRender(redraw)
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
-    case Interaction{editor,lastClear}:
+    case Interaction{editor,lastClear,lastEscape,selector}:
       do IO<Unit>:
         oldEditor : Maybe<&2,Live.Handle> <- Ref.dispose(Maybe<&2,Live.Handle>,editor)
         oldClear : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastClear)
+        oldEscape : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastEscape)
+        oldSelector : Maybe<&2,Selector.Host> <- Ref.dispose(Maybe<&2,Selector.Host>,selector)
         return Unit{}
 def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
   match context:
-    case ThemeContext{theme,transcript,setting,builtinDir,customDir,_}:
+    case ThemeContext{theme,transcript,_,setting,builtinDir,customDir,_}:
       ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,setting,builtinDir,customDir}
 def selectionTheme(value: ThemeController.Selection) -> Theme.Theme:
   match value: case ThemeController.Selection{_,_,_,theme,_,_,_}: theme
@@ -420,19 +536,30 @@ def finish(outcome: View.View & Result<&2,&2,Error,Unit>,controller: Controller.
         disposeInteraction(interaction)
         return result
 
-def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,view: View.View,+foot: FooterOwner,controller: Controller.Controller,queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def runHosted(borrowed: Selector.Owner & Selector.Host & Component.Component,live: Live.Owner,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,chosen: Callback.Callback<Selector.Choice,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+  match borrowed:
+    case (retained,handle,modal):
+      do IO<Result<&2,&2,Error,Unit>>:
+        Ref.write(Maybe<&2,Selector.Host>,selectorRefOf(contextInteraction(context)),Some{handle})
+        outcome : View.View & Result<&2,&2,Error,Unit> <- process(view,modal,foot,stopped,redraw,queue,initial,context)
+        Ref.write(Maybe<&2,Selector.Host>,selectorRefOf(contextInteraction(context)),None{})
+        Selector.disposeHost(retained)
+        Callback.dispose(Selector.Choice,Unit,chosen)
+        finish(outcome,controller,transcript,live,foot,submitted,keys,paint,styles,rows,redraw,stopped,contextInteraction(context))
+def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (live,component,handle):
       do IO<Result<&2,&2,Error,Unit>>:
         recordEditor(contextInteraction(context),handle)
-        outcome : View.View & Result<&2,&2,Error,Unit> <- process(view,component,foot,stopped,redraw,queue,initial,context)
-        finish(outcome,controller,transcript,live,foot,submitted,keys,paint,styles,rows,redraw,stopped,contextInteraction(context))
-def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+        +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~SelectInput,~Selector.Choice,~Unit,~chosenSelection,SelectInput{queue,footerFailure(foot),redraw})
+        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),chosen)
+        runHosted(Selector.borrowHost(host),live,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
+def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (paint,uiTheme):
       do IO<Result<&2,&2,Error,Unit>>:
         editor : Editor.Editor <- Editor.new(uiTheme,None{})
-        +keys : Callback.Callback<Editor.EditorAction,Unit> <- Callback.create(~KeyInput,~Editor.EditorAction,~Unit,~keyAction,KeyInput{queue,stopped,footerFailure(foot),lastClearOf(contextInteraction(context))})
+        +keys : Callback.Callback<Editor.EditorAction,Unit> <- Callback.create(~KeyInput,~Editor.EditorAction,~Unit,~keyAction,keyInput(queue,stopped,footerFailure(foot),contextInteraction(context),contextSession(context),redraw))
         +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submitted},None{},Some{keys}}))
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
@@ -444,7 +571,7 @@ def startController(pair: Controller.Controller & Controller.Handle,view: View.V
         submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,footerFailure(foot)})
         paintPair : Callback.Callback<String,String> & Editor.EditorTheme <- editorTheme(contextTheme(context))
         startPaint(paintPair,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw,context)
-def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String) -> IO(Result<&2,&2,Error,Unit>):
+def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -459,9 +586,12 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~Interactive.CommandSink,~Commands.Action,~Unit,~Interactive.commandResult,Interactive.CommandSink{footerFailure(foot),redraw})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
+        +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
+        +selectorRef : Ref.Ref<Maybe<&2,Selector.Host>> <- Ref.new(Maybe<&2,Selector.Host>,None{})
+        selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{session,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,footerFailure(foot),redraw})
-        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver})
-        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,setting,builtinDir,customDir,Interaction{editorHandle,lastClear}})
+        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver})
+        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,session,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef}})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live}:

@@ -15,10 +15,13 @@ type Control is Data:
   Dequeue{draft: String}
 type ControlResult is Data:
   ControlResult{text: String,count: Nat}
+type Selection is Data: Navigate{id: String} Fork{id: String}
+type SelectionResult is Data: Navigated{navigation: Session.Navigation} Forked{fork: Session.Fork} SelectionFailed{message: String}
 type Job is Data:
   PromptJob{request: Submission}
   CommandJob{command: Commands.Command}
   ControlJob{control: Control}
+  SelectJob{selection: Selection}
 type SubmitError is Data: Closed{} Full{}
 type PromptFailure is Data: PromptFailure{message: String}
 type QueueState is Data:
@@ -27,7 +30,7 @@ type Decision is Data: Rejected{error: SubmitError} Accepted{wake: Bool}
 type Handle is Data: Handle{state: Ref.Ref<QueueState>,wake: Chan(Unit)}
 type PromptRun is Data: PromptRun{running: Ref.Ref<Bool>,task: Ref.Ref<Maybe<&2,Chan(Unit)>>}
 type Controller is Type:
-  Controller{handle: Handle,worker: Chan(Unit),run: PromptRun,prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,listener: Maybe<&2,Session.Listener()>,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>}
+  Controller{handle: Handle,worker: Chan(Unit),run: PromptRun,prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,listener: Maybe<&2,Session.Listener()>,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>}
 
 def submitState(state: QueueState, +request: Job) -> QueueState & Decision:
   match state:
@@ -57,6 +60,8 @@ def submitCommand(handle: Handle,command: Commands.Command) -> IO(Result<&2,&2,S
   enqueue(handle,CommandJob{command})
 def submitControl(handle: Handle,control: Control) -> IO(Result<&2,&2,SubmitError,Unit>):
   enqueue(handle,ControlJob{control})
+def submitSelection(handle: Handle,selection: Selection) -> IO(Result<&2,&2,SubmitError,Unit>):
+  enqueue(handle,SelectJob{selection})
 def submitText(handle: Handle,text: String) -> IO(Result<&2,&2,SubmitError,Unit>):
   submit(handle,Submission{text,Nil{},None{}})
 
@@ -182,29 +187,55 @@ def performControl(session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Ca
     case None{} _: IO.pure(Result<&2,&2,String,Unit>,Fail{"Control requires an active session"})
     case Some{value} Interrupt{draft}: interruptControl(value,observer,run,draft)
     case Some{value} Dequeue{draft}: clearControl(value,observer,draft,False{})
-def perform(handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,run: PromptRun,job: Job) -> IO(Result<&2,&2,String,Unit>):
+def notifySelection(observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,result: SelectionResult) -> IO(Unit):
+  match observer:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: Callback.call(SelectionResult,Unit,callback,result)
+def navigationResult(result: Result<&2,&2,String,Session.Navigation>) -> SelectionResult:
+  match result:
+    case Done{value}: Navigated{value}
+    case Fail{message}: SelectionFailed{message}
+def forkResult(result: Result<&2,&2,String,Session.Fork>) -> SelectionResult:
+  match result:
+    case Done{value}: Forked{value}
+    case Fail{message}: SelectionFailed{message}
+def performSelection(session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,selection: Selection) -> IO(Result<&2,&2,String,Unit>):
+  match session selection:
+    case None{} _: IO.pure(Result<&2,&2,String,Unit>,Fail{"Selection requires an active session"})
+    case Some{value} Navigate{id}:
+      do IO<Result<&2,&2,String,Unit>>:
+        outcome : Result<&2,&2,String,Session.Navigation> <- Session.navigateTree(value,id)
+        notifySelection(observer,navigationResult(outcome))
+        return Done{Unit{}}
+    case Some{value} Fork{id}:
+      do IO<Result<&2,&2,String,Unit>>:
+        outcome : Result<&2,&2,String,Session.Fork> <- Session.forkAt(value,id)
+        notifySelection(observer,forkResult(outcome))
+        return Done{Unit{}}
+def perform(handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,run: PromptRun,job: Job) -> IO(Result<&2,&2,String,Unit>):
   match job:
     case PromptJob{request}: dispatchPrompt(handle,prompt,session,observer,run,request)
     case CommandJob{command}: performCommand(session,commandResult,command)
     case ControlJob{control}: performControl(session,controlResult,run,control)
-@unsafe def worker(+handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+session: Maybe<&2,Session.AgentSession>,+observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+run: PromptRun,phase: Phase) -> IO(Unit):
+    case SelectJob{selection}: performSelection(session,selectionResult,selection)
+@unsafe def worker(+handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+session: Maybe<&2,Session.AgentSession>,+observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,+run: PromptRun,phase: Phase) -> IO(Unit):
   match phase:
     case Check{}:
       do IO<Unit>:
         next : Maybe<&2,Job> <- take(handle)
-        worker(handle,prompt,session,observer,commandResult,controlResult,run,Taken{next})
+        worker(handle,prompt,session,observer,commandResult,controlResult,selectionResult,run,Taken{next})
     case Taken{Some{request}}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Unit> <- perform(handle,prompt,session,observer,commandResult,controlResult,run,request)
+        result : Result<&2,&2,String,Unit> <- perform(handle,prompt,session,observer,commandResult,controlResult,selectionResult,run,request)
         complete(handle,result)
-        worker(handle,prompt,session,observer,commandResult,controlResult,run,Check{})
+        worker(handle,prompt,session,observer,commandResult,controlResult,selectionResult,run,Check{})
     case Taken{None{}}:
       do IO<Unit>:
         signal : Maybe<&1,Unit> <- waitWake(handle)
-        worker(handle,prompt,session,observer,commandResult,controlResult,run,Woken{signal})
+        worker(handle,prompt,session,observer,commandResult,controlResult,selectionResult,run,Woken{signal})
     case Woken{None{}}: IO.pure(Unit,Unit{})
-    case Woken{Some{_}}: worker(handle,prompt,session,observer,commandResult,controlResult,run,Check{})
-def started(+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+session: Maybe<&2,Session.AgentSession>,listener: Maybe<&2,Session.Listener()>,limit: Nat,+failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>) -> IO(Controller & Handle):
+    case Woken{Some{_}}: worker(handle,prompt,session,observer,commandResult,controlResult,selectionResult,run,Check{})
+def started(+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+session: Maybe<&2,Session.AgentSession>,listener: Maybe<&2,Session.Listener()>,limit: Nat,+failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>) -> IO(Controller & Handle):
   do IO<Controller & Handle>:
     +state : Ref.Ref<QueueState> <- Ref.new(QueueState,QueueState{Fifo.new(Job),0n,Nat.max(1n,limit),False{},False{},None{}})
     +wake : Chan(Unit) <- Chan.new(Unit,1)
@@ -212,20 +243,20 @@ def started(+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+se
     +running : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +promptTask : Ref.Ref<Maybe<&2,Chan(Unit)>> <- Ref.new(Maybe<&2,Chan(Unit)>,None{})
     +run : PromptRun <- IO.pure(PromptRun,PromptRun{running,promptTask})
-    +task : Chan(Unit) <- IO.fork(Unit,worker(handle,prompt,session,failure,commandResult,controlResult,run,Check{}))
-    return (Controller{handle,task,run,prompt,session,listener,failure,commandResult,controlResult},handle)
+    +task : Chan(Unit) <- IO.fork(Unit,worker(handle,prompt,session,failure,commandResult,controlResult,selectionResult,run,Check{}))
+    return (Controller{handle,task,run,prompt,session,listener,failure,commandResult,controlResult,selectionResult},handle)
 def callPrompt(session: Session.AgentSession,request: Submission) -> IO(Result<&2,&2,String,Unit>):
   match request:
     case Submission{text,images,behavior}: Session.prompt(session,text,images,behavior)
-def start(+session: Session.AgentSession,+listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>) -> IO(Controller & Handle):
+def start(+session: Session.AgentSession,+listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>) -> IO(Controller & Handle):
   do IO<Controller & Handle>:
     Session.subscribe(session,listener)
     +prompt : Callback.Callback<Submission,Result<&2,&2,String,Unit>> <- Callback.create(~Session.AgentSession,~Submission,~Result<&2,&2,String,Unit>,~callPrompt,session)
-    started(prompt,Some{session},Some{listener},limit,failure,commandResult,controlResult)
+    started(prompt,Some{session},Some{listener},limit,failure,commandResult,controlResult,selectionResult)
 # Injectable prompt path for a lifecycle test and for embedders with a custom
 # session driver. The controller owns this callback just as start owns its own.
 def startWithPrompt(prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,limit: Nat,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>) -> IO(Controller & Handle):
-  started(prompt,None{},None{},limit,failure,None{},None{})
+  started(prompt,None{},None{},limit,failure,None{},None{},None{})
 def errorIn(current: QueueState) -> Maybe<&2,PromptFailure>:
   match current: case QueueState{_,_,_,_,_,error}: error
 def lastError(handle: Handle) -> IO(Maybe<&2,PromptFailure>):
@@ -257,6 +288,10 @@ def disposeControlResult(observer: Maybe<&2,Callback.Callback<ControlResult,Unit
   match observer:
     case None{}: IO.pure(Unit,Unit{})
     case Some{callback}: Callback.dispose(ControlResult,Unit,callback)
+def disposeSelectionResult(observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>) -> IO(Unit):
+  match observer:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: Callback.dispose(SelectionResult,Unit,callback)
 def abortSession(session: Maybe<&2,Session.AgentSession>,active: Bool) -> IO(Unit):
   match session:
     case Some{value}: Bool.pick(Unit -> IO(Unit),active,_ => Session.abort(value),_ => IO.pure(Unit,Unit{}))(Unit{})
@@ -270,7 +305,7 @@ def disposeRun(run: PromptRun) -> IO(Unit):
         return Unit{}
 def stop(owner: Controller) -> IO(Unit):
   match owner:
-    case Controller{Handle{+state,wake},+task,+run,prompt,+session,listener,failure,commandResult,controlResult}:
+    case Controller{Handle{+state,wake},+task,+run,prompt,+session,listener,failure,commandResult,controlResult,selectionResult}:
       do IO<Unit>:
         active : Bool <- Ref.modify(QueueState,Bool,state,closedState)
         Chan.close(Unit,wake)
@@ -285,5 +320,6 @@ def stop(owner: Controller) -> IO(Unit):
         disposeFailure(failure)
         disposeCommandResult(commandResult)
         disposeControlResult(controlResult)
+        disposeSelectionResult(selectionResult)
         retired : QueueState <- Ref.dispose(QueueState,state)
         return Unit{}

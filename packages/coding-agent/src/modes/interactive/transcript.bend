@@ -240,6 +240,16 @@ def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
       do IO<Unit>:
         Tool.dispose(entry)
         disposeEntries(rest)
+def cleared(state: State) -> IO(State & Unit):
+  match state:
+    case State{entries,_,_,nextId,+view,theme,styles}:
+      do IO<State & Unit>:
+        View.clear(view)
+        disposeEntries(entries)
+        return (State{Nil{},Nil{},None{},nextId,view,theme,styles},Unit{})
+def clear(handle: Handle) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,cleared)
 def disposeState(state: State) -> IO(Unit):
   match state:
     case State{entries,_,_,_,_,_,_}: disposeEntries(entries)

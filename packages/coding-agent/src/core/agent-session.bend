@@ -1795,3 +1795,9 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
         result : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
         emit(shared, SessionInfoChanged{Some{name}})
         return result
+
+# Interactive key handling reads the effective setting without exposing the
+# mutable settings manager to the runner.
+def doubleEscapeAction(session: AgentSession) -> Settings.DoubleEscapeAction:
+  match session:
+    case AgentSession{_,_,_,settings,_,_}: Settings.getDoubleEscapeAction(settings)
