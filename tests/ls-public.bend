@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/collation.bend as Collation
 import ../packages/coding-agent/src/core/tools/ls.bend as L
 import ../packages/coding-agent/src/core/tools/truncate.bend as T
 import ../packages/coding-agent/src/utils/paths.bend as Paths
@@ -138,16 +139,29 @@ def reuse(mode: String, operations: L.LsOperations) -> IO(Unit):
         check(Result.is_done(&2,&2,L.Error,Bool,value),"injected callbacks remain caller-owned")
     case _ _: IO.pure(Unit,Unit{})
 
+# The default order: lowercase names in root collation, loaded from <entries>.
+def collated(+cwd: String, path: String, maximum: String, signal: A.AbortSignal<Unit>, loaded: Result<&2,&2,Collation.LoadError,Collation.Collator>) -> IO(Unit):
+  match loaded:
+    case Fail{_}: IO.die(Unit,1,"collation data missing")
+    case Done{collator}:
+      do IO<Unit>:
+        owner : L.ToolOwner <- L.createLsTool(collator,environment(cwd),cwd,L.LsToolOptions{None{}})
+        call(L.borrowTool(owner),arguments(path,maximum),signal)
+
 def execute(mode: String, +cwd: String, path: String, maximum: String, entries: String, +controller: A.AbortController<Unit>) -> IO(Unit):
   match mode:
     case "native":
       do IO<Unit>:
         owner : L.ToolOwner <- L.createLsToolWithComparator(~lessEqual,environment(cwd),cwd,L.LsToolOptions{None{}})
         call(L.borrowTool(owner),arguments(path,maximum),A.signal(Unit,controller))
+    case "collated":
+      do IO<Unit>:
+        loaded : Result<&2,&2,Collation.LoadError,Collation.Collator> <- Collation.load(entries)
+        collated(cwd,path,maximum,A.signal(Unit,controller),loaded)
     case "context":
       do IO<Unit>:
         +ops : L.LsOperations <- L.defaultLsOperations()
-        result : L.ToolResult() <- L.invokeWithContext(~lessEqual,L.Invocation{environment(cwd),"/",ops},L.LsContext{Some{cwd}},Agent.ToolExecutionInput{"ls-context",arguments(path,maximum),Some{A.signal(Unit,controller)},None{}})
+        result : L.ToolResult() <- L.invokeWithContext(~lessEqual,L.Invocation{environment(cwd),"/",ops,L.ByComparator{}},L.LsContext{Some{cwd}},Agent.ToolExecutionInput{"ls-context",arguments(path,maximum),Some{A.signal(Unit,controller)},None{}})
         report(result)
         L.dispose(ops)
     case mode:

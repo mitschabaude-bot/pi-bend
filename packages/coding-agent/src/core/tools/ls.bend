@@ -11,6 +11,8 @@ import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/stable-sort.bend as Sort
 import ./truncate.bend as Truncate
+import ../../../../runtime/src/collation.bend as Collation
+import ../../../../runtime/src/case-map.bend as CaseMap
 
 # Native tool execution. Extension ToolDefinition and terminal rendering remain
 # shared public-boundary integration work, as with the other native tools.
@@ -40,8 +42,14 @@ type LsToolOptions is Data:
   LsToolOptions{operations: Maybe<&2,LsOperations>}
 type LsContext is Data:
   LsContext{cwd: Maybe<&2,String>}
+# upstream sorts entries with a.toLowerCase().localeCompare(b.toLowerCase());
+# ByComparator keeps an injected comparator for callers without collation data.
+type Order is Data:
+  ByComparator{}
+  Collated{collator: Collation.Collator}
+
 type Invocation is Data:
-  Invocation{paths: Paths.Environment, cwd: String, operations: LsOperations}
+  Invocation{paths: Paths.Environment, cwd: String, operations: LsOperations, order: Order}
 type ToolOwner is Type:
   ToolOwner{tool: Agent.AgentTool<Maybe<&2,LsToolDetails>,Error>, ownedOperations: Maybe<&2,LsOperations>}
 
@@ -77,10 +85,12 @@ def entryNames(entries: List<&2,FS.DirectoryEntry>, reversed: List<&2,String>) -
     case Nil{}: List.reverse(&2,String,reversed)
     case FS.DirectoryEntry{name,_} <> rest: entryNames(rest,name <> reversed)
 
+def codePointLe(left: String, right: String) -> Bool: String.is_le(left,right)
+
 def directoryResult(result: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>) -> ResultOf(List<&2,String>):
   match result:
     case Fail{cause}: Fail{Filesystem{cause}}
-    case Done{entries}: Done{entryNames(entries,Nil{})}
+    case Done{entries}: Done{Sort.sort(~String,~codePointLe,entryNames(entries,Nil{}))}
 
 def localReaddir(environment: Unit, path: String) -> IO(ResultOf(List<&2,String>)):
   do IO<ResultOf(List<&2,String>)>:
@@ -170,7 +180,31 @@ def readResult(value: ResultOf(List<&2,String>)) -> ResultOf(List<&2,String>):
     case Fail{Aborted{}}: Fail{Aborted{}}
     case Fail{error}: Fail{CannotReadDirectory{errorMessage(error)}}
 
-def checkedDirectory(~le: String -> String -> Bool, info: LsStat, stat: Callback.Callback<String,ResultOf(LsStat)>, readdir: Callback.Callback<String,ResultOf(List<&2,String>)>, +path: String, +limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
+type Named is Data:
+  Named{key: Collation.Key, name: String}
+
+def namedLe(left: Named, right: Named) -> Bool:
+  match left right:
+    case Named{a,_} Named{b,_}: Bool.not(Cmp.is_gt(Collation.compareKeys(a,b)))
+
+def keyedNames(+collator: Collation.Collator, names: List<&2,String>, reversed: List<&2,Named>) -> List<&2,Named>:
+  match names:
+    case Nil{}: List.reverse(&2,Named,reversed)
+    case +name <> rest: keyedNames(collator,rest,Named{Collation.key(collator,CaseMap.lower(name)),name} <> reversed)
+
+def namesOf(values: List<&2,Named>) -> List<&2,String>:
+  match values:
+    case Nil{}: Nil{}
+    case Named{_,name} <> rest: name <> namesOf(rest)
+
+# A stable sort, so names whose lowercase forms collate equally keep the
+# directory order (Node lists entries in byte order).
+def sortedNames(~le: String -> String -> Bool, order: Order, names: List<&2,String>) -> List<&2,String>:
+  match order:
+    case ByComparator{}: Sort.sort(~String,~le,names)
+    case Collated{collator}: namesOf(Sort.sort(~Named,~namedLe,keyedNames(collator,names,Nil{})))
+
+def checkedDirectory(~le: String -> String -> Bool, order: Order, info: LsStat, stat: Callback.Callback<String,ResultOf(LsStat)>, readdir: Callback.Callback<String,ResultOf(List<&2,String>)>, +path: String, +limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match info:
     case LsStat{False{}}: IO.pure(ToolResult(),Fail{NotDirectory{path}})
     case LsStat{True{}}:
@@ -178,15 +212,15 @@ def checkedDirectory(~le: String -> String -> Bool, info: LsStat, stat: Callback
         do IO<ToolResult()>:
           entries : ResultOf(List<&2,String>) <- Callback.call(String,ResultOf(List<&2,String>),readdir,path)
           then(List<&2,String>,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,settled(List<&2,String>,signal,readResult(entries)),names =>
-            then(Listing,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,collect(Sort.sort(~String,~le,names),Selection{limit,Nil{}},stat,path,signal),listing => IO.pure(ToolResult(),render(limit,listing)))))
+            then(Listing,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,collect(sortedNames(~le,order,names),Selection{limit,Nil{}},stat,path,signal),listing => IO.pure(ToolResult(),render(limit,listing)))))
 
-def listDirectory(~le: String -> String -> Bool, operations: LsOperations, +path: String, +limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
+def listDirectory(~le: String -> String -> Bool, order: Order, operations: LsOperations, +path: String, +limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match operations:
     case LsOperations{exists,+stat,readdir}:
       then(Bool,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,Callback.call(String,ResultOf(Bool),exists,path),found =>
         then(Unit,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,check(signal),_ =>
           Bool.pick(Unit -> IO(ToolResult()),found,
-            _ => then(LsStat,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,Callback.call(String,ResultOf(LsStat),stat,path),info => checkedDirectory(~le,info,stat,readdir,path,limit,signal)),
+            _ => then(LsStat,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,Callback.call(String,ResultOf(LsStat),stat,path),info => checkedDirectory(~le,order,info,stat,readdir,path,limit,signal)),
             _ => IO.pure(ToolResult(),Fail{PathNotFound{path}}))(Unit{})))
 
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
@@ -216,19 +250,19 @@ def nonempty(value: Maybe<&2,String>, +fallback: String) -> String:
     case None{}: fallback
     case Some{+value}: Bool.pick(String,String.is_empty(value),fallback,value)
 
-def resolved(~le: String -> String -> Bool, operations: LsOperations, limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, path: Result<&2,&2,Paths.Error,String>) -> IO(ToolResult()):
+def resolved(~le: String -> String -> Bool, order: Order, operations: LsOperations, limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, path: Result<&2,&2,Paths.Error,String>) -> IO(ToolResult()):
   match path:
     case Fail{cause}: IO.pure(ToolResult(),Fail{InvalidPath{cause}})
     case Done{path}:
       do IO<ToolResult()>:
-        value : ToolResult() <- listDirectory(~le,operations,path,limit,signal)
+        value : ToolResult() <- listDirectory(~le,order,operations,path,limit,signal)
         settled(Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,signal,value)
 
 def invokeInput(~le: String -> String -> Bool, environment: Invocation, context: LsContext, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, input: ResultOf(LsToolInput)) -> IO(ToolResult()):
   match environment context input:
     case _ _ Fail{error}: IO.pure(ToolResult(),Fail{error})
-    case Invocation{paths,cwd,operations} LsContext{override} Done{LsToolInput{path,limit}}:
-      resolved(~le,operations,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT()),signal,Paths.resolveToCwd(paths,nonempty(path,"."),nonempty(override,cwd)))
+    case Invocation{paths,cwd,operations,order} LsContext{override} Done{LsToolInput{path,limit}}:
+      resolved(~le,order,operations,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT()),signal,Paths.resolveToCwd(paths,nonempty(path,"."),nonempty(override,cwd)))
 
 def invokeWithContext(~le: String -> String -> Bool, environment: Invocation, context: LsContext, request: Agent.ToolExecutionInput<Maybe<&2,LsToolDetails>>) -> IO(ToolResult()):
   match request:
@@ -252,13 +286,20 @@ def created(~le: String -> String -> Bool, environment: Invocation, owned: Maybe
     return ToolOwner{Agent.AgentTool{"ls","List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).",lsSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"ls",None{},callback,None{},None{}},owned}
 
 # Comparator injection also makes the ordering contract explicit for consumers.
-def createLsToolWithComparator(~le: String -> String -> Bool, paths: Paths.Environment, cwd: String, options: LsToolOptions) -> IO(ToolOwner):
+def createWithOrder(~le: String -> String -> Bool, order: Order, paths: Paths.Environment, cwd: String, options: LsToolOptions) -> IO(ToolOwner):
   match options:
-    case LsToolOptions{Some{operations}}: created(~le,Invocation{paths,cwd,operations},None{})
+    case LsToolOptions{Some{operations}}: created(~le,Invocation{paths,cwd,operations,order},None{})
     case LsToolOptions{None{}}:
       do IO<ToolOwner>:
         +operations : LsOperations <- defaultLsOperations()
-        created(~le,Invocation{paths,cwd,operations},Some{operations})
+        created(~le,Invocation{paths,cwd,operations,order},Some{operations})
+
+def createLsToolWithComparator(~le: String -> String -> Bool, paths: Paths.Environment, cwd: String, options: LsToolOptions) -> IO(ToolOwner):
+  createWithOrder(~le,ByComparator{},paths,cwd,options)
+
+# upstream createLsTool: entries in lowercase locale-collation order.
+def createLsTool(collator: Collation.Collator, paths: Paths.Environment, cwd: String, options: LsToolOptions) -> IO(ToolOwner):
+  createWithOrder(~codePointLe,Collated{collator},paths,cwd,options)
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,LsToolDetails>,Error>:
   match owner:

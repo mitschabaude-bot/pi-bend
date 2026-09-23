@@ -27,3 +27,7 @@ BEND=/path/to/private/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/ls
 /path/to/private/bend2/main.ts tests/ls-public.bend -o build/ls-public.js
 python3 tests/ls_public_check.py bun native-1 native-4
 ```
+
+## Default order
+
+`Ls.createLsTool(collator, …)` is the registered tool (`--tools ls`): local directory listings arrive in Node's `readdir` order (byte order), then sort stably by the collation key of the JavaScript-lowercased name (`runtime/collation.bend`, ICU 78 root, loaded from `packages/runtime/data`), exactly as upstream's `a.toLowerCase().localeCompare(b.toLowerCase())` under Node 24. `tests/ls_collation_check.py` compares 40 entries (case pairs, accents, digits, symbols, Greek final sigma, ß/SS, a ligature, CJK, directories) against `node` running that sort; `createLsToolWithComparator` keeps the explicit-comparator form used by the 45 public scenarios. Without the collation data file the registry falls back to code point order.
