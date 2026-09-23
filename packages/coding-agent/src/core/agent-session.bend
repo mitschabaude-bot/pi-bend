@@ -13,6 +13,7 @@ import ../../../ai/src/utils/model-api.bend as ModelApi
 import ../../../ai/src/utils/uuid.bend as Uuid
 import ../../../runtime/src/fetch.bend as Fetch
 import ./compaction/compaction.bend as Compaction
+import ./compaction/plan.bend as Plan
 import ../../../runtime/src/abort.bend as A
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/timer.bend as Sleep
@@ -812,53 +813,25 @@ def thresholdTokens(+assistant: Ai.AssistantMessage<V.Value, Unit>, messages: Li
   +direct = Compaction.calculateContextTokens(assistantUsage(assistant))
   usageOrEstimate(Bool.or(isErrorStop(assistantStop(assistant)), F.isEqual(F.compare(direct, F.fromU32(0)))), direct, messages, boundary)
 
-type CompactionPlan is Data:
-  NoCompaction{}
-  RecoveryExhausted{errorMessage: String}
-  OverflowCompaction{willRetry: Bool}
-  ThresholdCompaction{}
-
 def enabledOf(settings: Compaction.CompactionSettings) -> Bool:
   match settings:
     case Compaction.CompactionSettings{enabled, _, _}: enabled
 
-def recoveryMessage(contextOverflow: Bool) -> String:
-  match contextOverflow:
-    case True{}: "Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model."
-    case False{}: "Truncated response recovery failed after one compact-and-retry attempt."
-
-# A completed response compacts without retry; a failed or truncated one
-# gets one compact-and-retry.
-def overflowPlan(attempted: Bool, willRetry: Bool, contextOverflow: Bool) -> CompactionPlan:
-  match attempted willRetry:
-    case _ False{}: OverflowCompaction{False{}}
-    case True{} True{}: RecoveryExhausted{recoveryMessage(contextOverflow)}
-    case False{} True{}: OverflowCompaction{True{}}
-
-def thresholdPlan(settings: Compaction.CompactionSettings, contextWindow: F64, tokens: Maybe<&2, F64>) -> CompactionPlan:
+def thresholdReached(settings: Compaction.CompactionSettings, contextWindow: F64, tokens: Maybe<&2, F64>) -> Bool:
   match tokens:
-    case None{}: NoCompaction{}
-    case Some{value}: Bool.pick(CompactionPlan, Compaction.shouldCompact(value, contextWindow, settings), ThresholdCompaction{}, NoCompaction{})
+    case None{}: False{}
+    case Some{value}: Compaction.shouldCompact(value, contextWindow, settings)
 
 # Disabled compaction, a skipped aborted message and a message from before
 # the latest compaction never compact.
 def skipsCheck(settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, boundary: Maybe<&2, F64>) -> Bool:
   Bool.or(Bool.not(enabledOf(settings)), Bool.or(Bool.and(skipAborted, isAborted(assistantStop(assistant))), notAfter(assistantTimestamp(assistant), boundary)))
 
-def triggeredPlan(overflow: Bool, settings: Compaction.CompactionSettings, assistant: Ai.AssistantMessage<V.Value, Unit>, contextWindow: F64, boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool, contextOverflow: Bool) -> CompactionPlan:
-  match overflow:
-    case True{}: overflowPlan(attempted, Bool.not(isStop(assistantStop(assistant))), contextOverflow)
-    case False{}: thresholdPlan(settings, contextWindow, thresholdTokens(assistant, messages, boundary))
-
-def checkedPlan(skip: Bool, settings: Compaction.CompactionSettings, assistant: Ai.AssistantMessage<V.Value, Unit>, contextWindow: F64, boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool, +contextOverflow: Bool, recoverable: Bool) -> CompactionPlan:
-  match skip:
-    case True{}: NoCompaction{}
-    case False{}: triggeredPlan(Bool.or(contextOverflow, recoverable), settings, assistant, contextWindow, boundary, messages, attempted, contextOverflow)
-
-# upstream _checkCompaction's decision, in its order: skip, overflow, threshold.
-def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool) -> CompactionPlan:
+# upstream _checkCompaction's decision (Plan.decideCompaction) from the
+# assistant message, the model and the session's compaction boundary.
+def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool) -> Plan.CompactionPlan:
   +sameModel = Bool.and(String.eq(assistantProvider(assistant), modelProvider(model)), String.eq(assistantModel(assistant), modelIdOf(model)))
-  checkedPlan(skipsCheck(settings, skipAborted, assistant, boundary), settings, assistant, modelContextWindow(model), boundary, messages, attempted, Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, modelMaxTokens(model))))
+  Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, modelMaxTokens(model))), isStop(assistantStop(assistant)), attempted, thresholdReached(settings, modelContextWindow(model), thresholdTokens(assistant, messages, boundary)))
 
 # The summarizer: the agent's stream function with fresh options.
 type SummarizerEnv is Data:
@@ -1019,20 +992,20 @@ def runAutoCompaction(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings:
     entries : List<&2, Entry()> <- branchEntries(shared)
     autoCompactPrepared(agent, shared, model, reason, willRetry, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
 
-def executePlan(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>, plan: CompactionPlan) -> IO(Bool):
+def executePlan(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>, plan: Plan.CompactionPlan) -> IO(Bool):
   match plan:
-    case NoCompaction{}: IO.pure(Bool, False{})
-    case RecoveryExhausted{errorMessage}:
+    case Plan.NoCompaction{}: IO.pure(Bool, False{})
+    case Plan.RecoveryExhausted{errorMessage}:
       do IO<Bool>:
         emit(shared, CompactionEnd{Overflow{}, None{}, False{}, False{}, Some{errorMessage}})
         return False{}
-    case OverflowCompaction{False{}}: runAutoCompaction(agent, shared, settings, model, Overflow{}, False{})
-    case OverflowCompaction{True{}}:
+    case Plan.OverflowCompaction{False{}}: runAutoCompaction(agent, shared, settings, model, Overflow{}, False{})
+    case Plan.OverflowCompaction{True{}}:
       do IO<Bool>:
         R.modify(Shared, Unit, shared, current => (markOverflow(current, True{}), Unit{}))
         withoutLastAssistant(agent)
         runAutoCompaction(agent, shared, settings, model, Overflow{}, True{})
-    case ThresholdCompaction{}: runAutoCompaction(agent, shared, settings, model, Threshold{}, False{})
+    case Plan.ThresholdCompaction{}: runAutoCompaction(agent, shared, settings, model, Threshold{}, False{})
 
 # upstream _checkCompaction: true when the run should continue.
 def checkCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, assistant: Ai.AssistantMessage<V.Value, Unit>, skipAborted: Bool) -> IO(Bool):

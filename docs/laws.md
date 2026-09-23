@@ -15,6 +15,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/agent.bend` | 35 | `packages/agent/src/agent.bend` (state, queues, events, owner, continue planning) |
 | `laws/bounded.bend` | 6 | `packages/runtime/src/bounded.bend` |
 | `laws/calendar.bend` | 1 | `packages/runtime/src/calendar.bend` |
+| `laws/compaction.bend` | 4 | `packages/coding-agent/src/core/compaction/plan.bend` |
 | `laws/connection-driver.bend` | 28 | `packages/runtime/src/connection-driver.bend` |
 | `laws/dns-message.bend` | 25 | `packages/runtime/src/dns-message.bend` |
 | `laws/dns-resolver.bend` | 9 | `packages/runtime/src/dns-resolver.bend` |
@@ -50,7 +51,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/utf8.bend` | 6 | `packages/runtime/src/utf8.bend` |
 | `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
 | `laws/x509.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
-| **Total** | **502** | |
+| **Total** | **506** | |
 
 The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.
 
@@ -349,3 +350,7 @@ Six laws in `laws/agent.bend` cover pi's `continue()` as the pure decision `cont
 ### Tool execution mode, batch termination and the beforeToolCall decision (2026-09-22)
 
 `laws/agent-loop.bend` (21) states the pure decisions of the agent loop that the upstream agent-loop tests exercise through live runs: a configured sequential mode wins; one sequential tool forces sequential execution of the whole batch (hypothesis on the per-tool scan, since tool names compare as symbolic strings); otherwise parallel tools run in parallel; an empty batch terminates, a batch of terminating results terminates, and a single continuing result continues the run; an aborted operation rejects every tool call with "Operation aborted"; without a hook result the call proceeds; a non-blocking hook lets the call proceed; a blocking hook rejects with its reason and its terminate flag, falling back to "Tool execution was blocked" for an absent or empty reason; an empty batch never terminates and a nonempty batch terminates exactly when every call opted in; queued messages continue the run without an agent_end event and a failed queue read fails the turn; only a length stop marks an assistant message truncated; at the stream lease a failed open has nothing to release, an earlier failure survives the release, a release failure fails a consumed response and a clean release keeps the message. The contradictory-hypothesis eliminators now live in `proofs/absurd.bend` (`false_is_not_true`, `true_is_not_false`) for reuse.
+
+### Automatic-compaction decision (2026-09-23)
+
+`laws/compaction.bend` (4) characterizes upstream `_checkCompaction`'s decision, `decideCompaction` in `core/compaction/plan.bend`, over every combination of its facts (skipped check, context overflow, recoverable length stop, completed response, recovery already attempted, context past the threshold): a skipped check never compacts; a compact-and-retry is planned exactly for a failed overflow whose recovery was not yet attempted, so recovery runs at most once until a completed or aborted response re-arms it; recovery is reported exhausted exactly for a repeated failed overflow; threshold compaction happens exactly when nothing overflowed and the context is past the threshold. The proofs are finite case splits over the six Booleans. The decision lives in its own dependency-free module so the proof closure adds no unsafe declarations; how AgentSession derives the facts from the assistant message, model and compaction boundary is covered by the faux-provider scenarios in `tests/agent-session.md`, which run "does not retry overflow recovery more than once" and the threshold and disabled cases end to end; "compacts successful overflow responses without retrying" is covered by the laws only.

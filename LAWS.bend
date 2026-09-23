@@ -42,3 +42,4 @@ import ./laws/agent-loop.bend as AgentLoop
 import ./laws/f64.bend as F64Laws
 import ./laws/tool-truncate.bend as ToolTruncate
 import ./laws/glob.bend as Glob
+import ./laws/compaction.bend as Compaction

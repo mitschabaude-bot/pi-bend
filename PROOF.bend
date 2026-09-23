@@ -43,3 +43,4 @@ import ./proofs/agent-loop.bend as AgentLoop
 import ./proofs/f64.bend as F64Laws
 import ./proofs/tool-truncate.bend as ToolTruncate
 import ./proofs/glob.bend as Glob
+import ./proofs/compaction.bend as Compaction
