@@ -8,11 +8,14 @@ import ../../../ai/src/utils/json.bend as Json
 import ../../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../../ai/src/utils/message-json.bend as MessageJson
 import ../../../ai/src/utils/thinking-levels.bend as Levels
+import ../../../ai/src/utils/model-json.bend as ModelJson
 import ../../../ai/src/types.bend as Ai
 import ../../../agent/src/agent.bend as Agent
 import ../../../agent/src/types.bend as AgentTypes
 import ../core/agent-session.bend as Session
 import ../core/agent-runtime.bend as Runtime
+import ../core/settings-manager.bend as Settings
+import ../core/session-persistence.bend as Sessions
 import ../core/session-manager.bend as S
 import ../core/session-json.bend as SessionJson
 import ../core/tools/index.bend as Tools
@@ -422,6 +425,34 @@ def cycleThinking(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
       do IO<Unit>:
         current : Session.AgentState() <- Session.state(session)
         cycleState(session,sink,id,current)
+def queueModeName(value: AgentTypes.QueueMode) -> String:
+  match value:
+    case AgentTypes.All{}: "all"
+    case AgentTypes.OneAtATime{}: "one-at-a-time"
+def pendingCount(value: Session.Shared) -> Nat:
+  match value:
+    case Session.Shared{_,steering,followUp,_,_,_,_,_}: List.length(&2,String,steering) + List.length(&2,String,followUp)
+def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> V.Value:
+  MessageJson.object(MessageJson.field("model",ModelJson.model(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
+def settingsCompaction(session: Session.AgentSession) -> Bool:
+  match session:
+    case Session.AgentSession{_,_,_,settings,_,_}: Settings.getCompactionEnabled(settings)
+def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
+  match session:
+    case Session.AgentSession{_,shared,_,_,_,_}: Ref.read(Session.Shared,shared)
+def getState(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{+session,sink,_,_,_}:
+      do IO<Unit>:
+        +agent : Runtime.Owner() <- IO.pure(Runtime.Owner(),Session.agentOf(session))
+        stored : Session.Session() <- Session.sessionOf(session)
+        current : Session.AgentState() <- Session.state(session)
+        shared : Session.Shared <- sharedSnapshot(session)
+        streaming : Bool <- Session.isStreaming(session)
+        compacting : Bool <- Session.isCompacting(session)
+        steering : AgentTypes.QueueMode <- Agent.getSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
+        followUp : AgentTypes.QueueMode <- Agent.getFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
+        output(sink,data(id,"get_state",stateValue(stored,current,shared,streaming,compacting,steering,followUp,settingsCompaction(session))))
 def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "prompt": prompt(handle,id,object)
@@ -431,6 +462,7 @@ def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Rec
     case "abort_retry": abortCommand(handle,id,True{})
     case "clear_queue": clearQueue(handle,id)
     case "get_messages": currentMessages(handle,id)
+    case "get_state": getState(handle,id)
     case "get_entries": getEntries(handle,id,optionalText(field(object,"since")))
     case "get_tree": getTree(handle,id)
     case "get_fork_messages": getForkMessages(handle,id)

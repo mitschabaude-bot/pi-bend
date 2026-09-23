@@ -30,6 +30,7 @@ def check(label, executable, threads=None):
         ("missing", "get_entries", False),
         ("name", "set_session_name", True),
         ("name2", "set_session_name", True),
+        ("state", "get_state", True),
         ("tree", "get_tree", True),
         ("forks", "get_fork_messages", True),
         ("p", "prompt", True),
@@ -44,14 +45,20 @@ def check(label, executable, threads=None):
     assert responses[6]["data"] == {"steering": ["queued steer"], "followUp": ["queued follow"]}
     assert responses[7]["data"] == {"entries": [], "leafId": None}
     assert responses[8]["error"] == "Entry not found: nowhere"
-    tree = responses[11]["data"]["tree"]
+    state = responses[11]["data"]
+    assert state["model"]["provider"] == "faux" and state["model"]["id"] == "faux-model"
+    assert state["thinkingLevel"] == "off" and state["isStreaming"] is False and state["isCompacting"] is False
+    assert state["steeringMode"] == "all" and state["followUpMode"] == "one-at-a-time"
+    assert state["sessionName"] == "rpc nested" and state["messageCount"] == 0 and state["pendingMessageCount"] == 0
+    assert "sessionFile" not in state
+    tree = responses[12]["data"]["tree"]
     assert tree[0]["entry"]["type"] == "session_info"
     assert tree[0]["entry"]["name"] == "rpc tree"
     assert tree[0]["children"][0]["entry"]["name"] == "rpc nested"
     assert tree[0]["children"][0]["children"] == []
-    assert responses[12]["data"] == {"messages": []}
-    assert responses[15]["error"] == "Invalid command: message must be a string"
-    assert responses[16]["error"] == "Invalid command: data must be a string"
+    assert responses[13]["data"] == {"messages": []}
+    assert responses[16]["error"] == "Invalid command: message must be a string"
+    assert responses[17]["error"] == "Invalid command: data must be a string"
     prompt_index = next(i for i, r in enumerate(records) if r.get("id") == "p")
     start_index = next(i for i, r in enumerate(records) if r.get("type") == "agent_start")
     settled_index = next(i for i, r in enumerate(records) if r.get("type") == "agent_settled")

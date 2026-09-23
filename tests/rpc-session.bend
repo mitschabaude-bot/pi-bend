@@ -33,6 +33,7 @@ def execute(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         Rpc.feed(handle,"{\"id\":\"missing\",\"type\":\"get_entries\",\"since\":\"nowhere\"}\n")
         Rpc.feed(handle,"{\"id\":\"name\",\"type\":\"set_session_name\",\"name\":\"rpc tree\"}\n")
         Rpc.feed(handle,"{\"id\":\"name2\",\"type\":\"set_session_name\",\"name\":\"rpc nested\"}\n")
+        Rpc.feed(handle,"{\"id\":\"state\",\"type\":\"get_state\"}\n")
         Rpc.feed(handle,"{\"id\":\"tree\",\"type\":\"get_tree\"}\n")
         Rpc.feed(handle,"{\"id\":\"forks\",\"type\":\"get_fork_messages\"}\n")
         Rpc.feed(handle,"{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello\",\"images\":[{\"type\":\"image\",\"data\":\"AA==\",\"mimeType\":\"image/png\"}]}\n")
