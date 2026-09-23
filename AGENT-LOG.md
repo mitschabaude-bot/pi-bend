@@ -1659,3 +1659,5 @@ Codex f4e8f40 adds tested overlay composition/image-line preservation; autocompl
 Field handoff `a22a065` moves completed-line reversal/trimming and style continuation inside overflow branches, removing the remaining wide-line quadratic paths. Bun/native one/four pass the full layout gate plus seven long cases; 4K-column hosted long-word/short-word runs improve 1.84/4.83→0.17/0.20 s, documented in `tests/ansi-layout.md`.
 
 AgentSession differential harness: tests/agent-session.bend + tests/agent_session_check.py run a scripted faux provider through core/agent-session.bend; 21 checks (persist, steering/follow-up queues, thinking/model/name mutations) pass Bun and native one/four. Committing the harness, tests/agent-session.md and inventory/parity notes to native-tls now; next is the AgentSession busy path and compaction/retry scope.
+
+AgentSession harness committed as f5b8599 on native-tls. Next: the streaming busy path (prompt during a run) with a blocking faux tool, then compaction/retry scope.
