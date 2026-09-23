@@ -331,7 +331,8 @@ def triggerDouble(+input: KeyInput) -> IO(Unit):
     case KeyInput{_,_,_,_,lastEscape,_,session,_}:
       do IO<Unit>:
         Ref.write(Maybe<&2,F64>,lastEscape,None{})
-        actionDouble(input,Session.doubleEscapeAction(session))
+        action : Settings.DoubleEscapeAction <- Session.doubleEscapeAction(session)
+        actionDouble(input,action)
 def doubleEscape(input: KeyInput,previous: Maybe<&2,F64>,now: F64) -> IO(Unit):
   match previous:
     case None{}: IO.pure(Unit,Unit{})

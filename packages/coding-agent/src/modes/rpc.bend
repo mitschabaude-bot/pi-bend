@@ -13,6 +13,7 @@ import ../../../ai/src/types.bend as Ai
 import ../../../agent/src/agent.bend as Agent
 import ../../../agent/src/types.bend as AgentTypes
 import ../core/agent-session.bend as Session
+import ../core/bash-executor.bend as Bash
 import ../core/agent-runtime.bend as Runtime
 import ../core/model-runtime.bend as Models
 import ../core/settings-manager.bend as Settings
@@ -29,9 +30,11 @@ import ./json-event.bend as Events
 # byte transport; this endpoint owns framing, dispatch and event subscriptions.
 def Sink() -> Data: Callback.Callback<String,Unit>
 type Submission is Data: Submission{text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
+type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclude: Maybe<&2,Bool>}
+type Work is Data: PromptWork{request: Submission} BashWork{request: BashRequest}
 type Resources is Data: Resources{assetsDir: Maybe<&2,String>,availableModels: List<&2,Models.Model()>,scopedModels: List<&2,Models.ScopedModel>}
 type Handle is Data:
-  Handle{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Submission),resources: Resources}
+  Handle{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),resources: Resources}
 type Owner is Type:
   Owner{handle: Handle,worker: Chan(Unit),listener: Session.Listener()}
 
@@ -60,6 +63,12 @@ def requiredTextValue(value: Maybe<&2,V.Value>,name: String) -> Result<&2,&2,Str
     case _: Fail{"Invalid command: " ++ name ++ " must be a string"}
 def requiredText(object: R.Record<V.Value>,+name: String) -> Result<&2,&2,String,String>:
   requiredTextValue(field(object,name),name)
+def booleanValue(value: Maybe<&2,V.Value>,name: String) -> Result<&2,&2,String,Bool>:
+  match value:
+    case Some{V.Boolean{value}}: Done{value}
+    case _: Fail{"Invalid command: " ++ name ++ " must be a boolean"}
+def requiredBoolean(object: R.Record<V.Value>,+name: String) -> Result<&2,&2,String,Bool>:
+  booleanValue(field(object,name),name)
 def idOf(object: R.Record<V.Value>) -> Result<&2,&2,String,Maybe<&2,String>>:
   optionalText(field(object,"id"))
 def behaviorValue(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>:
@@ -119,39 +128,57 @@ def observe(sink: Sink(),value: Session.AgentSessionEvent) -> IO(Unit): event(si
 
 # A prompt response is written before waking this worker. A prompt without a
 # streaming behavior is rejected while another is accepted, as upstream does.
-def nextJob(handle: Handle) -> IO(Maybe<&1,Submission>):
-  match handle:
-    case Handle{_,_,_,_,jobs,_}: Chan.recv(Submission,jobs)
+def bashValue(result: Bash.BashResult) -> V.Value:
+  match result:
+    case Bash.BashResult{content,exitCode,cancelled,truncated,fullOutputPath}:
+      MessageJson.object(MessageJson.field("output",V.Text{content},MessageJson.optional("exitCode",Maybe.map(&2,U32,V.Value,code => MessageJson.natural(U32.to_nat(code)),exitCode),MessageJson.field("cancelled",V.Boolean{cancelled},MessageJson.field("truncated",V.Boolean{truncated},MessageJson.optionalText("fullOutputPath",fullOutputPath,Nil{}))))))
+def bashReply(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Bash.BashResult>) -> IO(Unit):
+  match result:
+    case Fail{reason}: output(sink,failure(id,"bash",reason))
+    case Done{value}: output(sink,data(id,"bash",bashValue(value)))
+def runBash(handle: Handle,request: BashRequest) -> IO(Unit):
+  match handle request:
+    case Handle{session,sink,_,_,_,_} BashRequest{+id,command,exclude}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Bash.BashResult> <- Session.executeBash(session,command,None{},Session.BashOptions{exclude,id,None{}})
+        bashReply(sink,id,result)
 def runJob(handle: Handle,request: Submission) -> IO(Unit):
   match handle request:
     case Handle{session,_,_,busy,_,_} Submission{text,images,behavior}:
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
         Ref.write(Bool,busy,False{})
-type Phase is Type: Check{} Received{request: Maybe<&1,Submission>}
+def runWork(handle: Handle,work: Work) -> IO(Unit):
+  match work:
+    case PromptWork{request}: runJob(handle,request)
+    case BashWork{request}: runBash(handle,request)
+def nextJob(handle: Handle) -> IO(Maybe<&1,Work>):
+  match handle:
+    case Handle{_,_,_,_,jobs,_}: Chan.recv(Work,jobs)
+type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
 @unsafe def worker(+handle: Handle,phase: Phase) -> IO(Unit):
   match phase:
     case Check{}:
       do IO<Unit>:
-        request : Maybe<&1,Submission> <- nextJob(handle)
+        request : Maybe<&1,Work> <- nextJob(handle)
         worker(handle,Received{request})
     case Received{None{}}: IO.pure(Unit,Unit{})
     case Received{Some{request}}:
       do IO<Unit>:
-        runJob(handle,request)
+        runWork(handle,request)
         worker(handle,Check{})
 def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,availableModels: List<&2,Models.Model()>,scopedModels: List<&2,Models.ScopedModel>) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
     +buffer : Ref.Ref<String> <- Ref.new(String,"")
     +busy : Ref.Ref<Bool> <- Ref.new(Bool,False{})
-    +jobs : Chan(Submission) <- Chan.new(Submission,64)
+    +jobs : Chan(Work) <- Chan.new(Work,64)
     +handle : Handle <- IO.pure(Handle,Handle{session,sink,buffer,busy,jobs,Resources{assetsDir,availableModels,scopedModels}})
     +listener : Session.Listener() <- Callback.create(~Sink(),~Session.AgentSessionEvent,~Unit,~observe,sink)
     Session.subscribe(session,listener)
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
     return (Owner{handle,task,listener},handle)
 
-def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Submission),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
+def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Work),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
   match active behavior:
     case True{} None{}: output(sink,failure(id,"prompt","Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."))
     case True{} Some{Session.Steer{}}:
@@ -166,7 +193,7 @@ def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool
       do IO<Unit>:
         Ref.write(Bool,busy,True{})
         output(sink,ok(id,"prompt"))
-        accepted : Bool <- Chan.send(Submission,jobs,Submission{text,images,behavior})
+        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior}})
         return Unit{}
 
 def promptChecked(handle: Handle,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
@@ -438,9 +465,6 @@ def pendingCount(value: Session.Shared) -> Nat:
     case Session.Shared{_,steering,followUp,_,_,_,_,_, _}: List.length(&2,String,steering) + List.length(&2,String,followUp)
 def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> V.Value:
   MessageJson.object(MessageJson.field("model",ModelJson.model(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
-def settingsCompaction(session: Session.AgentSession) -> Bool:
-  match session:
-    case Session.AgentSession{_,_,_,settings,_,_}: Settings.getCompactionEnabled(settings)
 def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
   match session:
     case Session.AgentSession{_,shared,_,_,_,_}: Ref.read(Session.Shared,shared)
@@ -456,7 +480,24 @@ def getState(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
         compacting : Bool <- Session.isCompacting(session)
         steering : AgentTypes.QueueMode <- Agent.getSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         followUp : AgentTypes.QueueMode <- Agent.getFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
-        output(sink,data(id,"get_state",stateValue(stored,current,shared,streaming,compacting,steering,followUp,settingsCompaction(session))))
+        auto : Bool <- Session.getAutoCompactionEnabled(session)
+        output(sink,data(id,"get_state",stateValue(stored,current,shared,streaming,compacting,steering,followUp,auto)))
+def autoResult(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  output(sink,resultResponse(id,command,result))
+def setAutoCompaction(handle: Handle,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
+  match handle enabled:
+    case Handle{_,sink,_,_,_,_} Fail{message}: output(sink,failure(id,"set_auto_compaction",message))
+    case Handle{session,sink,_,_,_,_} Done{value}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Unit> <- Session.setAutoCompactionEnabled(session,value)
+        autoResult(sink,id,"set_auto_compaction",result)
+def setAutoRetry(handle: Handle,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
+  match handle enabled:
+    case Handle{_,sink,_,_,_,_} Fail{message}: output(sink,failure(id,"set_auto_retry",message))
+    case Handle{session,sink,_,_,_,_} Done{value}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Unit> <- Session.setAutoRetryEnabled(session,value)
+        autoResult(sink,id,"set_auto_retry",result)
 
 # Model commands use the same authenticated catalog that selected the running
 # agent's initial model. No separate registry is constructed for RPC.
@@ -589,6 +630,25 @@ def exportHtml(handle: Handle,id: Maybe<&2,String>,path: Result<&2,&2,String,May
   match path:
     case Fail{reason}: commandFailure(handle,id,"export_html",reason)
     case Done{chosen}: exportChosen(handle,id,chosen)
+def bashSubmitted(handle: Handle,id: Maybe<&2,String>,command: Result<&2,&2,String,String>,exclude: Result<&2,&2,String,Maybe<&2,Bool>>) -> IO(Unit):
+  match handle command exclude:
+    case Handle{_,sink,_,_,_,_} Fail{reason} _: output(sink,failure(id,"bash",reason))
+    case Handle{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"bash",reason))
+    case Handle{_,_,_,_,jobs,_} Done{text} Done{choice}:
+      do IO<Unit>:
+        accepted : Bool <- Chan.send(Work,jobs,BashWork{BashRequest{id,text,choice}})
+        return Unit{}
+def optionalBoolean(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,Maybe<&2,Bool>>:
+  match value:
+    case None{}: Done{None{}}
+    case Some{V.Boolean{choice}}: Done{Some{choice}}
+    case _: Fail{"Invalid command: excludeFromContext must be a boolean"}
+def abortBash(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{session,sink,_,_,_,_}:
+      do IO<Unit>:
+        Session.abortBash(session)
+        output(sink,ok(id,"abort_bash"))
 def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "prompt": prompt(handle,id,object)
@@ -602,6 +662,10 @@ def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Rec
     case "get_available_models": availableModels(handle,id)
     case "set_model": setCatalogModel(handle,id,object)
     case "cycle_model": cycleCatalogModel(handle,id)
+    case "set_auto_compaction": setAutoCompaction(handle,id,requiredBoolean(object,"enabled"))
+    case "set_auto_retry": setAutoRetry(handle,id,requiredBoolean(object,"enabled"))
+    case "bash": bashSubmitted(handle,id,requiredText(object,"command"),optionalBoolean(field(object,"excludeFromContext")))
+    case "abort_bash": abortBash(handle,id)
     case "get_session_stats": getSessionStats(handle,id)
     case "export_html": exportHtml(handle,id,optionalText(field(object,"outputPath")))
     case "get_entries": getEntries(handle,id,optionalText(field(object,"since")))
@@ -673,9 +737,10 @@ def finish(+handle: Handle) -> IO(Unit):
         Bool.pick(Unit -> IO(Unit),String.is_empty(pending),_ => IO.pure(Unit,Unit{}),_ => command(handle,withoutCR(pending)))(Unit{})
 def stop(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Handle{session,_,buffer,busy,jobs,_},+task,+listener}:
+    case Owner{Handle{+session,_,buffer,busy,jobs,_},+task,+listener}:
       do IO<Unit>:
-        Chan.close(Submission,jobs)
+        Session.abortBash(session)
+        Chan.close(Work,jobs)
         completed : Maybe<&1,Unit> <- Chan.recv(Unit,task)
         Chan.close(Unit,task)
         Session.unsubscribe(session,listener)

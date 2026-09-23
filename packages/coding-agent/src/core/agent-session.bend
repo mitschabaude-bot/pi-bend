@@ -44,7 +44,7 @@ import ../../../ai/src/utils/transcript.bend as Transcript
 # records model, thinking-level and name changes as session entries,
 # retries transient provider errors with the settings' backoff policy, and
 # compacts the context manually or when it overflows or crosses the
-# settings' threshold. Bash execution, extensions, skills, prompt templates,
+# settings' threshold. Extensions, skills, prompt templates,
 # branch summarization and the mid-run threshold check are not ported yet.
 
 # The CLI's session codecs: no diagnostic details, tool details as their
@@ -222,7 +222,7 @@ type SessionHooks is Data:
   SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>}
 
 type AgentSession is Data:
-  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: Settings.SettingsManager, cwd: String, loadout: Runtime.Loadout}
+  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: Runtime.Loadout}
 
 def sharedSession(state: Shared) -> Session():
   match state:
@@ -503,6 +503,10 @@ def withContextWindow(state: Shared, contextWindow: F64) -> Shared:
 def retryPolicy(resolved: Settings.ResolvedRetrySettings) -> Retry.RetryPolicy:
   match resolved:
     case Settings.ResolvedRetrySettings{enabled, maxRetries, baseDelayMs, maxAgentDelayMs}: Retry.RetryPolicy{enabled, F.natural(maxRetries), F.fromU64(baseDelayMs), Some{F.fromU64(maxAgentDelayMs)}}
+def withRetryPolicy(state: Shared,policy: Retry.RetryPolicy) -> Shared:
+  match state:
+    case Shared{session,steering,followUp,listeners,runActive,lastAssistant,RetryState{_,attempt,contextWindow,sleeping},compaction,bash}:
+      Shared{session,steering,followUp,listeners,runActive,lastAssistant,RetryState{policy,attempt,contextWindow,sleeping},compaction,bash}
 
 # Context overflow is handled by compaction, not retry.
 def isRetryableError(+assistant: Ai.AssistantMessage<V.Value, Unit>, contextWindow: F64) -> Bool:
@@ -823,8 +827,9 @@ def recordedBash(+session: AgentSession, command: String, excludeFromContext: Ma
 
 def withOperations(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.Callback<String, Unit>>, excludeFromContext: Maybe<&2, Bool>, id: Maybe<&2, String>, owned: Bool, +operations: Bash.BashOperations) -> IO(Result<&2, &2, String, BashExec.BashResult>):
   match session:
-    case AgentSession{_, +shared, _, settings, cwd, _}:
+    case AgentSession{_, +shared, _, settingsRef, cwd, _}:
       do IO<Result<&2, &2, String, BashExec.BashResult>>:
+        settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
         +controller : A.AbortController<Unit> <- A.new(Unit)
         ticket : Nat <- R.modify(Shared, Nat, shared, current => startedBash(current, controller))
         +sink : C.Callback<String, Unit> <- C.create(~ChunkSink, ~String, ~Unit, ~forwardChunk, ChunkSink{onChunk, shared, id})
@@ -845,7 +850,7 @@ def withLocalOperations(+session: AgentSession, +command: String, onChunk: Maybe
         +operations : Bash.BashOperations <- Bash.createLocalBashOperations(directory, path)
         withOperations(session, command, onChunk, excludeFromContext, id, True{}, operations)
 
-def settingsOf(session: AgentSession) -> Settings.SettingsManager:
+def settingsOf(session: AgentSession) -> R.Ref<Settings.SettingsManager>:
   match session:
     case AgentSession{_, _, _, settings, _, _}: settings
 
@@ -859,12 +864,13 @@ def executeBash(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.C
       do IO<Result<&2, &2, String, BashExec.BashResult>>:
         binDir : Config.Located() <- Config.getBinDir()
         environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
-        withLocalOperations(session, command, onChunk, excludeFromContext, id, binDir, shellPathOf(settingsOf(session), environment))
+        settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsOf(session))
+        withLocalOperations(session, command, onChunk, excludeFromContext, id, binDir, shellPathOf(settings, environment))
 
 # Abort the agent and disconnect; the agent itself belongs to the runtime.
 def dispose(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, _, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settings, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -876,6 +882,7 @@ def dispose(session: AgentSession) -> IO(Unit):
         C.dispose(T.ToolHookInput<Turn()>, TurnResult(), nextTurn)
         Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedRequest)
         C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
+        oldSettings : Settings.SettingsManager <- R.dispose(Settings.SettingsManager,settings)
         released : Shared <- R.dispose(Shared, shared)
         return Unit{}
 
@@ -1444,7 +1451,7 @@ def withPatch(patch: Maybe<&2, Message()>, messages: List<&2, Message()>) -> Lis
 def Context() -> Data: T.AgentContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
 
 type NextTurnEnv is Data:
-  NextTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: Runtime.Loadout}
+  NextTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: Runtime.Loadout}
 
 def turnContext(turn: Turn()) -> Context():
   match turn:
@@ -1538,7 +1545,10 @@ def refreshTurn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Setti
 # Callback bodies cannot copy their environment; the copy happens inside.
 def nextTurnHook(env: NextTurnEnv, input: T.ToolHookInput<Turn()>) -> IO(TurnResult()):
   match env input:
-    case NextTurnEnv{agent, shared, settings, previous, legacy, loadout} T.ToolHookInput{turn, signal}: refreshTurn(agent, shared, settings, previous, legacy, loadout, turn, signal)
+    case NextTurnEnv{agent, shared, settings, previous, legacy, loadout} T.ToolHookInput{turn, signal}:
+      do IO<TurnResult()>:
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        refreshTurn(agent, shared, current, previous, legacy, loadout, turn, signal)
 
 # Request projection
 # ------------------
@@ -1581,16 +1591,17 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
   do IO<AgentSession>:
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, Ai.modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
+    +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
     +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settings, replaced, legacy, loadout})
+    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadout})
     Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
     +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settings, cwd, loadout}
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settingsRef, cwd, loadout}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -1654,8 +1665,9 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
 # and the agent runs until post-run handling settles.
 def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, +settings, _, loadout}:
+    case AgentSession{+agent, +shared, _, settingsRef, _, loadout}:
       do IO<Result<&2, &2, String, Unit>>:
+        +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         compactBeforePrompt(agent, shared, settings)
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
@@ -1806,8 +1818,9 @@ def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Result<
 # is returned, a failure or cancellation is reported in compaction_end.
 def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match session:
-    case AgentSession{+agent, +shared, _, +settings, _, _}:
+    case AgentSession{+agent, +shared, _, settingsRef, _, _}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
+        +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         abortSleeping(shared)
         abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -2015,6 +2028,59 @@ def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         applyThinking(agent, shared, clamped(current, level))
 
+def checkedSetting(value: Settings.SettingsManager & List<&2,Settings.SettingsError>) -> Result<&2,&2,String,Settings.SettingsManager>:
+  match value:
+    case (manager,Nil{}): Done{manager}
+    case (_, _): Fail{"Could not persist settings"}
+def persistedSetting(result: Settings.Outcome(Settings.SettingsManager)) -> IO(Result<&2,&2,String,Settings.SettingsManager>):
+  match result:
+    case Fail{_}: IO.pure(Result<&2,&2,String,Settings.SettingsManager>,Fail{"Could not update settings"})
+    case Done{manager}:
+      do IO<Result<&2,&2,String,Settings.SettingsManager>>:
+        saved : Settings.SettingsManager <- Settings.flushFiles(manager)
+        return checkedSetting(Settings.drainErrors(saved))
+def settingApplied(settings: R.Ref<Settings.SettingsManager>,result: Result<&2,&2,String,Settings.SettingsManager>) -> IO(Result<&2,&2,String,Unit>):
+  match result:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{manager}:
+      do IO<Result<&2,&2,String,Unit>>:
+        R.write(Settings.SettingsManager,settings,manager)
+        return Done{Unit{}}
+def setAutoCompactionEnabled(session: AgentSession,enabled: Bool) -> IO(Result<&2,&2,String,Unit>):
+  match session:
+    case AgentSession{_,_,_,+settings,_,_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        updated : Result<&2,&2,String,Settings.SettingsManager> <- persistedSetting(Settings.setCompactionEnabled(enabled,current))
+        settingApplied(settings,updated)
+def getAutoCompactionEnabled(session: AgentSession) -> IO(Bool):
+  match session:
+    case AgentSession{_,_,_,settings,_,_}:
+      do IO<Bool>:
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        return Settings.getCompactionEnabled(current)
+def retryApplied(settings: R.Ref<Settings.SettingsManager>,shared: R.Ref<Shared>,result: Result<&2,&2,String,Settings.SettingsManager>) -> IO(Result<&2,&2,String,Unit>):
+  match result:
+    case Fail{message}: IO.pure(Result<&2,&2,String,Unit>,Fail{message})
+    case Done{+manager}:
+      do IO<Result<&2,&2,String,Unit>>:
+        R.modify(Shared,Unit,shared,current => (withRetryPolicy(current,retryPolicy(Settings.getRetrySettings(manager))),Unit{}))
+        R.write(Settings.SettingsManager,settings,manager)
+        return Done{Unit{}}
+def setAutoRetryEnabled(session: AgentSession,enabled: Bool) -> IO(Result<&2,&2,String,Unit>):
+  match session:
+    case AgentSession{_,shared,_,+settings,_,_}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        updated : Result<&2,&2,String,Settings.SettingsManager> <- persistedSetting(Settings.setRetryEnabled(enabled,current))
+        retryApplied(settings,shared,updated)
+def getAutoRetryEnabled(session: AgentSession) -> IO(Bool):
+  match session:
+    case AgentSession{_,_,_,settings,_,_}:
+      do IO<Bool>:
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        return Settings.getRetryEnabled(current)
+
 # upstream setModel: apply the model, keep the thinking level within its
 # range, record the change (extension model_select events are not ported).
 def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Unit>):
@@ -2042,6 +2108,9 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
 
 # Interactive key handling reads the effective setting without exposing the
 # mutable settings manager to the runner.
-def doubleEscapeAction(session: AgentSession) -> Settings.DoubleEscapeAction:
+def doubleEscapeAction(session: AgentSession) -> IO(Settings.DoubleEscapeAction):
   match session:
-    case AgentSession{_,_,_,settings,_,_}: Settings.getDoubleEscapeAction(settings)
+    case AgentSession{_,_,_,settings,_,_}:
+      do IO<Settings.DoubleEscapeAction>:
+        current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        return Settings.getDoubleEscapeAction(current)

@@ -2139,3 +2139,16 @@ def fileWithLock(storage: FileSettingsStorage,scope: SettingsScope,writable: Boo
 def create(cwd: String,agentDir: String,options: SettingsManagerCreateOptions) -> IO(FileSettingsStorage & SettingsManager):
   +storage = fileStorage(cwd,agentDir)
   fromStorageWithPaths(~FileSettingsStorage,~fileWithLock,storage,options,SettingsPaths{Some{filePath(Global{},storage)},Some{filePath(Project{},storage)}})
+
+# Persist a manager loaded from file storage, while in-memory managers retain
+# their transaction state for their caller's storage implementation.
+def flushedFiles(value: FileSettingsStorage & SettingsManager) -> SettingsManager:
+  match value:
+    case (_,manager): manager
+def flushFiles(+state: SettingsManager) -> IO(SettingsManager):
+  match state:
+    case SettingsManager{_,_,_,_,_,_,SettingsPaths{Some{+global},Some{+project}}}:
+      do IO<SettingsManager>:
+        written : FileSettingsStorage & SettingsManager <- flush(~FileSettingsStorage,~fileWithLock,FileSettingsStorage{global,project},state)
+        return flushedFiles(written)
+    case _: IO.pure(SettingsManager,state)
