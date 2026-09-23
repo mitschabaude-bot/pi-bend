@@ -5,6 +5,7 @@ import ../utils/schema-json.bend as Schema
 import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
 import ../utils/thinking-levels.bend as Levels
+import ./simple-options.bend as Simple
 import ../utils/sanitize-unicode.bend as Unicode
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
@@ -27,7 +28,7 @@ def number(value: Maybe<&2, F64>) -> Maybe<&2, J()>:
     case Some{item}: Some{T.JsonNumber{item}}
 
 type Options is Data:
-  Options{maxTokens: Maybe<&2, F64>, temperature: Maybe<&2, F64>, toolChoice: Maybe<&2, T.ToolChoice>, reasoningEffort: Maybe<&2, String>, reasoningRequested: Bool}
+  Options{maxTokens: Maybe<&2, F64>, temperature: Maybe<&2, F64>, toolChoice: Maybe<&2, T.ToolChoice>, reasoningEffort: Maybe<&2, String>, reasoningRequested: Bool, samplingParams: Maybe<&2, R.Record<J()>>}
 
 type ThinkingWire is Data:
   StandardThinking{}
@@ -302,9 +303,14 @@ def withReasoning(+fields: Fields(), wire: ThinkingWire, reasoning: Bool, enable
     case TogetherWire{} True{} False{}:
       put(fields, "reasoning", obj(R.Record{field("enabled", T.JsonBoolean{False{}}) <> Nil{}}))
 
+def withSampling(fields: Fields(), sampling: Maybe<&2, R.Record<J()>>) -> Fields():
+  match sampling:
+    case None{}: fields
+    case Some{selected}: Simple.mergeFields(J(), R.entries(J(), selected), fields)
+
 def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool, images: Bool, reasoning: Bool, supported: Bool, wire: ThinkingWire, mapping: Maybe<&2, T.ThinkingLevelMap>) -> J():
   match context options:
-    case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, toolChoice, reasoningEffort, requested}:
+    case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, toolChoice, reasoningEffort, requested, sampling}:
       +declared = requestedTools(G, D, normalizedMessages)
       +base = {R.Record{field("model", str(id)) <> field("messages", T.JsonArray{messages(G, D, normalizedMessages, True{}, developer, images, Nil{})}) <> field("stream", T.JsonBoolean{True{}}) <> Nil{}} : Fields()}
       +withUsage = Bool.pick(Fields(), usage, put(base, "stream_options", obj(R.Record{field("include_usage", T.JsonBoolean{True{}}) <> Nil{}})), base)
@@ -313,7 +319,7 @@ def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContex
       +withTemp = maybe(withMax, "temperature", number(temperature))
       +withTools = Bool.pick(Fields(), List.is_empty(&2, J(), declared), withTemp, put(withTemp, "tools", T.JsonArray{declared}))
       +withChoice = maybe(withTools, "tool_choice", Maybe.map(&2, T.ToolChoice, J(), choice, toolChoice))
-      obj(withReasoning(withChoice, wire, reasoning, requested, supported, reasoningEffort, mapping))
+      obj(withSampling(withReasoning(withChoice, wire, reasoning, requested, supported, reasoningEffort, mapping), sampling))
 
 def params(-G: Data, -D: Data, model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, selected: Behavior) -> J():
   match model context options selected:

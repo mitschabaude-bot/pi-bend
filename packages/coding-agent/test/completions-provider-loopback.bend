@@ -41,6 +41,14 @@ def imageOf(selected: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
 
 def imageModel(base: String) -> Ai.Model<Ai.JsonValue>: imageOf(model(base))
 
+def samplingOf(selected: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
+  match selected:
+    case Ai.Model{id, name, api, provider, url, reasoning, mapping, input, limits, cost, cache, window, maximum, _, headers, compat}:
+      +sampling = {R.Record{R.Property{"seed", Ai.JsonNumber{F.fromU32(7)}} <> R.Property{"temperature", Ai.JsonNumber{F.fromU32(1)}} <> R.Property{"top_p", Ai.JsonNumber{F.fromU32(0)}} <> Nil{}} : R.Record<Ai.JsonValue>}
+      Ai.Model{id, name, api, provider, url, reasoning, mapping, input, limits, cost, cache, window, maximum, Some{sampling}, headers, compat}
+
+def samplingModel(base: String) -> Ai.Model<Ai.JsonValue>: samplingOf(model(base))
+
 def withCompat(value: Ai.Model<Ai.JsonValue>, compat: Ai.OpenAICompletionsCompat) -> Ai.Model<Ai.JsonValue>:
   match value:
     case Ai.Model{id, name, _, provider, url, reasoning, mapping, inputs, limits, cost, cache, window, maximum, sampling, headers, _}:
@@ -84,6 +92,12 @@ def reasoningOptions(value: Completions.Options()) -> Completions.Options():
   match value:
     case Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maximum, transport, cache, session, websocket, metadata, choice, _, deferred, budgets}:
       Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maximum, transport, cache, session, websocket, metadata, choice, Some{Ai.Low{}}, deferred, budgets}
+
+def samplingOptions(value: Completions.Options()) -> Completions.Options():
+  match value:
+    case Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, _, _, maximum, transport, cache, session, websocket, metadata, choice, reasoning, deferred, budgets}:
+      +sampling = {R.Record{R.Property{"temperature", Ai.JsonNumber{F.fromU32(3)}} <> R.Property{"top_p", Ai.JsonNumber{F.fromU32(1)}} <> R.Property{"presence_penalty", Ai.JsonNumber{F.fromU32(1)}} <> Nil{}} : R.Record<Ai.JsonValue>}
+      Ai.SimpleStreamOptions{signal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, Some{F.fromU32(2)}, Some{sampling}, maximum, transport, cache, session, websocket, metadata, choice, reasoning, deferred, budgets}
 
 def configuredHeaders(value: Completions.Options()) -> Completions.Options():
   match value:
@@ -150,6 +164,11 @@ def reasoningRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantM
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), reasoningModel(base), context(), Some{reasoningOptions(options())})
     opened(result)
 
+def samplingRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), samplingModel(base), context(), Some{samplingOptions(options())})
+    opened(result)
+
 def providerOptions(enabled: Bool) -> Completions.Options():
   Bool.pick(Completions.Options(), enabled, reasoningOptions(options()), options())
 
@@ -173,6 +192,10 @@ def compatRequest(fetch: Fetch.Fetch(Unit), base: String, unsupported: Bool) -> 
 
 def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit):
   match mode:
+    case "sampling":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- samplingRequest(fetch, base)
+        return Unit{}
     case "deepseek_unsupported":
       do IO<Unit>:
         message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "deepseek", True{})

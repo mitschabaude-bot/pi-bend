@@ -58,7 +58,7 @@ def main():
     source = (UPSTREAM / 'packages/ai/src/api/openai-completions.ts').read_text()
     for contract in ['chat.completions.create(params', 'stream_options = { include_usage: true }', 'case "tool_calls":', 'Provider finish_reason: ${reason}']:
         assert contract in source, contract
-    baselines = {mode: oracle(mode) for mode in ('basic', 'tool', 'tool_image', 'compat', 'reasoning', 'reasoning_off', 'openrouter', 'openrouter_off', 'together', 'together_off')}
+    baselines = {mode: oracle(mode) for mode in ('basic', 'tool', 'tool_image', 'compat', 'reasoning', 'reasoning_off', 'sampling', 'openrouter', 'openrouter_off', 'together', 'together_off')}
     fixture = ROOT / 'packages/coding-agent/test/completions-provider-loopback.bend'
     with tempfile.TemporaryDirectory(prefix='completions-loopback-') as directory:
         commands = []
@@ -137,6 +137,10 @@ def main():
                 run(command, base, 'reasoning_off', baselines['reasoning_off']['eventTypes'])
                 assert Handler.requests[0][2] == baselines['reasoning_off']['payloads'][0], (Handler.requests[0][2], baselines['reasoning_off'])
                 print(f'{backend}: default-off reasoning request')
+                Handler.requests.clear()
+                run(command, base, 'sampling', baselines['sampling']['eventTypes'])
+                assert Handler.requests[0][2] == baselines['sampling']['payloads'][0], (Handler.requests[0][2], baselines['sampling'])
+                print(f'{backend}: model and option sampling precedence')
                 for mode in ('openrouter', 'openrouter_off', 'together', 'together_off'):
                     Handler.requests.clear()
                     run(command, base, mode, baselines[mode]['eventTypes'])

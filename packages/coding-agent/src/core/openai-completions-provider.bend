@@ -14,6 +14,7 @@ import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/fetch.bend as Fetch
+import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/url.bend as URL
 import ./tools/index.bend as Tools
@@ -67,10 +68,15 @@ def reasoningEffort(model: Ai.Model<Ai.JsonValue>, requested: Maybe<&2, Ai.Think
   match requested:
     case None{}: None{}
     case Some{level}: reasoningFor(model, level)
+
+def modelSampling(model: Ai.Model<Ai.JsonValue>) -> Maybe<&2, R.Record<Ai.JsonValue>>:
+  match model:
+    case Ai.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, sampling, _, _}: sampling
+
 def requestOptions(+model: Ai.Model<Ai.JsonValue>, context: Context(), value: Options()) -> Request.Options:
   match value:
-    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, _, maxTokens, _, _, _, _, _, choice, +level, _, _}:
-      Request.Options{outputTokens(model, context, maxTokens), temperature, choice, reasoningEffort(model, level), Maybe.is_some(&2, Ai.ThinkingLevel, level)}
+    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, maxTokens, _, _, _, _, _, choice, +level, _, _}:
+      Request.Options{outputTokens(model, context, maxTokens), temperature, choice, reasoningEffort(model, level), Maybe.is_some(&2, Ai.ThinkingLevel, level), Simple.mergeSampling(Ai.JsonValue, modelSampling(model), sampling)}
 
 def requestKey(value: Options()) -> Maybe<&2, String>:
   match value:
