@@ -1667,3 +1667,59 @@ AgentSession busy scenario: a channel-gated faux request holds the run open whil
 Automatic retry ported: ai/utils/retry.bend + overflow.bend (158-case differential corpus vs upstream), AgentSession post-run retry loop with auto_retry_start/end, willRetry, abortRetry/isRetrying; abortable sleep moved from runtime/socket.bend to runtime/timer.bend (provider-retry and the sleep test repointed). 47 harness checks, proof gate, offline and live print CLI checks pass. Committing to native-tls now; next is compaction.
 
 Retry port committed as de2a917 on native-tls. Next: compaction scope (compaction.ts, utils.ts, AgentSession _checkCompaction/compact) over the same faux harness.
+
+Field reserves `tui/terminal-image.bend` and focused terminal-image tests in isolated `native-terminal-image`, based on 0ec0b09. Implementing protocols, metadata/placement/cropping, sizing and explicit capability state; root TUI interfaces and other agents’ components/navigation remain separate.
+
+Codex reviewed f5b8599/59908bc/de2a917 and current compaction changes after the usage pause; rechecking existing AgentSession/compaction artifacts without touching your sources. Claude retains agent/retry/session/compaction/json-event ownership; please flag a stable handoff for fresh combined CLI validation.
+
+Codex owns moving the generic child-process runner from coding-agent/utils into runtime and updating its five imports, enabling the native tmux probe without a TUI→coding-agent dependency. No process semantics or compiler changes; existing execution/draining checks are the gate.
+
+Codex364f551 moves the unchanged process runner into runtime; all native execution/draining/timeout/FD gates pass on one/four threads. Field owns the next stdout-selection/probe extension; wide-line integration0ec0b09 also passes the compositor corpus on all three backends.
+
+Codex owns pure overlay size/anchor/margin resolution in tui.bend and focused source comparisons. Native dimensions use Nat, percentages explicit F64, signed offsets a direction/magnitude value; lifecycle and component ownership stay separate.
+
+Word-navigation agent resumes the reserved word-break/navigation files in native-word-navigation, preserving existing implementation and evidence. Finishing native/Bun segmentation and injected-navigation checks; Intl dictionary/LSTM defaults remain pending.
+
+Codex completed pure overlay geometry; final Bun/native one/four pass1,180 source comparisons and12 invalid-percentage checks (tests/overlay-layout.md). Text/word-navigation workers resumed existing private work after their previous handles disappeared; image/probe and Claude compaction ownership unchanged.
+
+Word-navigation handoff d6bd7d5 completes Unicode17 default boundaries and explicit-context injected navigation; 1,944 official boundary cases, seven explicit/six long scans and 1,260 source-navigation comparisons pass Bun/native one/four. Evidence and the approved punctuation progress correction are in tests/word-navigation.md; Intl dictionary/LSTM defaults and substantive generic proofs remain pending.
+
+Word-navigation agent reserves runtime/case-map.bend, generated Unicode lowercase data and focused generator/tests in native-word-navigation. Checking Base scope before implementing Unicode17 default lowercase for SelectList, including Final_Sigma without locale tailoring.
+
+Codex integrated Text ce1ebf7 and word5317a3f: rebuilt shared-compiler artifacts pass complete component, navigation and Unicode conformance checks on Bun/native one/four; inventory preserves pending Intl default. SelectList owns the next component, full lowercase dependency is underway, and shared mouse types are7b7925d.
+
+Word-navigation agent handoff6e66471 adds CaseMap.lower: Unicode17 full default lowercase with Final_Sigma and dotted-I expansion, after confirming Base handles ASCII only. Pinned regeneration, 2,204 exact source/ICU comparisons, full-scalar mapping checksum and four long cases pass Bun/native one/four; evidence in tests/case-map.md, SelectList integration remains with Text agent.
+
+Codex integrated lowercase9544471; regenerated tables and independent shared-compiler checks pass Bun/native one/four. SelectList now has its exact filtering dependency; the word worker proceeds with faithful ICU CJK lexical data/algorithm design, without claiming other language engines.
+
+Word agent proposes ICU78 CJK weighted segmentation with a2.32MB serialized radix dictionary, pure once-loaded context and exact NFKC chunk-offset mapping; ownership is new runtime/cjk-word-break.bend, runtime/data/icu78-cjk assets, generator and focused cjk tests in native-cjk-segmentation. Outer ICU rule dispatch and non-CJK dictionary/LSTM engines remain explicit separate dependencies.
+
+Codex reserves tui/src/component.bend and focused component/container source tests. Implementing borrowed typed component callbacks, explicit renderer-assigned identities, immutable container layout and nested mouse dispatch; Claude session/compaction files remain untouched.
+
+Text component agent reserves SettingsList and focused fixtures in native-settings-list, preserving immutable updates and borrowed callbacks. Reviewing search-input/submenu dependencies before implementation; shared Component/Container and inventory remain with root.
+
+SettingsList depends on the missing full Input component; root approved porting Input first in the same isolated branch. Ownership expands to components/input.bend and focused Input tests, reusing existing kill/yank/undo and explicit word-navigation primitives.
+
+Word agent hands off67edafa +84c2c4b from native-cjk-segmentation: complete weighted ICU78 CJK range engine with2.20MB immutable dictionary and exact NFKC offset mapping. All315,968 weighted-prefix comparisons,2,151 ICU boundary cases (five long), regeneration and full-domain NFKC-boundary oracle pass Bun/native one/four; tests/cjk-word-break.md records API, licenses, Base equality recurrence and remaining outer-dispatch/non-CJK/proof gaps.
+
+Field hands off terminal-image commit4468a9b from native-terminal-image: protocols, header probes, immutable capabilities/registry and native tmux probing via stdout-only runner selection. Final Bun/native one/four pass764 reference comparisons,95 captured results from72 named tests,18 corrections and state/ID checks; native probe and existing process lifecycle gates pass (tests/terminal-image.md). Three separate Image-component cases remain pending; no compiler/toolchain changes.
+
+Word agent reserves ICU outer word-rule dispatch/status, generated rule data and focused mixed-text fixtures in native-word-rules, plus Nat cumulative CJK costs. Coordinating the explicit loaded Context with Input; unsupported dictionary/LSTM engines remain visible failures rather than a fabricated Intl default.
+
+Field reserves components/image.bend and focused Image-component tests in native-terminal-image, reusing4468a9b without shared source edits. Porting borrowed fallback callbacks, immutable width cache and lazy Kitty IDs; root retains Component/Container and inventory ownership.
+
+Codex integrated SelectList2063a4c and CJK64fab36/f226504 with fresh shared-compiler gates on Bun/native one/four; upstream SelectList suite is ported. Component/Container7ea5ab7 passes255 exact source traces, preserving displayed hit layouts and nested focus/capture transforms; terminal-image4468a9b is queued, Input/Image/outer segmentation stay with their workers.
+
+Codex integrated terminal-imagefcf94fe: fresh protocol/state/probe and existing process lifecycle gates pass all applicable backends; Image component remains with Field. Checked navigationa5b2fb5 and checked-Nat CJK costsd5da8dc also pass fresh full gates; user approved deterministic preloaded CJK segmentation over ICU cache-history behavior, and Word owns that integration.
+
+Field hands off Image component1cef7cf after4468a9b:130-line immutable core with borrowed fallback callback, lazy Kitty IDs and exact width-cache/protocol layout. Bun and optimized native one/four pass107 source-equivalent sequences, all three original component assertions and five malformed cases (tests/image-component.md); Component adapters and inventory stay with root.
+
+Field reserves components/editor.bend and focused Editor fixtures in native-editor from7809f2e. Porting immutable editing/layout and owned asynchronous autocomplete; coordinating checked segmentation with Word and borrowed callbacks with Input, while root retains Component/overlays.
+
+Codex reserves tui/src/overlays.bend and focused focus-policy fixtures: immutable overlay stack, focus restoration/blocking and ordered renderer effects, with resolved visibility/mounted IDs supplied by the renderer. Image7809f2e integration is checking full-width Nat conversion rather than silently clamping viewport widths to U32.
+
+Word agent hands off65798b8: pure ICU78 word-rule DFA, CJK range refinement and lexical statuses with explicit missing-engine results;16,446 exact mixed/status cases pass Bun/native one/four and table regeneration passes. Checked navigation54c883c and native Nat cost915491a were handed off earlier; tests/word-segmenter.md records the user-approved deterministic preloaded-CJK correction and remaining four language-engine/proof gaps.
+
+Word agent recovered clean65798b8 and reserves native Khmer dictionary segmentation, immutable generated data and focused tests in native-word-rules. ICU78 uses dictionary Khmer/Lao and LSTM Thai/Myanmar; next ports exact three-word lookahead and resynchronization, keeping the checked context and remaining-engine failures explicit.
+
+Claude committed 5826217 on native-tls: compaction core (core/compaction) plus AgentSession manual/threshold/overflow compaction with summarization retry; 27 core + 91 session checks pass Bun/native 1/4, proof gate and print CLI (offline, Codex live) pass. Stable handoff for Codex's combined CLI validation; next I take a cleanup pass (duplicate `digits` parsers in runtime) and then the mid-run compaction check.
