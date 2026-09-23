@@ -9,6 +9,7 @@ import ./core/agent-session.bend as AgentSession
 import ./core/settings-manager.bend as Settings
 import ./core/tools/index.bend as Tools
 import ./modes/print-mode.bend as Print
+import ./modes/rpc.bend as Rpc
 import ./modes/interactive/session-controller.bend as Controller
 import ./modes/interactive/run.bend as InteractiveRun
 import ./utils/paths.bend as Paths
@@ -21,6 +22,7 @@ import ../../runtime/src/posix-path.bend as Path
 import ../../runtime/src/url.bend as URL
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json.bend as Decode
+import ../../runtime/src/callback.bend as Callback
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. RPC mode,
@@ -558,6 +560,60 @@ def optionalHome(result: Result<&2,&2,FS.Error,String>) -> Maybe<&2,String>:
     case Fail{_}: None{}
     case Done{path}: Some{path}
 
+# RPC owns framing and command dispatch; this loop owns the blocking stdin
+# file and strict UTF-8 decoding across arbitrary read boundaries.
+type RpcInput is Type:
+  Read{file: File,decoder: Utf8.State}
+  Bytes{pair: File & Result<&1,&1,U32 & String,List<&2,U32>>,decoder: Utf8.State}
+  Checked{file: File,decoded: Result<&2,&2,Utf8.Error,Utf8.State>}
+  Text{file: File,chunk: Utf8.Chunk}
+  End{file: File,decoded: Result<&2,&2,Utf8.Error,String>}
+  ReadFailure{file: File,message: String}
+
+def rpcFileError(error: U32 & String) -> String:
+  match error:
+    case (code,message): "RPC stdin error " ++ U32.show(code) ++ ": " ++ message
+def rpcClosed(result: Result<&1,&1,U32 & String,Unit>) -> Result<&2,&2,String,Unit>:
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{error}: Fail{rpcFileError(error)}
+@unsafe def rpcRead(+handle: Rpc.Handle,phase: RpcInput) -> IO(Result<&2,&2,String,Unit>):
+  match phase:
+    case Read{file,decoder}:
+      do IO<Result<&2,&2,String,Unit>>:
+        pair : File & Result<&1,&1,U32 & String,List<&2,U32>> <- File.read_bytes(file,4096)
+        rpcRead(handle,Bytes{pair,decoder})
+    case Bytes{(file,Fail{error}),_}: rpcRead(handle,ReadFailure{file,rpcFileError(error)})
+    case Bytes{(file,Done{Nil{}}),decoder}: rpcRead(handle,End{file,Utf8.finishStrict(Done{decoder})})
+    case Bytes{(file,Done{bytes}),decoder}: rpcRead(handle,Checked{file,Utf8.feed(bytes,Done{decoder})})
+    case Checked{file,Fail{_}}: rpcRead(handle,ReadFailure{file,"Invalid UTF-8 on RPC stdin"})
+    case Checked{file,Done{decoder}}: rpcRead(handle,Text{file,Utf8.drain(decoder)})
+    case Text{file,Utf8.Chunk{decoder,text}}:
+      do IO<Result<&2,&2,String,Unit>>:
+        Rpc.feed(handle,text)
+        rpcRead(handle,Read{file,decoder})
+    case End{file,Fail{_}}: rpcRead(handle,ReadFailure{file,"Incomplete UTF-8 on RPC stdin"})
+    case End{file,Done{text}}:
+      do IO<Result<&2,&2,String,Unit>>:
+        Rpc.feed(handle,text)
+        Rpc.finish(handle)
+        closed : Result<&1,&1,U32 & String,Unit> <- File.close_checked(file)
+        return rpcClosed(closed)
+    case ReadFailure{file,message}:
+      do IO<Result<&2,&2,String,Unit>>:
+        closed : Result<&1,&1,U32 & String,Unit> <- File.close_checked(file)
+        return Fail{message}
+
+def rpcOpened(handle: Rpc.Handle,result: Result<&1,&1,U32 & String,File>) -> IO(Result<&2,&2,String,Unit>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2,&2,String,Unit>,Fail{rpcFileError(error)})
+    case Done{file}: rpcRead(handle,Read{file,Utf8.initial(Utf8.Preserve{})})
+
+def rpcStdin(handle: Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    opened : Result<&1,&1,U32 & String,File> <- File.open("/dev/stdin","r")
+    rpcOpened(handle,opened)
+
 def interactiveFinished(result: Result<&2,&2,InteractiveRun.Error,Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit,Unit{})
@@ -602,9 +658,59 @@ def interactiveSelected(initial: InitialMessage, session: Session(), hasExisting
     case Fail{error}: fail(error)
     case Done{runtime}: interactiveSelection(initial,session,hasExisting,hasThinking,settings,cwd,agentDir,packageDir,Runtime.selectionOf(runtime))
 
+def rpcWrite(_: Unit,text: String) -> IO(Unit): IO.write(text)
+def rpcFinished(result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{message}: fail(message)
+def rpcInput(pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
+  match pair:
+    case (owner,handle):
+      do IO<Result<&2,&2,String,Unit>>:
+        result : Result<&2,&2,String,Unit> <- rpcStdin(handle)
+        Rpc.stop(owner)
+        return result
+def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,agent: Runtime.Owner(),pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+  match pair:
+    case (runtime,loadout):
+      do IO<Unit>:
+        +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
+        +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink)
+        result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
+        Callback.dispose(String,Unit,sink)
+        AgentSession.dispose(live)
+        Runtime.dispose(runtime)
+        rpcFinished(result)
+def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+  match pair:
+    case (runtime,agent): rpcWith(stored,settings,cwd,agent,Runtime.loadoutOf(runtime))
+def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: String,runtime: Runtime.AgentRuntime) -> IO(Unit):
+  match recorded:
+    case Fail{Failed{message}}:
+      do IO<Unit>:
+        Runtime.dispose(runtime)
+        fail(message)
+    case Fail{Aborted{note}}:
+      do IO<Unit>:
+        Runtime.dispose(runtime)
+        IO.print(note)
+    case Done{+session}: rpcLoaded(session,settings,cwd,Runtime.agentOf(runtime))
+def rpcSelection(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
+  match pair:
+    case (runtime,selection):
+      do IO<Unit>:
+        recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
+        rpcRecorded(recorded,settings,cwd,runtime)
+def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+  match created:
+    case Fail{error}: fail(error)
+    case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,Runtime.selectionOf(runtime))
+
 def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match mode:
     case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,cwd,agentDir,packageDir,created)
+    case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,created)
     case _: printSelected(outputMode(mode),initial,session,hasExisting,hasThinking,settings,cwd,created)
 
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
@@ -764,18 +870,28 @@ def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, me
         sessionEnv : Result<&1, &1, U32 & String, String> <- IO.get_env(Config.envSessionDir())
         runConfigured(parsed, mode, buildInitialMessage(stdin, processedText(processed), processedImages(processed), messages), sessionFlags(parsed), cwd, home, url, agentDirLocated, authPath, bundle, packageDir, sessionEnv)
 
+def runInputFiles(parsed: Args.Args,mode: AppMode,stdin: Maybe<&2,String>,messages: List<&2,String>,+environment: Paths.Environment,fileArgs: List<&2,String>) -> IO(Unit):
+  match mode fileArgs:
+    case Rpc{} _ <> _: fail("Error: @file arguments are not supported in RPC mode")
+    case _ args:
+      do IO<Unit>:
+        files : Files.ResultOf(Files.ProcessedFiles) <- Files.processFileArguments(environment,args,Files.defaults())
+        runWithFiles(parsed,mode,stdin,messages,environment,files)
+
 def runWithInput(+parsed: Args.Args, mode: AppMode, stdinTty: Bool, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):
   match parsed environment:
     case _ Fail{_}: fail("Could not resolve the working directory")
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, messages, fileArgs, _, _} Done{Paths.Environment{+cwd, +home, +url}}:
       do IO<Unit>:
         stdin : Maybe<&2, String> <- readPipedStdin(stdinTty)
-        files : Files.ResultOf(Files.ProcessedFiles) <- Files.processFileArguments(Paths.Environment{cwd, home, url}, fileArgs, Files.defaults())
-        runWithFiles(parsed, mode, stdin, messages, Paths.Environment{cwd, home, url}, files)
+        runInputFiles(parsed,mode,stdin,messages,Paths.Environment{cwd,home,url},fileArgs)
 
 def runMode(parsed: Args.Args, +mode: AppMode, stdinTty: Bool) -> IO(Unit):
   match mode:
-    case Rpc{}: fail("RPC mode is not available in this port yet.")
+    case Rpc{}:
+      do IO<Unit>:
+        environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
+        runWithInput(parsed,Rpc{},True{},environment)
     case _:
       do IO<Unit>:
         environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
