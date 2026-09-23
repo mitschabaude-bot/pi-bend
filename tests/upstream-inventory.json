@@ -3462,9 +3462,16 @@
     },
     {
       "source": "packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "89f2ce2cf538aedb404b872aba345309b92c6f44375ea1882e0540c4900dfb00"
+      "status": "ported",
+      "ports": [
+        "tests/terminal-image.bend",
+        "tests/terminal-image-state.bend",
+        "tests/terminal_image_check.py",
+        "tests/terminal_image_named.ts",
+        "tests/terminal-image-map.json"
+      ],
+      "sha256": "89f2ce2cf538aedb404b872aba345309b92c6f44375ea1882e0540c4900dfb00",
+      "notes": "All current-implementation recognizer assertions execute unchanged and replay on Bun/native one/four. The historical test of a deliberately broken old recognizer is excluded rather than recreated; see tests/terminal-image-map.json."
     },
     {
       "source": "packages/tui/test/editor-history-keybindings.test.ts",
@@ -3661,9 +3668,16 @@
     },
     {
       "source": "packages/tui/test/terminal-image.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2"
+      "status": "partial",
+      "ports": [
+        "tests/terminal-image.bend",
+        "tests/terminal-image-state.bend",
+        "tests/terminal_image_check.py",
+        "tests/terminal_image_named.ts",
+        "tests/terminal-image-map.json"
+      ],
+      "sha256": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2",
+      "notes": "Module protocols, metadata, capability state, sizing, crop and fallback assertions pass Bun/native one/four. Three Image component assertions remain pending; named coverage and strict-input corrections are documented in tests/terminal-image-map.json and tests/terminal-image.md. Native tmux probes and shared process lifecycle gates pass."
     },
     {
       "source": "packages/tui/test/terminal.test.ts",

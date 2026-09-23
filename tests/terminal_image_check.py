@@ -12,7 +12,10 @@ def batch(command,items):
  result=[]
  for i in range(0,len(items),5):
   p=subprocess.run(command+[json.dumps([compress(v) for v in items[i:i+5]],ensure_ascii=False,separators=(',',':'))],cwd=ROOT,capture_output=True,text=True,timeout=90)
-  assert p.returncode==0,(p.returncode,p.stderr[-3000:]);result+=json.loads(p.stdout)
+  assert p.returncode==0,(p.returncode,p.stderr[-3000:])
+  values=json.loads(p.stdout)
+  assert isinstance(values,list) and len(values)==len(items[i:i+5]),('result count',len(values),len(items[i:i+5]))
+  result+=values
  return result
 
 def cases():

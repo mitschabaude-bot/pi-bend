@@ -10,12 +10,12 @@ Intentional malformed-input corrections follow the user's reject-invalid policy:
 
 ```sh
 BEND=build/bend-process-files/bend2/main.ts
-"$BEND" tests/terminal-image.bend -o build/terminal-image.js
+bun "$BEND" tests/terminal-image.bend -o build/terminal-image.js
 BEND="$BEND" sh scripts/build-pure.sh tests/terminal-image.bend build/terminal-image
 python3 tests/terminal_image_check.py bun build/terminal-image.js
 python3 tests/terminal_image_check.py -- build/terminal-image --threads 1
 python3 tests/terminal_image_check.py -- build/terminal-image --threads 4
-"$BEND" tests/terminal-image-state.bend -o build/terminal-image-state.js
+bun "$BEND" tests/terminal-image-state.bend -o build/terminal-image-state.js
 BEND="$BEND" sh scripts/build-pure.sh tests/terminal-image-state.bend build/terminal-image-state
 bun build/terminal-image-state.js
 build/terminal-image-state --threads 1
@@ -28,3 +28,5 @@ python3 tests/child_process_check.py --prefix build/image-child-process
 ```
 
 The native probe checks cover split stdout, Unicode-trimmed feature tokens, false positives, missing/nonzero/slow tmux, invalid UTF-8, output limits and stderr larger than a pipe buffer. Seven stdout-selection scenarios include 50 repeated executions and sustained post-exit stderr activity. Existing merged-output gates retain 45 execution scenarios, 75 timeout conversions, 29 draining scenarios and 40 same-runtime descriptor checks per native backend. Process execution is currently a Linux-native primitive; hosted pure image/state comparisons are supported, while hosted probing safely falls back on the existing unsupported-process error.
+
+Root integration at `fcf94fe` rebuilt the protocol/state and process fixtures with the shared compiler. All three backends pass the full comparison/state gate, and native one/four pass the real probes plus unchanged merged-process lifecycle checks. Logs: `build/terminal-image-*-check.log`, `build/image-child-execute-check.log`, `build/image-child-process-check.log`. Every oracle/native batch now checks the result count before comparing values.
