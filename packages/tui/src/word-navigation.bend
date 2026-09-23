@@ -4,7 +4,7 @@ import ../../runtime/src/text.bend as Text
 # A segmenter supplies lexical status; Unicode default word boundaries alone do
 # not provide Intl's dictionary/LSTM segmentation. There is no implicit default.
 type Segment is Data: Segment{text: String,isWordLike: Bool}
-type Error is Data: InvalidCursor{} InvalidSegments{}
+type Error is Data: InvalidCursor{} InvalidSegments{} MissingWordEngine{language: String}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
 type Slice is Data: Slice{before: String,after: String}
 type Direction is Data: Forward{} Backward{}
@@ -88,3 +88,20 @@ def findWordBackward(~Context: Data,~segment: Context -> String -> List<&2,Segme
   find(~Context,~segment,~isAtomic,context,Backward{},cursor,slice(text,cursor,""))
 def findWordForward(~Context: Data,~segment: Context -> String -> List<&2,Segment>,~isAtomic: Context -> String -> Bool,context: Context,text: String,+cursor: Nat) -> ResultOf(Nat):
   find(~Context,~segment,~isAtomic,context,Forward{},cursor,slice(text,cursor,""))
+
+# A checked segmenter can report an unavailable dictionary/model explicitly.
+# Keep the infallible callback entrypoints for fully supplied custom segmenters.
+def segmented(~Context: Data,~isAtomic: Context -> String -> Bool,context: Context,direction: Direction,text: String,cursor: Nat,result: ResultOf(List<&2,Segment>)) -> ResultOf(Nat):
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{parts}: navigate(~Context,~isAtomic,context,direction,text,cursor,parts)
+def findChecked(~Context: Data,~segment: Context -> String -> ResultOf(List<&2,Segment>),~isAtomic: Context -> String -> Bool,+context: Context,+direction: Direction,cursor: Nat,result: ResultOf(Slice)) -> ResultOf(Nat):
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{Slice{before,after}}:
+      +text = Bool.pick(String,isBackward(direction),before,after)
+      segmented(~Context,~isAtomic,context,direction,text,cursor,segment(context,text))
+def findWordBackwardChecked(~Context: Data,~segment: Context -> String -> ResultOf(List<&2,Segment>),~isAtomic: Context -> String -> Bool,context: Context,text: String,+cursor: Nat) -> ResultOf(Nat):
+  findChecked(~Context,~segment,~isAtomic,context,Backward{},cursor,slice(text,cursor,""))
+def findWordForwardChecked(~Context: Data,~segment: Context -> String -> ResultOf(List<&2,Segment>),~isAtomic: Context -> String -> Bool,context: Context,text: String,+cursor: Nat) -> ResultOf(Nat):
+  findChecked(~Context,~segment,~isAtomic,context,Forward{},cursor,slice(text,cursor,""))

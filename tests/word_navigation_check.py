@@ -60,6 +60,8 @@ for i,([text,cursor,backward,parts,marker],want) in enumerate(zip(rows,expected)
    assert count>0,(rows[i],want)
    expected[i]=str(edge-count if backward else edge+count);corrected[i]=want
   break
+for backward in [False,True]:
+ rows.append(['abc','3' if backward else '0',backward,[['abc',True]],'[missing]']);expected.append('MissingWordEngine:Thai')
 # Typed native validation of caller-provided coordinates and partitions.
 for row,want in [(['abc','4',False,[], ''],'InvalidCursor'),(['abc','0',False,[['ab',True]],''],'InvalidSegments'),(['abc','0',False,[['',False],['abc',True]],''],'InvalidSegments'),(['abc','0',False,[['xyz',True]],''],'InvalidSegments')]:rows.append(row);expected.append(want)
 for backend in a.backends:
