@@ -369,3 +369,18 @@ def preparedInput(base: TuiBase,+registry: List<&2,C.Component>,change: O.Change
 def dispatchInput(+base: TuiBase,+registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,data: String) -> IO(ResultOf(InputResult)):
   match base:
     case TuiBase{_,+focus,_,_,_,_,_}: preparedInput(base,registry,O.prepareInput(focus,mounted),data)
+
+def focusResult(result: ResultOf(Unit),base: TuiBase,registry: List<&2,C.Component>,changes: List<&2,O.FocusChange>) -> IO(ResultOf(TuiBase)):
+  match result:
+    case Fail{error}: IO.pure(ResultOf(TuiBase),Fail{error})
+    case Done{_}:
+      do IO<ResultOf(TuiBase)>:
+        applyChanges(changes,registry)
+        return Done{base}
+def focusChange(base: TuiBase,change: O.Change,+registry: List<&2,C.Component>) -> IO(ResultOf(TuiBase)):
+  match base change:
+    case TuiBase{root,_,bindings,displayed,scheduler,show,clear} O.Change{focus,+changes,_,_}:
+      focusResult(validateChanges(changes,registry),TuiBase{root,focus,bindings,displayed,scheduler,show,clear},registry,changes)
+def setFocus(+base: TuiBase,registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,target: Maybe<&2,C.ComponentId>) -> IO(ResultOf(TuiBase)):
+  match base:
+    case TuiBase{_,+focus,_,_,_,_,_}: focusChange(base,O.setFocus(focus,mounted,target),registry)
