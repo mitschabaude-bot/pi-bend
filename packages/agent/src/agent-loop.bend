@@ -583,7 +583,7 @@ def selectedRequestModel(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: 
 
 def requestModelProvider(-Value: Data, model: Ai.Model<Value>) -> String:
   match model:
-    case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
+    case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
 
 # Source uses logical OR, so an empty resolved key falls back just like absence.
 # The fallback itself is returned unchanged, including an empty string.

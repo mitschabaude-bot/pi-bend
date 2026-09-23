@@ -11,7 +11,7 @@ import ../../../runtime/src/f64.bend as F
 
 def model() -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{"gpt-5.4", "GPT-5.4", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(400000), F.fromU32(128000), None{}, None{}, None{}}
+  T.Model{"gpt-5.4", "GPT-5.4", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", True{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(400000), F.fromU32(128000), None{}, None{}, None{}}
 
 def createOutput(id: String) -> T.AssistantMessage<V.Value, Unit>:
   Fixture.assistantJson(Nil{}, "openai-responses", "openai", id, T.Pending{})

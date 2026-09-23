@@ -14,7 +14,7 @@ import ../packages/runtime/src/f64.bend as F
 # tests/retry_classify_check.py can compare against upstream's classifiers.
 
 type Case is Data:
-  Case{errorMessage: Maybe<&2, String>, stopReason: Ai.StopReason, input: F64, cacheRead: F64, output: F64, contextWindow: F64, desiredMaxOutput: F64, baseDelayMs: F64, maxAgentDelayMs: Maybe<&2, F64>, attempt: Nat}
+  Case{provider: String, errorMessage: Maybe<&2, String>, stopReason: Ai.StopReason, input: F64, cacheRead: F64, output: F64, contextWindow: F64, desiredMaxOutput: F64, baseDelayMs: F64, maxAgentDelayMs: Maybe<&2, F64>, attempt: Nat}
 
 def stopReasonOf(name: String) -> Ai.StopReason:
   match name:
@@ -42,6 +42,7 @@ def natural(value: V.Value) -> Result<&2, &2, Decode.Error, Nat>:
 def decodeCase(value: V.Value) -> Result<&2, &2, Decode.Error, Case>:
   do Result<&2, &2, Decode.Error, Case>:
     +fields : R.Record<V.Value> <- Decode.object(value)
+    provider : String <- Decode.required(String, fields, "provider", Decode.string)
     errorMessage : Maybe<&2, String> <- Decode.required(Maybe<&2, String>, fields, "errorMessage", nullable)
     stopReason : String <- Decode.required(String, fields, "stopReason", Decode.string)
     input : F64 <- Decode.required(F64, fields, "input", Decode.number)
@@ -52,17 +53,17 @@ def decodeCase(value: V.Value) -> Result<&2, &2, Decode.Error, Case>:
     baseDelayMs : F64 <- Decode.required(F64, fields, "baseDelayMs", Decode.number)
     maxAgentDelayMs : Maybe<&2, F64> <- Decode.required(Maybe<&2, F64>, fields, "maxAgentDelayMs", nullableNumber)
     attempt : Nat <- Decode.required(Nat, fields, "attempt", natural)
-    return Case{errorMessage, stopReasonOf(stopReason), input, cacheRead, output, contextWindow, desiredMaxOutput, baseDelayMs, maxAgentDelayMs, attempt}
+    return Case{provider, errorMessage, stopReasonOf(stopReason), input, cacheRead, output, contextWindow, desiredMaxOutput, baseDelayMs, maxAgentDelayMs, attempt}
 
-def message(errorMessage: Maybe<&2, String>, stopReason: Ai.StopReason, +input: F64, +cacheRead: F64, +output: F64) -> Ai.AssistantMessage<V.Value, Unit>:
-  Ai.AssistantMessage{Nil{}, "openai-completions", "faux", "faux-model", None{}, None{}, None{}, None{}, Ai.Usage{input, output, cacheRead, F.fromU32(0), None{}, None{}, F.add(F.add(input, cacheRead), output), Ai.UsageCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0)}}, stopReason, None{}, errorMessage, None{}, None{}, F.fromU32(0)}
+def message(provider: String, errorMessage: Maybe<&2, String>, stopReason: Ai.StopReason, +input: F64, +cacheRead: F64, +output: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+  Ai.AssistantMessage{Nil{}, "openai-completions", provider, "faux-model", None{}, None{}, None{}, None{}, Ai.Usage{input, output, cacheRead, F.fromU32(0), None{}, None{}, F.add(F.add(input, cacheRead), output), Ai.UsageCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0)}}, stopReason, None{}, errorMessage, None{}, None{}, F.fromU32(0)}
 
 def flag(value: Bool) -> String: Bool.pick(String, value, "true", "false")
 
 def classified(value: Case) -> String:
   match value:
-    case Case{errorMessage, stopReason, input, cacheRead, output, contextWindow, desiredMaxOutput, baseDelayMs, maxAgentDelayMs, attempt}:
-      +assistant = message(errorMessage, stopReason, input, cacheRead, output)
+    case Case{provider, errorMessage, stopReason, input, cacheRead, output, contextWindow, desiredMaxOutput, baseDelayMs, maxAgentDelayMs, attempt}:
+      +assistant = message(provider, errorMessage, stopReason, input, cacheRead, output)
       "{\"retryable\":" ++ flag(Retry.isRetryableAssistantError(V.Value, Unit, assistant)) ++ ",\"overflow\":" ++ flag(Overflow.isContextOverflow(V.Value, Unit, assistant, contextWindow)) ++ ",\"recoverable\":" ++ flag(Overflow.isRecoverableLength(V.Value, Unit, assistant, desiredMaxOutput)) ++ ",\"delayMs\":" ++ Maybe.default(&2, String, F.toJsonNumber(Retry.retryDelayMs(baseDelayMs, maxAgentDelayMs, attempt)), "null") ++ "}"
 
 def answer(parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> String:

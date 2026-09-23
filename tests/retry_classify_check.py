@@ -61,9 +61,15 @@ RETRY_TEXTS = [
 def cases():
     out = []
     for text in RETRY_TEXTS:
-        out.append({'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
-    out.append({'errorMessage': 'overloaded_error', 'stopReason': 'stop', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
-    out.append({'errorMessage': None, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+        out.append({'provider': 'faux', 'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+    out.append({'provider': 'faux', 'errorMessage': 'overloaded_error', 'stopReason': 'stop', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+    out.append({'provider': 'faux', 'errorMessage': None, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+    # Cerebras's bodyless 400/413 means overflow only from Cerebras; z.ai says "Prompt too long".
+    for provider in ['cerebras', 'faux']:
+        for text in ['400 status code (no body)', '413 (no body)', '413 status code (no body) extra', '404 status code (no body)']:
+            out.append({'provider': provider, 'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+    for text in ['{"code":"1261","message":"Prompt too long"}', 'Prompt too long', 'prompt is too long', 'prompt  too long']:
+        out.append({'provider': 'zai', 'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
     # usage-based overflow (overflow.test.ts and z.ai / Xiaomi shapes)
     usage = [
         ('stop', 200001, 0, 10, 200000), ('stop', 100000, 100001, 10, 200000), ('stop', 200000, 0, 10, 200000), ('stop', 300000, 0, 10, 0),
@@ -71,13 +77,13 @@ def cases():
         ('toolUse', 300000, 0, 0, 200000), ('aborted', 300000, 0, 0, 200000), ('error', 300000, 0, 0, 200000),
     ]
     for stop, inp, cache, outp, window in usage:
-        out.append({'errorMessage': None, 'stopReason': stop, 'input': inp, 'cacheRead': cache, 'output': outp, 'contextWindow': window, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+        out.append({'provider': 'faux', 'errorMessage': None, 'stopReason': stop, 'input': inp, 'cacheRead': cache, 'output': outp, 'contextWindow': window, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
     # recoverable length stops
     for stop, inp, cache, outp, desired in [('length', 3, 253584, 16, 128000), ('length', 4062, 0, 1024, 1024), ('length', 100, 0, 0, 128000), ('length', 100, 0, 5, 0), ('stop', 100, 0, 5, 128000), ('length', 100, 0, 2000, 1024)]:
-        out.append({'errorMessage': None, 'stopReason': stop, 'input': inp, 'cacheRead': cache, 'output': outp, 'contextWindow': 0, 'desiredMaxOutput': desired, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+        out.append({'provider': 'faux', 'errorMessage': None, 'stopReason': stop, 'input': inp, 'cacheRead': cache, 'output': outp, 'contextWindow': 0, 'desiredMaxOutput': desired, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
     # retry delays (retry.test.ts "caps agent retry delay" and boundaries)
     for base, cap, attempt in [(2000, None, 6), (2000, 5000, 5), (2000, 0, 5), (2000, None, 1), (2000, None, 0), (1, None, 3), (1, 100000, 20), (1, 10 ** 17, 60), (0.5, None, 2), (2000, 75000, 6), (1, 2 ** 60, 60)]:
-        out.append({'errorMessage': None, 'stopReason': 'stop', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 0, 'desiredMaxOutput': 0, 'baseDelayMs': base, 'maxAgentDelayMs': cap, 'attempt': attempt})
+        out.append({'provider': 'faux', 'errorMessage': None, 'stopReason': 'stop', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 0, 'desiredMaxOutput': 0, 'baseDelayMs': base, 'maxAgentDelayMs': cap, 'attempt': attempt})
     return out
 
 def main():

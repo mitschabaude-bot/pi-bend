@@ -203,14 +203,15 @@ def firstCutAtOrAfter(cutPoints: List<&2, Nat>, +index: Nat, fallback: Nat) -> N
     case +point <> rest: Bool.pick(Nat, Nat.is_lt(point, index), firstCutAtOrAfter(rest, index, fallback), point)
 
 # Walk the range backwards accumulating estimated tokens; the cut is the
-# first cut point at or after the entry that crosses the recent budget.
+# first cut point at or after the entry that crosses the recent budget, or
+# the last cut point when trailing tool results alone exceed it.
 def accumulateCut(-D: Data, -T: Data, -C: Data, reversed: List<&2, Indexed<D, T, C>>, +accumulated: F64, +keepRecentTokens: F64, +cutPoints: List<&2, Nat>, +fallback: Nat) -> Nat:
   match reversed:
     case Nil{}: fallback
     case Indexed{index, entry} <> +rest:
       +tokens = entryTokens(D, T, C, entry)
       +next = F.add(accumulated, tokens)
-      Bool.pick(Unit -> Nat, F.isEqual(F.compare(tokens, zero())), _ => accumulateCut(D, T, C, rest, accumulated, keepRecentTokens, cutPoints, fallback), _ => Bool.pick(Unit -> Nat, F.isAtLeast(F.compare(next, keepRecentTokens)), _ => firstCutAtOrAfter(cutPoints, index, fallback), _ => accumulateCut(D, T, C, rest, next, keepRecentTokens, cutPoints, fallback))(Unit{}))(Unit{})
+      Bool.pick(Unit -> Nat, F.isEqual(F.compare(tokens, zero())), _ => accumulateCut(D, T, C, rest, accumulated, keepRecentTokens, cutPoints, fallback), _ => Bool.pick(Unit -> Nat, F.isAtLeast(F.compare(next, keepRecentTokens)), _ => firstCutAtOrAfter(cutPoints, index, Maybe.default(&2, Nat, List.last(&2, Nat, cutPoints), fallback)), _ => accumulateCut(D, T, C, rest, next, keepRecentTokens, cutPoints, fallback))(Unit{}))(Unit{})
 
 def rangeReversed(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, +startIndex: Nat, +endIndex: Nat, +reversed: List<&2, Indexed<D, T, C>>) -> List<&2, Indexed<D, T, C>>:
   match indexed:
@@ -414,7 +415,7 @@ def UPDATE_SUMMARIZATION_PROMPT() -> String:
   "The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.\n\n" ++ UPDATE_SUMMARIZATION_INSTRUCTIONS()
 
 def TURN_PREFIX_SUMMARIZATION_PROMPT() -> String:
-  "This is the PREFIX of a turn that was too large to keep. The SUFFIX (recent work) is retained.\n\nSummarize the prefix to provide context for the retained suffix:\n\n## Original Request\n[What did the user ask for in this turn?]\n\n## Early Progress\n- [Key decisions and work done in the prefix]\n\n## Context for Suffix\n- [Information needed to understand the retained recent work]\n\nBe concise. Focus on what's needed to understand the kept suffix."
+  "The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.\n\nCreate a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.\n\n## Original Request\n[What did the user ask for?]\n\n## Progress So Far\n- [Key decisions and work completed in these messages]\n\n## Context Needed to Continue\n- [Information from these messages needed to understand the later work]\n\nOnly summarize information explicitly present above. Do not infer or recreate later messages."
 
 def getSummarizationFailure(-D: Data, response: Assistant(D), label: String) -> Maybe<&2, String>:
   match response:
@@ -500,8 +501,10 @@ def summarize(~D: Data, ~T: Data, summarizer: Summarizer(D, T), promptText: Stri
 def generateSummaryWithUsage(~D: Data, ~T: Data, ~C: Data, summarizer: Summarizer(D, T), messages: List<&2, Msg(D, T, C)>, model: Ai.Model<Ai.JsonValue>, reserveTokens: F64, signal: Maybe<&2, A.AbortSignal<Unit>>, customInstructions: Maybe<&2, String>, +previousSummary: Maybe<&2, String>, retry: Maybe<&2, Retry.RetryPolicy>, callbacks: Maybe<&2, Retry.RetryCallbacks()>) -> IO(Result<&2, &2, String, Summary>):
   summarize(~D, ~T, summarizer, conversationBlock(D, T, C, messages) ++ previousBlock(previousSummary) ++ withFocus(basePromptFor(previousSummary), customInstructions), summaryBudget(F.divide(F.fromU32(4), F.fromU32(5)), reserveTokens, Ai.modelMaxTokens(model)), "Summarization", signal, retry, callbacks)
 
+# The conversation and the instructions are separate sections, which keeps
+# models from refusing to summarize a split turn (upstream d192bd6dc).
 def generateTurnPrefixSummary(~D: Data, ~T: Data, ~C: Data, summarizer: Summarizer(D, T), messages: List<&2, Msg(D, T, C)>, model: Ai.Model<Ai.JsonValue>, reserveTokens: F64, signal: Maybe<&2, A.AbortSignal<Unit>>, retry: Maybe<&2, Retry.RetryPolicy>, callbacks: Maybe<&2, Retry.RetryCallbacks()>) -> IO(Result<&2, &2, String, Summary>):
-  summarize(~D, ~T, summarizer, conversationBlock(D, T, C, messages) ++ TURN_PREFIX_SUMMARIZATION_PROMPT(), summaryBudget(F.divide(F.fromU32(1), F.fromU32(2)), reserveTokens, Ai.modelMaxTokens(model)), "Turn prefix summarization", signal, retry, callbacks)
+  summarize(~D, ~T, summarizer, "# Conversation\n" ++ Utils.serializeConversation(D, T, Messages.convertToLlm(D, T, C, messages)) ++ "\n\n# Instructions\n" ++ TURN_PREFIX_SUMMARIZATION_PROMPT(), summaryBudget(F.divide(F.fromU32(1), F.fromU32(2)), reserveTokens, Ai.modelMaxTokens(model)), "Turn prefix summarization", signal, retry, callbacks)
 
 def addMaybe(left: Maybe<&2, F64>, right: Maybe<&2, F64>) -> Maybe<&2, F64>:
   match left right:

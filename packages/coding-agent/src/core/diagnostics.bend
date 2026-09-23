@@ -9,6 +9,11 @@ type DiagnosticType is Data:
   Warning{}
   Error{}
   Collision{}
+def typeName(kind: DiagnosticType) -> String:
+  match kind:
+    case Warning{}: "warning"
+    case Error{}: "error"
+    case Collision{}: "collision"
 type ResourceCollision is Data:
   ResourceCollision{resourceType: ResourceType,name: String,winnerPath: String,loserPath: String,winnerSource: Maybe<&2,String>,loserSource: Maybe<&2,String>}
 type ResourceDiagnostic is Data:

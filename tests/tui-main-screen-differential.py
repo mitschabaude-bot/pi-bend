@@ -1,4 +1,4 @@
-"""Compare native main-screen effects and state with pi-mono@46c9de402.
+"""Compare native main-screen effects and state with the pinned pi-mono (tests/upstream_pin.py).
 
 Set BEND_COMPILER to a current bend2/main.ts when the installed compiler lacks
 recent process constructors. Setting `BEND_MAIN_SCREEN_NATIVE` also compares a prebuilt binary named by

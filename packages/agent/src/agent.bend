@@ -26,7 +26,7 @@ type AgentInitialState<-DiagnosticDetails: Data, -Details: Data, -Custom: Data, 
 
 def defaultModel(-Value: Data) -> Ai.Model<Value>:
   +zero = F.fromU32(0)
-  Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
+  Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, zero, zero, None{}, None{}, None{}}
 
 def defaultConvertToLlm(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, messages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>) -> List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, Details>>:
   match messages:
@@ -691,7 +691,7 @@ def emptyUsage() -> Ai.Usage:
   Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, Ai.UsageCost{zero, zero, zero, zero, zero}}
 def failureMessage(-G: Data, model: Ai.Model<Ai.JsonValue>, aborted: Bool, error: String, timestamp: F64) -> Ai.AssistantMessage<Schema.Value, G>:
   match model:
-    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}:
+    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}:
       Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"", None{}}} <> Nil{}, Api.name(api), provider, id, None{}, None{}, None{}, None{}, emptyUsage(), Bool.pick(Ai.StopReason, aborted, Ai.Aborted{}, Ai.Error{}), None{}, Some{error}, None{}, None{}, timestamp}
 def fromState(-G: Data, -D: Data, -C: Data, -E: Data, agentState: T.AgentState<G, D, C, E>, aborted: Bool, error: String, timestamp: F64) -> T.AgentMessage<G, D, C>:
   match agentState:

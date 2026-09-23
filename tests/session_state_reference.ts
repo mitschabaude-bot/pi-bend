@@ -14,7 +14,10 @@ function watch(s:any){let depth=0;const steps:any[]=[];const testcase={name,head
 }
 class SessionManager extends actual.SessionManager{static inMemory(...args:any[]){return watch(actual.SessionManager.inMemory(...args))}}
 mock.module(root+'/src/core/session-manager.ts',()=>({...actual,SessionManager}));
-mock.module('vitest',()=>({expect,describe:(_name:string,fn:()=>void)=>fn(),it:(title:string,fn:()=>void)=>{if(['does not duplicate entries when forking from first user message','preserves tool and summary usage across a file-backed reload','writes file immediately when forking from a point with assistant messages'].includes(title)){skipped.push(title);return}name=title;fn();tests.push(title)}}));
+// An installed vitest resolves to its own path, which a bare-name mock misses.
+const vitestFactory=()=>({expect,describe:(_name:string,fn:()=>void)=>fn(),it:(title:string,fn:()=>void)=>{if(['does not duplicate entries when forking from first user message','preserves tool and summary usage across a file-backed reload','writes file immediately when forking from a point with assistant messages'].includes(title)){skipped.push(title);return}name=title;fn();tests.push(title)}});
+mock.module('vitest',vitestFactory);
+try{mock.module(Bun.resolveSync('vitest',root+'/test'),vitestFactory)}catch{};
 // Evaluate only the two actual pure fixture constructors, avoiding unrelated
 // provider catalogs/auth helpers imported by the utilities module.
 const utilities=readFileSync(root+'/test/utilities.ts','utf8');

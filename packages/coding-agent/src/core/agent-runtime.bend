@@ -277,7 +277,7 @@ def chosenModel(models: Models.ModelRuntime, settings: Settings.SettingsManager,
 
 def modelApi(model: Models.Model()) -> Ai.ModelApi:
   match model:
-    case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _}: api
+    case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _, _, _}: api
 
 # The OpenAI Responses and Codex Responses APIs stream through the modular provider.
 def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:

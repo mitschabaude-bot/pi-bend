@@ -4,12 +4,13 @@
 Build first: BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli
 Live checks run when PI_BEND_LIVE=1 and OPENAI_API_KEY are set."""
 import json, os, pathlib, re, subprocess, sys, tempfile
+from upstream_pin import PIN
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 UPSTREAM = ROOT.parent / 'pi-mono'
 CLI = pathlib.Path(os.environ.get('PI_BEND_CLI', str(ROOT / 'build/pi-cli')))
 
 def source(path):
-    return subprocess.check_output(['git', '-C', str(UPSTREAM), 'show', f'46c9de402:packages/coding-agent/{path}'], text=True)
+    return subprocess.check_output(['git', '-C', str(UPSTREAM), 'show', f'{PIN}:packages/coding-agent/{path}'], text=True)
 
 def run(args, stdin=b'', env=None, timeout=120, cwd=ROOT):
     merged = dict(os.environ)
@@ -144,7 +145,7 @@ if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
         check([json.dumps(e) for e in after[:3]] == [json.dumps(json.loads(o)) for o in original] and [e['type'] for e in after[3:]] == ['thinking_level_change', 'message', 'message'], 'the run records its thinking level, the prompt and the reply after the stored entries (AgentSession message_end persistence)')
         check(after[3]['parentId'] == 'aaaa0002' and after[4]['parentId'] == after[3]['id'] and after[5]['parentId'] == after[4]['id'] and after[4]['message']['role'] == 'user' and after[5]['message']['role'] == 'assistant' and after[5]['message'] == final, 'persisted entries chain from the stored leaf and the assistant entry equals the final message_end message')
 if os.environ.get('PI_BEND_CODEX_LIVE') == '1':
-    codex = run(['--no-tools', '--provider', 'openai-codex', '--model', 'gpt-5.5', '-p', 'Reply with exactly the word pong'],
+    codex = run(['--no-tools', '--provider', 'openai-codex', '--model', 'gpt-6-luna', '-p', 'Reply with exactly the word pong'],
                 env={'OPENAI_API_KEY': ''}, timeout=300)
     check(codex.returncode == 0 and codex.stdout.decode().strip().lower().rstrip('.') == 'pong' and codex.stderr == b'', 'Codex runs through the existing OAuth login')
 
@@ -155,7 +156,7 @@ if os.environ.get('PI_BEND_FIND_LIVE') == '1':
         (root / 'nested' / 'needle.txt').write_text('registry integration fixture\n')
         (root / '.gitignore').write_text('hidden.txt\n')
         (root / 'hidden.txt').write_text('must be ignored\n')
-        task = run(['--tools', 'find', '--provider', 'openai-codex', '--model', 'gpt-5.5', '--mode', 'json', '-p',
+        task = run(['--tools', 'find', '--provider', 'openai-codex', '--model', 'gpt-6-luna', '--mode', 'json', '-p',
                     'Call the find tool exactly once with pattern **/*.txt, path ., and limit 1. Then report the path it returned.'],
                    cwd=folder, env={'OPENAI_API_KEY': ''}, timeout=300)
         check(task.returncode == 0 and task.stderr == b'', 'native CLI completes a find-only model request')

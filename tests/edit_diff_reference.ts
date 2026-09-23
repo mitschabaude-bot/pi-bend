@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 const source = process.env.PI_MONO ?? '/home/agent/code/pi-mono';
 // Exclude unused IO/diff-rendering imports; execute the original pure source.
 const original=readFileSync(`${source}/packages/coding-agent/src/core/tools/edit-diff.ts`,'utf8');
-if(createHash('sha256').update(original).digest('hex')!=='f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d') throw Error('Unexpected edit-diff.ts revision; expected pinned46c9de402');
+if(createHash('sha256').update(original).digest('hex')!=='f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d') throw Error('Unexpected edit-diff.ts revision; expected pinnedf07218c4d');
 const code=original.split('/** Generate a standard unified patch. */')[0].replace(/^import .*;\n/gm,'');
 const edit=await import('data:text/javascript;base64,'+Buffer.from(stripTypeScriptTypes(code)).toString('base64'));
 const rows = JSON.parse(readFileSync(0,'utf8'));

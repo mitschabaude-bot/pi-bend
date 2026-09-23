@@ -14,7 +14,7 @@ def Input() -> Data: Transform.NormalizeToolCallIdInput<V.Value, Unit, Unit>
 def Output() -> Data: Result<&2, &2, String, String>
 def model() -> Ai.Model<Unit>:
   +zero = F.fromU32(0)
-  Ai.Model{"claude-sonnet-4.6", "Claude Sonnet 4.6", Ai.AnthropicMessagesApi{}, "github-copilot", "https://api.individual.githubcopilot.com", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(16000), None{}, None{}, None{}}
+  Ai.Model{"claude-sonnet-4.6", "Claude Sonnet 4.6", Ai.AnthropicMessagesApi{}, "github-copilot", "https://api.individual.githubcopilot.com", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(16000), None{}, None{}, None{}}
 def assistant(content: List<&2, Ai.AssistantContent<V.Value>>, api: String, id: String, reason: Ai.StopReason) -> Ai.AssistantMessage<V.Value, Unit>:
   +zero = F.fromU32(0)
   Ai.AssistantMessage{content, api, "github-copilot", id, None{}, None{}, None{}, None{}, Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, Ai.UsageCost{zero, zero, zero, zero, zero}}, reason, None{}, None{}, None{}, None{}, zero}

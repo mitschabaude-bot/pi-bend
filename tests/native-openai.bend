@@ -45,7 +45,7 @@ def config(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> P.Confi
     HTTP.WithTLS{authorizer, TLS.defaults()}, 65536n, False{}}
 
 def model(name: String, base: String) -> T.Model<T.JsonValue>:
-  T.Model{name, "Live integration", T.OpenAIResponsesApi{}, "openai", base, False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  T.Model{name, "Live integration", T.OpenAIResponsesApi{}, "openai", base, False{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def options(key: String) -> P.OpenAIResponsesOptions<Unit, Unit, String>:
   P.fromStreamOptions(Unit, Unit, String,

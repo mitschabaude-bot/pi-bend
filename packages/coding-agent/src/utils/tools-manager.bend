@@ -76,7 +76,7 @@ def run(command: String, args: List<String>) -> IO(Child.Completed):
 def spawnError(command: String, errors: List<&2,Child.Error>) -> Maybe<&2,String>:
   match errors:
     case Nil{}: None{}
-    case Child.Error{"spawn",code,_} <> _: Some{"spawnSync " ++ command ++ " " ++ Child.errnoName(code)}
+    case Child.Error{"spawn",code,_} <> _: Some{"spawnSync " ++ command ++ " " ++ FS.errnoName(code)}
     case _ <> rest: spawnError(command,rest)
 
 def started(completed: Child.Completed) -> Bool:

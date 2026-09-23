@@ -326,8 +326,8 @@ def xaiInclude(provider: String, fields: R.Record<T.JsonValue>) -> R.Record<T.Js
 
 def addReasoning(fields: R.Record<T.JsonValue>, model: T.Model<T.JsonValue>, +effort: Maybe<&2, T.ThinkingLevel>, summary: Maybe<&2, T.Nullable<ReasoningSummary>>) -> R.Record<T.JsonValue>:
   match model:
-    case T.Model{_, _, _, _, _, False{}, _, _, _, _, _, _, _, _}: fields
-    case T.Model{_, _, _, +provider, _, True{}, mapping, _, _, _, _, _, _, _}:
+    case T.Model{_, _, _, _, _, False{}, _, _, _, _, _, _, _, _, _, _}: fields
+    case T.Model{_, _, _, +provider, _, True{}, mapping, _, _, _, _, _, _, _, _, _}:
       +selected = summaryText(summary)
       xaiInclude(provider, configuredReasoning(reasoningRequested(effort, selected), fields, provider, mapping, effort, selected))
 
@@ -380,7 +380,7 @@ def tierValue(value: Maybe<&2, T.Nullable<ServiceTier>>) -> Maybe<&2, T.Nullable
 # The final wire object from already-encoded input items and tools.
 def assembledParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, retention: T.CacheRetention) -> T.JsonValue:
   match model options:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, maxTokens, _, _, session, _, _, effort, summary, tier, choice}:
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, maxTokens, _, _, session, _, _, effort, summary, tier, choice}:
       fields = baseFields(id, input, compat, retention, session)
       budgeted = optionalNumber(fields, "max_output_tokens", outputTokens(maxOutputSupport(compat), maxTokens))
       configured = optionalNullableString(optionalNumber(budgeted, "temperature", temperature), "service_tier", tierValue(tier))
@@ -392,7 +392,7 @@ def assembledParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T
 # an explicit tool choice, and no output-token budget or cache retention.
 def codexParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, retention: T.CacheRetention, instructions: String) -> T.JsonValue:
   match model options:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, _, _, _, session, _, _, effort, summary, tier, choice}:
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, _, _, _, session, _, _, effort, summary, tier, choice}:
       fields = {R.Record{R.Property{"model", T.JsonString{id}} <> R.Property{"store", T.JsonBoolean{False{}}} <> R.Property{"stream", T.JsonBoolean{True{}}} <> R.Property{"instructions", T.JsonString{instructions}} <> R.Property{"input", T.JsonArray{input}} <> R.Property{"text", T.JsonObject{R.Record{R.Property{"verbosity", T.JsonString{"low"}} <> Nil{}}}} <> R.Property{"include", T.JsonArray{T.JsonString{"reasoning.encrypted_content"} <> Nil{}}} <> Nil{}} : R.Record<T.JsonValue>}
       keyed = optionalString(fields, "prompt_cache_key", promptCacheKey(retention, session))
       chosen = R.set(T.JsonValue, R.set(T.JsonValue, keyed, "tool_choice", Maybe.default(&2, T.JsonValue, choice, T.JsonString{"auto"})), "parallel_tool_calls", T.JsonBoolean{True{}})
@@ -493,7 +493,7 @@ def compatible(api: T.ModelApi, +provider: String, +baseUrl: String, headers: Ma
 
 def modelSettings(model: T.Model<T.JsonValue>) -> Result<&2, &2, PreparationError, ModelSettings>:
   match model:
-    case T.Model{_, _, api, provider, baseUrl, _, _, _, _, _, _, _, headers, compat}: compatible(api, provider, baseUrl, headers, compat)
+    case T.Model{_, _, api, provider, baseUrl, _, _, _, _, _, _, _, _, _, headers, compat}: compatible(api, provider, baseUrl, headers, compat)
 
 def grammarResult(result: Result<&2, &2, Sampling.Error, R.Record<String>>) -> Result<&2, &2, PreparationError, R.Record<String>>:
   match result:
@@ -624,7 +624,7 @@ def scaled(multiplier: Maybe<&2, F64>, usage: T.Usage) -> T.Usage:
 # one leaves the usage untouched, including its cost total.
 def applyServiceTierPricing(model: T.Model<T.JsonValue>, serviceTier: Maybe<&2, String>, usage: T.Usage) -> T.Usage:
   match model:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: scaled(getServiceTierCostMultiplier(id, serviceTier), usage)
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: scaled(getServiceTierCostMultiplier(id, serviceTier), usage)
 
 # Errors
 # ------
@@ -833,7 +833,7 @@ type RunResult<-Reason: Data, -G: Data, -E: Data> is Data:
 
 def initialMessage(-G: Data, model: T.Model<T.JsonValue>, timestamp: F64) -> T.AssistantMessage<V.Value, G>:
   match model:
-    case T.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}:
+    case T.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}:
       +zero = F.fromU32(0)
       T.AssistantMessage{Nil{}, Api.name(api), provider, id, None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, T.UsageCost{zero, zero, zero, zero, zero}}, T.Pending{}, None{}, None{}, None{}, None{}, timestamp}
 

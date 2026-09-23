@@ -53,7 +53,7 @@ def inputMessages(tags: List<&2, String>) -> Messages():
     case tag <> rest: fixtureMessage(tag) <> inputMessages(rest)
 def target(same: Bool) -> Ai.Model<Unit>:
   +zero = F.fromU32(0)
-  Ai.Model{Bool.pick(String, same, "test", "foreign"), "Test", Ai.OpenAIResponsesApi{}, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  Ai.Model{Bool.pick(String, same, "test", "foreign"), "Test", Ai.OpenAIResponsesApi{}, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 def firstText(content: List<&2, Ai.AssistantContent<String>>) -> String:
   match content:
     case Ai.AssistantText{Ai.TextContent{text, signature}} <> _:
@@ -64,7 +64,7 @@ def sourceTag(source: Ai.AssistantMessage<String, Unit>) -> String:
     case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: firstText(content)
 def targetId(model: Ai.Model<Unit>) -> String:
   match model:
-    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
+    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
 
 def increment(+old: U32) -> U32 & U32: (U32.add(old, 1), old)
 def decision(mode: U32, index: U32, +id: String) -> Output():

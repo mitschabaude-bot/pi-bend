@@ -13,7 +13,7 @@ import ./json-value-data.bend as Data
 
 def prepareModel(provider: String, compat: Maybe<&2, T.OpenAIResponsesCompat>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{"target", "Target", T.OpenAIResponsesApi{}, provider, "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, Some{R.Record{R.Property{"User-Agent", "model-agent"} <> R.Property{"authorization", "model-only"} <> Nil{}}}, compat}
+  T.Model{"target", "Target", T.OpenAIResponsesApi{}, provider, "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, Some{R.Record{R.Property{"User-Agent", "model-agent"} <> R.Property{"authorization", "model-only"} <> Nil{}}}, compat}
 
 def callerHeaders(scenario: U32) -> Maybe<&2, T.ProviderHeaders()>:
   match scenario:

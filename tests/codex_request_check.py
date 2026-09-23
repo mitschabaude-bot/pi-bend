@@ -1,7 +1,7 @@
 """Compare Codex body framing against the actual pinned pure request builder."""
 import itertools, json, pathlib, subprocess, sys
+from upstream_pin import PIN
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-PIN='46c9de402bddf46b03c3b9f46487b777aaa41861'
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()==PIN
 FIELDS=['supportsDeveloperRole','supportsMidConvoSystemMessages','sessionAffinityFormat','supportsLongCacheRetention','supportsStrictMode','supportsOpenAIGrammarTools','supportsAdditionalTools','supportsToolSearch','supportsExplicitPromptCacheMode','supportsMaxOutputTokens']
 schema={'type':'object','properties':{'input':{'type':'string'}},'required':['input']}

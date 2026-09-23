@@ -14,7 +14,7 @@ def usage(values: Counters, cost: T.UsageCost) -> T.Usage:
     case Counters{input, output, cacheRead, cacheWrite, longWrite, reasoning, total}: T.Usage{input, output, cacheRead, cacheWrite, longWrite, reasoning, total, cost}
 
 def model(cost: T.ModelCost) -> T.Model<Unit>:
-  T.Model{"gpt-5.6-sol", "gpt-5.6-sol", T.CustomModelApi{"test-api"}, "openai", "https://example.test/v1", False{}, None{}, T.InputText{} <> Nil{}, cost, F.fromU32(10000), F.fromU32(1000), None{}, None{}, None{}}
+  T.Model{"gpt-5.6-sol", "gpt-5.6-sol", T.CustomModelApi{"test-api"}, "openai", "https://example.test/v1", False{}, None{}, T.InputText{} <> Nil{}, None{}, cost, None{}, F.fromU32(10000), F.fromU32(1000), None{}, None{}, None{}}
 
 def nan(value: F.Decoded) -> Bool:
   match value:

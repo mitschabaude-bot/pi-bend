@@ -4,7 +4,7 @@ against tests/compaction.bend (packages/coding-agent/src/core/compaction)."""
 import argparse, json, subprocess
 from pathlib import Path
 
-SCENARIOS = ['tokens', 'last-usage', 'estimate', 'should-compact', 'cut-tokens', 'cut-none', 'cut-fits', 'cut-split', 'cut-custom-tiny', 'cut-custom-fits',
+SCENARIOS = ['tokens', 'last-usage', 'estimate', 'should-compact', 'cut-tokens', 'cut-none', 'cut-fits', 'cut-split', 'cut-custom-tiny', 'cut-custom-fits', 'cut-trailing-tool', 'prepare-trailing-tool',
              'context-plain', 'context-single', 'context-multiple', 'context-first', 'context-changes', 'prepare-system', 'prepare-skip', 'prepare-move',
              'serialize-long', 'serialize-short', 'serialize-plain', 'serialize-mixed', 'file-ops']
 
@@ -57,6 +57,11 @@ def main():
     system = r['prepare-system']
     assert system is not None and system['firstKeptEntryId'] == 'test-id-2' and system['isSplitTurn'] and system['summarized'] == '' and system['prefix'] == 'one long turn', system
     assert r['prepare-skip'] is None, r['prepare-skip']
+    # #9740: oversized trailing tool results fall back to the last valid cut point.
+    trailing = r['cut-trailing-tool']
+    assert (trailing['firstKeptEntryIndex'], trailing['turnStartIndex'], trailing['isSplitTurn']) == (3, 2, True), trailing
+    trailing = r['prepare-trailing-tool']
+    assert trailing['firstKeptEntryId'] == 'test-id-3' and trailing['summarized'] == 'old history\nold answer' and trailing['prefix'] == 'read the large file', trailing
     move = r['prepare-move']
     assert move is not None and 'user msg 2 - kept by compaction1' in move['summarized'] and 'user msg 3 - kept by compaction1' in move['summarized'] and 'First summary' not in move['summarized'] and move['previousSummary'] == 'First summary', move
     checks += 3

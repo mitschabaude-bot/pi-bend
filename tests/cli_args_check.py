@@ -1,6 +1,7 @@
 """Pinned named CLI assertions plus complete-result differential comparisons."""
 import argparse,json,pathlib,random,subprocess,tempfile
-ROOT=pathlib.Path(__file__).resolve().parents[1];UPSTREAM=ROOT.parent/'pi-mono';PIN='46c9de402bddf46b03c3b9f46487b777aaa41861'
+from upstream_pin import PIN
+ROOT=pathlib.Path(__file__).resolve().parents[1];UPSTREAM=ROOT.parent/'pi-mono'
 p=argparse.ArgumentParser();p.add_argument('--prefix',default='build/cli-args');p.add_argument('backends',nargs='*');a=p.parse_args()
 def source(path):return subprocess.check_output(['git','-C',str(UPSTREAM),'show',PIN+':packages/coding-agent/'+path],text=True)
 rng=random.Random(54149)

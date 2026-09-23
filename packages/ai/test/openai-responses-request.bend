@@ -12,7 +12,7 @@ import ./openai-responses-policy-runner.bend as P
 
 def model(compat: Maybe<&2, T.OpenAIResponsesCompat>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{"target", "Target", T.OpenAIResponsesApi{}, "openai", "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
+  T.Model{"target", "Target", T.OpenAIResponsesApi{}, "openai", "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
 
 def schema() -> V.Value:
   V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"input", V.ObjectValue{R.Record{R.Property{"type", V.Text{"string"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"input"} <> Nil{}}} <> Nil{}}}

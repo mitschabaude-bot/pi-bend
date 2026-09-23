@@ -113,7 +113,7 @@ def recordCompaction(session: Session(), summary: String, firstKeptEntryId: Stri
 
 def recordModel(session: Session(), model: Ai.Model<Ai.JsonValue>) -> IO(Sessions.Outcome(Appended())):
   match model:
-    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _}: Sessions.appendModelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, provider, id)
+    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Sessions.appendModelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, provider, id)
 
 def stateMessages(value: AgentState()) -> List<&2, Message()>:
   match value:
@@ -125,7 +125,7 @@ def stateModel(value: AgentState()) -> Ai.Model<Ai.JsonValue>:
 
 def modelIdentity(model: Ai.Model<Ai.JsonValue>) -> Settings.ModelIdentity:
   match model:
-    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _}: Settings.ModelIdentity{provider, id}
+    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Settings.ModelIdentity{provider, id}
 
 def stateThinking(value: AgentState()) -> Ai.ModelThinkingLevel:
   match value:
@@ -808,7 +808,7 @@ def summaryConfig(config: Runtime.LoopConfig(), model: Ai.Model<Ai.JsonValue>, o
 
 def errorReply(model: Ai.Model<Ai.JsonValue>, message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
   match model:
-    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}: Ai.AssistantMessage{Nil{}, ModelApi.name(api), provider, id, None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
+    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Ai.AssistantMessage{Nil{}, ModelApi.name(api), provider, id, None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
 
 def leaseMessage(model: Ai.Model<Ai.JsonValue>, response: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   match response:

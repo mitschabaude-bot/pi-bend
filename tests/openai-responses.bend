@@ -249,7 +249,7 @@ def tier(mode: U32) -> Maybe<&2, T.Nullable<P.ServiceTier>>:
     case _: None{}
 
 def model(mode: U32, port: U32) -> T.Model<T.JsonValue>:
-  T.Model{Bool.pick(String, U32.is_eq(mode, 26), "gpt-5.5", "test"), "Test", T.OpenAIResponsesApi{}, "openai", "http://127.0.0.1:" ++ U32.show(port) ++ "/v1", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{F.fromU32(1000000), F.fromU32(2000000), F.fromU32(3000000), F.fromU32(4000000), None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, Some{T.OpenAIResponsesCompat{None{}, None{}, None{}, None{}, None{}, Some{True{}}, None{}, None{}, None{}, None{}}}}
+  T.Model{Bool.pick(String, U32.is_eq(mode, 26), "gpt-5.5", "test"), "Test", T.OpenAIResponsesApi{}, "openai", "http://127.0.0.1:" ++ U32.show(port) ++ "/v1", False{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{F.fromU32(1000000), F.fromU32(2000000), F.fromU32(3000000), F.fromU32(4000000), None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, Some{T.OpenAIResponsesCompat{None{}, None{}, None{}, None{}, None{}, Some{True{}}, None{}, None{}, None{}, None{}}}}
 
 def grammarSchema() -> V.Value:
   V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"program", V.ObjectValue{R.Record{R.Property{"type", V.Text{"string"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"program"} <> Nil{}}} <> Nil{}}}

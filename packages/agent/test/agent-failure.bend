@@ -116,7 +116,7 @@ def resultKey(result: EventTest.Outcome()) -> String:
     case Fail{Events.OutsideRun{message}}: "outside:" ++ message
 def model() -> Ai.Model<Ai.JsonValue>:
   +zero = F.fromU32(0)
-  Ai.Model{"failure-model", "Failure", Ai.CustomModelApi{"failure-api"}, "failure-provider", "", False{}, None{}, Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
+  Ai.Model{"failure-model", "Failure", Ai.CustomModelApi{"failure-api"}, "failure-provider", "", False{}, None{}, Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, zero, zero, None{}, None{}, None{}}
 def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
     Test.assertion(valid(Failure.failureMessage(Unit, model(), aborted, error, F.fromU32(42)), aborted, error, F.fromU32(42), F.fromU32(42)), "explicit failure constructor preserves timestamp and complete message shape")

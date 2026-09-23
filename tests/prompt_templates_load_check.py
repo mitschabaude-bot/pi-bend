@@ -7,6 +7,7 @@ def optional(value):return 'none' if value is None else wire(value)
 def row(t):
  s=t['sourceInfo']
  return '|'.join(['template',wire(t['name']),wire(t['description']),optional(t.get('argumentHint')),wire(t['content']),wire(t['filePath']),wire(s['path']),s['source'],s['scope'],s['origin'],optional(s.get('baseDir'))])
+def diagnostic(d):return '|'.join(['diagnostic',d['type'],optional(d.get('path')),wire(d['message'])])
 def main():
  p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=ROOT.parent/'pi-mono/packages/coding-agent');a=p.parse_args()
  cmd=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
@@ -41,7 +42,8 @@ def main():
   def reference(paths,defaults=True):
    options=dict(cwd=str(cwd),agentDir=str(agent),promptPaths=[str(x) for x in paths],includeDefaults=defaults)
    path=root/'options.json';path.write_text(json.dumps(options))
-   return [row(x) for x in json.loads(subprocess.check_output(['bun',str(ROOT/'tests/prompt_templates_reference.ts'),str(a.reference),str(path),'load'],text=True))]
+   result=json.loads(subprocess.check_output(['bun',str(ROOT/'tests/prompt_templates_reference.ts'),str(a.reference),str(path),'load'],text=True))
+   return [row(x) for x in result['templates']]+[diagnostic(x) for x in result['diagnostics']]
   scenarios=[([],True),([extras],False),([extras,agent/'prompts/same.md',extras/'pr.md'],True),(['../extras',root/'missing'],False),([extras/'ignored.MD',extras/'pipe.md',extras/'nested'],False),([extras/'pr.md',extras/'pr.md'],False),([extras.as_uri()],False)]
   count=0
   for paths,defaults in scenarios:
@@ -52,19 +54,27 @@ def main():
   put(home/'tilde.md','home');assert native(['~/tilde.md'],False)==reference([home/'tilde.md'],False)
   (cwd/'.custom/prompts').mkdir(parents=True);put(cwd/'.custom/prompts/custom.md','custom')
   custom=native([],True,'.custom');assert len(custom)==2 and custom[1].startswith('template|'+wire('custom')+'|'),custom
-  # Reject wrong metadata types / invalid bytes instead of JS truthiness or replacement decoding.
+  # Non-string metadata is ignored, invalid bytes decode with replacement and
+  # malformed frontmatter is a warning (upstream b6419322e).
   bad=root/'bad';bad.mkdir()
   put(bad/'description.md','---\ndescription: 42\n---\nbody')
   put(bad/'hint.md','---\nargument-hint: false\n---\nbody')
   put(bad/'yaml.md','---\ndescription: [unterminated\n---\nbody')
   (bad/'bytes.md').write_bytes(b'\xffbody')
-  rows=native([bad],False);assert len(rows)==4 and all(x.startswith('diagnostic|') for x in rows),rows
+  rows=native([bad],False);want=reference([bad],False)
+  # The YAML warning's prose is the yaml package's; ours keeps its own wording
+  # (docs/upstream-v0.87.1.md), so only its path and location must agree.
+  def located(row):
+   kind,level,path,message=row.split('|');text=''.join(chr(int(c)) for c in message.split(','))
+   return (kind,level,path,text[text.index(' at line '):].split(':')[0])
+  assert [r for r in rows if not r.startswith('diagnostic|')]==[r for r in want if not r.startswith('diagnostic|')],(rows,want)
+  assert [located(r) for r in rows if r.startswith('diagnostic|')]==[located(r) for r in want if r.startswith('diagnostic|')],(rows,want)
   # A 60-UTF16-unit display budget must not manufacture half a surrogate pair.
   boundary=put(root/'boundary.md','x'*59+'😀end')
   rows=native([boundary],False);assert rows[0].split('|')[2]==wire('x'*59+'...'),rows
   unreadable=put(root/'unreadable.md','private');unreadable.chmod(0)
   try:
-   rows=native([unreadable],False);assert len(rows)==1 and rows[0].startswith('diagnostic|'),rows
+   rows=native([unreadable],False);assert rows==reference([unreadable],False) and rows[0].startswith('diagnostic|warning|'),rows
   finally:unreadable.chmod(0o600)
-  print(f'{len(scenarios)} pinned discovery scenarios / {count} templates; all five original argument-hint cases, typed rejection, symlinks, nonfiles, config and UTF16 boundary passed')
+  print(f'{len(scenarios)} pinned discovery scenarios / {count} templates; all five original argument-hint cases, warnings for malformed or unreadable templates, symlinks, nonfiles, config and UTF16 boundary passed')
 if __name__=='__main__':main()

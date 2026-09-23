@@ -104,7 +104,7 @@ def step(index: U32, state: Value()) -> Value():
 def zero(value: F64) -> Bool: V.equal(V.Number{value}, V.Number{F.fromU32(0)})
 def defaultModelMatches(model: Ai.Model<Ai.JsonValue>) -> Bool:
   match model:
-    case Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, maximum, None{}, None{}, None{}}:
+    case Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, _, Ai.ModelCost{a, b, c, d, None{}}, _, context, maximum, None{}, None{}, None{}}:
       zero(a) && zero(b) && zero(c) && zero(d) && zero(context) && zero(maximum)
     case _: False{}
 

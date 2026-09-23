@@ -190,6 +190,12 @@ def toolCallMessage(name: String, path: String) -> Msg():
   Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Ai.AssistantToolCall{Ai.ToolCall{"tc", name, V.ObjectValue{R.Record{R.Property{"path", V.Text{path}} <> Nil{}}}, None{}, None{}}} <> Nil{}, "anthropic-messages", "anthropic", "claude-sonnet-4-5", None{}, None{}, None{}, None{}, mockUsage(1, 1, 0, 0), Ai.Stop{}, None{}, None{}, None{}, None{}, n(1000)}}}
 
 
+# compaction.test.ts #9740: trailing tool results alone exceed the budget.
+def trailingTool() -> List<&2, Entry()>:
+  entries(m(user("old history")) <> m(plain("old answer")) <> m(user("read the large file")) <>
+    m(Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Ai.AssistantToolCall{Ai.ToolCall{"call-1", "read", V.ObjectValue{R.Record{R.Property{"path", V.Text{"big.txt"}} <> Nil{}}}, None{}, None{}}} <> Nil{}, "anthropic-messages", "anthropic", "claude-sonnet-4-5", None{}, None{}, None{}, None{}, mockUsage(100, 50, 0, 0), Ai.ToolUse{}, None{}, None{}, None{}, None{}, n(1000)}}}) <>
+    m(Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{"call-1", "read", Ai.TextImageText{Ai.TextContent{String.repeat("x", 8000n), None{}}} <> Nil{}, None{}, None{}, False{}, n(1000)}}}) <> Nil{})
+
 def quotedAll(values: List<&2, String>) -> List<&2, String>:
   match values:
     case Nil{}: Nil{}
@@ -220,6 +226,8 @@ def scenario(name: String) -> String:
     case "cut-split": cut(entries(m(user("Turn 1")) <> m(assistant("A1", mockUsage(0, 100, 1000, 0))) <> m(user("Turn 2")) <> m(assistant("A2-1", mockUsage(0, 100, 5000, 0))) <> m(assistant("A2-2", mockUsage(0, 100, 8000, 0))) <> m(assistant("A2-3", mockUsage(0, 100, 10000, 0))) <> Nil{}), 3000)
     case "cut-custom-tiny": cut(entries(m(user("hi")) <> m(plain("hello")) <> CustomOf{String.repeat("x", 4000n)} <> m(plain("ok")) <> Nil{}), 1)
     case "cut-custom-fits": cut(entries(m(user("hi")) <> m(plain("hello")) <> CustomOf{String.repeat("x", 4000n)} <> m(plain("ok")) <> Nil{}), 2)
+    case "cut-trailing-tool": cut(trailingTool(), 1000)
+    case "prepare-trailing-tool": prepare(trailingTool(), 1000)
     case "context-plain": context(entries(m(user("1")) <> m(plain("a")) <> m(user("2")) <> m(plain("b")) <> Nil{}))
     case "context-single": context(entries(m(user("1")) <> m(plain("a")) <> m(user("2")) <> m(plain("b")) <> CompactionOf{"Summary of 1,a,2,b", 2n} <> m(user("3")) <> m(plain("c")) <> Nil{}))
     case "context-multiple": context(entries(m(user("1")) <> m(plain("a")) <> CompactionOf{"First summary", 0n} <> m(user("2")) <> m(plain("b")) <> m(user("3")) <> m(plain("c")) <> CompactionOf{"Second summary", 5n} <> m(user("4")) <> m(plain("d")) <> Nil{}))

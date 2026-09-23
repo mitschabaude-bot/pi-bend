@@ -79,7 +79,8 @@ def recognized(bytes: List<&2,U32>) -> Maybe<&2,String>:
   match bytes:
     case 255 <> 216 <> 255 <> rest: jpeg(rest)
     case 137 <> 80 <> 78 <> 71 <> 13 <> 10 <> 26 <> 10 <> rest: png(rest)
-    case 71 <> 73 <> 70 <> _: Some{"image/gif"}
+    case 71 <> 73 <> 70 <> 56 <> 55 <> 97 <> _: Some{"image/gif"}
+    case 71 <> 73 <> 70 <> 56 <> 57 <> 97 <> _: Some{"image/gif"}
     case 82 <> 73 <> 70 <> 70 <> _ <> _ <> _ <> _ <> 87 <> 69 <> 66 <> 80 <> _: Some{"image/webp"}
     case 66 <> 77 <> rest: bmp(rest)
     case _: None{}

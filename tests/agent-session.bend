@@ -56,7 +56,7 @@ def holdAt(gate: Maybe<&2, Gate>) -> IO(Unit):
         return Unit{}
 
 def fauxModel() -> Ai.Model<Ai.JsonValue>:
-  Ai.Model{"faux-model", "Faux", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Nil{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
+  Ai.Model{"faux-model", "Faux", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Nil{}, None{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, None{}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
 
 # A scripted response is its text, optionally "text#tokens" to report that
 # much context usage, "~text" to stop at the length limit, or "!message" to

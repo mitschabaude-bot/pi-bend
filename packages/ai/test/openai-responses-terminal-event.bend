@@ -12,7 +12,7 @@ import ../../runtime/test/schema.bend as A
 # do not inspect wall time. The provider-wrapper case remains unported.
 def createModel() -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{"gpt-5-mini", "GPT-5 Mini", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(400000), F.fromU32(128000), None{}, None{}, None{}}
+  T.Model{"gpt-5-mini", "GPT-5 Mini", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", True{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(400000), F.fromU32(128000), None{}, None{}, None{}}
 
 def createOutput() -> T.AssistantMessage<V.Value, Unit>:
   +zero = F.fromU32(0)

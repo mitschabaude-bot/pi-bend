@@ -9,6 +9,7 @@ import struct
 import subprocess
 import tempfile
 import zlib
+from upstream_pin import PIN
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
@@ -18,7 +19,6 @@ p.add_argument('--photon', required=True)
 args = p.parse_args()
 photon = Path(args.photon).resolve()
 assert json.loads((photon.parent/'package.json').read_text())['version'] == '0.3.4'
-PIN = '46c9de402bddf46b03c3b9f46487b777aaa41861'
 
 
 def source(name):

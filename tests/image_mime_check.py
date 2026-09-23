@@ -25,7 +25,7 @@ def bmp(header=40, planes=1, depth=24, size=58, pixels=54):
 
 
 def corpus():
-    cases = [b'', b'not an image', b'GIF', b'GIF00?', b'RIFF\0\0\0\0WEBP', b'RIFFxxxxWAVE']
+    cases = [b'', b'not an image', b'GIF', b'GIF00?', b'GIF87a', b'GIF88a', b'GIF89', b'GIF89a', b'RIFF\0\0\0\0WEBP', b'RIFFxxxxWAVE']
     cases += [b'\xff\xd8\xff'] + [b'\xff\xd8\xff'+bytes([n]) for n in range(256)]
     seeds = [PNG + chunk(b'IHDR', b'\0'*13), b'GIF89a', b'RIFF1234WEBP', bmp()]
     for value in seeds:

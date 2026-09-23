@@ -1,4 +1,4 @@
-"""Port of packages/agent/test/harness/truncate.test.ts at 46c9de402.
+"""Port of packages/agent/test/harness/truncate.test.ts at the pinned pi-mono.
 
 Preserves all nine named tests, including the exhaustive and seeded UTF-16
 surrogate fuzz cases. Python only drives the compiled native Bend functions.

@@ -66,12 +66,12 @@ def comparison(value: Maybe<&2, Cmp>) -> Bool:
 def equals(value: F64, expected: U32) -> Bool: comparison(F.compare(value, F.fromU32(expected)))
 def completeModel(model: Ai.Model<Ai.JsonValue>, expectedApi: String) -> Bool:
   match model:
-    case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)
+    case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, _, Ai.ModelCost{a, b, c, d, None{}}, _, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)
     case _: False{}
 def emptyPending(values: Set.StringSet) -> Bool: Nat.is_eq(List.length(&2, String, Set.toList(values)), 0n)
 def defaultState(value: Snapshot()) -> Bool:
   match value:
-    case T.AgentState{Ai.Model{"unknown", _, _, _, _, _, _, _, _, _, _, _, _, _}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)
+    case T.AgentState{Ai.Model{"unknown", _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)
     case _: False{}
 def customState(value: Snapshot()) -> Bool:
   match value:

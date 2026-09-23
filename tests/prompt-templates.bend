@@ -84,9 +84,9 @@ def showTemplates(values: List<&2,P.PromptTemplate>) -> IO(Unit):
 def showDiagnostics(values: List<&2,Diagnostics.ResourceDiagnostic>) -> IO(Unit):
   match values:
     case Nil{}: IO.pure(Unit,Unit{})
-    case Diagnostics.ResourceDiagnostic{_,message,path,_} <> rest:
+    case Diagnostics.ResourceDiagnostic{kind,message,path,_} <> rest:
       do IO<Unit>:
-        IO.print("diagnostic|" ++ optional(path) ++ "|" ++ W.showText(message))
+        IO.print("diagnostic|" ++ Diagnostics.typeName(kind) ++ "|" ++ optional(path) ++ "|" ++ W.showText(message))
         showDiagnostics(rest)
 
 def loaded(value: Result<&2,&2,Paths.Error,P.LoadResult>) -> IO(Unit):

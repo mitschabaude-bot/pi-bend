@@ -86,7 +86,7 @@ def options(+value: V.Value) -> Options():
 
 def model(id: String, provider: String, reasoning: Bool, thinking: Maybe<&2, T.ThinkingLevelMap>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{id, "Test", T.OpenAIResponsesApi{}, provider, "", reasoning, thinking, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  T.Model{id, "Test", T.OpenAIResponsesApi{}, provider, "", reasoning, thinking, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def jsonItems(values: List<&2, V.Value>) -> List<&2, T.JsonValue>:
   match values:

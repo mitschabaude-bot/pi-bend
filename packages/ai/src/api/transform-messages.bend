@@ -49,7 +49,7 @@ def supportsImages(input: List<&2, Ai.ModelInput>) -> Bool:
 
 def imageCapability(-J: Data, model: Ai.Model<J>) -> Bool:
   match model:
-    case Ai.Model{_, _, _, _, _, _, _, input, _, _, _, _, _, _}: supportsImages(input)
+    case Ai.Model{_, _, _, _, _, _, _, input, _, _, _, _, _, _, _, _}: supportsImages(input)
 
 def downgradeSelected(-P: Data, -A: Data, -G: Data, -D: Data, enabled: Bool, messages: List<&2, Ai.Message<P, A, G, D>>) -> List<&2, Ai.Message<P, A, G, D>>:
   match enabled:
@@ -66,7 +66,7 @@ type Target is Data:
 
 def target(-J: Data, model: Ai.Model<J>) -> Target:
   match model:
-    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}: Target{Api.name(api), provider, id}
+    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Target{Api.name(api), provider, id}
 
 def sameModel(-A: Data, -G: Data, target: Target, source: Ai.AssistantMessage<A, G>) -> Bool:
   match target source:

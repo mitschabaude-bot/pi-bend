@@ -535,7 +535,7 @@ def supportsDeveloper(api: T.ModelApi, compatibility: Maybe<&2, T.ModelCompatibi
 
 def instructionRole(-J: Data, model: T.Model<J>) -> InstructionRole:
   match model:
-    case T.Model{_, _, api, _, _, reasoning, _, _, _, _, _, _, _, compatibility}: Bool.pick(InstructionRole, reasoning && supportsDeveloper(api, compatibility), DeveloperRole{}, SystemRole{})
+    case T.Model{_, _, api, _, _, reasoning, _, _, _, _, _, _, _, _, _, compatibility}: Bool.pick(InstructionRole, reasoning && supportsDeveloper(api, compatibility), DeveloperRole{}, SystemRole{})
 
 def anchors(-P: Data, tools: Transcript.TranscriptTools<P>) -> Bool:
   match tools:

@@ -9,7 +9,7 @@ import ../../../runtime/src/f64.bend as F
 # length stops with no output that fill the window.
 
 def overflowPatterns() -> List<&2, String>:
-  "prompt is too long" <> "request_too_large" <> "input is too long for requested model" <> "exceeds the context window" <>
+  "prompt (?:is )?too long" <> "request_too_large" <> "input is too long for requested model" <> "exceeds the context window" <>
   "exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\\d,]+ tokens?|\\s*\\([\\d,]+\\))" <>
   "input token count.*exceeds the maximum" <> "maximum prompt length is \\d+" <> "reduce the length of the messages" <>
   "maximum context length is \\d+ tokens" <> "exceeds (?:the )?maximum allowed input length of [\\d,]+ tokens?" <>
@@ -18,7 +18,7 @@ def overflowPatterns() -> List<&2, String>:
   "exceeded model token limit" <> "too large for model with \\d+ maximum context length" <>
   "prompt has [\\d,]+ tokens?, but the configured context size is [\\d,]+ tokens?" <> "model_context_window_exceeded" <>
   "prompt too long; exceeded (?:max )?context length" <> "range of input length should be" <> "context[_ ]length[_ ]exceeded" <>
-  "too many tokens" <> "token limit exceeded" <> "^4(?:00|13)\\s*(?:status code)?\\s*\\(no body\\)" <> Nil{}
+  "too many tokens" <> "token limit exceeded" <> Nil{}
 
 # Throttling and server errors are excluded even when they also match above.
 def nonOverflowPatterns() -> List<&2, String>:
@@ -34,12 +34,17 @@ def matchesAny(patterns: List<&2, String>, +text: String) -> Bool:
     case Nil{}: False{}
     case pattern <> rest: Bool.pick(Unit -> Bool, matched(Regex.compile(pattern, True{}), text), _ => True{}, _ => matchesAny(rest, text))(Unit{})
 
-def overflowText(+text: String) -> Bool:
-  Bool.pick(Unit -> Bool, Bool.or(String.eq(text, ""), matchesAny(nonOverflowPatterns(), text)), _ => False{}, _ => matchesAny(overflowPatterns(), text))(Unit{})
+# Cerebras answers an oversized request with a bodyless 400 or 413; from other
+# providers that text means something else.
+def cerebrasBodylessOverflow() -> String: "^4(?:00|13)\\s*(?:status code)?\\s*\\(no body\\)"
 
-def overflowError(stopReason: T.StopReason, errorMessage: Maybe<&2, String>) -> Bool:
+def overflowText(+text: String, +provider: String) -> Bool:
+  Bool.pick(Unit -> Bool, Bool.or(String.eq(text, ""), matchesAny(nonOverflowPatterns(), text)), _ => False{},
+    _ => Bool.or(matchesAny(overflowPatterns(), text), Bool.and(String.eq(provider, "cerebras"), matchesAny([cerebrasBodylessOverflow()], text))))(Unit{})
+
+def overflowError(stopReason: T.StopReason, errorMessage: Maybe<&2, String>, provider: String) -> Bool:
   match stopReason errorMessage:
-    case T.Error{} Some{text}: overflowText(text)
+    case T.Error{} Some{text}: overflowText(text, provider)
     case _ _: False{}
 
 def inputTokens(usage: T.Usage) -> F64:
@@ -61,8 +66,8 @@ def usageOverflow(+contextWindow: F64, stopReason: T.StopReason, +usage: T.Usage
 
 def isContextOverflow(-Arguments: Data, -DiagnosticDetails: Data, message: T.AssistantMessage<Arguments, DiagnosticDetails>, contextWindow: F64) -> Bool:
   match message:
-    case T.AssistantMessage{_, _, _, _, _, _, _, _, usage, +stopReason, _, errorMessage, _, _, _}:
-      Bool.or(overflowError(stopReason, errorMessage), usageOverflow(contextWindow, stopReason, usage))
+    case T.AssistantMessage{_, _, provider, _, _, _, _, _, usage, +stopReason, _, errorMessage, _, _, _}:
+      Bool.or(overflowError(stopReason, errorMessage, provider), usageOverflow(contextWindow, stopReason, usage))
 
 # A length stop below the caller's intended output limit may be recoverable
 # by one bounded compact-and-retry attempt.

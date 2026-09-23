@@ -167,7 +167,7 @@ def trimmed(lines: List<&2,String>) -> List<&2,String>:
 
 def fdFailure(fdPath: String,errors: List<&2,Child.Error>) -> String:
   match errors:
-    case Child.Error{"spawn",code,_} <> _: "spawn " ++ fdPath ++ " " ++ Child.errnoName(code)
+    case Child.Error{"spawn",code,_} <> _: "spawn " ++ fdPath ++ " " ++ FS.errnoName(code)
     case Child.Error{operation,_,message} <> _: operation ++ ": " ++ message
     case Nil{}: "unknown error"
 

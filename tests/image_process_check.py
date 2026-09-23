@@ -10,9 +10,9 @@ import tempfile
 import zlib
 from webp_lossless_check import constant, webp
 from webp_check import animated
+from upstream_pin import PIN
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = '46c9de402bddf46b03c3b9f46487b777aaa41861'
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends', nargs='*', default=['bun', 'native-1', 'native-4'])
 p.add_argument('--photon', required=True)

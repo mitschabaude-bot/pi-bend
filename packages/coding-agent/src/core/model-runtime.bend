@@ -84,15 +84,15 @@ def getModels(runtime: ModelRuntime) -> List<&2, Model()>:
 
 def modelId(model: Model()) -> String:
   match model:
-    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
+    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
 
 def modelName(model: Model()) -> String:
   match model:
-    case Ai.Model{_, name, _, _, _, _, _, _, _, _, _, _, _, _}: name
+    case Ai.Model{_, name, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: name
 
 def modelProvider(model: Model()) -> String:
   match model:
-    case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
+    case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
 
 def reference(+model: Model()) -> String: modelProvider(model) ++ "/" ++ modelId(model)
 

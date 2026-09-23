@@ -28,8 +28,8 @@ type Trace is Data:
 type Environment is Data:
   Environment{inputs: Ref.Ref<List<&2, Raw.Input>>, capture: Ref.Ref<Trace>, closeMode: String}
 
-type Pipe is Type:
-  Pipe{cursor: Sse.Cursor<String>, capture: Ref.Ref<Trace>, mode: Harness.Mode}
+type Stage is Type:
+  Stage{cursor: Sse.Cursor<String>, capture: Ref.Ref<Trace>, mode: Harness.Mode}
 
 def E() -> Data: Stream.ReaderError<String>
 
@@ -73,25 +73,25 @@ def diagnosticCallback(env: Environment, cause: Sse.DispatchError) -> IO(Result<
         return Done{Unit{}}
     case _ _: IO.die(Result<&2, &2, Sse.ReadError<String>, Unit>, 1, "unexpected diagnostic")
 
-def advanced(capture: Ref.Ref<Trace>, mode: Harness.Mode, step: Stream.EventStep(String)) -> Pipe & Result<&2, &2, E(), Maybe<&2, Stream.ResponseStreamEvent>>:
+def advanced(capture: Ref.Ref<Trace>, mode: Harness.Mode, step: Stream.EventStep(String)) -> Stage & Result<&2, &2, E(), Maybe<&2, Stream.ResponseStreamEvent>>:
   match step:
-    case (cursor, result): (Pipe{cursor, capture, mode}, result)
+    case (cursor, result): (Stage{cursor, capture, mode}, result)
 
-def next(pipe: Pipe) -> IO(Pipe & Result<&2, &2, E(), Maybe<&2, Stream.ResponseStreamEvent>>):
+def next(pipe: Stage) -> IO(Stage & Result<&2, &2, E(), Maybe<&2, Stream.ResponseStreamEvent>>):
   match pipe:
-    case Pipe{cursor, capture, mode}:
-      do IO<Pipe & Result<&2, &2, E(), Maybe<&2, Stream.ResponseStreamEvent>>>:
+    case Stage{cursor, capture, mode}:
+      do IO<Stage & Result<&2, &2, E(), Maybe<&2, Stream.ResponseStreamEvent>>>:
         step : Stream.EventStep(String) <- Stream.nextEvent(String, cursor)
         return advanced(capture, mode, step)
 
-def closed(capture: Ref.Ref<Trace>, mode: Harness.Mode, step: Sse.Cursor<String> & Result<&2, &2, E(), Unit>) -> Pipe & Result<&2, &2, E(), Unit>:
+def closed(capture: Ref.Ref<Trace>, mode: Harness.Mode, step: Sse.Cursor<String> & Result<&2, &2, E(), Unit>) -> Stage & Result<&2, &2, E(), Unit>:
   match step:
-    case (cursor, result): (Pipe{cursor, capture, mode}, result)
+    case (cursor, result): (Stage{cursor, capture, mode}, result)
 
-def close(pipe: Pipe) -> IO(Pipe & Result<&2, &2, E(), Unit>):
+def close(pipe: Stage) -> IO(Stage & Result<&2, &2, E(), Unit>):
   match pipe:
-    case Pipe{cursor, capture, mode}:
-      do IO<Pipe & Result<&2, &2, E(), Unit>>:
+    case Stage{cursor, capture, mode}:
+      do IO<Stage & Result<&2, &2, E(), Unit>>:
         step : Sse.Cursor<String> & Result<&2, &2, E(), Unit> <- Stream.closeEvents(String, cursor)
         return closed(capture, mode, step)
 
@@ -100,12 +100,12 @@ def emitted(mode: Harness.Mode, event: T.AssistantMessageEvent<V.Value, Unit>, t
     case Trace{+emits, reversed}:
       (Trace{1n+emits, V.ObjectValue{R.Record{R.Property{"emit", State.event(event)} <> Nil{}}} <> reversed}, Bool.pick(Result<&2, &2, E(), Unit>, Harness.sinkFailure(mode, emits), Fail{Stream.StreamingFailure{Sse.TransportFailure{"sink failed"}}}, Done{Unit{}}))
 
-def emit(pipe: Pipe, event: T.AssistantMessageEvent<V.Value, Unit>) -> IO(Pipe & Result<&2, &2, E(), Unit>):
+def emit(pipe: Stage, event: T.AssistantMessageEvent<V.Value, Unit>) -> IO(Stage & Result<&2, &2, E(), Unit>):
   match pipe:
-    case Pipe{cursor, +capture, +mode}:
-      do IO<Pipe & Result<&2, &2, E(), Unit>>:
+    case Stage{cursor, +capture, +mode}:
+      do IO<Stage & Result<&2, &2, E(), Unit>>:
         result : Result<&2, &2, E(), Unit> <- Ref.modify(Trace, Result<&2, &2, E(), Unit>, capture, trace => emitted(mode, event, trace))
-        return (Pipe{cursor, capture, mode}, result)
+        return (Stage{cursor, capture, mode}, result)
 
 def readerText(cause: E()) -> String:
   match cause:
@@ -133,16 +133,16 @@ def resultValue(result: Stream.RunResult<Unit, E()>, trace: Trace) -> V.Value:
 
 # The adapter's own disposal closes an unfinished cursor; here iteration has
 # always ended, so this returns the closed successor without effects.
-def finished(pair: Pipe & Stream.RunResult<Unit, E()>) -> IO(Stream.RunResult<Unit, E()>):
+def finished(pair: Stage & Stream.RunResult<Unit, E()>) -> IO(Stream.RunResult<Unit, E()>):
   match pair:
-    case (Pipe{cursor, _, _}, result):
+    case (Stage{cursor, _, _}, result):
       do IO<Stream.RunResult<Unit, E()>>:
         ignored : Sse.CloseResult<String> <- Sse.close(String, cursor)
         return result
 
-def process(pipe: Pipe) -> IO(Stream.RunResult<Unit, E()>):
+def process(pipe: Stage) -> IO(Stream.RunResult<Unit, E()>):
   do IO<Stream.RunResult<Unit, E()>>:
-    pair : Pipe & Stream.RunResult<Unit, E()> <- Stream.processResponsesStream(~Pipe, ~(E()), ~Unit, ~Unit, ~next, ~close, ~emit, ~Stream.defaultResolveServiceTier, ~(Stream.noServiceTierPricing(Unit)), pipe, TerminalTest.initial(), Fixture.model(False{}, False{}, None{}), Stream.defaultOptions())
+    pair : Stage & Stream.RunResult<Unit, E()> <- Stream.processResponsesStream(~Stage, ~(E()), ~Unit, ~Unit, ~next, ~close, ~emit, ~Stream.defaultResolveServiceTier, ~(Stream.noServiceTierPricing(Unit)), pipe, TerminalTest.initial(), Fixture.model(False{}, False{}, None{}), Stream.defaultOptions())
     finished(pair)
 
 def sinkMode(value: String) -> Harness.Mode:
@@ -165,7 +165,7 @@ def run(inputs: List<&2, Raw.Input>, closeMode: String, mode: String, expected: 
     +closeSource : Cb.Callback<Unit, Result<&2, &2, Sse.ReadError<String>, Unit>> <- Cb.create(~Environment, ~Unit, ~Result<&2, &2, Sse.ReadError<String>, Unit>, ~closeCallback, env)
     +abort : Cb.Callback<Unit, Unit> <- Cb.create(~Environment, ~Unit, ~Unit, ~abortCallback, env)
     +diagnostic : Cb.Callback<Sse.DispatchError, Result<&2, &2, Sse.ReadError<String>, Unit>> <- Cb.create(~Environment, ~Sse.DispatchError, ~Result<&2, &2, Sse.ReadError<String>, Unit>, ~diagnosticCallback, env)
-    result : Stream.RunResult<Unit, E()> <- process(Pipe{Sse.create(String, Bytes.Source{read, closeSource}, Sse.Hooks{abort, diagnostic}, False{}), capture, sinkMode(mode)})
+    result : Stream.RunResult<Unit, E()> <- process(Stage{Sse.create(String, Bytes.Source{read, closeSource}, Sse.Hooks{abort, diagnostic}, False{}), capture, sinkMode(mode)})
     Cb.dispose(Unit, Result<&2, &2, Sse.ReadError<String>, Maybe<&2, Bytes.Chunk>>, read)
     Cb.dispose(Unit, Result<&2, &2, Sse.ReadError<String>, Unit>, closeSource)
     Cb.dispose(Unit, Unit, abort)

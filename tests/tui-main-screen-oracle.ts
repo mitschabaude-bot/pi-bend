@@ -1,4 +1,4 @@
-// Test-only oracle pinned to ../pi-mono@46c9de402; no production dependency.
+// Test-only oracle pinned to ../pi-mono@f07218c4d; no production dependency.
 import { TuiMainScreen } from "../../pi-mono/packages/tui/src/tui-main-screen.ts";
 
 class Terminal {

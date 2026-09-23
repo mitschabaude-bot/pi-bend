@@ -155,6 +155,48 @@ def readPrefix(path: String, maximum: U32) -> IO(Result<&2, &2, Error, List<&2, 
     return readResult(outcome)
 
 # stat follows symbolic links and reads no content. Keep the full OS word size.
+# libuv's error names and descriptions, as Node's fs and child_process
+# errors show them.
+def errnoName(code: U32) -> String:
+  match code:
+    case 1: "EPERM"
+    case 2: "ENOENT"
+    case 5: "EIO"
+    case 6: "ENXIO"
+    case 7: "E2BIG"
+    case 8: "ENOEXEC"
+    case 12: "ENOMEM"
+    case 13: "EACCES"
+    case 20: "ENOTDIR"
+    case 21: "EISDIR"
+    case 23: "ENFILE"
+    case 24: "EMFILE"
+    case 36: "ENAMETOOLONG"
+    case 40: "ELOOP"
+    case code: "Unknown system error -" ++ U32.show(code)
+
+def errnoDescription(code: U32) -> String:
+  match code:
+    case 1: "operation not permitted"
+    case 2: "no such file or directory"
+    case 5: "i/o error"
+    case 6: "no such device or address"
+    case 7: "argument list too long"
+    case 8: "exec format error"
+    case 12: "not enough memory"
+    case 13: "permission denied"
+    case 20: "not a directory"
+    case 21: "illegal operation on a directory"
+    case 23: "file table overflow"
+    case 24: "too many open files"
+    case 36: "name too long"
+    case 40: "too many symbolic links encountered"
+    case code: "Unknown system error -" ++ U32.show(code)
+
+# Node's fs error message: "EACCES: permission denied, open '/path'".
+def nodeMessage(+code: U32, syscall: String, path: String) -> String:
+  errnoName(code) ++ ": " ++ errnoDescription(code) ++ ", " ++ syscall ++ " '" ++ path ++ "'"
+
 # The tools' rendering of a filesystem failure.
 def errorMessage(error: Error) -> String:
   match error:

@@ -29,9 +29,12 @@ const wrappers = Object.fromEntries(['parseCommandArgs','substituteArgs','expand
 }]));
 mock.module(root+'/src/core/prompt-templates.ts',()=>({...actual,...wrappers}));
 let skip=false;
-mock.module('vitest',()=>({expect,afterAll:()=>{},describe:(name:string,fn:()=>void)=>{
+// An installed vitest resolves to its own path, which a bare-name mock misses.
+const vitestFactory=()=>({expect,afterAll:()=>{},describe:(name:string,fn:()=>void)=>{
   const previous=skip;skip=name.startsWith('loadPromptTemplates');fn();skip=previous;
-},test:(_name:string,fn:()=>void)=>{if(!skip)fn();}}));
+},test:(_name:string,fn:()=>void)=>{if(!skip)fn();}});
+mock.module('vitest',vitestFactory);
+try{mock.module(Bun.resolveSync('vitest',root+'/test'),vitestFactory)}catch{};
 await import(root+'/test/prompt-templates.test.ts');
 origin="generated";
 for(const c of JSON.parse(readFileSync(process.argv[3],'utf8'))){captured.push({origin,...c,expected:actual[c.kind](...c.args)});}

@@ -1,8 +1,9 @@
 """Actual CLI file arguments, compared with pinned Pi and Photon."""
 import argparse,base64,json,os,pathlib,re,struct,subprocess,tempfile,zlib
+from upstream_pin import PIN
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--photon',required=True);p.add_argument('--prefix',default='build/file-processor');p.add_argument('backends',nargs='*');a=p.parse_args()
-photon=pathlib.Path(a.photon).resolve();upstream=ROOT.parent/'pi-mono';pin='46c9de402bddf46b03c3b9f46487b777aaa41861'
+photon=pathlib.Path(a.photon).resolve();upstream=ROOT.parent/'pi-mono';pin=PIN
 def source(path):return subprocess.check_output(['git','-C',str(upstream),'show',pin+':packages/coding-agent/'+path],text=True)
 def png(w,h):
  def chunk(k,d):return struct.pack('>I',len(d))+k+d+struct.pack('>I',zlib.crc32(k+d))

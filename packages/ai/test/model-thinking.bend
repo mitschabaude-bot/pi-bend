@@ -7,11 +7,11 @@ import ../../runtime/src/f64.bend as F
 # Full fixture fields match max-thinking.test.ts; no model catalog substitution.
 def model(id: String, name: String, reasoning: Bool, mapping: Maybe<&2, T.ThinkingLevelMap>) -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{id, name, T.OpenAICompletionsApi{}, "test", "https://example.com/v1", reasoning, mapping, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  T.Model{id, name, T.OpenAICompletionsApi{}, "test", "https://example.com/v1", reasoning, mapping, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def identityModel(id: String, provider: String, api: T.ModelApi) -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{id, "Ignored display name", api, provider, "https://example.test", False{}, None{}, Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
+  T.Model{id, "Ignored display name", api, provider, "https://example.test", False{}, None{}, Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, zero, zero, None{}, None{}, None{}}
 
 def assertion(ok: Bool, label: String) -> IO(Unit):
   Bool.pick(IO(Unit), ok, IO.pure(Unit, Unit{}), IO.die(Unit, 1, label))
