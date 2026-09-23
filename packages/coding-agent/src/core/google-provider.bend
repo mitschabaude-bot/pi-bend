@@ -10,6 +10,7 @@ import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/date.bend as Date
+import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/fetch.bend as Fetch
@@ -188,7 +189,9 @@ def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch
     case Done{detailed}: preparedWithHook(stream, callback, fetch, signal, model, timestamp, retries, delay, detailed, hook)
 
 def exchange(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Options(), timestamp: F64) -> IO(Unit):
-  prepared(stream, callback, fetch, signal, model, timestamp, retryCount(options), retryDelay(options), Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), options), Client.prepareDetailed(Unit, Unit, Details(), urlContext, model, context, requestOptions(model, context, options), requestKey(options), requestHeaders(options)))
+  do IO<Unit>:
+    agent : String <- IO.try(String, UserAgent.get())
+    prepared(stream, callback, fetch, signal, model, timestamp, retryCount(options), retryDelay(options), Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), options), Client.prepareDetailedWithAgent(Unit, Unit, Details(), urlContext, model, context, requestOptions(model, context, options), requestKey(options), Some{agent}, requestHeaders(options)))
 
 def borrowed(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Options(), timestamp: F64, pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(Unit):
   match pair:

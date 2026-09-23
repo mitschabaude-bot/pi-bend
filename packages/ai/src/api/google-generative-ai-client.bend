@@ -99,8 +99,10 @@ def layer(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, na
     case Fail{cause}: Fail{cause}
     case Done{current}: Headers.set(current, name, value)
 
-def baseHeaders(key: String) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
-  layer(layer(layer(Done{Headers.new()}, "accept", "text/event-stream"), "content-type", "application/json"), "x-goog-api-key", key)
+def baseHeaders(key: String, agent: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  match agent:
+    case None{}: layer(layer(layer(Done{Headers.new()}, "accept", "text/event-stream"), "content-type", "application/json"), "x-goog-api-key", key)
+    case Some{value}: layer(layer(layer(layer(Done{Headers.new()}, "accept", "text/event-stream"), "content-type", "application/json"), "x-goog-api-key", key), "user-agent", value)
 
 def fromConfiguration(current: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, config: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
   match current:
@@ -130,21 +132,24 @@ def included(-Reason: Data, id: String, payload: T.JsonValue, result: Result<&2,
     case Fail{cause}: Fail{cause}
     case Done{request}: Done{Prepared{request, Google.sdkParams(id, payload)}}
 
-def encodedPayload(-Reason: Data, urlContext: URL.Context, base: String, +id: String, key: String, headers: Maybe<&2, R.Record<String>>, custom: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, Constrained.Error, T.JsonValue>) -> Result<&2, &2, Error<Reason>, Prepared>:
+def encodedPayload(-Reason: Data, urlContext: URL.Context, base: String, +id: String, key: String, agent: Maybe<&2, String>, headers: Maybe<&2, R.Record<String>>, custom: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, Constrained.Error, T.JsonValue>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match result:
     case Fail{cause}: Fail{InvalidToolConfig{Constrained.errorMessage(cause)}}
-    case Done{+payload}: included(Reason, id, payload, validURL(Reason, JsonWire.stringify(payload), withHeaders(baseHeaders(key), headers, custom), URL.parse(urlContext, address(base, id))))
+    case Done{+payload}: included(Reason, id, payload, validURL(Reason, JsonWire.stringify(payload), withHeaders(baseHeaders(key, agent), headers, custom), URL.parse(urlContext, address(base, id))))
 
-def keyValue(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: String, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
+def keyValue(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: String, agent: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match model:
     case T.Model{id, _, _, _, base, _, _, _, _, _, _, _, _, _, headers, _}:
-      encodedPayload(Reason, urlContext, base, id, key, headers, custom, Google.buildParams(G, D, model, context, options))
+      encodedPayload(Reason, urlContext, base, id, key, agent, headers, custom, Google.buildParams(G, D, model, context, options))
 
-def prepareDetailed(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
+def prepareDetailedWithAgent(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, agent: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match key:
     case None{}: Fail{MissingAuth{}}
     case Some{SNil{}}: Fail{MissingAuth{}}
-    case Some{value}: keyValue(Reason, G, D, urlContext, model, context, options, value, custom)
+    case Some{value}: keyValue(Reason, G, D, urlContext, model, context, options, value, agent, custom)
+
+def prepareDetailed(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
+  prepareDetailedWithAgent(Reason, G, D, urlContext, model, context, options, key, None{}, custom)
 
 def requestOf(-Reason: Data, value: Result<&2, &2, Error<Reason>, Prepared>) -> Result<&2, &2, Error<Reason>, Request>:
   match value:

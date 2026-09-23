@@ -133,6 +133,10 @@ def main():
                 assert body["contents"] == [{"role": "user", "parts": [{"text": "ping"}]}], body
                 expected = oracle("basic" if commands[index][0] == "client" else "simple-basic")
                 assert body == expected, (body, expected)
+                if commands[index][0] == "provider":
+                    node_agent = subprocess.check_output(["node", "-e", "const os=require('node:os');process.stdout.write(`pi (${os.platform()} ${os.release()}; ${os.arch()})`)"], text=True)
+                    assert Handler.request_headers[index].get("User-Agent") == node_agent, Handler.request_headers[index]
+                    print(f"provider {commands[index][1]}: default User-Agent matches Node OS identity")
             Handler.bodies.clear()
             Handler.request_headers.clear()
             Handler.response = b'data: {"responseId":"thought-1","candidates":[{"content":{"parts":[{"text":"Why","thought":true,"thoughtSignature":"c2ln"},{"text":"Hello"}]},"finishReason":"STOP"}]}\n\n'

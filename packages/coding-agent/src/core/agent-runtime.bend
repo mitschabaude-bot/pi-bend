@@ -16,6 +16,7 @@ import ../../../agent/src/providers.bend as Providers
 import ../../../agent/src/stream-fn.bend as StreamFn
 import ../../../agent/src/types.bend as T
 import ../../../runtime/src/fetch.bend as Fetch
+import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../runtime/src/http-exchange.bend as HTTP
 import ../../../runtime/src/http-message.bend as Message
 import ../../../runtime/src/http-response.bend as Response
@@ -84,9 +85,6 @@ def entryError(error: Loop.ContinueError) -> Error(): Tools.Failure{Loop.errorMe
 def urlContext() -> URL.Context:
   URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}}
 
-# pi's user agent names the host platform; the port has no OS-info primitive yet.
-def userAgent() -> String: "pi (bend)"
-
 def files() -> Fetch.Files: Fetch.Files{"/etc/resolv.conf", "/etc/hosts", 4096, 1048576n, 5000, 65535}
 
 def httpOptions() -> HTTP.Options:
@@ -95,8 +93,8 @@ def httpOptions() -> HTTP.Options:
 def security(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> HTTP.Security:
   HTTP.WithTLS{authorizer, TLS.defaults()}
 
-def providerConfig(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> Responses.Config:
-  Responses.Config{urlContext(), Client.Defaults{userAgent(), R.new(String), None{}, None{}}, files(), httpOptions(), security(authorizer), 65536n, False{}}
+def providerConfig(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, agent: String) -> Responses.Config:
+  Responses.Config{urlContext(), Client.Defaults{agent, R.new(String), None{}, None{}}, files(), httpOptions(), security(authorizer), 65536n, False{}}
 
 type Transport is Type:
   Transport{authorizer: C.Callback<URL.Host, TLSClient.Authorization>, runtime: Fetch.Runtime, fetch: Fetch.Fetch(Unit)}
@@ -178,7 +176,9 @@ def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), U
       selectedProvider(responses, fetch, model, context, options, modelApi(model))
 
 def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit)) -> IO(Stream()):
-  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer), fetch})
+  do IO<Stream()>:
+    agent : String <- IO.try(String, UserAgent.get())
+    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch})
 
 # Request auth
 # ------------
