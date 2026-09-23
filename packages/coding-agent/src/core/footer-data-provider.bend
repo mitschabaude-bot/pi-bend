@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/text.bend as Text
 import ../utils/paths.bend as Paths
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
@@ -33,7 +34,7 @@ def readText(path: String) -> IO(Maybe<&2,String>):
 def commonText(value: Maybe<&2,String>,repo: String,+gitDir: String,head: String) -> Probe:
   match value:
     case None{}: Found{None{}}
-    case Some{value}: Found{Some{GitPaths{repo,Maybe.default(&2,String,Path.resolve(gitDir,Paths.trim(value)),gitDir),head}}}
+    case Some{value}: Found{Some{GitPaths{repo,Maybe.default(&2,String,Path.resolve(gitDir,Text.trim(value)),gitDir),head}}}
 def commonKind(kind: Result<&2,&2,FS.Error,FS.FileKind>,repo: String,+gitDir: String,head: String) -> IO(Probe):
   match kind:
     case Fail{_}: IO.pure(Probe,Found{Some{GitPaths{repo,gitDir,head}}})
@@ -57,8 +58,8 @@ def gitFile(value: Maybe<&2,String>,+repo: String) -> IO(Probe):
   match value:
     case None{}: IO.pure(Probe,Found{None{}})
     case Some{value}:
-      +content = Paths.trim(value)
-      Bool.pick(Unit -> IO(Probe),String.starts_with(content,"gitdir: "),_ => linkedTarget(repo,Maybe.default(&2,String,Path.resolve(repo,Paths.trim(String.drop(content,8n))),repo)),_ => IO.pure(Probe,Continue{}))(Unit{})
+      +content = Text.trim(value)
+      Bool.pick(Unit -> IO(Probe),String.starts_with(content,"gitdir: "),_ => linkedTarget(repo,Maybe.default(&2,String,Path.resolve(repo,Text.trim(String.drop(content,8n))),repo)),_ => IO.pure(Probe,Continue{}))(Unit{})
 def regularHead(kind: Result<&2,&2,FS.Error,FS.FileKind>,repo: String,gitDir: String,head: String) -> Probe:
   Bool.pick(Probe,exists(kind),Found{Some{GitPaths{repo,gitDir,head}}},Found{None{}})
 def gitKind(kind: Result<&2,&2,FS.Error,FS.FileKind>,+repo: String,+gitPath: String) -> IO(Probe):

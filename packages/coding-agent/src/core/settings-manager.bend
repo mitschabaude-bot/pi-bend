@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/text.bend as Text
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/utils/uuid.bend as Uuid
 import ../../../agent/src/types.bend as Agent
@@ -201,7 +202,7 @@ def timeoutText(+text: String) -> Result<&2,&2,J.Error,W.U64>:
     case +text: Bool.pick(Result<&2,&2,J.Error,W.U64>,timeoutWord(text,"disabled"),Done{W.U64{0,0}},natural(V.Number{F64.floor(NumberString.toNumber(text))}))
 def decodeTimeout(value: V.Value) -> Result<&2,&2,J.Error,W.U64>:
   match value:
-    case V.Text{text}: timeoutText(NumberString.trim(text))
+    case V.Text{text}: timeoutText(Text.trim(text))
     case V.Number{number}: natural(V.Number{F64.floor(number)})
     case _: Fail{J.WrongType{Nil{},"timeout duration"}}
 def decodeImageWidth(value: V.Value) -> Result<&2,&2,J.Error,W.U64>:
@@ -1979,7 +1980,7 @@ def nonemptyText(value: Maybe<&2,String>) -> Maybe<&2,String>:
 def configuredEditor(value: Maybe<&2,String>,environment: String) -> String:
   match value:
     case None{}: environment
-    case Some{+value}: Bool.pick(String,String.is_empty(Paths.trim(value)),environment,value)
+    case Some{+value}: Bool.pick(String,String.is_empty(Text.trim(value)),environment,value)
 def getExternalEditorCommand(environment: Environment,state: SettingsManager) -> String:
   match environment:
     case Environment{_,visual,editor,windows,_,_}: configuredEditor(getExternalEditorSetting(state),Maybe.default(&2,String,Maybe.or(&2,String,nonemptyText(visual),nonemptyText(editor)),Bool.pick(String,windows,"notepad","nano")))

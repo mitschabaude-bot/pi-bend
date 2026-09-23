@@ -28,14 +28,6 @@ def defaults() -> PathInputOptions:
 def toolOptions() -> PathInputOptions:
   PathInputOptions{False{}, True{}, None{}, True{}, True{}}
 
-def trimStart(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code}, +rest}: Bool.pick(Unit -> String, Text.whitespace(code), _ => trimStart(rest), _ => SCon{Chr{code}, rest})(Unit{})
-
-def trim(text: String) -> String:
-  String.reverse(trimStart(String.reverse(trimStart(text))))
-
 def unicodeSpace(+code: U32) -> Bool:
   U32.is_eq(code, 160) || (U32.is_ge(code, 8192) && U32.is_le(code, 8202)) || U32.is_eq(code, 8239) || U32.is_eq(code, 8287) || U32.is_eq(code, 12288)
 
@@ -50,7 +42,7 @@ def stripAt(text: String) -> String:
     case other: other
 
 def prepare(input: String, trimming: Bool, normalizeSpaces: Bool, strip: Bool) -> String:
-  +trimmed = Bool.pick(String -> String, trimming, trim, value => value)(input)
+  +trimmed = Bool.pick(String -> String, trimming, Text.trim, value => value)(input)
   +normalized = Bool.pick(Unit -> String, normalizeSpaces, _ => spaces(trimmed, ""), _ => trimmed)(Unit{})
   Bool.pick(String -> String, strip, stripAt, value => value)(normalized)
 

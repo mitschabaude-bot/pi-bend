@@ -251,7 +251,7 @@ def firstDescription(lines: List<&2,String>) -> String:
   match lines:
     case Nil{}: ""
     case +line <> rest:
-      Bool.pick(Unit -> String,String.is_empty(Paths.trim(line)),_ => firstDescription(rest),_ => descriptionCut(Text.take(line,60n)))(Unit{})
+      Bool.pick(Unit -> String,String.is_empty(Text.trim(line)),_ => firstDescription(rest),_ => descriptionCut(Text.take(line,60n)))(Unit{})
 
 def templateDescription(description: Maybe<&2,String>, body: String) -> String:
   match description:

@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/text.bend as Text
 import ./validation-errors.bend as Errors
 import ../../../runtime/src/schema.bend as NativeErrors
 import ../types.bend as Ai
@@ -59,7 +60,7 @@ def primitiveType(+kind: String) -> PrimitiveType:
 def numericText(integerOnly: Bool, +text: String) -> V.Value:
   +parsed = NumberString.toNumber(text)
   acceptable = Bool.pick(Bool, integerOnly, F.isInteger(parsed), F.isFinite(F.decode(parsed)))
-  Bool.pick(V.Value, Bool.not(String.is_empty(NumberString.trim(text))) && acceptable, V.Number{parsed}, V.Text{text})
+  Bool.pick(V.Value, Bool.not(String.is_empty(Text.trim(text))) && acceptable, V.Number{parsed}, V.Text{text})
 
 def coerceNumeric(integerOnly: Bool, value: V.Value) -> V.Value:
   match value:

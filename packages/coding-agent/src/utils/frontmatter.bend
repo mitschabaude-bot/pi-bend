@@ -8,12 +8,6 @@ type Frontmatter is Data:
   Frontmatter{frontmatter: R.Record<Yaml.Value>,body: String}
 type Extracted is Data:
   Extracted{yaml: Maybe<&2,String>,body: String}
-def trimStart(value: String) -> String:
-  match value:
-    case SNil{}: ""
-    case SCon{+char,+rest}:
-      Bool.pick(Unit -> String,Space.whitespace(Char.to_u32(char)),_ => trimStart(rest),_ => SCon{char,rest})(Unit{})
-def trim(value: String) -> String: String.reverse(trimStart(String.reverse(trimStart(value))))
 def newlines(value: String,reversed: String,afterCR: Bool) -> String:
   match value:
     case SNil{}: String.reverse(reversed)
@@ -27,7 +21,7 @@ def normalized(value: String) -> String:
 def closing(lines: List<&2,String>,yaml: List<&2,String>,original: String) -> Extracted:
   match lines:
     case Nil{}: Extracted{None{},original}
-    case "---" <> rest: Extracted{Some{String.join(List.reverse(&2,String,yaml),"\n")},trim(String.join(rest,"\n"))}
+    case "---" <> rest: Extracted{Some{String.join(List.reverse(&2,String,yaml),"\n")},Space.trim(String.join(rest,"\n"))}
     case line <> rest: closing(rest,line <> yaml,original)
 def opening(lines: List<&2,String>,original: String) -> Extracted:
   match lines:

@@ -13,14 +13,6 @@ def reverseInto(text: String, result: String) -> String:
     case SNil{}: result
     case SCon{char, rest}: reverseInto(rest, SCon{char, result})
 
-def trimStart(text: String) -> String:
-  match text:
-    case SNil{}: SNil{}
-    case SCon{Chr{+code}, +rest}: Bool.pick(String, whitespace(code), trimStart(rest), SCon{Chr{code}, rest})
-
-def trim(text: String) -> String:
-  reverseInto(trimStart(reverseInto(trimStart(text), SNil{})), SNil{})
-
 def digit(+code: U32) -> Bool: U32.is_ge(code, 48) && U32.is_le(code, 57)
 def atMost(+value: Nat, +limit: Nat) -> Nat: Bool.pick(Nat, Nat.is_lt(value, limit), value, limit)
 
@@ -135,7 +127,7 @@ def fromTrimmed(text: String) -> F64:
     case SCon{Chr{48}, SCon{Chr{66}, rest}}: radixValue(radixDigits(rest, 2, B.zero(), False{}))
     case text: signedDecimal(False{}, text)
 
-def toNumber(text: String) -> F64: fromTrimmed(trim(text))
+def toNumber(text: String) -> F64: fromTrimmed(Space.trim(text))
 
 # Fixed decimal formatting rounds the exact stored binary64 value, once.
 # Multiplying in floating point before rounding can change a halfway result.

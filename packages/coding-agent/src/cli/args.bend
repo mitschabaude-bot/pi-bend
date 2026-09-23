@@ -267,14 +267,8 @@ def printToken(value: String) -> Bool:
     case SCon{'@',_}: False{}
     case _: True{}
 
-def trimStart(value: String) -> String:
-  match value:
-    case SNil{}: ""
-    case SCon{Chr{+code},+rest}:
-      Bool.pick(Unit -> String,Space.whitespace(code),_ => trimStart(rest),_ => SCon{Chr{code},rest})(Unit{})
-
 def normalizeSessionName(value: String) -> Maybe<&2,String>:
-  +name = String.reverse(trimStart(String.reverse(trimStart(value))))
+  +name = String.reverse(Space.trimStart(String.reverse(Space.trimStart(value))))
   Bool.pick(Maybe<&2,String>,Strings.equal(name,""),None{},Some{name})
 
 def listValues(values: List<&2,String>,+keepEmpty: Bool,+result: List<&2,String>) -> List<&2,String>:

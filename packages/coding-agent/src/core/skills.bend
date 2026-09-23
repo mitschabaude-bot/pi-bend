@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/text.bend as Text
 import ./diagnostics.bend as D
 import ../utils/frontmatter.bend as Frontmatter
 import ../utils/paths.bend as Paths
@@ -111,7 +112,7 @@ def validateDescription(value: Maybe<&2,String>) -> List<&2,String>:
     case None{}: "description is required" <> Nil{}
     case Some{+description}:
       +count = Yaml.length(description,0n)
-      Bool.pick(List<&2,String>,String.is_empty(Frontmatter.trim(description)),"description is required" <> Nil{},
+      Bool.pick(List<&2,String>,String.is_empty(Text.trim(description)),"description is required" <> Nil{},
         Bool.pick(List<&2,String>,Nat.is_gt(count,1024n),("description exceeds 1024 characters (" ++ Nat.show(count) ++ ")") <> Nil{},Nil{}))
 def warnings(messages: List<&2,String>,+path: String) -> List<&2,D.ResourceDiagnostic>:
   match messages:
@@ -142,7 +143,7 @@ def validatedSkill(value: SkillFrontmatter,+path: String,source: String,declared
       +directory = parent(path)
       +name = chosenName(givenName,basename(directory))
       +text = Maybe.default(&2,String,description,"")
-      +hasDescription = Bool.not(String.is_empty(Frontmatter.trim(text)))
+      +hasDescription = Bool.not(String.is_empty(Text.trim(text)))
       Bool.pick(Unit -> LoadSkillsResult,Bool.not(declared) && Bool.not(hasDescription),_ => emptyResult(),_ =>
         LoadSkillsResult{Bool.pick(List<&2,Skill>,hasDescription,Skill{name,text,path,directory,sourceInfo(path,directory,source),disabled} <> Nil{},Nil{}),
           warnings(List.append(&2,String,validateDescription(description),validateName(name)),path)})(Unit{})
@@ -213,7 +214,7 @@ def prefixedPattern(line: String,prefix: String) -> String:
     case SCon{'\\',SCon{'!',rest}}: prefix ++ "\\!" ++ rest
     case other: prefix ++ stripLeadingSlash(other)
 def prefixIgnorePattern(+line: String,prefix: String) -> Maybe<&2,String>:
-  +trimmed = Frontmatter.trim(line)
+  +trimmed = Text.trim(line)
   Bool.pick(Maybe<&2,String>,String.is_empty(trimmed) || String.starts_with(trimmed,"#"),None{},Some{prefixedPattern(line,prefix)})
 def ignorePatterns(lines: List<&2,String>,+prefix: String,+reversed: List<&2,String>) -> List<&2,String>:
   match lines:

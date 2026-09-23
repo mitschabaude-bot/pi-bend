@@ -37,14 +37,6 @@ def normalizeBuildSystemPromptOptions(input: BuildSystemPromptOptions) -> Normal
         Maybe.default(&2,Record.Record<String>,sections,Record.new(String)),cwd,
         Maybe.default(&2,List<&2,ContextFile>,files,Nil{}),Maybe.default(&2,List<&2,Skills.Skill>,skills,Nil{})}
 
-def trimStart(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code},+rest}:
-      Bool.pick(Unit -> String,Space.whitespace(code),_ => trimStart(rest),_ => SCon{Chr{code},rest})(Unit{})
-
-def trim(text: String) -> String: String.reverse(trimStart(String.reverse(trimStart(text))))
-
 def contains(values: List<&2,String>,+value: String) -> Bool:
   match values:
     case Nil{}: False{}
@@ -56,7 +48,7 @@ def normalizedRule(+rule: String,+rules: List<&2,String>) -> List<&2,String>:
 def addRules(values: List<&2,String>,rules: List<&2,String>) -> List<&2,String>:
   match values:
     case Nil{}: rules
-    case value <> rest: addRules(rest,normalizedRule(trim(value),rules))
+    case value <> rest: addRules(rest,normalizedRule(Space.trim(value),rules))
 
 def toolRules(tools: List<&2,String>,+guidelines: Record.Record<List<&2,String>>,rules: List<&2,String>) -> List<&2,String>:
   match tools:
@@ -136,7 +128,7 @@ def withContext(files: List<&2,ContextFile>,sections: SystemPromptSections()) ->
 def withSkills(+tools: List<&2,String>,skills: List<&2,Skills.Skill>,+sections: SystemPromptSections()) -> SystemPromptSections():
   +read = contains(tools,"read")
   Bool.pick(Unit -> SystemPromptSections(),read || contains(tools,"bash"),
-    _ => putNonEmpty("skills",trim(Skills.formatSkillsForPrompt(skills,Bool.pick(Skills.FileReadTool,read,Skills.Read{},Skills.Bash{}))),sections),
+    _ => putNonEmpty("skills",Space.trim(Skills.formatSkillsForPrompt(skills,Bool.pick(Skills.FileReadTool,read,Skills.Read{},Skills.Bash{}))),sections),
     _ => sections)(Unit{})
 
 def documentation(paths: DocumentationPaths) -> String:

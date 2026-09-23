@@ -7,6 +7,15 @@ import Base
 def whitespace(+code: U32) -> Bool:
   (U32.is_ge(code, 9) && U32.is_le(code, 13)) || U32.is_eq(code, 32) || U32.is_eq(code, 160) || U32.is_eq(code, 5760) || (U32.is_ge(code, 8192) && U32.is_le(code, 8202)) || U32.is_eq(code, 8232) || U32.is_eq(code, 8233) || U32.is_eq(code, 8239) || U32.is_eq(code, 8287) || U32.is_eq(code, 12288) || U32.is_eq(code, 65279)
 
+# JavaScript's trimStart, trimEnd and trim over the same whitespace.
+def trimStart(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{Chr{+code}, +rest}: Bool.pick(Unit -> String, whitespace(code), _ => trimStart(rest), _ => SCon{Chr{code}, rest})(Unit{})
+
+def trimEnd(text: String) -> String: String.reverse(trimStart(String.reverse(text)))
+def trim(text: String) -> String: trimEnd(trimStart(text))
+
 def blank(text: String) -> Bool:
   match text:
     case SNil{}: True{}

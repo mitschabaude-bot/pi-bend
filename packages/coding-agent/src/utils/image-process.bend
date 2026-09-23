@@ -1,4 +1,5 @@
 import Base
+import ../../../runtime/src/text.bend as Text
 import ./image-convert.bend as Convert
 import ./image-resize.bend as Resize
 import ../../../runtime/src/base64.bend as Base64
@@ -20,7 +21,7 @@ def mimePrefix(text: String, reversed: String) -> String:
     case SCon{';',_}: Strings.reverseInto(reversed,"")
     case SCon{char,rest}: mimePrefix(rest,SCon{char,reversed})
 
-def baseMimeType(mimeType: String) -> String: String.to_lower(Strings.trim(mimePrefix(mimeType,"")))
+def baseMimeType(mimeType: String) -> String: String.to_lower(Text.trim(mimePrefix(mimeType,"")))
 
 def normalizeSupportedImageMimeType(mimeType: String) -> Maybe<&2,String>:
   match mimeType:

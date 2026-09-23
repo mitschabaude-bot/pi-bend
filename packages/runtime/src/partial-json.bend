@@ -1,4 +1,5 @@
 import Base
+import ./text.bend as Text
 import ./json.bend as Json
 import ./schema-value.bend as V
 import ./record.bend as R
@@ -252,4 +253,4 @@ def parseTrimmed(+text: String) -> Result<&2, &2, Error, V.Value>:
     case other: run(8n * String.length(other) + 16n, Running{Read{Cursor{other, 0n}}, Nil{}}, other, lastExponent(other, 0n, None{}))
 
 def parse(text: String) -> Result<&2, &2, Error, V.Value>:
-  parseTrimmed(Number.trim(text))
+  parseTrimmed(Text.trim(text))

@@ -9,11 +9,6 @@ import ./utf8.bend as Utf8
 import ./abort.bend as Abort
 import ./stable-sort.bend as Sort
 
-def trimStart(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code},+rest}: Bool.pick(Unit -> String,Text.whitespace(code),_ => trimStart(rest),_ => SCon{Chr{code},rest})(Unit{})
-def trim(text: String) -> String: String.reverse(trimStart(String.reverse(trimStart(text))))
 def accessExists(value: Result<&1,&1,U32 & String,Unit>) -> Bool:
   match value:
     case Done{_}: True{}
@@ -138,12 +133,12 @@ def linkedGit(root: String,value: Maybe<&2,String>) -> Maybe<&2,String>:
   match value:
     case None{}: None{}
     case Some{text}:
-      +line = trim(firstLine(text))
+      +line = Text.trim(firstLine(text))
       Bool.pick(Unit -> Maybe<&2,String>,String.starts_with(line,"gitdir: "),_ => Path.resolve(root,String.drop(line,8n)),_ => None{})(Unit{})
 def commonGit(+gitdir: String,value: Maybe<&2,String>) -> String:
   match value:
     case None{}: gitdir
-    case Some{text}: Maybe.default(&2,String,Path.resolve(gitdir,trim(firstLine(text))),gitdir)
+    case Some{text}: Maybe.default(&2,String,Path.resolve(gitdir,Text.trim(firstLine(text))),gitdir)
 def linkedGitDirectory(value: Maybe<&2,String>) -> IO(ResultOf(Maybe<&2,String>)):
   match value:
     case None{}: IO.pure(ResultOf(Maybe<&2,String>),Done{None{}})
@@ -240,7 +235,7 @@ def configValue(path: String,text: String) -> ResultOf(String):
 def configAssignment(path: String,parts: List<&2,String>) -> ResultOf(Maybe<&2,String>):
   match parts:
     case key <> values:
-      Bool.pick(Unit -> ResultOf(Maybe<&2,String>),Strings.equal(String.to_lower(trim(key)),"excludesfile"),_ => Result.map(&2,&2,Error,String,Maybe<&2,String>,value => Some{value},configValue(path,trim(String.join(values,"=")))),_ => Done{None{}})(Unit{})
+      Bool.pick(Unit -> ResultOf(Maybe<&2,String>),Strings.equal(String.to_lower(Text.trim(key)),"excludesfile"),_ => Result.map(&2,&2,Error,String,Maybe<&2,String>,value => Some{value},configValue(path,Text.trim(String.join(values,"=")))),_ => Done{None{}})(Unit{})
     case Nil{}: Done{None{}}
 type ConfigValue is Data:
   ConfigValue{core: Bool, value: Maybe<&2,String>}
@@ -255,7 +250,7 @@ def configLines(lines: List<&2,String>,+path: String,state: ConfigValue) -> Resu
   match lines state:
     case Nil{} ConfigValue{_,value}: Done{value}
     case line <> rest ConfigValue{core,value}:
-      Result.bind(&2,&2,Error,ConfigValue,Maybe<&2,String>,configLine(path,trim(line),core,value),next => configLines(rest,path,next))
+      Result.bind(&2,&2,Error,ConfigValue,Maybe<&2,String>,configLine(path,Text.trim(line),core,value),next => configLines(rest,path,next))
 def configText(path: String,value: Maybe<&2,String>) -> ResultOf(Maybe<&2,String>):
   match value:
     case None{}: Done{None{}}

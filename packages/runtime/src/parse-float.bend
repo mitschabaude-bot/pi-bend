@@ -1,4 +1,5 @@
 import Base
+import ./text.bend as Text
 import ./number-string.bend as Number
 import ./f64.bend as F
 
@@ -58,4 +59,4 @@ def trimmed(text: String) -> F64:
     case SCon{'-', rest}: numeric(True{}, rest)
     case other: numeric(False{}, other)
 
-def parseFloat(text: String) -> F64: trimmed(Number.trimStart(text))
+def parseFloat(text: String) -> F64: trimmed(Text.trimStart(text))
