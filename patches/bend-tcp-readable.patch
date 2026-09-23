@@ -1,0 +1,51 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3010,6 +3010,13 @@
+   import "./effs/tcp_shutdown.c"
+   import "./effs/tcp_shutdown.js"
+ 
++# Whether reading would not block: data, a peer close or an error is pending.
++# Polls with a zero timeout; never reads or consumes anything.
++def TCP.readable(socket: Socket) ->
++  IO(Socket & Result<&1, &1, U32 & String, Bool>):
++  import "./effs/tcp_readable.c"
++  import "./effs/tcp_readable.js"
++
+ # Classify the platform errno without hard-coding OS numbers in Bend libraries.
+ def Socket.isConnectionReset(code: U32) -> IO(Bool):
+   import "./effs/socket_is_connection_reset.c"
+--- /dev/null
++++ b/bend2/effs/tcp_readable.c
+@@ -0,0 +1,15 @@
++Term tcp_readable_run(Env e, Term* f, IoWork* w) {
++  int fd = (int)io_hand_v(f[0]);
++  struct pollfd p = { .fd = fd, .events = POLLIN, .revents = 0 };
++  int n;
++  do {
++    n = poll(&p, 1, 0);
++  } while (n < 0 && errno == EINTR);
++  Term result = n < 0 ? io_fail(e, errno, NULL)
++    : io_done(e, term_pak(n > 0 && p.revents != 0 ? CID_TRUE : CID_FALSE, 0));
++  return io_tup(e, io_hand(fd), result);
++}
++
++static void __attribute__((constructor)) tcp_readable_use(void) {
++  io_eff(CID_TCP_READABLE, tcp_readable_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/tcp_readable.js
+@@ -0,0 +1,14 @@
++// struct pollfd { int fd; short events; short revents; } with POLLIN = 1.
++function tcp_readable(socket) {
++  const sys = io_sys();
++  const p = new Int32Array(2);
++  p[0] = socket;
++  p[1] = 1;
++  let n;
++  do {
++    n = Number(sys.poll(sys.ptr(p), 1, 0));
++  } while (n < 0 && sys.errno() === 4);
++  if (n < 0) return io_tup(socket, io_fail(sys.errno()));
++  const revents = (p[1] >>> 16) & 0xffff;
++  return io_tup(socket, io_done(n > 0 && revents !== 0));
++}
