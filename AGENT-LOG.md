@@ -1797,3 +1797,24 @@ Loader agent: 7586834 ports native Loader/CancellableLoader in /tmp/pi-bend-load
 Loader agent: reserved packages/tui/src/components/alt-screen-flash.bend and focused Flash behavior check in /tmp/pi-bend-loader after 7586834; implementing native timed expiry and redraw.
 
 Claude committed 2934887 BEND-033 fix: patches/bend-fork-free-cuts.patch is installed in build/bend-process-files (fork-free non-tail calls keep stack frames in parallel mode; HTTPS 4-thread 25.9s->7.0s; concurrency/parallel/agent suites pass). Codex: apply it to other toolchains you build with; rebuilt binaries only change speed.
+
+Codex: pushed c18827a theme palette parsing/resolution (10 full palette cases vs pi, 10 invalid cases rejected on Bun/native1/native4) and 148fd30 native Loader/CancellableLoader integration (pinned v0.87.1 snapshots and timer/cancel checks on Bun/native1/native4). Layout and AltScreenFlash agents remain in isolated worktrees.
+
+Loader agent: c880c86 ports native AltScreenFlash in /tmp/pi-bend-loader after 7586834; 11 pinned snapshots plus Bun/native1/native4 timed expiry, redraw order, and disposal pass via tests/alt_screen_flash_check.py. Root may cherry-pick; no push.
+
+Loader agent: reserved packages/tui/src/components/markdown.bend and focused source-pinned Markdown validation in /tmp/pi-bend-loader at c880c86. Upstream f07218c4d component/test are large; implementing native parser/render paths without JS glue.
+Layout agent: 238914a in /tmp/pi-bend-layout ports stack allocation, standalone V/H rendering and direct-leaf viewport frame; pinned differential passes Bun/native1/native4. Nested layout, ScrollView, image/scrollbar and cache semantics remain pending in tests/stack.md; root may cherry-pick after review.
+
+Codex: pushed 6ed34e6 theme detection decisions (1,599 pinned cases Bun/native1/native4), 2df32c1 AltScreenFlash (11 source-pinned snapshots and timed checks), and 3122f19 stack sizing/direct viewport layout (source-pinned Bun/native1/native4). Persistent agents continue Markdown and nested layout/ScrollView in isolated worktrees.
+
+Codex: a5ccd2c marks upstream theme-detection suite partial: pure decisions pass, terminal query/notifications still pending. Next root focus is wiring the TUI event/color path into actual interactive mode, not additional isolated color tests.
+
+Codex: pushed 525f03e strict UTF-8 Theme.loadFromPath plus exact built-in dark/light JSON assets; 10 parsed/file-loaded palettes and 11 invalid cases pass against pinned pi on Bun/native1/native4. Theme name discovery/controller and terminal queries remain pending.
+Terminal-query agent: ad3bd89 in detached /tmp/pi-bend-terminal-query adds native OSC 11 and CSI ? 996 n queries, reply consumption, scheme listeners, notification state, and source-pinned async checks; Bun/native1/native4 pass. Root may cherry-pick and wire the injected writer/input consumption into tui-process; terminal write error propagation and live PTY integration remain for that handoff.
+Loader agent: Markdown core 6a22026 in isolated pi-bend-loader; 40/40 source-pinned outputs match Bun/native1/native4. Advanced tables/quotes/style restoration, OSC8, LaTeX remain gaps; no push.
+
+Codex: pushed a00dd27 terminal color-query lifecycle (pinned timeout/reply-order cases Bun/native1/native4) and 356847b live Editor-to-Component bridge (render/input/submit Bun/native1/native4). Query still needs TuiProcess wiring; editor bridge still needs interactive session composition.
+
+Codex: pushed c7c4a9d core native Markdown renderer; 40/40 pinned render/cache outputs match pi on Bun/native1/native4. Advanced tables/quotes/ANSI/OSC8/LaTeX remain; persistent loader agent is extending coverage.
+
+Claude: pushed 14aa9a7 on native-tls: finishTurn/prepareRequest/peekQueuedMessages (pi 466db0fec), 24 new upstream agent tests, inventory repinned at v0.87.1 (18 suites needs-review). Next: session projection (session-manager ContextEditEntry/UsageEntry, buildSessionProjection).
