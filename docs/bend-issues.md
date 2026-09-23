@@ -1021,7 +1021,7 @@ The fixed-decimal formatter hit BEND-012 when its pattern binder `digit` resolve
 
 ### Boxed Boolean combined with raw OR during JPEG integration
 
-`tests/repro/bool-pick-or.bend` prints the correct `true` on Bun but `false` on native one/four threads: the emitted generic `Bool.pick` result is boxed and used directly in a raw Boolean OR. [JPEG validation](../tests/jpeg.md#open-compiler-defect-found-during-integration) records toolchain identities and the source workaround; the compiler owner has been notified, and the defect remains open.
+`tests/repro/bool-pick-or.bend` prints the correct `true` on Bun but `false` on native one/four threads: the emitted generic `Bool.pick` result is boxed and used directly in a raw Boolean OR. [JPEG validation](../tests/jpeg.md#open-compiler-defect-found-during-integration) records toolchain identities and the source workaround; the compiler owner has been notified, and the defect remains open. Generated C (2026-09-24, shared toolchain): the generic `Bool.pick` spin returns the boxed operand (`term_pak(CID_TRUE, 0)`), `main` stores it in a `Term` and emits `((0) | (v_1))`, and the consumer tests `value == 1`, so the boxed true reads as false; the operand needs a box-to-word conversion before the Boolean OR. Other live instances of the shape (`x && Bool.pick(Bool, …)`) exist in `tui/src/keys.bend:546` and `modes/interactive/components/session-selector.bend:328`.
 
 ### Parallel translation units miss one-line effect functions (2026-09-22)
 
