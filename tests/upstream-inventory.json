@@ -3244,9 +3244,10 @@
     },
     {
       "source": "packages/coding-agent/test/theme-detection.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "cdcfc3ba8f799d3f16fad7c2ba9de24e63edc6e15a46d2adef8f78fa7c899c49"
+      "status": "partial",
+      "ports": ["tests/theme-detection.bend", "tests/theme-detection-reference.ts", "tests/theme_detection_check.py"],
+      "sha256": "cdcfc3ba8f799d3f16fad7c2ba9de24e63edc6e15a46d2adef8f78fa7c899c49",
+      "notes": "Pure theme-setting, COLORFGBG, ANSI index and RGB classification plus auto-query precedence match 1,599 pinned cases on Bun/native one/four. Actual terminal query, timeout and notification ownership remain pending."
     },
     {
       "source": "packages/coding-agent/test/theme-export.test.ts",
