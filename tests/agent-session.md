@@ -43,3 +43,5 @@ BEND=build/bend-process-files/bend2/main.ts BEND_TUS=4 sh scripts/build-pure.sh 
 python3 tests/agent_session_check.py --runner build/agent-session.js
 python3 tests/agent_session_check.py --runner build/agent-session --threads 4
 ```
+
+Tree navigation and fork selection now have source-pinned checks in `tests/agent_session_navigation_check.py` against pi v0.87.1. `navigateTree(session, entryId)` implements the no-summary path: selecting a user message returns its text for the editor, moves the active leaf to its parent, rebuilds the agent context, and retains the old branch in the same session file. `forkAt(session, userEntryId)` creates a new session from that parent, resets agent run state, updates its session ID, emits `session_start`, and returns the selected text; the fixture covers in-memory and persisted forks on Bun/native1/native4. Branch summarization, UI selectors, and tool restoration for extension-provided tools remain pending.

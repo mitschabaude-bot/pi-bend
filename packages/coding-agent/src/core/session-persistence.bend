@@ -741,6 +741,10 @@ def isPersisted(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Bool
   match session:
     case Session{_, _, _, _, persist, _}: persist
 
+def isFlushed(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Bool:
+  match session:
+    case Session{_, _, _, _, _, flushed}: flushed
+
 # The effective working directory: an opened session may override its header's.
 def getCwd(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> String:
   match session:

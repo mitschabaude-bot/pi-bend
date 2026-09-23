@@ -40,7 +40,7 @@ import ../../../ai/src/utils/transcript.bend as Transcript
 # retries transient provider errors with the settings' backoff policy, and
 # compacts the context manually or when it overflows or crosses the
 # settings' threshold. Bash execution, extensions, skills, prompt templates,
-# tree navigation and the mid-run threshold check are not ported yet.
+# branch summarization and the mid-run threshold check are not ported yet.
 
 # The CLI's session codecs: no diagnostic details, tool details as their
 # JSON shape (restored ones kept raw), extension payloads as JSON values.
@@ -161,6 +161,7 @@ type AgentSessionEvent is Data:
   QueueUpdate{steering: List<&2, String>, followUp: List<&2, String>}
   SessionInfoChanged{name: Maybe<&2, String>}
   SessionTree{oldLeafId: Maybe<&2, String>, newLeafId: Maybe<&2, String>}
+  SessionForked{sessionId: String, sessionFile: Maybe<&2, String>, previousSessionFile: Maybe<&2, String>}
   ThinkingLevelChanged{level: Ai.ModelThinkingLevel}
   AutoRetryStart{attempt: Nat, maxAttempts: Nat, delayMs: F64, errorMessage: String}
   AutoRetryEnd{success: Bool, attempt: Nat, finalError: Maybe<&2, String>}
@@ -1654,6 +1655,90 @@ def navigateTree(+session: AgentSession, targetId: String) -> IO(Result<&2, &2, 
           _ => do IO<Result<&2, &2, String, Navigation>>:
             snapshot : Shared <- R.read(Shared, shared)
             navigateSnapshot(agent, shared, snapshot, targetId))(Unit{})
+
+type Fork is Data:
+  Fork{selectedText: String, sessionId: String, sessionFile: Maybe<&2, String>}
+
+def forkText(text: Maybe<&2, String>, parent: Maybe<&2, String>) -> Maybe<&2, Navigation>:
+  match text:
+    case Some{value}: Some{Navigation{Some{value}, parent}}
+    case None{}: None{}
+
+def forkTarget(entry: Entry()) -> Maybe<&2, Navigation>:
+  match entry:
+    case S.SessionMessageEntry{S.SessionEntryBase{_,parent,_}, message}: forkText(userText(message), parent)
+    case _: None{}
+
+def forkPrepared(+current: Session(), leafId: Maybe<&2, String>) -> IO(Sessions.Outcome(Session())):
+  match leafId:
+    case None{}: Sessions.newSession(Unit, Tools.ToolDetails, V.Value, current, Sessions.NewSessionOptions{None{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, current)})
+    case Some{id}: Sessions.createBranchedSession(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, current, id)
+
+def unsavedSource(+current: Session(), leafId: Maybe<&2, String>) -> Bool:
+  match leafId:
+    case None{}: False{}
+    case Some{_}: Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, current) && Bool.not(Sessions.isFlushed(Unit, Tools.ToolDetails, V.Value, current))
+
+def forkShared(previous: Shared, next: Session()) -> Shared:
+  match previous:
+    case Shared{_, _, _, listeners, _, _, RetryState{policy, _, window, _}, _}:
+      Shared{next, Nil{}, Nil{}, listeners, False{}, None{}, RetryState{policy, 0n, window, None{}}, CompactionState{False{}, None{}, None{}}}
+
+def finishFork(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +next: Session(), text: String, previousSessionFile: Maybe<&2, String>, reset: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Fork>):
+  match reset:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Fork>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, String, Fork>>:
+        +id : String <- IO.pure(String, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, next))
+        +file : Maybe<&2, String> <- IO.pure(Maybe<&2, String>, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, next))
+        Agent.setSessionId(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{id})
+        R.modify(Shared, Unit, shared, previous => (forkShared(previous, next), Unit{}))
+        refreshContext(agent, shared)
+        emit(shared, SessionForked{id, file, previousSessionFile})
+        return Done{Fork{text, id, file}}
+
+def forkWritten(+agent: Runtime.Owner(), shared: R.Ref<Shared>, text: String, previousSessionFile: Maybe<&2, String>, result: Sessions.Outcome(Session())) -> IO(Result<&2, &2, String, Fork>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Fork>, Fail{Sessions.message(error)})
+    case Done{next}:
+      do IO<Result<&2, &2, String, Fork>>:
+        reset : Result<&2, &2, String, Unit> <- Agent.reset(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        finishFork(agent, shared, next, text, previousSessionFile, reset)
+
+def forkSelected(agent: Runtime.Owner(), shared: R.Ref<Shared>, +current: Session(), selected: Maybe<&2, Navigation>) -> IO(Result<&2, &2, String, Fork>):
+  match selected:
+    case None{}: IO.pure(Result<&2, &2, String, Fork>, Fail{"Invalid entry ID for forking"})
+    case Some{Navigation{Some{text}, +leafId}}:
+      Bool.pick(Unit -> IO(Result<&2, &2, String, Fork>), unsavedSource(current, leafId),
+        _ => IO.pure(Result<&2, &2, String, Fork>, Fail{"This session has not been saved yet. Wait for the first assistant response before cloning or forking it."}),
+        _ => do IO<Result<&2, &2, String, Fork>>:
+          result : Sessions.Outcome(Session()) <- forkPrepared(current, leafId)
+          forkWritten(agent, shared, text, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, current), result))(Unit{})
+    case Some{_}: IO.pure(Result<&2, &2, String, Fork>, Fail{"Invalid entry ID for forking"})
+
+def forkFound(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), found: Maybe<&2, Entry()>) -> IO(Result<&2, &2, String, Fork>):
+  match found:
+    case None{}: IO.pure(Result<&2, &2, String, Fork>, Fail{"Invalid entry ID for forking"})
+    case Some{entry}: forkSelected(agent, shared, current, forkTarget(entry))
+
+def forkSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Shared, entryId: String) -> IO(Result<&2, &2, String, Fork>):
+  match snapshot:
+    case Shared{+current, _, _, _, _, _, _, _}:
+      forkFound(agent, shared, current, S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(current), entryId))
+
+# Fork before a user message into a new session, returning that message's text
+# for the editor. The active owner and its event subscribers stay mounted.
+def forkAt(+session: AgentSession, entryId: String) -> IO(Result<&2, &2, String, Fork>):
+  match session:
+    case AgentSession{agent, shared, _, _, _, _}:
+      do IO<Result<&2, &2, String, Fork>>:
+        streaming : Bool <- isStreaming(session)
+        compacting : Bool <- isCompacting(session)
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Fork>), streaming || compacting,
+          _ => IO.pure(Result<&2, &2, String, Fork>, Fail{"Wait for the current response or compaction to finish before forking the session."}),
+          _ => do IO<Result<&2, &2, String, Fork>>:
+            snapshot : Shared <- R.read(Shared, shared)
+            forkSnapshot(agent, shared, snapshot, entryId))(Unit{})
 
 # Mutations
 # ---------
