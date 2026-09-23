@@ -384,14 +384,6 @@ def sessionEventIn(state: Shared, event: SessionEvent()) -> AgentSessionEvent:
     case T.AgentEnd{+messages}: AgentEnd{messages, willRetryAfterAgentEnd(state, messages)}
     case other: AgentEvent{other}
 
-def assistantStop(assistant: Ai.AssistantMessage<V.Value, Unit>) -> Ai.StopReason:
-  match assistant:
-    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, stopReason, _, _, _, _, _}: stopReason
-
-def assistantError(assistant: Ai.AssistantMessage<V.Value, Unit>) -> Maybe<&2, String>:
-  match assistant:
-    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, errorMessage, _, _, _}: errorMessage
-
 def retryEnded(shared: R.Ref<Shared>, previous: Nat, success: Bool, finalError: Maybe<&2, String>) -> IO(Unit):
   match previous:
     case 0n: IO.pure(Unit, Unit{})
@@ -422,8 +414,8 @@ def settleRetry(+shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
   match event:
     case T.MessageEnd{T.LlmMessage{Ai.Assistant{+assistant}}}:
       do IO<Unit>:
-        settleOverflow(shared, assistantStop(assistant))
-        succeededRetry(shared, assistantStop(assistant))
+        settleOverflow(shared, Ai.assistantStopReason(V.Value, Unit, assistant))
+        succeededRetry(shared, Ai.assistantStopReason(V.Value, Unit, assistant))
     case _: IO.pure(Unit, Unit{})
 
 def ready() -> Loop.Emission<Runtime.Error()>: Loop.EmissionReady{Done{Unit{}}}
@@ -624,7 +616,7 @@ def errorText(errorMessage: Maybe<&2, String>) -> String:
     case Some{text}: text
     case None{}: "Unknown error"
 
-def errorMessageOf(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String: errorText(assistantError(assistant))
+def errorMessageOf(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String: errorText(Ai.assistantErrorMessage(V.Value, Unit, assistant))
 
 def withoutTrailingAssistant(messages: List<&2, Message()>) -> Maybe<&2, List<&2, Message()>>:
   match messages:
@@ -736,22 +728,6 @@ def compactionTime(entry: Maybe<&2, S.CompactionEntry<V.Value>>) -> Maybe<&2, F6
 def compactionTimestamp(entries: List<&2, Entry()>) -> Maybe<&2, F64>:
   compactionTime(S.getLatestCompactionEntry(Unit, Tools.ToolDetails, V.Value, entries))
 
-def assistantTimestamp(assistant: Ai.AssistantMessage<V.Value, Unit>) -> F64:
-  match assistant:
-    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, _, _, _, timestamp}: timestamp
-
-def assistantProvider(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String:
-  match assistant:
-    case Ai.AssistantMessage{_, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
-
-def assistantModel(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String:
-  match assistant:
-    case Ai.AssistantMessage{_, _, _, model, _, _, _, _, _, _, _, _, _, _, _}: model
-
-def assistantUsage(assistant: Ai.AssistantMessage<V.Value, Unit>) -> Ai.Usage:
-  match assistant:
-    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}: usage
-
 def isAborted(stopReason: Ai.StopReason) -> Bool:
   match stopReason:
     case Ai.Aborted{}: True{}
@@ -774,7 +750,7 @@ def notAfter(time: F64, boundary: Maybe<&2, F64>) -> Bool:
 
 def staleAnchor(message: Maybe<&2, Message()>, boundary: Maybe<&2, F64>) -> Bool:
   match message:
-    case Some{T.LlmMessage{Ai.Assistant{assistant}}}: notAfter(assistantTimestamp(assistant), boundary)
+    case Some{T.LlmMessage{Ai.Assistant{assistant}}}: notAfter(Ai.assistantTimestamp(V.Value, Unit, assistant), boundary)
     case _: False{}
 
 # A usage-backed estimate whose anchor predates the compaction is stale.
@@ -790,8 +766,8 @@ def usageOrEstimate(estimated: Bool, direct: F64, +messages: List<&2, Message()>
 
 # Error or zero-usage messages fall back to the estimate from the context.
 def thresholdTokens(+assistant: Ai.AssistantMessage<V.Value, Unit>, messages: List<&2, Message()>, boundary: Maybe<&2, F64>) -> Maybe<&2, F64>:
-  +direct = Compaction.calculateContextTokens(assistantUsage(assistant))
-  usageOrEstimate(Bool.or(isErrorStop(assistantStop(assistant)), F.isEqual(F.compare(direct, F.fromU32(0)))), direct, messages, boundary)
+  +direct = Compaction.calculateContextTokens(Ai.assistantUsage(V.Value, Unit, assistant))
+  usageOrEstimate(Bool.or(isErrorStop(Ai.assistantStopReason(V.Value, Unit, assistant)), F.isEqual(F.compare(direct, F.fromU32(0)))), direct, messages, boundary)
 
 def enabledOf(settings: Compaction.CompactionSettings) -> Bool:
   match settings:
@@ -805,13 +781,13 @@ def thresholdReached(settings: Compaction.CompactionSettings, contextWindow: F64
 # Disabled compaction, a skipped aborted message and a message from before
 # the latest compaction never compact.
 def skipsCheck(settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, boundary: Maybe<&2, F64>) -> Bool:
-  Bool.or(Bool.not(enabledOf(settings)), Bool.or(Bool.and(skipAborted, isAborted(assistantStop(assistant))), notAfter(assistantTimestamp(assistant), boundary)))
+  Bool.or(Bool.not(enabledOf(settings)), Bool.or(Bool.and(skipAborted, isAborted(Ai.assistantStopReason(V.Value, Unit, assistant))), notAfter(Ai.assistantTimestamp(V.Value, Unit, assistant), boundary)))
 
 # upstream _checkCompaction's decision (Plan.decideCompaction) from the
 # assistant message, the model and the session's compaction boundary.
 def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool) -> Plan.CompactionPlan:
-  +sameModel = Bool.and(String.eq(assistantProvider(assistant), Ai.modelProvider(model)), String.eq(assistantModel(assistant), Ai.modelId(model)))
-  Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, Ai.modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, Ai.modelMaxTokens(model))), isStop(assistantStop(assistant)), attempted, thresholdReached(settings, Ai.modelContextWindow(model), thresholdTokens(assistant, messages, boundary)))
+  +sameModel = Bool.and(String.eq(Ai.assistantProvider(V.Value, Unit, assistant), Ai.modelProvider(model)), String.eq(Ai.assistantModel(V.Value, Unit, assistant), Ai.modelId(model)))
+  Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, Ai.modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, Ai.modelMaxTokens(model))), isStop(Ai.assistantStopReason(V.Value, Unit, assistant)), attempted, thresholdReached(settings, Ai.modelContextWindow(model), thresholdTokens(assistant, messages, boundary)))
 
 # The summarizer: the agent's stream function with fresh options.
 type SummarizerEnv is Data:
@@ -1119,7 +1095,7 @@ def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: M
 # Without a retry, a final error is reported and compaction gets its turn.
 def finishFailed(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +assistant: Ai.AssistantMessage<V.Value, Unit>) -> IO(Bool):
   do IO<Bool>:
-    failedRetry(shared, assistantStop(assistant), assistantError(assistant))
+    failedRetry(shared, Ai.assistantStopReason(V.Value, Unit, assistant), Ai.assistantErrorMessage(V.Value, Unit, assistant))
     checkCompaction(agent, shared, settings, assistant, True{})
 
 def retryOrFinish(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +assistant: Ai.AssistantMessage<V.Value, Unit>) -> IO(Bool):

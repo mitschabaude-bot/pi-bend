@@ -150,14 +150,6 @@ type Loop<-Arguments: Data, -DiagnosticDetails: Data> is Data:
   Resume{attempt: Nat, errorMessage: String}
   Settled{response: T.AssistantMessage<Arguments, DiagnosticDetails>, notice: Maybe<&2, RetryNotice>}
 
-def stopReasonOf(-Arguments: Data, -DiagnosticDetails: Data, message: T.AssistantMessage<Arguments, DiagnosticDetails>) -> T.StopReason:
-  match message:
-    case T.AssistantMessage{_, _, _, _, _, _, _, _, _, stopReason, _, _, _, _, _}: stopReason
-
-def errorMessageOf(-Arguments: Data, -DiagnosticDetails: Data, message: T.AssistantMessage<Arguments, DiagnosticDetails>) -> Maybe<&2, String>:
-  match message:
-    case T.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, errorMessage, _, _, _}: errorMessage
-
 def decideAfter(-Arguments: Data, -DiagnosticDetails: Data, +response: T.AssistantMessage<Arguments, DiagnosticDetails>, +attempt: Nat, +last: Maybe<&2, LastRetry>, maxAttempts: Nat, stopReason: T.StopReason, +errorMessage: Maybe<&2, String>, retryable: Bool) -> Loop<Arguments, DiagnosticDetails>:
   match stopReason:
     case T.Aborted{}: Settled{response, finishedNotice(last, False{}, None{})}
@@ -165,7 +157,7 @@ def decideAfter(-Arguments: Data, -DiagnosticDetails: Data, +response: T.Assista
     case _: Settled{response, finishedNotice(last, True{}, None{})}
 
 def afterResponse(-Arguments: Data, -DiagnosticDetails: Data, +response: T.AssistantMessage<Arguments, DiagnosticDetails>, attempt: Nat, last: Maybe<&2, LastRetry>, maxAttempts: Nat) -> Loop<Arguments, DiagnosticDetails>:
-  decideAfter(Arguments, DiagnosticDetails, response, attempt, last, maxAttempts, stopReasonOf(Arguments, DiagnosticDetails, response), errorMessageOf(Arguments, DiagnosticDetails, response), isRetryableAssistantError(Arguments, DiagnosticDetails, response))
+  decideAfter(Arguments, DiagnosticDetails, response, attempt, last, maxAttempts, T.assistantStopReason(Arguments, DiagnosticDetails, response), T.assistantErrorMessage(Arguments, DiagnosticDetails, response), isRetryableAssistantError(Arguments, DiagnosticDetails, response))
 
 def afterSleep(-Arguments: Data, -DiagnosticDetails: Data, slept: Result<&2, &2, ProviderRetry.SleepError, Unit>, attempt: Nat, errorMessage: String, response: T.AssistantMessage<Arguments, DiagnosticDetails>) -> Loop<Arguments, DiagnosticDetails>:
   match slept:

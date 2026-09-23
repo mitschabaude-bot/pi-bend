@@ -220,10 +220,6 @@ def withOutput(-G: Data, state: State<G>, output: T.AssistantMessage<V.Value, G>
   match state:
     case State{_, slots, refs, properties}: State{output, slots, refs, properties}
 
-def messageBlocks(-G: Data, message: T.AssistantMessage<V.Value, G>) -> List<&2, T.AssistantContent<V.Value>>:
-  match message:
-    case T.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
-
 def count(values: List<&2, T.AssistantContent<V.Value>>) -> Nat:
   match values:
     case Nil{}: 0n
@@ -255,7 +251,7 @@ def replaceBlock(values: List<&2, T.AssistantContent<V.Value>>, index: Nat, valu
     case head <> rest 1n+tail: head <> replaceBlock(rest, tail, value)
 
 def withBlock(-G: Data, +message: T.AssistantMessage<V.Value, G>, index: Nat, value: T.AssistantContent<V.Value>) -> T.AssistantMessage<V.Value, G>:
-  Transform.withContent(V.Value, G, message, replaceBlock(messageBlocks(G, message), index, value))
+  Transform.withContent(V.Value, G, message, replaceBlock(T.assistantContent(V.Value, G, message), index, value))
 
 def withStopReason(-G: Data, message: T.AssistantMessage<V.Value, G>, reason: T.StopReason) -> T.AssistantMessage<V.Value, G>:
   match message:
@@ -335,7 +331,7 @@ def unchangedState(-G: Data, state: State<G>) -> Update<G>: Update{state, Nil{},
 def createdSlot(-G: Data, +state: State<G>, key: F64, value: Maybe<&2, BlockUpdate>) -> Update<G>:
   match value:
     case None{}: unchangedState(G, state)
-    case Some{update}: applyUpdate(G, state, key, count(messageBlocks(G, stateOutput(G, state))), None{}, update)
+    case Some{update}: applyUpdate(G, state, key, count(T.assistantContent(V.Value, G, stateOutput(G, state))), None{}, update)
 
 def addSlot(-G: Data, state: State<G>, key: F64, item: OutputItem) -> Update<G>:
   match state:
@@ -421,10 +417,6 @@ def withOptionalResponseId(-G: Data, message: T.AssistantMessage<V.Value, G>, id
     case Some{""}: message
     case other: withResponseId(G, message, other)
 
-def getUsage(-G: Data, message: T.AssistantMessage<V.Value, G>) -> T.Usage:
-  match message:
-    case T.AssistantMessage{_, _, _, _, _, _, _, _, value, _, _, _, _, _, _}: value
-
 def withUsage(-G: Data, message: T.AssistantMessage<V.Value, G>, usage: T.Usage) -> T.AssistantMessage<V.Value, G>:
   match message:
     case T.AssistantMessage{content, api, provider, model, responseModel, id, thinking, diagnostics, _, stop, deferred, error, raw, endTurn, time}:
@@ -466,7 +458,7 @@ def withCost(usage: T.Usage, cost: T.UsageCost) -> T.Usage:
     case T.Usage{input, output, read, write, longWrite, reasoning, total, _}: T.Usage{input, output, read, write, longWrite, reasoning, total, cost}
 
 def accounting(-G: Data, +message: T.AssistantMessage<V.Value, G>, id: Maybe<&2, String>, incoming: Maybe<&2, ResponseUsage>, cost: T.ModelCost) -> T.AssistantMessage<V.Value, G>:
-  +next = responseUsage(getUsage(G, message), incoming)
+  +next = responseUsage(T.assistantUsage(V.Value, G, message), incoming)
   withUsage(G, withOptionalResponseId(G, message, id), withCost(next, Cost.compute(cost, next)))
 
 # Azure can omit reasoning.encrypted_content from output_item.done and provide
@@ -530,7 +522,7 @@ def repairReference(-G: Data, +state: State<G>, encrypted: String, reference: Ma
   match encrypted reference:
     case "" _: Terminal{state, None{}}
     case _ None{}: Terminal{state, None{}}
-    case text Some{position}: backfilled(G, state, repairAt(messageBlocks(G, stateOutput(G, state)), position, text))
+    case text Some{position}: backfilled(G, state, repairAt(T.assistantContent(V.Value, G, stateOutput(G, state)), position, text))
 
 def backfillItem(-G: Data, state: State<G>, item: OutputItem) -> Terminal<G>:
   match state item:
@@ -619,7 +611,7 @@ def priced(~J: Data, ~G: Data, ~resolveTier: Maybe<&2, String> -> Maybe<&2, Stri
   match current:
     case Terminal{state, Some{error}}: Terminal{state, Some{error}}
     case Terminal{+state, None{}}:
-      finishResponse(G, withOutput(G, state, withUsage(G, stateOutput(G, state), applyPricing(model, resolveTier(response, requested), getUsage(G, stateOutput(G, state))))), status, reason)
+      finishResponse(G, withOutput(G, state, withUsage(G, stateOutput(G, state), applyPricing(model, resolveTier(response, requested), T.assistantUsage(V.Value, G, stateOutput(G, state))))), status, reason)
 
 def finalizeResponse(~J: Data, ~G: Data, ~resolveTier: Maybe<&2, String> -> Maybe<&2, String> -> Maybe<&2, String>, ~applyPricing: T.Model<J> -> Maybe<&2, String> -> T.Usage -> T.Usage, +model: T.Model<J>, requested: Maybe<&2, String>, state: State<G>, response: Response) -> Terminal<G>:
   match response:

@@ -947,13 +947,9 @@ def toolCallsInContent(content: List<&2, Ai.AssistantContent<Schema.Value>>) -> 
     case Ai.AssistantToolCall{call} <> rest: call <> toolCallsInContent(rest)
     case _ <> rest: toolCallsInContent(rest)
 
-def assistantContent(-DiagnosticDetails: Data, message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>) -> List<&2, Ai.AssistantContent<Schema.Value>>:
-  match message:
-    case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
-
 def collectAssistantToolCalls(-DiagnosticDetails: Data, assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>) -> List<&2, T.AgentToolCall>:
   message = {assistant : Ai.AssistantMessage<Schema.Value, DiagnosticDetails>}
-  content = {assistantContent(DiagnosticDetails, message) : List<&2, Ai.AssistantContent<Schema.Value>>}
+  content = {Ai.assistantContent(Schema.Value, DiagnosticDetails, message) : List<&2, Ai.AssistantContent<Schema.Value>>}
   {toolCallsInContent(content) : List<&2, T.AgentToolCall>}
 
 type PreparedToolCallBatch is Data:

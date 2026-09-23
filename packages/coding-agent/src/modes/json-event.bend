@@ -68,10 +68,6 @@ def indexResult(result: Result<&2, &2, F.Error, Nat>) -> Nat:
 
 def indexOf(value: F64) -> Nat: indexResult(F.convert(value))
 
-def partialContent(partial: Ai.AssistantMessage<V.Value, Unit>) -> List<&2, Ai.AssistantContent<V.Value>>:
-  match partial:
-    case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
-
 # toolcall_start carries the call's id and name from the partial snapshot;
 # a missing tool call at that index is a protocol error.
 def toolcallStart(index: F64, call: Maybe<&2, Ai.ToolCall<V.Value>>) -> Result<&2, &2, String, V.Value>:
@@ -88,7 +84,7 @@ def assistantMessageEvent(event: Ai.AssistantMessageEvent<V.Value, Unit>) -> Res
     case Ai.ThinkingStart{index, _}: Done{Json.object(Json.field("type", Json.text("thinking_start"), Json.field("contentIndex", V.Number{index}, Nil{})))}
     case Ai.ThinkingDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("thinking_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
     case Ai.ThinkingEnd{index, content, _}: Done{Json.object(Json.field("type", Json.text("thinking_end"), Json.field("contentIndex", V.Number{index}, Json.field("content", Json.text(content), Nil{}))))}
-    case Ai.ToolcallStart{+index, partial}: toolcallStart(index, toolCallAt(partialContent(partial), indexOf(index)))
+    case Ai.ToolcallStart{+index, partial}: toolcallStart(index, toolCallAt(Ai.assistantContent(V.Value, Unit, partial), indexOf(index)))
     case Ai.ToolcallDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("toolcall_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
     case Ai.ToolcallEnd{index, call, _}: Done{Json.object(Json.field("type", Json.text("toolcall_end"), Json.field("contentIndex", V.Number{index}, Json.field("toolCall", Json.toolCall(call), Nil{}))))}
     case Ai.StreamDone{reason, final}: Done{Json.object(Json.field("type", Json.text("done"), Json.field("reason", Json.text(Json.doneReason(reason)), Json.field("message", Json.assistantMessage(~Unit, ~unitDetails, final), Nil{}))))}

@@ -101,6 +101,34 @@ type AssistantContent<-Arguments: Data> is Data:
 type AssistantMessage<-Arguments: Data, -DiagnosticDetails: Data> is Data:
   AssistantMessage{content: List<&2, AssistantContent<Arguments>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: F64}
 
+def assistantContent(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> List<&2, AssistantContent<A>>:
+  match message:
+    case AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
+
+def assistantProvider(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> ProviderId():
+  match message:
+    case AssistantMessage{_, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
+
+def assistantModel(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> String:
+  match message:
+    case AssistantMessage{_, _, _, model, _, _, _, _, _, _, _, _, _, _, _}: model
+
+def assistantUsage(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> Usage:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}: usage
+
+def assistantStopReason(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> StopReason:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, _, stopReason, _, _, _, _, _}: stopReason
+
+def assistantErrorMessage(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> Maybe<&2, String>:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, errorMessage, _, _, _}: errorMessage
+
+def assistantTimestamp(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> F64:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, _, _, _, timestamp}: timestamp
+
 # Restricted terminal reasons preserve upstream Extract<StopReason, ...>.
 type DoneReason is Data:
   DoneStop{}
