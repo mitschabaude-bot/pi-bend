@@ -18,7 +18,7 @@ import ../session-json.bend as SessionJson
 import ../messages.bend as Messages
 import ../tools/index.bend as Tools
 
-# The browser viewer is a copied static asset from pi-mono at 46c9de402.
+# The browser viewer is a copied static asset from pi-mono at f07218c4d.
 # Bend owns the session snapshot, JSON encoding, asset loading and file write.
 # Asset paths are explicit so an installed CLI can locate its bundled viewer
 # independently of the user's conversation working directory.

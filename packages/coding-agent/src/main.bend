@@ -6,6 +6,7 @@ import ./core/agent-runtime.bend as Runtime
 import ./core/session-manager.bend as S
 import ./core/session-persistence.bend as Sessions
 import ./core/agent-session.bend as AgentSession
+import ./core/export-html/index.bend as Export
 import ./core/settings-manager.bend as Settings
 import ./core/tools/index.bend as Tools
 import ./modes/print-mode.bend as Print
@@ -25,8 +26,8 @@ import ../../runtime/src/json.bend as Decode
 import ../../runtime/src/callback.bend as Callback
 
 # The pi entry point: argument parsing, mode selection, session selection,
-# initial message assembly, runtime creation and exit behavior. RPC mode,
-# extensions and package commands are not ported yet.
+# initial message assembly, runtime creation and exit behavior. Extensions
+# and package commands remain to be ported.
 
 type AppMode is Data:
   Interactive{}
@@ -930,13 +931,63 @@ def versionFlag(parsed: Args.Args) -> Bool:
     case Args.Args{_, _, _, _, _, _, _, _, _, Some{True{}}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: True{}
     case _: False{}
 
+type ExportRequest is Data:
+  ExportRequest{source: String,output: Maybe<&2,String>}
+
+def firstMessage(messages: List<&2,String>) -> Maybe<&2,String>:
+  match messages:
+    case Nil{}: None{}
+    case first <> _: Some{first}
+
+def exportRequest(parsed: Args.Args) -> Maybe<&2,ExportRequest>:
+  match parsed:
+    case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, source, _, _, _, _, _, _, _, _, _, _, _, _, _, messages, _, _, _}:
+      match source:
+        case None{}: None{}
+        case Some{path}: Some{ExportRequest{path,firstMessage(messages)}}
+
+def exported(result: Result<&2,&2,String,String>) -> IO(Unit):
+  match result:
+    case Done{path}: IO.print("Exported to: " ++ path)
+    case Fail{message}: fail("Error: " ++ message)
+
+def exportAssets(request: ExportRequest, loaded: Result<&2,&2,String,Export.Assets>) -> IO(Unit):
+  match request loaded:
+    case _ Fail{message}: fail("Error: " ++ message)
+    case ExportRequest{source,output} Done{assets}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,String> <- Export.exportFromFile(assets,source,output)
+        exported(result)
+
+def exportLocated(request: ExportRequest,cwd: String,configured: Result<&1,&1,U32 & String,String>) -> IO(Unit):
+  do IO<Unit>:
+    assetsRoot : String <- resolvedPackageDir(cwd,configured)
+    assets : Result<&2,&2,String,Export.Assets> <- Export.loadAssets(Path.join(assetsRoot,"packages/coding-agent/src/core/export-html"))
+    exportAssets(request,assets)
+
+def exportCwd(request: ExportRequest,configured: Result<&1,&1,U32 & String,String>,cwd: Result<&2,&2,FS.Error,String>) -> IO(Unit):
+  match cwd:
+    case Done{path}: exportLocated(request,path,configured)
+    case Fail{_}: fail("Error: Could not resolve the working directory")
+
+def exportFile(request: ExportRequest) -> IO(Unit):
+  do IO<Unit>:
+    cwd : Result<&2,&2,FS.Error,String> <- FS.cwd()
+    configured : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_BEND_PACKAGE_DIR")
+    exportCwd(request,configured,cwd)
+
+def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
+  match request:
+    case Some{value}: exportFile(value)
+    case None{}: runMode(parsed, resolveAppMode(modeOf(parsed), printFlag(parsed), stdinTty, stdoutTty), stdinTty)
+
 def dispatch(+parsed: Args.Args, help: Bool, version: Bool, invalid: Bool, +stdinTty: Bool, stdoutTty: Bool, flagError: Maybe<&2, String>) -> IO(Unit):
   match help version invalid flagError:
     case True{} _ _ _: IO.print(Args.helpText(Config.appName()))
     case _ True{} _ _: IO.print(Config.version())
     case _ _ True{} _: IO.die(Unit, 1, "")
     case _ _ _ Some{message}: fail(message)
-    case _ _ _ None{}: runMode(parsed, resolveAppMode(modeOf(parsed), printFlag(parsed), stdinTty, stdoutTty), stdinTty)
+    case _ _ _ None{}: dispatchExport(parsed,exportRequest(parsed),stdinTty,stdoutTty)
 
 def run(+parsed: Args.Args) -> IO(Unit):
   do IO<Unit>:
