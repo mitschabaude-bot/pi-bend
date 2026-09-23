@@ -85,7 +85,7 @@ if __name__=='__main__':
  print(f'{len(items)} terminal-image reference comparisons passed')
  named=json.loads(subprocess.check_output(['bun','tests/terminal_image_named.ts',args.upstream],cwd=ROOT,text=True));captured=named['calls'];results=batch(args.command,[v['input'] for v in captured])
  for v,got in zip(captured,results):assert got==v['expected'],(v['name'],v['input'],v['expected'],got)
- print(f"{len(captured)} captured results from {len(named['passed'])} original named tests passed; 3 Image component cases pending; historical broken-implementation example excluded")
+ print(f"{len(captured)} captured results from {len(named['passed'])} original named tests passed; 3 Image component cases delegated to image_component_check.py; historical broken-implementation example excluded")
 
  strict=boundaries();actual=batch(args.command,[v for v,_ in strict])
  for (v,want),got in zip(strict,actual):assert want==got,(v,want,got)

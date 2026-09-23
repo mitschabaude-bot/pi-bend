@@ -506,17 +506,23 @@
   {
     "source": "terminal-image.test.ts",
     "test": "Kitty image cursor movement / caps Image component height to a square pixel box by default",
-    "status": "pending-image-component"
+    "status": "ported",
+    "fixture": "image-component.bend",
+    "validation": "image_component_check.py executes the original assertions and compares complete rendered lines."
   },
   {
     "source": "terminal-image.test.ts",
     "test": "Kitty image cursor movement / places image sequence on first line with empty padding rows",
-    "status": "pending-image-component"
+    "status": "ported",
+    "fixture": "image-component.bend",
+    "validation": "image_component_check.py executes the original assertions and compares complete rendered lines."
   },
   {
     "source": "terminal-image.test.ts",
     "test": "Kitty image cursor movement / truncates long image fallback lines to render width",
-    "status": "pending-image-component"
+    "status": "ported",
+    "fixture": "image-component.bend",
+    "validation": "image_component_check.py executes the original assertions and compares complete rendered lines."
   },
   {
     "source": "bug-regression-isimageline-startswith-bug.test.ts",
