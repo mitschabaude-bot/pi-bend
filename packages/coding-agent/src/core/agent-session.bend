@@ -50,8 +50,8 @@ import ../../../ai/src/utils/transcript.bend as Transcript
 # records model, thinking-level and name changes as session entries,
 # retries transient provider errors with the settings' backoff policy, and
 # compacts the context manually or when it overflows or crosses the
-# settings' threshold. Extensions, skills, prompt templates,
-# branch summarization and the mid-run threshold check are not ported yet.
+# settings' threshold, expands /skill: commands and prompt templates, and runs
+# user bash commands. Extensions, reload and the cache warmer are not ported.
 
 # The CLI's session codecs: no diagnostic details, tool details as their
 # JSON shape (restored ones kept raw), extension payloads as JSON values.
@@ -2173,6 +2173,26 @@ def getAutoRetryEnabled(session: AgentSession) -> IO(Bool):
       do IO<Bool>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getRetryEnabled(current)
+
+# upstream setSteeringMode / setFollowUpMode: the agent's queue mode, persisted
+# to the settings.
+def setSteeringMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, &2, String, Unit>):
+  match session:
+    case AgentSession{agent, _, _, +settings, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        Agent.setSteeringMode(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setSteeringMode(mode, current))
+        settingApplied(settings, updated)
+
+def setFollowUpMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, &2, String, Unit>):
+  match session:
+    case AgentSession{agent, _, _, +settings, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        Agent.setFollowUpMode(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setFollowUpMode(mode, current))
+        settingApplied(settings, updated)
 
 # upstream setModel: apply the model, keep the thinking level within its
 # range, record the change (extension model_select events are not ported).

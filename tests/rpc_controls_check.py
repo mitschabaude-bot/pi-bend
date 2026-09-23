@@ -48,6 +48,10 @@ def check(label, command):
             assert until(process, lambda x: x.get("id") == "compaction")[0]["success"]
             send(process, id="retry", type="set_auto_retry", enabled=False)
             assert until(process, lambda x: x.get("id") == "retry")[0]["success"]
+            send(process, id="steering", type="set_steering_mode", mode="all")
+            assert until(process, lambda x: x.get("id") == "steering")[0]["success"]
+            send(process, id="follow", type="set_follow_up_mode", mode="all")
+            assert until(process, lambda x: x.get("id") == "follow")[0]["success"]
             send(process, id="bad-compaction", type="set_auto_compaction", enabled="false")
             assert until(process, lambda x: x.get("id") == "bad-compaction")[0]["error"] == "Invalid command: enabled must be a boolean"
             send(process, id="bad-retry", type="set_auto_retry", enabled="false")
@@ -78,8 +82,9 @@ def check(label, command):
             assert stopped["success"] and stopped["data"]["cancelled"] is True and stopped["data"]["output"] == "start", stopped
             process.stdin.close()
             assert process.wait(timeout=10) == 0, process.stderr.read()
-            assert json.loads((agent / "settings.json").read_text())["retry"]["enabled"] is False
-            print(f"{label}: settings persistence, bash history/events, and cancellation")
+            saved = json.loads((agent / "settings.json").read_text())
+            assert saved["retry"]["enabled"] is False and saved["steeringMode"] == "all" and saved["followUpMode"] == "all", saved
+            print(f"{label}: settings persistence (including queue modes), bash history/events, and cancellation")
         finally:
             if process.poll() is None:
                 process.kill()

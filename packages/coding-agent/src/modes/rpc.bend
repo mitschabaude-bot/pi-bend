@@ -403,9 +403,9 @@ def mode(value: String) -> Maybe<&2,AgentTypes.QueueMode>:
 def modeResponse(handle: Handle,id: Maybe<&2,String>,+command: String,value: Maybe<&2,AgentTypes.QueueMode>) -> IO(Unit):
   match handle value:
     case Handle{_,sink,_,_,_,_} None{}: output(sink,failure(id,command,"Invalid command: mode must be 'all' or 'one-at-a-time'"))
-    case Handle{Session.AgentSession{+agent,_,_,_,_,_},sink,_,_,_,_} Some{+chosen}:
+    case Handle{+session,sink,_,_,_,_} Some{+chosen}:
       do IO<Unit>:
-        Bool.pick(Unit -> IO(Unit),String.eq(command,"set_steering_mode"),_ => Agent.setSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent,chosen),_ => Agent.setFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent,chosen))(Unit{})
+        persisted : Result<&2,&2,String,Unit> <- Bool.pick(Unit -> IO(Result<&2,&2,String,Unit>),String.eq(command,"set_steering_mode"),_ => Session.setSteeringMode(session,chosen),_ => Session.setFollowUpMode(session,chosen))(Unit{})
         output(sink,ok(id,command))
 def setMode(handle: Handle,id: Maybe<&2,String>,command: String,value: Result<&2,&2,String,String>) -> IO(Unit):
   match value:
