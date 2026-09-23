@@ -2582,21 +2582,36 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-model-extension.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "faa5d0bb64fea33d75cc10456fba48d190f6040510b62bb4fba197b7095099c5"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "faa5d0bb64fea33d75cc10456fba48d190f6040510b62bb4fba197b7095099c5",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5ac5275be8e0ddb9fc2c1dbaef31ba3a096d6a51e73d65866c4cb4282b28e6ae"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "5ac5275be8e0ddb9fc2c1dbaef31ba3a096d6a51e73d65866c4cb4282b28e6ae",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'prompts while idle and records a single text response' is the persist scenario of tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, the streaming busy error and the no-model/no-auth errors remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6419227d98849f6aed17e9262cfa13d85bb18f59b1040ba8b687f9f487771fdb"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "6419227d98849f6aed17e9262cfa13d85bb18f59b1040ba8b687f9f487771fdb",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'delivers follow-up messages only after the current run finishes' is the queue scenario of tests/agent_session_check.py over a text-only turn (steering joins the first turn, the follow-up starts the second). Extension-origin messages, input handlers, one-at-a-time/all modes and custom-message delivery remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-retry-events.test.ts",
@@ -2608,11 +2623,13 @@
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",
       "status": "partial",
       "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
         "tests/print_cli_check.py"
       ],
       "sha256": "2b940dfac449b6e7dea886ab202051c41520a4580b67de8d3642e849da842561",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'persists message_end assistant replacements to the session manager' is covered end to end by the live stored-session check (assistant entry equals the final message_end message). Session switching, forking and runtime replacement remain pending with the AgentSessionRuntime port."
+      "notes": "'persists message_end assistant replacements to the session manager' is covered by the persist scenario of tests/agent_session_check.py (faux provider) and end to end by the live stored-session check (assistant entry equals the final message_end message). Session switching, forking and runtime replacement remain pending with the AgentSessionRuntime port."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-tool-result-images.test.ts",
@@ -3606,7 +3623,9 @@
     {
       "source": "packages/tui/test/terminal-colors.test.ts",
       "status": "partial",
-      "ports": ["tests/terminal-colors.bend"],
+      "ports": [
+        "tests/terminal-colors.bend"
+      ],
       "notes": "All four original pure parser tests execute and replay against native Bend. 1,010 source comparisons, six documented strictness corrections and two long-input checks pass Bun/native one/four. The five TUI background-query lifecycle/dispatch tests remain pending. See tests/terminal-colors.md.",
       "sha256": "83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566"
     },
@@ -3619,7 +3638,10 @@
     {
       "source": "packages/tui/test/terminal.test.ts",
       "status": "partial",
-      "ports": ["tests/terminal-protocol.bend", "tests/terminal.bend"],
+      "ports": [
+        "tests/terminal-protocol.bend",
+        "tests/terminal.bend"
+      ],
       "sha256": "b63dbc3886282a7642c5af452a28ada1888d941352e1e514a1049ff1bed0ced4",
       "notes": "All 21 original source tests execute in the reference harness; 19 recorded pure helper calls and 90 negotiation traces replay on Bun/native one/four. The owned Linux driver passes 35 PTY/file scenarios on native one/four, including descriptor reuse, signals, cleanup, cancellation and directory log naming across time zones. This does not cover native Windows/macOS terminal setup or modifier sensing, socket-backed stdio, or complete interactive TUI integration. See tests/terminal.md."
     },
