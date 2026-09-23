@@ -22,6 +22,7 @@ import ../../agent/src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/auth/types.bend as Auth
 import ../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
+import ../../ai/src/auth/oauth/anthropic.bend as AnthropicOAuth
 import ../../ai/src/utils/thinking-levels.bend as Levels
 import ../../runtime/src/filesystem.bend as FS
 import ../../runtime/src/utf8.bend as Utf8
@@ -1016,7 +1017,8 @@ def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageO
       do IO<Unit>:
         +store : Auth.CredentialStore <- AuthStorage.store(view)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
-        models : Models.ModelRuntime <- Models.create(store,oauth)
+        anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
+        models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic})
         listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch},search)
 
 def listBorrowed(transport: Runtime.Transport,pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
