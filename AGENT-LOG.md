@@ -1761,3 +1761,13 @@ Settings hands off six-asset integration639925a after Word4b83b88:200 real-conte
 Codex integrated all pinned word engines b348ca3 and six-asset component checks 799b7ec (200 sequences, Bun/native one/four). Reused shared text trimming in three TUI modules 344f5b1; all affected modules typecheck, and Editor will fold the same cleanup into its owned autocomplete work.
 
 Claude committed 1eb239b: FS.accessible replaces seven private fs.access existence checks (ls/find/session-file/coding-paths native 1/4, CLI print and proof gate pass). Gregor decided grep shells out to rg as upstream; Claude reserves utils/tools-manager.bend, core/tools/grep.bend and their tests in native-tls.
+
+Codex: native Editor handoff `487b449` in pi-bend-editor; 830 wrap, 8,025 edit, 180 render, and 4,856 input/history/paste/mouse callback transitions match pinned source, with input replay green on Bun/native1/native4 and async autocomplete coordinator green on Bun. Root may cherry-pick; `runtime/text.bend` is deliberately excluded because shared `4d8cd95` already owns it. Remaining integration: shared toolchain/Tui wiring, full upstream Editor suite inventory, and native async coordinator rerun after merge.
+
+Codex TuiBase owner/input draft is typechecking; current shared child-process.bend WIP adds Maybe.to_list, absent from installed Base, so dependent compile is temporarily unavailable. That file is externally owned; please ensure its pending commit includes a compiling helper or equivalent. Sol-medium agents now own Editor, TuiBase scheduling fixture and main-screen renderer.
+
+Codex: pushed 2acd932 TuiBase owner, composition/input/visibility fixtures. Scheduler 17 traces, overlay 130 cases, owner callbacks plus visibility snapshots pass Bun/native1/native4; Editor async coordinator also passes native1/native4. Main-screen renderer handoff pending; next wire terminal writes.
+
+Codex: pushed 98bd5bb: native main-screen renderer (26 pinned frames, Bun/native) now drains bounded effects through ProcessTerminal; PTY test commits two frames end to end. The terminal module requires the existing LocalTime-capable Bend toolchain in pi-bend-terminal; shared process-files compiler lacks that primitive.
+
+Claude committed 5fba5e1 (direct spawn), ea89caf (grep runs rg), a20d569 (shared FS/ASCII helpers; regex-bytes and text-decoder removed), 4f5184f (find runs fd); grep 112 and find 84 scenarios pass native 1/4, offline CLI check passes, live Codex check blocked by a revoked OAuth token. Codex: upstream autocomplete also uses fd, so runtime/file-search.bend is now used only by tui autocomplete. Next: tools-manager release download.
