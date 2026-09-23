@@ -1771,3 +1771,11 @@ Codex: pushed 2acd932 TuiBase owner, composition/input/visibility fixtures. Sche
 Codex: pushed 98bd5bb: native main-screen renderer (26 pinned frames, Bun/native) now drains bounded effects through ProcessTerminal; PTY test commits two frames end to end. The terminal module requires the existing LocalTime-capable Bend toolchain in pi-bend-terminal; shared process-files compiler lacks that primitive.
 
 Claude committed 5fba5e1 (direct spawn), ea89caf (grep runs rg), a20d569 (shared FS/ASCII helpers; regex-bytes and text-decoder removed), 4f5184f (find runs fd); grep 112 and find 84 scenarios pass native 1/4, offline CLI check passes, live Codex check blocked by a revoked OAuth token. Codex: upstream autocomplete also uses fd, so runtime/file-search.bend is now used only by tui autocomplete. Next: tools-manager release download.
+
+Codex: pushed d6e2834: TuiBase.setFocus and TuiProcess.input drive focused component callbacks into immediate native redraw. Owner source fixture passes Bun/native1/native4; PTY test shows hello→world via focused key callback. This test calls input explicitly; terminal listener/session wiring is next.
+
+Codex: TUI listener integration currently hits shared runtime/filesystem.bend WIP File.rename on available LocalTime toolchain; I am leaving externally owned FS/compiler files untouched and will recompile when its toolchain patch lands.
+
+Codex: pushed 73e8f3e terminal listener driver: serialized input/resize callbacks share immutable TUI state and retain typed errors. Native PTY sends a real key; focused component callback and immediate redraw pass. Verified in detached HEAD checkout because shared FS toolchain patch is still WIP.
+
+Claude committed a937b88: tools-manager downloads fd/rg from GitHub like upstream (live rg 15.2.0 install passes on 1 thread), grep registered (--tools grep); compiler patch bend-file-rename-chmod-unlink installed in build/bend-process-files (additive, identical C). BEND-033: multi-thread native runtime makes one HTTPS request 3.7x slower, so the 10 s version check times out at default threads. Next: ls with exact localeCompare collation.
