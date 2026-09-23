@@ -843,29 +843,30 @@ def printHosted(options: Print.PrintModeOptions, +host: Host()) -> IO(Unit):
     SessionRuntime.dispose(Services, host)
     exitWith(code)
 
-def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
-  do IO<Unit>:
-    current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
-    +live : AgentSession.AgentSession <- activeSession(current)
-    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager, AgentSession.settingsOf(live))
-    home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings))
-    SessionRuntime.dispose(Services, host)
-    interactiveFinished(result)
-
 type Catalog is Data:
   Catalog{available: List<&2,Models.Model()>, scope: List<&2,Models.ScopedModel>}
-
 def catalogPair(+scope: List<&2,Models.ScopedModel>, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Services & Catalog):
   match pair:
     case (runtime, models):
       do IO<Services & Catalog>:
         available : List<&2,Models.Model()> <- Models.getAvailable(models)
         return (Services{runtime, scope}, Catalog{available, scope})
-
 def catalogOf(services: Services) -> IO(Services & Catalog):
   match services:
     case Services{runtime, scope}: catalogPair(scope, rpcCatalog(runtime))
+def catalogModels(catalog: Catalog) -> List<&2,Models.Model()>:
+  match catalog: case Catalog{available,_}: available
+
+def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
+  do IO<Unit>:
+    current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
+    +live : AgentSession.AgentSession <- activeSession(current)
+    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager, AgentSession.settingsOf(live))
+    home : Result<&2,&2,FS.Error,String> <- FS.homedir()
+    catalog : Catalog <- SessionRuntime.withServices(Services,Catalog,host,catalogOf,Catalog{Nil{},Nil{}})
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    SessionRuntime.dispose(Services, host)
+    interactiveFinished(result)
 
 def rpcWithCatalog(live: AgentSession.AgentSession, assetsRoot: String, host: Host(), catalog: Catalog) -> IO(Unit):
   match catalog:
