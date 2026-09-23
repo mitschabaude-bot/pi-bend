@@ -55,7 +55,7 @@ for backend, command in [
                     break
                 raise
         assert output.count(ESC + b'[?2031h') == 1 and output.count(ESC + b'[?2031l') == 1, (backend, bytes(output))
-        assert stderr.splitlines() == ['background:255,128,64', 'malformed:none', 'scheme:light', 'redrawn', 'input:x', 'done'], (backend, stderr)
+        assert stderr.splitlines() == ['background:255,128,64', 'malformed:none', 'scheme:light', 'redrawn', 'input:x', 'stopping', 'done'], (backend, stderr)
         assert termios.tcgetattr(slave) == original, backend
         print(f'{backend}: OSC 11, malformed reply, color scheme and ordinary input passed')
     finally:
