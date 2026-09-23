@@ -677,22 +677,22 @@ def rpcInput(pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
         result : Result<&2,&2,String,Unit> <- rpcStdin(handle)
         Rpc.stop(owner)
         return result
-def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,agent: Runtime.Owner(),pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
   match pair:
     case (runtime,loadout):
       do IO<Unit>:
         +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink)
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")})
         result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
         Callback.dispose(String,Unit,sink)
         AgentSession.dispose(live)
         Runtime.dispose(runtime)
         rpcFinished(result)
-def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
   match pair:
-    case (runtime,agent): rpcWith(stored,settings,cwd,agent,Runtime.loadoutOf(runtime))
-def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: String,runtime: Runtime.AgentRuntime) -> IO(Unit):
+    case (runtime,agent): rpcWith(stored,settings,cwd,assetsRoot,agent,Runtime.loadoutOf(runtime))
+def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,runtime: Runtime.AgentRuntime) -> IO(Unit):
   match recorded:
     case Fail{Failed{message}}:
       do IO<Unit>:
@@ -702,22 +702,22 @@ def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: Str
       do IO<Unit>:
         Runtime.dispose(runtime)
         IO.print(note)
-    case Done{+session}: rpcLoaded(session,settings,cwd,Runtime.agentOf(runtime))
-def rpcSelection(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
+    case Done{+session}: rpcLoaded(session,settings,cwd,assetsRoot,Runtime.agentOf(runtime))
+def rpcSelection(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
   match pair:
     case (runtime,selection):
       do IO<Unit>:
         recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
-        rpcRecorded(recorded,settings,cwd,runtime)
-def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+        rpcRecorded(recorded,settings,cwd,assetsRoot,runtime)
+def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match created:
     case Fail{error}: fail(error)
-    case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,Runtime.selectionOf(runtime))
+    case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,assetsRoot,Runtime.selectionOf(runtime))
 
 def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match mode:
     case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,themeOverride,cwd,agentDir,packageDir,created)
-    case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,created)
+    case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,packageDir,created)
     case _: printSelected(outputMode(mode),initial,session,hasExisting,hasThinking,settings,cwd,created)
 
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
