@@ -155,6 +155,14 @@ def readPrefix(path: String, maximum: U32) -> IO(Result<&2, &2, Error, List<&2, 
     return readResult(outcome)
 
 # stat follows symbolic links and reads no content. Keep the full OS word size.
+# The tools' rendering of a filesystem failure.
+def errorMessage(error: Error) -> String:
+  match error:
+    case System{code, message}: "Error " ++ U32.show(code) ++ ": " ++ message
+    case InvalidPathEncoding{_}: "Invalid UTF-8 path"
+    case ReadAndClose{_, read, _, close}: read ++ "; close: " ++ close
+    case WriteAndClose{_, write, _, close}: write ++ "; close: " ++ close
+
 def granted(result: Result<&1,&1,U32 & String,Unit>) -> Bool:
   match result:
     case Done{Unit{}}: True{}

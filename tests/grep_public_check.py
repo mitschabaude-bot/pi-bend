@@ -1,18 +1,22 @@
-"""Public native grep against ripgrep 15.2.0 and injected operation contracts."""
+"""Public grep over rg against an rg-driven oracle of upstream's formatting and injected operation contracts."""
 import argparse
 import base64
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
+# Process spawning is native-only; the Bun lane has no process primitive.
+p.add_argument('backends',nargs='*',default=['native-1','native-4'])
 p.add_argument('--prefix',type=Path,default=ROOT/'build/grep-public')
+p.add_argument('--rg',default=shutil.which('rg'))
 a=p.parse_args()
-assert subprocess.check_output(['rg','--version'],text=True).startswith('ripgrep 15.2.0')
+RG=str(Path(a.rg).resolve())
+print(subprocess.check_output([RG,'--version'],text=True).splitlines()[0],flush=True)
 
 def clipped(text):
     size=0
@@ -22,12 +26,16 @@ def clipped(text):
     return text,False
 
 for backend in a.backends:
-    command=['bun',str(a.prefix)+'.js'] if backend=='bun' else [str(a.prefix),'--threads',backend[-1]]
+    command=[str(a.prefix),'--threads',backend[-1]]
     checks=0
     with tempfile.TemporaryDirectory(prefix='bend-grep-public-',dir='/var/tmp') as tmp:
         base=Path(tmp);home=base/'home';home.mkdir();root=base/'work';root.mkdir();xdg=home/'.config';xdg.mkdir()
-        env={**os.environ,'HOME':str(home),'XDG_CONFIG_HOME':str(xdg)}
-        env.pop('RIPGREP_CONFIG_PATH',None)
+        # The tool finds rg in the agent's bin directory. The rg configuration
+        # sorts by path so that rg's parallel output order is reproducible.
+        bindir=home/'.pi/agent/bin';bindir.mkdir(parents=True);(bindir/'rg').symlink_to(RG)
+        rgrc=base/'rgrc';rgrc.write_text('--sort=path\n')
+        env={**os.environ,'HOME':str(home),'XDG_CONFIG_HOME':str(xdg),'RIPGREP_CONFIG_PATH':str(rgrc)}
+        env.pop('PI_CODING_AGENT_DIR',None)
         def write(path,text):
             path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
             if isinstance(text,bytes):path.write_bytes(text)
@@ -47,28 +55,29 @@ for backend in a.backends:
         def oracle(args):
             search=Path(args.get('path') or root)
             if not search.is_absolute():search=root/search
-            flags=['rg','--json','--line-number','--color=never','--hidden','--sort','path']
-            if args.get('ignoreCase'):flags+=['-i']
-            if args.get('literal'):flags+=['-F']
+            flags=[RG,'--json','--line-number','--color=never','--hidden']
+            if args.get('ignoreCase'):flags+=['--ignore-case']
+            if args.get('literal'):flags+=['--fixed-strings']
             if args.get('glob'):flags+=['--glob',args['glob']]
-            result=subprocess.run(flags+['--',args['pattern'],str(search)],cwd=root,env=env,text=True,capture_output=True)
-            assert result.returncode in (0,1),(args,result.stderr)
-            events=[event['data'] for line in result.stdout.splitlines() if (event:=json.loads(line))['type']=='match']
-            # Native traversal selects deterministically by scalar pathname;
-            # upstream's default parallel rg order is unspecified.
-            events.sort(key=lambda e:(e['path']['text'],e['line_number']))
-            maximum=max(1,args.get('limit',100));reached=len(events)>=maximum
-            events=events[:maximum]
+            result=subprocess.run(flags+['--',args['pattern'],str(search)],cwd=root,env=env,capture_output=True)
+            maximum=max(1,args.get('limit',100))
+            events=[event['data'] for line in result.stdout.decode('utf-8','replace').splitlines() if line.strip() and (event:=json.loads(line))['type']=='match'][:maximum]
+            reached=len(events)>=maximum
+            if not reached and result.returncode not in (0,1):
+                return {'error':result.stderr.decode('utf-8','replace').strip() or f'ripgrep exited with code {result.returncode}'}
             if not events:return {'text':'No matches found','details':'none'}
             lines=[];line_cut=False;context=max(0,args.get('context',0))
             for event in events:
-                path=Path(event['path']['text']);number=event['line_number']
-                display=str(path.relative_to(search)) if search.is_dir() else path.name
-                if not context:
+                if 'text' not in event['path']:continue
+                path=event['path']['text'];number=event['line_number']
+                relative=os.path.relpath(path,search) if search.is_dir() else ''
+                display=relative if relative and relative!='.' and not relative.startswith('..') else os.path.basename(path)
+                if not context and 'text' in event['lines']:
                     text=event['lines']['text'].replace('\r\n','\n').replace('\r','').removesuffix('\n')
                     text,cut=clipped(text);line_cut|=cut;lines.append(f'{display}:{number}: {text}')
                 else:
-                    content=path.read_text().replace('\r\n','\n').replace('\r','\n').split('\n')
+                    # Node's readFile(path, 'utf-8'): replacement, BOM kept.
+                    content=Path(path).read_bytes().decode('utf-8','replace').replace('\r\n','\n').replace('\r','\n').split('\n')
                     for index in range(max(1,number-context),min(len(content),number+context)+1):
                         text,cut=clipped(content[index-1]);line_cut|=cut
                         sep=':' if index==number else '-'
@@ -139,8 +148,7 @@ for backend in a.backends:
         write(outside/'custom.txt','hit\n');compare({'pattern':'hit','path':str(outside)})
         quoted=home/'custom excludes';write(quoted,'custom.txt\n')
         write(home/'.gitconfig',f'[core]\n excludesFile = "{quoted}"\n')
-        value,_=run({'pattern':'hit','path':str(outside)})
-        assert 'custom.txt:' not in value['text'] and 'global.txt:' in value['text']
+        compare({'pattern':'hit','path':str(outside)})
         (home/'.gitconfig').unlink()
         (outside/'link').symlink_to(samples,target_is_directory=True)
         (outside/'linked.txt').symlink_to(samples/'a.txt')
@@ -157,51 +165,43 @@ for backend in a.backends:
             else:assert value==oracle(args)
         value,trace=run({'pattern':'needle','path':str(file),'context':1},mode='read-error')
         assert value['text']=='test.txt:2: (unable to read file)\ntest.txt:4: (unable to read file)' and len(trace)==2
-        for mode,n in [('preabort',0),('abort-isDirectory',1),('abort-readFile',2)]:
-            value,trace=run({'pattern':'needle','path':str(file),'context':1},mode=mode)
-            assert value=={'error':'Operation aborted'} and len(trace)==n,(mode,value,trace)
+        value,trace=run({'pattern':'needle','path':str(file),'context':1},mode='preabort')
+        assert value=={'error':'Operation aborted'} and not trace,(value,trace)
+        # Upstream listens for an abort only once rg has started, and formats
+        # the output after rg exits without checking again: an abort during
+        # isDirectory or a context read leaves the search to finish.
+        for mode in ['abort-isDirectory','abort-readFile']:
+            value,trace=run({'pattern':'needle','path':str(file),'context':1},mode=mode,entries='A\ncustom one\nC\ncustom two\nE\n')
+            assert 'custom one' in value['text'] and [k for k,_ in trace]==['isDirectory','readFile'],(mode,value,trace)
         for mode in ['missing','directory-error']:
             value,_=run({'pattern':'needle','path':str(file)},mode=mode);assert value=={'error':f'Path not found: {file}'}
         value,trace=run({'pattern':'needle','path':str(file)},mode='reuse',entries='caller-owned');assert trace[-1]==('readFile','/virtual')
         value,_=run({'pattern':'needle','path':'absent'});assert value=={'error':f'Path not found: {root / "absent"}'}
         for invalid in [{}, {'pattern':4},{'pattern':'a','limit':-1},{'pattern':'a','limit':1.5},{'pattern':'a','context':-1},{'pattern':'a','ignoreCase':'yes'},{'pattern':'a','literal':1},{'pattern':'a','glob':5}]:
             value,trace=run(invalid,mode='injected');assert 'input is invalid' in value['error'] and not trace
+        # rg's own failures surface as its stderr.
         denied=root/'denied';write(denied/'file','needle\n');denied.chmod(0)
         try:
-            value,_=run({'pattern':'needle','path':str(denied)});assert 'error' in value and 'denied' in value['error'].lower()
+            value,_=run({'pattern':'needle','path':str(denied)});assert value==oracle({'pattern':'needle','path':str(denied)}) and 'denied' in value['error'].lower(),value
         finally:denied.chmod(0o700)
         for target in [file,samples]:
-            value,_=run({'pattern':'needle','path':str(target),'glob':'['});assert 'glob' in value['error']
+            value,_=run({'pattern':'needle','path':str(target),'glob':'['});assert value==oracle({'pattern':'needle','path':str(target),'glob':'['}) and 'glob' in value['error']
         compare({'pattern':'needle','path':str(file),'glob':'!*.txt'})
         for pattern in ['[','(?=a)',r'foo\nbar',r'[\n]',r'\x0a']:
-            value,_=run({'pattern':pattern,'path':str(file)});assert 'regex' in value['error']
-        value,_=run({'pattern':'foo\nbar','literal':True,'path':str(file)});assert 'regex' in value['error']
-        value,_=run({'pattern':'a','path':str(file)},extra_env={'RIPGREP_CONFIG_PATH':str(root/'rg.conf')});assert 'not supported' in value['error']
-
-        # The same decoder is used for matching and native context, correcting
-        # upstream's UTF-8 reread of valid UTF-16 input.
+            value=compare({'pattern':pattern,'path':str(file)});assert 'regex' in value['error'],value
+        compare({'pattern':'foo\nbar','literal':True,'path':str(file)})
+        # rg transcodes UTF-16 by its BOM; context lines are reread as UTF-8,
+        # as upstream does.
         for encoding,bom in [('utf-8',b'\xef\xbb\xbf'),('utf-16le',b'\xff\xfe'),('utf-16be',b'\xfe\xff')]:
             encoded=root/f'{encoding}.txt';write(encoded,bom+'before\nneedle 😀\nafter\n'.encode(encoding))
-            compare({'pattern':'needle','path':str(encoded)})
-            value,_=run({'pattern':'needle','path':str(encoded),'context':1})
-            assert value['text']==f'{encoded.name}-1- before\n{encoded.name}:2: needle 😀\n{encoded.name}-3- after'
-        for raw in [b'needle\n\xff',b'needle\xc3',b'\xff\xfea',b'\xfe\xff\xd8\0']:
+            for context in [0,1]:compare({'pattern':'needle','path':str(encoded),'context':context})
+        # Invalid UTF-8 lines reach the tool as bytes; the file is read instead.
+        for raw in [b'needle\n\xff',b'needle\xc3',b'\xff\xfea',b'x\xffneedle\n']:
             broken=root/'broken';write(broken,raw)
-            value,_=run({'pattern':'needle','path':str(broken)});assert 'encoding' in value['error']
-        # Binary policy is explicit in options, not a chosen CLI default.
+            for context in [0,1]:compare({'pattern':'needle','path':str(broken),'context':context})
         binary=root/'binary'
-        for raw in [b'needle\0text\n',b'needle\n'+b'x'*70000+b'\0',b'\xff\xfe'+ 'needle\0text\n'.encode('utf-16le')]:
-            write(binary,raw)
-            value,_=run({'pattern':'needle','path':str(binary),'limit':1})
-            assert 'needle' in value['text']
-            value,_=run({'pattern':'needle','path':str(binary),'limit':1},mode='skip-binary')
-            assert value=={'text':'No matches found','details':'none'}
-        write(binary,b'needle\n'+b'x'*70000+b'\xff')
-        value,_=run({'pattern':'needle','path':str(binary),'limit':1},mode='skip-binary')
-        assert 'encoding' in value['error']
-        write(binary,b'needle\n'+b'x'*70000)
-        value,_=run({'pattern':'needle','path':str(binary),'limit':1},mode='skip-binary')
-        assert value['text'].startswith('binary:1: needle') and value['details'].startswith('1|')
+        for raw in [b'needle\0text\n',b'needle\n'+b'x'*70000+b'\0',b'\xff\xfe'+ 'needle\0text\n'.encode('utf-16le'),b'needle\n'+b'x'*70000+b'\xff']:
+            write(binary,raw);compare({'pattern':'needle','path':str(binary),'limit':1});compare({'pattern':'needle','path':str(root)})
         long=root/'long';write(long,'x'*100000+'needle\n'+'😀'*400+'needle\n')
         compare({'pattern':'needle','path':str(long)})
         large=root/'large';write(large,('needle '+'a'*490+'\n')*200)
@@ -210,6 +210,8 @@ for backend in a.backends:
         assert value['text'].endswith('for more, or refine pattern. 50.0KB limit reached]')
         value,_=run({'pattern':'needle','path':str(file),'limit':1},mode='repeat')
         before,after=map(int,value['fds'].split(':'));assert before==after and before<100
-        slow=root/'slow';write(slow,b'x'*(10*1024*1024))
-        value,_=run({'pattern':'absent-pattern','path':str(slow)},mode='abort-native');assert value=={'error':'Operation aborted'}
+        # rg blocks reading a FIFO without a writer until the abort kills it.
+        slow=root/'slow';os.mkfifo(slow)
+        value,_=run({'pattern':'absent-pattern','path':str(slow)},mode='abort-native');assert value=={'error':'Operation aborted'},value
+        slow.unlink()
     print(f'{backend}: {checks} public grep scenarios passed',flush=True)

@@ -1,17 +1,17 @@
 import Base
 import ../../utils/paths.bend as Paths
+import ../../utils/tools-manager.bend as Tools
 import ../../../../runtime/src/file-search.bend as Search
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/filesystem.bend as FS
-import ../../../../runtime/src/posix-path.bend as Path
-import ../../../../runtime/src/regex.bend as Regex
-import ../../../../runtime/src/ignore.bend as Ignore
-import ../../../../runtime/src/regex-bytes.bend as Bytes
-import ../../../../runtime/src/text-decoder.bend as Text
-import ../../../../runtime/src/file-fold.bend as FileFold
+import ../../../../runtime/src/child-process.bend as Child
+import ../../../../runtime/src/json.bend as Json
+import ../../../../runtime/src/utf8.bend as Utf8
+import ../../../../runtime/src/text.bend as Text
+import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/callback.bend as Callback
@@ -24,14 +24,9 @@ type GrepToolDetails is Data:
   GrepToolDetails{truncation: Maybe<&2,Truncate.TruncationResult>,matchLimitReached: Maybe<&2,Nat>,linesTruncated: Maybe<&2,Bool>}
 type Error is Data:
   Filesystem{cause: FS.Error}
-  SearchFailure{cause: Search.Error}
-  FileFailure{cause: FileFold.Error}
-  InvalidEncoding{path: String,cause: Text.Error}
-  InvalidPattern{cause: Regex.Error}
   InvalidArguments{}
   InvalidPath{cause: Paths.Error}
   PathNotFound{path: String}
-  UnsupportedConfiguration{path: String}
   Operation{message: String}
   Aborted{}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
@@ -41,16 +36,12 @@ def promptSnippet() -> String: "Search file contents for patterns (respects .git
 
 type GrepOperations is Data:
   GrepOperations{isDirectory: Callback.Callback<String,ResultOf(Bool)>,readFile: Callback.Callback<String,ResultOf(String)>}
-# A caller must choose explicitly; CLI default awaits the user's binary policy.
-type BinaryPolicy is Data:
-  MatchText{}
-  SkipBinary{}
 type GrepToolOptions is Data:
-  GrepToolOptions{operations: Maybe<&2,GrepOperations>,binaryPolicy: BinaryPolicy}
+  GrepToolOptions{operations: Maybe<&2,GrepOperations>}
 type GrepContext is Data:
   GrepContext{cwd: Maybe<&2,String>}
 type Invocation is Data:
-  Invocation{paths: Paths.Environment,cwd: String,operations: Maybe<&2,GrepOperations>,binaryPolicy: BinaryPolicy}
+  Invocation{paths: Paths.Environment,cwd: String,operations: Maybe<&2,GrepOperations>}
 type ToolOwner is Type:
   ToolOwner{tool: Agent.AgentTool<Maybe<&2,GrepToolDetails>,Error>}
 
@@ -68,215 +59,105 @@ def check(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Unit)):
         aborted : Bool <- Abort.aborted(Unit,signal)
         return Bool.pick(ResultOf(Unit),aborted,Fail{Aborted{}},Done{Unit{}})
 
+# A match event of rg's JSON output. rg reports non-UTF-8 lines as bytes, so
+# their text is absent and the line is read from the file instead.
 type Match is Data:
-  Match{path: String,line: Nat,text: String}
-type Matches is Data:
-  Matches{reversed: List<&2,Match>,count: Nat}
+  Match{path: String,line: Nat,text: Maybe<&2,String>}
 
-type Scan is Type:
-  Scanning{regex: Bytes.Regex,decoder: Text.Decoder,cursor: Bytes.Cursor,line: Nat,prefix: String,prefixCount: Nat,hasData: Bool,matches: Matches}
-  Validating{decoder: Text.Decoder,matches: Matches}
-  Scanned{matches: Matches}
-  Skipped{}
-  ScanFailed{error: Error}
+# Output collected while rg runs: the unfinished stdout line (reversed bytes),
+# the matches in reverse, the match count, whether the limit stopped rg, and
+# stderr (reversed bytes).
+type Collected is Data:
+  Collected{pending: List<&2,U32>,matches: List<&2,Match>,count: Nat,limitReached: Bool,stderr: List<&2,U32>}
 
-def limitReached(policy: BinaryPolicy,decoder: Text.Decoder,matches: Matches) -> Scan:
-  match policy:
-    case MatchText{}: Scanned{matches}
-    case SkipBinary{}: Validating{decoder,matches}
+def field(-A: Data,value: Maybe<&2,Value.Value>,decode: Value.Value -> Maybe<&2,A>) -> Maybe<&2,A>:
+  match value:
+    case None{}: None{}
+    case Some{value}: decode(value)
+def objectOf(value: Value.Value) -> Maybe<&2,Record.Record<Value.Value>>:
+  match value:
+    case Value.ObjectValue{properties}: Some{properties}
+    case _: None{}
+def textOf(value: Value.Value) -> Maybe<&2,String>:
+  match value:
+    case Value.Text{text}: Some{text}
+    case _: None{}
+def wholeNumber(value: Result<&2,&2,Number.Error,Nat>) -> Maybe<&2,Nat>:
+  match value:
+    case Done{number}: Some{number}
+    case Fail{_}: None{}
+def lineNumber(value: Value.Value) -> Maybe<&2,Nat>:
+  match value:
+    case Value.Number{number}: wholeNumber(Number.convert(number))
+    case _: None{}
+def member(value: Maybe<&2,Record.Record<Value.Value>>,key: String) -> Maybe<&2,Value.Value>:
+  match value:
+    case None{}: None{}
+    case Some{record}: Record.get(Value.Value,record,key)
+def nested(object: Maybe<&2,Record.Record<Value.Value>>,key: String,+name: String) -> Maybe<&2,String>:
+  field(String,member(field(Record.Record<Value.Value>,member(object,key),objectOf),name),textOf)
 
-def finishLine(+path: String,+limit: Nat,policy: BinaryPolicy,+regex: Bytes.Regex,+decoder: Text.Decoder,cursor: Bytes.Cursor,+line: Nat,prefix: String,matches: Matches) -> Scan:
-  match matches:
-    case Matches{+reversed,+count}:
-      +matched = {Bytes.finish(cursor): Bool}
-      +matches = {Matches{Bool.pick(List<&2,Match>,matched,Match{path,line,String.reverse(prefix)} <> reversed,reversed),count + Bool.pick(Nat,matched,1n,0n)}: Matches}
-      Bool.pick(Unit -> Scan,matched && Nat.is_ge(Succ{count},limit),_ => limitReached(policy,decoder,matches),_ => Scanning{regex,decoder,Bytes.create(regex),Succ{line},"",0n,False{},matches})(Unit{})
+def matchFrom(path: Maybe<&2,String>,line: Maybe<&2,Nat>,text: Maybe<&2,String>) -> Maybe<&2,Match>:
+  match path line:
+    case Some{SCon{first,rest}} Some{line}: Some{Match{SCon{first,rest},line,text}}
+    case _ _: None{}
+def matchOf(+data: Maybe<&2,Record.Record<Value.Value>>) -> Maybe<&2,Match>:
+  matchFrom(nested(data,"path","text"),field(Nat,member(data,"line_number"),lineNumber),nested(data,"lines","text"))
 
-def decoded(path: String,limit: Nat,policy: BinaryPolicy,regex: Bytes.Regex,cursor: Bytes.Cursor,line: Nat,prefix: String,prefixCount: Nat,hasData: Bool,matches: Matches,result: Result<&2,&2,Text.Error,Text.Step>) -> Scan:
-  match policy result:
-    case _ Fail{cause}: ScanFailed{InvalidEncoding{path,cause}}
-    case _ Done{Text.Step{decoder,None{}}}: Scanning{regex,decoder,cursor,line,prefix,prefixCount,hasData,matches}
-    case SkipBinary{} Done{Text.Step{_,Some{Chr{0}}}}: Skipped{}
-    case policy Done{Text.Step{decoder,Some{'\n'}}}: finishLine(path,limit,policy,regex,decoder,cursor,line,prefix,matches)
-    case _ Done{Text.Step{decoder,Some{char}}}:
-      +char = {char: Char}
-      +prefix = {prefix: String}
-      +prefixCount = {prefixCount: Nat}
-      Scanning{regex,decoder,Bytes.feedScalar(char,cursor),line,
-        Bool.pick(String,Char.is_eq(char,'\r') || Nat.is_ge(prefixCount,501n),prefix,SCon{char,prefix}),
-        prefixCount + Bool.pick(Nat,Char.is_eq(char,'\r') || Nat.is_ge(prefixCount,501n),0n,1n),True{},matches}
+def kept(found: Maybe<&2,Match>,matches: List<&2,Match>) -> List<&2,Match>:
+  match found:
+    case None{}: matches
+    case Some{value}: value <> matches
+def matched(+limit: Nat,found: Maybe<&2,Match>,collected: Collected) -> Collected:
+  match collected:
+    case Collected{pending,matches,count,_,stderr}:
+      +next = {Succ{count}: Nat}
+      Collected{pending,kept(found,matches),next,Nat.is_ge(next,limit),stderr}
+def eventOf(+limit: Nat,kind: Maybe<&2,String>,value: Maybe<&2,Record.Record<Value.Value>>,collected: Collected) -> Collected:
+  match kind:
+    case Some{"match"}: matched(limit,matchOf(field(Record.Record<Value.Value>,member(value,"data"),objectOf)),collected)
+    case _: collected
+def event(+limit: Nat,+value: Maybe<&2,Record.Record<Value.Value>>,collected: Collected) -> Collected:
+  eventOf(limit,field(String,member(value,"type"),textOf),value,collected)
 
-# Once the requested matches are collected, SkipBinary still validates the
-# remaining file without running the matcher or retaining more text.
-def validated(matches: Matches,result: Result<&2,&2,Text.Error,Text.Step>,path: String) -> Scan:
-  match result:
-    case Fail{cause}: ScanFailed{InvalidEncoding{path,cause}}
-    case Done{Text.Step{_,Some{Chr{0}}}}: Skipped{}
-    case Done{Text.Step{decoder,_}}: Validating{decoder,matches}
+def parsed(+limit: Nat,value: Result<&2,&2,Json.ParseError,Value.Value>,collected: Collected) -> Collected:
+  match value:
+    case Fail{_}: collected
+    case Done{value}: event(limit,objectOf(value),collected)
 
-def scanBytes(bytes: List<&2,U32>,+path: String,+limit: Nat,+policy: BinaryPolicy,state: Scan) -> FileFold.Control<Scan>:
-  match bytes state:
-    case _ Scanned{matches}: FileFold.Stop{Scanned{matches}}
-    case _ Skipped{}: FileFold.Stop{Skipped{}}
-    case _ ScanFailed{error}: FileFold.Stop{ScanFailed{error}}
-    case Nil{} state: FileFold.Continue{state}
-    case byte <> rest Validating{decoder,matches}: scanBytes(rest,path,limit,policy,validated(matches,Text.step(decoder,byte),path))
-    case byte <> rest Scanning{regex,decoder,cursor,line,prefix,prefixCount,hasData,matches}:
-      scanBytes(rest,path,limit,policy,decoded(path,limit,policy,regex,cursor,line,prefix,prefixCount,hasData,matches,Text.step(decoder,byte)))
+# Blank lines, lines after the limit and lines that are not JSON are skipped.
+def acceptLine(+limit: Nat,+text: String,+collected: Collected) -> Collected:
+  match collected:
+    case Collected{_,_,count,_,_}: Bool.pick(Unit -> Collected,Nat.is_ge(count,limit) || Text.blank(text),_ => collected,_ => parsed(limit,Json.parse(text),collected))(Unit{})
 
-def endChecked(path: String,limit: Nat,policy: BinaryPolicy,result: Result<&2,&2,Text.Error,Unit>,state: Scan) -> Scan:
-  match result state:
-    case Fail{cause} _: ScanFailed{InvalidEncoding{path,cause}}
-    case Done{_} Scanning{regex,decoder,cursor,line,prefix,_,True{},matches}: finishLine(path,limit,policy,regex,decoder,cursor,line,prefix,matches)
-    case Done{_} Scanning{_,_,_,_,_,_,False{},matches}: Scanned{matches}
-    case _ state: state
+def withoutFinalCR(reversed: String) -> String:
+  match reversed:
+    case SCon{'\r',rest}: String.reverse(rest)
+    case _: String.reverse(reversed)
+def withoutCR(text: String) -> String: withoutFinalCR(String.reverse(text))
 
-def fileEnded(path: String,limit: Nat,policy: BinaryPolicy,state: Scan) -> Scan:
-  match state:
-    case Validating{+decoder,matches}: endChecked(path,limit,policy,Text.finish(decoder),Scanned{matches})
-    case Scanning{regex,+decoder,cursor,line,prefix,count,hasData,matches}: endChecked(path,limit,policy,Text.finish(decoder),Scanning{regex,decoder,cursor,line,prefix,count,hasData,matches})
-    case state: state
+def finishLine(+limit: Nat,collected: Collected) -> Collected:
+  match collected:
+    case Collected{pending,matches,count,reached,stderr}: acceptLine(limit,withoutCR(Utf8.decodeBuffer(List.reverse(&2,U32,pending))),Collected{Nil{},matches,count,reached,stderr})
 
-def scanResult(state: Scan) -> ResultOf(Matches):
-  match state:
-    case ScanFailed{error}: Fail{error}
-    case Skipped{}: Done{Matches{Nil{},0n}}
-    case Scanned{matches}: Done{matches}
-    case Validating{_,matches}: Done{matches}
-    case Scanning{_,_,_,_,_,_,_,matches}: Done{matches}
-def fileResult(path: String,limit: Nat,policy: BinaryPolicy,outcome: FileFold.Outcome<Scan>) -> ResultOf(Matches):
-  match outcome:
-    case FileFold.Outcome{ScanFailed{Aborted{}},_}: Fail{Aborted{}}
-    case FileFold.Outcome{_,Fail{cause}}: Fail{FileFailure{cause}}
-    case FileFold.Outcome{state,Done{_}}: scanResult(fileEnded(path,limit,policy,state))
+def feed(+limit: Nat,bytes: List<&2,U32>,collected: Collected) -> Collected:
+  match bytes collected:
+    case Nil{} collected: collected
+    case 10 <> rest collected: feed(limit,rest,finishLine(limit,collected))
+    case byte <> rest Collected{pending,matches,count,reached,stderr}: feed(limit,rest,Collected{byte <> pending,matches,count,reached,stderr})
 
-def received(path: String,limit: Nat,policy: BinaryPolicy,state: Scan,pair: File & Result<&1,&1,U32 & String,List<&2,U32>>) -> FileFold.Progress<Scan>:
-  match pair:
-    case Tuple{file,Fail{(code,message)}}: FileFold.Finished{file,state,Fail{FileFold.Read{code,message}}}
-    case Tuple{file,Done{Nil{}}}: FileFold.Finished{file,state,Done{FileFold.EndOfFile{}}}
-    case Tuple{file,Done{bytes}}: FileFold.consumed(Scan,file,scanBytes(bytes,path,limit,policy,state))
-def aborted(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Bool):
-  match signal:
-    case None{}: IO.pure(Bool,False{})
-    case Some{signal}: Abort.aborted(Unit,signal)
-def readUnless(stopped: Bool,file: File,state: Scan,path: String,limit: Nat,policy: BinaryPolicy) -> IO(FileFold.Progress<Scan>):
-  match stopped:
-    case True{}: IO.pure(FileFold.Progress<Scan>,FileFold.Finished{file,ScanFailed{Aborted{}},Done{FileFold.Stopped{}}})
-    case False{}:
-      do IO<FileFold.Progress<Scan>>:
-        pair : File & Result<&1,&1,U32 & String,List<&2,U32>> <- File.read_bytes(file,65536)
-        return received(path,limit,policy,state,pair)
-
-@unsafe def drive(progress: FileFold.Progress<Scan>,+path: String,+limit: Nat,+policy: BinaryPolicy,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(FileFold.Outcome<Scan>):
-  match progress:
-    case FileFold.Finished{file,state,result}: FileFold.completed(Scan,state,result,file)
-    case FileFold.ReadMore{file,state}:
-      do IO<FileFold.Outcome<Scan>>:
-        # File reads can complete synchronously; yield so cancellation can run.
-        IO.sleep(0)
-        stopped : Bool <- aborted(signal)
-        next : FileFold.Progress<Scan> <- readUnless(stopped,file,state,path,limit,policy)
-        drive(next,path,limit,policy,signal)
-
-def opened(path: String,regex: Bytes.Regex,limit: Nat,policy: BinaryPolicy,signal: Maybe<&2,Abort.AbortSignal<Unit>>,result: Result<&1,&1,U32 & String,File>) -> IO(FileFold.Outcome<Scan>):
-  match result:
-    case Fail{(code,message)}: IO.pure(FileFold.Outcome<Scan>,FileFold.Outcome{Skipped{},Fail{FileFold.Open{code,message}}})
-    case Done{file}:
-      +regex = {regex: Bytes.Regex}
-      drive(FileFold.ReadMore{file,Scanning{regex,Text.create(),Bytes.create(regex),1n,"",0n,False{},Matches{Nil{},0n}}},path,limit,policy,signal)
-def scanFile(+path: String,regex: Bytes.Regex,+limit: Nat,+policy: BinaryPolicy,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Matches)):
-  do IO<ResultOf(Matches)>:
-    result : Result<&1,&1,U32 & String,File> <- File.open(path,"r")
-    outcome : FileFold.Outcome<Scan> <- opened(path,regex,limit,policy,signal,result)
-    return fileResult(path,limit,policy,outcome)
-
-def searchResult(-A: Data,result: Search.ResultOf(A)) -> ResultOf(A):
-  match result:
-    case Fail{Search.Aborted{}}: Fail{Aborted{}}
-    case Fail{cause}: Fail{SearchFailure{cause}}
-    case Done{value}: Done{value}
-def next(cursor: Search.Cursor) -> IO(ResultOf(Search.Step)):
-  do IO<ResultOf(Search.Step)>:
-    result : Search.ResultOf(Search.Step) <- Search.next(cursor)
-    return searchResult(Search.Step,result)
-def merge(previous: Matches,current: Matches) -> Matches:
-  match previous current:
-    case Matches{older,n} Matches{newer,m}: Matches{List.append(&2,Match,newer,older),n + m}
-
-type Walk is Data:
-  Advance{cursor: Search.Cursor}
-  Visit{entry: Search.Entry,cursor: Search.Cursor}
-  End{}
-def searchStep(step: Search.Step) -> Walk:
-  match step:
-    case Search.End{}: End{}
-    case Search.Yield{entry,cursor}: Visit{entry,cursor}
-
-# Regular entries are read; symlinks and special files are not followed during
-# traversal. An explicitly supplied file path is classified with following stat.
-@unsafe def walk(work: Walk,+regex: Bytes.Regex,+limit: Nat,+policy: BinaryPolicy,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,+matches: Matches) -> IO(ResultOf(Matches)):
-  match work matches:
-    case End{} _: IO.pure(ResultOf(Matches),Done{matches})
-    case Advance{cursor} Matches{_,count}:
-      Bool.pick(Unit -> IO(ResultOf(Matches)),Nat.is_ge(count,limit),_ => IO.pure(ResultOf(Matches),Done{matches}),
-        _ => then(Search.Step,Matches,next(cursor),step => walk(searchStep(step),regex,limit,policy,signal,matches)))(Unit{})
-    case Visit{Search.Entry{path,_,FS.RegularFile{}},cursor} Matches{_,count}:
-      then(Matches,Matches,scanFile(path,regex,limit - count,policy,signal),found => walk(Advance{cursor},regex,limit,policy,signal,merge(matches,found)))
-    case Visit{_,cursor} _: walk(Advance{cursor},regex,limit,policy,signal,matches)
+# The flag reports whether this chunk reached the limit.
+def newlyReached(before: Bool,collected: Collected) -> Collected & Bool:
+  match collected:
+    case Collected{pending,matches,count,+after,stderr}: (Collected{pending,matches,count,after,stderr},after && Bool.not(before))
+def received(+limit: Nat,bytes: List<&2,U32>,collected: Collected) -> Collected & Bool:
+  match collected:
+    case Collected{pending,matches,count,+before,stderr}: newlyReached(before,feed(limit,bytes,Collected{pending,matches,count,before,stderr}))
 
 def fsResult(-A: Data,value: Result<&2,&2,FS.Error,A>) -> ResultOf(A):
   match value:
     case Fail{cause}: Fail{Filesystem{cause}}
     case Done{value}: Done{value}
-def literalCompiled(value: Result<&2,&2,Regex.Error,Regex.Regex>) -> Result<&2,&2,Regex.Error,Bytes.Regex>:
-  match value:
-    case Fail{error}: Fail{error}
-    case Done{regex}: Done{Bytes.LiteralRegex{regex}}
-def hasNewline(text: String) -> Bool:
-  match text:
-    case SNil{}: False{}
-    case SCon{'\n',_}: True{}
-    case SCon{_,rest}: hasNewline(rest)
-def compiledMatcher(value: Result<&2,&2,Regex.Error,Bytes.Regex>) -> ResultOf(Bytes.Regex):
-  match value:
-    case Fail{cause}: Fail{InvalidPattern{cause}}
-    case Done{regex}: Done{regex}
-def matcher(+pattern: String,+insensitive: Bool,literal: Bool) -> ResultOf(Bytes.Regex):
-  +result = Bool.pick(Unit -> Result<&2,&2,Regex.Error,Bytes.Regex>,literal,
-    _ => Bool.pick(Unit -> Result<&2,&2,Regex.Error,Bytes.Regex>,hasNewline(pattern),_ => Fail{Regex.Syntax{"Newline literals require multiline search"}},_ => literalCompiled(Regex.compileLiteral(pattern,insensitive)))(Unit{}),
-    _ => Bytes.compileLine(pattern,insensitive))(Unit{})
-  compiledMatcher(result)
-
-def configuration(value: Result<&1,&1,U32 & String,String>) -> ResultOf(Unit):
-  match value:
-    case Done{SNil{}}: Done{Unit{}}
-    case Done{path}: Fail{UnsupportedConfiguration{path}}
-    case Fail{_}: Done{Unit{}}
-def nativeDirectory(environment: Paths.Environment,+path: String,override: Maybe<&2,Search.Override>,regex: Bytes.Regex,limit: Nat,policy: BinaryPolicy,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Matches)):
-  match environment:
-    case Paths.Environment{_,+home,_}:
-      do IO<ResultOf(Matches)>:
-        cwdResult : Result<&2,&2,FS.Error,String> <- FS.cwd()
-        xdgResult : Result<&1,&1,U32 & String,String> <- IO.get_env("XDG_CONFIG_HOME")
-        continued(String,Matches,fsResult(String,cwdResult),cwd =>
-          do IO<ResultOf(Matches)>:
-            value : Search.ResultOf(Search.Cursor) <- Search.create(path,home,Search.nonempty(Search.optionalEnvironment(xdgResult),Path.join(home,".config")),True{},Search.Grep{cwd,override},signal)
-            continued(Search.Cursor,Matches,searchResult(Search.Cursor,value),cursor => walk(Advance{cursor},regex,limit,policy,signal,Matches{Nil{},0n})))
-def nativeKind(environment: Paths.Environment,+path: String,override: Maybe<&2,Search.Override>,regex: Bytes.Regex,limit: Nat,policy: BinaryPolicy,signal: Maybe<&2,Abort.AbortSignal<Unit>>,kind: Result<&2,&2,FS.Error,FS.FileKind>) -> IO(ResultOf(Matches)):
-  match kind:
-    case Fail{cause}: IO.pure(ResultOf(Matches),Fail{Filesystem{cause}})
-    case Done{FS.Directory{}}: nativeDirectory(environment,path,override,regex,limit,policy,signal)
-    case Done{FS.RegularFile{}}: scanFile(path,regex,limit,policy,signal)
-    case Done{_}: IO.pure(ResultOf(Matches),Fail{Operation{"Search path is not a regular file or directory: " ++ path}})
-def nativeSearch(environment: Paths.Environment,+path: String,glob: Maybe<&2,String>,regex: Bytes.Regex,limit: Nat,policy: BinaryPolicy,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ResultOf(Matches)):
-  continued(Maybe<&2,Search.Override>,Matches,searchResult(Maybe<&2,Search.Override>,Search.compileOverride(glob)),override =>
-    do IO<ResultOf(Matches)>:
-      config : Result<&1,&1,U32 & String,String> <- IO.get_env("RIPGREP_CONFIG_PATH")
-      then(Unit,Matches,IO.pure(ResultOf(Unit),configuration(config)),_ =>
-        do IO<ResultOf(Matches)>:
-          kind : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
-          nativeKind(environment,path,override,regex,limit,policy,signal,kind)))
-
 def foundDirectory(path: String,result: ResultOf(Bool)) -> ResultOf(Bool):
   match result:
     case Fail{_}: Fail{PathNotFound{path}}
@@ -292,19 +173,10 @@ def isDirectory(operations: Maybe<&2,GrepOperations>,+path: String) -> IO(Result
         result : Result<&2,&2,FS.Error,FS.FileKind> <- FS.fileKind(path)
         return foundDirectory(path,Result.map(&2,&2,Error,FS.FileKind,Bool,Search.isDirectory,fsResult(FS.FileKind,result)))
 
-def textFinished(path: String,text: String,result: Result<&2,&2,Text.Error,Unit>) -> ResultOf(String):
-  match result:
-    case Fail{cause}: Fail{InvalidEncoding{path,cause}}
-    case Done{_}: Done{text}
-def finishedText(path: String,result: Result<&2,&2,Text.Error,Text.Decoded>) -> ResultOf(String):
-  match result:
-    case Fail{cause}: Fail{InvalidEncoding{path,cause}}
-    case Done{Text.Decoded{decoder,text}}:
-      textFinished(path,text,Text.finish(decoder))
 def nativeText(+path: String) -> IO(ResultOf(String)):
   do IO<ResultOf(String)>:
     value : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
-    return Result.bind(&2,&2,Error,List<&2,U32>,String,fsResult(List<&2,U32>,value),bytes => finishedText(path,Text.feed(bytes,Text.create())))
+    return Result.map(&2,&2,Error,List<&2,U32>,String,Utf8.decodeBuffer,fsResult(List<&2,U32>,value))
 def readText(operations: Maybe<&2,GrepOperations>,path: String) -> IO(ResultOf(String)):
   match operations:
     case Some{GrepOperations{_,callback}}: Callback.call(String,ResultOf(String),callback,path)
@@ -349,17 +221,32 @@ def getLines(cached: Maybe<&2,List<&2,String>>,operations: Maybe<&2,GrepOperatio
         value : ResultOf(String) <- readText(operations,path)
         return contextLines(value)
 
-@unsafe def formatMatches(matches: List<&2,Match>,+root: String,+directory: Bool,+context: Nat,+operations: Maybe<&2,GrepOperations>,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,+cache: Record.Record<List<&2,String>>,+output: Output) -> IO(ResultOf(Output)):
+# rg's line keeps its terminator; CRs go, and so does the final newline.
+def sanitized(text: String,reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{'\r',rest}: sanitized(rest,reversed)
+    case SCon{'\n',SNil{}}: String.reverse(reversed)
+    case SCon{char,rest}: sanitized(rest,SCon{char,reversed})
+
+def inline(context: Nat,text: Maybe<&2,String>) -> Bool:
+  match context text:
+    case 0n Some{_}: True{}
+    case _ _: False{}
+
+# Without context, rg's own line is shown; otherwise, or when rg reported the
+# line as bytes, the file is read once and cached.
+@unsafe def formatMatches(matches: List<&2,Match>,+root: String,+directory: Bool,+context: Nat,+operations: Maybe<&2,GrepOperations>,+cache: Record.Record<List<&2,String>>,+output: Output) -> IO(Output):
   match matches:
-    case Nil{}: IO.pure(ResultOf(Output),Done{output})
-    case Match{+path,+line,text} <> +rest:
+    case Nil{}: IO.pure(Output,output)
+    case Match{+path,+line,+text} <> +rest:
       +display = displayPath(path,root,directory)
-      then(Unit,Output,check(signal),_ => Bool.pick(Unit -> IO(ResultOf(Output)),Nat.is_eq(context,0n),
-        _ => formatMatches(rest,root,directory,context,operations,signal,cache,appendLine(display,line,True{},Truncate.truncateLine(text,None{}),output)),
+      Bool.pick(Unit -> IO(Output),inline(context,text),
+        _ => formatMatches(rest,root,directory,context,operations,cache,appendLine(display,line,True{},Truncate.truncateLine(sanitized(Maybe.default(&2,String,text,""),""),None{}),output)),
         _ =>
-          do IO<ResultOf(Output)>:
+          do IO<Output>:
             +lines : List<&2,String> <- getLines(Record.get(List<&2,String>,cache,path),operations,path)
-            formatMatches(rest,root,directory,context,operations,signal,Record.set(List<&2,String>,cache,path,lines),contextBlock(lines,line,context,display,output)))(Unit{}))
+            formatMatches(rest,root,directory,context,operations,Record.set(List<&2,String>,cache,path,lines),contextBlock(lines,line,context,display,output)))(Unit{})
 
 def resultText(text: String,details: Maybe<&2,GrepToolDetails>) -> ToolResult():
   Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},details,None{},None{}}}
@@ -375,20 +262,135 @@ def rendered(+limit: Nat,+reached: Bool,+linesTruncated: Bool,+value: Truncate.T
 def renderOutput(limit: Nat,reached: Bool,output: Output) -> ToolResult():
   match output:
     case Output{reversed,truncated}: rendered(limit,reached,truncated,Truncate.truncateHead(String.join(List.reverse(&2,String,reversed),"\n"),Truncate.TruncationOptions{Some{4294967295n},None{}}))
-def format(+root: String,+directory: Bool,+context: Nat,+limit: Nat,operations: Maybe<&2,GrepOperations>,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,matches: Matches) -> IO(ToolResult()):
-  match matches:
-    case Matches{Nil{},_}: then(Unit,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,check(signal),_ => IO.pure(ToolResult(),resultText("No matches found",None{})))
-    case Matches{reversed,+count}:
-      then(Output,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,formatMatches(List.reverse(&2,Match,reversed),root,directory,context,operations,signal,Record.Record{Nil{}},Output{Nil{},False{}}),output =>
-        then(Unit,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,check(signal),_ => IO.pure(ToolResult(),renderOutput(limit,Nat.is_ge(count,limit),output))))
+def format(+root: String,+directory: Bool,+context: Nat,+limit: Nat,operations: Maybe<&2,GrepOperations>,collected: Collected) -> IO(ToolResult()):
+  match collected:
+    case Collected{_,_,0n,_,_}: IO.pure(ToolResult(),resultText("No matches found",None{}))
+    case Collected{_,matches,_,reached,_}:
+      do IO<ToolResult()>:
+        output : Output <- formatMatches(List.reverse(&2,Match,matches),root,directory,context,operations,Record.Record{Nil{}},Output{Nil{},False{}})
+        return renderOutput(limit,reached,output)
+
+def globArguments(glob: Maybe<&2,String>) -> List<String>:
+  match glob:
+    case None{}: []
+    case Some{SNil{}}: []
+    case Some{value}: ["--glob",value]
+
+def rgArguments(ignoreCase: Bool,literal: Bool,glob: Maybe<&2,String>,+pattern: String,+path: String) -> List<String>:
+  List.concat(&1,String,[["--json","--line-number","--color=never","--hidden"],Bool.pick(List<String>,ignoreCase,["--ignore-case"],[]),Bool.pick(List<String>,literal,["--fixed-strings"],[]),globArguments(glob),["--",pattern,path]])
+
+type Scanner is Data:
+  Scanner{state: Ref.Ref<Collected>,limit: Nat,stop: Abort.AbortController<Unit>}
+
+def stopAt(reached: Bool,stop: Abort.AbortController<Unit>) -> IO(Unit):
+  match reached:
+    case False{}: IO.pure(Unit,Unit{})
+    case True{}:
+      do IO<Unit>:
+        won : Bool <- Abort.abort(Unit,stop,None{})
+        return Unit{}
+
+# Reaching the limit stops rg, as upstream kills the child.
+def onStdout(scanner: Scanner,bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  match scanner:
+    case Scanner{state,+limit,stop}:
+      do IO<Result<&2,&2,String,Unit>>:
+        reached : Bool <- Ref.modify(Collected,Bool,state,collected => received(limit,bytes,collected))
+        stopAt(reached,stop)
+        return Done{Unit{}}
+
+def appendStderr(bytes: List<&2,U32>,collected: Collected) -> Collected & Unit:
+  match collected:
+    case Collected{pending,matches,count,reached,stderr}: (Collected{pending,matches,count,reached,List.append(&2,U32,List.reverse(&2,U32,bytes),stderr)},Unit{})
+
+def onStderr(state: Ref.Ref<Collected>,bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    Ref.modify(Collected,Unit,state,collected => appendStderr(bytes,collected))
+    return Done{Unit{}}
+
+def signalsWith(signal: Maybe<&2,Abort.AbortSignal<Unit>>,stop: Abort.AbortSignal<Unit>) -> List<&2,Abort.AbortSignal<Unit>>:
+  match signal:
+    case None{}: [stop]
+    case Some{parent}: [parent,stop]
+
+type Run is Data:
+  Run{result: Result<&2,&2,Child.ExecutionError,U32>,collected: Collected,watched: Maybe<&2,Abort.AbortSignal<Unit>>}
+
+def unlessAborted(signal: Abort.AbortSignal<Unit>,aborted: Bool) -> Maybe<&2,Abort.AbortSignal<Unit>>:
+  match aborted:
+    case True{}: None{}
+    case False{}: Some{signal}
+
+# Upstream subscribes to the signal once rg has started; an abort that came
+# earlier never reaches the listener, so the search runs to completion.
+def watchable(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Maybe<&2,Abort.AbortSignal<Unit>>):
+  match signal:
+    case None{}: IO.pure(Maybe<&2,Abort.AbortSignal<Unit>>,None{})
+    case Some{+value}:
+      do IO<Maybe<&2,Abort.AbortSignal<Unit>>>:
+        aborted : Bool <- Abort.aborted(Unit,value)
+        return unlessAborted(value,aborted)
+
+# rg runs in the process's own working directory and environment.
+def search(rgPath: String,args: List<String>,+limit: Nat,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Run):
+  do IO<Run>:
+    +watched : Maybe<&2,Abort.AbortSignal<Unit>> <- watchable(signal)
+    +state : Ref.Ref<Collected> <- Ref.new(Collected,Collected{Nil{},Nil{},0n,False{},Nil{}})
+    +stop : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +stdout : Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- Callback.create(~Scanner,~List<&2,U32>,~Result<&2,&2,String,Unit>,~onStdout,Scanner{state,limit,stop})
+    +stderr : Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- Callback.create(~Ref.Ref<Collected>,~List<&2,U32>,~Result<&2,&2,String,Unit>,~onStderr,state)
+    cwd : Result<&2,&2,FS.Error,String> <- FS.cwd()
+    env : List<String> <- IO.environment()
+    +result : Result<&2,&2,Child.ExecutionError,U32> <- Child.spawn(rgPath,args,Result.default(&2,&2,FS.Error,String,cwd,"."),env,signalsWith(watched,Abort.signal(Unit,stop)),stdout,stderr)
+    Callback.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,stdout)
+    Callback.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,stderr)
+    collected : Collected <- Ref.dispose(Collected,state)
+    Abort.dispose(Unit,stop)
+    return Run{result,finishLine(limit,collected),watched}
+
+def spawnFailure(rgPath: String,errors: List<&2,Child.Error>) -> String:
+  match errors:
+    case Child.Error{"spawn",code,_} <> _: "spawn " ++ rgPath ++ " " ++ Child.errnoName(code)
+    case Child.Error{operation,_,message} <> _: operation ++ ": " ++ message
+    case Nil{}: "unknown error"
+
+def exitFailure(+code: U32,stderr: List<&2,U32>) -> String:
+  +message = Text.trim(Utf8.decodeBuffer(List.reverse(&2,U32,stderr)))
+  Bool.pick(String,String.is_empty(message),"ripgrep exited with code " ++ U32.show(code),message)
+
+# After rg exits: an abort wins, then a failure to run it, then an exit status
+# other than 0 (matches) or 1 (none) unless the limit stopped it.
+def finished(rgPath: String,aborted: Bool,run: Run) -> ResultOf(Collected):
+  match aborted run:
+    case True{} _: Fail{Aborted{}}
+    case _ Run{Fail{Child.ExecutionFailed{errors}},_,_}: Fail{Operation{"Failed to run ripgrep: " ++ spawnFailure(rgPath,errors)}}
+    case _ Run{Done{+code},Collected{pending,matches,count,False{},+stderr},_}:
+      Bool.pick(ResultOf(Collected),U32.is_le(code,1),Done{Collected{pending,matches,count,False{},stderr}},Fail{Operation{exitFailure(code,stderr)}})
+    case _ Run{_,collected,_}: Done{collected}
+
+def ran(+rgPath: String,run: Run) -> IO(ResultOf(Collected)):
+  match run:
+    case Run{result,collected,+watched}:
+      do IO<ResultOf(Collected)>:
+        aborted : Bool <- Child.parentAborted(watched)
+        return finished(rgPath,aborted,Run{result,collected,watched})
+
+def withRg(rgPath: Maybe<&2,String>) -> ResultOf(String):
+  match rgPath:
+    case None{}: Fail{Operation{"ripgrep (rg) is not available and could not be downloaded"}}
+    case Some{path}: Done{path}
+def ensureRg() -> IO(ResultOf(String)):
+  do IO<ResultOf(String)>:
+    rgPath : Maybe<&2,String> <- Tools.ensureTool(Tools.Rg{},None{})
+    return withRg(rgPath)
 
 def execute(environment: Invocation,+path: String,pattern: String,glob: Maybe<&2,String>,insensitive: Bool,literal: Bool,+context: Nat,+limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match environment:
-    case Invocation{paths,_,+operations,policy}:
-      then(Bool,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,isDirectory(operations,path),directory =>
-        continued(Bytes.Regex,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,matcher(pattern,insensitive,literal),regex =>
-          then(Unit,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,check(signal),_ =>
-            then(Matches,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,nativeSearch(paths,path,glob,regex,limit,policy,signal),matches => format(path,directory,context,limit,operations,signal,matches)))))
+    case Invocation{_,_,+operations}:
+      then(String,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,ensureRg(),+rgPath =>
+        then(Bool,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,isDirectory(operations,path),directory =>
+          then(Collected,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,IO.bind(Run,ResultOf(Collected),search(rgPath,rgArguments(insensitive,literal,glob,pattern,path),limit,signal),run => ran(rgPath,run)),collected =>
+            format(path,directory,context,limit,operations,collected))))
 
 def optionalText(value: Maybe<&2,Value.Value>) -> ResultOf(Maybe<&2,String>):
   match value:
@@ -423,7 +425,7 @@ def resolved(environment: Invocation,input: GrepToolInput,signal: Maybe<&2,Abort
     case GrepToolInput{pattern,_,glob,insensitive,literal,context,limit} Done{path}: execute(environment,path,pattern,glob,Maybe.default(&2,Bool,insensitive,False{}),Maybe.default(&2,Bool,literal,False{}),Maybe.default(&2,Nat,context,0n),Nat.max(1n,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT())),signal)
 def invokeInput(+environment: Invocation,context: GrepContext,signal: Maybe<&2,Abort.AbortSignal<Unit>>,+input: GrepToolInput) -> IO(ToolResult()):
   match environment context input:
-    case Invocation{paths,cwd,_,_} GrepContext{override} GrepToolInput{_,path,_,_,_,_,_}:
+    case Invocation{paths,cwd,_} GrepContext{override} GrepToolInput{_,path,_,_,_,_,_}:
       resolved(environment,input,signal,Paths.resolveToCwd(paths,Search.nonempty(path,"."),Search.nonempty(override,cwd)))
 def invokeWithContext(environment: Invocation,context: GrepContext,request: Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>) -> IO(ToolResult()):
   match request:
@@ -432,45 +434,14 @@ def invokeWithContext(environment: Invocation,context: GrepContext,request: Agen
 def invoke(environment: Invocation,request: Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>) -> IO(ToolResult()):
   invokeWithContext(environment,GrepContext{None{}},request)
 
-def filesystemMessage(error: FS.Error) -> String:
-  match error:
-    case FS.System{code,message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FS.InvalidPathEncoding{_}: "Invalid UTF-8 path"
-    case FS.ReadAndClose{_,read,_,close}: read ++ "; close: " ++ close
-    case FS.WriteAndClose{_,write,_,close}: write ++ "; close: " ++ close
-def fileMessage(error: FileFold.Error) -> String:
-  match error:
-    case FileFold.Open{code,message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FileFold.Read{code,message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FileFold.Close{code,message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FileFold.ReadAndClose{_,read,_,close}: read ++ "; close: " ++ close
-    case FileFold.InvalidReadSize{}: "Invalid read size"
-def encodingMessage(error: Text.Error) -> String:
-  match error:
-    case Text.InvalidByte{offset,_}: "invalid byte at offset " ++ Nat.show(offset)
-    case Text.InvalidEncoding{offset}: "invalid text encoding at byte " ++ Nat.show(offset)
-    case Text.IncompleteEncoding{offset}: "incomplete text encoding at byte " ++ Nat.show(offset)
 def errorMessage(error: Error) -> String:
   match error:
-    case Filesystem{cause}: filesystemMessage(cause)
-    case FileFailure{cause}: fileMessage(cause)
-    case InvalidEncoding{path,cause}: path ++ ": " ++ encodingMessage(cause)
-    case InvalidPattern{Regex.Syntax{message}}: "Error parsing regex: " ++ message
-    case InvalidPattern{Regex.SizeLimit{}}: "Regex size limit exceeded"
-    case InvalidPattern{Regex.RequiresByteInput{}}: "Pattern requires byte matching"
+    case Filesystem{cause}: FS.errorMessage(cause)
     case InvalidArguments{}: "Grep tool input is invalid. Expected a pattern, optional path/glob, booleans and natural context/limit."
     case InvalidPath{_}: "Invalid file path"
     case PathNotFound{path}: "Path not found: " ++ path
-    case UnsupportedConfiguration{path}: "RIPGREP_CONFIG_PATH is not supported by native grep: " ++ path
     case Operation{message}: message
     case Aborted{}: "Operation aborted"
-    case SearchFailure{Search.Filesystem{cause}}: filesystemMessage(cause)
-    case SearchFailure{Search.Operation{message}}: message
-    case SearchFailure{Search.InvalidPattern{_}}: "Error parsing glob pattern"
-    case SearchFailure{Search.InvalidIgnore{path,cause}}: path ++ ": " ++ Ignore.errorMessage(cause)
-    case SearchFailure{Search.InvalidEncoding{path}}: path ++ ": invalid UTF-8"
-    case SearchFailure{Search.InvalidGitConfig{path}}: path ++ ": invalid Git configuration"
-    case SearchFailure{Search.Aborted{}}: "Operation aborted"
 
 def parameter(kind: String,description: String) -> Value.Value:
   Value.ObjectValue{Record.Record{Record.Property{"type",Value.Text{kind}} <> Record.Property{"description",Value.Text{description}} <> Nil{}}}
@@ -486,9 +457,9 @@ def grepSchema() -> Value.Value:
     Record.Property{"required",Value.ArrayValue{Value.Text{"pattern"} <> Nil{}}} <> Nil{}}}
 def createGrepTool(paths: Paths.Environment,cwd: String,options: GrepToolOptions) -> IO(ToolOwner):
   match options:
-    case GrepToolOptions{operations,policy}:
+    case GrepToolOptions{operations}:
       do IO<ToolOwner>:
-        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,~ToolResult(),~invoke,Invocation{paths,cwd,operations,policy})
+        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,~ToolResult(),~invoke,Invocation{paths,cwd,operations})
         return ToolOwner{Agent.AgentTool{"grep","Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",grepSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"grep",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,GrepToolDetails>,Error>:
   match owner:

@@ -16,6 +16,14 @@ def trimStart(text: String) -> String:
 def trimEnd(text: String) -> String: String.reverse(trimStart(String.reverse(text)))
 def trim(text: String) -> String: trimEnd(trimStart(text))
 
+# ASCII case folding for protocol tokens and ASCII keywords; other code points
+# are unchanged.
+def asciiLower(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{Chr{+code}, rest}:
+      SCon{Chr{Bool.pick(U32, U32.is_ge(code, 65) && U32.is_le(code, 90), (code + 32 : U32), code)}, asciiLower(rest)}
+
 def blank(text: String) -> Bool:
   match text:
     case SNil{}: True{}

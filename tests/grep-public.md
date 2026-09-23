@@ -1,39 +1,39 @@
-# Native public grep tool
+# Public grep over ripgrep
 
-`core/tools/grep.bend` implements the canonical typed `AgentTool`, `GrepToolInput`, `GrepToolDetails`, injected `GrepOperations.isDirectory/readFile`, context cwd, cancellation, output formatting/truncation and callback ownership. It searches directly through native Bend filesystem, text decoder and streaming byte-regex libraries; no production ripgrep process, JavaScript regex or host search implementation supplies behavior. The prompt snippet and input schema retain the upstream text. Shared extension `ToolDefinition` renderer/registry integration remains separate work.
+`core/tools/grep.bend` runs `rg` as upstream's `grep.ts` does, with the canonical typed `AgentTool`, `GrepToolInput`, `GrepToolDetails`, injected `GrepOperations.isDirectory/readFile`, context cwd, cancellation, output formatting and truncation. Gregor decided on 2026-09-23 that grep shells out to ripgrep like upstream rather than porting it. The native search engine is gone, and so are its binary policy, strict decoding and `RIPGREP_CONFIG_PATH` rejection. rg decides matching, ignore files, binary files and encodings.
 
-`GrepToolOptions{operations,binaryPolicy}` and `Invocation{paths,cwd,operations,binaryPolicy}` require an explicit native `BinaryPolicy`: `MatchText` searches decoded NUL like other valid text; `SkipBinary` discards a file containing a decoded NUL. The CLI default awaits the user's decision; neither option is claimed identical to ripgrep's buffer-dependent binary detection. `SkipBinary` continues decoding after collecting the requested matches, without running the matcher or retaining further text, so a NUL after the limit or beyond the first 64 KiB still discards the file. This can require reading more of a file than `MatchText`. UTF-16 encoding zero bytes are not themselves NUL characters.
-
-Matching streams 64 KiB chunks, retaining the regex cursor, decoder state, at most 501 preview scalars and the bounded selected matches. It finishes regex lines at LF and the final nonempty EOF fragment, counts matching lines rather than occurrences, preserves CR for regex assertions and removes CR from previews. Ordinary regex acceptance does not bypass later decoding or line accounting. The requested global match limit stops `MatchText` scanning; malformed bytes beyond that deliberate stopping point are not read. A cooperative yield between reads lets cancellation run even when file reads complete synchronously. Files close through checked retirement on EOF, limits, decoding/read errors and cancellation. Context reads use the injected callback when present and cache each file once; zero context never calls it. Injected callbacks remain caller-owned after tool disposal.
-
-Shared traversal distinguishes Find and Grep policy: `.rgignore`, `.ignore`, repository `.gitignore`, `info/exclude` and global Git excludes are supported with source priority and nested repository boundaries. Grep never loads `.fdignore` or the global fd ignore file; Git rules apply only inside a repository. Hidden entries remain searchable, ignored directories prune descendants, traversal does not follow symlinks or open special files, and explicitly selected regular-file symlinks are followed. Explicit roots bypass inherited pruning. Positive/negative glob overrides are anchored against the actual process cwd as in rg, independently of the tool's context cwd. Directory read failures propagate rather than returning a misleading partial success.
-
-Output preserves filename/line numbering, repeated overlapping context blocks, the global default of 100 matches, zero-limit coercion to one, 500 UTF-16-unit line truncation without splitting scalars, the 51,200-byte output cap, detail fields and ordered notices. An unreadable context callback yields the upstream `(unable to read file)` line. Files and matches are selected in deterministic Unicode scalar pathname/line order; upstream parallel rg discovery order is unspecified, so a capped subset can differ. The differential oracle sorts rg events into that explicit native order before selecting the subset.
+- `utils/tools-manager.bend` finds `rg` in the agent's bin directory (`~/.pi/agent/bin`), then on `PATH`. A candidate counts only if it can be started with `--version`, as upstream's `commandExists` does. `PI_OFFLINE` skips the download. The download of the latest release, and its extraction, are still pending. Until then a missing `rg` reports upstream's "ripgrep (rg) is not available and could not be downloaded".
+- The tool spawns `rg --json --line-number --color=never --hidden [--ignore-case] [--fixed-strings] [--glob G] -- PATTERN PATH` through `runtime/child-process.spawn`, in the process's working directory and environment. It parses stdout line by line as JSON match events and keeps stderr separately.
+- Reaching the match limit stops rg through a second abort signal. This mirrors upstream's `child.kill()`, and the exit status is then ignored.
+- Otherwise, an exit status other than 0 or 1 reports rg's trimmed stderr, or "ripgrep exited with code N". A failure to start reports "Failed to run ripgrep: spawn PATH ENOENT", using libuv's error names.
+- Match lines come from rg's `lines.text`, with CRs and the final newline removed. With context, or when rg reports a line as bytes (invalid UTF-8), the file is read once through `readFile`. It is decoded as Node's `readFile(path, 'utf-8')` would be (replacement, BOM kept), and a failed read shows `(unable to read file)`.
+- Upstream subscribes to the abort signal only after rg has started, and formats the output after rg exits without checking again. The port does the same: an abort before the spawn (for example during `isDirectory`) or during the context reads lets the search finish, and only an abort while rg runs reports "Operation aborted". The one remaining window is an abort after rg exits and before the final check, which the port reports as aborted while upstream resolves.
 
 ## Executed reference assertions
 
-The pinned Pi source is `pi-mono` commit `46c9de402`. The public fixture preserves these `tools.test.ts` assertions: **“should include filename when searching a single file”**, **“should respect global limit and include context lines”** (including exclusion of the second match), **“should treat flag-like patterns as search text”** (an executable payload is not invoked), and **“grep uses ctx.cwd when provided”**.
+The pinned Pi source is `pi-mono` commit `46c9de402`. The fixture preserves these `tools.test.ts` assertions:
 
-The runner checks 109 public scenarios on Bun and O1 native one/four workers against test-only ripgrep 15.2.0 and explicit native expectations. Additional coverage includes regex/literal/case/glob behavior, CRLF anchors and newline classes, nested/global ignore rules, authoritative injected context and caching, pre-abort and callback-triggered cancellation, real in-flight cancellation, malformed arguments/patterns/encodings, permission errors, 100,000-character lines, astral truncation, byte-limit notices, both explicit binary policies across 64 KiB boundaries, and 64 repeated early-limit scans with unchanged `/proc/self/fd` counts. Shared Find retains all 85 public scenarios across all three backends. Regex matching has the separate Rust differential and streaming checks documented in `regex.md`; these integration tests are not presented as universal proofs.
+- **"should include filename when searching a single file"**
+- **"should respect global limit and include context lines"**, including exclusion of the second match
+- **"should treat flag-like patterns as search text"**: the executable payload is not invoked
+- **"grep uses ctx.cwd when provided"**
 
-## Native corrections and remaining dependency scope
+`tests/grep_public_check.py` runs 112 public scenarios on native one/four workers. The tool finds `rg` through a symlink in the temporary home's bin directory. The oracle runs the same `rg` with the same arguments and applies upstream's formatting in Python. `RIPGREP_CONFIG_PATH` supplies `--sort=path`, so that rg's parallel output order is reproducible for both.
 
-UTF-8 and BOM-selected UTF-16LE/BE are decoded strictly. Native context uses the same codec as matching, intentionally correcting Pi's UTF-8 reread of valid UTF-16 files; a matching/context fixture verifies actual Unicode text for both UTF-16 byte orders. Other malformed encodings, malformed ignore/glob syntax and negative, fractional or out-of-range numeric parameters are rejected instead of silently coerced or replaced. The existing native Git-config parser respects `[core]` and quoted whitespace paths rather than reproducing rg/fd's loose regex extraction. These follow the user's approved strict/native policy.
+Coverage includes:
+- regex, literal, case and glob options; contexts; limits
+- ignore files and global Git excludes; symlinks and FIFOs
+- rg's regex, glob and permission errors, reported from its stderr
+- UTF-8 and UTF-16 BOM files, with context reread as UTF-8
+- invalid UTF-8 lines reported as bytes; binary files
+- long and astral lines; the byte cap
+- injected context callbacks and caching; the upstream abort timing
+- 64 repeated runs with unchanged `/proc/self/fd` counts
+- an abort that kills an `rg` blocked on a FIFO
 
-The byte-regex API preserves actual `(?-u)` byte-consuming semantics, while file decoding remains strict and matching operates on the decoded UTF-8 representation, including transcoded UTF-16. The regex syntax scope and verbose-mode token boundaries are documented in `regex.md`. Line search rejects explicit LF literals and singleton LF classes; LF remains excluded from the haystack for broader classes. Unlike Rust HIR normalization, it does not currently reduce every compound class expression to discover that it is semantically a singleton LF before rejecting it; such expressions can instead compile to a never-matching line expression.
-
-Arbitrary `RIPGREP_CONFIG_PATH` options are not yet implemented: a nonempty setting produces an explicit typed unsupported-configuration error. This is not a claim of full ripgrep CLI/configuration parity. Windows path/process conventions remain outside this POSIX fixture. Native filesystem and regex errors retain meaningful typed causes rather than byte-identical platform-specific rg stderr. The shared output max-lines sentinel is `4294967295` rather than JavaScript's `Number.MAX_SAFE_INTEGER`; the smaller byte limit wins first.
+Process spawning is native-only (the Bun lane has no process primitive), so there is no Bun run.
 
 ```sh
-/path/to/private/bend2/main.ts tests/grep-public.bend -o build/grep-public.js
-BEND=/path/to/private/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/grep-public.bend build/grep-public
-python3 tests/grep_public_check.py bun native-1 native-4
-python3 tests/find_public_check.py bun native-1 native-4
-python3 tests/regex_check.py bun native-1 native-4
+BEND=build/bend-process-files/bend2/main.ts BEND_TUS=4 sh scripts/build-pure.sh tests/grep-public.bend build/grep-public
+python3 tests/grep_public_check.py native-1 native-4
 ```
-
-A throughput check scanned exactly 1 MiB of 1,024-byte ASCII lines for a missing literal, using one worker and the median of five warm-cache runs after one warmup. The full native public fixture took about 583 ms; test-only rg took 1.6–2.6 ms in these runs. Removing redundant scalar encode/decode and an immediate state wrap/destructure reduced the native measurement from about 712 ms, but complete-scan throughput remains a substantial open performance gap. This is not a matched-output kernel benchmark or a throughput-parity claim; it includes process startup, native tool handling and fixture reporting. Cancellation yields remain enabled. The independent decoder/literal-filter optimization work is not included in these numbers.
-
-Root integration adds a cached first scalar for literal matching: input that cannot start a candidate avoids the prefix-table lookup, while active candidates keep the KMP transition. On the same complete 1 MiB missing-literal scan, seven alternating measured pairs after warmup improved median native one-worker time from 560.27 ms to 323.34 ms (42%). Both builds include the decoder ASCII fast path. Five alternating pairs over the existing sixteen scalar/byte long and adversarial commands measured 542.37 ms before and 564.07 ms after, with overlapping sample ranges; this does not establish an absence of regressions. Full regex differential/streaming checks and all 109 public grep scenarios pass Bun/native one/four. Overall grep throughput remains far from ripgrep.
-
-Root integration of the shared runtime traversal and expanded verbose parser independently rebuilt Bun/native artifacts and passed all 109 public scenarios on each of the three backends.

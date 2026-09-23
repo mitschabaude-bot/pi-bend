@@ -38,6 +38,20 @@ type State is Data:
 type Context is Data:
   Context{events: Chan(ProcessEvent), process: ProcessControl, stdout: PipeCancel, stderr: PipeCancel, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>, onError: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>}
 
+# libuv's names for the errors a spawn reports, as Node's messages show them.
+def errnoName(code: U32) -> String:
+  match code:
+    case 1: "EPERM"
+    case 2: "ENOENT"
+    case 7: "E2BIG"
+    case 8: "ENOEXEC"
+    case 12: "ENOMEM"
+    case 13: "EACCES"
+    case 20: "ENOTDIR"
+    case 36: "ENAMETOOLONG"
+    case 40: "ELOOP"
+    case code: "Unknown system error -" ++ U32.show(code)
+
 def errors(operation: String, result: Result<&1,&1,U32 & String,Unit>) -> List<&2,Error>:
   match result:
     case Done{_}: Nil{}

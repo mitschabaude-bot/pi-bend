@@ -98,6 +98,10 @@ def complete(result: Decoded) -> String:
 def decodeBytes(bytes: List<&2, U32>) -> String:
   complete(decode(create(), bytes))
 
+# Node's Buffer#toString('utf8'): replacement mode that keeps a leading BOM.
+def decodeBuffer(bytes: List<&2, U32>) -> String:
+  complete(decode(Decoder{Ready{}, True{}}, bytes))
+
 def scalarBytes(+scalar: U32, isValid: Bool, ascii: Bool, two: Bool, three: Bool) -> List<&2, U32>:
   match isValid ascii two three:
     case False{} _ _ _: 239 <> 191 <> 189 <> Nil{}

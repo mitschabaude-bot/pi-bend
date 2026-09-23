@@ -154,32 +154,28 @@ def execute(mode: String,+cwd: String,+home: String,args: V.Value,entries: Strin
   match mode:
     case "abort-native":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{},L.MatchText{}})
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{}})
         task : Chan(Unit) <- IO.fork(Unit,abortLater(controller))
         call(L.borrowTool(owner),args,A.signal(Unit,controller))
         IO.join(Unit,task)
     case "repeat":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{},L.MatchText{}})
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{}})
         repeated(L.borrowTool(owner),args,A.signal(Unit,controller))
-    case "skip-binary":
-      do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{},L.SkipBinary{}})
-        call(L.borrowTool(owner),args,A.signal(Unit,controller))
     case "native":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{},L.MatchText{}})
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{None{}})
         call(L.borrowTool(owner),args,A.signal(Unit,controller))
     case "context":
       do IO<Unit>:
-        result : L.ToolResult() <- L.invokeWithContext(L.Invocation{environment(cwd,home),"/",None{},L.MatchText{}},L.GrepContext{Some{cwd}},Agent.ToolExecutionInput{"grep-context",args,Some{A.signal(Unit,controller)},None{}})
+        result : L.ToolResult() <- L.invokeWithContext(L.Invocation{environment(cwd,home),"/",None{}},L.GrepContext{Some{cwd}},Agent.ToolExecutionInput{"grep-context",args,Some{A.signal(Unit,controller)},None{}})
         report(result)
     case mode:
       +mode = {mode: String}
       do IO<Unit>:
         +ops : L.GrepOperations <- operations(Injection{mode,entries,controller})
         cancel(mode,"preabort",controller)
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{Some{ops},L.MatchText{}})
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),cwd,L.GrepToolOptions{Some{ops}})
         call(L.borrowTool(owner),args,A.signal(Unit,controller))
         reuse(mode,ops)
         L.dispose(ops)
