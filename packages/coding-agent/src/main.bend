@@ -498,15 +498,19 @@ def recordSelection(+session: Session(), hasExisting: Bool, hasThinking: Bool, s
 # ----
 
 # The AgentSession owns the run; the runtime owns the agent and its services.
-def printWith(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+def printWith(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
   match pair:
-    case Tuple{runtime, agent}:
+    case Tuple{runtime, loadout}:
       do IO<Unit>:
-        +live : AgentSession.AgentSession <- AgentSession.create(agent, stored, settings, cwd)
+        +live : AgentSession.AgentSession <- AgentSession.create(agent, stored, settings, cwd, loadout)
         code : U32 <- Print.runPrintMode(live, options)
         AgentSession.dispose(live)
         Runtime.dispose(runtime)
         exitWith(code)
+
+def printLoaded(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+  match pair:
+    case Tuple{runtime, agent}: printWith(options, stored, settings, cwd, agent, Runtime.loadoutOf(runtime))
 
 def outputMode(mode: AppMode) -> Args.Mode:
   match mode:
@@ -523,7 +527,7 @@ def printRecorded(mode: Args.Mode, initial: InitialMessage, recorded: Selected()
       do IO<Unit>:
         Runtime.dispose(runtime)
         IO.print(note)
-    case InitialMessage{text, images, remaining} Done{+session}: printWith(Print.PrintModeOptions{mode, remaining, text, images}, session, settings, cwd, Runtime.agentOf(runtime))
+    case InitialMessage{text, images, remaining} Done{+session}: printLoaded(Print.PrintModeOptions{mode, remaining, text, images}, session, settings, cwd, Runtime.agentOf(runtime))
 
 def printWithSelection(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
   match pair:

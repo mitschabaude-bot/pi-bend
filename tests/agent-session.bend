@@ -10,6 +10,7 @@ import ../packages/ai/src/utils/schema-json.bend as SchemaJson
 import ../packages/runtime/src/json.bend as Decode
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as R
+import ../packages/runtime/src/record.bend as Rec
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/date.bend as Date
 import ../packages/runtime/src/number-string.bend as Numbers
@@ -148,7 +149,7 @@ type Fixture is Data:
   Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
 def options(stream: Runtime.Stream(), converter: Runtime.Converter(), sessionId: String) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
-  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{"You are helpful."}, Some{fauxModel()}, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, Some{fauxModel()}, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
 
 def requireAgent(result: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Runtime.Owner()):
   match result:
@@ -176,7 +177,7 @@ def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, response
     created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored)), registry, validator, Tools.WriteDetails{})
     +agent : Runtime.Owner() <- requireAgent(created)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
-    +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd)
+    +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, Runtime.Loadout{Rec.new(String), Nil{}})
     +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
     Session.subscribe(session, listener)
     return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef}}
@@ -262,6 +263,8 @@ def entryKinds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value
     case S.SessionInfoEntry{_, name} <> rest: ("session_info:" ++ Maybe.default(&2, String, name, "")) <> entryKinds(rest)
     case S.SessionMessageEntry{_, _} <> rest: "message" <> entryKinds(rest)
     case S.Compaction{_} <> rest: "compaction" <> entryKinds(rest)
+    case S.ContextEditEntry{_, _, None{}} <> rest: "context_edit:omit" <> entryKinds(rest)
+    case S.ContextEditEntry{_, _, Some{_}} <> rest: "context_edit:replace" <> entryKinds(rest)
     case _ <> rest: "other" <> entryKinds(rest)
 
 def quotedAll(values: List<&2, String>) -> List<&2, String>:

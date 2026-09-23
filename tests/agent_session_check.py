@@ -120,19 +120,20 @@ def compaction_checks(runner, threads, work):
     assert only(events, 'compacting')['value'] is False and [e['type'] for e in events if e['type'] in ('prompt_done', 'compact_failed')] == ['prompt_done', 'compact_failed', 'prompt_done']
     assert only(events, 'last_assistant_text')['text'] == 'continued'
     checks += 3
-    # overflow: one compact-and-retry, then the retried turn continues (#5217 overflow reason and willRetry)
-    events = run_compact(runner, threads, work, KEEP_RECENT, 'one;two', 'a1;%s;overflow summary;recovered' % OVERFLOW, 'none')
+    # overflow: one compact-and-retry, then the retried turn continues (#5217 overflow reason and willRetry).
+    # The omitted attempt is a recovery suffix, so the cut keeps it and summarizes its turn's input as a prefix.
+    events = run_compact(runner, threads, work, KEEP_RECENT, 'one;two', 'a1;%s;overflow summary;prefix summary;recovered' % OVERFLOW, 'none')
     assert only(events, 'compaction_start')['reason'] == 'overflow'
     end = only(events, 'compaction_end')
-    assert end['reason'] == 'overflow' and end['willRetry'] is True and end['aborted'] is False and end['result']['summary'] == 'overflow summary', end
+    assert end['reason'] == 'overflow' and end['willRetry'] is True and end['aborted'] is False and end['result']['summary'] == 'overflow summary\n\n---\n\n**Turn Context (split turn):**\n\nprefix summary', end
     order = [e['type'] for e in events if e['type'] in ('agent_end', 'compaction_start', 'compaction_end', 'agent_settled', 'prompt_done')]
     assert order == ['agent_end', 'agent_settled', 'prompt_done', 'agent_end', 'compaction_start', 'compaction_end', 'agent_end', 'agent_settled', 'prompt_done'], order
-    assert [m['role'] for m in only(events, 'messages')['messages']] == ['compactionSummary', 'user', 'assistant'], 'the failed response leaves the context'
+    assert [m['role'] for m in only(events, 'messages')['messages']] == ['compactionSummary', 'assistant'], 'the failed response leaves the context'
     assert only(events, 'last_assistant_text')['text'] == 'recovered' and only(events, 'remaining')['count'] == 0
-    assert only(events, 'entries')['kinds'] == ['message'] * 4 + ['compaction', 'message'], 'the session keeps the failed response as history'
+    assert only(events, 'entries')['kinds'] == ['message'] * 4 + ['context_edit:omit', 'compaction', 'message'], 'the session keeps the failed response as history, omitted before compaction'
     checks += 6
     # does not retry overflow recovery more than once
-    events = run_compact(runner, threads, work, KEEP_RECENT, 'one;two', 'a1;%s;overflow summary;%s;unused' % (OVERFLOW, OVERFLOW), 'none')
+    events = run_compact(runner, threads, work, KEEP_RECENT, 'one;two', 'a1;%s;overflow summary;prefix summary;%s;unused' % (OVERFLOW, OVERFLOW), 'none')
     ends = [e for e in events if e['type'] == 'compaction_end']
     assert len(ends) == 2 and len([e for e in events if e['type'] == 'compaction_start']) == 1, ends
     assert ends[1] == {'type': 'compaction_end', 'reason': 'overflow', 'aborted': False, 'willRetry': False, 'errorMessage': 'Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.'}, ends
@@ -240,8 +241,10 @@ def main():
     order = [e['type'] for e in events if e['type'] in ('agent_end', 'auto_retry_start', 'auto_retry_end', 'message_end', 'agent_settled', 'prompt_done')]
     assert order == ['message_end', 'message_end', 'agent_end', 'auto_retry_start', 'message_end', 'auto_retry_end', 'agent_end', 'agent_settled', 'prompt_done'], order
     assert [e for e in events if e['type'] == 'last_assistant_text'][0]['text'] == 'recovered'
-    assert [e for e in events if e['type'] == 'session'][0]['entries'] == 3, 'the failed assistant message stays in the session history'
-    checks += 7
+    assert [e for e in events if e['type'] == 'session'][0]['entries'] == 4, 'the failed assistant message stays in the session history, omitted by a context edit'
+    appended = [e['entry'] for e in events if e['type'] == 'entry_appended']
+    assert len(appended) == 1 and appended[0]['type'] == 'context_edit' and appended[0]['replacement'] is None, appended
+    checks += 8
     # retries multiple transient failures and succeeds on the final attempt
     events = run_retry(runner, args.threads, work, enabled, '!overloaded_error;!overloaded_error;success')
     assert retry_events(events) == ['start:1', 'start:2', 'end:true'] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 0
@@ -269,7 +272,7 @@ def main():
     assert retry_events(events) == ['start:1', 'end:false'], retry_events(events)
     assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
-    assert types(events)[-8:-4] == ['auto_retry_start', 'auto_retry_end', 'agent_settled', 'prompt_done'], types(events)
+    assert types(events)[-9:-4] == ['auto_retry_start', 'entry_appended', 'auto_retry_end', 'agent_settled', 'prompt_done'], types(events)
     checks += 4
     checks += compaction_checks(runner, args.threads, work)
     print('agent-session: %d checks passed' % checks)

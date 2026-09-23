@@ -155,4 +155,5 @@ def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, Strin
     case Session.SummarizationRetryScheduled{attempt, maxAttempts, delayMs, errorMessage}: Done{Json.object(Json.field("type", Json.text("summarization_retry_scheduled"), Json.field("attempt", Json.natural(attempt), Json.field("maxAttempts", Json.natural(maxAttempts), Json.field("delayMs", V.Number{delayMs}, Json.field("errorMessage", Json.text(errorMessage), Nil{}))))))}
     case Session.SummarizationRetryAttemptStart{source}: Done{Json.object(Json.field("type", Json.text("summarization_retry_attempt_start"), retrySource(source)))}
     case Session.SummarizationRetryFinished{}: Done{Json.object(Json.field("type", Json.text("summarization_retry_finished"), Nil{}))}
+    case Session.EntryAppended{entry}: Done{Json.object(Json.field("type", Json.text("entry_appended"), Json.field("entry", SessionJson.entry(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitDetails, ~Tools.detailsValue, ~rawValue, entry), Nil{})))}
 

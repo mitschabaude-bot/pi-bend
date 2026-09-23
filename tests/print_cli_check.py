@@ -104,7 +104,9 @@ if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
     header = lines[0]
     check(events.returncode == 0 and header['type'] == 'session' and header['version'] == 3 and re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', header['id']) and header['cwd'] == str(ROOT), 'JSON mode starts with the session header')
     compact = [t for t in types if t != 'message_update']
-    check(compact == ['session', 'agent_start', 'turn_start', 'message_start', 'message_end', 'message_start', 'message_end', 'turn_end', 'agent_end', 'agent_settled'], 'JSON mode emits the upstream event sequence (AgentSession adds agent_settled)')
+    check(compact == ['session', 'agent_start', 'turn_start'] + ['message_start', 'message_end'] * 3 + ['turn_end', 'agent_end', 'agent_settled'], 'JSON mode emits the upstream event sequence: the prompt loadout system message, the user message and the reply (AgentSession adds agent_settled)')
+    system = [event['message'] for event in lines if event['type'] == 'message_end'][0]
+    check(system['role'] == 'system' and system['content'] == '' and list(system['sections']) == ['preamble', 'tools', 'rules', 'docs', 'project_context', 'cwd'], 'the first prompt declares the system prompt sections (with this checkout'"'"'s AGENTS.md as project context), as pi 0.87.1 does')
     updates = [event for event in lines if event['type'] == 'message_update']
     check(updates and all('partial' not in event['assistantMessageEvent'] for event in updates) and all(set(event) == {'type', 'usage', 'assistantMessageEvent'} for event in updates), 'message_update events carry usage and snapshot-free assistant events')
     final = [event for event in lines if event['type'] == 'message_end'][-1]['message']
@@ -125,7 +127,7 @@ if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
     check(wrong.returncode == 1 and wrong.stdout == b'' and wrong.stderr.strip() != b'', 'a rejected request exits 1 with the error on stderr')
 
     # A stored session: its header opens the JSON stream, its context seeds the agent,
-    # and the run records the thinking level; new messages are not written yet (AgentSession).
+    # and the run records the thinking level, the prompt loadout and its messages (AgentSession).
     with tempfile.TemporaryDirectory(prefix='pi-native-cli-session-') as folder:
         project = pathlib.Path(folder) / 'project'; project.mkdir()
         stored = pathlib.Path(folder) / 'stored.jsonl'
@@ -142,8 +144,8 @@ if os.environ.get('PI_BEND_LIVE') == '1' and os.environ.get('OPENAI_API_KEY'):
         final = [event for event in resumed_lines if event['type'] == 'message_end'][-1]['message']
         check('marmalade' in final['content'][0]['text'].lower(), 'the stored context seeds the conversation')
         after = [json.loads(line) for line in stored.read_text().splitlines()]
-        check([json.dumps(e) for e in after[:3]] == [json.dumps(json.loads(o)) for o in original] and [e['type'] for e in after[3:]] == ['thinking_level_change', 'message', 'message'], 'the run records its thinking level, the prompt and the reply after the stored entries (AgentSession message_end persistence)')
-        check(after[3]['parentId'] == 'aaaa0002' and after[4]['parentId'] == after[3]['id'] and after[5]['parentId'] == after[4]['id'] and after[4]['message']['role'] == 'user' and after[5]['message']['role'] == 'assistant' and after[5]['message'] == final, 'persisted entries chain from the stored leaf and the assistant entry equals the final message_end message')
+        check([json.dumps(e) for e in after[:3]] == [json.dumps(json.loads(o)) for o in original] and [e['type'] for e in after[3:]] == ['thinking_level_change', 'message', 'message', 'message'], 'the run records its thinking level, the prompt loadout, the prompt and the reply after the stored entries, as pi 0.87.1 does (AgentSession message_end persistence)')
+        check(after[3]['parentId'] == 'aaaa0002' and after[4]['parentId'] == after[3]['id'] and after[5]['parentId'] == after[4]['id'] and after[6]['parentId'] == after[5]['id'] and [e['message']['role'] for e in after[4:]] == ['system', 'user', 'assistant'] and after[6]['message'] == final, 'persisted entries chain from the stored leaf and the assistant entry equals the final message_end message')
 if os.environ.get('PI_BEND_CODEX_LIVE') == '1':
     codex = run(['--no-tools', '--provider', 'openai-codex', '--model', 'gpt-6-luna', '-p', 'Reply with exactly the word pong'],
                 env={'OPENAI_API_KEY': ''}, timeout=300)

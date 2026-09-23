@@ -8,7 +8,7 @@ Between the two commits, 56 non-merge commits touch `packages/{ai,agent,coding-a
 |---|---|---|---|
 | f5c946480 | image input limits | ai types; file-processor, agent-session, read tool, main | types and catalog done; behaviour pending |
 | c596d09d9 | prompt cache warming | ai types (`promptCache`), agent-session, session-manager, settings-manager | `Model.promptCache` done; warming pending |
-| 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | agent package done (`finishTurn`, `prepareRequest`, `peekQueuedMessages`, 24 new named tests); session-manager context edits, `buildSessionProjection` and projected compaction done (session-context-edit.test.ts ported); agent-session request projection and boundaries pending |
+| 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | agent package done (`finishTurn`, `prepareRequest`, `peekQueuedMessages`, 24 new named tests); session-manager context edits, `buildSessionProjection` and projected compaction done (session-context-edit.test.ts ported); agent-session request projection, durable recovery omission and projection-aware compaction done; extension boundaries (`turn_end`, `agent_before_settle`) wait for the extension module |
 | de2de549b | compaction cancellation races | agent-session | pending |
 | 8bdcd4498 | compact oversized trailing tool results | compaction | done: last valid cut point as fallback; #9740 case in tests/compaction |
 | d192bd6dc | avoid split-turn summary refusals | compaction | done: new prompt, `# Conversation`/`# Instructions` sections |
