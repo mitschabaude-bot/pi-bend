@@ -48,12 +48,10 @@ def scenario(threads):
         try:
             until(b"theme-fixture")
             cases = [
-                ("/help", b"Commands: /thinking [level], /compact [instructions], /exit"),
+                ("/help", b"Commands: /model [search], /thinking [level], /compact [instructions], /exit"),
                 ("/thinking", b"Thinking level: off. Available: off"),
                 ("/thinking OFF", b"Thinking level: off"),
                 ("/thinking medium", b'Unknown thinking level "medium". Available levels: off.'),
-                ("/model", b"Model: fixture/theme-fixture"),
-                ("/model other", b"Model switching is not available yet"),
                 ("/compact", b"Error: Nothing to compact (session too small)"),
                 ("/new", b"Starting a new session is not available yet"),
                 ("/clear", b"Starting a new session is not available yet"),

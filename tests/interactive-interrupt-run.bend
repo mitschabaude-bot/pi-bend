@@ -57,6 +57,8 @@ def delayedProvider(_: Unit,input: Input()) -> IO(Output()):
     return Done{AgentTypes.borrowedStream(Unit,Tools.ToolError,stream)}
 def model() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"theme-fixture","Theme fixture",Ai.OpenAIResponsesApi{},"fixture","https://invalid.local",False{},None{},Ai.InputText{} <> Nil{},None{},Ai.ModelCost{U32.to_f64(0),U32.to_f64(0),U32.to_f64(0),U32.to_f64(0),None{}},None{},U32.to_f64(128000),U32.to_f64(4096),None{},None{},None{}}
+def otherModel() -> Ai.Model<Ai.JsonValue>:
+  Ai.Model{"alternate","Alternate fixture",Ai.OpenAIResponsesApi{},"fixture","https://invalid.local",False{},None{},Ai.InputText{} <> Nil{},None{},Ai.ModelCost{U32.to_f64(0),U32.to_f64(0),U32.to_f64(0),U32.to_f64(0),None{}},None{},U32.to_f64(128000),U32.to_f64(4096),None{},None{},None{}}
 def options(stream: Runtime.Stream(),converter: Runtime.Converter(),sessionId: String) -> Agent.AgentOptions<Unit,Tools.ToolDetails,Runtime.Custom(),Tools.ToolError,Unit>:
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, Some{model()}, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
 def requireAgent(result: Result<&2,&2,StreamFn.MissingDefault,Runtime.Owner()>) -> IO(Runtime.Owner()):
@@ -89,7 +91,7 @@ def run(args: List<String>) -> IO(Unit):
         +agent : Runtime.Owner() <- requireAgent(candidate)
         loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd,agentDir,Settings.options())
         +session : Session.AgentSession <- Session.create(agent,stored,settings(loaded),cwd,Runtime.Loadout{Record.new(String),Nil{}})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.run(session,Nil{},cwd,None{},agentDir,assetsRoot,setting(choice))
+        result : Result<&2,&2,Run.Error,Unit> <- Run.run(session,Nil{},cwd,None{},agentDir,assetsRoot,setting(choice),model() <> otherModel() <> Nil{})
         Session.dispose(session)
         Agent.dispose(Unit,Tools.ToolDetails,Runtime.Custom(),Tools.ToolError,Unit,agent)
         StreamFn.dispose(Unit,Tools.ToolDetails,Runtime.LoopConfig(),Tools.ToolError,registry)

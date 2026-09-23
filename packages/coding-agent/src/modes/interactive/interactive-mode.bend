@@ -7,6 +7,8 @@ import ../../../../runtime/src/text.bend as Text
 import ../../../../tui/src/tui-process.bend as Process
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../core/model-runtime.bend as Models
+import ./components/model-selector.bend as ModelPicker
 import ./session-controller.bend as Controller
 import ./commands.bend as Commands
 import ./transcript.bend as Transcript
@@ -23,7 +25,7 @@ type SubmissionFailure is Data:
 type SubmissionInput is Data:
   SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
 type CommandSink is Data:
-  CommandSink{failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  CommandSink{failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Session.AgentSession,models: List<&2,Models.Model()>}
 type Startup is Data:
   Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
 
@@ -59,17 +61,47 @@ def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
     case _: IO.pure(Unit,Unit{})
 def commandStatus(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,status: SubmissionFailure) -> IO(Unit):
   Ref.write(Maybe<&2,SubmissionFailure>,failure,Some{status})
-def commandResult(sink: CommandSink,result: Commands.Action) -> IO(Unit):
+def pickerCurrent(session: Session.AgentSession) -> IO(Models.Model()):
+  do IO<Models.Model()>:
+    current : Session.AgentState() <- Session.state(session)
+    return Session.stateModel(current)
+def openPicker(host: Maybe<&2,ModelPicker.Host>,models: List<&2,Models.Model()>,current: Models.Model(),query: Maybe<&2,String>) -> IO(Unit):
+  match host:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}: ModelPicker.open(value,ModelPicker.create(models,Some{current},Maybe.default(&2,String,query,""),24n))
+def openPickerResult(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Bool):
+  match models:
+    case Nil{}:
+      do IO<Bool>:
+        commandStatus(failure,CommandFailure{"No models available. Use /login to add a provider."})
+        requestRender(redraw)
+        return False{}
+    case model <> rest:
+      do IO<Bool>:
+        +current : Models.Model() <- pickerCurrent(session)
+        target : Maybe<&2,ModelPicker.Host> <- Ref.read(Maybe<&2,ModelPicker.Host>,picker)
+        openPicker(target,model <> rest,current,search)
+        requestRender(redraw)
+        return False{}
+def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
   match sink result:
-    case CommandSink{failure,redraw} Commands.Notice{message}:
-      do IO<Unit>:
+    case CommandSink{failure,redraw,_,_,_} Commands.Notice{message}:
+      do IO<Bool>:
         commandStatus(failure,CommandNotice{message})
         requestRender(redraw)
-    case CommandSink{failure,redraw} Commands.CommandError{message}:
-      do IO<Unit>:
+        return False{}
+    case CommandSink{failure,redraw,_,_,_} Commands.CommandError{message}:
+      do IO<Bool>:
         commandStatus(failure,CommandFailure{message})
         requestRender(redraw)
-    case _ _: IO.pure(Unit,Unit{})
+        return False{}
+    case CommandSink{failure,redraw,_,_,_} Commands.ModelSelected{model}:
+      do IO<Bool>:
+        commandStatus(failure,CommandNotice{"Model: " ++ Models.reference(model)})
+        requestRender(redraw)
+        return True{}
+    case CommandSink{failure,redraw,picker,session,models} Commands.OpenModelPicker{search}: openPickerResult(failure,redraw,picker,session,models,search)
+    case _ _: IO.pure(Bool,False{})
 def act(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,command: Commands.Command) -> IO(Unit):
   match command:
     case Commands.Stop{}:
