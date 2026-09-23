@@ -7,11 +7,13 @@ import pty
 import select
 import struct
 import subprocess
+import tempfile
 import termios
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get("PI_BEND_CLI", ROOT / "build/pi-cli"))
+PROJECT = tempfile.TemporaryDirectory(prefix="pi-bend-interactive-")
 
 for threads in (1, 4):
     master, slave = pty.openpty()
@@ -19,7 +21,7 @@ for threads in (1, 4):
     original = termios.tcgetattr(slave)
     process = subprocess.Popen(
         [str(BINARY), "--threads", str(threads), "--", "--no-tools"],
-        stdin=slave, stdout=slave, stderr=subprocess.PIPE, cwd=ROOT,
+        stdin=slave, stdout=slave, stderr=subprocess.PIPE, cwd=PROJECT.name,
         env={**os.environ, "TERM": "xterm-256color"},
     )
     output = bytearray()
@@ -53,3 +55,5 @@ for threads in (1, 4):
         os.close(master)
         os.close(slave)
     print(f"native{threads}: mounted, accepted /exit, restored terminal")
+
+PROJECT.cleanup()
