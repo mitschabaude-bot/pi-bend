@@ -11,6 +11,8 @@ COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], 
 UPSTREAM = Path(os.environ.get("PI_MONO", ROOT.parent / "pi-mono" if (ROOT.parent / "pi-mono").is_dir() else COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/modes/rpc/rpc-mode.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc"
+STATS_SOURCE = UPSTREAM / "packages/coding-agent/src/core/agent-session.ts"
+assert hashlib.sha256(STATS_SOURCE.read_bytes()).hexdigest() == "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
 
 def check(label, executable, threads=None):
     env = dict(os.environ)
@@ -31,6 +33,7 @@ def check(label, executable, threads=None):
         ("name", "set_session_name", True),
         ("name2", "set_session_name", True),
         ("state", "get_state", True),
+        ("empty-stats", "get_session_stats", True),
         ("tree", "get_tree", True),
         ("forks", "get_fork_messages", True),
         ("p", "prompt", True),
@@ -38,6 +41,8 @@ def check(label, executable, threads=None):
         ("bad", "prompt", False),
         ("image-bad", "steer", False),
         ("tail", "unknown", False),
+        ("final-stats", "get_session_stats", True),
+        ("final-forks", "get_fork_messages", True),
     ]
     assert [(r.get("id"), r["command"], r["success"]) for r in responses] == expected, (label, responses)
     assert responses[0]["data"] == {"levels": ["off"]}
@@ -51,18 +56,28 @@ def check(label, executable, threads=None):
     assert state["steeringMode"] == "all" and state["followUpMode"] == "one-at-a-time"
     assert state["sessionName"] == "rpc nested" and state["messageCount"] == 0 and state["pendingMessageCount"] == 0
     assert "sessionFile" not in state
-    tree = responses[12]["data"]["tree"]
+    empty_stats = responses[12]["data"]
+    assert {k: empty_stats[k] for k in ("userMessages", "assistantMessages", "toolCalls", "toolResults", "totalMessages", "cost")} == dict.fromkeys(("userMessages", "assistantMessages", "toolCalls", "toolResults", "totalMessages", "cost"), 0)
+    assert empty_stats["tokens"] == {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}
+    assert empty_stats["contextUsage"] == {"tokens": 0, "contextWindow": 128000, "percent": 0}
+    tree = responses[13]["data"]["tree"]
     assert tree[0]["entry"]["type"] == "session_info"
     assert tree[0]["entry"]["name"] == "rpc tree"
     assert tree[0]["children"][0]["entry"]["name"] == "rpc nested"
     assert tree[0]["children"][0]["children"] == []
-    assert responses[13]["data"] == {"messages": []}
-    assert responses[16]["error"] == "Invalid command: message must be a string"
-    assert responses[17]["error"] == "Invalid command: data must be a string"
+    assert responses[14]["data"] == {"messages": []}
+    assert responses[17]["error"] == "Invalid command: message must be a string"
+    assert responses[18]["error"] == "Invalid command: data must be a string"
     prompt_index = next(i for i, r in enumerate(records) if r.get("id") == "p")
     start_index = next(i for i, r in enumerate(records) if r.get("type") == "agent_start")
     settled_index = next(i for i, r in enumerate(records) if r.get("type") == "agent_settled")
-    assert prompt_index < start_index < settled_index == len(records) - 1, (label, records)
+    assert prompt_index < start_index < settled_index < next(i for i, r in enumerate(records) if r.get("id") == "final-stats"), (label, records)
+    final = responses[-2]["data"]
+    assert final["userMessages"] == final["assistantMessages"] == 1 and final["totalMessages"] == 2
+    assert final["toolCalls"] == final["toolResults"] == 0
+    assert final["tokens"] == {"input": 42, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 42}
+    assert final["contextUsage"] == {"tokens": 42, "contextWindow": 128000, "percent": 42 / 128000 * 100}
+    assert [m["text"] for m in responses[-1]["data"]["messages"]] == ["hello"]
     assert any(r.get("type") == "message_end" and r.get("message", {}).get("role") == "assistant" and r["message"]["content"][0]["text"] == "answer" for r in records)
     assert any(r.get("type") == "message_start" and r.get("message", {}).get("role") == "user" and r["message"]["content"][1] == {"type": "image", "data": "AA==", "mimeType": "image/png"} for r in records)
     assert sum(r.get("type") == "agent_start" for r in records) == 1

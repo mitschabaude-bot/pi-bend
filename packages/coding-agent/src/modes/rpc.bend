@@ -18,6 +18,7 @@ import ../core/settings-manager.bend as Settings
 import ../core/session-persistence.bend as Sessions
 import ../core/session-manager.bend as S
 import ../core/session-json.bend as SessionJson
+import ../core/session-stats.bend as Stats
 import ../core/tools/index.bend as Tools
 import ../core/compaction/compaction.bend as Compaction
 import ./json-event.bend as Events
@@ -453,6 +454,17 @@ def getState(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
         steering : AgentTypes.QueueMode <- Agent.getSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         followUp : AgentTypes.QueueMode <- Agent.getFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         output(sink,data(id,"get_state",stateValue(stored,current,shared,streaming,compacting,steering,followUp,settingsCompaction(session))))
+def statsResponse(id: Maybe<&2,String>,result: Result<&2,&2,S.Error,Stats.Stats>) -> V.Value:
+  match result:
+    case Fail{_}: failure(id,"get_session_stats","Session history is invalid")
+    case Done{value}: data(id,"get_session_stats",Stats.value(value))
+def getSessionStats(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{+session,sink,_,_,_}:
+      do IO<Unit>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        current : Session.AgentState() <- Session.state(session)
+        output(sink,statsResponse(id,Stats.stats(stored,Session.stateModel(current))))
 def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "prompt": prompt(handle,id,object)
@@ -463,6 +475,7 @@ def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Rec
     case "clear_queue": clearQueue(handle,id)
     case "get_messages": currentMessages(handle,id)
     case "get_state": getState(handle,id)
+    case "get_session_stats": getSessionStats(handle,id)
     case "get_entries": getEntries(handle,id,optionalText(field(object,"since")))
     case "get_tree": getTree(handle,id)
     case "get_fork_messages": getForkMessages(handle,id)

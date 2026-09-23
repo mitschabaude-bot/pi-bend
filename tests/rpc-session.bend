@@ -34,6 +34,7 @@ def execute(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         Rpc.feed(handle,"{\"id\":\"name\",\"type\":\"set_session_name\",\"name\":\"rpc tree\"}\n")
         Rpc.feed(handle,"{\"id\":\"name2\",\"type\":\"set_session_name\",\"name\":\"rpc nested\"}\n")
         Rpc.feed(handle,"{\"id\":\"state\",\"type\":\"get_state\"}\n")
+        Rpc.feed(handle,"{\"id\":\"empty-stats\",\"type\":\"get_session_stats\"}\n")
         Rpc.feed(handle,"{\"id\":\"tree\",\"type\":\"get_tree\"}\n")
         Rpc.feed(handle,"{\"id\":\"forks\",\"type\":\"get_fork_messages\"}\n")
         Rpc.feed(handle,"{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello\",\"images\":[{\"type\":\"image\",\"data\":\"AA==\",\"mimeType\":\"image/png\"}]}\n")
@@ -43,19 +44,27 @@ def execute(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         Rpc.feed(handle,"{\"id\":\"tail\",\"type\":\"unknown\"}")
         Rpc.finish(handle)
         Rpc.stop(owner)
+def finalQueries(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case Tuple{owner,handle}:
+      do IO<Unit>:
+        Rpc.feed(handle,"{\"id\":\"final-stats\",\"type\":\"get_session_stats\"}\n{\"id\":\"final-forks\",\"type\":\"get_fork_messages\"}\n")
+        Rpc.stop(owner)
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> agentDir <> Nil{}:
       do IO<Unit>:
         created : Stored.Outcome(Session.Session()) <- Session.memorySession(cwd,Stored.noOptions())
         stored : Session.Session() <- Faux.requireSession(created)
-        +fixture : Faux.Fixture <- Faux.fixture(stored,cwd,agentDir,"answer" <> Nil{},Nil{})
+        +fixture : Faux.Fixture <- Faux.fixture(stored,cwd,agentDir,"answer#42" <> Nil{},Nil{})
         quiet(fixture)
         +session : Session.AgentSession <- IO.pure(Session.AgentSession,Faux.sessionOf(fixture))
         +lines : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~capture,lines)
         pair : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink)
         execute(pair)
+        settled : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink)
+        finalQueries(settled)
         captured : List<&2,String> <- Ref.dispose(List<&2,String>,lines)
         output(captured)
         Callback.dispose(String,Unit,sink)
