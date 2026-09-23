@@ -1,8 +1,11 @@
 import Base
 import ./cli/args.bend as Args
 import ./cli/file-processor.bend as Files
+import ./cli/list-models.bend as ModelList
 import ./config.bend as Config
 import ./core/agent-runtime.bend as Runtime
+import ./core/model-runtime.bend as Models
+import ./core/auth-storage.bend as AuthStorage
 import ./core/session-manager.bend as S
 import ./core/session-persistence.bend as Sessions
 import ./core/agent-session.bend as AgentSession
@@ -16,6 +19,8 @@ import ./modes/interactive/run.bend as InteractiveRun
 import ./utils/paths.bend as Paths
 import ../../agent/src/types.bend as T
 import ../../ai/src/types.bend as Ai
+import ../../ai/src/auth/types.bend as Auth
+import ../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
 import ../../ai/src/utils/thinking-levels.bend as Levels
 import ../../runtime/src/filesystem.bend as FS
 import ../../runtime/src/utf8.bend as Utf8
@@ -976,10 +981,65 @@ def exportFile(request: ExportRequest) -> IO(Unit):
     configured : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_BEND_PACKAGE_DIR")
     exportCwd(request,configured,cwd)
 
+def listSearch(parsed: Args.Args) -> Maybe<&2,Maybe<&2,String>>:
+  match parsed:
+    case Args.Args{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,listModels,_,_,_,_,_,_,_,_}:
+      match listModels:
+        case None{}: None{}
+        case Some{Args.AllModels{}}: Some{None{}}
+        case Some{Args.SearchModels{pattern}}: Some{Some{pattern}}
+
+def listed(+runtime: Models.ModelRuntime,store: Auth.CredentialStore,storage: AuthStorage.AuthStorageOwner,transport: Runtime.Transport,search: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    ModelList.listModels(runtime,search)
+    Models.dispose(runtime)
+    Auth.disposeStore(store)
+    AuthStorage.dispose(storage)
+    Runtime.disposeTransport(transport)
+
+def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageOwner,view: AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
+  match transport:
+    case Runtime.Transport{+authorizer,runtime,+fetch}:
+      do IO<Unit>:
+        +store : Auth.CredentialStore <- AuthStorage.store(view)
+        oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
+        models : Models.ModelRuntime <- Models.create(store,oauth)
+        listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch},search)
+
+def listBorrowed(transport: Runtime.Transport,pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
+  match pair:
+    case (owner,view): listWithStore(transport,owner,view,search)
+
+def listWithTransport(transport: Runtime.Transport,path: String,search: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    storage : AuthStorage.AuthStorageOwner <- AuthStorage.create(path)
+    listBorrowed(transport,AuthStorage.borrow(storage),search)
+
+def listReady(transport: Runtime.Outcome(Runtime.Transport),authPath: Result<&2,&2,FS.Error,String>,search: Maybe<&2,String>) -> IO(Unit):
+  match transport authPath:
+    case Fail{error} _: fail(error)
+    case Done{transport} Fail{_}:
+      do IO<Unit>:
+        Runtime.disposeTransport(transport)
+        fail("Could not locate the auth file")
+    case Done{transport} Done{path}: listWithTransport(transport,path,search)
+
+def listModels(search: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    authPath : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+    bundle : Result<&1,&1,U32 & String,String> <- IO.get_env("SSL_CERT_FILE")
+    transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransport(envOr(bundle,"/etc/ssl/certs/ca-certificates.crt"))
+    listReady(transport,authPath,search)
+
 def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match request:
     case Some{value}: exportFile(value)
     case None{}: runMode(parsed, resolveAppMode(modeOf(parsed), printFlag(parsed), stdinTty, stdoutTty), stdinTty)
+
+def dispatchList(+parsed: Args.Args,search: Maybe<&2,Maybe<&2,String>>,stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
+  match search:
+    case Some{pattern}: listModels(pattern)
+    case None{}: dispatchExport(parsed,exportRequest(parsed),stdinTty,stdoutTty)
 
 def dispatch(+parsed: Args.Args, help: Bool, version: Bool, invalid: Bool, +stdinTty: Bool, stdoutTty: Bool, flagError: Maybe<&2, String>) -> IO(Unit):
   match help version invalid flagError:
@@ -987,7 +1047,7 @@ def dispatch(+parsed: Args.Args, help: Bool, version: Bool, invalid: Bool, +stdi
     case _ True{} _ _: IO.print(Config.version())
     case _ _ True{} _: IO.die(Unit, 1, "")
     case _ _ _ Some{message}: fail(message)
-    case _ _ _ None{}: dispatchExport(parsed,exportRequest(parsed),stdinTty,stdoutTty)
+    case _ _ _ None{}: dispatchList(parsed,listSearch(parsed),stdinTty,stdoutTty)
 
 def run(+parsed: Args.Args) -> IO(Unit):
   do IO<Unit>:
