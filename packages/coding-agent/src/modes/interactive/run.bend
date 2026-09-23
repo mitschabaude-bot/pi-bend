@@ -20,6 +20,7 @@ import ../../../../tui/src/tui-base.bend as Tui
 import ../../../../tui/src/tui-main-screen.bend as Screen
 import ../../../../tui/src/tui-process.bend as Process
 import ../../../../tui/src/terminal.bend as Terminal
+import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
 import ./components/footer.bend as Footer
@@ -138,34 +139,60 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
   observeCopied(input,event)
+type WorkerFailure is Data:
+  WorkerFailure{failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+def promptFailed(input: WorkerFailure,value: Controller.PromptFailure) -> IO(Unit):
+  match input value:
+    case WorkerFailure{failure,redraw} Controller.PromptFailure{message}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.PromptFailure{message}})
+        Interactive.requestRender(redraw)
 
-type FooterPaint is Data: FooterPaint{state: Ref.Ref<Footer.State>,theme: Theme.Theme}
-type FooterOwner is Data: FooterOwner{state: Ref.Ref<Footer.State>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type FooterPaint is Data: FooterPaint{state: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,theme: Theme.Theme}
+type FooterOwner is Data: FooterOwner{state: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 
-def footerLines(paint: FooterPaint,width: Nat) -> IO(List<&2,String>):
+def appendedFailure(lines: List<&2,String>,plain: String,painted: Result<&2,&2,Theme.Error,String>) -> List<&2,String>:
+  match painted:
+    case Done{colored}: List.append(&2,String,lines,colored <> Nil{})
+    case Fail{_}: List.append(&2,String,lines,plain <> Nil{})
+def withFailure(lines: List<&2,String>,failure: Maybe<&2,Interactive.SubmissionFailure>,theme: Theme.Theme,width: Nat) -> List<&2,String>:
+  match failure:
+    case None{}: lines
+    case Some{value}:
+      +plain = Utils.truncateToWidth("Error: " ++ Interactive.failureText(value),width,"...",False{})
+      appendedFailure(lines,plain,Theme.foreground(theme,"error",plain))
+def footerLinesCopied(paint: FooterPaint,+width: Nat) -> IO(List<&2,String>):
   match paint:
-    case FooterPaint{state,theme}:
+    case FooterPaint{state,failure,+theme}:
       do IO<List<&2,String>>:
         current : Footer.State <- Ref.read(Footer.State,state)
-        Footer.render(current,theme,width)
+        failed : Maybe<&2,Interactive.SubmissionFailure> <- Ref.read(Maybe<&2,Interactive.SubmissionFailure>,failure)
+        lines : List<&2,String> <- Footer.render(current,theme,width)
+        return withFailure(lines,failed,theme,width)
+def footerLines(paint: FooterPaint,width: Nat) -> IO(List<&2,String>):
+  footerLinesCopied(paint,width)
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def footer(initial: Footer.State,theme: Theme.Theme) -> IO(FooterOwner):
   do IO<FooterOwner>:
     +state : Ref.Ref<Footer.State> <- Ref.new(Footer.State,initial)
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~FooterPaint,~Nat,~List<&2,String>,~footerLines,FooterPaint{state,theme})
+    +failure : Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>> <- Ref.new(Maybe<&2,Interactive.SubmissionFailure>,None{})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~FooterPaint,~Nat,~List<&2,String>,~footerLines,FooterPaint{state,failure,theme})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
-    return FooterOwner{state,Component.Component{Component.ComponentId{3n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
+    return FooterOwner{state,failure,Component.Component{Component.ComponentId{3n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def footerState(owner: FooterOwner) -> Ref.Ref<Footer.State>:
-  match owner: case FooterOwner{state,_,_,_}: state
+  match owner: case FooterOwner{state,_,_,_,_}: state
+def footerFailure(owner: FooterOwner) -> Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>:
+  match owner: case FooterOwner{_,failure,_,_,_}: failure
 def footerComponent(owner: FooterOwner) -> Component.Component:
-  match owner: case FooterOwner{_,component,_,_}: component
+  match owner: case FooterOwner{_,_,component,_,_}: component
 def disposeFooter(owner: FooterOwner) -> IO(Unit):
   match owner:
-    case FooterOwner{state,_,render,invalidate}:
+    case FooterOwner{state,failure,_,render,invalidate}:
       do IO<Unit>:
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(Unit,Unit,invalidate)
         old : Footer.State <- Ref.dispose(Footer.State,state)
+        oldFailure : Maybe<&2,Interactive.SubmissionFailure> <- Ref.dispose(Maybe<&2,Interactive.SubmissionFailure>,failure)
         return Unit{}
 
 def editorTheme(theme: Theme.Theme) -> IO(Callback.Callback<String,String> & Editor.EditorTheme):
@@ -179,12 +206,12 @@ def processResult(result: Result<&2,&2,Terminal.Error,Process.Active>) -> Result
   match result:
     case Done{_}: Done{Unit{}}
     case Fail{cause}: Fail{TerminalStart{cause}}
-def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>) -> IO(View.View & Result<&2,&2,Error,Unit>):
+def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
     case (view,_,Done{base}):
       do IO<View.View & Result<&2,&2,Error,Unit>>:
-        +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~Interactive.Startup,~Process.QueryReady,~Unit,~Interactive.onReady,Interactive.Startup{redraw,queue,initial})
+        +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~Interactive.Startup,~Process.QueryReady,~Unit,~Interactive.onReady,Interactive.Startup{redraw,queue,initial,footerFailure(foot)})
         +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~clear,redraw)
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
@@ -235,11 +262,11 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,contr
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
         runLive(Live.borrow(live),view,foot,controller,queue,transcript,submitted,paint,styles,rows,redraw,stopped,initial)
-def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,foot: FooterOwner,theme: Theme.Theme,words: Words.Context,+stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Result<&2,&2,Error,Unit>):
+def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,theme: Theme.Theme,words: Words.Context,+stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (controller,+queue):
       do IO<Result<&2,&2,Error,Unit>>:
-        submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped})
+        submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,footerFailure(foot)})
         paintPair : Callback.Callback<String,String> & Editor.EditorTheme <- editorTheme(theme)
         startPaint(paintPair,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw)
 def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,styles: MarkdownTheme.Styles,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context) -> IO(Result<&2,&2,Error,Unit>):
@@ -253,7 +280,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot)})
-        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n)
+        failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{footerFailure(foot),redraw})
+        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver})
         startController(controllerPair,view,transcript,styles,initial,foot,theme,words,stopped,redraw)
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
