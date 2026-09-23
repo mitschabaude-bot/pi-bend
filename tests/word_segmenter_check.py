@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('backends',nargs='*',default=['bun','native-1','native-4']);a=p.parse_args()
 version=json.loads(subprocess.check_output(['node','-p','JSON.stringify({icu:process.versions.icu,unicode:process.versions.unicode})'],text=True));assert version=={'icu':'78.3','unicode':'17.0'},version
 cases=['ー'*12,'ｰ'*12,'ﾞ'*12,'ﾟ'*12,'','hello world','foo.bar','foo:bar','path/to/file','a_b','123abc','abc123','1カ2','_カナ123','你好world 123 foo.bar!','English日本語test','한국어test','א\'אב 1.5','カ\u0301ナ','中\u0301中','㌕世界','a\u200d👩🏽\u200d💻','🇦🇧🇨🇩🇪','\r\n',' \u0301 ','\ufeffx','᠀᠀','ภาษา','日本ภาษา','ພາສາ','မြန်မာ','ភាសា']
-missing={27:'Thai',28:'Thai',29:'Lao',30:'Myanmar',31:'Khmer'}
+missing={27:'Thai',28:'Thai',29:'Lao',30:'Myanmar'}
 units=['a','1','_',"'",'.',' ','\u0301','\u200d','中','カ','ー','😀']
 cases += [''.join(parts) for parts in itertools.product(units,repeat=3)]
 # Preserve the official Unicode corpus, but compare ICU's tailoring/statuses.
@@ -24,6 +24,14 @@ for i,(start,value) in enumerate(ranges):
 random.seed(7803)
 words=['hello','世界','東京大学','123','foo.bar','אב\'','日本語','カタカナ','ｶﾞｯﾂ','한국어','café','العربية','देवनागरी','_',':','?','\u0301','\u200d','😀',' ', '\r\n']
 cases += [''.join(random.choices(words,k=random.randrange(2,10))) for _ in range(1024)]
+# Every Khmer dictionary entry exercises the engine inside the outer rule machine.
+khmer_words=sorted({line.split('#')[0].strip() for line in (ROOT/'build/icu78-source/khmerdict.txt').read_text(encoding='utf-8-sig').splitlines() if line.split('#')[0].strip()})
+cases += khmer_words
+cases += [''.join(random.choices(khmer_words,k=random.randrange(2,6))) for _ in range(2048)]
+khmer_chars=[chr(cp) for cp in range(0x1780,0x17e0)]
+cases += [''.join(random.choices(khmer_chars,k=random.randrange(1,32))) for _ in range(2048)]
+cases += ['a'+word+'中 1'+word+'カ' for word in random.sample(khmer_words,512)]
+cases += ['ភាសាខ្មែរ '*4000,'ក'*20000,'ក'+'ា'*20000,'ភាសា\u0301ខ្មែរ','ភាសា\u200dខ្មែរ']
 cases += ['hello世界 123カタカナ. '*2000,'a'*100000,'ー'*20000,'_カ\u0301ナ'*4000,'a.'+'\u0301'*100000+'!']
 fixture=ROOT/'build/word-segmenter-fixture.json';fixture.write_text(json.dumps(cases,ensure_ascii=False))
 subprocess.run(['cc','-shared','-fPIC','-I/usr/include/node','tests/icu78_word_rules_oracle.c','-o','build/icu78-word-rules.node'],cwd=ROOT,check=True)
@@ -32,10 +40,10 @@ const fs=require('fs'),o=require('./build/icu78-word-rules.node'),s=new Intl.Seg
 // Native Context eagerly owns CJK; warm ICU to the same explicit capability.
 [...s.segment('日本')];
 for(const text of JSON.parse(fs.readFileSync(process.argv[1]))){
- const bytes=Buffer.from(text),parts=[];let start=0;
- for(const [end,status] of o.segments(text)){parts.push([bytes.subarray(start,end).toString(),status>=100&&status<500,status]);start=end;}
+ const parts=[];let start=0;
+ for(const [end,status] of o.segments(text)){parts.push([text.slice(start,end),status>=100&&status<500,status]);start=end;}
  const intl=[...s.segment(text)].map(x=>[x.segment,!!x.isWordLike]);
- if(JSON.stringify(intl)!==JSON.stringify(parts.map(x=>x.slice(0,2))))throw Error('ICU/Intl disagreement');
+ if(JSON.stringify(intl)!==JSON.stringify(parts.map(x=>x.slice(0,2))))throw Error('ICU/Intl disagreement '+JSON.stringify({text,intl,parts}));
  console.log(JSON.stringify(parts));
 }
 '''

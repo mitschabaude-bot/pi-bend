@@ -2,6 +2,7 @@ import Base
 import ../packages/runtime/src/word-segmenter.bend as W
 import ../packages/runtime/src/word-rules.bend as R
 import ../packages/runtime/src/cjk-dictionary.bend as D
+import ../packages/runtime/src/khmer-word-data.bend as K
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/json.bend as J
@@ -29,20 +30,31 @@ def inputs(context: W.Context,result: Result<&2,&2,J.ParseError,V.Value>) -> IO(
   match result:
     case Done{V.ArrayValue{values}}: cases(context,values)
     case _: IO.die(Unit,1,"expected JSON array")
-def rulesDecoded(dictionary: D.Trie,input: String,result: R.Parsed(R.Rules)) -> IO(Unit):
+def rulesDecoded(khmer: D.Trie,dictionary: D.Trie,input: String,result: R.Parsed(R.Rules)) -> IO(Unit):
   match result:
-    case Done{rules}: inputs(W.create(rules,dictionary),J.parse(input))
+    case Done{rules}: inputs(W.create(rules,dictionary,khmer),J.parse(input))
     case Fail{_}: IO.die(Unit,1,"invalid word rules")
-def rulesRead(dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+def rulesRead(khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
   match result:
-    case Done{bytes}: rulesDecoded(dictionary,input,R.decode(bytes))
+    case Done{bytes}: rulesDecoded(khmer,dictionary,input,R.decode(bytes))
     case Fail{_}: IO.die(Unit,1,"word rules read failed")
+def khmerDecoded(dictionary: D.Trie,input: String,result: D.Parsed(D.Trie)) -> IO(Unit):
+  match result:
+    case Done{khmer}:
+      do IO<Unit>:
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-word-rules.bin")
+        rulesRead(khmer,dictionary,input,bytes)
+    case Fail{_}: IO.die(Unit,1,"invalid Khmer dictionary")
+def khmerRead(dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+  match result:
+    case Done{bytes}: khmerDecoded(dictionary,input,K.decode(bytes))
+    case Fail{_}: IO.die(Unit,1,"Khmer dictionary read failed")
 def decoded(result: D.Parsed(D.Trie),input: String) -> IO(Unit):
   match result:
     case Done{dictionary}:
       do IO<Unit>:
-        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-word-rules.bin")
-        rulesRead(dictionary,input,bytes)
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-khmer.bin")
+        khmerRead(dictionary,input,bytes)
     case Fail{_}: IO.die(Unit,1,"invalid dictionary")
 def loaded(result: Result<&2,&2,FS.Error,List<&2,U32>>,input: String) -> IO(Unit):
   match result:

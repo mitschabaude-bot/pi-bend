@@ -25,7 +25,7 @@ static napi_value extract(napi_env env,napi_callback_info info) {
  }
  napi_set_named_property(env,result,"categories",categories);ucptrie_close_78(trie);destroy_iterator(iter);return result;
 }
-extern void *utext_openUTF8_78(void *,const char *,int64_t,int32_t *);
+extern void *utext_openUChars_78(void *,const uint16_t *,int64_t,int32_t *);
 extern void *utext_close_78(void *);
 extern void set_text(void *,void *,int32_t *) __asm__("_ZN6icu_7822RuleBasedBreakIterator7setTextEP5UTextR10UErrorCode");
 extern int32_t first(void *) __asm__("_ZN6icu_7822RuleBasedBreakIterator5firstEv");
@@ -33,10 +33,10 @@ extern int32_t next(void *) __asm__("_ZN6icu_7822RuleBasedBreakIterator4nextEv")
 extern int32_t status(void *) __asm__("_ZNK6icu_7822RuleBasedBreakIterator13getRuleStatusEv");
 static napi_value segments(napi_env env,napi_callback_info info){
  napi_value arg,result;size_t argc=1,length=0;int32_t error=0;
- napi_get_cb_info(env,info,&argc,&arg,0,0);napi_get_value_string_utf8(env,arg,0,0,&length);
- char *text=malloc(length+1);if(!text){napi_throw_error(env,0,"allocation failed");return 0;}
- napi_get_value_string_utf8(env,arg,text,length+1,&length);
- void *iter=word_iterator(english(),&error),*ut=utext_openUTF8_78(0,text,length,&error);
+ napi_get_cb_info(env,info,&argc,&arg,0,0);napi_get_value_string_utf16(env,arg,0,0,&length);
+ char16_t *text=malloc((length+1)*sizeof(char16_t));if(!text){napi_throw_error(env,0,"allocation failed");return 0;}
+ napi_get_value_string_utf16(env,arg,text,length+1,&length);
+ void *iter=word_iterator(english(),&error),*ut=utext_openUChars_78(0,(const uint16_t *)text,length,&error);
  if(error>0 || !iter || !ut){if(iter)destroy_iterator(iter);if(ut)utext_close_78(ut);free(text);napi_throw_error(env,0,"iterator failed");return 0;}
  set_text(iter,ut,&error);napi_create_array(env,&result);first(iter);uint32_t i=0;
  for(int32_t end;(end=next(iter))!=-1;){napi_value row,position,tag;napi_create_array_with_length(env,2,&row);napi_create_int32(env,end,&position);napi_create_int32(env,status(iter),&tag);napi_set_element(env,row,0,position);napi_set_element(env,row,1,tag);napi_set_element(env,result,i++,row);}

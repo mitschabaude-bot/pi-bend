@@ -2,16 +2,18 @@ import Base
 import ./word-rules.bend as Rules
 import ./cjk-dictionary.bend as Dictionary
 import ./cjk-word-break.bend as Cjk
+import ./khmer-word-break.bend as Khmer
+import ./khmer-word-data.bend as KhmerData
 
-# ICU78 default word rules with explicitly preloaded CJK lexical segmentation.
-# Missing Thai/Myanmar/Lao/Khmer engines are reported, never approximated by UAX.
-type Context is Data: Context{rules: Rules.Rules,cjk: Cjk.Context}
+# ICU78 default word rules with explicitly preloaded CJK and Khmer lexical segmentation.
+# Missing Thai/Myanmar/Lao engines are reported, never approximated by UAX.
+type Context is Data: Context{rules: Rules.Rules,cjk: Cjk.Context,khmer: Dictionary.Trie}
 type Segment is Data: Segment{text: String,isWordLike: Bool,status: U32}
 type Error is Data: MissingEngine{language: String} InvalidState{}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
-def create(rules: Rules.Rules,dictionary: Dictionary.Trie) -> Context: Context{rules,Cjk.create(dictionary)}
+def create(rules: Rules.Rules,dictionary: Dictionary.Trie,khmer: Dictionary.Trie) -> Context: Context{rules,Cjk.create(dictionary),khmer}
 
-type Mode is Data: Outside{} CjkRange{} KoreanRange{}
+type Mode is Data: Outside{} CjkRange{} KoreanRange{} KhmerRange{}
 type DictionaryScan is Data:
   Active{position: Nat,start: Nat,mode: Mode,reversed: String,breaks: List<&2,Nat>}
   Failed{error: Error}
@@ -20,15 +22,20 @@ def internalBreaks(ends: List<&2,Nat>,+start: Nat,reversed: List<&2,Nat>) -> Lis
     case Nil{}: reversed
     case _ <> Nil{}: reversed
     case endpoint <> rest: internalBreaks(rest,start,(start + endpoint) <> reversed)
-def flush(context: Cjk.Context,start: Nat,reversed: String,breaks: List<&2,Nat>) -> List<&2,Nat>:
+def rangeEnds(context: Context,mode: Mode,text: String) -> List<&2,Nat>:
+  match context mode:
+    case Context{_,_,khmer} KhmerRange{}: Khmer.boundaries(khmer,text)
+    case Context{_,cjk,_} _: Cjk.boundaries(cjk,text)
+def flush(context: Context,mode: Mode,start: Nat,reversed: String,breaks: List<&2,Nat>) -> List<&2,Nat>:
   match reversed:
     case SNil{}: breaks
-    case SCon{char,rest}: internalBreaks(Cjk.boundaries(context,String.reverse(SCon{char,rest})),start,breaks)
+    case SCon{char,rest}: internalBreaks(rangeEnds(context,mode,String.reverse(SCon{char,rest})),start,breaks)
 def continues(mode: Mode,char: Char) -> Bool:
   match mode:
     case Outside{}: False{}
     case CjkRange{}: Cjk.handles(char)
     case KoreanRange{}: Cjk.hangul(char)
+    case KhmerRange{}: KhmerData.handles(char)
 def engine(kind: U32,char: Char,+position: Nat,breaks: List<&2,Nat>) -> DictionaryScan:
   match kind:
     case 1: Active{Succ{position},position,CjkRange{},SCon{char,""},breaks}
@@ -36,25 +43,28 @@ def engine(kind: U32,char: Char,+position: Nat,breaks: List<&2,Nat>) -> Dictiona
     case 3: Failed{MissingEngine{"Thai"}}
     case 4: Failed{MissingEngine{"Lao"}}
     case 5: Failed{MissingEngine{"Myanmar"}}
-    case 6: Failed{MissingEngine{"Khmer"}}
+    case 6: Active{Succ{position},position,KhmerRange{},SCon{char,""},breaks}
     case 7: Active{Succ{position},position,CjkRange{},SCon{char,""},breaks}
     case _: Active{Succ{position},Succ{position},Outside{},"",breaks}
 def begin(+properties: U32,+char: Char,+position: Nat,+breaks: List<&2,Nat>) -> DictionaryScan:
   Bool.pick(Unit -> DictionaryScan,U32.is_ge((properties % 256: U32),24),
     _ => engine((properties / 256: U32),char,position,breaks),
     _ => Active{Succ{position},Succ{position},Outside{},"",breaks})(Unit{})
-def feed(context: Context,+char: Char,value: DictionaryScan) -> DictionaryScan:
-  match context value:
-    case _ Failed{error}: Failed{error}
-    case Context{rules,cjk} Active{+position,+start,+mode,+reversed,+breaks}:
+def properties(context: Context,char: Char) -> U32:
+  match context:
+    case Context{rules,_,_}: Rules.properties(rules,char)
+def feed(+context: Context,+char: Char,value: DictionaryScan) -> DictionaryScan:
+  match value:
+    case Failed{error}: Failed{error}
+    case Active{+position,+start,+mode,+reversed,+breaks}:
       Bool.pick(Unit -> DictionaryScan,continues(mode,char),
         _ => Active{Succ{position},start,mode,SCon{char,reversed},breaks},
-        _ => begin(Rules.properties(rules,char),char,position,flush(cjk,start,reversed,breaks)))(Unit{})
-def finish(context: Context,value: DictionaryScan) -> ResultOf(List<&2,Nat>):
-  match context value:
-    case _ Failed{error}: Fail{error}
-    case Context{_,cjk} Active{position,start,_,reversed,breaks}:
-      Done{List.reverse(&2,Nat,position <> flush(cjk,start,reversed,breaks))}
+        _ => begin(properties(context,char),char,position,flush(context,mode,start,reversed,breaks)))(Unit{})
+def finish(+context: Context,value: DictionaryScan) -> ResultOf(List<&2,Nat>):
+  match value:
+    case Failed{error}: Fail{error}
+    case Active{position,start,mode,reversed,breaks}:
+      Done{List.reverse(&2,Nat,position <> flush(context,mode,start,reversed,breaks))}
 def dictionaryBreaks(text: String,+context: Context,value: DictionaryScan) -> ResultOf(List<&2,Nat>):
   match text value:
     case _ Failed{error}: Fail{error}
@@ -98,7 +108,7 @@ def region(context: Context,value: Maybe<&2,Rules.Region>,reversed: List<&2,Segm
         _ => Done{Work{rest,Segment{text,U32.is_ge(status,100) && U32.is_lt(status,500),status} <> reversed}})(Unit{})
 def next(+context: Context,value: Work) -> ResultOf(Work):
   match context value:
-    case Context{rules,_} Work{text,reversed}: region(context,Rules.next(rules,text),reversed)
+    case Context{rules,_,_} Work{text,reversed}: region(context,Rules.next(rules,text),reversed)
 def segmentsLoop(fuel: Nat,+context: Context,result: ResultOf(Work)) -> ResultOf(List<&2,Segment>):
   match fuel result:
     case _ Fail{error}: Fail{error}
