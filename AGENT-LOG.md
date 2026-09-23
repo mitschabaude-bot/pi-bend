@@ -1665,3 +1665,5 @@ AgentSession harness committed as f5b8599 on native-tls. Next: the streaming bus
 AgentSession busy scenario: a channel-gated faux request holds the run open while prompt() is refused with the upstream message and steer/followUp queue; 29 checks pass Bun and native one/four. Committing to native-tls now; next is the compaction/retry scope of AgentSession.
 
 Automatic retry ported: ai/utils/retry.bend + overflow.bend (158-case differential corpus vs upstream), AgentSession post-run retry loop with auto_retry_start/end, willRetry, abortRetry/isRetrying; abortable sleep moved from runtime/socket.bend to runtime/timer.bend (provider-retry and the sleep test repointed). 47 harness checks, proof gate, offline and live print CLI checks pass. Committing to native-tls now; next is compaction.
+
+Retry port committed as de2a917 on native-tls. Next: compaction scope (compaction.ts, utils.ts, AgentSession _checkCompaction/compact) over the same faux harness.
