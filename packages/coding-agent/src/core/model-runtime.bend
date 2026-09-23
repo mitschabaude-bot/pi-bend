@@ -8,6 +8,7 @@ import ../../../ai/src/providers/openai.models.bend as OpenAI
 import ../../../ai/src/providers/openai-codex.models.bend as Codex
 import ../../../ai/src/providers/anthropic.models.bend as Anthropic
 import ../../../ai/src/providers/google.models.bend as Google
+import ../../../ai/src/providers/cerebras.models.bend as Cerebras
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/glob.bend as Glob
@@ -42,14 +43,20 @@ def googleProvider() -> IO(Provider):
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Gemini API key", ["GEMINI_API_KEY"])
     return Provider{"google", "Google", "https://generativelanguage.googleapis.com/v1beta", Auth.ProviderAuth{Some{apiKey}, None{}}, Google.GOOGLE_MODELS()}
 
+def cerebrasProvider() -> IO(Provider):
+  do IO<Provider>:
+    apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Cerebras API key", ["CEREBRAS_API_KEY"])
+    return Provider{"cerebras", "Cerebras", "https://api.cerebras.ai/v1", Auth.ProviderAuth{Some{apiKey}, None{}}, Cerebras.CEREBRAS_MODELS()}
+
 # The credential store is borrowed; the OAuth handler is owned from here on.
 def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     openai : Provider <- openaiProvider()
     anthropic : Provider <- anthropicProvider(anthropicOAuth)
     google : Provider <- googleProvider()
+    cerebras : Provider <- cerebrasProvider()
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
-    return ModelRuntime{[openai, openaiCodexProvider(codex), anthropic, google], credentials, context}
+    return ModelRuntime{[openai, openaiCodexProvider(codex), anthropic, google, cerebras], credentials, context}
 
 def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(ModelRuntime):
   createWithAnthropic(credentials, codex, None{})
@@ -173,7 +180,7 @@ type DefaultModel is Data:
   DefaultModel{provider: String, id: String}
 
 def defaultModelPerProvider() -> List<&2, DefaultModel>:
-  [DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"openai-codex", "gpt-5.5"}, DefaultModel{"anthropic", "claude-sonnet-5"}, DefaultModel{"google", "gemini-3.1-pro-preview"}]
+  [DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"openai-codex", "gpt-5.5"}, DefaultModel{"anthropic", "claude-sonnet-5"}, DefaultModel{"google", "gemini-3.1-pro-preview"}, DefaultModel{"cerebras", "gpt-oss-120b"}]
 
 # A split text; tuples are affine types, so pairs of strings are data.
 type Split is Data:

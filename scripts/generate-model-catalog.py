@@ -23,6 +23,19 @@ APIS = {
     'google-generative-ai': 'T.GoogleGenerativeAiApi{}',
 }
 RESPONSES_COMPAT = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
+COMPLETIONS_COMPAT = [
+    'supportsStore', 'supportsDeveloperRole', 'supportsReasoningEffort',
+    'supportsUsageInStreaming', 'supportsFinishReason', 'maxTokensField',
+    'requiresToolResultName', 'requiresAssistantAfterToolResult',
+    'requiresThinkingAsText', 'requiresReasoningContentOnAssistantMessages',
+    'thinkingFormat', 'chatTemplateKwargs', 'chatTemplateArgs',
+    'openRouterRouting', 'vercelGatewayRouting', 'zaiToolStream',
+    'thinkingTokenBudgetField', 'supportsThinkingTokenBudget',
+    'supportsOpenAIGrammarTools', 'supportsMidConvoSystemMessages',
+    'supportsMidConvoToolAdditions', 'supportsStrictMode', 'cacheControlFormat',
+    'sendSessionAffinityHeaders', 'sessionAffinityFormat',
+    'supportsLongCacheRetention', 'vllmPriority',
+]
 AFFINITY = {'openai-session': 'T.OpenAISession{}', 'openai-no-session': 'T.OpenAINoSession{}', 'openrouter-session': 'T.OpenRouterSession{}'}
 LEVELS = {'minimal': 'T.Minimal{}', 'low': 'T.Low{}', 'medium': 'T.Medium{}', 'high': 'T.High{}', 'xhigh': 'T.XHigh{}', 'max': 'T.Max{}'}
 
@@ -69,6 +82,12 @@ def ordered(items):
     return '[' + ', '.join(items) + ']' if items else 'Nil{}'
 
 def compat(api, value):
+    if api == 'openai-completions':
+        supported = {'supportsStore', 'supportsDeveloperRole'}
+        unknown = set(value) - supported
+        if unknown:
+            raise ValueError(f'unsupported completions compat fields: {sorted(unknown)}')
+        return 'T.OpenAICompletionsCompat{' + ', '.join(maybe(value.get(key), boolean) if key in supported else 'None{}' for key in COMPLETIONS_COMPAT) + '}'
     if api not in ('openai-responses', 'openai-codex-responses', 'azure-openai-responses'):
         raise ValueError(f'unsupported compat for {api}')
     fields = []
