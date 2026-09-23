@@ -24,8 +24,14 @@ def bar(width: Nat) -> String:
     case Succ{rest}: "─" ++ bar(rest)
 def clipped(text: String,width: Nat) -> String:
   Utils.truncateToWidth(text,width,"",False{})
-def frame(+theme: Theme.Theme,+width: Nat,body: List<&2,String>) -> List<&2,String>:
+def clipLines(lines: List<&2,String>,+width: Nat) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case line <> rest: clipped(line,width) <> clipLines(rest,width)
+def frameLines(+theme: Theme.Theme,+width: Nat,body: List<&2,String>) -> List<&2,String>:
   paint(theme,"dim",bar(width)) <> paint(theme,"accent"," Login to OpenAI Codex") <> "" <> List.append(&2,String,body,paint(theme,"dim",bar(width)) <> Nil{})
+def frame(theme: Theme.Theme,+width: Nat,body: List<&2,String>) -> List<&2,String>:
+  clipLines(frameLines(theme,width,body),width)
 def waiting(+theme: Theme.Theme,width: Nat) -> List<&2,String>:
   frame(theme,width,paint(theme,"dim"," Requesting device code...") <> "" <> " (Esc to cancel)" <> Nil{})
 def device(+theme: Theme.Theme,+width: Nat,+url: String,code: String) -> List<&2,String>:
