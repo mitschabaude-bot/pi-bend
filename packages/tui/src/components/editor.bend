@@ -728,6 +728,7 @@ type EditorOptions is Data: EditorOptions{paddingX: Nat,autocompleteMaxVisible: 
 type EditorAction is Data:
   Interrupt{text: String}
   Clear{}
+  Exit{}
   FollowUp{text: String}
   Dequeue{text: String}
 type EditorCallbacks is Data:
@@ -1397,16 +1398,21 @@ def regularSelected(~Context: Data,~segment: Context -> String -> Word.ResultOf(
     case Copy{}: IO.pure(ResultOf(Editor),Done{value})
     case UndoCommand{}: executeCommand(~Context,~segment,context,value,manager,keyboard,data,terminalRows,UndoCommand{})
     case selected: menuInput(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected)
-type AppInput is Data: AppInterrupt{} AppClear{} AppFollowUp{} AppDequeue{} AppNone{}
+type AppInput is Data: AppInterrupt{} AppClear{} AppExit{} AppFollowUp{} AppDequeue{} AppNone{}
 def appInput(+manager: KB.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> AppInput:
   Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.interrupt"),AppInterrupt{},
     Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.clear"),AppClear{},
-      Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.followUp"),AppFollowUp{},
-        Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.dequeue"),AppDequeue{},AppNone{}))))
+      Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.exit"),AppExit{},
+        Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.followUp"),AppFollowUp{},
+          Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.dequeue"),AppDequeue{},AppNone{})))))
 def runAppInput(~Context: Data,~segment: Context -> String -> Word.ResultOf(List<&2,Word.Segment>),context: Context,+value: Editor,manager: KB.KeybindingsManager,keyboard: Keys.Context,data: String,terminalRows: Nat,selected: Command,app: AppInput) -> IO(ResultOf(Editor)):
   match app:
     case AppInterrupt{}: editorAction(value,Interrupt{getText(value)},False{})
     case AppClear{}: editorAction(value,Clear{},True{})
+    case AppExit{}:
+      Bool.pick(Unit -> IO(ResultOf(Editor)),String.is_empty(getText(value)),
+        _ => editorAction(value,Exit{},False{}),
+        _ => regularSelected(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected))(Unit{})
     case AppFollowUp{}: editorAction(value,FollowUp{Text.trim(getExpandedText(value))},True{})
     case AppDequeue{}: editorAction(value,Dequeue{getText(value)},False{})
     case AppNone{}: regularSelected(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected)

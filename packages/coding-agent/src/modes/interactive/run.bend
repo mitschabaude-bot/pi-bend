@@ -259,11 +259,18 @@ def queuedFollowUp(input: KeyInput,+text: String) -> IO(Unit):
       Bool.pick(Unit -> IO(Unit),String.is_empty(text),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submit(queue,Controller.Submission{text,Nil{},Some{Session.FollowUp{}}})
         Interactive.submittedResult(failure,result))(Unit{})
+def exited(input: KeyInput) -> IO(Unit):
+  match input:
+    case KeyInput{_,stop,_,_}:
+      do IO<Unit>:
+        settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
+        return Unit{}
 def keyAction(input: KeyInput,action: Editor.EditorAction) -> IO(Unit):
   match action:
     case Editor.Interrupt{text}: keyControl(input,Controller.Interrupt{text})
     case Editor.Dequeue{text}: keyControl(input,Controller.Dequeue{text})
     case Editor.Clear{}: cleared(input)
+    case Editor.Exit{}: exited(input)
     case Editor.FollowUp{text}: queuedFollowUp(input,text)
 def changedEditor(target: Maybe<&2,Live.Handle>,value: String,count: Nat) -> IO(Unit):
   match target:
