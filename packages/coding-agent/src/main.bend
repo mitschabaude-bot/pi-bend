@@ -2,6 +2,7 @@ import Base
 import ./cli/args.bend as Args
 import ./cli/file-processor.bend as Files
 import ./cli/list-models.bend as ModelList
+import ./cli/session-picker.bend as Picker
 import ./config.bend as Config
 import ./core/agent-runtime.bend as Runtime
 import ./core/model-runtime.bend as Models
@@ -384,6 +385,15 @@ def openOrCreateById(existing: Maybe<&2, String>, +cwd: String, +sessionDir: May
         created : Sessions.Outcome(Session()) <- AgentSession.createSession(cwd, sessionDir, agentDir, Sessions.noOptions())
         return selected(created)
 
+def picked(result: Picker.Outcome(),cwd: String,sessionDir: Maybe<&2,String>) -> IO(Selected()):
+  match result:
+    case Fail{message}: IO.pure(Selected(),Fail{Failed{message}})
+    case Done{None{}}: IO.pure(Selected(),Fail{Aborted{"No session selected"}})
+    case Done{Some{path}}:
+      do IO<Selected()>:
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path,sessionDir,cwd)
+        return selected(opened)
+
 # upstream createSessionManager: --no-session (and help/model listing) stay
 # in memory; --fork and --session resolve their argument; --continue takes
 # the latest session; --session-id reopens or names a new session.
@@ -397,7 +407,10 @@ def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +s
       do IO<Selected()>:
         resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir)
         openResolved(resolved, cwd, sessionDir, agentDir)
-    case _ True{} None{} None{}: IO.pure(Selected(), Fail{Failed{"Error: --resume needs the interactive session selector, which this port does not have yet."}})
+    case _ True{} None{} None{}:
+      do IO<Selected()>:
+        choice : Picker.Outcome() <- Picker.selectSession(cwd,sessionDir,agentDir,sessionsDir)
+        picked(choice,cwd,sessionDir)
     case True{} False{} None{} None{}:
       do IO<Selected()>:
         continued : Sessions.Outcome(Session()) <- AgentSession.continueSession(cwd, sessionDir, agentDir)
