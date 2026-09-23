@@ -119,16 +119,36 @@ def promptGuidelines(name: ToolName) -> List<&2, String>:
 # Bridges
 # -------
 
+# A tool's result lifted into the registry's details and error sums.
+def lifted(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> ToolError, value: Result<&2, &2, E, Agent.AgentToolResult<D>>) -> Output():
+  match value:
+    case Fail{error}: Fail{failed(error)}
+    case Done{Agent.AgentToolResult{content, own, usage, terminate}}: Done{Agent.AgentToolResult{content, details(own), usage, terminate}}
+
+# Tools without streaming updates run with the loop's id, arguments and signal.
+def invokeLifted(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> ToolError, callback: C.Callback<Agent.ToolExecutionInput<D>, Result<&2, &2, E, Agent.AgentToolResult<D>>>, input: Input()) -> IO(Output()):
+  match input:
+    case Agent.ToolExecutionInput{id, params, signal, _}:
+      do IO<Output()>:
+        result : Result<&2, &2, E, Agent.AgentToolResult<D>> <- C.call(Agent.ToolExecutionInput<D>, Result<&2, &2, E, Agent.AgentToolResult<D>>, callback, Agent.ToolExecutionInput{id, params, signal, None{}})
+        return lifted(~D, ~E, ~details, ~failed, result)
+
+def readDetails(value: Maybe<&2, Read.ReadToolDetails>) -> ToolDetails: ReadDetails{value}
+def readFailed(error: Read.Error) -> ToolError: ReadFailed{error}
+def bashDetails(value: Maybe<&2, Bash.BashToolDetails>) -> ToolDetails: BashDetails{value}
+def bashFailed(error: Bash.Error) -> ToolError: BashFailed{error}
+def editDetails(value: Edit.EditToolDetails) -> ToolDetails: EditDetails{value}
+def editFailed(error: Edit.Error) -> ToolError: EditFailed{error}
+def writeDetails(value: Unit) -> ToolDetails: WriteDetails{}
+def writeFailed(error: Write.Error) -> ToolError: WriteFailed{error}
+def findDetails(value: Maybe<&2, Find.FindToolDetails>) -> ToolDetails: FindDetails{value}
+def findFailed(error: Find.Error) -> ToolError: FindFailed{error}
+
 # Streaming updates are forwarded into the loop wrapped in the details sum.
 def bashUpdate(callback: Update(), value: Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>) -> IO(Unit):
   match callback value:
     case None{} _: IO.pure(Unit, Unit{})
     case Some{callback} Agent.AgentToolResult{content, details, usage, terminate}: C.call(Agent.AgentToolResult<ToolDetails>, Unit, callback, Agent.AgentToolResult{content, BashDetails{details}, usage, terminate})
-
-def bashOutput(value: Bash.ToolResult()) -> Output():
-  match value:
-    case Fail{error}: Fail{BashFailed{error}}
-    case Done{Agent.AgentToolResult{content, details, usage, terminate}}: Done{Agent.AgentToolResult{content, BashDetails{details}, usage, terminate}}
 
 def invokeBash(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Bash.BashToolDetails>>, Bash.ToolResult()>, input: Input()) -> IO(Output()):
   match input:
@@ -137,43 +157,7 @@ def invokeBash(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Bash.Bash
         +bridge : Agent.AgentToolUpdateCallback(Maybe<&2, Bash.BashToolDetails>) <- C.create(~Update(), ~Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>, ~Unit, ~bashUpdate, update)
         result : Bash.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2, Bash.BashToolDetails>>, Bash.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, Some{bridge}})
         C.dispose(Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>, Unit, bridge)
-        return bashOutput(result)
-
-def readOutput(value: Read.ToolResult()) -> Output():
-  match value:
-    case Fail{error}: Fail{ReadFailed{error}}
-    case Done{Agent.AgentToolResult{content, details, usage, terminate}}: Done{Agent.AgentToolResult{content, ReadDetails{details}, usage, terminate}}
-
-def invokeRead(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Read.ReadToolDetails>>, Read.ToolResult()>, input: Input()) -> IO(Output()):
-  match input:
-    case Agent.ToolExecutionInput{id, params, signal, _}:
-      do IO<Output()>:
-        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2, Read.ReadToolDetails>>, Read.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, None{}})
-        return readOutput(result)
-
-def findOutput(value: Find.ToolResult()) -> Output():
-  match value:
-    case Fail{error}: Fail{FindFailed{error}}
-    case Done{Agent.AgentToolResult{content, details, usage, terminate}}: Done{Agent.AgentToolResult{content, FindDetails{details}, usage, terminate}}
-
-def invokeFind(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Find.FindToolDetails>>, Find.ToolResult()>, input: Input()) -> IO(Output()):
-  match input:
-    case Agent.ToolExecutionInput{id, params, signal, _}:
-      do IO<Output()>:
-        result : Find.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2, Find.FindToolDetails>>, Find.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, None{}})
-        return findOutput(result)
-
-def editOutput(value: Edit.ToolResult()) -> Output():
-  match value:
-    case Fail{error}: Fail{EditFailed{error}}
-    case Done{Agent.AgentToolResult{content, details, usage, terminate}}: Done{Agent.AgentToolResult{content, EditDetails{details}, usage, terminate}}
-
-def invokeEdit(callback: C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, input: Input()) -> IO(Output()):
-  match input:
-    case Agent.ToolExecutionInput{id, params, signal, _}:
-      do IO<Output()>:
-        result : Edit.ToolResult() <- C.call(Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, None{}})
-        return editOutput(result)
+        return lifted(~Maybe<&2, Bash.BashToolDetails>, ~Bash.Error, ~bashDetails, ~bashFailed, result)
 
 def prepared(value: Edit.ResultOf(V.Value)) -> Result<&2, &2, ToolError, V.Value>:
   match value:
@@ -184,18 +168,6 @@ def prepareEdit(callback: C.Callback<V.Value, Edit.ResultOf(V.Value)>, input: V.
   do IO<Result<&2, &2, ToolError, V.Value>>:
     result : Edit.ResultOf(V.Value) <- C.call(V.Value, Edit.ResultOf(V.Value), callback, input)
     return prepared(result)
-
-def writeOutput(value: Write.ToolResult()) -> Output():
-  match value:
-    case Fail{error}: Fail{WriteFailed{error}}
-    case Done{Agent.AgentToolResult{content, _, usage, terminate}}: Done{Agent.AgentToolResult{content, WriteDetails{}, usage, terminate}}
-
-def invokeWrite(callback: C.Callback<Agent.ToolExecutionInput<Unit>, Write.ToolResult()>, input: Input()) -> IO(Output()):
-  match input:
-    case Agent.ToolExecutionInput{id, params, signal, _}:
-      do IO<Output()>:
-        result : Write.ToolResult() <- C.call(Agent.ToolExecutionInput<Unit>, Write.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, None{}})
-        return writeOutput(result)
 
 # Owners
 # ------
@@ -248,12 +220,18 @@ def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{
 type Environment is Data:
   Environment{paths: Paths.Environment, cwd: String, binDir: String, queue: Queue.Queue}
 
+# The bridged tool keeps the tool's metadata and runs through the registry's
+# execution callback; tools without argument preparation share it.
+def bridged(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> ToolError, owned: Owned, tool: Agent.AgentTool<D, E>) -> IO(ToolOwner):
+  match tool:
+    case Agent.AgentTool{name, description, parameters, sampling, label, _, callback, replay, mode}:
+      do IO<ToolOwner>:
+        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<D>, Result<&2, &2, E, Agent.AgentToolResult<D>>>, ~Input(), ~Output(), ~invokeLifted(~D, ~E, ~details, ~failed), callback)
+        return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, owned}
+
 def bridgedRead(pair: Read.ToolOwner & Agent.AgentTool<Maybe<&2, Read.ReadToolDetails>, Read.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, Agent.AgentTool{name, description, parameters, sampling, label, _, callback, replay, mode}):
-      do IO<ToolOwner>:
-        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Maybe<&2, Read.ReadToolDetails>>, Read.ToolResult()>, ~Input(), ~Output(), ~invokeRead, callback)
-        return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, OwnedRead{owner}}
+    case (owner, tool): bridged(~Maybe<&2, Read.ReadToolDetails>, ~Read.Error, ~readDetails, ~readFailed, OwnedRead{owner}, tool)
 
 def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOptions>) -> IO(ToolOwner):
   match environment:
@@ -264,10 +242,7 @@ def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOpt
 
 def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Maybe<&2, Find.FindToolDetails>, Find.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, Agent.AgentTool{name, description, parameters, sampling, label, _, callback, replay, mode}):
-      do IO<ToolOwner>:
-        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Maybe<&2, Find.FindToolDetails>>, Find.ToolResult()>, ~Input(), ~Output(), ~invokeFind, callback)
-        return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, OwnedFind{owner}}
+    case (owner, tool): bridged(~Maybe<&2, Find.FindToolDetails>, ~Find.Error, ~findDetails, ~findFailed, OwnedFind{owner}, tool)
 
 def createFindTool(environment: Environment, options: Maybe<&2, Find.FindToolOptions>) -> IO(ToolOwner):
   match environment:
@@ -299,7 +274,7 @@ def bridgedEdit(pair: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edi
   match pair:
     case (owner, Agent.AgentTool{name, description, parameters, sampling, label, prepare, callback, replay, mode}):
       do IO<ToolOwner>:
-        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, ~Input(), ~Output(), ~invokeEdit, callback)
+        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, ~Input(), ~Output(), ~invokeLifted(~Edit.EditToolDetails, ~Edit.Error, ~editDetails, ~editFailed), callback)
         +prepared : Prepare() <- bridgedPrepare(prepare)
         return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, Some{prepared}, execute, replay, mode}, execute, OwnedEdit{owner, prepared}}
 
@@ -312,10 +287,7 @@ def createEditTool(environment: Environment, options: Maybe<&2, Edit.EditToolOpt
 
 def bridgedWrite(pair: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, Agent.AgentTool{name, description, parameters, sampling, label, _, callback, replay, mode}):
-      do IO<ToolOwner>:
-        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Unit>, Write.ToolResult()>, ~Input(), ~Output(), ~invokeWrite, callback)
-        return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, OwnedWrite{owner}}
+    case (owner, tool): bridged(~Unit, ~Write.Error, ~writeDetails, ~writeFailed, OwnedWrite{owner}, tool)
 
 def createWriteTool(environment: Environment, options: Maybe<&2, Write.WriteToolOptions>) -> IO(ToolOwner):
   match environment:
