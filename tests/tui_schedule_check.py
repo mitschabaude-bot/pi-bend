@@ -19,11 +19,10 @@ for backend in ['bun','native-1','native-4']:
   actual=run(command,actions).strip().splitlines()
   assert actual==expected,(backend,actions,actual,expected)
  print(f'{backend}: {len(cases)} exact source scheduling traces passed')
-# Upstream start() explicitly calls requestRender(); the current Bend
-# StartRendering transition only clears stopped, leaving the queue empty.
+# Starting queues a render on a fresh terminal; compare its exact effect.
 expected=json.loads(run(oracle,'b'))
 for backend in ['bun','native-1','native-4']:
  command=['bun',str(root/'build/tui-schedule.js')] if backend=='bun' else [str(root/'build/tui-schedule'),'--threads',backend[-1]]
  actual=run(command,'b').strip().splitlines()
- assert expected!=actual and expected[0].endswith('|s,') and actual[0].endswith('|'),(backend,expected,actual)
-print('known gap: StartRendering misses start() requestRender queue')
+ assert actual==expected,(backend,expected,actual)
+print('fresh start queues the source render request')
