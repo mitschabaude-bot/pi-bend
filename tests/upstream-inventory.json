@@ -3897,16 +3897,21 @@
       "ports": [
         "tests/stack.bend",
         "tests/stack_reference.ts",
-        "tests/stack_check.py"
+        "tests/stack_check.py",
+        "tests/scroll-layout.bend",
+        "tests/scroll_layout_check.py",
+        "tests/layout-tree.bend",
+        "tests/layout_tree_check.py"
       ],
       "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb",
-      "notes": "Direct-child viewport growth, shrink, visibility gaps, horizontal widths, zero-width painting and hit geometry match pinned upstream on Bun and native one/four. Weighted size allocation, max cap redistribution and standalone V/H rendering are differential checks. Nested layout, scrolling, Kitty images, scrollbar, render cache and later layout tests remain pending; see tests/stack.md."
+      "notes": "Direct stack sizing/rendering, nested minimum sizing, HStack allocation, ScrollView inside VStack, ScrollView state/follow and direct viewport scrollbar glyph geometry match source-pinned Bun/native one/four; see tests/stack.md and tests/scroll-layout.md. Kitty cropping, styled/background-preserving scrollbar overlays, nested ScrollView content, huge sparse content, arbitrary tree caching/invalidation and full source suite remain pending."
     },
     {
       "source": "packages/tui/test/markdown.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d"
+      "status": "partial",
+      "ports": ["tests/markdown.bend", "tests/markdown-reference.ts"],
+      "sha256": "1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d",
+      "notes": "Core native Markdown rendering and cache invalidation match 40 source-pinned outputs on Bun/native one/four. Advanced Marked grammar, table wrapping/alignment, ANSI restoration, OSC8 links, streaming fences and LaTeX remain pending."
     },
     {
       "source": "packages/tui/test/mouse-components.test.ts",

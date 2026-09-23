@@ -3,6 +3,7 @@ import ./component.bend as C
 import ./tui.bend as T
 import ./utils.bend as U
 import ./components/stack.bend as S
+import ./components/scroll-view.bend as Scroll
 
 type LayoutRect is Data: LayoutRect{x: Nat,y: Nat,width: Nat,height: Nat}
 type LayoutBox is Data:
@@ -139,3 +140,70 @@ def boxesAt(box: LayoutBox,+x: Nat,+y: Nat) -> List<&2,LayoutBox>:
       Bool.pick(Unit -> List<&2,LayoutBox>,within(clip,x,y),_ => List.append(&2,LayoutBox,childHits(children,x,y),LayoutBox{component,bounds,clip,children,lines,offset,layer} <> Nil{}),_ => Nil{})(Unit{})
 def getLayoutBoxesAt(frame: LayoutFrame,x: Nat,y: Nat) -> List<&2,LayoutBox>:
   match frame: case LayoutFrame{root,_,_,_}: boxesAt(root,x,y)
+
+# ScrollView owns state across frames; the returned value is the next immutable
+# state to retain.  lineOffset records the scroll translation of its child.
+type ScrollLayoutFrame is Data: ScrollLayoutFrame{view: Scroll.ScrollView,frame: LayoutFrame}
+type ScrollbarGeometry is Data:
+  ScrollbarGeometry{column: Nat,trackTop: Nat,trackHeight: Nat,thumbTop: Nat,thumbHeight: Nat,maxScrollTop: Nat}
+def viewTop(view: Scroll.ScrollView) -> Nat:
+  match view: case Scroll.ScrollView{_,_,_,_,_,_,top,_,_,_,_,_,_,_}: top
+def viewChild(view: Scroll.ScrollView) -> C.Component:
+  match view: case Scroll.ScrollView{child,_,_,_,_,_,_,_,_,_,_,_,_,_}: child
+def contentHeight(view: Scroll.ScrollView) -> Nat:
+  match view: case Scroll.ScrollView{_,_,_,_,_,_,_,content,_,_,_,_,_,_}: content
+def viewHeight(view: Scroll.ScrollView) -> Nat:
+  match view: case Scroll.ScrollView{_,_,_,_,_,_,_,_,height,_,_,_,_,_}: height
+def roundFraction(numerator: Nat,+denominator: Nat) -> Nat:
+  (numerator + denominator / 2n) / Nat.max(1n,denominator)
+def scrollbarGeometry(+view: Scroll.ScrollView,+width: Nat) -> Maybe<&2,ScrollbarGeometry>:
+  +height = viewHeight(view)
+  +content = contentHeight(view)
+  +top = viewTop(view)
+  Bool.pick(Unit -> Maybe<&2,ScrollbarGeometry>,Scroll.isScrollbarVisible(view) && Nat.is_gt(width,0n) && Nat.is_gt(height,0n),_ =>
+    +thumb = Nat.max(Nat.min(2n,height),Nat.min(height,roundFraction(height * height,Nat.max(1n,content))))
+    +maxTop = content - height
+    +maxThumb = height - thumb
+    Some{ScrollbarGeometry{width - 1n,0n,height,Bool.pick(Nat,Nat.is_eq(maxTop,0n),0n,roundFraction(top * maxThumb,maxTop)),thumb,maxTop}},_ => None{})(Unit{})
+def scrollbarActive(view: Scroll.ScrollView) -> Bool:
+  match view: case Scroll.ScrollView{_,_,_,_,_,_,_,_,_,_,_,_,active,_}: active
+def scrollbarGlyph(view: Scroll.ScrollView,+row: Nat,geometry: ScrollbarGeometry) -> String:
+  match geometry:
+    case ScrollbarGeometry{_,_,_,+thumbTop,thumbHeight,_}:
+      Bool.pick(String,Nat.is_le(thumbTop,row) && Nat.is_lt(row,thumbTop + thumbHeight),
+        Bool.pick(String,scrollbarActive(view),"█","┃"),"│")
+def styledGlyph(+glyph: String) -> String:
+  Bool.pick(String,String.eq(glyph,"│"),"\u{1b}[90m" ++ glyph ++ "\u{1b}[39m","\u{1b}[37m" ++ glyph ++ "\u{1b}[39m")
+def overScrollbar(row: String,index: Nat,view: Scroll.ScrollView,width: Nat,geometry: Maybe<&2,ScrollbarGeometry>) -> String:
+  match geometry:
+    case None{}: row
+    case Some{ScrollbarGeometry{+column,top,height,thumbTop,thumbHeight,maxTop}}:
+      +glyph = scrollbarGlyph(view,index,ScrollbarGeometry{column,top,height,thumbTop,thumbHeight,maxTop})
+      T.compositeTuiLine(row,styledGlyph(glyph),column,1n,width)
+def scrollRows(+sourceLines: List<&2,String>,+offset: Nat,count: Nat,+index: Nat,+width: Nat,+contentWidth: Nat,+view: Scroll.ScrollView,+geometry: Maybe<&2,ScrollbarGeometry>,reversed: List<&2,String>) -> List<&2,String>:
+  match count:
+    case Zero{}: List.reverse(&2,String,reversed)
+    case Succ{rest}:
+      +base = composite("",source(sourceLines,offset + index),0n,contentWidth,width)
+      +line = overScrollbar(base,index,view,width,geometry)
+      scrollRows(sourceLines,offset,rest,index + 1n,width,contentWidth,view,geometry,line <> reversed)
+def scrollChild(view: Scroll.ScrollView,lines: List<&2,String>,rootRect: LayoutRect,+childRect: LayoutRect,top: Nat) -> LayoutBox:
+  LayoutBox{Some{C.id(viewChild(view))},childRect,intersect(rootRect,childRect),Nil{},Some{lines},top,0n}
+def scrollRoot(+rootRect: LayoutRect,child: LayoutBox) -> LayoutBox:
+  LayoutBox{None{},rootRect,rootRect,child <> Nil{},None{},0n,0n}
+def scrollFrame(view: Scroll.ScrollView,+lines: List<&2,String>,+width: Nat,+height: Nat,+contentWidth: Nat) -> ScrollLayoutFrame:
+  +updated = Scroll.updateLayout(view,List.length(&2,String,lines),height)
+  +top = viewTop(updated)
+  +rootRect = rect(0n,0n,width,height)
+  +childRect = rect(0n,0n,contentWidth,List.length(&2,String,lines))
+  +child = scrollChild(updated,lines,rootRect,childRect,top)
+  +root = scrollRoot(rootRect,child)
+  +screen = scrollRows(lines,top,height,0n,width,contentWidth,updated,scrollbarGeometry(updated,width),Nil{})
+  ScrollLayoutFrame{updated,LayoutFrame{root,width,height,screen}}
+def renderScrollViewFrame(+view: Scroll.ScrollView,width: Nat,height: Nat) -> IO(ScrollLayoutFrame):
+  +safeWidth = Nat.max(1n,width)
+  +safeHeight = Nat.max(1n,height)
+  +contentWidth = Scroll.getContentWidth(view,safeWidth)
+  do IO<ScrollLayoutFrame>:
+    lines : List<&2,String> <- C.render(viewChild(view),contentWidth)
+    return scrollFrame(view,lines,safeWidth,safeHeight,contentWidth)
