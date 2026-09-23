@@ -9,6 +9,8 @@ import ./core/agent-session.bend as AgentSession
 import ./core/settings-manager.bend as Settings
 import ./core/tools/index.bend as Tools
 import ./modes/print-mode.bend as Print
+import ./modes/interactive/session-controller.bend as Controller
+import ./modes/interactive/run.bend as InteractiveRun
 import ./utils/paths.bend as Paths
 import ../../agent/src/types.bend as T
 import ../../ai/src/types.bend as Ai
@@ -21,9 +23,8 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json.bend as Decode
 
 # The pi entry point: argument parsing, mode selection, session selection,
-# initial message assembly, runtime creation and exit behavior. Interactive
-# and RPC modes, extensions and package commands are not ported yet; new
-# messages are not yet written to the selected session (AgentSession).
+# initial message assembly, runtime creation and exit behavior. RPC mode,
+# extensions and package commands are not ported yet.
 
 type AppMode is Data:
   Interactive{}
@@ -497,6 +498,17 @@ def recordSelection(+session: Session(), hasExisting: Bool, hasThinking: Bool, s
 # Runs
 # ----
 
+def queuedMessages(messages: List<&2,String>) -> List<&2,Controller.Submission>:
+  match messages:
+    case Nil{}: Nil{}
+    case text <> rest: Controller.Submission{text,Nil{},None{}} <> queuedMessages(rest)
+
+def initialSubmissions(initial: InitialMessage) -> List<&2,Controller.Submission>:
+  match initial:
+    case InitialMessage{None{},Nil{},remaining}: queuedMessages(remaining)
+    case InitialMessage{None{},images,remaining}: Controller.Submission{"",images,None{}} <> queuedMessages(remaining)
+    case InitialMessage{Some{text},images,remaining}: Controller.Submission{text,images,None{}} <> queuedMessages(remaining)
+
 # The AgentSession owns the run; the runtime owns the agent and its services.
 def printWith(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
   match pair:
@@ -540,6 +552,60 @@ def printSelected(mode: Args.Mode, initial: InitialMessage, session: Session(), 
   match created:
     case Fail{error}: fail(error)
     case Done{runtime}: printWithSelection(mode, initial, session, hasExisting, hasThinking, settings, cwd, Runtime.selectionOf(runtime))
+
+def optionalHome(result: Result<&2,&2,FS.Error,String>) -> Maybe<&2,String>:
+  match result:
+    case Fail{_}: None{}
+    case Done{path}: Some{path}
+
+def interactiveFinished(result: Result<&2,&2,InteractiveRun.Error,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{error}: fail(InteractiveRun.errorMessage(error))
+
+def interactiveWith(initial: InitialMessage, stored: Session(), settings: Settings.SettingsManager, +cwd: String, agentDir: String, packageDir: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+  match pair:
+    case Tuple{runtime,loadout}:
+      do IO<Unit>:
+        +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
+        home : Result<&2,&2,FS.Error,String> <- FS.homedir()
+        result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir)
+        AgentSession.dispose(live)
+        Runtime.dispose(runtime)
+        interactiveFinished(result)
+
+def interactiveLoaded(initial: InitialMessage, stored: Session(), settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+  match pair:
+    case Tuple{runtime,agent}: interactiveWith(initial,stored,settings,cwd,agentDir,packageDir,agent,Runtime.loadoutOf(runtime))
+
+def interactiveRecorded(initial: InitialMessage, recorded: Selected(), settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, runtime: Runtime.AgentRuntime) -> IO(Unit):
+  match recorded:
+    case Fail{Failed{message}}:
+      do IO<Unit>:
+        Runtime.dispose(runtime)
+        fail(message)
+    case Fail{Aborted{note}}:
+      do IO<Unit>:
+        Runtime.dispose(runtime)
+        IO.print(note)
+    case Done{+session}: interactiveLoaded(initial,session,settings,cwd,agentDir,packageDir,Runtime.agentOf(runtime))
+
+def interactiveSelection(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
+  match pair:
+    case Tuple{runtime,selection}:
+      do IO<Unit>:
+        recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
+        interactiveRecorded(initial,recorded,settings,cwd,agentDir,packageDir,runtime)
+
+def interactiveSelected(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+  match created:
+    case Fail{error}: fail(error)
+    case Done{runtime}: interactiveSelection(initial,session,hasExisting,hasThinking,settings,cwd,agentDir,packageDir,Runtime.selectionOf(runtime))
+
+def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+  match mode:
+    case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,cwd,agentDir,packageDir,created)
+    case _: printSelected(outputMode(mode),initial,session,hasExisting,hasThinking,settings,cwd,created)
 
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
@@ -617,7 +683,7 @@ def loadSettings(cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
     reported(drained(loaded))
 
-def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
+def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
   match seed:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: IO.print(note)
@@ -626,7 +692,7 @@ def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +sessio
       do IO<Unit>:
         +settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, sessionCwd, agentDir, authPath, bundlePath, packageDir, value, settings))
-        printSelected(outputMode(mode), initial, session, seedMessages(value), seedThinking(value), settings, sessionCwd, created)
+        runCreated(mode, initial, session, seedMessages(value), seedThinking(value), settings, sessionCwd, agentDir, packageDir, created)
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:
@@ -659,12 +725,32 @@ def flagSessionDir(flags: SessionFlags) -> Maybe<&2, String>:
   match flags:
     case SessionFlags{_, _, _, _, _, _, _, _, _, sessionDir}: sessionDir
 
+def discoveredPackageDir(cwd: String, executable: Result<&2,&2,FS.Error,String>) -> IO(String):
+  match executable:
+    case Fail{_}: IO.pure(String,cwd)
+    case Done{path}:
+      +candidate = Path.join(path,"../..")
+      do IO<String>:
+        found : Bool <- FS.accessible(Path.join(candidate,"packages/runtime/data/icu78-word-rules.bin"),0)
+        return Bool.pick(String,found,candidate,cwd)
+
+# A native build under build/ can find its bundled assets from /proc/self/exe.
+# The explicit package directory still wins for other installation layouts.
+def resolvedPackageDir(cwd: String, configured: Result<&1,&1,U32 & String,String>) -> IO(String):
+  match configured:
+    case Done{path}: IO.pure(String,path)
+    case Fail{_}:
+      do IO<String>:
+        executable : Result<&2,&2,FS.Error,String> <- FS.realpath("/proc/self/exe")
+        discoveredPackageDir(cwd,executable)
+
 def runConfigured(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
   +agentDir = located(agentDirLocated, Path.join(cwd, ".pi"))
   do IO<Unit>:
     startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
     selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})), agentDir, Path.join(agentDir, "sessions"))
-    runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), envOr(packageDir, cwd))
+    assets : String <- resolvedPackageDir(cwd,packageDir)
+    runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets)
 
 def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, messages: List<&2, String>, environment: Paths.Environment, files: Files.ResultOf(Files.ProcessedFiles)) -> IO(Unit):
   match environment files:
@@ -678,7 +764,7 @@ def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, me
         sessionEnv : Result<&1, &1, U32 & String, String> <- IO.get_env(Config.envSessionDir())
         runConfigured(parsed, mode, buildInitialMessage(stdin, processedText(processed), processedImages(processed), messages), sessionFlags(parsed), cwd, home, url, agentDirLocated, authPath, bundle, packageDir, sessionEnv)
 
-def runPrint(+parsed: Args.Args, mode: AppMode, stdinTty: Bool, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):
+def runWithInput(+parsed: Args.Args, mode: AppMode, stdinTty: Bool, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):
   match parsed environment:
     case _ Fail{_}: fail("Could not resolve the working directory")
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, messages, fileArgs, _, _} Done{Paths.Environment{+cwd, +home, +url}}:
@@ -689,12 +775,11 @@ def runPrint(+parsed: Args.Args, mode: AppMode, stdinTty: Bool, environment: Res
 
 def runMode(parsed: Args.Args, +mode: AppMode, stdinTty: Bool) -> IO(Unit):
   match mode:
-    case Interactive{}: fail("Interactive mode is not available in this port yet. Use --print/-p or --mode json.")
     case Rpc{}: fail("RPC mode is not available in this port yet.")
     case _:
       do IO<Unit>:
         environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
-        runPrint(parsed, mode, stdinTty, environment)
+        runWithInput(parsed, mode, stdinTty, environment)
 
 def modeOf(parsed: Args.Args) -> Maybe<&2, Args.Mode>:
   match parsed:
