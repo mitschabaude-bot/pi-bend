@@ -25,6 +25,10 @@ def assistant(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
 def withTools(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-1","sample_tool",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-2","second_tool",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
+def resumedAssistant() -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
+  Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"resumed turn",None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"resume-1","first_saved",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"resume-2","second_saved",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}}}
+def savedResult(id: String,name: String,text: String,error: Bool) -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
+  Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{id,name,Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},None{},None{},error,F64{0,0}}}}
 def toolResult(text: String) -> Agent.AgentToolResult<Value.Value>:
   Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},Value.Null{},None{},None{}}
 def started(value: Ai.AssistantMessage<Value.Value,Value.Value>) -> AgentEventT():
@@ -111,6 +115,18 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         check(toolSeed,"next user message did not append")
         +ordered : List<&2,String> <- Component.render(document,28n)
         check(contains(clean(ordered),"final output") && contains(clean(ordered),"after tool") && orderedRows(ordered,"final output","after tool"),"tool result lost or reordered across subsequent message")
+        # pi f07218c4d interactive-mode.ts renderSessionItems matches stored
+        # tool results by ID without adding result rows, even out of result order.
+        Transcript.seed(Value.Value,Value.Value,Unit,handle,resumedAssistant() <>
+          savedResult("resume-2","second_saved","saved second",False{}) <>
+          savedResult("resume-1","first_saved","saved first error",True{}) <>
+          savedResult("unknown","missing","unmatched output",False{}) <>
+          historical("resumed user") <> Nil{})
+        +resumed : List<&2,String> <- Component.render(document,28n)
+        check(orderedRows(resumed,"resumed turn","first_saved") && orderedRows(resumed,"first_saved","saved first error") && orderedRows(resumed,"saved first error","second_saved") && orderedRows(resumed,"second_saved","saved second") && orderedRows(resumed,"saved second","resumed user"),"saved tool results did not follow their calls")
+        check(Bool.not(contains(clean(resumed),"unmatched output")),"unmatched saved tool result rendered a standalone row")
+        resumedCount : Nat <- mountedCount(viewHandle)
+        check(Nat.is_eq(resumedCount,11n),"saved tool results added duplicate components")
         Transcript.dispose(transcript)
         View.dispose(view)
         Styles.dispose(styles)

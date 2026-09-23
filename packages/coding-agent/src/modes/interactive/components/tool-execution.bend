@@ -39,6 +39,10 @@ def updateResult(state: ToolExecution,result: ToolResult,isPartial: Bool) -> Too
   match state: case ToolExecution{name,id,args,_,expanded,images,_,started,complete,theme,shell}: ToolExecution{name,id,args,Some{result},expanded,images,isPartial,started,complete,theme,shell}
 def updateFromAgent(-D: Data,state: ToolExecution,result: Agent.AgentToolResult<D>,isError: Bool,isPartial: Bool) -> ToolExecution:
   match result: case Agent.AgentToolResult{content,_,_,_}: updateResult(state,ToolResult{content,isError},isPartial)
+def updateFromAiResult(-D: Data,state: ToolExecution,message: Ai.ToolResultMessage<D>) -> ToolExecution:
+  match message:
+    case Ai.ToolResultMessage{_,_,content,_,_,isError,_}:
+      updateResult(markExecutionStarted(setArgsComplete(state)),ToolResult{content,isError},False{})
 def setExpanded(state: ToolExecution,expanded: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,_,images,partial,started,complete,theme,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell}
 def setShowImages(state: ToolExecution,images: Bool) -> ToolExecution:

@@ -116,11 +116,24 @@ def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
     case Nil{}: ""
     case Ai.TextImageText{Ai.TextContent{text,_}} <> rest: text ++ blocksText(rest)
     case _ <> rest: blocksText(rest)
+def historicalFound(-D: Data,state: State,message: Ai.ToolResultMessage<D>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
+  match found:
+    case None{}: IO.pure(State & Bool,(state,False{}))
+    case Some{+handle}:
+      do IO<State & Bool>:
+        current : Tool.ToolExecution <- Tool.current(handle)
+        Tool.set(handle,Tool.updateFromAiResult(D,current,message))
+        return (state,True{})
+def historicalTool(-D: Data,state: State,+message: Ai.ToolResultMessage<D>) -> IO(State & Bool):
+  match state message:
+    case State{entries,+tools,active,next,view,theme,styles} Ai.ToolResultMessage{id,_,_,_,_,_,_}:
+      historicalFound(D,State{entries,tools,active,next,view,theme,styles},message,findTool(tools,id))
 def userMessage(-G: Data,-D: Data,-C: Data,state: State,message: Agent.AgentMessage<G,D,C>) -> IO(State & Bool):
   match message:
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text},_}}}: user(state,text)
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{blocks},_}}}: user(state,blocksText(blocks))
     case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantStart(G,state,assistant)
+    case Agent.LlmMessage{Ai.ToolResult{result}}: historicalTool(D,state,result)
     case _: IO.pure(State & Bool,(state,False{}))
 def updateMessage(-G: Data,-D: Data,-C: Data,state: State,message: Agent.AgentMessage<G,D,C>,streaming: Bool) -> IO(State & Bool):
   match message:
