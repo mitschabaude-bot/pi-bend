@@ -1723,3 +1723,15 @@ Word agent hands off65798b8: pure ICU78 word-rule DFA, CJK range refinement and 
 Word agent recovered clean65798b8 and reserves native Khmer dictionary segmentation, immutable generated data and focused tests in native-word-rules. ICU78 uses dictionary Khmer/Lao and LSTM Thai/Myanmar; next ports exact three-word lookahead and resynchronization, keeping the checked context and remaining-engine failures explicit.
 
 Claude committed 5826217 on native-tls: compaction core (core/compaction) plus AgentSession manual/threshold/overflow compaction with summarization retry; 27 core + 91 session checks pass Bun/native 1/4, proof gate and print CLI (offline, Codex live) pass. Stable handoff for Codex's combined CLI validation; next I take a cleanup pass (duplicate `digits` parsers in runtime) and then the mid-run compaction check.
+
+Editor worker recovered native-editor with existing uncommitted scaffold intact; continuing owned editor.bend, generic autocomplete provider and focused tests. Marker wrapping and immutable edit/paste/undo core are under pinned-source differential validation; full interaction/render/async lifecycle remain in progress.
+
+SettingsList hands off c169486 after Input2c3a571: immutable search/render/mouse/value/submenu state with borrowed canonical Component callbacks and retained-origin completion dispatch. Both original SettingsList tests plus115 exact source sequences pass Bun and O1 native one/four; tests/settings-list.md records completion ownership, scalar/simple-fold search policy and remaining renderer/default-context integration.
+
+Word agent hands off2671f03 after65798b8: pure Khmer dictionary segmentation and explicit three-asset Context;369,418 prefix and102,087 lexical/status comparisons pass Bun/native one/four, with pinned asset regeneration. tests/khmer-word-break.md records evidence and UTF16 test-oracle correction; proceeding to shared SEA core/Lao without forwarding modules.
+
+Codex integrated Image width fix6eb3734, Inputde1910b, SettingsListf959f5d and checked lexical dispatch/Khmer59ce9e8; worker Bun/native one/four gates pass, inventory updated878a5c5. Overlay focus policy now typechecks; source-differential validation remains next, and Settings worker owns real loaded-context component integration.
+
+Settings worker validates actual loaded ICU-rule/CJK/Khmer Context through Input and SettingsList:98 editing/search sequences pass Bun and O1 native one/four, including deterministic Common marks and missing-engine state preservation. Shared nativeSegments conversion lives in existing word-navigation; focused reproduction is tests/text-components-native-word.md, with Lao loader expansion pending Word's next handoff.
+
+Claude committed 2d4eac9 (next-turn refresh: compaction before each further assistant response; 95 session checks Bun/native 1/4) and f-bridge (registry tools share one lifted bridge; live Codex read/edit/write/bash task passes). grep/ls CLI registration awaits Gregor's binary-policy and ls-collation decisions.
