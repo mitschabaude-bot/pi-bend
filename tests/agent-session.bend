@@ -406,6 +406,55 @@ def reportMessages(session: Session.AgentSession) -> IO(Unit):
     current : List<&2, Session.Message()> <- Session.messages(session)
     printed(Done{Json.object(Json.field("type", Json.text("messages"), Json.field("messages", V.ArrayValue{JsonEvent.messages(current)}, Nil{})))})
 
+def userIds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.SessionMessageEntry{S.SessionEntryBase{id,_,_}, T.LlmMessage{Ai.User{_}}} <> rest: id <> userIds(rest)
+    case _ <> rest: userIds(rest)
+
+def secondUserId(ids: List<&2, String>) -> String:
+  match ids:
+    case _ <> id <> _: id
+    case _: "missing-second-user"
+
+def maybeQuoted(value: Maybe<&2, String>) -> String:
+  Maybe.default(&2, String, Maybe.map(&2, String, String, Decode.quote, value), "null")
+
+def secondUserInSession(stored: Session.Session()) -> String:
+  secondUserId(userIds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))))
+
+def currentLeaf(stored: Session.Session()) -> String:
+  Maybe.default(&2, String, S.getLeafId(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)), "missing-leaf")
+
+def reportNavigation(result: Result<&2, &2, String, Session.Navigation>) -> IO(Unit):
+  match result:
+    case Done{Session.Navigation{editorText,leafId}}: IO.print("{\"type\":\"navigation\",\"editorText\":" ++ maybeQuoted(editorText) ++ ",\"leafId\":" ++ maybeQuoted(leafId) ++ "}")
+    case Fail{error}: IO.print("{\"type\":\"navigation_error\",\"error\":" ++ Decode.quote(error) ++ "}")
+
+def navigationScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixture(stored, dir, agentDir, "a1" <> "a2" <> "branched" <> Nil{}, Nil{})
+    first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "one", Nil{}, None{})
+    reportPrompt(first)
+    second : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "two", Nil{}, None{})
+    reportPrompt(second)
+    before : Session.Session() <- Session.sessionOf(sessionOf(value))
+    navigated : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(sessionOf(value), secondUserInSession(before))
+    reportNavigation(navigated)
+    reportMessages(sessionOf(value))
+    after : Session.Session() <- Session.sessionOf(sessionOf(value))
+    unchanged : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(sessionOf(value), currentLeaf(after))
+    reportNavigation(unchanged)
+    invalid : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(sessionOf(value), "missing-entry")
+    reportNavigation(invalid)
+    replacement : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "replacement", Nil{}, None{})
+    reportPrompt(replacement)
+    reportMessages(sessionOf(value))
+    reportEntries(sessionOf(value))
+    teardown(value)
+
 def reportCompacting(session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     compacting : Bool <- Session.isCompacting(session)
@@ -484,6 +533,7 @@ def run(args: List<String>) -> IO(Unit):
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
     case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
+    case "navigate" <> dir <> agentDir <> Nil{}: navigationScenario(dir, agentDir)
     case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
 
 def main() -> IO(Unit):

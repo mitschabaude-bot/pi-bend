@@ -160,6 +160,7 @@ type AgentSessionEvent is Data:
   AgentSettled{}
   QueueUpdate{steering: List<&2, String>, followUp: List<&2, String>}
   SessionInfoChanged{name: Maybe<&2, String>}
+  SessionTree{oldLeafId: Maybe<&2, String>, newLeafId: Maybe<&2, String>}
   ThinkingLevelChanged{level: Ai.ModelThinkingLevel}
   AutoRetryStart{attempt: Nat, maxAttempts: Nat, delayMs: F64, errorMessage: String}
   AutoRetryEnd{success: Bool, attempt: Nat, finalError: Maybe<&2, String>}
@@ -279,6 +280,11 @@ def userText(message: Message()) -> Maybe<&2, String>:
     case T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, _}}}: Some{text}
     case T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{blocks}, _}}}: Some{blockText(blocks)}
     case _: None{}
+
+def userContentText(content: Ai.UserContent) -> String:
+  match content:
+    case Ai.UserText{text}: text
+    case Ai.UserBlocks{blocks}: blockText(blocks)
 
 def startedText(event: SessionEvent()) -> Maybe<&2, String>:
   match event:
@@ -1574,6 +1580,80 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
 
 def waitForIdle(session: AgentSession) -> IO(Unit):
   Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
+
+# Tree navigation keeps the session file and its full append-only history.
+# Selecting an editable user message positions the leaf at its parent and
+# returns the text to put back in the editor, as upstream navigateTree does.
+type Navigation is Data:
+  Navigation{editorText: Maybe<&2, String>, leafId: Maybe<&2, String>}
+
+def navigationLeaf(result: Navigation) -> Maybe<&2, String>:
+  match result: case Navigation{_, leafId}: leafId
+
+def userNavigation(text: Maybe<&2, String>, parent: Maybe<&2, String>, targetId: String) -> Navigation:
+  match text:
+    case Some{value}: Navigation{Some{value}, parent}
+    case None{}: Navigation{None{}, Some{targetId}}
+
+def navigationTarget(entry: Entry(), targetId: String) -> Navigation:
+  match entry:
+    case S.SessionMessageEntry{S.SessionEntryBase{_,parent,_}, message}:
+      userNavigation(userText(message), parent, targetId)
+    case S.CustomMessageEntry{S.SessionEntryBase{_,parent,_}, _, content, _, _}: Navigation{Some{userContentText(content)}, parent}
+    case _: Navigation{None{}, Some{targetId}}
+
+def branchTo(session: Session(), leafId: Maybe<&2, String>) -> Sessions.Outcome(Session()):
+  match leafId:
+    case None{}: Sessions.resetLeaf(Unit, Tools.ToolDetails, V.Value, session)
+    case Some{id}: Sessions.branch(Unit, Tools.ToolDetails, V.Value, session, id)
+
+def navigateBranched(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +target: Navigation, oldLeafId: Maybe<&2, String>, outcome: Sessions.Outcome(Session())) -> IO(Result<&2, &2, String, Navigation>):
+  match outcome:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Navigation>, Fail{Sessions.message(error)})
+    case Done{next}:
+      do IO<Result<&2, &2, String, Navigation>>:
+        R.modify(Shared, Unit, shared, previous => (withSession(previous, next), Unit{}))
+        refreshContext(agent, shared)
+        emit(shared, SessionTree{oldLeafId, navigationLeaf(target)})
+        return Done{target}
+
+def navigateSelected(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), +target: Navigation, oldLeafId: Maybe<&2, String>) -> IO(Result<&2, &2, String, Navigation>):
+  match target:
+    case Navigation{_, +leafId}: navigateBranched(agent, shared, target, oldLeafId, branchTo(current, leafId))
+
+def navigateFound(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), targetId: String, oldLeafId: Maybe<&2, String>, entry: Maybe<&2, Entry()>) -> IO(Result<&2, &2, String, Navigation>):
+  match entry:
+    case None{}: IO.pure(Result<&2, &2, String, Navigation>, Fail{"Entry " ++ targetId ++ " not found"})
+    case Some{selected}: navigateSelected(agent, shared, current, navigationTarget(selected, targetId), oldLeafId)
+
+def sameLeaf(leafId: Maybe<&2, String>, targetId: String) -> Bool:
+  match leafId:
+    case None{}: False{}
+    case Some{id}: String.eq(id, targetId)
+
+def navigateLocated(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), +targetId: String, tree: State(), +oldLeafId: Maybe<&2, String>) -> IO(Result<&2, &2, String, Navigation>):
+  Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), sameLeaf(oldLeafId, targetId),
+    _ => IO.pure(Result<&2, &2, String, Navigation>, Done{Navigation{None{}, oldLeafId}}),
+    _ => navigateFound(agent, shared, current, targetId, oldLeafId, S.getEntry(Unit, Tools.ToolDetails, V.Value, tree, targetId)))(Unit{})
+
+def navigateSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Shared, +targetId: String) -> IO(Result<&2, &2, String, Navigation>):
+  match snapshot:
+    case Shared{+current, _, _, _, _, _, _, _}:
+      +tree = stateOf(current)
+      navigateLocated(agent, shared, current, targetId, tree, S.getLeafId(Unit, Tools.ToolDetails, V.Value, tree))
+
+# No-summary navigation; branch summarization remains a separate operation.
+def navigateTree(+session: AgentSession, targetId: String) -> IO(Result<&2, &2, String, Navigation>):
+  match session:
+    case AgentSession{agent, shared, _, _, _, _}:
+      do IO<Result<&2, &2, String, Navigation>>:
+        streaming : Bool <- isStreaming(session)
+        compacting : Bool <- isCompacting(session)
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), streaming || compacting,
+          _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current response or compaction to finish before navigating the session tree."}),
+          _ => do IO<Result<&2, &2, String, Navigation>>:
+            snapshot : Shared <- R.read(Shared, shared)
+            navigateSnapshot(agent, shared, snapshot, targetId))(Unit{})
 
 # Mutations
 # ---------
