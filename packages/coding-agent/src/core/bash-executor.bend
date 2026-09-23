@@ -4,7 +4,7 @@ import ./tools/output-accumulator.bend as Output
 import ./tools/truncate.bend as Truncate
 import ../utils/ansi.bend as Ansi
 import ../utils/shell.bend as Shell
-import ../utils/child-process.bend as Child
+import ../../../runtime/src/child-process.bend as Child
 import ../../../runtime/src/utf8.bend as Utf8
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/serial-resource.bend as Serial

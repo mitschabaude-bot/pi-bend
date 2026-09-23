@@ -1,5 +1,5 @@
 import Base
-import ../packages/coding-agent/src/utils/child-process.bend as Child
+import ../packages/runtime/src/child-process.bend as Child
 import ../packages/runtime/src/abort.bend as A
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/base64.bend as B64

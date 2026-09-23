@@ -2,7 +2,7 @@ import Base
 import ./output-accumulator.bend as Output
 import ./truncate.bend as Truncate
 import ../../utils/shell.bend as Shell
-import ../../utils/child-process.bend as Child
+import ../../../../runtime/src/child-process.bend as Child
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/callback.bend as C

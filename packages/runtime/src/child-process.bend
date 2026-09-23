@@ -1,8 +1,8 @@
 import Base
-import ../../../runtime/src/callback.bend as Callback
-import ../../../runtime/src/abort.bend as Abort
-import ../../../runtime/src/deferred.bend as Deferred
-import ../../../runtime/src/utf8.bend as Utf8
+import ./callback.bend as Callback
+import ./abort.bend as Abort
+import ./deferred.bend as Deferred
+import ./utf8.bend as Utf8
 
 # The process owner stays unreaped until the caller has retired its timeout
 # and abort observers. Pipe readers and idle timers finish before this returns.

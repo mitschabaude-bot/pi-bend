@@ -6,7 +6,7 @@ import ../../../runtime/src/utf8.bend as Utf8
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/f64.bend as F
 import ../../../ai/src/types.bend as Ai
-import ../utils/child-process.bend as Child
+import ../../../runtime/src/child-process.bend as Child
 
 # Configuration values that may be shell commands, environment variables or
 # literals. Used by auth storage and the model registry.
