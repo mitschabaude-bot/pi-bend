@@ -3550,9 +3550,15 @@
     },
     {
       "source": "packages/tui/test/input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dcbed4da6d52e41dd52faaef9861ee4662806d5529e33b612f22e691e9a51386"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/components/input.bend",
+        "tests/input.bend",
+        "tests/input_reference.ts",
+        "tests/input_check.py"
+      ],
+      "sha256": "dcbed4da6d52e41dd52faaef9861ee4662806d5529e33b612f22e691e9a51386",
+      "notes": "All 36 original tests (47 traces), 274 additional sequences, 11 approved scanner corrections and checked missing-engine propagation pass Bun/native one/four. Immutable state and borrowed callbacks; see tests/input.md. Default loaded lexical-context and whole-renderer integration are separate."
     },
     {
       "source": "packages/tui/test/keybindings.test.ts",
@@ -3680,9 +3686,15 @@
     },
     {
       "source": "packages/tui/test/settings-list.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "36418fe2495b92835c24a15129c5371f2dcffdfb72d0ecce7208b1ab0056062d"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/components/settings-list.bend",
+        "tests/settings-list.bend",
+        "tests/settings_list_reference.ts",
+        "tests/settings_list_check.py"
+      ],
+      "sha256": "36418fe2495b92835c24a15129c5371f2dcffdfb72d0ecce7208b1ab0056062d",
+      "notes": "Both original tests and 115 additional state/render/callback sequences pass Bun/native one/four. Immutable state and borrowed callbacks; see tests/settings-list.md. Default loaded lexical-context and whole-renderer integration are separate."
     },
     {
       "source": "packages/tui/test/stdin-buffer.test.ts",
