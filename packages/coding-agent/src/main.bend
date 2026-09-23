@@ -10,6 +10,7 @@ import ./core/auth-storage.bend as AuthStorage
 import ./core/session-manager.bend as S
 import ./core/session-persistence.bend as Sessions
 import ./core/agent-session.bend as AgentSession
+import ./core/agent-session-runtime.bend as SessionRuntime
 import ./core/export-html/index.bend as Export
 import ./core/settings-manager.bend as Settings
 import ./core/tools/index.bend as Tools
@@ -31,6 +32,7 @@ import ../../runtime/src/url.bend as URL
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json.bend as Decode
 import ../../runtime/src/callback.bend as Callback
+import ../../runtime/src/ref.bend as Ref
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. Extensions
@@ -531,49 +533,10 @@ def initialSubmissions(initial: InitialMessage) -> List<&2,Controller.Submission
     case InitialMessage{None{},images,remaining}: Controller.Submission{"",images,None{}} <> queuedMessages(remaining)
     case InitialMessage{Some{text},images,remaining}: Controller.Submission{text,images,None{}} <> queuedMessages(remaining)
 
-# The AgentSession owns the run; the runtime owns the agent and its services.
-def printWith(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
-  match pair:
-    case Tuple{runtime, loadout}:
-      do IO<Unit>:
-        +live : AgentSession.AgentSession <- AgentSession.create(agent, stored, settings, cwd, loadout)
-        code : U32 <- Print.runPrintMode(live, options)
-        AgentSession.dispose(live)
-        Runtime.dispose(runtime)
-        exitWith(code)
-
-def printLoaded(options: Print.PrintModeOptions, stored: Session(), settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
-  match pair:
-    case Tuple{runtime, agent}: printWith(options, stored, settings, cwd, agent, Runtime.loadoutOf(runtime))
-
 def outputMode(mode: AppMode) -> Args.Mode:
   match mode:
     case PrintJson{}: Args.Json{}
     case _: Args.Text{}
-
-def printRecorded(mode: Args.Mode, initial: InitialMessage, recorded: Selected(), settings: Settings.SettingsManager, cwd: String, runtime: Runtime.AgentRuntime) -> IO(Unit):
-  match initial recorded:
-    case _ Fail{Failed{message}}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        fail(message)
-    case _ Fail{Aborted{note}}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        IO.print(note)
-    case InitialMessage{text, images, remaining} Done{+session}: printLoaded(Print.PrintModeOptions{mode, remaining, text, images}, session, settings, cwd, Runtime.agentOf(runtime))
-
-def printWithSelection(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
-  match pair:
-    case Tuple{kept, selection}:
-      do IO<Unit>:
-        recorded : Selected() <- recordSelection(session, hasExisting, hasThinking, selection)
-        printRecorded(mode, initial, recorded, settings, cwd, kept)
-
-def printSelected(mode: Args.Mode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
-  match created:
-    case Fail{error}: fail(error)
-    case Done{runtime}: printWithSelection(mode, initial, session, hasExisting, hasThinking, settings, cwd, Runtime.selectionOf(runtime))
 
 def optionalHome(result: Result<&2,&2,FS.Error,String>) -> Maybe<&2,String>:
   match result:
@@ -644,46 +607,6 @@ def selectedTheme(override: Maybe<&2,String>, settings: Settings.SettingsManager
     case Some{name}: Some{name}
     case None{}: Settings.getThemeSetting(settings)
 
-def interactiveWith(initial: InitialMessage, stored: Session(), +settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
-  match pair:
-    case Tuple{runtime,loadout}:
-      +themeSetting = selectedTheme(themeOverride,settings)
-      do IO<Unit>:
-        +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
-        home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-        result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,themeSetting)
-        AgentSession.dispose(live)
-        Runtime.dispose(runtime)
-        interactiveFinished(result)
-
-def interactiveLoaded(initial: InitialMessage, stored: Session(), settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
-  match pair:
-    case Tuple{runtime,agent}: interactiveWith(initial,stored,settings,themeOverride,cwd,agentDir,packageDir,agent,Runtime.loadoutOf(runtime))
-
-def interactiveRecorded(initial: InitialMessage, recorded: Selected(), settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, runtime: Runtime.AgentRuntime) -> IO(Unit):
-  match recorded:
-    case Fail{Failed{message}}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        fail(message)
-    case Fail{Aborted{note}}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        IO.print(note)
-    case Done{+session}: interactiveLoaded(initial,session,settings,themeOverride,cwd,agentDir,packageDir,Runtime.agentOf(runtime))
-
-def interactiveSelection(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
-  match pair:
-    case Tuple{runtime,selection}:
-      do IO<Unit>:
-        recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
-        interactiveRecorded(initial,recorded,settings,themeOverride,cwd,agentDir,packageDir,runtime)
-
-def interactiveSelected(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
-  match created:
-    case Fail{error}: fail(error)
-    case Done{runtime}: interactiveSelection(initial,session,hasExisting,hasThinking,settings,themeOverride,cwd,agentDir,packageDir,Runtime.selectionOf(runtime))
-
 def rpcWrite(_: Unit,text: String) -> IO(Unit): IO.write(text)
 def rpcFinished(result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
@@ -700,53 +623,6 @@ def rpcCatalog(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.M
   match runtime:
     case Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,+models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
       (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
-def rpcWithCatalog(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),loadout: Runtime.Loadout,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Unit):
-  match pair:
-    case (runtime,models):
-      do IO<Unit>:
-        +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
-        +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
-        available : List<&2,Models.Model()> <- Models.getAvailable(models)
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},available,scope)
-        result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
-        Callback.dispose(String,Unit,sink)
-        AgentSession.dispose(live)
-        Runtime.dispose(runtime)
-        rpcFinished(result)
-def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
-  match pair:
-    case (runtime,loadout): rpcWithCatalog(stored,settings,cwd,assetsRoot,agent,loadout,scope,rpcCatalog(runtime))
-def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
-  match pair:
-    case (runtime,agent): rpcWith(stored,settings,cwd,assetsRoot,agent,scope,Runtime.loadoutOf(runtime))
-def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,runtime: Runtime.AgentRuntime) -> IO(Unit):
-  match recorded:
-    case Fail{Failed{message}}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        fail(message)
-    case Fail{Aborted{note}}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        IO.print(note)
-    case Done{+session}: rpcLoaded(session,settings,cwd,assetsRoot,scope,Runtime.agentOf(runtime))
-def rpcSelection(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
-  match pair:
-    case (runtime,selection):
-      do IO<Unit>:
-        recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
-        rpcRecorded(recorded,settings,cwd,assetsRoot,scope,runtime)
-def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
-  match created:
-    case Fail{error}: fail(error)
-    case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,assetsRoot,scope,Runtime.selectionOf(runtime))
-
-def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, scope: List<&2,Models.ScopedModel>, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
-  match mode:
-    case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,themeOverride,cwd,agentDir,packageDir,created)
-    case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,packageDir,scope,created)
-    case _: printSelected(outputMode(mode),initial,session,hasExisting,hasThinking,settings,cwd,created)
-
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
     case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, _, _, _, _, _, _, _, _, _, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
@@ -862,47 +738,174 @@ def themeOverride(parsed: Args.Args) -> Maybe<&2,String>:
   match parsed:
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, useTheme, _, _, _, _, _, _, _, _, _, _, _}: useTheme
 
-def scopedRun(mode: AppMode,initial: InitialMessage,session: Session(),+hasExisting: Bool,hasThinking: Bool,+settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,flags: ScopeFlags,+scope: List<&2,Models.ScopedModel>,runtime: Runtime.AgentRuntime) -> IO(Unit):
-  do IO<Unit>:
-    selected : Runtime.AgentRuntime <- startupScope(runtime,scope,seed,settings,flags,hasExisting)
-    runCreated(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,scope,Done{selected})
-def scopedResult(mode: AppMode,initial: InitialMessage,session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,flags: ScopeFlags,runtime: Runtime.AgentRuntime,result: Result<&2,&2,String,List<&2,Models.ScopedModel>>) -> IO(Unit):
-  match result:
-    case Fail{message}:
-      do IO<Unit>:
-        Runtime.dispose(runtime)
-        fail(message)
-    case Done{scope}: scopedRun(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,seed,flags,scope,runtime)
 def resolveFlags(flags: ScopeFlags,available: List<&2,Models.Model()>) -> Result<&2,&2,String,List<&2,Models.ScopedModel>>:
   match flags:
     case ScopeFlags{patterns,_,_}: Models.resolveScope(patterns,available,Nil{})
-def scopedCatalog(mode: AppMode,initial: InitialMessage,session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,+flags: ScopeFlags,pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Unit):
-  match pair:
-    case (runtime,models):
-      do IO<Unit>:
-        available : List<&2,Models.Model()> <- Models.getAvailable(models)
-        scopedResult(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,seed,flags,runtime,resolveFlags(flags,available))
-def scopedCreated(mode: AppMode,initial: InitialMessage,session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,flags: ScopeFlags,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
-  match created:
-    case Fail{error}: runCreated(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,Nil{},Fail{error})
-    case Done{runtime}: scopedCatalog(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,seed,flags,rpcCatalog(runtime))
+# Runtime factory
+# ---------------
 
-def runSeeded(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
-  match seed:
-    case Fail{Failed{message}}: fail(message)
-    case Fail{Aborted{note}}: IO.print(note)
-    case Done{+value}:
-      +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
+# upstream main's createRuntime: the services and AgentSession for a session,
+# with settings loaded for its cwd and the model, thinking level and scope
+# resolved from the CLI arguments as at startup. AgentSessionRuntime calls it
+# for the initial session and for every replacement.
+type Services is Type:
+  Services{runtime: Runtime.AgentRuntime, scope: List<&2, Models.ScopedModel>}
+
+def Created() -> Type: SessionRuntime.Created<Services>
+def Host() -> Data: SessionRuntime.AgentSessionRuntime<Services>
+
+type FactoryEnv is Data:
+  FactoryEnv{parsed: Args.Args, agentDir: String, authPath: String, bundlePath: String, packageDir: String}
+
+def releaseServices(env: Unit, services: Services) -> IO(Unit):
+  match services:
+    case Services{runtime, _}: Runtime.dispose(runtime)
+
+def factoryFailed(runtime: Runtime.AgentRuntime, message: String) -> IO(Result<&1, &1, String, Created()>):
+  do IO<Result<&1, &1, String, Created()>>:
+    Runtime.dispose(runtime)
+    return Fail{message}
+
+def sessionWithLoadout(cwd: String, +settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, session: Session(), agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Result<&1, &1, String, Created()>):
+  match pair:
+    case (runtime, loadout):
+      do IO<Result<&1, &1, String, Created()>>:
+        live : AgentSession.AgentSession <- AgentSession.create(agent, session, settings, cwd, loadout)
+        return Done{SessionRuntime.Created{Services{runtime, scope}, live}}
+
+def sessionWithAgent(cwd: String, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, session: Session(), pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Result<&1, &1, String, Created()>):
+  match pair:
+    case (runtime, agent): sessionWithLoadout(cwd, settings, scope, session, agent, Runtime.loadoutOf(runtime))
+
+def createdSession(cwd: String, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, recorded: Selected(), runtime: Runtime.AgentRuntime) -> IO(Result<&1, &1, String, Created()>):
+  match recorded:
+    case Fail{Failed{message}}: factoryFailed(runtime, message)
+    case Fail{Aborted{note}}: factoryFailed(runtime, note)
+    case Done{session}: sessionWithAgent(cwd, settings, scope, session, Runtime.agentOf(runtime))
+
+def selectionRecorded(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Result<&1, &1, String, Created()>):
+  match pair:
+    case (runtime, selection):
+      do IO<Result<&1, &1, String, Created()>>:
+        recorded : Selected() <- recordSelection(session, hasExisting, hasThinking, selection)
+        createdSession(cwd, settings, scope, recorded, runtime)
+
+def scopeApplied(cwd: String, session: Session(), +hasExisting: Bool, hasThinking: Bool, +settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, +scope: List<&2, Models.ScopedModel>, runtime: Runtime.AgentRuntime) -> IO(Result<&1, &1, String, Created()>):
+  do IO<Result<&1, &1, String, Created()>>:
+    selected : Runtime.AgentRuntime <- startupScope(runtime, scope, seed, settings, flags, hasExisting)
+    selectionRecorded(cwd, session, hasExisting, hasThinking, settings, scope, Runtime.selectionOf(selected))
+
+def scopeResolved(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, runtime: Runtime.AgentRuntime, result: Result<&2, &2, String, List<&2, Models.ScopedModel>>) -> IO(Result<&1, &1, String, Created()>):
+  match result:
+    case Fail{message}: factoryFailed(runtime, message)
+    case Done{scope}: scopeApplied(cwd, session, hasExisting, hasThinking, settings, seed, flags, scope, runtime)
+
+def catalogScoped(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, +flags: ScopeFlags, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Result<&1, &1, String, Created()>):
+  match pair:
+    case (runtime, models):
+      do IO<Result<&1, &1, String, Created()>>:
+        available : List<&2, Models.Model()> <- Models.getAvailable(models)
+        scopeResolved(cwd, session, hasExisting, hasThinking, settings, seed, flags, runtime, resolveFlags(flags, available))
+
+def runtimeCreated(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Result<&1, &1, String, Created()>):
+  match created:
+    case Fail{error}: IO.pure(Result<&1, &1, String, Created()>, Fail{error})
+    case Done{runtime}: catalogScoped(cwd, session, hasExisting, hasThinking, settings, seed, flags, rpcCatalog(runtime))
+
+def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Result<&1, &1, String, Created()>):
+  match env seed:
+    case _ Fail{Failed{message}}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
+    case _ Fail{Aborted{note}}: IO.pure(Result<&1, &1, String, Created()>, Fail{note})
+    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, packageDir} Done{+value}:
+      do IO<Result<&1, &1, String, Created()>>:
+        +settings : Settings.SettingsManager <- loadSettings(cwd, agentDir)
+        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
+        runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
+
+def createRuntime(env: FactoryEnv, request: SessionRuntime.Request) -> IO(Result<&1, &1, String, Created()>):
+  match request:
+    case SessionRuntime.Request{cwd, +session, _}: seededRuntime(env, cwd, session, sessionSeed(session))
+
+# Modes
+# -----
+
+def activeSession(live: Maybe<&2, AgentSession.AgentSession>) -> IO(AgentSession.AgentSession):
+  match live:
+    case Some{session}: IO.pure(AgentSession.AgentSession, session)
+    case None{}: IO.die(AgentSession.AgentSession, 1, "No active session")
+
+def printHosted(options: Print.PrintModeOptions, +host: Host()) -> IO(Unit):
+  do IO<Unit>:
+    current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
+    live : AgentSession.AgentSession <- activeSession(current)
+    code : U32 <- Print.runPrintMode(live, options)
+    SessionRuntime.dispose(Services, host)
+    exitWith(code)
+
+def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
+  do IO<Unit>:
+    current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
+    +live : AgentSession.AgentSession <- activeSession(current)
+    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager, AgentSession.settingsOf(live))
+    home : Result<&2,&2,FS.Error,String> <- FS.homedir()
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings))
+    SessionRuntime.dispose(Services, host)
+    interactiveFinished(result)
+
+type Catalog is Data:
+  Catalog{available: List<&2,Models.Model()>, scope: List<&2,Models.ScopedModel>}
+
+def catalogPair(+scope: List<&2,Models.ScopedModel>, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Services & Catalog):
+  match pair:
+    case (runtime, models):
+      do IO<Services & Catalog>:
+        available : List<&2,Models.Model()> <- Models.getAvailable(models)
+        return (Services{runtime, scope}, Catalog{available, scope})
+
+def catalogOf(services: Services) -> IO(Services & Catalog):
+  match services:
+    case Services{runtime, scope}: catalogPair(scope, rpcCatalog(runtime))
+
+def rpcWithCatalog(live: AgentSession.AgentSession, assetsRoot: String, host: Host(), catalog: Catalog) -> IO(Unit):
+  match catalog:
+    case Catalog{available, scope}:
       do IO<Unit>:
-        +settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
-        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, sessionCwd, agentDir, authPath, bundlePath, packageDir, value, settings))
-        scopedCreated(mode,initial,session,seedMessages(value),seedThinking(value),settings,themeOverride(parsed),sessionCwd,agentDir,packageDir,value,scopeFlags(parsed,settings),created)
+        +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},available,scope)
+        result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
+        Callback.dispose(String,Unit,sink)
+        SessionRuntime.dispose(Services, host)
+        rpcFinished(result)
+
+def rpcHosted(assetsRoot: String, +host: Host()) -> IO(Unit):
+  do IO<Unit>:
+    current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
+    live : AgentSession.AgentSession <- activeSession(current)
+    catalog : Catalog <- SessionRuntime.withServices(Services, Catalog, host, catalogOf, Catalog{Nil{}, Nil{}})
+    rpcWithCatalog(live, assetsRoot, host, catalog)
+
+def runHosted(mode: AppMode, initial: InitialMessage, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
+  match mode initial started:
+    case _ _ Fail{message}: fail(message)
+    case Interactive{} _ Done{host}: interactiveHosted(initial, themeOverride, cwd, agentDir, packageDir, host)
+    case Rpc{} _ Done{host}: rpcHosted(packageDir, host)
+    case _ InitialMessage{text, images, remaining} Done{host}: printHosted(Print.PrintModeOptions{outputMode(mode), remaining, text, images}, host)
+
+def runSeeded(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
+  +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
+  do IO<Unit>:
+    +factory : SessionRuntime.Factory(Services) <- Callback.create(~FactoryEnv, ~SessionRuntime.Request, ~Result<&1, &1, String, Created()>, ~createRuntime, FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir})
+    +release : Callback.Callback<Services, Unit> <- Callback.create(~Unit, ~Services, ~Unit, ~releaseServices, Unit{})
+    started : Result<&2, &2, String, Host()> <- SessionRuntime.create(Services, factory, release, agentDir, sessionCwd, session)
+    runHosted(mode, initial, themeOverride(parsed), sessionCwd, agentDir, packageDir, started)
+    Callback.dispose(SessionRuntime.Request, Result<&1, &1, String, Created()>, factory)
+    Callback.dispose(Services, Unit, release)
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: IO.print(note)
-    case Done{+session}: runSeeded(parsed, mode, initial, session, agentDir, authPath, bundlePath, packageDir, sessionSeed(session))
+    case Done{+session}: runSeeded(parsed, mode, initial, session, agentDir, authPath, bundlePath, packageDir)
 
 def runChecked(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), issue: Maybe<&2, String>, name: Maybe<&2, String>, agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match issue:
