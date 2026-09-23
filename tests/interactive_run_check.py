@@ -36,6 +36,13 @@ for threads in (1, 4):
         assert output, (threads, process.poll(), process.stderr.read() if process.poll() is not None else b"")
         os.write(master, b"/exit\r")
         stderr = process.communicate(timeout=30)[1]
+        while select.select([master], [], [], 0)[0]:
+            try:
+                output.extend(os.read(master, 65536))
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+                break
         assert process.returncode == 0, (threads, stderr.decode(errors="replace"), bytes(output))
         assert termios.tcgetattr(slave) == original, threads
         assert b"\x1b[" in output, (threads, bytes(output))
