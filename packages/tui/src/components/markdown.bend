@@ -11,12 +11,12 @@ type MarkdownTheme is Data:
 type DefaultTextStyle is Data:
   DefaultTextStyle{color: Maybe<&2,Style()>,bgColor: Maybe<&2,Style()>,bold: Bool,italic: Bool,strikethrough: Bool,underline: Bool}
 type MarkdownOptions is Data:
-  MarkdownOptions{preserveOrderedListMarkers: Bool,preserveBackslashEscapes: Bool,transform: Maybe<&2,C.Callback<(String & Nat),String>>,renderLatex: Bool}
+  MarkdownOptions{preserveOrderedListMarkers: Bool,preserveBackslashEscapes: Bool,transform: Maybe<&2,C.Callback<(String & Nat),String>>,renderLatex: Bool,hyperlinks: Bool}
 type Cache is Data: Cache{width: Nat,lines: List<&2,String>}
 type Markdown is Data:
   Markdown{text: String,paddingX: Nat,paddingY: Nat,theme: MarkdownTheme,defaultTextStyle: Maybe<&2,DefaultTextStyle>,options: MarkdownOptions,cache: Maybe<&2,Cache>}
 
-def defaultOptions() -> MarkdownOptions: MarkdownOptions{False{},False{},None{},True{}}
+def defaultOptions() -> MarkdownOptions: MarkdownOptions{False{},False{},None{},True{},False{}}
 def new(text: String,paddingX: Nat,paddingY: Nat,theme: MarkdownTheme,style: Maybe<&2,DefaultTextStyle>,options: Maybe<&2,MarkdownOptions>) -> Markdown:
   Markdown{text,paddingX,paddingY,theme,style,Maybe.default(&2,MarkdownOptions,options,defaultOptions()),None{}}
 def setText(state: Markdown,text: String) -> Markdown:
@@ -51,8 +51,10 @@ def styleText(text: String,style: Maybe<&2,DefaultTextStyle>,+theme: MarkdownThe
         applyIf(deleted,underline,themeUnderline(theme))
 def transformed(source: String,width: Nat,options: MarkdownOptions) -> IO(String):
   match options:
-    case MarkdownOptions{_,_,None{},_}: IO.pure(String,source)
-    case MarkdownOptions{_,_,Some{transform},_}: C.call(String & Nat,String,transform,(source,width))
+    case MarkdownOptions{_,_,None{},_,_}: IO.pure(String,source)
+    case MarkdownOptions{_,_,Some{transform},_,_}: C.call(String & Nat,String,transform,(source,width))
+def linkCapability(options: MarkdownOptions) -> Bool:
+  match options: case MarkdownOptions{_,_,_,_,enabled}: enabled
 def background(style: Maybe<&2,DefaultTextStyle>) -> Maybe<&2,Style()>:
   match style:
     case None{}: None{}
@@ -168,28 +170,43 @@ def inlineStyle(kind: InlineKind,theme: MarkdownTheme) -> Style():
     case Link{_} MarkdownTheme{_,link,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: link
 def themeLinkUrl(theme: MarkdownTheme) -> Style():
   match theme: case MarkdownTheme{_,_,linkUrl,_,_,_,_,_,_,_,_,_,_,_,_,_}: linkUrl
-def styledInline(+kind: InlineKind,raw: String,inner: String,+theme: MarkdownTheme) -> IO(String):
+def styledInline(+kind: InlineKind,raw: String,inner: String,+theme: MarkdownTheme,links: Bool) -> IO(String):
   match kind:
     case Link{href}:
       do IO<String>:
         underlined : String <- C.call(String,String,themeUnderline(theme),inner)
         +linked : String <- C.call(String,String,inlineStyle(kind,theme),underlined)
-        Bool.pick(Unit -> IO(String),String.eq(raw,href),_ => IO.pure(String,linked),
+        Bool.pick(Unit -> IO(String),links,
+          _ => IO.pure(String,"\u{1b}]8;;" ++ href ++ "\u{1b}\\" ++ linked ++ "\u{1b}]8;;\u{1b}\\"),
+        _ => Bool.pick(Unit -> IO(String),String.eq(raw,href),_ => IO.pure(String,linked),
           _ => do IO<String>:
             url : String <- C.call(String,String,themeLinkUrl(theme)," (" ++ href ++ ")")
-            return linked ++ url)(Unit{})
+            return linked ++ url)(Unit{}))(Unit{})
     case kind: C.call(String,String,inlineStyle(kind,theme),inner)
-@unsafe def renderInline(step: InlineStep,plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>) -> IO(String):
+def isCode(kind: InlineKind) -> Bool:
+  match kind:
+    case Code{}: True{}
+    case _: False{}
+def prefixPart(value: Maybe<&2,Split>) -> String:
+  match value:
+    case None{}: ""
+    case Some{Split{before,_}}: before
+def prefixOf(styled: String) -> String: prefixPart(cut(styled,"\u{0}",""))
+@unsafe def renderDefault(step: InlineStep,+plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+links: Bool,+prefix: String) -> IO(String):
   match step:
-    case End{}: styleText(String.reverse(plain),style,theme)
-    case Literal{char,rest}: renderInline(nextInline(rest),SCon{char,plain},theme,style)
-    case Styled{kind,+content,rest}:
+    case End{}: Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => styleText(String.reverse(plain),style,theme))(Unit{})
+    case Literal{char,rest}: renderDefault(nextInline(rest),SCon{char,plain},theme,style,links,prefix)
+    case Styled{+kind,+content,+rest}:
       do IO<String>:
-        before : String <- styleText(String.reverse(plain),style,theme)
-        inner : String <- renderInline(nextInline(content),"",theme,style)
-        highlighted : String <- styledInline(kind,content,inner,theme)
-        following : String <- renderInline(nextInline(rest),"",theme,style)
-        return before ++ highlighted ++ following
+        before : String <- Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => styleText(String.reverse(plain),style,theme))(Unit{})
+        inner : String <- Bool.pick(Unit -> IO(String),isCode(kind),_ => IO.pure(String,content),_ => renderDefault(nextInline(content),"",theme,style,links,prefix))(Unit{})
+        highlighted : String <- styledInline(kind,content,inner,theme,links)
+        following : String <- renderDefault(nextInline(rest),"",theme,style,links,prefix)
+        return before ++ highlighted ++ Bool.pick(String,String.eq(rest,""),"",prefix) ++ following
+def renderInline(step: InlineStep,plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+links: Bool) -> IO(String):
+  do IO<String>:
+    sentinel : String <- styleText("\u{0}",style,theme)
+    renderDefault(step,plain,theme,style,links,prefixOf(sentinel))
 
 def headingLevel(text: String,count: Nat) -> Nat:
   match text:
@@ -204,6 +221,43 @@ def styledHeading(text: String,level: Nat,+theme: MarkdownTheme) -> IO(String):
     underlined : String <- applyIf(text,Nat.is_eq(level,1n),themeUnderline(theme))
     bold : String <- C.call(String,String,themeBold(theme),underlined)
     C.call(String,String,themeHeading(theme),bold)
+type InlineContext is Data:
+  HeadingContext{level: Nat}
+  QuoteContext{}
+def contextPlain(text: String,context: InlineContext,theme: MarkdownTheme) -> IO(String):
+  match context:
+    case HeadingContext{level}: styledHeading(text,level,theme)
+    case QuoteContext{}: IO.pure(String,text)
+def hashes(count: Nat,reversed: String) -> String:
+  match count:
+    case Zero{}: reversed
+    case Succ{rest}: hashes(rest,"#" ++ reversed)
+@unsafe def renderContext(step: InlineStep,+plain: String,+context: InlineContext,+prefix: String,+theme: MarkdownTheme,+links: Bool) -> IO(String):
+  match step:
+    case End{}:
+      Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => contextPlain(String.reverse(plain),context,theme))(Unit{})
+    case Literal{char,rest}: renderContext(nextInline(rest),SCon{char,plain},context,prefix,theme,links)
+    case Styled{+kind,+content,+rest}:
+      do IO<String>:
+        before : String <- Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => contextPlain(String.reverse(plain),context,theme))(Unit{})
+        inner : String <- Bool.pick(Unit -> IO(String),isCode(kind),_ => IO.pure(String,content),_ => renderContext(nextInline(content),"",context,prefix,theme,links))(Unit{})
+        highlighted : String <- styledInline(kind,content,inner,theme,links)
+        following : String <- renderContext(nextInline(rest),"",context,prefix,theme,links)
+        return before ++ highlighted ++ Bool.pick(String,String.eq(rest,""),"",prefix) ++ following
+def headingInline(content: String,+level: Nat,+theme: MarkdownTheme,+links: Bool) -> IO(String):
+  do IO<String>:
+    styled : String <- styledHeading("\u{0}",level,theme)
+    +rendered : String <- renderContext(nextInline(content),"",HeadingContext{level},prefixOf(styled),theme,links)
+    Bool.pick(Unit -> IO(String),Nat.is_ge(level,3n),_ => do IO<String>:
+      marker : String <- styledHeading(hashes(level,"") ++ " ",level,theme)
+      return marker ++ rendered,_ => IO.pure(String,rendered))(Unit{})
+def themeQuote(theme: MarkdownTheme) -> Style():
+  match theme: case MarkdownTheme{_,_,_,_,_,_,quote,_,_,_,_,_,_,_,_,_}: quote
+def quoteInline(content: String,+theme: MarkdownTheme,links: Bool) -> IO(String):
+  do IO<String>:
+    italic : String <- C.call(String,String,themeItalic(theme),"\u{0}")
+    styled : String <- C.call(String,String,themeQuote(theme),italic)
+    renderContext(nextInline(content),"",QuoteContext{},prefixOf(styled),theme,links)
 type BlockLine is Data:
   HeadingLine{level: Nat,content: String}
   BulletLine{depth: Nat,marker: String,content: String}
@@ -247,8 +301,6 @@ def classify(+line: String) -> BlockLine:
   classified(line,headingLevel(line,0n),space,bulletLine(body,space / 2n),quoteLine(body))
 def themeListBullet(theme: MarkdownTheme) -> Style():
   match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,bullet,_,_,_,_,_,_}: bullet
-def themeQuote(theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,quote,_,_,_,_,_,_,_,_,_}: quote
 def themeQuoteBorder(theme: MarkdownTheme) -> Style():
   match theme: case MarkdownTheme{_,_,_,_,_,_,_,border,_,_,_,_,_,_,_,_}: border
 def themeHr(theme: MarkdownTheme) -> Style():
@@ -257,25 +309,23 @@ def repeatText(+text: String,count: Nat,reversed: String) -> String:
   match count:
     case Zero{}: reversed
     case Succ{rest}: repeatText(text,rest,text ++ reversed)
-def lineResult(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat) -> IO(String):
+def lineResult(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,+links: Bool) -> IO(String):
   match kind:
-    case HeadingLine{level,content}: styledHeading(content,level,theme)
+    case HeadingLine{level,content}: headingInline(content,level,theme,links)
     case BulletLine{depth,mark,content}:
       do IO<String>:
         bullet : String <- C.call(String,String,themeListBullet(theme),mark)
-        rendered : String <- renderInline(nextInline(content),"",theme,style)
+        rendered : String <- renderInline(nextInline(content),"",theme,style,links)
         return U.spaces(depth * 4n,"") ++ bullet ++ rendered
     case QuoteLine{content}:
       do IO<String>:
         border : String <- C.call(String,String,themeQuoteBorder(theme),"│ ")
-        rendered : String <- renderInline(nextInline(content),"",theme,None{})
+        rendered : String <- renderInline(nextInline(content),"",theme,None{},links)
         quoted : String <- C.call(String,String,themeItalic(theme),rendered)
         result : String <- C.call(String,String,themeQuote(theme),quoted)
         return border ++ result
     case RuleLine{}: C.call(String,String,themeHr(theme),repeatText("─",Nat.min(width,80n),""))
-    case PlainLine{content}: renderInline(nextInline(content),"",theme,style)
-def renderLine(line: String,theme: MarkdownTheme,style: Maybe<&2,DefaultTextStyle>,width: Nat) -> IO(String):
-  lineResult(classify(line),theme,style,width)
+    case PlainLine{content}: renderInline(nextInline(content),"",theme,style,links)
 def continuation(lines: List<&2,String>,+prefix: String,reversed: List<&2,String>) -> List<&2,String>:
   match lines:
     case Nil{}: List.reverse(&2,String,reversed)
@@ -284,23 +334,37 @@ def prefixedParts(parts: List<&2,String>,+prefix: String,+space: String) -> List
   match parts:
     case Nil{}: prefix <> Nil{}
     case first <> rest: (prefix ++ first) <> continuation(rest,space,Nil{})
-def bulletWrapped(depth: Nat,mark: String,content: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat) -> IO(List<&2,String>):
+def quotedParts(parts: List<&2,String>,+prefix: String,+theme: MarkdownTheme,reversed: List<&2,String>) -> IO(List<&2,String>):
+  match parts:
+    case Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
+    case fragment <> rest:
+      do IO<List<&2,String>>:
+        italic : String <- C.call(String,String,themeItalic(theme),fragment)
+        styled : String <- C.call(String,String,themeQuote(theme),italic)
+        quotedParts(rest,prefix,theme,(prefix ++ styled) <> reversed)
+def quoteWrapped(content: String,+theme: MarkdownTheme,width: Nat,links: Bool) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    +border : String <- C.call(String,String,themeQuoteBorder(theme),"│ ")
+    rendered : String <- quoteInline(content,theme,links)
+    quotedParts(U.wrapTextWithAnsi(rendered,Nat.max(1n,width - U.visibleWidth(border))),border,theme,Nil{})
+def bulletWrapped(depth: Nat,mark: String,content: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,links: Bool) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     bullet : String <- C.call(String,String,themeListBullet(theme),mark)
-    rendered : String <- renderInline(nextInline(content),"",theme,style)
+    rendered : String <- renderInline(nextInline(content),"",theme,style,links)
     +prefix : String <- IO.pure(String,U.spaces(depth * 4n,"") ++ bullet)
     +space : String <- IO.pure(String,U.spaces(U.visibleWidth(prefix),""))
     +parts : List<&2,String> <- IO.pure(List<&2,String>,U.wrapTextWithAnsi(rendered,Nat.max(1n,width - U.visibleWidth(prefix))))
     return prefixedParts(parts,prefix,space)
-def blockKind(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat) -> IO(List<&2,String>):
+def blockKind(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,links: Bool) -> IO(List<&2,String>):
   match kind:
-    case BulletLine{depth,mark,content}: bulletWrapped(depth,mark,content,theme,style,width)
+    case BulletLine{depth,mark,content}: bulletWrapped(depth,mark,content,theme,style,width,links)
+    case QuoteLine{content}: quoteWrapped(content,theme,width,links)
     case kind:
       do IO<List<&2,String>>:
-        rendered : String <- lineResult(kind,theme,style,width)
+        rendered : String <- lineResult(kind,theme,style,width,links)
         return rendered <> Nil{}
-def blockLine(line: String,theme: MarkdownTheme,style: Maybe<&2,DefaultTextStyle>,width: Nat) -> IO(List<&2,String>):
-  blockKind(classify(line),theme,style,width)
+def blockLine(line: String,theme: MarkdownTheme,style: Maybe<&2,DefaultTextStyle>,width: Nat,links: Bool) -> IO(List<&2,String>):
+  blockKind(classify(line),theme,style,width,links)
 def dropTrailingBlank(+reversed: List<&2,String>) -> List<&2,String>:
   match reversed:
     case Nil{}: Nil{}
@@ -323,6 +387,32 @@ def withSpacing(line: String,+rendered: List<&2,String>,rest: List<&2,String>,+f
 def afterFence(+rendered: List<&2,String>,rest: List<&2,String>,+following: List<&2,String>) -> List<&2,String>:
   Bool.pick(List<&2,String>,hasFollowing(rest),List.append(&2,String,rendered,"" <> following),List.append(&2,String,rendered,following))
 type Fence is Data: Fence{code: List<&2,String>,remaining: List<&2,String>}
+type QuoteGroup is Data: QuoteGroup{content: List<&2,String>,remaining: List<&2,String>}
+def quoteContent(kind: BlockLine) -> Maybe<&2,String>:
+  match kind:
+    case QuoteLine{content}: Some{content}
+    case PlainLine{content}: Some{content}
+    case _: None{}
+def quoteLineContent(line: String) -> Maybe<&2,String>: quoteContent(classify(line))
+def collectQuote(lines: List<&2,String>,+reversed: List<&2,String>) -> QuoteGroup:
+  match lines:
+    case Nil{}: QuoteGroup{List.reverse(&2,String,reversed),Nil{}}
+    case +line <> +rest:
+      Bool.pick(Unit -> QuoteGroup,Bool.not(Text.blank(line)) && Bool.not(Maybe.is_none(&2,String,quoteLineContent(line))),
+        _ => collectQuote(rest,Maybe.default(&2,String,quoteLineContent(line),"") <> reversed),
+        _ => QuoteGroup{List.reverse(&2,String,reversed),line <> rest})(Unit{})
+def quoteLines(group: QuoteGroup) -> List<&2,String>:
+  match group: case QuoteGroup{lines,_}: lines
+def quoteRest(group: QuoteGroup) -> List<&2,String>:
+  match group: case QuoteGroup{_,rest}: rest
+def renderQuoteLines(lines: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(List<&2,String>):
+  match lines:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case line <> rest:
+      do IO<List<&2,String>>:
+        rendered : List<&2,String> <- quoteWrapped(line,theme,width,links)
+        following : List<&2,String> <- renderQuoteLines(rest,theme,width,links)
+        return List.append(&2,String,rendered,following)
 def fenceLines(value: Fence) -> List<&2,String>:
   match value: case Fence{code,_}: code
 def fenceRest(value: Fence) -> List<&2,String>:
@@ -366,6 +456,17 @@ def fenceRendered(+opening: String,code: List<&2,String>,+theme: MarkdownTheme) 
     return first <> List.append(&2,String,body,last <> Nil{})
 type TableRows is Data: TableRows{rows: List<&2,List<&2,String>>,remaining: List<&2,String>}
 type TableResult is Data: TableResult{lines: List<&2,String>,remaining: List<&2,String>}
+def rawTable(lines: List<&2,String>,+reversed: List<&2,String>) -> TableResult:
+  match lines:
+    case Nil{}: TableResult{List.reverse(&2,String,reversed),Nil{}}
+    case +line <> +rest:
+      Bool.pick(Unit -> TableResult,String.contains(line,"|") && Bool.not(Text.blank(line)),
+        _ => rawTable(rest,line <> reversed),_ => TableResult{List.reverse(&2,String,reversed),line <> rest})(Unit{})
+def narrowFromRaw(raw: TableResult,width: Nat) -> TableResult:
+  match raw:
+    case TableResult{lines,remaining}: TableResult{wrap(lines,width,Nil{}),remaining}
+def narrowTable(header: String,rest: List<&2,String>,width: Nat) -> TableResult:
+  narrowFromRaw(rawTable(header <> rest,Nil{}),width)
 def tableLines(value: TableResult) -> List<&2,String>:
   match value: case TableResult{lines,_}: lines
 def tableRest(value: TableResult) -> List<&2,String>:
@@ -417,6 +518,57 @@ def widths(header: List<&2,String>,+rows: List<&2,List<&2,String>>,+index: Nat) 
   match header:
     case Nil{}: Nil{}
     case cell <> rest: Nat.max(U.visibleWidth(cell),rowWidth(rows,index)) <> widths(rest,rows,Succ{index})
+def longestWord(words: List<&2,String>) -> Nat:
+  match words:
+    case Nil{}: 1n
+    case word <> rest: Nat.max(U.visibleWidth(word),longestWord(rest))
+def wordWidth(text: String) -> Nat: Nat.min(30n,longestWord(Strings.split(text,' ')))
+def rowWordWidth(rows: List<&2,List<&2,String>>,+index: Nat) -> Nat:
+  match rows:
+    case Nil{}: 1n
+    case row <> rest: Nat.max(Maybe.default(&2,Nat,Maybe.map(&2,String,Nat,word => wordWidth(word),List.get(&2,String,row,index)),1n),rowWordWidth(rest,index))
+def minimumWidths(header: List<&2,String>,+rows: List<&2,List<&2,String>>,+index: Nat) -> List<&2,Nat>:
+  match header:
+    case Nil{}: Nil{}
+    case cell <> rest: Nat.max(wordWidth(cell),rowWordWidth(rows,index)) <> minimumWidths(rest,rows,Succ{index})
+def sumWidths(sizes: List<&2,Nat>) -> Nat:
+  match sizes:
+    case Nil{}: 0n
+    case size <> rest: size + sumWidths(rest)
+def ones(count: Nat) -> List<&2,Nat>:
+  match count:
+    case Zero{}: Nil{}
+    case Succ{rest}: 1n <> ones(rest)
+def potential(target: List<&2,Nat>,base: List<&2,Nat>) -> List<&2,Nat>:
+  match target base:
+    case Nil{} _: Nil{}
+    case _ Nil{}: Nil{}
+    case value <> more minimum <> rest: (value - minimum) <> potential(more,rest)
+def proportional(base: List<&2,Nat>,weights: List<&2,Nat>,+extra: Nat,+total: Nat) -> List<&2,Nat>:
+  match base weights:
+    case Nil{} _: Nil{}
+    case _ Nil{}: Nil{}
+    case value <> more weight <> rest: (value + Bool.pick(Nat,Nat.is_gt(total,0n),weight * extra / total,0n)) <> proportional(more,rest,extra,total)
+def growPass(current: List<&2,Nat>,targets: List<&2,Nat>,+remaining: Nat) -> List<&2,Nat>:
+  match current targets:
+    case Nil{} _: Nil{}
+    case _ Nil{}: Nil{}
+    case +value <> +more +target <> +rest:
+      Bool.pick(List<&2,Nat>,Nat.is_gt(remaining,0n) && Nat.is_lt(value,target),
+        Succ{value} <> growPass(more,rest,remaining - 1n),value <> growPass(more,rest,remaining))
+@unsafe def fillWidths(+current: List<&2,Nat>,+targets: List<&2,Nat>,+budget: Nat) -> List<&2,Nat>:
+  +remaining = budget - sumWidths(current)
+  Bool.pick(Unit -> List<&2,Nat>,Nat.is_gt(remaining,0n) && Nat.is_lt(sumWidths(current),sumWidths(targets)),
+    _ => fillWidths(growPass(current,targets,remaining),targets,budget),_ => current)(Unit{})
+def allocatedWidths(+natural: List<&2,Nat>,+minimum: List<&2,Nat>,+available: Nat) -> List<&2,Nat>:
+  +count = List.length(&2,Nat,natural)
+  +base = Bool.pick(List<&2,Nat>,Nat.is_gt(sumWidths(minimum),available),ones(count),minimum)
+  +target = Bool.pick(List<&2,Nat>,Nat.is_gt(sumWidths(minimum),available),minimum,natural)
+  +weights = potential(target,base)
+  +initial = proportional(base,weights,available - sumWidths(base),sumWidths(weights))
+  fillWidths(initial,target,available)
+def tableWidths(+natural: List<&2,Nat>,minimum: List<&2,Nat>,+available: Nat) -> List<&2,Nat>:
+  Bool.pick(List<&2,Nat>,Nat.is_le(sumWidths(natural),available),natural,allocatedWidths(natural,minimum,available))
 def dashes(widths: List<&2,Nat>) -> List<&2,String>:
   match widths:
     case Nil{}: Nil{}
@@ -426,38 +578,63 @@ def border(widths: List<&2,Nat>,left: String,middle: String,right: String) -> St
 def paddedCell(+cell: String,width: Nat,bold: Bool,theme: MarkdownTheme) -> IO(String):
   +plain = U.padResult(cell,U.visibleWidth(cell),width,True{})
   applyIf(plain,bold,themeBold(theme))
-@unsafe def rowParts(+items: List<&2,String>,sizes: List<&2,Nat>,+bold: Bool,+theme: MarkdownTheme,reversed: List<&2,String>) -> IO(List<&2,String>):
+def resetFragments(parts: List<&2,String>) -> List<&2,String>:
+  match parts:
+    case Nil{}: Nil{}
+    case last <> Nil{}: last <> Nil{}
+    case first <> rest: (first ++ "\u{1b}[22;23;24;25;27;28;29;39m") <> resetFragments(rest)
+@unsafe def wrappedCells(+cells: List<&2,String>,sizes: List<&2,Nat>,+theme: MarkdownTheme,+links: Bool,reversed: List<&2,List<&2,String>>) -> IO(List<&2,List<&2,String>>):
   match sizes:
-    case Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
-    case width <> more:
+    case Nil{}: IO.pure(List<&2,List<&2,String>>,List.reverse(&2,List<&2,String>,reversed))
+    case width <> rest:
+      do IO<List<&2,List<&2,String>>>:
+        rendered : String <- renderInline(nextInline(Maybe.default(&2,String,List.get(&2,String,cells,0n),"")),"",theme,None{},links)
+        wrappedCells(List.drop(&2,String,cells,1n),rest,theme,links,resetFragments(U.wrapTextWithAnsi(rendered,Nat.max(1n,width))) <> reversed)
+def wrappedHeight(cells: List<&2,List<&2,String>>) -> Nat:
+  match cells:
+    case Nil{}: 0n
+    case cell <> rest: Nat.max(List.length(&2,String,cell),wrappedHeight(rest))
+def wrappedRowParts(cells: List<&2,List<&2,String>>,sizes: List<&2,Nat>,+index: Nat,+bold: Bool,+theme: MarkdownTheme,reversed: List<&2,String>) -> IO(List<&2,String>):
+  match cells sizes:
+    case Nil{} _: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
+    case _ Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
+    case cell <> more width <> rest:
       do IO<List<&2,String>>:
-        padded : String <- paddedCell(Maybe.default(&2,String,List.get(&2,String,items,0n),""),width,bold,theme)
-        rowParts(List.drop(&2,String,items,1n),more,bold,theme,padded <> reversed)
-def rowLine(cells: List<&2,String>,widths: List<&2,Nat>,bold: Bool,theme: MarkdownTheme) -> IO(String):
-  do IO<String>:
-    parts : List<&2,String> <- rowParts(cells,widths,bold,theme,Nil{})
-    return "│ " ++ String.join(parts," │ ") ++ " │"
-def renderedRows(rows: List<&2,List<&2,String>>,+widths: List<&2,Nat>,+theme: MarkdownTheme,+separator: String) -> IO(List<&2,String>):
+        padded : String <- paddedCell(Maybe.default(&2,String,List.get(&2,String,cell,index),""),width,bold,theme)
+        wrappedRowParts(more,rest,index,bold,theme,padded <> reversed)
+@unsafe def wrappedRowLines(+cells: List<&2,List<&2,String>>,+sizes: List<&2,Nat>,+bold: Bool,+theme: MarkdownTheme,+index: Nat,count: Nat) -> IO(List<&2,String>):
+  match count:
+    case Zero{}: IO.pure(List<&2,String>,Nil{})
+    case Succ{rest}:
+      do IO<List<&2,String>>:
+        parts : List<&2,String> <- wrappedRowParts(cells,sizes,index,bold,theme,Nil{})
+        following : List<&2,String> <- wrappedRowLines(cells,sizes,bold,theme,Succ{index},rest)
+        return ("│ " ++ String.join(parts," │ ") ++ " │") <> following
+def wrappedRow(row: List<&2,String>,+sizes: List<&2,Nat>,+bold: Bool,+theme: MarkdownTheme,links: Bool) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    +cells : List<&2,List<&2,String>> <- wrappedCells(row,sizes,theme,links,Nil{})
+    wrappedRowLines(cells,sizes,bold,theme,0n,wrappedHeight(cells))
+def renderedRows(rows: List<&2,List<&2,String>>,+widths: List<&2,Nat>,+theme: MarkdownTheme,+separator: String,+links: Bool) -> IO(List<&2,String>):
   match rows:
     case Nil{}: IO.pure(List<&2,String>,Nil{})
-    case row <> Nil{}:
-      do IO<List<&2,String>>:
-        line : String <- rowLine(row,widths,False{},theme)
-        return line <> Nil{}
+    case row <> Nil{}: wrappedRow(row,widths,False{},theme,links)
     case row <> rest:
       do IO<List<&2,String>>:
-        line : String <- rowLine(row,widths,False{},theme)
-        following : List<&2,String> <- renderedRows(rest,widths,theme,separator)
-        return line <> separator <> following
-def tableRendered(header: String,rest: List<&2,String>,+theme: MarkdownTheme) -> IO(TableResult):
+        line : List<&2,String> <- wrappedRow(row,widths,False{},theme,links)
+        following : List<&2,String> <- renderedRows(rest,widths,theme,separator,links)
+        return List.append(&2,String,line,separator <> following)
+def tableRegular(header: String,rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(TableResult):
   do IO<TableResult>:
     +parsed : TableRows <- IO.pure(TableRows,collectRows(afterDivider(rest),Nil{}))
     +cells : List<&2,String> <- IO.pure(List<&2,String>,tableHeader(header))
-    +columns : List<&2,Nat> <- IO.pure(List<&2,Nat>,widths(cells,tableRows(parsed),0n))
-    heading : String <- rowLine(cells,columns,True{},theme)
-    rows : List<&2,String> <- renderedRows(tableRows(parsed),columns,theme,border(columns,"├─","─┼─","─┤"))
-    return TableResult{border(columns,"┌─","─┬─","─┐") <> heading <> border(columns,"├─","─┼─","─┤") <> List.append(&2,String,rows,border(columns,"└─","─┴─","─┘") <> Nil{}),tableRemaining(parsed)}
-@unsafe def renderBlocks(lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat) -> IO(List<&2,String>):
+    +columns : List<&2,Nat> <- IO.pure(List<&2,Nat>,tableWidths(widths(cells,tableRows(parsed),0n),minimumWidths(cells,tableRows(parsed),0n),width - (3n * List.length(&2,String,cells) + 1n)))
+    heading : List<&2,String> <- wrappedRow(cells,columns,True{},theme,links)
+    rows : List<&2,String> <- renderedRows(tableRows(parsed),columns,theme,border(columns,"├─","─┼─","─┤"),links)
+    return TableResult{border(columns,"┌─","─┬─","─┐") <> List.append(&2,String,heading,border(columns,"├─","─┼─","─┤") <> List.append(&2,String,rows,border(columns,"└─","─┴─","─┘") <> Nil{})),tableRemaining(parsed)}
+def tableRendered(+header: String,+rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(TableResult):
+  Bool.pick(Unit -> IO(TableResult),Nat.is_lt(width,4n * List.length(&2,String,tableHeader(header)) + 1n),
+    _ => IO.pure(TableResult,narrowTable(header,rest,width)),_ => tableRegular(header,rest,theme,width,links))(Unit{})
+@unsafe def renderBlocks(lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+links: Bool) -> IO(List<&2,String>):
   match lines:
     case Nil{}: IO.pure(List<&2,String>,Nil{})
     case +line <> +rest:
@@ -465,17 +642,24 @@ def tableRendered(header: String,rest: List<&2,String>,+theme: MarkdownTheme) ->
         _ => do IO<List<&2,String>>:
           +fence : Fence <- IO.pure(Fence,collectFence(rest,"```",Nil{}))
           rendered : List<&2,String> <- fenceRendered(line,fenceLines(fence),theme)
-          following : List<&2,String> <- renderBlocks(fenceRest(fence),theme,style,width)
+          following : List<&2,String> <- renderBlocks(fenceRest(fence),theme,style,width,links)
           return afterFence(rendered,fenceRest(fence),following),
+        _ => Bool.pick(Unit -> IO(List<&2,String>),Bool.not(Maybe.is_none(&2,BlockLine,quoteLine(line))),
+          _ => do IO<List<&2,String>>:
+            +group : QuoteGroup <- IO.pure(QuoteGroup,collectQuote(rest,Nil{}))
+            first : List<&2,String> <- blockLine(line,theme,style,width,links)
+            more : List<&2,String> <- renderQuoteLines(quoteLines(group),theme,width,links)
+            following : List<&2,String> <- renderBlocks(quoteRest(group),theme,style,width,links)
+            return afterFence(List.append(&2,String,first,more),quoteRest(group),following),
         _ => Bool.pick(Unit -> IO(List<&2,String>),isTable(line,rest),
           _ => do IO<List<&2,String>>:
-            +table : TableResult <- tableRendered(line,rest,theme)
-            following : List<&2,String> <- renderBlocks(tableRest(table),theme,style,width)
+            +table : TableResult <- tableRendered(line,rest,theme,width,links)
+            following : List<&2,String> <- renderBlocks(tableRest(table),theme,style,width,links)
             return List.append(&2,String,tableLines(table),following),
           _ => do IO<List<&2,String>>:
-            rendered : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),Text.blank(line),_ => IO.pure(List<&2,String>,"" <> Nil{}),_ => blockLine(line,theme,style,width))(Unit{})
-            following : List<&2,String> <- renderBlocks(rest,theme,style,width)
-            return withSpacing(line,rendered,rest,following))(Unit{}))(Unit{})
+            rendered : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),Text.blank(line),_ => IO.pure(List<&2,String>,"" <> Nil{}),_ => blockLine(line,theme,style,width,links))(Unit{})
+            following : List<&2,String> <- renderBlocks(rest,theme,style,width,links)
+            return withSpacing(line,rendered,rest,following))(Unit{}))(Unit{}))(Unit{})
 
 type OrderedLine is Data: OrderedLine{number: Nat,content: String}
 type Numbered is Data: Numbered{line: String,next: Maybe<&2,Nat>}
@@ -514,7 +698,7 @@ def normalizeOrdered(lines: List<&2,String>,current: Maybe<&2,Nat>) -> List<&2,S
       numberedLine(step) <> normalizeOrdered(rest,numberedNext(step))
 def preparedLines(lines: List<&2,String>,options: MarkdownOptions) -> List<&2,String>:
   match options:
-    case MarkdownOptions{True{},_,_,_}: lines
+    case MarkdownOptions{True{},_,_,_,_}: lines
     case _: normalizeOrdered(lines,None{})
 def uncached(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
   match state:
@@ -524,7 +708,7 @@ def uncached(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
         Bool.pick(Unit -> IO(Markdown & List<&2,String>),Text.blank(transformedText),
           _ => IO.pure(Markdown & List<&2,String>,rendered(state,width,Nil{})),
           _ => do IO<Markdown & List<&2,String>>:
-            blocks : List<&2,String> <- renderBlocks(preparedLines(trimTrailing(Strings.split(String.join(Strings.split(transformedText,'\t'),"   "),'\n')),options),theme,style,Nat.max(1n,width - x * 2n))
+            blocks : List<&2,String> <- renderBlocks(preparedLines(trimTrailing(Strings.split(String.join(Strings.split(transformedText,'\t'),"   "),'\n')),options),theme,style,Nat.max(1n,width - x * 2n),linkCapability(options))
             finish(state,width,blocks))(Unit{})
 def render(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
   match state:
