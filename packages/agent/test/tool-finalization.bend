@@ -55,7 +55,7 @@ def forbidden(unused: Unit, input: ToolInput()) -> IO(ToolOutput()):
   IO.die(ToolOutput(), 1, "finalization must not execute tool twice")
 
 def configuration(converter: ConfigTest.Converter(), after: Maybe<&2, Hook()>) -> Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, after}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, after}
 
 def check(finalized: Loop.FinalizedToolCallOutcome<String>, expectedText: String, expectedDetails: String, expectedError: Bool, expectedTerminate: Bool) -> IO(Unit):
   match finalized:

@@ -47,7 +47,13 @@ def check(result: Outcome(), expected: String) -> IO(Unit):
         checkMessages(messages)
         Test.assertion(String.eq(Bool.pick(String, failed, "ended", "continue"), expected), "completion result differs")
 
-def run(reason: Ai.StopReason, failAt: U32, expected: String, expectedTrace: String, expectedCalls: U32) -> IO(Unit):
+def finishing(trace: R.Ref<String>, fails: Bool, messages: H.Messages()) -> IO(Emitted()):
+  do IO<Emitted()>:
+    Test.assertion(Nat.is_eq(List.length(&2, H.Message(), messages), 2n), "finishTurn receives the history with the failed assistant")
+    R.modify(String, Unit, trace, old => (old ++ "finish|", Unit{}))
+    return Bool.pick(Emitted(), fails, Fail{"finish failure"}, Done{Unit{}})
+
+def run(reason: Ai.StopReason, failAt: U32, finishFails: Bool, expected: String, expectedTrace: String, expectedCalls: U32) -> IO(Unit):
   do IO<Unit>:
     +zero : F64 = F.fromU32(0)
     message : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), reason)
@@ -55,7 +61,7 @@ def run(reason: Ai.StopReason, failAt: U32, expected: String, expectedTrace: Str
     +trace : R.Ref<String> <- R.new(String, "")
     +count : R.Ref<U32> <- R.new(U32, 0)
     +sink : Loop.AgentEventSink(Unit, String, String, Unit, Unit, String) <- C.create(~Environment, ~EventValue(), ~Emitted(), ~emit, Environment{count, trace, failAt})
-    result : Outcome() <- Loop.recordAssistantCompletion(Unit, String, String, Unit, Unit, String, message, messages, sink)
+    result : Outcome() <- Loop.recordAssistantCompletion(Unit, String, String, Unit, Unit, String, message, messages, sink, history => finishing(trace, finishFails, history))
     check(result, expected)
     Test.assertion(Nat.is_eq(List.length(&2, H.Message(), messages), 1n), "completion mutated input history")
     observed : String <- R.dispose(String, trace)

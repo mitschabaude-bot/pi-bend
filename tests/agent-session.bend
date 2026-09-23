@@ -148,7 +148,7 @@ type Fixture is Data:
   Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
 def options(stream: Runtime.Stream(), converter: Runtime.Converter(), sessionId: String) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
-  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{"You are helpful."}, Some{fauxModel()}, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{"You are helpful."}, Some{fauxModel()}, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
 
 def requireAgent(result: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Runtime.Owner()):
   match result:

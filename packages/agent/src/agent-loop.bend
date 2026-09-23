@@ -401,7 +401,7 @@ def turnReasoning(previous: Maybe<&2, Ai.ThinkingLevel>, requested: Maybe<&2, T.
 
 def withTurnConfig(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, replacementModel: Maybe<&2, Ai.Model<Ai.JsonValue>>, requestedThinking: Maybe<&2, T.ThinkingLevel()>) -> T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>:
   match config:
-    case T.AgentLoopConfig{+options, model, convertToLlm, transformContext, getApiKey, stopHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withReasoning(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options, turnReasoning(Ai.reasoningOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options), requestedThinking)), choose(Ai.Model<Ai.JsonValue>, model, replacementModel), convertToLlm, transformContext, getApiKey, stopHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{+options, model, convertToLlm, transformContext, getApiKey, stopHook, requestHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withReasoning(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options, turnReasoning(Ai.reasoningOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options), requestedThinking)), choose(Ai.Model<Ai.JsonValue>, model, replacementModel), convertToLlm, transformContext, getApiKey, stopHook, requestHook, prepareHook, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 type PreparedTurnState<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data> is Data:
   PreparedTurnState{context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)}
@@ -445,7 +445,7 @@ def invokePrepareNextTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom:
 
 def selectedPrepareNextTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, value: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.PrepareNextTurnContext(DiagnosticDetails, ToolDetails, Custom, ExecutionError), Result<&2, &2, ExecutionError, Maybe<&2, T.AgentLoopTurnUpdate<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>>:
   match value:
-    case T.AgentLoopConfig{_, _, _, _, _, _, callback, _, _, _, _, _}: callback
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, callback, _, _, _, _, _}: callback
 
 def prepareNextTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, +config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.PrepareNextTurnContext(DiagnosticDetails, ToolDetails, Custom, ExecutionError)) -> IO(Result<&2, &2, ExecutionError, PreparedTurnState<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>>):
   do IO<Result<&2, &2, ExecutionError, PreparedTurnState<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>>>:
@@ -462,7 +462,7 @@ def readQueuedMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Da
 
 def selectedSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<Unit, Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, selected, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, selected, _, _, _, _}: selected
 
 def pollSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> IO(Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>):
   do IO<Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>:
@@ -471,7 +471,7 @@ def pollSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: 
 
 def selectedFollowUpMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<Unit, Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, selected, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, selected, _, _, _}: selected
 
 def pollFollowUpMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> IO(Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>):
   do IO<Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>:
@@ -491,51 +491,31 @@ def repollSteeringMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom
     contents : List<&2, T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>> = pending
     repollSteeringContents(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, config, pending, contents)
 
-# A missing stop hook is false. Recoverable hook errors are not stop requests.
-def invokeShouldStopAfterTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, callback: Maybe<&2, C.Callback<T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, Result<&2, &2, ExecutionError, Bool>>>) -> IO(Result<&2, &2, ExecutionError, Bool>):
+# upstream finishTurn: called with the completed turn before turn_end. None
+# (no hook, or no decision) preserves normal scheduling.
+def invokeFinishTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, completed: T.AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, callback: Maybe<&2, C.Callback<T.ToolHookInput<T.AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>>>>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>>):
   match callback:
-    case None{}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Done{False{}})
-    case Some{selected}: C.call(T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, Result<&2, &2, ExecutionError, Bool>, selected, completed)
+    case None{}: IO.pure(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>>, Done{None{}})
+    case Some{selected}: C.call(T.ToolHookInput<T.AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>>, selected, T.ToolHookInput{completed, signal})
 
-def selectedShouldStopAfterTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, Result<&2, &2, ExecutionError, Bool>>>:
+def selectedFinishTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, callback, _, _, _, _, _, _}: callback
+    case T.AgentLoopConfig{_, _, _, _, _, callback, _, _, _, _, _, _, _}: callback
 
-def shouldStopAfterTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>) -> IO(Result<&2, &2, ExecutionError, Bool>):
-  do IO<Result<&2, &2, ExecutionError, Bool>>:
-    current : T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry> = config
-    invokeShouldStopAfterTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError, completed, selectedShouldStopAfterTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, current))
+def finishTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>>):
+  invokeFinishTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError, completed, signal, selectedFinishTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, config))
 
-def stoppedTurnResult(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, emitted: Result<&2, &2, ExecutionError, Unit>) -> Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>:
-  match emitted:
-    case Fail{error}: Fail{error}
-    case Done{_}: Done{None{}}
+# An error or aborted response still reports its turn; the run ends regardless
+# of the decision.
+def finishFailedTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Result<&2, &2, ExecutionError, Unit>):
+  do IO<Result<&2, &2, ExecutionError, Unit>>:
+    decision : Result<&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>> <- finishTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, config, completed, signal)
+    return Result.map(&2, &2, ExecutionError, Maybe<&2, T.AgentTurnDecision>, Unit, _ => Unit{}, decision)
 
-def queuedTurnResult(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, queued: Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>) -> Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>:
-  match queued:
-    case Fail{error}: Fail{error}
-    case Done{messages}: Done{Some{messages}}
-
-def afterTurnDecision(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, -PartialResult: Data, -ExecutionResult: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, newMessages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), decision: Result<&2, &2, ExecutionError, Bool>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>):
+def continuesExplicitly(decision: Maybe<&2, T.AgentTurnDecision>) -> Bool:
   match decision:
-    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>, Fail{error})
-    case Done{True{}}:
-      do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
-        emitted : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.AgentEnd{newMessages})
-        return stoppedTurnResult(DiagnosticDetails, ToolDetails, Custom, ExecutionError, emitted)
-    case Done{False{}}:
-      do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
-        queued : Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)> <- pollSteeringMessages(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, config)
-        return queuedTurnResult(DiagnosticDetails, ToolDetails, Custom, ExecutionError, queued)
-
-# The runLoop block after turn_end and completed-context construction. None
-# means agent_end settled; Some supplies pending steering to the inner loop.
-# Hook/emit errors skip polling. The supplied message history is the
-# immutable value delivered to agent_end.
-def finishCompletedTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, -PartialResult: Data, -ExecutionResult: Data, +config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, newMessages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError)) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>):
-  do IO<Result<&2, &2, ExecutionError, Maybe<&2, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
-    decision : Result<&2, &2, ExecutionError, Bool> <- shouldStopAfterTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, config, completed)
-    afterTurnDecision(DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry, PartialResult, ExecutionResult, config, newMessages, emit, decision)
+    case Some{T.ContinueTurn{}}: True{}
+    case _: False{}
 
 def contextMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>) -> T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom):
   match context:
@@ -548,11 +528,11 @@ def invokeContextTransform(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom
 
 def selectedContextTransform(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>, Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, selected, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, selected, _, _, _, _, _, _, _, _, _}: selected
 
 def selectedMessageConverter(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> C.Callback<T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), Result<&2, &2, ExecutionError, List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, ToolDetails>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, selected, _, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, selected, _, _, _, _, _, _, _, _, _, _}: selected
 
 def convertTransformedMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, transformed: Result<&2, &2, ExecutionError, T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>) -> IO(Result<&2, &2, ExecutionError, List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, ToolDetails>>>):
   match transformed:
@@ -571,15 +551,15 @@ def convertContextMessages(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom
 
 def selectedApiKey(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, String>:
   match config:
-    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _}: Ai.apiKeyOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options)
+    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _, _}: Ai.apiKeyOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options)
 
 def selectedApiKeyResolver(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<String, Result<&2, &2, ExecutionError, Maybe<&2, String>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, selected, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, _, _, _, selected, _, _, _, _, _, _, _, _}: selected
 
 def selectedRequestModel(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Ai.Model<Ai.JsonValue>:
   match config:
-    case T.AgentLoopConfig{_, selected, _, _, _, _, _, _, _, _, _, _}: selected
+    case T.AgentLoopConfig{_, selected, _, _, _, _, _, _, _, _, _, _, _}: selected
 
 def requestModelProvider(-Value: Data, model: Ai.Model<Value>) -> String:
   match model:
@@ -637,7 +617,7 @@ def prepareLlmContext(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Dat
 
 def withRequestOverrides(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, resolvedApiKey: Maybe<&2, String>, requestSignal: Maybe<&2, Abort.AbortSignal<Unit>>) -> T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>:
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, stopCallback, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withApiKey(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, Ai.withSignal(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options, requestSignal), resolvedApiKey), model, convertToLlm, transformContext, getApiKey, stopCallback, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, stopCallback, requestHook, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withApiKey(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, Ai.withSignal(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError, options, requestSignal), resolvedApiKey), model, convertToLlm, transformContext, getApiKey, stopCallback, requestHook, prepareCallback, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 def snapshotRequestConfig(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>, requestSignal: Maybe<&2, Abort.AbortSignal<Unit>>, resolved: Result<&2, &2, ExecutionError, Maybe<&2, String>>) -> Result<&2, &2, ExecutionError, T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>>:
   match resolved:
@@ -852,14 +832,23 @@ def afterFailedTurnEnd(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Da
         ended : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.AgentEnd{messages})
         return afterFailedAgentEnd(ExecutionError, ended)
 
-def endFailedAssistantTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), +emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), failed: Bool) -> IO(Result<&2, &2, ExecutionError, Bool>):
-  match failed:
-    case False{}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Done{False{}})
-    case True{}:
+def failedTurnFinished(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, +message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, +messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), +emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), finished: Result<&2, &2, ExecutionError, Unit>) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  match finished:
+    case Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Fail{error})
+    case Done{_}:
       do IO<Result<&2, &2, ExecutionError, Bool>>:
         +results : List<&2, Ai.ToolResultMessage<ToolDetails>> = Nil{}
         emitted : Result<&2, &2, ExecutionError, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult>, Result<&2, &2, ExecutionError, Unit>, emit, T.TurnEnd{T.LlmMessage{Ai.Assistant{message}}, results})
         afterFailedTurnEnd(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, messages, emit, emitted)
+
+# An error or aborted response reports finishTurn, then turn_end and agent_end.
+def endFailedAssistantTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, +messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), +emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), finish: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom) -> IO(Result<&2, &2, ExecutionError, Unit>), failed: Bool) -> IO(Result<&2, &2, ExecutionError, Bool>):
+  match failed:
+    case False{}: IO.pure(Result<&2, &2, ExecutionError, Bool>, Done{False{}})
+    case True{}:
+      do IO<Result<&2, &2, ExecutionError, Bool>>:
+        finished : Result<&2, &2, ExecutionError, Unit> <- finish(messages)
+        failedTurnFinished(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, message, messages, emit, finished)
 
 type AssistantCompletion<-Message: Data> is Data:
   AssistantCompletion{messages: List<&2, Message>, failed: Bool}
@@ -869,10 +858,10 @@ def completionResult(-Message: Data, -Error: Data, messages: List<&2, Message>, 
     case Fail{error}: Fail{error}
     case Done{failed}: Done{AssistantCompletion{messages, failed}}
 
-def recordAssistantCompletion(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, +message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, +messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError)) -> IO(Result<&2, &2, ExecutionError, AssistantCompletion<T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>>>):
+def recordAssistantCompletion(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionResult: Data, -ExecutionError: Data, +message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, +messages: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), emit: AgentEventSink(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError), finish: T.AgentMessageArray(DiagnosticDetails, ToolDetails, Custom) -> IO(Result<&2, &2, ExecutionError, Unit>)) -> IO(Result<&2, &2, ExecutionError, AssistantCompletion<T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>>>):
   do IO<Result<&2, &2, ExecutionError, AssistantCompletion<T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>>>>:
     +updated : List<&2, T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>> = List.append(&2, T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>, messages, T.LlmMessage{Ai.Assistant{message}} <> Nil{})
-    outcome : Result<&2, &2, ExecutionError, Bool> <- endFailedAssistantTurn(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, message, updated, emit, assistantFailed(DiagnosticDetails, message))
+    outcome : Result<&2, &2, ExecutionError, Bool> <- endFailedAssistantTurn(DiagnosticDetails, ToolDetails, Custom, PartialResult, ExecutionResult, ExecutionError, message, updated, emit, finish, assistantFailed(DiagnosticDetails, message))
     return completionResult(T.AgentMessage<DiagnosticDetails, ToolDetails, Custom>, ExecutionError, updated, outcome)
 
 type ExecutedToolCallBatch<-Details: Data> is Data:
@@ -957,7 +946,7 @@ type PreparedToolCallBatch is Data:
 
 def configuredToolExecution(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, T.ToolExecutionMode>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, configured, _, _}: configured
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, configured, _, _}: configured
 
 def availableContextTools(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, context: T.AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>) -> List<&2, T.AgentTool<ToolDetails, ExecutionError>>:
   match context:
@@ -1011,7 +1000,7 @@ def finalizeToolOutcome(-Details: Data, call: Ai.ToolCall<Schema.Value>, execute
 
 def selectedAfterToolCall(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, hook}: hook
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, hook}: hook
 
 def invokeAfterToolCall(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, hook: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>>>, input: T.ToolHookInput<T.AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>) -> IO(Result<&2, &2, ExecutionError, Maybe<&2, T.AfterToolCallResult<ToolDetails>>>):
   match hook:
@@ -1176,7 +1165,7 @@ def checkedArgumentPreparation(-Details: Data, -Error: Data, tool: T.AgentTool<D
 
 def selectedBeforeToolCall(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, T.BeforeToolCallUpdate<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, hook, _}: hook
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, hook, _}: hook
 
 def invokeBeforeToolCall(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, context: T.AgentContext<DiagnosticDetails, Details, Custom, Error>, assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, call: Ai.ToolCall<Schema.Value>, args: Schema.Value, signal: Maybe<&2, Abort.AbortSignal<Unit>>, hook: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, T.BeforeToolCallUpdate<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>>>>) -> IO(Result<&2, &2, Error, T.BeforeToolCallUpdate<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>>):
   match hook:
@@ -1744,74 +1733,91 @@ def disposeValidation(-Error: Data, validator: Validator(Error)) -> IO(Unit):
 # Successful turn completion returns an immutable snapshot for prepareNextTurn.
 # The caller has already recorded the assistant response in both histories.
 type NextTurn<-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data> is Data:
-  Finished{completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>}
-  CompletionContinue{completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>, pending: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>}
+  Finished{completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>}
+  CompletionContinue{completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>, pending: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>}
 
 def toolMessages(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, results: List<&2, Ai.ToolResultMessage<Details>>) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
   match results:
     case Nil{}: Nil{}
     case message <> rest: T.LlmMessage{Ai.ToolResult{message}} <> toolMessages(DiagnosticDetails, Details, Custom, rest)
 
-def completedTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, context: T.AgentContext<DiagnosticDetails, Details, Custom, Error>, newMessages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, +results: List<&2, Ai.ToolResultMessage<Details>>) -> T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>:
+def completedTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, context: T.AgentContext<DiagnosticDetails, Details, Custom, Error>, newMessages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, +results: List<&2, Ai.ToolResultMessage<Details>>) -> T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>:
   match context:
     case T.AgentContext{messages, tools}:
       +added = toolMessages(DiagnosticDetails, Details, Custom, results)
-      T.ShouldStopAfterTurnContext{assistant, results, T.AgentContext{List.append(&2, T.AgentMessage<DiagnosticDetails, Details, Custom>, messages, added), tools}, List.append(&2, T.AgentMessage<DiagnosticDetails, Details, Custom>, newMessages, added)}
+      T.AgentTurnContext{assistant, results, T.AgentContext{List.append(&2, T.AgentMessage<DiagnosticDetails, Details, Custom>, messages, added), tools}, List.append(&2, T.AgentMessage<DiagnosticDetails, Details, Custom>, newMessages, added)}
 
-def completedHistory(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
+def completedHistory(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>) -> List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>:
   match completed:
-    case T.ShouldStopAfterTurnContext{_, _, _, messages}: messages
+    case T.AgentTurnContext{_, _, _, messages}: messages
 
 def nonemptyCompletion(-A: Data, values: List<&2, A>) -> Bool:
   match values:
     case Nil{}: False{}
     case _ <> _: True{}
 
-def endedCompletion(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>, emitted: Result<&2, &2, Error, Unit>) -> Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>:
+def endedCompletion(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>, emitted: Result<&2, &2, Error, Unit>) -> Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>:
   match emitted:
     case Fail{error}: Fail{error}
     case Done{_}: Done{Finished{completed}}
 
-def followed(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, +completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>, sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, queued: Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
-  match queued:
-    case Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
-    case Done{Nil{}}:
+# Nothing else scheduled another request: an explicit continuation still runs
+# one turn on the current context, otherwise the run ends.
+def followed(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, +completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>, sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, explicit: Bool, queued: Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
+  match explicit queued:
+    case _ Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
+    case True{} Done{Nil{}}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, Nil{}}})
+    case False{} Done{Nil{}}:
       do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
         emitted : Result<&2, &2, Error, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>, sink, T.AgentEnd{completedHistory(DiagnosticDetails, Details, Custom, Error, completed)})
         return endedCompletion(DiagnosticDetails, Details, Custom, Error, completed, emitted)
-    case Done{head <> tail}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, head <> tail}})
+    case _ Done{head <> tail}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, head <> tail}})
 
-def afterSteering(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>, sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, queued: Result<&2, &2, Error, Maybe<&2, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>, moreTools: Bool) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
+# Remaining tool calls or steering keep the run going; otherwise follow-ups are
+# polled.
+def afterSteering(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>, sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, explicit: Bool, queued: Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, moreTools: Bool) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
   match queued moreTools:
     case Fail{error} _: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
-    case Done{None{}} _: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{Finished{completed}})
-    case Done{Some{pending}} True{}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, pending}})
-    case Done{Some{head <> tail}} False{}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, head <> tail}})
-    case Done{Some{Nil{}}} False{}:
+    case Done{pending} True{}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, pending}})
+    case Done{head <> tail} False{}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{CompletionContinue{completed, head <> tail}})
+    case Done{Nil{}} False{}:
       do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
         followUp : Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>> <- pollFollowUpMessages(DiagnosticDetails, Details, Custom, Error, Telemetry, config)
-        followed(DiagnosticDetails, Details, Custom, Error, completed, sink, followUp)
+        followed(DiagnosticDetails, Details, Custom, Error, completed, sink, explicit, followUp)
 
-def afterTurnEnd(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, +completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>, +sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, moreTools: Bool, emitted: Result<&2, &2, Error, Unit>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
-  match emitted:
-    case Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
-    case Done{_}:
+# EndTurn ends the run without polling queues.
+def afterTurnEnd(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, +completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>, +sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, moreTools: Bool, decision: Maybe<&2, T.AgentTurnDecision>, emitted: Result<&2, &2, Error, Unit>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
+  match decision emitted:
+    case _ Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
+    case Some{T.EndTurn{}} Done{_}:
       do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
-        queued : Result<&2, &2, Error, Maybe<&2, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>> <- finishCompletedTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, T.AgentToolResult<Details>, T.AgentToolResult<Details>, config, completed, completedHistory(DiagnosticDetails, Details, Custom, Error, completed), sink)
-        afterSteering(DiagnosticDetails, Details, Custom, Error, Telemetry, config, completed, sink, queued, moreTools)
+        ended : Result<&2, &2, Error, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>, sink, T.AgentEnd{completedHistory(DiagnosticDetails, Details, Custom, Error, completed)})
+        return endedCompletion(DiagnosticDetails, Details, Custom, Error, completed, ended)
+    case decision Done{_}:
+      do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
+        queued : Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>> <- pollSteeringMessages(DiagnosticDetails, Details, Custom, Error, Telemetry, config)
+        afterSteering(DiagnosticDetails, Details, Custom, Error, Telemetry, config, completed, sink, continuesExplicitly(decision), queued, moreTools)
 
-# Commit successful tool results to both histories before turn_end and the
-# stop hook. Steering is checked after the stop hook; follow-ups are checked
-# only when neither continuing tool calls nor steering keeps the inner loop alive.
-def completeTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, newMessages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, +sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, batch: Result<&2, &2, Error, Batch<T.AgentContext<DiagnosticDetails, Details, Custom, Error>, Ai.ToolResultMessage<Details>>>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
+def decidedTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, +results: List<&2, Ai.ToolResultMessage<Details>>, +config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, +completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>, +sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, moreTools: Bool, decision: Result<&2, &2, Error, Maybe<&2, T.AgentTurnDecision>>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
+  match decision:
+    case Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
+    case Done{value}:
+      do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
+        emitted : Result<&2, &2, Error, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>, sink, T.TurnEnd{T.LlmMessage{Ai.Assistant{assistant}}, results})
+        afterTurnEnd(DiagnosticDetails, Details, Custom, Error, Telemetry, config, completed, sink, moreTools, value, emitted)
+
+# Commit successful tool results to both histories; finishTurn sees the
+# completed turn before turn_end. Steering is polled after turn_end; follow-ups
+# only when neither continuing tool calls nor steering keeps the run going.
+def completeTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +assistant: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, newMessages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, +config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, +sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>, +signal: Maybe<&2, Abort.AbortSignal<Unit>>, batch: Result<&2, &2, Error, Batch<T.AgentContext<DiagnosticDetails, Details, Custom, Error>, Ai.ToolResultMessage<Details>>>) -> IO(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>):
   match batch:
     case Fail{error}: IO.pure(Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error})
     case Done{Batch{context, +results, terminate}}:
       do IO<Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>>>:
-        +completed : T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error> = completedTurn(DiagnosticDetails, Details, Custom, Error, assistant, context, newMessages, results)
+        +completed : T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error> = completedTurn(DiagnosticDetails, Details, Custom, Error, assistant, context, newMessages, results)
         moreTools : Bool = nonemptyCompletion(Ai.ToolCall<Schema.Value>, collectAssistantToolCalls(DiagnosticDetails, assistant)) && Bool.not(terminate)
-        emitted : Result<&2, &2, Error, Unit> <- C.call(T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>, sink, T.TurnEnd{T.LlmMessage{Ai.Assistant{assistant}}, results})
-        afterTurnEnd(DiagnosticDetails, Details, Custom, Error, Telemetry, config, completed, sink, moreTools, emitted)
+        decision : Result<&2, &2, Error, Maybe<&2, T.AgentTurnDecision>> <- finishTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, config, completed, signal)
+        decidedTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, assistant, results, config, completed, sink, moreTools, decision)
 
 
 # Ready for the provider boundary: updated context/config and committed history.
@@ -1890,6 +1896,45 @@ def initialTurn(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error:
   declare(DiagnosticDetails, Details, Custom, Error, Telemetry, context, config, newMessages, pending, sink, declarationError)
 
 
+# upstream prepareRequest: runs immediately before every conversational
+# request, after pending messages were appended. Its context, model and
+# thinking level replace the runtime values for this and later requests.
+def thinkingOf(reasoning: Maybe<&2, Ai.ThinkingLevel>) -> T.ThinkingLevel():
+  match reasoning:
+    case None{}: Ai.Off{}
+    case Some{level}: Ai.Thinking{level}
+
+def requestThinking(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>) -> T.ThinkingLevel():
+  match config:
+    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _, _}: thinkingOf(Ai.reasoningOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), Error, options))
+
+def requestModel(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>) -> Ai.Model<Ai.JsonValue>:
+  match config:
+    case T.AgentLoopConfig{_, model, _, _, _, _, _, _, _, _, _, _, _}: model
+
+def selectedPrepareRequest(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>) -> Maybe<&2, C.Callback<T.ToolHookInput<T.PrepareRequestContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, Maybe<&2, T.AgentRequestUpdate<DiagnosticDetails, Details, Custom, Error>>>>>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, callback, _, _, _, _, _, _}: callback
+
+def requestUpdated(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, state: RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>, update: Result<&2, &2, Error, Maybe<&2, T.AgentRequestUpdate<DiagnosticDetails, Details, Custom, Error>>>) -> Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>:
+  match state update:
+    case _ Fail{error}: Fail{error}
+    case state Done{None{}}: Done{state}
+    case RequestState{context, config, newMessages} Done{Some{T.AgentRequestUpdate{replacement, model, thinkingLevel}}}:
+      Done{RequestState{choose(T.AgentContext<DiagnosticDetails, Details, Custom, Error>, context, replacement), withTurnConfig(DiagnosticDetails, Details, Custom, Error, Telemetry, config, model, thinkingLevel), newMessages}}
+
+def invokePrepareRequest(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +state: RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, callback: Maybe<&2, C.Callback<T.ToolHookInput<T.PrepareRequestContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, Maybe<&2, T.AgentRequestUpdate<DiagnosticDetails, Details, Custom, Error>>>>>) -> IO(Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>):
+  match state callback:
+    case state None{}: IO.pure(Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>, Done{state})
+    case RequestState{context, +config, newMessages} Some{selected}:
+      do IO<Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>>:
+        update : Result<&2, &2, Error, Maybe<&2, T.AgentRequestUpdate<DiagnosticDetails, Details, Custom, Error>>> <- C.call(T.ToolHookInput<T.PrepareRequestContext<DiagnosticDetails, Details, Custom, Error>>, Result<&2, &2, Error, Maybe<&2, T.AgentRequestUpdate<DiagnosticDetails, Details, Custom, Error>>>, selected, T.ToolHookInput{T.PrepareRequestContext{context, requestModel(DiagnosticDetails, Details, Custom, Error, Telemetry, config), requestThinking(DiagnosticDetails, Details, Custom, Error, Telemetry, config)}, signal})
+        return requestUpdated(DiagnosticDetails, Details, Custom, Error, Telemetry, RequestState{context, config, newMessages}, update)
+
+def prepareRequest(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, +state: RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>):
+  match state:
+    case RequestState{_, config, _}: invokePrepareRequest(DiagnosticDetails, Details, Custom, Error, Telemetry, state, signal, selectedPrepareRequest(DiagnosticDetails, Details, Custom, Error, Telemetry, config))
+
 # Batches may fail before sibling work drains. The loop owner retains executions
 # until explicit disposal; tool-held update aliases have their separate owner.
 def Batches(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data) -> Data: R.Ref<List<&2, Execution<DiagnosticDetails, Details, Custom, Error>>>
@@ -1919,6 +1964,7 @@ type LoopCapture<-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error
 type LoopStep<-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data> is Data:
   Initial{pending: Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>}
   LoopPrepared{state: Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>}
+  RequestReady{state: Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>>}
   Responded{message: Result<&2, &2, Error, Ai.AssistantMessage<Schema.Value, DiagnosticDetails>>}
   Recorded{message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, recorded: Result<&2, &2, Error, AssistantCompletion<T.AgentMessage<DiagnosticDetails, Details, Custom>>>}
   LoopExecuted{message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, batch: ExecutionOutcome(DiagnosticDetails, Details, Custom, Error)}
@@ -1947,9 +1993,15 @@ def executeLoop(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error:
         R.modify(List<&2, Execution<DiagnosticDetails, Details, Custom, Error>>, Unit, batches, entries => (execution <> entries, Unit{}))
         executionResult(DiagnosticDetails, Details, Custom, Error, execution)
 
-def completedContext(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>) -> T.AgentContext<DiagnosticDetails, Details, Custom, Error>:
+# The failed turn's context is the live one, which holds the response.
+def finishFailedInCell(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, -Telemetry: Data, config: T.AgentLoopConfig<DiagnosticDetails, Details, Custom, Error, Telemetry>, contextCell: R.Ref<T.AgentContext<DiagnosticDetails, Details, Custom, Error>>, message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, newMessages: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Result<&2, &2, Error, Unit>):
+  do IO<Result<&2, &2, Error, Unit>>:
+    context : T.AgentContext<DiagnosticDetails, Details, Custom, Error> <- R.read(T.AgentContext<DiagnosticDetails, Details, Custom, Error>, contextCell)
+    finishFailedTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, config, T.AgentTurnContext{message, Nil{}, context, newMessages}, signal)
+
+def completedContext(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>) -> T.AgentContext<DiagnosticDetails, Details, Custom, Error>:
   match completed:
-    case T.ShouldStopAfterTurnContext{_, _, context, _}: context
+    case T.AgentTurnContext{_, _, context, _}: context
 
 # One completed response advances to preparation or finishes. IO may suspend at
 # any stage; records and retained event histories stay immutable. Only the live
@@ -1966,7 +2018,12 @@ def advanceLoop(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error:
             prepared : Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>> <- initialTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, context, config, history, pending, sink, error => declarationError(error))
             advanceLoop(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, capture, contextCell, config, Nil{}, LoopPrepared{prepared})
         case LoopPrepared{Fail{error}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Fail{error})
-        case LoopPrepared{Done{RequestState{context, +nextConfig, newMessages}}}:
+        case LoopPrepared{Done{state}}:
+          do IO<Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
+            ready : Result<&2, &2, Error, RequestState<DiagnosticDetails, Details, Custom, Error, Telemetry>> <- prepareRequest(DiagnosticDetails, Details, Custom, Error, Telemetry, state, signal)
+            advanceLoop(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, capture, contextCell, config, Nil{}, RequestReady{ready})
+        case RequestReady{Fail{error}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Fail{error})
+        case RequestReady{Done{RequestState{context, +nextConfig, newMessages}}}:
           do IO<Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
             R.write(T.AgentContext<DiagnosticDetails, Details, Custom, Error>, contextCell, context)
             response : Result<&2, &2, Error, Ai.AssistantMessage<Schema.Value, DiagnosticDetails>> <- streamAssistantResponse(DiagnosticDetails, Details, Custom, Error, Telemetry, T.AgentToolResult<Details>, T.AgentToolResult<Details>, AssistantRequest{contextCell, nextConfig, signal, sink, streamFunction})
@@ -1974,7 +2031,7 @@ def advanceLoop(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error:
         case Responded{Fail{error}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Fail{error})
         case Responded{Done{+message}}:
           do IO<Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
-            recorded : Result<&2, &2, Error, AssistantCompletion<T.AgentMessage<DiagnosticDetails, Details, Custom>>> <- recordAssistantCompletion(DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>, Error, message, history, sink)
+            recorded : Result<&2, &2, Error, AssistantCompletion<T.AgentMessage<DiagnosticDetails, Details, Custom>>> <- recordAssistantCompletion(DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>, Error, message, history, sink, newMessages => finishFailedInCell(DiagnosticDetails, Details, Custom, Error, Telemetry, config, contextCell, message, newMessages, signal))
             advanceLoop(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, capture, contextCell, config, Nil{}, Recorded{message, recorded})
         case Recorded{_, Fail{error}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Fail{error})
         case Recorded{_, Done{AssistantCompletion{messages, True{}}}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Done{messages})
@@ -1985,10 +2042,10 @@ def advanceLoop(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Error:
             advanceLoop(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, capture, contextCell, config, messages, LoopExecuted{message, outcome})
         case LoopExecuted{message, batch}:
           do IO<Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
-            completed : Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>> <- completeTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, message, history, config, sink, batch)
+            completed : Result<&2, &2, Error, NextTurn<DiagnosticDetails, Details, Custom, Error>> <- completeTurn(DiagnosticDetails, Details, Custom, Error, Telemetry, message, history, config, sink, signal, batch)
             advanceLoop(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, ~declarationError, capture, contextCell, config, Nil{}, LoopCompleted{completed})
         case LoopCompleted{Fail{error}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Fail{error})
-        case LoopCompleted{Done{Finished{T.ShouldStopAfterTurnContext{_, _, _, messages}}}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Done{messages})
+        case LoopCompleted{Done{Finished{T.AgentTurnContext{_, _, _, messages}}}}: IO.pure(Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>, Done{messages})
         case LoopCompleted{Done{CompletionContinue{+completed, pending}}}:
           do IO<Result<&2, &2, Error, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>>>:
             +context : T.AgentContext<DiagnosticDetails, Details, Custom, Error> = completedContext(DiagnosticDetails, Details, Custom, Error, completed)

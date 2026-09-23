@@ -82,7 +82,7 @@ def same(left: Bindings, right: Bindings) -> Bool:
     case Bindings{a, b} Bindings{c, d}: samePayload(a, c) && sameResponse(b, d)
 def config(value: H.Config()) -> Bindings:
   match value:
-    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, payload, response, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: Bindings{payload, response}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, payload, response, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}: Bindings{payload, response}
 def payloadSuccess(value: PayloadResult()) -> Bool:
   match value:
     case Done{Some{Ai.JsonNull{}}}: True{}

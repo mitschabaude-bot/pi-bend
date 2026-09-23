@@ -21,7 +21,7 @@ def forbidden(unused: Unit, messages: Messages()) -> IO(ConvertOutput()):
   IO.die(ConvertOutput(), 1, "tool selection must not convert messages")
 
 def config(model: Ai.Model<Ai.JsonValue>, converter: Converter(), configured: Maybe<&2, T.ToolExecutionMode>) -> Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), model, converter, None{}, None{}, None{}, None{}, None{}, None{}, configured, None{}, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, configured, None{}, None{}}
 
 def contents(tags: List<&2, String>, +a: T.AgentToolCall, +b: T.AgentToolCall, +text: Ai.TextContent, +thinking: Ai.ThinkingContent) -> List<&2, Ai.AssistantContent<Schema.Value>>:
   match tags:

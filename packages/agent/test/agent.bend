@@ -37,7 +37,7 @@ def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState
     case 3: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), Some{H.user("old") <> Nil{}}}}
     case _: None{}
 def options(initial: Maybe<&2, State.AgentInitialState<Unit, Unit, String, String>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
-  Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def create(mode: U32) -> IO(Fixture):
   do IO<Fixture>:
     +stream : StreamFunction() <- C.create(~Unit, ~H.ProviderInput(), ~H.ProviderOutput(), ~unused, Unit{})

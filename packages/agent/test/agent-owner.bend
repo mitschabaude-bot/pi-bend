@@ -34,12 +34,12 @@ def outcome(result: Outcome()) -> String:
     case Fail{Agent.ClaimFailed{message}}: message
     case Fail{Agent.DeliveryFailed{error}}: H.resultKey(Fail{error})
 def options(initial: State.AgentInitialState<Unit, Unit, String, String>, converter: Options.Converter(Unit, Unit, String, String), stream: Maybe<&2, T.StreamFn(Unit, Unit, H.Config(), String)>, supplied: Bool) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
-  Options.AgentOptions{Some{initial}, Bool.pick(Maybe<&2, Options.Converter(Unit, Unit, String, String)>, supplied, Some{converter}, None{}), None{}, stream, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  Options.AgentOptions{Some{initial}, Bool.pick(Maybe<&2, Options.Converter(Unit, Unit, String, String)>, supplied, Some{converter}, None{}), None{}, stream, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 type ProviderCapture is Data:
   ProviderCapture{runtime: R.Ref<Maybe<&2, H.Owner()>>, mode: U32, streams: R.Ref<List<&2, H.StreamValue()>>, requests: R.Ref<String>}
 def defaults(config: Maybe<&2, H.Config()>) -> Bool:
   match config:
-    case Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{Ai.AutoTransport{}}, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, Some{T.Parallel{}}, _, _}}: True{}
+    case Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, Some{Ai.AutoTransport{}}, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, Some{T.Parallel{}}, _, _}}: True{}
     case _: False{}
 def callProvider(state: Maybe<&2, H.Owner()>, mode: U32, streams: R.Ref<List<&2, H.StreamValue()>>, requests: R.Ref<String>, +input: H.ProviderInput()) -> IO(H.ProviderOutput()):
   match state input:

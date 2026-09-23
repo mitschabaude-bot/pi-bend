@@ -143,6 +143,14 @@ def drainedOne(-M: Data, popped: Fifo.Queue<M> & Maybe<&2, M>) -> PendingMessage
   match popped:
     case Tuple{remaining, None{}}: (PendingMessageQueue{T.OneAtATime{}, remaining}, Nil{})
     case Tuple{remaining, Some{value}}: (PendingMessageQueue{T.OneAtATime{}, remaining}, value <> Nil{})
+def peekedOne(-M: Data, popped: Fifo.Queue<M> & Maybe<&2, M>) -> List<&2, M>:
+  match popped:
+    case Tuple{_, None{}}: Nil{}
+    case Tuple{_, Some{value}}: value <> Nil{}
+def peekPending(-M: Data, queue: PendingMessageQueue<M>) -> List<&2, M>:
+  match queue:
+    case PendingMessageQueue{T.All{}, messages}: Fifo.drain(M, messages)
+    case PendingMessageQueue{T.OneAtATime{}, messages}: peekedOne(M, Fifo.dequeue(M, messages))
 def drainPending(-M: Data, queue: PendingMessageQueue<M>) -> PendingMessageQueue<M> & List<&2, M>:
   match queue:
     case PendingMessageQueue{T.All{}, messages}: (newPending(M, T.All{}), Fifo.drain(M, messages))
@@ -176,6 +184,14 @@ def clearAll(-M: Data, queues: Queues<M>) -> Queues<M>:
 def queuesHaveMessages(-M: Data, queues: Queues<M>) -> Bool:
   match queues:
     case Queues{steering, followUps}: hasItems(M, steering) || hasItems(M, followUps)
+def peekedQueues(-M: Data, steering: List<&2, M>, followUps: PendingMessageQueue<M>) -> List<&2, M>:
+  match steering:
+    case Nil{}: peekPending(M, followUps)
+    case selected: selected
+# The messages the next turn would take, without consuming them.
+def peekQueues(-M: Data, queues: Queues<M>) -> List<&2, M>:
+  match queues:
+    case Queues{steering, followUps}: peekedQueues(M, peekPending(M, steering), followUps)
 def drainedQueues(-M: Data, kind: QueueKind, other: PendingMessageQueue<M>, result: PendingMessageQueue<M> & List<&2, M>) -> Queues<M> & List<&2, M>:
   match kind result:
     case QueuesSteering{} Tuple{remaining, messages}: (Queues{remaining, other}, messages)
@@ -737,18 +753,15 @@ def runClaimedFailure(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -E
 
 def HooksSignal() -> Data: Abort.AbortSignal<Unit>
 def PrepareResult(-Update: Data, -Error: Data) -> Data: Result<&2, &2, Error, Maybe<&2, Update>>
-def StopHook(-Turn: Data, -Error: Data) -> Data: C.Callback<T.ToolHookInput<Turn>, Result<&2, &2, Error, Bool>>
 def LegacyHook(-Update: Data, -Error: Data) -> Data: C.Callback<Maybe<&2, HooksSignal()>, PrepareResult(Update, Error)>
 def ContextHook(-Turn: Data, -Update: Data, -Error: Data) -> Data: C.Callback<T.ToolHookInput<Turn>, PrepareResult(Update, Error)>
 
 # These handles are borrowed from the Agent's mutable options. Preparation
-# rereads both forms on every invocation; stop hooks are captured per run.
+# rereads both forms on every invocation.
 type Hooks<-Turn: Data, -Update: Data, -Error: Data> is Data:
-  Hooks{shouldStopAfterTurn: Maybe<&2, StopHook(Turn, Error)>, prepareNextTurn: Maybe<&2, LegacyHook(Update, Error)>, prepareNextTurnWithContext: Maybe<&2, ContextHook(Turn, Update, Error)>}
+  Hooks{prepareNextTurn: Maybe<&2, LegacyHook(Update, Error)>, prepareNextTurnWithContext: Maybe<&2, ContextHook(Turn, Update, Error)>}
 type Adapters<-Turn: Data, -Update: Data, -Error: Data> is Data:
-  Adapters{shouldStopAfterTurn: Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>>, prepareNextTurn: Maybe<&2, C.Callback<Turn, PrepareResult(Update, Error)>>}
-type StopCapture<-State: Data, -Turn: Data, -Error: Data> is Data:
-  StopCapture{lifecycle: Lifecycle<State>, hook: StopHook(Turn, Error)}
+  Adapters{prepareNextTurn: Maybe<&2, C.Callback<Turn, PrepareResult(Update, Error)>>}
 type PrepareCapture<-State: Data, -Turn: Data, -Update: Data, -Error: Data> is Data:
   PrepareCapture{lifecycle: Lifecycle<State>, hooks: R.Ref<Hooks<Turn, Update, Error>>}
 
@@ -756,39 +769,26 @@ def signalHooks(-State: Data, lifecycle: Lifecycle<State>) -> IO(Maybe<&2, Hooks
   do IO<Maybe<&2, HooksSignal()>>:
     active : Maybe<&2, ActiveRun> <- activeRun(State, lifecycle)
     return Maybe.map(&2, ActiveRun, HooksSignal(), run => activeRunSignal(run), active)
-def stopBody(-State: Data, -Turn: Data, -Error: Data, capture: StopCapture<State, Turn, Error>, turnContext: Turn) -> IO(Result<&2, &2, Error, Bool>):
-  match capture:
-    case StopCapture{lifecycle, hook}:
-      do IO<Result<&2, &2, Error, Bool>>:
-        active : Maybe<&2, HooksSignal()> <- signalHooks(State, lifecycle)
-        C.call(T.ToolHookInput<Turn>, Result<&2, &2, Error, Bool>, hook, T.ToolHookInput{turnContext, active})
 def prepareSelected(-State: Data, -Turn: Data, -Update: Data, -Error: Data, lifecycle: Lifecycle<State>, hooks: Hooks<Turn, Update, Error>, turnContext: Turn) -> IO(PrepareResult(Update, Error)):
   match hooks:
-    case Hooks{_, _, Some{hook}}:
+    case Hooks{_, Some{hook}}:
       do IO<PrepareResult(Update, Error)>:
         active : Maybe<&2, HooksSignal()> <- signalHooks(State, lifecycle)
         C.call(T.ToolHookInput<Turn>, PrepareResult(Update, Error), hook, T.ToolHookInput{turnContext, active})
-    case Hooks{_, Some{hook}, None{}}:
+    case Hooks{Some{hook}, None{}}:
       do IO<PrepareResult(Update, Error)>:
         active : Maybe<&2, HooksSignal()> <- signalHooks(State, lifecycle)
         C.call(Maybe<&2, HooksSignal()>, PrepareResult(Update, Error), hook, active)
-    case Hooks{_, None{}, None{}}: IO.pure(PrepareResult(Update, Error), Done{None{}})
+    case Hooks{None{}, None{}}: IO.pure(PrepareResult(Update, Error), Done{None{}})
 def prepareBody(-State: Data, -Turn: Data, -Update: Data, -Error: Data, capture: PrepareCapture<State, Turn, Update, Error>, turnContext: Turn) -> IO(PrepareResult(Update, Error)):
   match capture:
     case PrepareCapture{lifecycle, hooks}:
       do IO<PrepareResult(Update, Error)>:
         selected : Hooks<Turn, Update, Error> <- R.read(Hooks<Turn, Update, Error>, hooks)
         prepareSelected(State, Turn, Update, Error, lifecycle, selected, turnContext)
-def createStop(~State: Data, ~Turn: Data, ~Error: Data, lifecycle: Lifecycle<State>, hook: Maybe<&2, StopHook(Turn, Error)>) -> IO(Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>>):
-  match hook:
-    case None{}: IO.pure(Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>>, None{})
-    case Some{callback}:
-      do IO<Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>>>:
-        adapted : C.Callback<Turn, Result<&2, &2, Error, Bool>> <- C.create(~StopCapture<State, Turn, Error>, ~Turn, ~Result<&2, &2, Error, Bool>, ~(stopBody(State, Turn, Error)), StopCapture{lifecycle, callback})
-        return Some{adapted}
 def hasPreparation(-Turn: Data, -Update: Data, -Error: Data, hooks: Hooks<Turn, Update, Error>) -> Bool:
   match hooks:
-    case Hooks{_, None{}, None{}}: False{}
+    case Hooks{None{}, None{}}: False{}
     case _: True{}
 def createPrepare(~State: Data, ~Turn: Data, ~Update: Data, ~Error: Data, lifecycle: Lifecycle<State>, hooks: R.Ref<Hooks<Turn, Update, Error>>, enabled: Bool) -> IO(Maybe<&2, C.Callback<Turn, PrepareResult(Update, Error)>>):
   match enabled:
@@ -797,15 +797,11 @@ def createPrepare(~State: Data, ~Turn: Data, ~Update: Data, ~Error: Data, lifecy
       do IO<Maybe<&2, C.Callback<Turn, PrepareResult(Update, Error)>>>:
         adapted : C.Callback<Turn, PrepareResult(Update, Error)> <- C.create(~PrepareCapture<State, Turn, Update, Error>, ~Turn, ~PrepareResult(Update, Error), ~(prepareBody(State, Turn, Update, Error)), PrepareCapture{lifecycle, hooks})
         return Some{adapted}
-def stopValue(-Turn: Data, -Update: Data, -Error: Data, hooks: Hooks<Turn, Update, Error>) -> Maybe<&2, StopHook(Turn, Error)>:
-  match hooks:
-    case Hooks{stop, _, _}: stop
 def createHooks(~State: Data, ~Turn: Data, ~Update: Data, ~Error: Data, +lifecycle: Lifecycle<State>, +hooks: R.Ref<Hooks<Turn, Update, Error>>) -> IO(Adapters<Turn, Update, Error>):
   do IO<Adapters<Turn, Update, Error>>:
     +current : Hooks<Turn, Update, Error> <- R.read(Hooks<Turn, Update, Error>, hooks)
-    stop : Maybe<&2, C.Callback<Turn, Result<&2, &2, Error, Bool>>> <- createStop(~State, ~Turn, ~Error, lifecycle, stopValue(Turn, Update, Error, current))
     prepare : Maybe<&2, C.Callback<Turn, PrepareResult(Update, Error)>> <- createPrepare(~State, ~Turn, ~Update, ~Error, lifecycle, hooks, hasPreparation(Turn, Update, Error, current))
-    return Adapters{stop, prepare}
+    return Adapters{prepare}
 def disposeCallback(-Input: Data, -Output: Data, callback: Maybe<&2, C.Callback<Input, Output>>) -> IO(Unit):
   match callback:
     case None{}: IO.pure(Unit, Unit{})
@@ -814,10 +810,7 @@ def disposeCallback(-Input: Data, -Output: Data, callback: Maybe<&2, C.Callback<
 # storage and lifecycle remain caller-owned, including replaced callbacks.
 def disposeHooks(-Turn: Data, -Update: Data, -Error: Data, adapters: Adapters<Turn, Update, Error>) -> IO(Unit):
   match adapters:
-    case Adapters{stop, prepare}:
-      do IO<Unit>:
-        disposeCallback(Turn, Result<&2, &2, Error, Bool>, stop)
-        disposeCallback(Turn, PrepareResult(Update, Error), prepare)
+    case Adapters{prepare}: disposeCallback(Turn, PrepareResult(Update, Error), prepare)
 
 
 # Queue readers belong to one run. Other configuration callbacks are borrowed.
@@ -858,8 +851,8 @@ def context(-G: Data, -D: Data, -M: Data, -E: Data, agentState: T.AgentState<G, 
 # from one immutable Agent snapshot. The public options adapter builds the base.
 def bind(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agentState: T.AgentState<G, D, M, E>, base: T.AgentLoopConfig<G, D, M, E, Telemetry>, readers: BindingPollers<G, D, M, E>) -> T.AgentLoopConfig<G, D, M, E, Telemetry>:
   match agentState base readers:
-    case T.AgentState{currentModel, thinking, _, _, _, _, _, _} T.AgentLoopConfig{options, _, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} BindingPollers{steering, followUps, _}:
-      T.AgentLoopConfig{Ai.withReasoning(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, thinkingReasoning(thinking)), currentModel, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, Some{steering}, Some{followUps}, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentState{currentModel, thinking, _, _, _, _, _, _} T.AgentLoopConfig{options, _, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} BindingPollers{steering, followUps, _}:
+      T.AgentLoopConfig{Ai.withReasoning(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, thinkingReasoning(thinking)), currentModel, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, Some{steering}, Some{followUps}, toolExecution, beforeToolCall, afterToolCall}
 type Snapshot<-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data> is Data:
   Snapshot{context: T.AgentContext<G, D, M, E>, config: T.AgentLoopConfig<G, D, M, E, Telemetry>}
 def snapshotBinding(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, runtime: OwnedRuntime<G, D, M, E>, base: T.AgentLoopConfig<G, D, M, E, Telemetry>, readers: BindingPollers<G, D, M, E>) -> IO(Snapshot<G, D, M, E, Telemetry>):
@@ -876,9 +869,9 @@ def disposeBinding(-G: Data, -D: Data, -M: Data, -E: Data, readers: BindingPolle
         return Unit{}
 
 # The run owns these wrappers; public hooks and option storage stay borrowed.
-def applyHooks(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, base: T.AgentLoopConfig<G, D, M, E, Telemetry>, adapters: Adapters<T.ShouldStopAfterTurnContext<G, D, M, E>, T.AgentLoopTurnUpdate<G, D, M, E>, E>) -> T.AgentLoopConfig<G, D, M, E, Telemetry>:
+def applyHooks(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, base: T.AgentLoopConfig<G, D, M, E, Telemetry>, adapters: Adapters<T.AgentTurnContext<G, D, M, E>, T.AgentLoopTurnUpdate<G, D, M, E>, E>) -> T.AgentLoopConfig<G, D, M, E, Telemetry>:
   match base adapters:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} Adapters{stop, prepare}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, stop, prepare, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, _, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} Adapters{prepare}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepare, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 
 def RunSignal() -> Data: Abort.AbortSignal<Unit>
@@ -973,14 +966,14 @@ def runDispose(-G: Data, -D: Data, -M: Data, -E: Data, resources: Resources<G, D
 
 
 def Converter(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: C.Callback<T.AgentMessageArray(G, D, M), Result<&2, &2, E, List<&2, Ai.Message<Schema.Value, Schema.Value, G, D>>>>
-def Turn(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: T.ShouldStopAfterTurnContext<G, D, M, E>
+def Turn(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: T.AgentTurnContext<G, D, M, E>
 def Update(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: T.AgentLoopTurnUpdate<G, D, M, E>
 def TurnHooks(-G: Data, -D: Data, -M: Data, -E: Data) -> Data: Hooks<Turn(G, D, M, E), Update(G, D, M, E), E>
 # streamFn is optional only for the source's legacy default-provider fallback.
 type AgentOptions<-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data> is Data:
-  AgentOptions{initialState: Maybe<&2, AgentInitialState<G, D, M, E>>, convertToLlm: Maybe<&2, Converter(G, D, M, E)>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, streamFn: Maybe<&2, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, shouldStopAfterTurn: Maybe<&2, StopHook(Turn(G, D, M, E), E)>, prepareNextTurn: Maybe<&2, LegacyHook(Update(G, D, M, E), E)>, prepareNextTurnWithContext: Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>, steeringMode: Maybe<&2, T.QueueMode>, followUpMode: Maybe<&2, T.QueueMode>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>}
+  AgentOptions{initialState: Maybe<&2, AgentInitialState<G, D, M, E>>, convertToLlm: Maybe<&2, Converter(G, D, M, E)>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, streamFn: Maybe<&2, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, finishTurn: Maybe<&2, T.FinishTurn(G, D, M, E)>, prepareRequest: Maybe<&2, T.PrepareRequest(G, D, M, E)>, prepareNextTurn: Maybe<&2, LegacyHook(Update(G, D, M, E), E)>, prepareNextTurnWithContext: Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>, steeringMode: Maybe<&2, T.QueueMode>, followUpMode: Maybe<&2, T.QueueMode>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>}
 def defaultAgentOptions(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data) -> AgentOptions<G, D, M, E, Telemetry>:
-  AgentOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  AgentOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 type Resolved<-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data> is Data:
   Resolved{initialState: AgentInitialState<G, D, M, E>, config: Config(G, D, M, E, Telemetry), streamFn: T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E), hooks: TurnHooks(G, D, M, E), steeringMode: T.QueueMode, followUpMode: T.QueueMode, ownedConverter: Maybe<&2, Converter(G, D, M, E)>}
 type Converted<-G: Data, -D: Data, -M: Data, -E: Data> is Data:
@@ -998,20 +991,20 @@ def providerSelection(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, 
   match callback:
     case Some{value}: Provider.Explicit{value}
     case None{}: Provider.Fallback{fallback}
-def finishOptions(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, initial: Maybe<&2, AgentInitialState<G, D, M, E>>, converted: Converted<G, D, M, E>, stream: T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E), hooks: TurnHooks(G, D, M, E), steering: Maybe<&2, T.QueueMode>, follow: Maybe<&2, T.QueueMode>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
+def finishOptions(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, initial: Maybe<&2, AgentInitialState<G, D, M, E>>, converted: Converted<G, D, M, E>, stream: T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E), hooks: TurnHooks(G, D, M, E), steering: Maybe<&2, T.QueueMode>, follow: Maybe<&2, T.QueueMode>, transformContext: Maybe<&2, C.Callback<T.TransformContextInput<T.AgentMessageArray(G, D, M)>, Result<&2, &2, E, T.AgentMessageArray(G, D, M)>>>, getApiKey: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>, onPayload: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>, onResponse: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>, beforeToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>, afterToolCall: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>, finishTurn: Maybe<&2, T.FinishTurn(G, D, M, E)>, prepareRequest: Maybe<&2, T.PrepareRequest(G, D, M, E)>, sessionId: Maybe<&2, String>, thinkingBudgets: Maybe<&2, Ai.ThinkingBudgets>, transport: Maybe<&2, Ai.Transport>, maxRetryDelayMs: Maybe<&2, F64>, toolExecution: Maybe<&2, T.ToolExecutionMode>) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
   match converted:
-    case Converted{callback, owned}: IO.pure(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>, Done{Resolved{Maybe.default(&2, AgentInitialState<G, D, M, E>, initial, AgentInitialState{None{}, None{}, None{}, None{}, None{}}), T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, onPayload, onResponse, None{}, None{}, None{}, maxRetryDelayMs, None{}, None{}, None{}, Some{Maybe.default(&2, Ai.Transport, transport, Ai.AutoTransport{})}, None{}, sessionId, None{}, None{}, None{}, None{}, None{}, thinkingBudgets}, defaultModel(Ai.JsonValue), callback, transformContext, getApiKey, None{}, None{}, None{}, None{}, Some{Maybe.default(&2, T.ToolExecutionMode, toolExecution, T.Parallel{})}, beforeToolCall, afterToolCall}, stream, hooks, Maybe.default(&2, T.QueueMode, steering, T.OneAtATime{}), Maybe.default(&2, T.QueueMode, follow, T.OneAtATime{}), owned}})
+    case Converted{callback, owned}: IO.pure(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>, Done{Resolved{Maybe.default(&2, AgentInitialState<G, D, M, E>, initial, AgentInitialState{None{}, None{}, None{}, None{}, None{}}), T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, onPayload, onResponse, None{}, None{}, None{}, maxRetryDelayMs, None{}, None{}, None{}, Some{Maybe.default(&2, Ai.Transport, transport, Ai.AutoTransport{})}, None{}, sessionId, None{}, None{}, None{}, None{}, None{}, thinkingBudgets}, defaultModel(Ai.JsonValue), callback, transformContext, getApiKey, finishTurn, prepareRequest, None{}, None{}, None{}, Some{Maybe.default(&2, T.ToolExecutionMode, toolExecution, T.Parallel{})}, beforeToolCall, afterToolCall}, stream, hooks, Maybe.default(&2, T.QueueMode, steering, T.OneAtATime{}), Maybe.default(&2, T.QueueMode, follow, T.OneAtATime{}), owned}})
 def resolvedOptions(~G: Data, ~D: Data, ~M: Data, ~E: Data, ~Telemetry: Data, options: AgentOptions<G, D, M, E, Telemetry>, provider: Result<&2, &2, Provider.MissingDefault, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
   match options provider:
     case _ Fail{error}: IO.pure(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>, Fail{error})
-    case AgentOptions{initialState, convertToLlm, transformContext, streamFn, getApiKey, onPayload, onResponse, beforeToolCall, afterToolCall, shouldStopAfterTurn, prepareNextTurn, prepareNextTurnWithContext, steeringMode, followUpMode, sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution} Done{stream}:
+    case AgentOptions{initialState, convertToLlm, transformContext, streamFn, getApiKey, onPayload, onResponse, beforeToolCall, afterToolCall, finishTurn, prepareRequest, prepareNextTurn, prepareNextTurnWithContext, steeringMode, followUpMode, sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution} Done{stream}:
       do IO<Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>>:
         converted : Converted<G, D, M, E> <- suppliedConverter(~G, ~D, ~M, ~E, convertToLlm)
-        finishOptions(G, D, M, E, Telemetry, initialState, converted, stream, Hooks{shouldStopAfterTurn, prepareNextTurn, prepareNextTurnWithContext}, steeringMode, followUpMode, transformContext, getApiKey, onPayload, onResponse, beforeToolCall, afterToolCall, sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution)
+        finishOptions(G, D, M, E, Telemetry, initialState, converted, stream, Hooks{prepareNextTurn, prepareNextTurnWithContext}, steeringMode, followUpMode, transformContext, getApiKey, onPayload, onResponse, beforeToolCall, afterToolCall, finishTurn, prepareRequest, sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution)
 # Resolve fallback at construction, preserving the selected callback for runs.
 def resolve(~G: Data, ~D: Data, ~M: Data, ~E: Data, ~Telemetry: Data, +options: AgentOptions<G, D, M, E, Telemetry>, fallback: Provider.Registry(G, D, Config(G, D, M, E, Telemetry), E)) -> IO(Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>):
   match options:
-    case AgentOptions{_, _, _, streamFn, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case AgentOptions{_, _, _, streamFn, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       do IO<Result<&2, &2, Provider.MissingDefault, Resolved<G, D, M, E, Telemetry>>>:
         provider : Result<&2, &2, Provider.MissingDefault, T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)> <- Provider.resolve(G, D, Config(G, D, M, E, Telemetry), E, providerSelection(G, D, M, E, Telemetry, streamFn, fallback))
         resolvedOptions(~G, ~D, ~M, ~E, ~Telemetry, options, provider)
@@ -1241,6 +1234,10 @@ def hasQueuedMessages(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, 
   do IO<Bool>:
     queues : Queues<RunMessage(G, D, M)> <- queueSnapshot(G, D, M, E, Telemetry, agent)
     return queuesHaveMessages(RunMessage(G, D, M), queues)
+def peekQueuedMessages(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(List<&2, RunMessage(G, D, M)>):
+  do IO<List<&2, RunMessage(G, D, M)>>:
+    queues : Queues<RunMessage(G, D, M)> <- queueSnapshot(G, D, M, E, Telemetry, agent)
+    return peekQueues(RunMessage(G, D, M), queues)
 def setSteeringMode(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, mode: T.QueueMode) -> IO(Unit):
   match agent:
     case Agent{runtime, _, _, _, _, _}: setQueueMode(G, D, M, E, runtime, QueuesSteering{}, mode)
@@ -1258,10 +1255,10 @@ def getFollowUpMode(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, ag
 
 def configSettings(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Settings:
   match config:
-    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, maxRetryDelayMs, _, _, _, transport, _, sessionId, _, _, _, _, _, thinkingBudgets}, _, _, _, _, _, _, _, _, toolExecution, _, _}: Settings{sessionId, thinkingBudgets, Maybe.default(&2, Ai.Transport, transport, Ai.AutoTransport{}), maxRetryDelayMs, Maybe.default(&2, T.ToolExecutionMode, toolExecution, T.Parallel{})}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, maxRetryDelayMs, _, _, _, transport, _, sessionId, _, _, _, _, _, thinkingBudgets}, _, _, _, _, _, _, _, _, _, toolExecution, _, _}: Settings{sessionId, thinkingBudgets, Maybe.default(&2, Ai.Transport, transport, Ai.AutoTransport{}), maxRetryDelayMs, Maybe.default(&2, T.ToolExecutionMode, toolExecution, T.Parallel{})}
 def settingsConfig(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), settings: Settings) -> Config(G, D, M, E, Telemetry):
   match config settings:
-    case T.AgentLoopConfig{Ai.SimpleStreamOptions{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, _, temperature, samplingParams, maxTokens, _, cacheRetention, _, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, _}, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, _, beforeToolCall, afterToolCall} Settings{sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution}: T.AgentLoopConfig{Ai.SimpleStreamOptions{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, Some{transport}, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, Some{toolExecution}, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, _, temperature, samplingParams, maxTokens, _, cacheRetention, _, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, _}, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, _, beforeToolCall, afterToolCall} Settings{sessionId, thinkingBudgets, transport, maxRetryDelayMs, toolExecution}: T.AgentLoopConfig{Ai.SimpleStreamOptions{runSignal, telemetryContext, apiKey, fetch, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, Some{transport}, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, Some{toolExecution}, beforeToolCall, afterToolCall}
 def changedSettings(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, change: SettingsChange) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{+config, provider, validate, emptyDetails}: (Options{settingsConfig(G, D, M, E, Telemetry, config, apply(configSettings(G, D, M, E, Telemetry, config), change)), provider, validate, emptyDetails}, Unit{})
@@ -1341,10 +1338,10 @@ def getConfig(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: A
         return optionsConfig(G, D, M, E, Telemetry, current)
 def configConvertToLlm(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Converter(G, D, M, E):
   match config:
-    case T.AgentLoopConfig{_, _, value, _, _, _, _, _, _, _, _, _}: value
+    case T.AgentLoopConfig{_, _, value, _, _, _, _, _, _, _, _, _, _}: value
 def replaceConvertToLlm(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Converter(G, D, M, E)) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, _, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, value, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, _, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, value, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 def changedConvertToLlm(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Converter(G, D, M, E)) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceConvertToLlm(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1362,10 +1359,10 @@ def getConvertToLlm(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, ag
         return optionsConvertToLlm(G, D, M, E, Telemetry, current)
 def configTransformContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, C.Callback<T.TransformContextInput<List<&2, RunMessage(G, D, M)>>, Result<&2, &2, E, List<&2, RunMessage(G, D, M)>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, value, _, _, _, _, _, _, _, _}: value
+    case T.AgentLoopConfig{_, _, _, value, _, _, _, _, _, _, _, _, _}: value
 def replaceTransformContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, C.Callback<T.TransformContextInput<List<&2, RunMessage(G, D, M)>>, Result<&2, &2, E, List<&2, RunMessage(G, D, M)>>>>) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, _, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, value, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, _, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, value, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 def changedTransformContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, C.Callback<T.TransformContextInput<List<&2, RunMessage(G, D, M)>>, Result<&2, &2, E, List<&2, RunMessage(G, D, M)>>>>) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceTransformContext(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1384,10 +1381,10 @@ def getTransformContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data
 
 def configGetApiKey(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, value, _, _, _, _, _, _, _}: value
+    case T.AgentLoopConfig{_, _, _, _, value, _, _, _, _, _, _, _, _}: value
 def replaceGetApiKey(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, _, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, value, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, _, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, value, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 def changedGetApiKey(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, C.Callback<String, Result<&2, &2, E, Maybe<&2, String>>>>) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceGetApiKey(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1406,10 +1403,10 @@ def getGetApiKey(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent
 
 def configOnPayload(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>:
   match config:
-    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _}: Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options)
+    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _, _}: Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options)
 def replaceOnPayload(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withOnPayload(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, value), model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withOnPayload(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, value), model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 def changedOnPayload(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, E)>) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceOnPayload(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1428,10 +1425,10 @@ def getOnPayload(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent
 
 def configOnResponse(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>:
   match config:
-    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _}: Ai.onResponseOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options)
+    case T.AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _, _}: Ai.onResponseOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options)
 def replaceOnResponse(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withOnResponse(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, value), model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{Ai.withOnResponse(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, value), model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 def changedOnResponse(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, E)>) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceOnResponse(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1450,10 +1447,10 @@ def getOnResponse(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agen
 
 def configBeforeToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, value, _}: value
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, value, _}: value
 def replaceBeforeToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, _, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, value, afterToolCall}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, _, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, value, afterToolCall}
 def changedBeforeToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, C.Callback<T.ToolHookInput<T.BeforeToolCallContext<G, D, M, E>>, Result<&2, &2, E, T.BeforeToolCallUpdate<T.AgentContext<G, D, M, E>>>>>) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceBeforeToolCall(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1473,10 +1470,10 @@ def getBeforeToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, 
 
 def configAfterToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, value}: value
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, _, _, _, _, value}: value
 def replaceAfterToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>) -> Config(G, D, M, E, Telemetry):
   match config:
-    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, _}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, value}
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, _}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, value}
 def changedAfterToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, C.Callback<T.ToolHookInput<T.AfterToolCallContext<G, D, M, E>>, Result<&2, &2, E, Maybe<&2, T.AfterToolCallResult<D>>>>>) -> Options<G, D, M, E, Telemetry> & Unit:
   match options:
     case Options{config, provider, validate, emptyDetails}: (Options{replaceAfterToolCall(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
@@ -1493,31 +1490,59 @@ def getAfterToolCall(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, a
         current : Options<G, D, M, E, Telemetry> <- R.read(Options<G, D, M, E, Telemetry>, options)
         return optionsAfterToolCall(G, D, M, E, Telemetry, current)
 
-def changedShouldStopAfterTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, hooks: TurnHooks(G, D, M, E), value: Maybe<&2, StopHook(Turn(G, D, M, E), E)>) -> TurnHooks(G, D, M, E) & Unit:
-  match hooks:
-    case Hooks{_, legacy, turnContext}: (Hooks{value, legacy, turnContext}, Unit{})
-def setShouldStopAfterTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, StopHook(Turn(G, D, M, E), E)>) -> IO(Unit):
+def configFinishTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, T.FinishTurn(G, D, M, E)>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, value, _, _, _, _, _, _, _}: value
+def replaceFinishTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, T.FinishTurn(G, D, M, E)>) -> Config(G, D, M, E, Telemetry):
+  match config:
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, _, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, value, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedFinishTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, T.FinishTurn(G, D, M, E)>) -> Options<G, D, M, E, Telemetry> & Unit:
+  match options:
+    case Options{config, provider, validate, emptyDetails}: (Options{replaceFinishTurn(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
+def setFinishTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, T.FinishTurn(G, D, M, E)>) -> IO(Unit):
   match agent:
-    case Agent{_, _, _, hooks, _, _}: R.modify(TurnHooks(G, D, M, E), Unit, hooks, current => changedShouldStopAfterTurn(G, D, M, E, Telemetry, current, value))
-def hooksShouldStopAfterTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, hooks: TurnHooks(G, D, M, E)) -> Maybe<&2, StopHook(Turn(G, D, M, E), E)>:
-  match hooks:
-    case Hooks{value, _, _}: value
-def getShouldStopAfterTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, StopHook(Turn(G, D, M, E), E)>):
+    case Agent{_, _, options, _, _, _}: R.modify(Options<G, D, M, E, Telemetry>, Unit, options, current => changedFinishTurn(G, D, M, E, Telemetry, current, value))
+def optionsFinishTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>) -> Maybe<&2, T.FinishTurn(G, D, M, E)>:
+  match options:
+    case Options{config, _, _, _}: configFinishTurn(G, D, M, E, Telemetry, config)
+def getFinishTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, T.FinishTurn(G, D, M, E)>):
   match agent:
-    case Agent{_, _, _, hooks, _, _}:
-      do IO<Maybe<&2, StopHook(Turn(G, D, M, E), E)>>:
-        current : TurnHooks(G, D, M, E) <- R.read(TurnHooks(G, D, M, E), hooks)
-        return hooksShouldStopAfterTurn(G, D, M, E, Telemetry, current)
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, T.FinishTurn(G, D, M, E)>>:
+        current : Options<G, D, M, E, Telemetry> <- R.read(Options<G, D, M, E, Telemetry>, options)
+        return optionsFinishTurn(G, D, M, E, Telemetry, current)
+
+def configPrepareRequest(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Maybe<&2, T.PrepareRequest(G, D, M, E)>:
+  match config:
+    case T.AgentLoopConfig{_, _, _, _, _, _, value, _, _, _, _, _, _}: value
+def replacePrepareRequest(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry), value: Maybe<&2, T.PrepareRequest(G, D, M, E)>) -> Config(G, D, M, E, Telemetry):
+  match config:
+    case T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, _, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}: T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, value, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+def changedPrepareRequest(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>, value: Maybe<&2, T.PrepareRequest(G, D, M, E)>) -> Options<G, D, M, E, Telemetry> & Unit:
+  match options:
+    case Options{config, provider, validate, emptyDetails}: (Options{replacePrepareRequest(G, D, M, E, Telemetry, config, value), provider, validate, emptyDetails}, Unit{})
+def setPrepareRequest(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, T.PrepareRequest(G, D, M, E)>) -> IO(Unit):
+  match agent:
+    case Agent{_, _, options, _, _, _}: R.modify(Options<G, D, M, E, Telemetry>, Unit, options, current => changedPrepareRequest(G, D, M, E, Telemetry, current, value))
+def optionsPrepareRequest(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>) -> Maybe<&2, T.PrepareRequest(G, D, M, E)>:
+  match options:
+    case Options{config, _, _, _}: configPrepareRequest(G, D, M, E, Telemetry, config)
+def getPrepareRequest(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, T.PrepareRequest(G, D, M, E)>):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Maybe<&2, T.PrepareRequest(G, D, M, E)>>:
+        current : Options<G, D, M, E, Telemetry> <- R.read(Options<G, D, M, E, Telemetry>, options)
+        return optionsPrepareRequest(G, D, M, E, Telemetry, current)
 
 def changedPrepareNextTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, hooks: TurnHooks(G, D, M, E), value: Maybe<&2, LegacyHook(Update(G, D, M, E), E)>) -> TurnHooks(G, D, M, E) & Unit:
   match hooks:
-    case Hooks{stop, _, turnContext}: (Hooks{stop, value, turnContext}, Unit{})
+    case Hooks{_, turnContext}: (Hooks{value, turnContext}, Unit{})
 def setPrepareNextTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, LegacyHook(Update(G, D, M, E), E)>) -> IO(Unit):
   match agent:
     case Agent{_, _, _, hooks, _, _}: R.modify(TurnHooks(G, D, M, E), Unit, hooks, current => changedPrepareNextTurn(G, D, M, E, Telemetry, current, value))
 def hooksPrepareNextTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, hooks: TurnHooks(G, D, M, E)) -> Maybe<&2, LegacyHook(Update(G, D, M, E), E)>:
   match hooks:
-    case Hooks{_, value, _}: value
+    case Hooks{value, _}: value
 def getPrepareNextTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, LegacyHook(Update(G, D, M, E), E)>):
   match agent:
     case Agent{_, _, _, hooks, _, _}:
@@ -1527,13 +1552,13 @@ def getPrepareNextTurn(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data,
 
 def changedPrepareNextTurnWithContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, hooks: TurnHooks(G, D, M, E), value: Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>) -> TurnHooks(G, D, M, E) & Unit:
   match hooks:
-    case Hooks{stop, legacy, _}: (Hooks{stop, legacy, value}, Unit{})
+    case Hooks{legacy, _}: (Hooks{legacy, value}, Unit{})
 def setPrepareNextTurnWithContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>, value: Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>) -> IO(Unit):
   match agent:
     case Agent{_, _, _, hooks, _, _}: R.modify(TurnHooks(G, D, M, E), Unit, hooks, current => changedPrepareNextTurnWithContext(G, D, M, E, Telemetry, current, value))
 def hooksPrepareNextTurnWithContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, hooks: TurnHooks(G, D, M, E)) -> Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>:
   match hooks:
-    case Hooks{_, _, value}: value
+    case Hooks{_, value}: value
 def getPrepareNextTurnWithContext(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Maybe<&2, ContextHook(Turn(G, D, M, E), Update(G, D, M, E), E)>):
   match agent:
     case Agent{_, _, _, hooks, _, _}:

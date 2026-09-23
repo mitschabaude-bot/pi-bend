@@ -85,7 +85,7 @@ def emit(unused: Unit, event: Execute.EventValue()) -> IO(E.Emission<String>):
   IO.die(E.Emission<String>, 1, "test executor emits no updates")
 
 def configuration(converter: ConfigTest.Converter(), hook: Maybe<&2, Hook()>) -> ConfigTest.Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, hook, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, hook, None{}}
 
 def expectedMessage(mode: U32) -> String:
   match mode:

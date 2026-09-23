@@ -221,7 +221,7 @@ The remaining Agent turn-hook and late-update cases are mapped as follows:
 | Upstream name | Native assertion group |
 | --- | --- |
 | keeps legacy prepareNextTurn signal callback behavior | `agent-turn-options.bend:scenario(0)` runs a noop tool, checks a live signal in the legacy callback and exactly two provider requests |
-| forwards shouldStopAfterTurn through AgentOptions | `agent-turn-options.bend:scenario(1)` checks the live signal, exact system/user/assistant/toolResult callback context and one provider request |
+| forwards finishTurn through AgentOptions with the active abort signal | `agent-turn-options.bend:scenario(1)` checks the live signal, exact system/user/assistant/toolResult callback context and one provider request |
 | should ignore tool updates after the tool execution settles | `agent-late-updates.bend:scenario(0)` retains and calls the actual update callback after prompt completion, checks unchanged total events and exactly one original progress event |
 | should ignore a settled parallel tool update while another tool is still running | `agent-late-updates.bend:scenario(1)` gates the slow sibling, waits for the first tool's execution-end event, calls its retained callback and checks unchanged events and zero progress events |
 
@@ -338,3 +338,8 @@ Original error identity maps to preservation of the immutable native error value
 The shared error-body suite remains partial: all sixteen named scenarios and 306 total utility comparisons pass on native one/four threads, but complete provider catch paths are still pending. OpenAI's typed HTTP adapter now has SDK/pi and native-socket coverage. Error display caps use complete native characters under the existing UTF-16 unit budget; two supplemental cases that previously split an emoji deliberately omit the whole character and count the discarded units. The original SDK outputs and explicit adaptations are retained in [validation](docs/openai-responses.md); no expectation is silently relaxed.
 
 The OpenAI Responses provider is consolidated into five modules and validated end to end: 48 loopback cases per backend against the pinned upstream wrapper (`tests/openai_responses_check.py`), plus the retained pure-stage differential harnesses. Upstream's failing service-tier hook cases have no native equivalent because the native hooks are pure; the V8 JSON parse message is replaced by the native parser's diagnostic. Inventory statuses are unchanged: the provider suites (`openai-responses-compat`, `openai-responses-terminal-event`, `error-body`) remain partial pending native TLS and the authentication flows.
+
+## v0.87.1: finishTurn and prepareRequest (466db0fec)
+
+`shouldStopAfterTurn` became `finishTurn`, which runs before `turn_end` and returns continue, end or nothing; `prepareRequest` runs before every provider request. Both are loop-config fields passed through unchanged from the Agent, like the tool-call hooks, so `agent_hooks_check.py` now covers only the preparation adapter (32 scenarios). `agent-loop-turn-decisions.bend` ports the eleven new `agent-loop.test.ts` cases (it.each rows as separate scenarios); `agent-continuation.bend` ports the thirteen new `agent.test.ts` cases, including `peekQueuedMessages`. The turn-completion (87), failed-turn (42), main-loop and accessor oracles were updated to the new hook and order. The decision union `{action: "continue"} | {action: "end"}` is the constructor pair `ContinueTurn{}`/`EndTurn{}`; a callback returning nothing is `None{}`.
+

@@ -8,7 +8,7 @@ Between the two commits, 56 non-merge commits touch `packages/{ai,agent,coding-a
 |---|---|---|---|
 | f5c946480 | image input limits | ai types; file-processor, agent-session, read tool, main | types and catalog done; behaviour pending |
 | c596d09d9 | prompt cache warming | ai types (`promptCache`), agent-session, session-manager, settings-manager | `Model.promptCache` done; warming pending |
-| 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | pending (AgentLoopConfig `finishTurn`/`prepareRequest` surface in tests/loop_config_types) |
+| 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | agent package done (`finishTurn`, `prepareRequest`, `peekQueuedMessages`, 24 new named tests); session projection pending |
 | de2de549b | compaction cancellation races | agent-session | pending |
 | 8bdcd4498 | compact oversized trailing tool results | compaction | done: last valid cut point as fallback; #9740 case in tests/compaction |
 | d192bd6dc | avoid split-turn summary refusals | compaction | done: new prompt, `# Conversation`/`# Instructions` sections |
@@ -34,5 +34,11 @@ Before 2026-09-23 some loaders deliberately deviated from upstream. They rejecte
 - The YAML module keeps its own error prose; the `yaml` package's messages and code frames are pending.
 - Frontmatter rejects `---suffix` fences and nonmapping frontmatter.
 - The skills loader warns on unreadable directories and invalid ignore patterns where upstream stays silent.
+- Default tool-argument validation rejects coercible scalar mismatches that upstream coerces (`packages/agent/test/agent-validation.bend`, `packages/agent/README.md`).
 
 Prompt templates were converted with b6419322e. The prompt-template load check compares YAML warnings by path and location only until the prose matches.
+
+## Test inventory
+
+`tests/upstream-inventory.json` now pins f07218c4d. Suites whose upstream file changed and that were already ported or partial are marked `needs-review` (18) until their diffs are ported; changed suites that were never ported stay pending.
+

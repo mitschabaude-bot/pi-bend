@@ -11,8 +11,8 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | Law file | Laws | Constrains |
 | --- | ---: | --- |
 | `laws/abort.bend` | 2 | `packages/runtime/src/abort.bend` |
-| `laws/agent-loop.bend` | 21 | `packages/agent/src/agent-loop.bend` (execution mode, termination, hooks, batches, stream lease) |
-| `laws/agent.bend` | 35 | `packages/agent/src/agent.bend` (state, queues, events, owner, continue planning) |
+| `laws/agent-loop.bend` | 22 | `packages/agent/src/agent-loop.bend` (execution mode, termination, hooks, batches, stream lease) |
+| `laws/agent.bend` | 36 | `packages/agent/src/agent.bend` (state, queues, events, owner, continue planning) |
 | `laws/bounded.bend` | 6 | `packages/runtime/src/bounded.bend` |
 | `laws/calendar.bend` | 1 | `packages/runtime/src/calendar.bend` |
 | `laws/compaction.bend` | 4 | `packages/coding-agent/src/core/compaction/plan.bend` |
@@ -354,3 +354,6 @@ Six laws in `laws/agent.bend` cover pi's `continue()` as the pure decision `cont
 ### Automatic-compaction decision (2026-09-23)
 
 `laws/compaction.bend` (4) characterizes upstream `_checkCompaction`'s decision, `decideCompaction` in `core/compaction/plan.bend`, over every combination of its facts (skipped check, context overflow, recoverable length stop, completed response, recovery already attempted, context past the threshold): a skipped check never compacts; a compact-and-retry is planned exactly for a failed overflow whose recovery was not yet attempted, so recovery runs at most once until a completed or aborted response re-arms it; recovery is reported exhausted exactly for a repeated failed overflow; threshold compaction happens exactly when nothing overflowed and the context is past the threshold. The proofs are finite case splits over the six Booleans. The decision lives in its own dependency-free module so the proof closure adds no unsafe declarations; how AgentSession derives the facts from the assistant message, model and compaction boundary is covered by the faux-provider scenarios in `tests/agent-session.md`, which run "does not retry overflow recovery more than once" and the threshold and disabled cases end to end; "compacts successful overflow responses without retrying" is covered by the laws only.
+
+The v0.87.1 turn decisions add two laws. `laws/agent-loop.bend`: queued messages continue the run and a failed queue read fails it whatever finishTurn decided, and an explicit continuation with nothing queued continues once on the current context (upstream "makes exactly one context-only request"). `laws/agent.bend`: previewing a pending queue yields exactly the messages the list-level delivery model says a drain emits, so `peekQueuedMessages` agrees with the next drain in both queue modes.
+

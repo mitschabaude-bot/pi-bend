@@ -12,7 +12,7 @@ def Tools() -> Data: T.AgentToolArray(String, String)
 def Context() -> Data: T.AgentContext<Unit, String, String, String>
 def Before() -> Data: T.BeforeToolCallContext<Unit, String, String, String>
 def After() -> Data: T.AfterToolCallContext<Unit, String, String, String>
-def Turn() -> Data: T.ShouldStopAfterTurnContext<Unit, String, String, String>
+def Turn() -> Data: T.AgentTurnContext<Unit, String, String, String>
 def Update() -> Data: T.AgentLoopTurnUpdate<Unit, String, String, String>
 
 def sharedElement(value: Message(), expected: String) -> Bool:

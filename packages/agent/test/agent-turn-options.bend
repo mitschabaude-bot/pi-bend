@@ -26,6 +26,8 @@ def Turn() -> Data: Options.Turn(Unit, Unit, String, String)
 def Update() -> Data: Options.Update(Unit, Unit, String, String)
 def PrepareResult() -> Data: Hooks.PrepareResult(Update(), String)
 def StopInput() -> Data: T.ToolHookInput<Turn()>
+def Finish() -> Data: T.FinishTurn(Unit, Unit, String, String)
+def Finished() -> Data: Result<&2, &2, String, Maybe<&2, T.AgentTurnDecision>>
 type Capture is Data:
   Capture{count: R.Ref<U32>, streams: R.Ref<List<&2, H.StreamValue()>>}
 def toolAssistant() -> Ai.AssistantMessage<Schema.Value, Unit>:
@@ -61,18 +63,18 @@ def roles(messages: H.Messages()) -> String:
     case Nil{}: ""
     case T.LlmMessage{Ai.ToolResult{_}} <> rest: "t" ++ roles(rest)
     case message <> rest: H.role(message) ++ roles(rest)
-def stop(seen: R.Ref<Bool>, input: StopInput()) -> IO(Result<&2, &2, String, Bool>):
+def stop(seen: R.Ref<Bool>, input: StopInput()) -> IO(Finished()):
   match input:
-    case T.ToolHookInput{T.ShouldStopAfterTurnContext{_, _, T.AgentContext{messages, _}, _}, signal}:
-      do IO<Result<&2, &2, String, Bool>>:
+    case T.ToolHookInput{T.AgentTurnContext{_, _, T.AgentContext{messages, _}, _}, signal}:
+      do IO<Finished()>:
         inspectSignal(seen, signal)
-        Test.assertion(String.eq(roles(messages), "suat"), "stop hook receives system/user/assistant/toolResult context")
-        return Done{True{}}
+        Test.assertion(String.eq(roles(messages), "suat"), "finishTurn receives system/user/assistant/toolResult context")
+        return Done{Some{T.EndTurn{}}}
 def execute(mode: U32, input: T.ToolExecutionInput<Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   IO.pure(Result<&2, &2, String, T.AgentToolResult<Unit>>, Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, U32.is_eq(mode, 0), "ok", "tool complete"), None{}}} <> Nil{}, Unit{}, None{}, None{}}})
-def options(+mode: U32, stream: Named.StreamFunction(), executor: Named.Executor(), prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Hooks.StopHook(Turn(), String)) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
-  Options.AgentOptions{Some{State.AgentInitialState{None{}, None{}, None{}, Some{Declarations.tool("noop", "Noop tool", executor) <> Nil{}}, None{}}}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, Hooks.StopHook(Turn(), String)>, U32.is_eq(mode, 1), Some{stopHook}, None{}), Bool.pick(Maybe<&2, Hooks.LegacyHook(Update(), String)>, U32.is_eq(mode, 0), Some{prepareHook}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
-def create(+mode: U32, capture: Capture, prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Hooks.StopHook(Turn(), String)) -> IO(Named.Fixture):
+def options(+mode: U32, stream: Named.StreamFunction(), executor: Named.Executor(), prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Finish()) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
+  Options.AgentOptions{Some{State.AgentInitialState{None{}, None{}, None{}, Some{Declarations.tool("noop", "Noop tool", executor) <> Nil{}}, None{}}}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, Finish()>, U32.is_eq(mode, 1), Some{stopHook}, None{}), None{}, Bool.pick(Maybe<&2, Hooks.LegacyHook(Update(), String)>, U32.is_eq(mode, 0), Some{prepareHook}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+def create(+mode: U32, capture: Capture, prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Finish()) -> IO(Named.Fixture):
   do IO<Named.Fixture>:
     +stream : Named.StreamFunction() <- C.create(~Capture, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, capture)
     +validator : Named.Validator() <- C.create(~U32, ~Loop.ToolValidationInput, ~Result<&2, &2, String, Schema.Value>, ~H.validate, 9)
@@ -87,7 +89,7 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     +streams : R.Ref<List<&2, H.StreamValue()>> <- R.new(List<&2, H.StreamValue()>, Nil{})
     +seen : R.Ref<Bool> <- R.new(Bool, False{})
     +prepareHook : Hooks.LegacyHook(Update(), String) <- C.create(~R.Ref<Bool>, ~Maybe<&2, Run.RunSignal()>, ~PrepareResult(), ~prepare, seen)
-    +stopHook : Hooks.StopHook(Turn(), String) <- C.create(~R.Ref<Bool>, ~StopInput(), ~Result<&2, &2, String, Bool>, ~stop, seen)
+    +stopHook : Finish() <- C.create(~R.Ref<Bool>, ~StopInput(), ~Finished(), ~stop, seen)
     +fixture : Named.Fixture <- create(mode, Capture{count, streams}, prepareHook, stopHook)
     Behavior.prompt(Named.getAgent(fixture), "start")
     calls : U32 <- R.read(U32, count)
@@ -95,7 +97,7 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
     Test.assertion(sawSignal && U32.is_eq(calls, Bool.pick(U32, U32.is_eq(mode, 0), 2, 1)), "AgentOptions forwards turn hook and preserves original request count")
     Named.dispose(fixture)
     C.dispose(Maybe<&2, Run.RunSignal()>, PrepareResult(), prepareHook)
-    C.dispose(StopInput(), Result<&2, &2, String, Bool>, stopHook)
+    C.dispose(StopInput(), Finished(), stopHook)
     old : U32 <- R.dispose(U32, count)
     old : Bool <- R.dispose(Bool, seen)
     all : List<&2, H.StreamValue()> <- R.dispose(List<&2, H.StreamValue()>, streams)
@@ -104,4 +106,4 @@ def scenario(+mode: U32, name: String) -> IO(Unit):
 def main() -> IO(Unit):
   do IO<Unit>:
     scenario(0, "keeps legacy prepareNextTurn signal callback behavior")
-    scenario(1, "forwards shouldStopAfterTurn through AgentOptions")
+    scenario(1, "forwards finishTurn through AgentOptions with the active abort signal")

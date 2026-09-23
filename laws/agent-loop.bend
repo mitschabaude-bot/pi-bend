@@ -127,21 +127,34 @@ law queued_messages_continue_the_run_without_ending_it:
   for -Details: Data
   for -Custom: Data
   for -Error: Data
-  for completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>
+  for completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>
   for sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>
+  for explicit: Bool
   for head: T.AgentMessage<DiagnosticDetails, Details, Custom>
   for tail: List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>
-  {Loop.followed(DiagnosticDetails, Details, Custom, Error, completed, sink, Done{head <> tail}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{Loop.CompletionContinue{completed, head <> tail}}) : IO(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>)}
+  {Loop.followed(DiagnosticDetails, Details, Custom, Error, completed, sink, explicit, Done{head <> tail}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{Loop.CompletionContinue{completed, head <> tail}}) : IO(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>)}
 
 law a_failed_queue_read_fails_the_turn:
   for -DiagnosticDetails: Data
   for -Details: Data
   for -Custom: Data
   for -Error: Data
-  for completed: T.ShouldStopAfterTurnContext<DiagnosticDetails, Details, Custom, Error>
+  for completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>
   for sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>
+  for explicit: Bool
   for error: Error
-  {Loop.followed(DiagnosticDetails, Details, Custom, Error, completed, sink, Fail{error}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error}) : IO(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>)}
+  {Loop.followed(DiagnosticDetails, Details, Custom, Error, completed, sink, explicit, Fail{error}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>, Fail{error}) : IO(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>)}
+
+# finishTurn's continue decision guarantees one more request: with nothing
+# queued, the run continues on the current context.
+law an_explicit_continuation_without_queued_messages_continues_on_the_current_context:
+  for -DiagnosticDetails: Data
+  for -Details: Data
+  for -Custom: Data
+  for -Error: Data
+  for completed: T.AgentTurnContext<DiagnosticDetails, Details, Custom, Error>
+  for sink: C.Callback<T.AgentEvent<DiagnosticDetails, Details, Custom, T.AgentToolResult<Details>, T.AgentToolResult<Details>>, Result<&2, &2, Error, Unit>>
+  {Loop.followed(DiagnosticDetails, Details, Custom, Error, completed, sink, True{}, Done{Nil{}}) == IO.pure(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>, Done{Loop.CompletionContinue{completed, Nil{}}}) : IO(Result<&2, &2, Error, Loop.NextTurn<DiagnosticDetails, Details, Custom, Error>>)}
 
 def isLength(reason: Ai.StopReason) -> Bool:
   match reason:

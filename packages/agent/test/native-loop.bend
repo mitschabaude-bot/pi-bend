@@ -134,7 +134,7 @@ def scenario(+failTransform: Bool, failUpdate: Bool, +failConvert: Bool, +failKe
     +resolver : C.Callback<String, Result<&2, &2, String, Maybe<&2, String>>> <- C.create(~TransformState, ~String, ~Result<&2, &2, String, Maybe<&2, String>>, ~keyBody, TransformState{logValue, failKey})
     +provider : C.Callback<Input(), ProviderOutput()> <- C.create(~ProviderState, ~Input(), ~ProviderOutput(), ~providerBody, ProviderState{logValue, stream})
     +sink : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~SinkState, ~EventValue(), ~Result<&2, &2, String, Unit>, ~sinkBody, SinkState{logValue, events, failUpdate})
-    config : Config() = T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{"fallback"}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, Some{transformer}, Some{resolver}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+    config : Config() = T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{"fallback"}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, Some{transformer}, Some{resolver}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     outcome : Result<&2, &2, String, Message()> <- Loop.streamAssistantResponse(Unit, String, String, String, Unit, Unit, Unit, Loop.AssistantRequest{context, config, None{}, sink, provider})
     checkOutcome(outcome, expected)
     trace : List<&2, String> <- R.read(List<&2, String>, logValue)

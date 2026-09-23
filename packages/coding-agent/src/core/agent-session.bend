@@ -803,8 +803,8 @@ def summaryOptions(model: Ai.Model<Ai.JsonValue>, thinking: Ai.ModelThinkingLeve
 
 def summaryConfig(config: Runtime.LoopConfig(), model: Ai.Model<Ai.JsonValue>, options: Ai.SimpleStreamOptions<Ai.JsonValue, A.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Runtime.Error()>) -> Runtime.LoopConfig():
   match config:
-    case T.AgentLoopConfig{_, _, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}:
-      T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+    case T.AgentLoopConfig{_, _, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}:
+      T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
 
 def errorReply(model: Ai.Model<Ai.JsonValue>, message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
   match model:
@@ -1001,11 +1001,11 @@ type NextTurnEnv is Data:
 
 def turnContext(turn: Turn()) -> Context():
   match turn:
-    case T.ShouldStopAfterTurnContext{_, _, context, _}: context
+    case T.AgentTurnContext{_, _, context, _}: context
 
 def withTurnContext(turn: Turn(), context: Context()) -> Turn():
   match turn:
-    case T.ShouldStopAfterTurnContext{message, toolResults, _, newMessages}: T.ShouldStopAfterTurnContext{message, toolResults, context, newMessages}
+    case T.AgentTurnContext{message, toolResults, _, newMessages}: T.AgentTurnContext{message, toolResults, context, newMessages}
 
 def withContextMessages(context: Context(), messages: List<&2, Message()>) -> Context():
   match context:

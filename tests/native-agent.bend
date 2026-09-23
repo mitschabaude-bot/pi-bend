@@ -65,7 +65,7 @@ def echo(counter: Ref.Ref<U32>, input: ToolInput()) -> IO(ToolOutput()):
     case _: IO.pure(ToolOutput(), Fail{"echo expects an object"})
 
 def configuration(model: Ai.Model<Ai.JsonValue>, key: String, converter: C.Callback<Messages(), Converted()>, maxTokens: U32, maxRetries: U32) -> Config():
-  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(maxRetries)}, None{}, None{}, None{}, Some{F.fromU32(maxTokens)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, Some{key}, None{}, Some{R.new(String)}, None{}, None{}, None{}, Some{F.fromU32(120000)}, Some{F.fromU32(maxRetries)}, None{}, None{}, None{}, Some{F.fromU32(maxTokens)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, model, converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 # Print the event sequence separately from the tool execution count, so the
 # oracle can check ordering without depending on worker scheduling.

@@ -38,7 +38,7 @@ def roles(messages: Validation.Messages()) -> String:
 
 def checkTurn(input: H.Turn()) -> IO(Unit):
   match input:
-    case T.ShouldStopAfterTurnContext{message, Ai.ToolResultMessage{id, _, _, _, _, False{}, _} <> Nil{}, T.AgentContext{messages, _}, history}:
+    case T.AgentTurnContext{message, Ai.ToolResultMessage{id, _, _, _, _, False{}, _} <> Nil{}, T.AgentContext{messages, _}, history}:
       Test.assertion(String.eq(H.assistantName(message), "assistant:tool") && String.eq(id, "tool-1") && String.eq(roles(messages), "system|user|assistant|toolResult|") && String.eq(roles(history), "system|user|assistant|toolResult|"), "hook receives assistant, completed tool result, committed context and generated history")
     case _: Test.assertion(False{}, "completed tool turn snapshot")
 
@@ -49,7 +49,7 @@ def nextUpdate(index: U32, context: Validation.Context()) -> H.PrepareOutput():
 
 def updateFrom(index: U32, input: H.Turn()) -> H.PrepareOutput():
   match input:
-    case T.ShouldStopAfterTurnContext{_, _, context, _}: nextUpdate(index, context)
+    case T.AgentTurnContext{_, _, context, _}: nextUpdate(index, context)
 
 def prepare(environment: Preparing, input: H.Turn()) -> IO(H.PrepareOutput()):
   match environment:
@@ -61,11 +61,13 @@ def prepare(environment: Preparing, input: H.Turn()) -> IO(H.PrepareOutput()):
         index : U32 <- H.bump(calls)
         return updateFrom(index, input)
 
-def stop(recording: H.Log(), input: H.Turn()) -> IO(Result<&2, &2, String, Bool>):
-  do IO<Result<&2, &2, String, Bool>>:
-    checkTurn(input)
-    H.log(recording, "stop")
-    return Done{True{}}
+def finish(recording: H.Log(), input: H.FinishInput()) -> IO(H.FinishOutput()):
+  match input:
+    case T.ToolHookInput{turn, _}:
+      do IO<H.FinishOutput()>:
+        checkTurn(turn)
+        H.log(recording, "finish")
+        return Done{Some{T.EndTurn{}}}
 
 def steering(recording: H.Log(), unused: Unit) -> IO(H.QueueOutput()):
   do IO<H.QueueOutput()>:
@@ -135,14 +137,14 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     +streams : R.Ref<List<&2, H.StreamValue()>> <- R.new(List<&2, H.StreamValue()>, Nil{})
     +executor : C.Callback<Validation.ExecuteInput(), Validation.ExecuteOutput()> <- C.create(~H.Log(), ~Validation.ExecuteInput(), ~Validation.ExecuteOutput(), ~execute, recording)
     +preparer : C.Callback<H.Turn(), H.PrepareOutput()> <- C.create(~Preparing, ~H.Turn(), ~H.PrepareOutput(), ~prepare, Preparing{prepares, recording})
-    +stopper : C.Callback<H.Turn(), Result<&2, &2, String, Bool>> <- C.create(~H.Log(), ~H.Turn(), ~Result<&2, &2, String, Bool>, ~stop, recording)
+    +finisher : C.Callback<H.FinishInput(), H.FinishOutput()> <- C.create(~H.Log(), ~H.FinishInput(), ~H.FinishOutput(), ~finish, recording)
     +steeringCallback : C.Callback<Unit, H.QueueOutput()> <- C.create(~H.Log(), ~Unit, ~H.QueueOutput(), ~steering, recording)
     +followCallback : C.Callback<Unit, H.QueueOutput()> <- C.create(~H.Log(), ~Unit, ~H.QueueOutput(), ~followUp, recording)
     +providerCallback : H.ProviderFunction() <- C.create(~Provider, ~H.ProviderInput(), ~H.ProviderOutput(), ~provider, Provider{stopMode, calls, streams})
     +converter : C.Callback<Validation.Messages(), Validation.Converted()> <- C.create(~Unit, ~Validation.Messages(), ~Validation.Converted(), ~Tools.convert, Unit{})
     +validator : C.Callback<Validation.Input(), Validation.Checked()> <- C.create(~Unit, ~Validation.Input(), ~Validation.Checked(), ~Validation.validate, Unit{})
     +aborted : C.Callback<Maybe<&2, Abort.AbortSignal<Unit>>, Bool> <- C.create(~Unit, ~Maybe<&2, Abort.AbortSignal<Unit>>, ~Bool, ~H.abort, Unit{})
-    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<H.Turn(), Result<&2, &2, String, Bool>>>, stopMode, Some{stopper}, None{}), Bool.pick(Maybe<&2, C.Callback<H.Turn(), H.PrepareOutput()>>, stopMode, None{}, Some{preparer}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{steeringCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{followCallback}, None{}), None{}, None{}, None{}}
+    config : Validation.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Bool.pick(Maybe<&2, C.Callback<H.FinishInput(), H.FinishOutput()>>, stopMode, Some{finisher}, None{}), None{}, Bool.pick(Maybe<&2, C.Callback<H.Turn(), H.PrepareOutput()>>, stopMode, None{}, Some{preparer}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{steeringCallback}, None{}), Bool.pick(Maybe<&2, C.Callback<Unit, H.QueueOutput()>>, stopMode, Some{followCallback}, None{}), None{}, None{}, None{}}
     context : Validation.Context() = T.AgentContext{Nil{}, Some{T.AgentTool{"echo", "Echo tool", Tools.schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}}
     +run : H.StreamRun() <- W.agentLoop(~Unit, ~String, ~String, ~String, ~Unit, ~H.render, ~H.declarationError, ~Defaults.errorMessage, ~Entry.errorMessage, user("echo something") <> Nil{}, context, config, W.Options{None{}, validator, aborted, "empty", Defaults.Explicit{providerCallback}})
     +iterator : S.Iterator<Validation.EventValue(), H.Outcome()> <- W.iterator(Unit, String, String, String, run)
@@ -157,10 +159,10 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
     prepareCount : U32 <- R.dispose(U32, prepares)
     Test.assertion(U32.is_eq(prepareCount, Bool.pick(U32, stopMode, 0, 1)), "prepareNextTurn called once only when continuing")
     trace : List<&2, String> <- R.dispose(List<&2, String>, recording)
-    Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), Bool.pick(String, stopMode, "steering|hello|stop", "hello|prepare")), "one execution, correct hook/poll counts, follow-up stays queued on stop")
+    Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), Bool.pick(String, stopMode, "steering|hello|finish", "hello|prepare")), "one execution, correct hook/poll counts, follow-up stays queued on stop")
     C.dispose(Validation.ExecuteInput(), Validation.ExecuteOutput(), executor)
     C.dispose(H.Turn(), H.PrepareOutput(), preparer)
-    C.dispose(H.Turn(), Result<&2, &2, String, Bool>, stopper)
+    C.dispose(H.FinishInput(), H.FinishOutput(), finisher)
     C.dispose(Unit, H.QueueOutput(), steeringCallback)
     C.dispose(Unit, H.QueueOutput(), followCallback)
     C.dispose(H.ProviderInput(), H.ProviderOutput(), providerCallback)
@@ -174,4 +176,4 @@ def scenario(+stopMode: Bool, name: String) -> IO(Unit):
 def main() -> IO(Unit):
   do IO<Unit>:
     scenario(False{}, "should use prepareNextTurn snapshot before continuing")
-    scenario(True{}, "should stop after the current turn when shouldStopAfterTurn returns true")
+    scenario(True{}, "action:end receives finalized turn context and stops before queue polling")

@@ -65,7 +65,7 @@ def hookResult(mode: U32, replacement: Context()) -> PrepareOutput():
 
 def prepare(environment: Hook, completed: Turn()) -> IO(PrepareOutput()):
   match environment completed:
-    case Hook{recording, mode, replacement} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{contextMessages, _}, newMessages}:
+    case Hook{recording, mode, replacement} T.AgentTurnContext{_, _, T.AgentContext{contextMessages, _}, newMessages}:
       do IO<PrepareOutput()>:
         Test.assertion(String.eq(messages(contextMessages), "old|") && String.eq(messages(newMessages), "generated|"), "prepare hook receives the completed snapshot")
         log(recording, "prepare")
@@ -112,7 +112,7 @@ def reasoning(value: Maybe<&2, Ai.ThinkingLevel>, replaced: Bool) -> Bool:
 
 def configMatches(config: Config(), +replaced: Bool) -> Bool:
   match config:
-    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, thinking, _, _}, model, _, _, _, _, _, _, _, _, _, _}:
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, thinking, _, _}, model, _, _, _, _, _, _, _, _, _, _, _}:
       reasoning(thinking, replaced) && String.eq(Api.name(Api.modelApi(Ai.JsonValue, model)), Bool.pick(String, replaced, "replacement", "original"))
 
 def check(actual: Outcome(), +replaced: Bool, +expectedMessages: String, expectedError: String) -> IO(Unit):
@@ -122,7 +122,7 @@ def check(actual: Outcome(), +replaced: Bool, +expectedMessages: String, expecte
       Test.assertion(String.is_empty(expectedError) && configMatches(config, replaced) && String.eq(messages(contextMessages), Bool.pick(String, replaced, "compacted|", "old|") ++ expectedMessages) && String.eq(messages(newMessages), "generated|" ++ expectedMessages), "prepared context/config and generated history reach the request boundary")
 
 def configuration(converter: C.Callback<Messages(), Converted()>, hook: C.Callback<Turn(), PrepareOutput()>, steering: C.Callback<Unit, QueueOutput()>) -> Config():
-  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Ai.High{}}, None{}, None{}}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, Some{hook}, Some{steering}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Ai.High{}}, None{}, None{}}, Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, None{}, None{}, Some{hook}, Some{steering}, None{}, None{}, None{}, None{}}
 
 def run(initial: Bool, +context: Context(), config: Config(), completed: Turn(), pending: Messages(), sink: C.Callback<EventValue(), Result<&2, &2, String, Unit>>) -> IO(Outcome()):
   match initial:
@@ -147,7 +147,7 @@ def scenario(+initial: Bool, +mode: U32, retained: Bool, queueMode: U32, failAt:
     +sink : C.Callback<EventValue(), Result<&2, &2, String, Unit>> <- C.create(~Recording, ~EventValue(), ~Result<&2, &2, String, Unit>, ~emit, Recording{recording, failAt})
     +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<V.Value, Unit> = Ai.AssistantMessage{Nil{}, "custom-api", "custom-provider", "model", None{}, None{}, None{}, None{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}, None{}, None{}, None{}, None{}, zero}
-    completed : Turn() = T.ShouldStopAfterTurnContext{assistant, Nil{}, context, T.CustomMessage{"generated"} <> Nil{}}
+    completed : Turn() = T.AgentTurnContext{assistant, Nil{}, context, T.CustomMessage{"generated"} <> Nil{}}
     pending : Messages() = Bool.pick(Messages(), retained, T.CustomMessage{"retained"} <> Nil{}, Nil{})
     result : Outcome() <- run(initial, context, configuration(converter, hook, steering), completed, pending, sink)
     check(result, Bool.not(initial) && U32.is_eq(mode, 1), expectedMessages, expectedError)

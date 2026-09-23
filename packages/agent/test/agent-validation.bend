@@ -110,7 +110,7 @@ def scenario(+valid: Bool) -> IO(Unit):
     +stream : T.StreamFn(Unit, String, Config(), String) <- C.create(~Capture, ~ProviderInput(), ~ProviderOutput(), ~provider, Capture{valid, calls, streams})
     +registry : Provider.Registry(Unit, String, Config(), String) <- Provider.create(Unit, String, Config(), String)
     initial : State.AgentInitialState<Unit, String, String, String> = State.AgentInitialState{None{}, None{}, None{}, Some{T.AgentTool{"echo", "Echo", schema(), None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{}}, None{}}
-    options : Options.AgentOptions<Unit, String, String, String, Unit> = Options.AgentOptions{Some{initial}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+    options : Options.AgentOptions<Unit, String, String, String, Unit> = Options.AgentOptions{Some{initial}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
     created : Result<&2, &2, Provider.MissingDefault, Owner()> <- Agent.new(~Unit, ~String, ~String, ~String, ~Unit, options, registry, validator, "empty")
     +agent : Owner() <- required(created)
     result : Result<&2, &2, Agent.AgentError<String>, Unit> <- Agent.prompt(~Unit, ~String, ~String, ~String, ~Unit, ~identity, ~identity, ~declarationError, agent, Agent.Text{"run tool", Nil{}})
