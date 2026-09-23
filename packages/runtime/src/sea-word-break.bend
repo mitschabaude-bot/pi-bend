@@ -3,7 +3,7 @@ import ./cjk-dictionary.bend as Dictionary
 import ./u32-table.bend as Table
 import ./sea-word-data.bend as Data
 
-# ICU78 Khmer/Lao dictionary engine, with immutable three-word lookahead.
+# ICU78 Southeast Asian dictionary engines, with immutable three-word lookahead.
 # Trie records share the native CJK radix representation, but Khmer matching
 # has language-specific length bounds and retains ICU's attempted-prefix count.
 type Context is Data: Context{language: Data.Language,dictionary: Dictionary.Trie}
@@ -111,6 +111,42 @@ def marks(text: String,+context: Context,+length: Nat) -> Candidate:
 def attachMarks(context: Context,value: Candidate) -> Candidate:
   match value:
     case Candidate{length,text}: marks(text,context,length)
+def isThai(context: Context) -> Bool:
+  match context:
+    case Context{Data.Thai{},_}: True{}
+    case _: False{}
+def previous(count: Nat,text: String,last: Maybe<&2,Char>) -> Maybe<&2,Char>:
+  match count text:
+    case Zero{} _: last
+    case Succ{left} SCon{char,rest}: previous(left,rest,Some{char})
+    case _ SNil{}: last
+def suffixChar(char: Char) -> Bool:
+  match char:
+    case Chr{+code}: U32.is_eq(code,3631) || U32.is_eq(code,3654)
+def previousSuffix(last: Maybe<&2,Char>) -> Bool:
+  match last:
+    case Some{char}: suffixChar(char)
+    case None{}: False{}
+def previousRepeat(last: Maybe<&2,Char>) -> Bool:
+  match last:
+    case Some{Chr{code}}: U32.is_eq(code,3654)
+    case None{}: False{}
+def repeatSuffix(last: Maybe<&2,Char>,value: Candidate) -> Candidate:
+  match value:
+    case Candidate{+length,SCon{Chr{3654},+rest}}:
+      Bool.pick(Candidate,previousRepeat(last),Candidate{length,SCon{Chr{3654},rest}},Candidate{Succ{length},rest})
+    case value: value
+def thaiSuffix(last: Maybe<&2,Char>,value: Candidate) -> Candidate:
+  match value:
+    case Candidate{+length,SCon{Chr{3631},+rest}}:
+      Bool.pick(Unit -> Candidate,previousSuffix(last),
+        _ => Candidate{length,SCon{Chr{3631},rest}},_ => repeatSuffix(Some{Chr{3631}},Candidate{Succ{length},rest}))(Unit{})
+    case value: repeatSuffix(last,value)
+def suffix(+context: Context,+source: String,value: Candidate) -> Candidate:
+  match value:
+    case Candidate{+length,+rest}:
+      Bool.pick(Unit -> Candidate,isThai(context) && Nat.is_gt(length,0n) && Bool.not(any(matches(context,rest))),
+        _ => thaiSuffix(previous(length,source,None{}),Candidate{length,rest}),_ => Candidate{length,rest})(Unit{})
 type Work is Data: Work{text: String,position: Nat,reversed: List<&2,Nat>}
 def accepted(value: Candidate,position: Nat,reversed: List<&2,Nat>) -> Work:
   match value:
@@ -118,7 +154,7 @@ def accepted(value: Candidate,position: Nat,reversed: List<&2,Nat>) -> Work:
       +position = position + length
       Work{rest,position,position <> reversed}
 def advance(+context: Context,+text: String,position: Nat,reversed: List<&2,Nat>) -> Work:
-  accepted(attachMarks(context,combine(context,choose(context,matches(context,text),text))),position,reversed)
+  accepted(suffix(context,text,attachMarks(context,combine(context,choose(context,matches(context,text),text)))),position,reversed)
 def loop(fuel: Nat,+context: Context,value: Work) -> List<&2,Nat>:
   match fuel value:
     case _ Work{SNil{},_,reversed}: List.reverse(&2,Nat,reversed)
@@ -126,5 +162,5 @@ def loop(fuel: Nat,+context: Context,value: Work) -> List<&2,Nat>:
     case Succ{left} Work{text,position,reversed}: loop(left,context,advance(context,text,position,reversed))
 def boundaries(+context: Context,+text: String) -> List<&2,Nat>:
   +length = String.length(text)
-  Bool.pick(Unit -> List<&2,Nat>,Nat.is_lt(length,4n),
+  Bool.pick(Unit -> List<&2,Nat>,Nat.is_lt(length,4n) || (isThai(context) && Nat.is_eq(length,4n)),
     _ => Bool.pick(List<&2,Nat>,Nat.is_eq(length,0n),Nil{},length <> Nil{}),_ => loop(length,context,Work{text,0n,Nil{}}))(Unit{})

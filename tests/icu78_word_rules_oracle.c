@@ -42,5 +42,19 @@ static napi_value segments(napi_env env,napi_callback_info info){
  for(int32_t end;(end=next(iter))!=-1;){napi_value row,position,tag;napi_create_array_with_length(env,2,&row);napi_create_int32(env,end,&position);napi_create_int32(env,status(iter),&tag);napi_set_element(env,row,0,position);napi_set_element(env,row,1,tag);napi_set_element(env,result,i++,row);}
  destroy_iterator(iter);utext_close_78(ut);free(text);return result;
 }
-static napi_value init(napi_env env,napi_value exports){napi_value fn;napi_create_function(env,"extract",7,extract,0,&fn);napi_set_named_property(env,exports,"extract",fn);napi_create_function(env,"segments",8,segments,0,&fn);napi_set_named_property(env,exports,"segments",fn);return exports;}
+/* Pin the actual reference's resource-driven Thai/Myanmar dictionary fallback. */
+extern const void *CreateLSTMDataForScript_78(int,int32_t *);
+extern void DeleteLSTMData_78(const void *);
+extern void *ures_openDirect_78(const char *,const char *,int32_t *);
+extern void *ures_getByKey_78(const void *,const char *,void *,int32_t *);
+extern void ures_close_78(void *);
+static napi_value engine_resources(napi_env env,napi_callback_info info){
+ int32_t states[6]={0},error=0;void *root=ures_openDirect_78("icudt78l-brkitr","root",&error);states[0]=error;
+ if(root){void *lstm=ures_getByKey_78(root,"lstm",0,&error);states[1]=error;if(lstm)ures_close_78(lstm);ures_close_78(root);}
+ const char *models[]={"Thai_graphclust_model4_heavy","Burmese_graphclust_model5_heavy"};int scripts[]={38,28};
+ for(int i=0;i<2;i++){error=0;void *resource=ures_openDirect_78("icudt78l-brkitr",models[i],&error);states[2+i]=error;if(resource)ures_close_78(resource);
+  error=0;const void *data=CreateLSTMDataForScript_78(scripts[i],&error);states[4+i]=error;if(data)DeleteLSTMData_78(data);}
+ napi_value result;napi_create_array_with_length(env,6,&result);for(int i=0;i<6;i++){napi_value code;napi_create_int32(env,states[i],&code);napi_set_element(env,result,i,code);}return result;
+}
+static napi_value init(napi_env env,napi_value exports){napi_value fn;napi_create_function(env,"extract",7,extract,0,&fn);napi_set_named_property(env,exports,"extract",fn);napi_create_function(env,"segments",8,segments,0,&fn);napi_set_named_property(env,exports,"segments",fn);napi_create_function(env,"engineResources",15,engine_resources,0,&fn);napi_set_named_property(env,exports,"engineResources",fn);return exports;}
 NAPI_MODULE(NODE_GYP_MODULE_NAME,init)

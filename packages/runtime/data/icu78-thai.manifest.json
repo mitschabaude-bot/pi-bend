@@ -1,0 +1,15 @@
+{
+  "source": "https://raw.githubusercontent.com/unicode-org/icu/release-78.3/icu4c/source/data/brkitr/dictionaries/thaidict.txt",
+  "source_sha256": "3166abde40c0f44ab91c28f5ce96d7d1472cb7882e1c0bda0a72f8f69dba4274",
+  "icu": "78.3",
+  "unicode": "17.0",
+  "entries": 26383,
+  "nodes": 31515,
+  "bytes": 270119,
+  "sha256": "f539d345f29cd4025cb47af0a5bc3883ea4a0f34adf3d10d832a286ced4b20a9",
+  "max_word_length": 20,
+  "max_prefix_candidates": 5,
+  "format": "ICUTHA01: magic8,nodeCount:u32le,wordCount:u32le; CJK radix record format with cost0 terminal,255 nonterminal; edge labels capped20",
+  "license": "icu78-thai.LICENSE",
+  "unicode_sha256": "2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e"
+}

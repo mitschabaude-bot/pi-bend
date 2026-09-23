@@ -37,20 +37,42 @@ def checked(result: Result<&2,&2,String,Nat>) -> IO(Unit):
   match result:
     case Done{count}: IO.print(Nat.show(count))
     case Fail{message}: IO.die(Unit,1,"word mismatch: " ++ message)
-def rulesDecoded(lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: R.Parsed(R.Rules)) -> IO(Unit):
+def rulesDecoded(thai: D.Trie,myanmar: D.Trie,lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: R.Parsed(R.Rules)) -> IO(Unit):
   match result:
-    case Done{rules}: checked(cases(W.create(rules,dictionary,khmer,lao),Text.split(input,'\n'),0n))
+    case Done{rules}: checked(cases(W.create(rules,dictionary,khmer,lao,thai,myanmar),Text.split(input,'\n'),0n))
     case Fail{_}: IO.die(Unit,1,"invalid word rules")
-def rulesRead(lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+def rulesRead(thai: D.Trie,myanmar: D.Trie,lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
   match result:
-    case Done{bytes}: rulesDecoded(lao,khmer,dictionary,input,R.decode(bytes))
+    case Done{bytes}: rulesDecoded(thai,myanmar,lao,khmer,dictionary,input,R.decode(bytes))
     case Fail{_}: IO.die(Unit,1,"word rules read failed")
+def myanmarDecoded(thai: D.Trie,lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: D.Parsed(D.Trie)) -> IO(Unit):
+  match result:
+    case Done{myanmar}:
+      do IO<Unit>:
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-word-rules.bin")
+        rulesRead(thai,myanmar,lao,khmer,dictionary,input,bytes)
+    case Fail{_}: IO.die(Unit,1,"invalid Myanmar dictionary")
+def myanmarRead(thai: D.Trie,lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+  match result:
+    case Done{bytes}: myanmarDecoded(thai,lao,khmer,dictionary,input,K.decodeMyanmar(bytes))
+    case Fail{_}: IO.die(Unit,1,"Myanmar dictionary read failed")
+def thaiDecoded(lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: D.Parsed(D.Trie)) -> IO(Unit):
+  match result:
+    case Done{thai}:
+      do IO<Unit>:
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-burmese.bin")
+        myanmarRead(thai,lao,khmer,dictionary,input,bytes)
+    case Fail{_}: IO.die(Unit,1,"invalid Thai dictionary")
+def thaiRead(lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+  match result:
+    case Done{bytes}: thaiDecoded(lao,khmer,dictionary,input,K.decodeThai(bytes))
+    case Fail{_}: IO.die(Unit,1,"Thai dictionary read failed")
 def laoDecoded(khmer: D.Trie,dictionary: D.Trie,input: String,result: D.Parsed(D.Trie)) -> IO(Unit):
   match result:
     case Done{lao}:
       do IO<Unit>:
-        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-word-rules.bin")
-        rulesRead(lao,khmer,dictionary,input,bytes)
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-thai.bin")
+        thaiRead(lao,khmer,dictionary,input,bytes)
     case Fail{_}: IO.die(Unit,1,"invalid Lao dictionary")
 def laoRead(khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
   match result:

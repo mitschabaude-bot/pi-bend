@@ -1,11 +1,11 @@
-"""Exact ICU78 word rules, mixed CJK dispatch, lexical statuses and missing engines."""
+"""Exact ICU78 word rules, all reference dictionary engines and lexical statuses."""
 import argparse,importlib.util,itertools,json,random,struct,subprocess,time,zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('backends',nargs='*',default=['bun','native-1','native-4']);a=p.parse_args()
 version=json.loads(subprocess.check_output(['node','-p','JSON.stringify({icu:process.versions.icu,unicode:process.versions.unicode})'],text=True));assert version=={'icu':'78.3','unicode':'17.0'},version
 cases=['ー'*12,'ｰ'*12,'ﾞ'*12,'ﾟ'*12,'','hello world','foo.bar','foo:bar','path/to/file','a_b','123abc','abc123','1カ2','_カナ123','你好world 123 foo.bar!','English日本語test','한국어test','א\'אב 1.5','カ\u0301ナ','中\u0301中','㌕世界','a\u200d👩🏽\u200d💻','🇦🇧🇨🇩🇪','\r\n',' \u0301 ','\ufeffx','᠀᠀','ภาษา','日本ภาษา','ພາສາ','မြန်မာ','ភាសា']
-missing={27:'Thai',28:'Thai',30:'Myanmar'}
+missing={}
 units=['a','1','_',"'",'.',' ','\u0301','\u200d','中','カ','ー','😀']
 cases += [''.join(parts) for parts in itertools.product(units,repeat=3)]
 # Preserve the official Unicode corpus, but compare ICU's tailoring/statuses.
@@ -20,7 +20,7 @@ for i,(start,value) in enumerate(ranges):
  for cp in {start,end}:
   if 0xd800<=cp<0xe000:continue
   char=chr(cp);cases.append(char)
-  if value>>8 not in (3,4,5,6):cases.append('a'+char+'中');cases.append('1'+char+'カ')
+  cases.append('a'+char+'中');cases.append('1'+char+'カ')
 random.seed(7803)
 words=['hello','世界','東京大学','123','foo.bar','אב\'','日本語','カタカナ','ｶﾞｯﾂ','한국어','café','العربية','देवनागरी','_',':','?','\u0301','\u200d','😀',' ', '\r\n']
 cases += [''.join(random.choices(words,k=random.randrange(2,10))) for _ in range(1024)]
@@ -39,11 +39,24 @@ lao_chars=[chr(cp) for cp in range(0xe80,0xee0)]
 cases += [''.join(random.choices(lao_chars,k=random.randrange(1,32))) for _ in range(2048)]
 cases += ['a'+word+'ភាសាខ្មែរ 1'+word+'中' for word in random.sample(lao_words,512)]
 cases += ['ພາສາລາວ '*4000,'ກ'*20000,'ກ'+'ິ'*20000,'ພາສາ\u0301ລາວ','ພາສາ\u200dລາວ']
+for name,lo,hi,example,letter,mark in [('thai',0xe00,0xe60,'ภาษาไทย','ก','ิ'),('burmese',0x1000,0x10a0,'မြန်မာ','က','ိ')]:
+ words=sorted({line.split('#')[0].strip() for line in (ROOT/('build/icu78-source/'+name+'dict.txt')).read_text(encoding='utf-8-sig').splitlines() if line.split('#')[0].strip()})
+ cases+=words
+ cases+=[''.join(random.choices(words,k=random.randrange(2,6))) for _ in range(2048)]
+ chars=[chr(cp) for cp in range(lo,hi)]
+ cases+=[''.join(random.choices(chars,k=random.randrange(1,32))) for _ in range(2048)]
+ cases+=['a'+word+'ភាសាខ្មែរ 1'+word+'ພາສາ中' for word in random.sample(words,512)]
+ cases+=[(example+' ')*1000,letter*10000,letter+mark*10000,example+'\u0301'+example,example+'\u200d'+example]
+for stem in ['','ก','กา','กกา','กกกา','ภาษา','ไทย','ภาษาไทย','ฯ','ๆ']:
+ for n in range(1,5):
+  cases += [stem+''.join(suffix) for suffix in itertools.product('ฯๆ',repeat=n)]
+cases+=['ก'+'ิ'*12+'กกกกก','က'+'ိ'*12+'ကကကကက']
 cases += ['hello世界 123カタカナ. '*2000,'a'*100000,'ー'*20000,'_カ\u0301ナ'*4000,'a.'+'\u0301'*100000+'!']
 fixture=ROOT/'build/word-segmenter-fixture.json';fixture.write_text(json.dumps(cases,ensure_ascii=False))
 subprocess.run(['cc','-shared','-fPIC','-I/usr/include/node','tests/icu78_word_rules_oracle.c','-o','build/icu78-word-rules.node'],cwd=ROOT,check=True)
 oracle=r'''
 const fs=require('fs'),o=require('./build/icu78-word-rules.node'),s=new Intl.Segmenter('en',{granularity:'word'});
+if(JSON.stringify(o.engineResources())!==JSON.stringify([0,0,2,2,2,2]))throw Error('reference engine resources changed');
 // Native Context eagerly owns CJK; warm ICU to the same explicit capability.
 [...s.segment('日本')];
 for(const text of JSON.parse(fs.readFileSync(process.argv[1]))){
@@ -63,4 +76,4 @@ for backend in a.backends:
  start=time.monotonic();result=subprocess.run(cmd+[str(fixture)],cwd=ROOT,capture_output=True,text=True,timeout=120)
  assert result.returncode==0 and not result.stderr,(backend,result.returncode,result.stderr)
  assert result.stdout.strip()==str(len(cases)),(backend,result.stdout,len(cases))
- print(f'{backend}: {len(cases)} exact mixed-text/status results and typed missing-engine cases pass ({time.monotonic()-start:.3f}s)',flush=True)
+ print(f'{backend}: {len(cases)} exact mixed-text/status results across all reference dictionary engines pass ({time.monotonic()-start:.3f}s)',flush=True)

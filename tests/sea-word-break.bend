@@ -35,10 +35,14 @@ def decode(language: K.Language,bytes: List<&2,U32>) -> D.Parsed(D.Trie):
   match language:
     case K.Khmer{}: K.decodeKhmer(bytes)
     case K.Lao{}: K.decodeLao(bytes)
+    case K.Thai{}: K.decodeThai(bytes)
+    case K.Myanmar{}: K.decodeMyanmar(bytes)
 def asset(language: K.Language) -> String:
   match language:
     case K.Khmer{}: "packages/runtime/data/icu78-khmer.bin"
     case K.Lao{}: "packages/runtime/data/icu78-lao.bin"
+    case K.Thai{}: "packages/runtime/data/icu78-thai.bin"
+    case K.Myanmar{}: "packages/runtime/data/icu78-burmese.bin"
 def loaded(+language: K.Language,result: Result<&2,&2,FS.Error,List<&2,U32>>,input: String) -> IO(Unit):
   match result:
     case Done{bytes}: decoded(language,decode(language,bytes),input)
@@ -59,6 +63,8 @@ def arguments(args: List<String>) -> IO(Unit):
   match args:
     case "khmer" <> path <> Nil{}: input(K.Khmer{},path)
     case "lao" <> path <> Nil{}: input(K.Lao{},path)
+    case "thai" <> path <> Nil{}: input(K.Thai{},path)
+    case "burmese" <> path <> Nil{}: input(K.Myanmar{},path)
     case _: IO.die(Unit,1,"expected language and TSV fixture path")
 def main() -> IO(Unit):
   do IO<Unit>:
