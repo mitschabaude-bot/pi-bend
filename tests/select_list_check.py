@@ -6,8 +6,9 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
 p.add_argument('--prefix',type=Path,default=ROOT/'build/select-list')
 p.add_argument('--reference',default='/home/agent/code/pi-mono')
+p.add_argument('--modules',default='build/select-reference/node_modules')
 a=p.parse_args(); E='\x1b'
-oracle=['bun','tests/select_list_reference.ts',a.reference,'build/select-reference/node_modules']
+oracle=['bun','tests/select_list_reference.ts',a.reference,a.modules]
 def run(command,values):
  r=subprocess.run(command+[json.dumps(values,ensure_ascii=False,separators=(',',':'))],cwd=ROOT,text=True,capture_output=True,timeout=90)
  assert r.returncode==0 and not r.stderr,(command,r.returncode,r.stderr[-3000:])

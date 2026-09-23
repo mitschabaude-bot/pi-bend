@@ -19,3 +19,5 @@ python3 tests/select_list_check.py
 ```
 
 Use `--prefix` to select isolated build artifacts; positional backend arguments select `bun`, `native-1` or `native-4`. The default runs all three.
+
+Root integration at `2063a4c` rebuilt both artifacts with the shared compiler and passed the full gate on Bun/native one/four. Logs: `build/select-list-bun-check.log` and `build/select-list-native-check.log`. The checker accepts `--modules /path/to/node_modules` for existing test-only reference dependencies.

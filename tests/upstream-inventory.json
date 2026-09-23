@@ -3610,9 +3610,14 @@
     },
     {
       "source": "packages/tui/test/select-list.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0135b531ef8dfe52de6625c2004a4ed95566214bc9860068106c862efcf22376"
+      "status": "ported",
+      "ports": [
+        "tests/select-list.bend",
+        "tests/select_list_check.py",
+        "tests/select_list_reference.ts"
+      ],
+      "sha256": "0135b531ef8dfe52de6625c2004a4ed95566214bc9860068106c862efcf22376",
+      "notes": "All five original named tests and 235 supplemental rendering/filter/input/callback sequences pass Bun and native one/four threads; immutable state and explicit borrowed callback/context APIs are documented in tests/select-list.md. Renderer integration remains separate."
     },
     {
       "source": "packages/tui/test/settings-list.test.ts",
