@@ -4,7 +4,7 @@ import os
 import subprocess
 
 root = Path(__file__).resolve().parents[1]
-compiler = os.environ.get('BEND_COMPILER', '/tmp/pi-bend-theme-controller/build/theme-toolchain/bend2/main.ts')
+compiler = os.environ.get('BEND_COMPILER', str(root / 'build/bend-process-files/bend2/main.ts'))
 env = dict(os.environ)
 env.pop('NO_COLOR', None)
 env.update(FORCE_COLOR='1', TERM='xterm-256color')
