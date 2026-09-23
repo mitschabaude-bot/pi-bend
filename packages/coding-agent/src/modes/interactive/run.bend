@@ -133,8 +133,8 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
   match input:
     case Observation{transcript,+redraw,footer}:
       do IO<Unit>:
-        Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
+        Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
   observeCopied(input,event)
