@@ -6,6 +6,7 @@ import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/ignore.bend as Ignore
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/stable-sort.bend as Sort
+import ../../../runtime/src/minimatch.bend as Minimatch
 
 # upstream PackageManager.resolve for local resources: the skills, prompt
 # templates and themes named by the global and project settings (plain paths
@@ -39,8 +40,7 @@ type ResolvedPaths is Data:
 # Patterns
 # --------
 
-# Placeholder until runtime/minimatch.bend lands: glob patterns match nothing.
-def globMatches(path: String, pattern: String) -> Bool: False{}
+def globMatches(path: String, pattern: String) -> Bool: Minimatch.minimatch(path, pattern)
 
 def isOverridePattern(+entry: String) -> Bool:
   String.starts_with(entry, "!") || String.starts_with(entry, "+") || String.starts_with(entry, "-")

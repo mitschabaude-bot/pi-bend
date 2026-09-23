@@ -2,7 +2,7 @@
 
 Builds fixture trees (user agent directory, project .pi, .agents skill
 directories up to the Git root, ignore files, symlinks, settings entries and
-exact +/- overrides) and compares the Bend resolution with the reference
+exact +/- overrides and minimatch glob patterns) and compares the Bend resolution with the reference
 script run under Bun from ../pi-mono/packages/coding-agent.
 """
 import argparse, json, os, subprocess, tempfile
@@ -41,11 +41,13 @@ def fixture(base):
     skill(project / '.pi/skills/ps/SKILL.md', 'ps'); write(project / '.pi/prompts/pp.md'); write(project / '.pi/themes/pt.json', '{}')
     skill(base / 'extra/set/e1/SKILL.md', 'e1'); write(base / 'extra/set/e2.md'); skill(home / 'tilde/t1/SKILL.md', 't1')
     write(base / 'extra-prompts/x.md'); write(base / 'extra-prompts/deeper/y.md'); write(base / 'extra-prompts/z.txt')
+    skill(agent / 'skills/globbed/SKILL.md', 'globbed'); skill(agent / 'skills/other/SKILL.md', 'other')
+    write(base / 'extra-prompts/keep-a.md'); write(base / 'extra-prompts/drop-b.md')
     write(agent / 'settings.json', json.dumps({
-        'skills': [str(base / 'extra/set'), '~/tilde', 'skills/one/SKILL.md', '-skills/nested/deep', '+skills/one'],
-        'prompts': [str(base / 'extra-prompts')],
+        'skills': [str(base / 'extra/set'), '~/tilde', 'skills/one/SKILL.md', '-skills/nested/deep', '+skills/one', '!glob*', '!**/tilde/t1', '+skills/globbed/SKILL.md', '!e?'],
+        'prompts': [str(base / 'extra-prompts'), '*.md', '!drop-*', '!deeper/**'],
         'themes': [str(agent / 'themes/t.json')]}))
-    write(project / '.pi/settings.json', json.dumps({'skills': ['-skills/ps'], 'prompts': ['-prompts/pp.md']}))
+    write(project / '.pi/settings.json', json.dumps({'skills': ['-skills/ps', '!{r,s}'], 'prompts': ['-prompts/pp.md'], 'themes': ['!*.json']}))
     return home, agent, project
 
 def main():
