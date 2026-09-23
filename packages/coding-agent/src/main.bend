@@ -619,22 +619,28 @@ def interactiveFinished(result: Result<&2,&2,InteractiveRun.Error,Unit>) -> IO(U
     case Done{_}: IO.pure(Unit,Unit{})
     case Fail{error}: fail(InteractiveRun.errorMessage(error))
 
-def interactiveWith(initial: InitialMessage, stored: Session(), settings: Settings.SettingsManager, +cwd: String, agentDir: String, packageDir: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+def selectedTheme(override: Maybe<&2,String>, settings: Settings.SettingsManager) -> Maybe<&2,String>:
+  match override:
+    case Some{name}: Some{name}
+    case None{}: Settings.getThemeSetting(settings)
+
+def interactiveWith(initial: InitialMessage, stored: Session(), +settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
   match pair:
     case Tuple{runtime,loadout}:
+      +themeSetting = selectedTheme(themeOverride,settings)
       do IO<Unit>:
         +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-        result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir)
+        result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.run(live,initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,themeSetting)
         AgentSession.dispose(live)
         Runtime.dispose(runtime)
         interactiveFinished(result)
 
-def interactiveLoaded(initial: InitialMessage, stored: Session(), settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+def interactiveLoaded(initial: InitialMessage, stored: Session(), settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
   match pair:
-    case Tuple{runtime,agent}: interactiveWith(initial,stored,settings,cwd,agentDir,packageDir,agent,Runtime.loadoutOf(runtime))
+    case Tuple{runtime,agent}: interactiveWith(initial,stored,settings,themeOverride,cwd,agentDir,packageDir,agent,Runtime.loadoutOf(runtime))
 
-def interactiveRecorded(initial: InitialMessage, recorded: Selected(), settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, runtime: Runtime.AgentRuntime) -> IO(Unit):
+def interactiveRecorded(initial: InitialMessage, recorded: Selected(), settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, runtime: Runtime.AgentRuntime) -> IO(Unit):
   match recorded:
     case Fail{Failed{message}}:
       do IO<Unit>:
@@ -644,19 +650,19 @@ def interactiveRecorded(initial: InitialMessage, recorded: Selected(), settings:
       do IO<Unit>:
         Runtime.dispose(runtime)
         IO.print(note)
-    case Done{+session}: interactiveLoaded(initial,session,settings,cwd,agentDir,packageDir,Runtime.agentOf(runtime))
+    case Done{+session}: interactiveLoaded(initial,session,settings,themeOverride,cwd,agentDir,packageDir,Runtime.agentOf(runtime))
 
-def interactiveSelection(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
+def interactiveSelection(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
   match pair:
     case Tuple{runtime,selection}:
       do IO<Unit>:
         recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
-        interactiveRecorded(initial,recorded,settings,cwd,agentDir,packageDir,runtime)
+        interactiveRecorded(initial,recorded,settings,themeOverride,cwd,agentDir,packageDir,runtime)
 
-def interactiveSelected(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+def interactiveSelected(initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match created:
     case Fail{error}: fail(error)
-    case Done{runtime}: interactiveSelection(initial,session,hasExisting,hasThinking,settings,cwd,agentDir,packageDir,Runtime.selectionOf(runtime))
+    case Done{runtime}: interactiveSelection(initial,session,hasExisting,hasThinking,settings,themeOverride,cwd,agentDir,packageDir,Runtime.selectionOf(runtime))
 
 def rpcWrite(_: Unit,text: String) -> IO(Unit): IO.write(text)
 def rpcFinished(result: Result<&2,&2,String,Unit>) -> IO(Unit):
@@ -707,9 +713,9 @@ def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings:
     case Fail{error}: fail(error)
     case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,Runtime.selectionOf(runtime))
 
-def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match mode:
-    case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,cwd,agentDir,packageDir,created)
+    case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,themeOverride,cwd,agentDir,packageDir,created)
     case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,created)
     case _: printSelected(outputMode(mode),initial,session,hasExisting,hasThinking,settings,cwd,created)
 
@@ -789,7 +795,11 @@ def loadSettings(cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
     reported(drained(loaded))
 
-def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
+def themeOverride(parsed: Args.Args) -> Maybe<&2,String>:
+  match parsed:
+    case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, useTheme, _, _, _, _, _, _, _, _, _, _, _}: useTheme
+
+def runSeeded(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
   match seed:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: IO.print(note)
@@ -798,7 +808,7 @@ def runSeeded(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +sessio
       do IO<Unit>:
         +settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, sessionCwd, agentDir, authPath, bundlePath, packageDir, value, settings))
-        runCreated(mode, initial, session, seedMessages(value), seedThinking(value), settings, sessionCwd, agentDir, packageDir, created)
+        runCreated(mode, initial, session, seedMessages(value), seedThinking(value), settings, themeOverride(parsed), sessionCwd, agentDir, packageDir, created)
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:
