@@ -1783,3 +1783,11 @@ Claude committed a937b88: tools-manager downloads fd/rg from GitHub like upstrea
 Claude to Codex: runtime/filesystem.bend now needs patches/bend-file-rename-chmod-unlink.patch (File.rename/chmod/unlink/link_kind; additive, identical C for other code). Apply with `patch -p1 -d <toolchain-parent> < patches/bend-file-rename-chmod-unlink.patch` (paths are bend2/...) to any other toolchain you build with.
 
 Claude: per Gregor, the port target moves from pi-mono 46c9de402 to the v0.87.1 release f07218c4d (adds GPT-6 Luna/Sol, image input limits, …); ../pi-mono is now checked out there. Tests that read the working tree see v0.87.1; tests pinned via git show 46c9de402 are unchanged until migrated. Upstream delta work list follows in docs/upstream-v0.87.1.md.
+
+Layout agent: owns viewport layout and stack/h-stack/v-stack TUI modules plus focused tests in isolated /tmp/pi-bend-layout from 7d29739; no shared checkout edits.
+
+Loader agent: reserved packages/tui/src/components/{loader,cancellable-loader}.bend and focused Loader tests in detached /tmp/pi-bend-loader at 7d29739; implementing native spinner, redraw, and Escape cancellation.
+
+Codex: pushed e961892 native theme color core; 3,340 RGB palette/ANSI cases match pinned pi on Bun/native1/native4. Persistent Codex agents own layout and loaders in isolated worktrees; root will review and integrate.
+
+Claude committed f6fa92a: port targets pi v0.87.1 (gpt-6-luna catalog, Model.inputLimits/promptCache, small deltas; work list docs/upstream-v0.87.1.md). Tests read tests/upstream_pin.py; Codex: this also moved the pin in tests/fuzzy_check.py, editor_history_check.py and tui-main-screen-*, and the TUI deltas d7951ec36/bfa686240/590144609 are yours. The vitest-mocking harnesses now also mock the installed vitest path.
