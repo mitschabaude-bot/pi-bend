@@ -12,7 +12,12 @@ type Error is Data:
 type Report is Data:
   Report{status: Maybe<&2,ProcessStatus>, errors: List<&2,Error>}
 
+type OutputSelection is Data:
+  Merged{}
+  Stdout{}
+
 type ProcessEvent is Data:
+  IgnoredOutput{}
   Output{bytes: List<&2,U32>}
   PipeEnded{errors: List<&2,Error>}
   Exited{status: Maybe<&2,ProcessStatus>, errors: List<&2,Error>}
@@ -35,21 +40,21 @@ def closePipe(events: Chan(ProcessEvent), pipe: Pipe, failed: List<&2,Error>) ->
     sent : Bool <- Chan.send(ProcessEvent,events,PipeEnded{List.append(&2,Error,failed,errors("pipe close",closed))})
     return Unit{}
 
-def readResult(next: Pipe -> IO(Unit), +events: Chan(ProcessEvent), result: Pipe & Result<&1,&1,U32 & String,List<&2,U32>>) -> IO(Unit):
+def readResult(selected: Bool,next: Pipe -> IO(Unit), +events: Chan(ProcessEvent), result: Pipe & Result<&1,&1,U32 & String,List<&2,U32>>) -> IO(Unit):
   match result:
     case (pipe,Fail{(code,message)}): closePipe(events,pipe,Error{"pipe read",code,message} <> Nil{})
     case (pipe,Done{Nil{}}): closePipe(events,pipe,Nil{})
     case (pipe,Done{bytes}):
       do IO<Unit>:
-        sent : Bool <- Chan.send(ProcessEvent,events,Output{bytes})
+        sent : Bool <- Chan.send(ProcessEvent,events,Bool.pick(ProcessEvent,selected,Output{bytes},IgnoredOutput{}))
         next(pipe)
 
 # External input determines the number of reads, so no structural fuel bound
 # is appropriate. Each step awaits a read or a bounded-channel send.
-@unsafe def readPipe(+events: Chan(ProcessEvent), pipe: Pipe) -> IO(Unit):
+@unsafe def readPipe(+selected: Bool,+events: Chan(ProcessEvent), pipe: Pipe) -> IO(Unit):
   do IO<Unit>:
     result : Pipe & Result<&1,&1,U32 & String,List<&2,U32>> <- Pipe.read(pipe,65536)
-    readResult(next => readPipe(events,next),events,result)
+    readResult(selected,next => readPipe(selected,events,next),events,result)
 
 def processResult(+events: Chan(ProcessEvent), owners: Chan(Process), result: Process & Result<&1,&1,U32 & String,ProcessStatus>) -> IO(Unit):
   match result:
@@ -172,6 +177,8 @@ def timerEnded(context: Context, state: State, elapsed: Bool) -> IO(State):
 
 def consume(+context: Context, state: State, event: ProcessEvent) -> IO(State):
   match context state event:
+    case _ state IgnoredOutput{}:
+      outputResult(context,state,Done{Unit{}})
     case _ state Output{bytes}:
       deliver(context,state,bytes)
     case _ State{pipes,exited,status,failed,+stopping,generation,timer,timers} PipeEnded{newErrors}:
@@ -205,18 +212,26 @@ def receive(events: Chan(ProcessEvent)) -> IO(ProcessEvent):
         next : State <- consume(context,state,event)
         drive(context,next)
 
-def waitForChildProcess(owner: Process, +control: ProcessControl, stdout: Pipe & PipeCancel, stderr: Pipe & PipeCancel, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Process & Report):
+def merged(selection: OutputSelection) -> Bool:
+  match selection:
+    case Merged{}: True{}
+    case Stdout{}: False{}
+
+def waitForSelectedChildProcess(selection: OutputSelection,owner: Process, +control: ProcessControl, stdout: Pipe & PipeCancel, stderr: Pipe & PipeCancel, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Process & Report):
   match stdout stderr:
     case Tuple{out,outCancel} Tuple{err,errCancel}:
       do IO<Process & Report>:
         +events : Chan(ProcessEvent) <- Chan.new(ProcessEvent,16)
         +owners : Chan(Process) <- Chan.new(Process,1)
-        IO.spawn(Unit,readPipe(events,out))
-        IO.spawn(Unit,readPipe(events,err))
+        IO.spawn(Unit,readPipe(True{},events,out))
+        IO.spawn(Unit,readPipe(merged(selection),events,err))
         IO.spawn(Unit,watchProcess(events,owners,owner))
         report : Report <- drive(Context{events,control,outCancel,errCancel,onData},State{2,False{},None{},Nil{},False{},0n,None{},0n})
         process : Process <- IO.join(Process,owners)
         return (process,report)
+
+def waitForChildProcess(owner: Process,control: ProcessControl,stdout: Pipe & PipeCancel,stderr: Pipe & PipeCancel,onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Process & Report):
+  waitForSelectedChildProcess(Merged{},owner,control,stdout,stderr,onData)
 
 # Execution owns the process and its cancellation observers. The caller owns
 # the parent signal and output callback, both of which remain borrowed.
@@ -435,7 +450,7 @@ def spawnShell(stdin: Bool, shell: String, args: List<String>, command: String, 
         result : Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel)> <- Process.spawn_null_stdin(shell,List.append(&1,String,args,[command]),cwd,env)
         return withoutInput(result)
 
-def executeStarted(options: ExecutionOptions, command: String, result: Result<&1,&1,U32 & String,Started>) -> IO(Result<&2,&2,ExecutionError,U32>):
+def executeStarted(selection: OutputSelection,options: ExecutionOptions, command: String, result: Result<&1,&1,U32 & String,Started>) -> IO(Result<&2,&2,ExecutionError,U32>):
   match options result:
     case ExecutionOptions{signal,_,_} Fail{(code,message)}:
       do IO<Result<&2,&2,ExecutionError,U32>>:
@@ -446,27 +461,32 @@ def executeStarted(options: ExecutionOptions, command: String, result: Result<&1
         parent : Maybe<&1,Observer> <- observeAbort(signal,control)
         deadline : Maybe<&1,Observer> <- observeDeadline(milliseconds,control)
         writer : Maybe<&1,InputWriter> <- startInput(input,command)
-        result : Process & Report <- waitForChildProcess(owner,control,output,error,onData)
+        result : Process & Report <- waitForSelectedChildProcess(selection,owner,control,output,error,onData)
         retireExecution(signal,writer,parent,deadline,result)
 
-def executeChecked(aborted: Bool, stdin: Bool, shell: String, args: List<String>, +command: String, cwd: String, env: List<String>, options: ExecutionOptions) -> IO(Result<&2,&2,ExecutionError,U32>):
+def executeChecked(selection: OutputSelection,aborted: Bool, stdin: Bool, shell: String, args: List<String>, +command: String, cwd: String, env: List<String>, options: ExecutionOptions) -> IO(Result<&2,&2,ExecutionError,U32>):
   match aborted:
     case True{}: IO.pure(Result<&2,&2,ExecutionError,U32>,Fail{ExecutionAborted{}})
     case False{}:
       do IO<Result<&2,&2,ExecutionError,U32>>:
         result : Result<&1,&1,U32 & String,Started> <- spawnShell(stdin,shell,args,command,cwd,env)
-        executeStarted(options,command,result)
+        executeStarted(selection,options,command,result)
 
-def executeValidated(stdin: Bool, shell: String, args: List<String>, command: String, cwd: String, env: List<String>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>, timeout: Result<&2,&2,ExecutionError,Maybe<&2,U32>>) -> IO(Result<&2,&2,ExecutionError,U32>):
+def executeValidated(selection: OutputSelection,stdin: Bool, shell: String, args: List<String>, command: String, cwd: String, env: List<String>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>, timeout: Result<&2,&2,ExecutionError,Maybe<&2,U32>>) -> IO(Result<&2,&2,ExecutionError,U32>):
   match timeout:
     case Fail{error}: IO.pure(Result<&2,&2,ExecutionError,U32>,Fail{error})
     case Done{milliseconds}:
       do IO<Result<&2,&2,ExecutionError,U32>>:
         aborted : Bool <- parentAborted(signal)
-        executeChecked(aborted,stdin,shell,args,command,cwd,env,ExecutionOptions{signal,milliseconds,onData})
+        executeChecked(selection,aborted,stdin,shell,args,command,cwd,env,ExecutionOptions{signal,milliseconds,onData})
 
 def execute(shell: String, args: List<String>, command: String, cwd: String, env: List<String>, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeoutSeconds: Maybe<&2,F64>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,ExecutionError,U32>):
-  executeValidated(False{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))
+  executeValidated(Merged{},False{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))
 
 def executeStdin(shell: String, args: List<String>, command: String, cwd: String, env: List<String>, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeoutSeconds: Maybe<&2,F64>, onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,ExecutionError,U32>):
-  executeValidated(True{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))
+  executeValidated(Merged{},True{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))
+
+# Stderr is always drained and checked, but Stdout never calls the consumer for
+# those bytes. Both streams still extend post-exit activity before retirement.
+def executeSelected(selection: OutputSelection,shell: String,args: List<String>,command: String,cwd: String,env: List<String>,signal: Maybe<&2,Abort.AbortSignal<Unit>>,timeoutSeconds: Maybe<&2,F64>,onData: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,ExecutionError,U32>):
+  executeValidated(selection,False{},shell,args,command,cwd,env,signal,onData,optionalTimeout(timeoutSeconds))

@@ -74,10 +74,11 @@ def joinAbort(task: Maybe<&2,Chan(Unit)>) -> IO(Unit):
     case None{}: IO.pure(Unit,Unit{})
     case Some{channel}: IO.join(Unit,channel)
 
-def invoke(stdin: Bool, shell: String, command: String, cwd: String, env: List<String>, signal: Maybe<&2,A.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, callback: C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,Child.ExecutionError,U32>):
-  match stdin:
-    case True{}: Child.executeStdin(shell,[],command,cwd,env,signal,timeout,callback)
-    case False{}: Child.execute(shell,["-c"],command,cwd,env,signal,timeout,callback)
+def invoke(selection: Child.OutputSelection,stdin: Bool, shell: String, command: String, cwd: String, env: List<String>, signal: Maybe<&2,A.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, callback: C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,Child.ExecutionError,U32>):
+  match selection stdin:
+    case _ True{}: Child.executeStdin(shell,[],command,cwd,env,signal,timeout,callback)
+    case Child.Merged{} False{}: Child.execute(shell,["-c"],command,cwd,env,signal,timeout,callback)
+    case Child.Stdout{} False{}: Child.executeSelected(Child.Stdout{},shell,["-c"],command,cwd,env,signal,timeout,callback)
 
 def stdinMode(+mode: String) -> Bool: String.eq(mode,"stdin") || String.eq(mode,"stdin-abort")
 
@@ -90,7 +91,7 @@ def repeat(count: Nat,+mode: String,+seconds: String,+delay: U32,+shell: String,
         task : Maybe<&2,Chan(Unit)> <- scheduled(mode,controller,delay)
         +callback : C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- C.create(~String,~List<&2,U32>,~Result<&2,&2,String,Unit>,~output,mode)
         env : List<String> <- IO.environment()
-        completed : Result<&2,&2,Child.ExecutionError,U32> <- invoke(stdinMode(mode),shell,command,cwd,env,Bool.pick(Maybe<&2,A.AbortSignal<Unit>>,String.eq(mode,"no-signal"),None{},Some{A.signal(Unit,controller)}),timeout(seconds),callback)
+        completed : Result<&2,&2,Child.ExecutionError,U32> <- invoke(Bool.pick(Child.OutputSelection,String.starts_with(mode,"stdout"),Child.Stdout{},Child.Merged{}),stdinMode(mode),shell,command,cwd,env,Bool.pick(Maybe<&2,A.AbortSignal<Unit>>,String.eq(mode,"no-signal"),None{},Some{A.signal(Unit,controller)}),timeout(seconds),callback)
         IO.print("result " ++ result(completed))
         joinAbort(task)
         C.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,callback)
