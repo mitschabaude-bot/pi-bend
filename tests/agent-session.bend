@@ -259,7 +259,7 @@ def entryKinds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value
   match entries:
     case Nil{}: Nil{}
     case S.ThinkingLevelChangeEntry{_, level} <> rest: ("thinking_level_change:" ++ level) <> entryKinds(rest)
-    case S.ModelChangeEntry{_, provider, model} <> rest: ("model_change:" ++ provider ++ "/" ++ model) <> entryKinds(rest)
+    case S.ModelChangeEntry{_, providerName, model} <> rest: ("model_change:" ++ providerName ++ "/" ++ model) <> entryKinds(rest)
     case S.SessionInfoEntry{_, name} <> rest: ("session_info:" ++ Maybe.default(&2, String, name, "")) <> entryKinds(rest)
     case S.SessionMessageEntry{_, _} <> rest: "message" <> entryKinds(rest)
     case S.Compaction{_} <> rest: "compaction" <> entryKinds(rest)

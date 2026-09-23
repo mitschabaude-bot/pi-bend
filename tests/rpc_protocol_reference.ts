@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
 
-const root = process.env.PI_MONO ?? "/home/agent/code/pi-mono";
+const root = process.env.PI_MONO ?? new URL("../../../pi-mono", import.meta.url).pathname;
 const { attachJsonlLineReader, serializeJsonLine } = await import(`${root}/packages/coding-agent/src/modes/rpc/jsonl.ts`);
 
 function records(chunks: string[]): string[] {

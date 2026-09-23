@@ -10,12 +10,16 @@ import ../../../ai/src/utils/message-json.bend as MessageJson
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../ai/src/types.bend as Ai
 import ../core/agent-session.bend as Session
+import ../core/session-manager.bend as S
+import ../core/session-json.bend as SessionJson
+import ../core/tools/index.bend as Tools
+import ../core/compaction/compaction.bend as Compaction
 import ./json-event.bend as Events
 
 # pi v0.87.1's headless protocol is LF-delimited JSON objects. The caller owns
 # byte transport; this endpoint owns framing, dispatch and event subscriptions.
 def Sink() -> Data: Callback.Callback<String,Unit>
-type Submission is Data: Submission{text: String,behavior: Maybe<&2,Session.StreamingBehavior>}
+type Submission is Data: Submission{text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
 type Handle is Data:
   Handle{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Submission)}
 type Owner is Type:
@@ -56,12 +60,32 @@ def behaviorValue(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,Maybe<&2,Sess
     case _: Fail{"Invalid command: streamingBehavior must be 'steer' or 'followUp'"}
 def behaviorOf(object: R.Record<V.Value>) -> Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>:
   behaviorValue(field(object,"streamingBehavior"))
-def imagesValue(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,Unit>:
+def imageFields(kind: Result<&2,&2,String,String>,data: Result<&2,&2,String,String>,mime: Result<&2,&2,String,String>) -> Result<&2,&2,String,Ai.ImageContent>:
+  match kind data mime:
+    case Fail{reason} _ _: Fail{reason}
+    case _ Fail{reason} _: Fail{reason}
+    case _ _ Fail{reason}: Fail{reason}
+    case Done{"image"} Done{content} Done{mimeType}: Done{Ai.ImageContent{content,mimeType}}
+    case Done{_} _ _: Fail{"Invalid command: images items must have type 'image'"}
+def imageValue(value: V.Value) -> Result<&2,&2,String,Ai.ImageContent>:
   match value:
-    case None{}: Done{Unit{}}
-    case Some{V.ArrayValue{Nil{}}}: Done{Unit{}}
-    case _: Fail{"Image input is not supported by the native RPC endpoint"}
-def noImages(object: R.Record<V.Value>) -> Result<&2,&2,String,Unit>:
+    case V.ObjectValue{+fields}: imageFields(requiredText(fields,"type"),requiredText(fields,"data"),requiredText(fields,"mimeType"))
+    case _: Fail{"Invalid command: images items must be objects"}
+def prependImage(head: Result<&2,&2,String,Ai.ImageContent>,tail: Result<&2,&2,String,List<&2,Ai.ImageContent>>) -> Result<&2,&2,String,List<&2,Ai.ImageContent>>:
+  match head tail:
+    case Fail{reason} _: Fail{reason}
+    case _ Fail{reason}: Fail{reason}
+    case Done{image} Done{images}: Done{image <> images}
+def imageList(values: List<&2,V.Value>) -> Result<&2,&2,String,List<&2,Ai.ImageContent>>:
+  match values:
+    case Nil{}: Done{Nil{}}
+    case value <> rest: prependImage(imageValue(value),imageList(rest))
+def imagesValue(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,List<&2,Ai.ImageContent>>:
+  match value:
+    case None{}: Done{Nil{}}
+    case Some{V.ArrayValue{values}}: imageList(values)
+    case _: Fail{"Invalid command: images must be an array"}
+def imagesOf(object: R.Record<V.Value>) -> Result<&2,&2,String,List<&2,Ai.ImageContent>>:
   imagesValue(field(object,"images"))
 def resultResponse(id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> V.Value:
   match result:
@@ -78,7 +102,7 @@ def messageValues(messages: List<&2,Session.Message()>) -> List<&2,V.Value>:
 def eventValue(sink: Sink(),converted: Result<&2,&2,String,V.Value>) -> IO(Unit):
   match converted:
     case Done{json}: output(sink,json)
-    case Fail{_}: IO.pure(Unit,Unit{})
+    case Fail{reason}: IO.print_err("RPC event conversion failed: " ++ reason)
 def event(sink: Sink(),value: Session.AgentSessionEvent) -> IO(Unit):
   eventValue(sink,Events.toSessionJsonEvent(value))
 def observe(sink: Sink(),value: Session.AgentSessionEvent) -> IO(Unit): event(sink,value)
@@ -90,9 +114,9 @@ def nextJob(handle: Handle) -> IO(Maybe<&1,Submission>):
     case Handle{_,_,_,_,jobs}: Chan.recv(Submission,jobs)
 def runJob(handle: Handle,request: Submission) -> IO(Unit):
   match handle request:
-    case Handle{session,_,_,busy,_} Submission{text,behavior}:
+    case Handle{session,_,_,busy,_} Submission{text,images,behavior}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,Nil{},behavior)
+        result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
         Ref.write(Bool,busy,False{})
 type Phase is Type: Check{} Received{request: Maybe<&1,Submission>}
 @unsafe def worker(+handle: Handle,phase: Phase) -> IO(Unit):
@@ -117,52 +141,52 @@ def start(+session: Session.AgentSession,+sink: Sink()) -> IO(Owner & Handle):
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
     return (Owner{handle,task,listener},handle)
 
-def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Submission),id: Maybe<&2,String>,text: String,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
+def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Submission),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
   match active behavior:
     case True{} None{}: output(sink,failure(id,"prompt","Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."))
     case True{} Some{Session.Steer{}}:
       do IO<Unit>:
-        Session.steer(session,text,Nil{})
+        Session.steer(session,text,images)
         output(sink,ok(id,"prompt"))
     case True{} Some{Session.FollowUp{}}:
       do IO<Unit>:
-        Session.followUp(session,text,Nil{})
+        Session.followUp(session,text,images)
         output(sink,ok(id,"prompt"))
     case False{} _:
       do IO<Unit>:
         Ref.write(Bool,busy,True{})
         output(sink,ok(id,"prompt"))
-        accepted : Bool <- Chan.send(Submission,jobs,Submission{text,behavior})
+        accepted : Bool <- Chan.send(Submission,jobs,Submission{text,images,behavior})
         return Unit{}
 
-def promptChecked(handle: Handle,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,Unit>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
+def promptChecked(handle: Handle,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
   match handle:
     case Handle{+session,+sink,_,+busy,+jobs}:
       match message images behavior:
         case Fail{error} _ _: output(sink,failure(id,"prompt",error))
         case _ Fail{error} _: output(sink,failure(id,"prompt",error))
         case _ _ Fail{error}: output(sink,failure(id,"prompt",error))
-        case Done{text} Done{_} Done{behavior}:
+        case Done{text} Done{images} Done{behavior}:
           do IO<Unit>:
             active : Bool <- Ref.read(Bool,busy)
             streaming : Bool <- Session.isStreaming(session)
-            acceptedPrompt(session,sink,busy,jobs,id,text,active || streaming,behavior)
+            acceptedPrompt(session,sink,busy,jobs,id,text,images,active || streaming,behavior)
 def prompt(handle: Handle,id: Maybe<&2,String>,+object: R.Record<V.Value>) -> IO(Unit):
-  promptChecked(handle,id,requiredText(object,"message"),noImages(object),behaviorOf(object))
+  promptChecked(handle,id,requiredText(object,"message"),imagesOf(object),behaviorOf(object))
 def commandFailure(handle: Handle,id: Maybe<&2,String>,command: String,error: String) -> IO(Unit):
   match handle:
     case Handle{_,sink,_,_,_}: output(sink,failure(id,command,error))
-def queueText(handle: Handle,id: Maybe<&2,String>,+command: String,+text: String) -> IO(Unit):
+def queueText(handle: Handle,id: Maybe<&2,String>,+command: String,+text: String,+images: List<&2,Ai.ImageContent>) -> IO(Unit):
   match handle:
     case Handle{+session,sink,_,_,_}:
       do IO<Unit>:
-        Bool.pick(Unit -> IO(Unit),String.eq(command,"steer"),_ => Session.steer(session,text,Nil{}),_ => Session.followUp(session,text,Nil{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),String.eq(command,"steer"),_ => Session.steer(session,text,images),_ => Session.followUp(session,text,images))(Unit{})
         output(sink,ok(id,command))
-def queued(handle: Handle,id: Maybe<&2,String>,+command: String,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,Unit>) -> IO(Unit):
+def queued(handle: Handle,id: Maybe<&2,String>,+command: String,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>) -> IO(Unit):
   match message images:
     case Fail{error} _: commandFailure(handle,id,command,error)
     case _ Fail{error}: commandFailure(handle,id,command,error)
-    case Done{text} Done{_}: queueText(handle,id,command,text)
+    case Done{text} Done{images}: queueText(handle,id,command,text,images)
 def setCleanName(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,name: String) -> IO(Unit):
   match name:
     case "": output(sink,failure(id,"set_session_name","Session name cannot be empty"))
@@ -211,6 +235,56 @@ def currentMessages(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
       do IO<Unit>:
         messages : List<&2,Session.Message()> <- Session.messages(session)
         output(sink,data(id,"get_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{messageValues(messages)},Nil{}))))
+def entryValue(entry: Session.Entry()) -> V.Value:
+  SessionJson.entry(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,entry)
+def entryValues(entries: List<&2,Session.Entry()>) -> List<&2,V.Value>:
+  match entries:
+    case Nil{}: Nil{}
+    case value <> rest: entryValue(value) <> entryValues(rest)
+def textValue(value: Maybe<&2,V.Value>) -> String:
+  match value:
+    case Some{V.Text{text}}: text
+    case _: ""
+def entryIdValue(value: V.Value) -> String:
+  match value:
+    case V.ObjectValue{fields}: textValue(R.get(V.Value,fields,"id"))
+    case _: ""
+def entryId(value: Session.Entry()) -> String: entryIdValue(entryValue(value))
+def entriesAfter(entries: List<&2,Session.Entry()>,+since: String) -> Maybe<&2,List<&2,Session.Entry()>>:
+  match entries:
+    case Nil{}: None{}
+    case value <> +rest:
+      Bool.pick(Maybe<&2,List<&2,Session.Entry()>>,String.eq(entryId(value),since),Some{rest},entriesAfter(rest,since))
+def selectedFound(id: String,found: Maybe<&2,List<&2,Session.Entry()>>) -> Result<&2,&2,String,List<&2,Session.Entry()>>:
+  match found:
+    case Some{rest}: Done{rest}
+    case None{}: Fail{"Entry not found: " ++ id}
+def selectedEntries(entries: List<&2,Session.Entry()>,since: Maybe<&2,String>) -> Result<&2,&2,String,List<&2,Session.Entry()>>:
+  match since:
+    case None{}: Done{entries}
+    case Some{+id}: selectedFound(id,entriesAfter(entries,id))
+def entriesResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,selected: Result<&2,&2,String,List<&2,Session.Entry()>>) -> V.Value:
+  match selected:
+    case Fail{reason}: failure(id,"get_entries",reason)
+    case Done{entries}: data(id,"get_entries",MessageJson.object(MessageJson.field("entries",V.ArrayValue{entryValues(entries)},MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
+def getEntries(handle: Handle,id: Maybe<&2,String>,since: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+  match handle since:
+    case Handle{_,sink,_,_,_} Fail{reason}: output(sink,failure(id,"get_entries",reason))
+    case Handle{session,sink,_,_,_} Done{since}:
+      do IO<Unit>:
+        +stored : Session.Session() <- Session.sessionOf(session)
+        output(sink,entriesResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),selectedEntries(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),since)))
+def compactResponse(id: Maybe<&2,String>,result: Result<&2,&2,String,Compaction.CompactionResult>) -> V.Value:
+  match result:
+    case Fail{reason}: failure(id,"compact",reason)
+    case Done{value}: data(id,"compact",Events.compactionResult(value))
+def compactCommand(handle: Handle,id: Maybe<&2,String>,instructions: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+  match handle instructions:
+    case Handle{_,sink,_,_,_} Fail{reason}: output(sink,failure(id,"compact",reason))
+    case Handle{session,sink,_,_,_} Done{custom}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Compaction.CompactionResult> <- Session.compact(session,custom)
+        output(sink,compactResponse(id,result))
 def lastText(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Handle{session,sink,_,_,_}:
@@ -220,12 +294,14 @@ def lastText(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
 def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "prompt": prompt(handle,id,object)
-    case "steer": queued(handle,id,"steer",requiredText(object,"message"),noImages(object))
-    case "follow_up": queued(handle,id,"follow_up",requiredText(object,"message"),noImages(object))
+    case "steer": queued(handle,id,"steer",requiredText(object,"message"),imagesOf(object))
+    case "follow_up": queued(handle,id,"follow_up",requiredText(object,"message"),imagesOf(object))
     case "abort": abortCommand(handle,id,False{})
     case "abort_retry": abortCommand(handle,id,True{})
     case "get_messages": currentMessages(handle,id)
+    case "get_entries": getEntries(handle,id,optionalText(field(object,"since")))
     case "get_last_assistant_text": lastText(handle,id)
+    case "compact": compactCommand(handle,id,optionalText(field(object,"customInstructions")))
     case "set_session_name": setName(handle,id,requiredText(object,"name"))
     case "set_thinking_level": setThinking(handle,id,requiredText(object,"level"))
     case _: reply(handle,failure(id,command,"Unknown command: " ++ command))
