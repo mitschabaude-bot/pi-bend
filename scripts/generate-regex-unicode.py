@@ -145,4 +145,37 @@ def generate():
     print(len(keys),'properties',len(names),'aliases',target.stat().st_size,'bytes')
     (ROOT/'build/regex-unicode-reference.json').write_text(json.dumps({name:ranges(sets[key]) for name,key in names.items()}))
 
-if __name__=='__main__':generate()
+def generate_word_break(check=False):
+    """Compact scalar classifier from the same pinned property inputs as regex."""
+    archive=source()
+    classes=['Other','CR','LF','Newline','Extend','Format','ZWJ','WSegSpace','ALetter','Hebrew_Letter','Numeric','Katakana','ExtendNumLet','MidLetter','MidNum','MidNumLet','Single_Quote','Double_Quote','Regional_Indicator']
+    values=[0]*0x110000
+    for span,name,*_ in records(archive,'auxiliary/WordBreakProperty.txt'):
+        for cp in points(span):values[cp]=classes.index(name)
+    for span,name,*_ in records(archive,'emoji/emoji-data.txt'):
+        if name=='Extended_Pictographic':
+            for cp in points(span):values[cp]|=32
+    spans=[(0,values[0])]+[(i,v) for i,v in enumerate(values[1:],1) if values[i-1]!=v]
+    restored=[value for i,(start,value) in enumerate(spans) for _ in range((spans[i+1][0] if i+1<len(spans) else len(values))-start)]
+    assert restored==values
+    def decision(rows):
+        if len(rows)==1:return str(rows[0][1])
+        mid=len(rows)//2
+        return f'Bool.pick(Unit -> U32,U32.is_lt(code,{rows[mid][0]}),\n  _ => {decision(rows[:mid])},\n  _ => {decision(rows[mid:])})(Unit{{}})'
+    output='# Generated from pinned Unicode17 UCD by generate-regex-unicode.py --word-break.\n# Unicode License V3; see unicode-LICENSE.txt. Low5 bits Word_Break, bit5 Extended_Pictographic.\nimport Base\n\ndef properties(+code: U32) -> U32:\n  '+decision(spans)+'\n'
+    target=ROOT/'packages/runtime/src/unicode-17-word-break.bend'
+    if check:assert target.read_text()==output,'regenerate word-break data'
+    else:target.write_text(output)
+    (ROOT/'build/WordBreakTest-17.txt').write_bytes(archive.read('auxiliary/WordBreakTest.txt'))
+    print(len(spans),'word-break property ranges;',len(output),'source bytes; full scalar classification checked')
+
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--word-break',action='store_true')
+    parser.add_argument('--check',action='store_true')
+    args=parser.parse_args()
+    if args.word_break:generate_word_break(args.check)
+    else:
+        if args.check:parser.error('--check requires --word-break')
+        generate()
