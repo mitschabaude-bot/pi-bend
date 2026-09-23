@@ -596,14 +596,10 @@ def captureProbe(+bytes: List<&2,U32>,state: ProbeOutput) -> ProbeOutput & Resul
       Bool.pick(ProbeOutput & Result<&2,&2,String,Unit>,Nat.is_le(size,1048576n),(ProbeOutput{bytes <> chunks,size},Done{Unit{}}),(ProbeOutput{chunks,length},Fail{"tmux probe exceeded stdout limit"}))
 def collectProbe(state: Ref.Ref<ProbeOutput>,bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
   Ref.modify(ProbeOutput,Result<&2,&2,String,Unit>,state,value => captureProbe(bytes,value))
-def trimLeft(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code},+rest}: Bool.pick(Unit -> String,Text.whitespace(code),_ => trimLeft(rest),_ => SCon{Chr{code},rest})(Unit{})
 def feature(items: List<&2,String>) -> Bool:
   match items:
     case Nil{}: False{}
-    case value <> rest: Bool.pick(Unit -> Bool,Strings.equal(String.reverse(trimLeft(String.reverse(trimLeft(value)))),"hyperlinks"),_ => True{},_ => feature(rest))(Unit{})
+    case value <> rest: Bool.pick(Unit -> Bool,Strings.equal(Text.trim(value),"hyperlinks"),_ => True{},_ => feature(rest))(Unit{})
 def probeText(result: Result<&2,&2,Utf8.Error,String>) -> Bool:
   match result:
     case Fail{_}: False{}

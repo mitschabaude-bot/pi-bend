@@ -24,12 +24,6 @@ def oscPayload(data: String) -> Maybe<&2,String>:
 def isOsc11BackgroundColorResponse(data: String) -> Bool:
   Bool.not(Maybe.is_none(&2,String,oscPayload(data)))
 
-def trimStart(text: String) -> String:
-  match text:
-    case SCon{+char,+rest}: Bool.pick(Unit -> String,Text.whitespace(Char.to_u32(char)),_ => trimStart(rest),_ => SCon{char,rest})(Unit{})
-    case SNil{}: ""
-def trim(text: String) -> String: String.reverse(trimStart(String.reverse(trimStart(text))))
-
 # X11 RGB channels have one to four hex digits. Scale with integer arithmetic
 # so rounding is exact and malformed/oversized values cannot produce NaN.
 def channelDigits(text: String,+value: U32,+maximum: U32,count: U32) -> Maybe<&2,U32>:
@@ -70,7 +64,7 @@ def colorValue(value: String) -> Maybe<&2,RgbColor>:
 def parsePayload(value: Maybe<&2,String>) -> Maybe<&2,RgbColor>:
   match value:
     case None{}: None{}
-    case Some{text}: colorValue(trim(text))
+    case Some{text}: colorValue(Text.trim(text))
 def parseOsc11BackgroundColor(data: String) -> Maybe<&2,RgbColor>:
   parsePayload(oscPayload(data))
 

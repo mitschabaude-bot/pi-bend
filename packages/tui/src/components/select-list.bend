@@ -56,13 +56,9 @@ def setFilter(state: SelectList,filter: String) -> SelectList:
 def display(item: SelectItem) -> String:
   match item:
     case SelectItem{value,+label,_}: Bool.pick(String,String.eq(label,""),value,label)
-def trimStart(text: String) -> String:
-  match text:
-    case SCon{+char,+rest}: Bool.pick(Unit -> String,Text.whitespace(Char.to_u32(char)),_ => trimStart(rest),_ => SCon{char,rest})(Unit{})
-    case SNil{}: ""
 def singleLine(text: String,+newline: Bool,+reversed: String) -> String:
   match text:
-    case SNil{}: String.reverse(trimStart(String.reverse(trimStart(String.reverse(reversed)))))
+    case SNil{}: Text.trim(String.reverse(reversed))
     case SCon{+char,rest}:
       +isNewline = Char.is_eq(char,'\r') || Char.is_eq(char,'\n')
       singleLine(rest,isNewline,Bool.pick(String,isNewline,Bool.pick(String,newline,reversed,SCon{' ',reversed}),SCon{char,reversed}))
