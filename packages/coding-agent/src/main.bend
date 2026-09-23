@@ -696,18 +696,26 @@ def rpcInput(pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
         result : Result<&2,&2,String,Unit> <- rpcStdin(handle)
         Rpc.stop(owner)
         return result
-def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+def rpcCatalog(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.ModelRuntime:
+  match runtime:
+    case Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,+models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
+      (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
+def rpcWithCatalog(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),loadout: Runtime.Loadout,pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Unit):
   match pair:
-    case (runtime,loadout):
+    case (runtime,models):
       do IO<Unit>:
         +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")})
+        available : List<&2,Models.Model()> <- Models.getAvailable(models)
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},available)
         result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
         Callback.dispose(String,Unit,sink)
         AgentSession.dispose(live)
         Runtime.dispose(runtime)
         rpcFinished(result)
+def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+  match pair:
+    case (runtime,loadout): rpcWithCatalog(stored,settings,cwd,assetsRoot,agent,loadout,rpcCatalog(runtime))
 def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
   match pair:
     case (runtime,agent): rpcWith(stored,settings,cwd,assetsRoot,agent,Runtime.loadoutOf(runtime))
