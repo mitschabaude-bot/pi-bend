@@ -28,9 +28,9 @@ The first long normalized-input run reproduced the already documented Base `Stri
 python3 scripts/generate-cjk-dictionary.py --check
 python3 scripts/generate-cjk-properties.py --check
 bun "$BEND" tests/cjk-dictionary.bend -o build/cjk-dictionary.js
-bun "$BEND" tests/cjk-dictionary.bend -o build/cjk-dictionary
+BEND="$BEND" BEND_TUS=8 sh scripts/build-pure.sh tests/cjk-dictionary.bend build/cjk-dictionary
 bun "$BEND" tests/cjk-word-break.bend -o build/cjk-word-break.js
-bun "$BEND" tests/cjk-word-break.bend -o build/cjk-word-break
+BEND="$BEND" BEND_TUS=8 sh scripts/build-pure.sh tests/cjk-word-break.bend build/cjk-word-break
 python3 tests/cjk_dictionary_check.py
 python3 tests/cjk_word_break_check.py
 ```
@@ -47,3 +47,5 @@ All ICU source references use [`unicode-org/icu`, tag `release-78.3`](https://gi
 - `LICENSE`, SHA-256 `e55522d81edc687a341a4411e0776e54ca654e90147f354a90458aaced4116af`.
 
 The adjacent dictionary manifest records the source URL/hash and packed asset hash. `icu78-cjk.LICENSE` retains the complete ICU license and the complete cjdict source notices, including the dictionary's underlying Libtabe/IPADIC notices and its account of removing CC-CEDICT-only words. Generated Unicode property predicates use the existing SHA-pinned UCD17 archive and Unicode License V3.
+
+Root integration at `64fab36`/`f226504` regenerated both assets, rebuilt all fixtures with the shared compiler, and passed all 315,968 prefix and 2,151 segmentation comparisons on Bun/native one/four plus the complete NFKC boundary oracle. Logs: `build/cjk-dictionary-check.log` and `build/cjk-word-break-check.log`.
