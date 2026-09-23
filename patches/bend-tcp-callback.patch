@@ -1,0 +1,102 @@
+--- a/base.bend
++++ b/base.bend
+@@ -311,10 +311,19 @@
+   import "./effs/tcp_listen.c"
+   import "./effs/tcp_listen.js"
+ 
++def TCP.listen_host(host: String, port: U32) -> IO(Result<&1, &1, U32 & String, Listener>):
++  import "./effs/tcp_listen_host.c"
++  import "./effs/tcp_listen_host.js"
++
+ def TCP.accept(listener: Listener) ->
+   IO(Listener & Result<&1, &1, U32 & String, Socket>):
+   import "./effs/tcp_accept.c"
+   import "./effs/tcp_accept.js"
++
++def TCP.accept_try(listener: Listener) ->
++  IO(Listener & Result<&1, &1, U32 & String, Socket>):
++  import "./effs/tcp_accept_try.c"
++  import "./effs/tcp_accept_try.js"
+ 
+ def TCP.connect(host: String, port: U32) ->
+   IO(Result<&1, &1, U32 & String, Socket>):
+--- a/effs/tcp_listen_host.c
++++ b/effs/tcp_listen_host.c
+@@ -0,0 +1,25 @@
++// A caller-specified IPv4 bind address. OAuth uses 127.0.0.1, never INADDR_ANY.
++Term tcp_listen_host_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e, f[0], &w->size);
++  struct sockaddr_in at;
++  if (io_nul(w->data, w->size) || io_sys_addr(w->data, (u32)f[1], &at) < 0) {
++    free(w->data);
++    return io_fail(e, EINVAL, NULL);
++  }
++  free(w->data);
++  int fd = socket(AF_INET, SOCK_STREAM, 0);
++  if (fd < 0) return io_fail(e, (u32)errno, NULL);
++  int one = 1;
++  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
++  if (bind(fd, (struct sockaddr*)&at, sizeof(at)) < 0 || listen(fd, 16) < 0
++    || fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) < 0) {
++    u32 code = (u32)errno;
++    close(fd);
++    return io_fail(e, code, NULL);
++  }
++  return io_done(e, io_hand(fd));
++}
++
++static void __attribute__((constructor)) tcp_listen_host_use(void) {
++  io_eff(CID_TCP_LISTEN_HOST, tcp_listen_host_run, 0);
++}
+--- a/effs/tcp_listen_host.js
++++ b/effs/tcp_listen_host.js
+@@ -0,0 +1,16 @@
++function tcp_listen_host(host, port) {
++  const sys = io_sys();
++  const at = io_addr(host, Number(port));
++  if (at === null) return io_fail(22);
++  const fd = sys.socket(2, 1, 0);
++  if (fd < 0) return io_fail(sys.errno());
++  const one = new Int32Array([1]);
++  sys.setsockopt(fd, sys.mac ? 0xffff : 1, sys.mac ? 4 : 2, sys.ptr(one), 4);
++  if (sys.bind(fd, sys.ptr(at), 16) < 0 || sys.listen(fd, 16) < 0
++    || sys.fcntl(fd, 4, sys.fcntl(fd, 3, 0) | (sys.mac ? 4 : 0x800)) < 0) {
++    const code = sys.errno();
++    sys.close(fd);
++    return io_fail(code);
++  }
++  return io_done(fd);
++}
+--- a/effs/tcp_accept_try.c
++++ b/effs/tcp_accept_try.c
+@@ -0,0 +1,16 @@
++// One nonblocking accept attempt; EAGAIN is returned so the owner can cancel.
++Term tcp_accept_try_run(Env e, Term* f, IoWork* w) {
++  int listener = (int)io_hand_v(f[0]);
++  int socket = accept(listener, NULL, NULL);
++  if (socket >= 0 && fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK) < 0) {
++    close(socket);
++    socket = -1;
++  }
++  io_sys_end(w, socket);
++  Term outcome = w->code ? io_fail(e, w->code, NULL) : io_done(e, io_hand(socket));
++  return io_tup(e, io_hand(listener), outcome);
++}
++
++static void __attribute__((constructor)) tcp_accept_try_use(void) {
++  io_eff(CID_TCP_ACCEPT_TRY, tcp_accept_try_run, 0);
++}
+--- a/effs/tcp_accept_try.js
++++ b/effs/tcp_accept_try.js
+@@ -0,0 +1,11 @@
++function tcp_accept_try(listener) {
++  const sys = io_sys();
++  const fd = sys.accept(listener, null, null);
++  if (fd < 0) return io_tup(listener, io_fail(sys.errno()));
++  if (sys.fcntl(fd, 4, sys.fcntl(fd, 3, 0) | (sys.mac ? 4 : 0x800)) < 0) {
++    const code = sys.errno();
++    sys.close(fd);
++    return io_tup(listener, io_fail(code));
++  }
++  return io_tup(listener, io_done(fd));
++}
