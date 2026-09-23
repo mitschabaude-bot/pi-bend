@@ -4,6 +4,9 @@ import ./terminal-image.bend as Image
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/u64.bend as Word
 
+# Zero-width hardware cursor marker shared by focused input components.
+def CURSOR_MARKER() -> String: "\u{1b}_pi:c\u{7}"
+
 type OverlayAnchor is Data:
   Center{} TopLeft{} TopRight{} BottomLeft{} BottomRight{}
   TopCenter{} BottomCenter{} LeftCenter{} RightCenter{}
