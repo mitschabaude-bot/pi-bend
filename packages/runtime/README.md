@@ -6,7 +6,7 @@ Pure Bend primitives for the canonical libraries. Compiler changes are documente
 
 One module per responsibility; the family merges of 2026-09-22 are recorded in [`docs/consolidation/`](../../docs/consolidation/README.md).
 
-Values and text: `f64` (binary64 arithmetic, comparison outcomes, decimal codec), `u64`, `u128`, `big-nat`, `number-string` (ECMAScript numeric literals), `parse-float`, `random` (SplitMix64), `calendar`, `date`, `clock` (monotonic nanoseconds), `timer`, `utf8`, `utf16`, `text` (whitespace and UTF-16 budgets), `string` (string sets and splitting), `unicode` (property types), `unicode-17-*` (generated tables), `punycode`, `idna`, `uri-component`, `base64`, `pem`, `der`.
+Values and text: `f64` (binary64 arithmetic, comparison outcomes, decimal codec), `u64`, `u128`, `big-nat`, `number-string` (ECMAScript numeric literals), `parse-float`, `random` (SplitMix64), `calendar`, `date`, `clock` (monotonic nanoseconds), `timer`, `utf8`, `utf16`, `text` (whitespace and UTF-16 budgets), `string` (string sets and splitting), `unicode` (property types), `unicode-17-*` (generated tables), `collation` (ICU 78 root `localeCompare`, data in `data/icu78-collation.bin`), `punycode`, `idna`, `uri-component`, `base64`, `pem`, `der`.
 
 Data structures: `record` (ordered string-keyed dictionary), `ordered-map`, `fifo`, `list-interleave`, `stable-sort`, `u32-table`, `json` (strict decoding), `partial-json`, `schema-value`, `schema` (JSON Schema loading, checking, diagnostics, builder conversion, JSON pointers), `bounded` (byte budgets), `file-fold`, `filesystem` (POSIX recursive directory creation, canonical paths and file reads/writes).
 

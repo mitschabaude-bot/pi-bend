@@ -1,0 +1,20 @@
+{
+  "icu": "78.3",
+  "unicode": "17.0",
+  "cldr": "48",
+  "source": "https://raw.githubusercontent.com/unicode-org/icu/release-78.3/icu4c/source/data/unidata/FractionalUCA.txt",
+  "source_sha256": "d7cdfab860bf94c6f470c1fae39b81619a12f3a51f80d7cad1ba08404dec3de6",
+  "ucd": "https://www.unicode.org/Public/17.0.0/ucd/UCD.zip",
+  "ucd_sha256": "2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e",
+  "mappings": 10997,
+  "weight_runs": 8615,
+  "contraction_starters": 76,
+  "contractions": 1149,
+  "han": 101996,
+  "han_spans": 20546,
+  "weight_pairs": 338,
+  "bytes": 356921,
+  "sha256": "31fd16dd940abba7d5167f235479a5e565a64d74eddd13a39a622b898bc7aba3",
+  "license": "icu78-cjk.LICENSE",
+  "format": "ICUCOL01; bytes,hanBase,unassignedBase,commonPair,pairs,mappings,hanSpans,cccSpans,fcdSpans,decompositions:u32le; pairs(secondary,tertiary:u16le); mapping kind:u8 code:u24le then 0:last:u24,weight:u32 | 1:weights | 2:flags:u8,weights,count:u8,(length:u8,codes:u24*,weights)* | 3:weights,count:u8,(prefix:u24,weights)*; weights=count:u8,(primaryRank<<11|pair:u32le)*; han(first,last,rank:u24); ccc(first,last:u24,ccc:u8); fcd(first,last:u24,lccc<<8|tccc:u16); decomposition(code:u24,count:u8,codes:u24*); leads count:u16,(lead:u16,hasLccc|hasTccc<<1:u8)*"
+}
