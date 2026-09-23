@@ -141,6 +141,10 @@ def scenario_file_operations(temp):
     (by_cwd / 'b.jsonl').write_text(header_line('b', project_b) + '\n'); os.utime(by_cwd / 'b.jsonl', (1700000010, 1700000010))
     add({'op': 'findMostRecent', 'dir': str(by_cwd), 'cwd': project_a}, lambda r: r['path'] == str(by_cwd / 'a.jsonl'))  # filters most recent session by cwd
     add({'op': 'findMostRecent', 'dir': str(by_cwd), 'cwd': project_b}, lambda r: r['path'] == str(by_cwd / 'b.jsonl'))
+    # v0.87.1 stats every candidate before reading headers: a dangling .jsonl link makes discovery unavailable
+    dangling = d / 'recent-dangling'; dangling.mkdir(); (dangling / 'valid.jsonl').write_text(header_line('abc', '/tmp') + '\n')
+    os.symlink(str(dangling / 'missing-target'), dangling / 'broken.jsonl')
+    add({'op': 'findMostRecent', 'dir': str(dangling)}, lambda r: r['path'] is None)
     # Signed timestamps must compare chronologically, including across 1970.
     for label, older_ns, newer_ns in [('pre-epoch', -2000000000, -1000000000), ('cross-epoch', -1000000000, 1000000000)]:
         directory = d / label; directory.mkdir()

@@ -435,37 +435,42 @@ def matchesCwd(cwd: Maybe<&2, String>, header: S.SessionHeader) -> Bool:
     case None{}: True{}
     case Some{resolved}: sessionCwdMatches(headerCwd(header), resolved)
 
-def timedIf(+path: String, accepted: Bool, +reversed: List<&2, Timed>) -> IO(List<&2, Timed>):
-  match accepted:
-    case False{}: IO.pure(List<&2, Timed>, reversed)
-    case True{}:
-      do IO<List<&2, Timed>>:
-        modified : Result<&2, &2, FS.Error, F64> <- FS.modified(path)
-        return Maybe.default(&2, List<&2, Timed>, Maybe.map(&2, F64, List<&2, Timed>, time => Timed{path, time} <> reversed, SJ.maybeOf(FS.Error, F64, modified)), reversed)
+def withTime(timed: Maybe<&2, List<&2, Timed>>, path: String, modified: Result<&2, &2, FS.Error, F64>) -> Maybe<&2, List<&2, Timed>>:
+  match timed modified:
+    case Some{values} Done{time}: Some{Timed{path, time} <> values}
+    case _ _: None{}
 
-def timedFiles(files: List<&2, String>, +cwd: Maybe<&2, String>, +reversed: List<&2, Timed>) -> IO(List<&2, Timed>):
+# Every candidate is stat'ed first; a failed stat makes discovery unavailable,
+# as a directory access race does upstream.
+def timedFiles(files: List<&2, String>, timed: Maybe<&2, List<&2, Timed>>) -> IO(Maybe<&2, List<&2, Timed>>):
   match files:
-    case Nil{}: IO.pure(List<&2, Timed>, List.reverse(&2, Timed, reversed))
+    case Nil{}: IO.pure(Maybe<&2, List<&2, Timed>>, Maybe.map(&2, List<&2, Timed>, List<&2, Timed>, values => List.reverse(&2, Timed, values), timed))
     case +path <> rest:
-      do IO<List<&2, Timed>>:
+      do IO<Maybe<&2, List<&2, Timed>>>:
+        modified : Result<&2, &2, FS.Error, F64> <- FS.modified(path)
+        timedFiles(rest, withTime(timed, path, modified))
+
+# Newest first, the first file whose header belongs to the working directory.
+def firstMatching(files: List<&2, Timed>, +cwd: Maybe<&2, String>) -> IO(Maybe<&2, String>):
+  match files:
+    case Nil{}: IO.pure(Maybe<&2, String>, None{})
+    case Timed{+path, _} <> rest:
+      do IO<Maybe<&2, String>>:
         header : Maybe<&2, S.SessionHeader> <- readSessionHeaderForDiscovery(path)
-        next : List<&2, Timed> <- timedIf(path, Maybe.default(&2, Bool, Maybe.map(&2, S.SessionHeader, Bool, found => matchesCwd(cwd, found), header), False{}), reversed)
-        timedFiles(rest, cwd, next)
+        Bool.pick(Unit -> IO(Maybe<&2, String>), Maybe.default(&2, Bool, Maybe.map(&2, S.SessionHeader, Bool, found => matchesCwd(cwd, found), header), False{}), _ => IO.pure(Maybe<&2, String>, Some{path}), _ => firstMatching(rest, cwd))(Unit{})
 
-def firstPath(sorted: List<&2, Timed>) -> Maybe<&2, String>:
-  match sorted:
-    case Nil{}: None{}
-    case Timed{path, _} <> _: Some{path}
-
-def newest(files: List<&2, Timed>) -> Maybe<&2, String>: firstPath(Sort.sort(~Timed, ~newerFirst, files))
+def newestMatching(timed: Maybe<&2, List<&2, Timed>>, cwd: Maybe<&2, String>) -> IO(Maybe<&2, String>):
+  match timed:
+    case None{}: IO.pure(Maybe<&2, String>, None{})
+    case Some{files}: firstMatching(Sort.sort(~Timed, ~newerFirst, files), cwd)
 
 def mostRecent(files: Maybe<&2, List<&2, String>>, cwd: Maybe<&2, String>) -> IO(Maybe<&2, String>):
   match files:
     case None{}: IO.pure(Maybe<&2, String>, None{})
     case Some{paths}:
       do IO<Maybe<&2, String>>:
-        timed : List<&2, Timed> <- timedFiles(paths, cwd, Nil{})
-        return newest(timed)
+        timed : Maybe<&2, List<&2, Timed>> <- timedFiles(paths, Some{Nil{}})
+        newestMatching(timed, cwd)
 
 # The most recently modified session file in a directory, optionally only
 # sessions of one working directory; None when the directory is unavailable.
