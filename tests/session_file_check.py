@@ -233,6 +233,17 @@ def load_entries_phase_two(results, sources):
     ops += [{'op': 'inMemory', 'cwd': '/project', 'entries': [{'type': 'session', 'version': 3, 'id': 'c', 'timestamp': '2026-01-01T00:00:00Z', 'cwd': '/project'}] + snapshots['compaction']['entries']},
             {'op': 'appendCompaction', 'summary': 'summary so far', 'firstKeptEntryId': kept_id, 'tokensBefore': 1000}, {'op': 'snapshot'}]
     compaction_index = len(ops) - 1
+    # context edits: string content normalized for the assistant, a later
+    # omission of the kept entry, and a compaction that retains nothing
+    assistant_id = 'answer01'
+    edit_entries = snapshots['compaction']['entries'] + [{'type': 'message', 'id': assistant_id, 'parentId': snapshots['compaction']['entries'][-1]['id'], 'timestamp': '2026-01-01T00:00:02.000Z',
+        'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'answer'}], 'api': 'anthropic-messages', 'provider': 'anthropic', 'model': 'test',
+                    'usage': {'input': 1, 'output': 1, 'cacheRead': 0, 'cacheWrite': 0, 'totalTokens': 2, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'total': 0}}, 'stopReason': 'stop', 'timestamp': 2}}]
+    ops += [{'op': 'inMemory', 'cwd': '/project', 'entries': [{'type': 'session', 'version': 3, 'id': 'e', 'timestamp': '2026-01-01T00:00:00Z', 'cwd': '/project'}] + edit_entries},
+            {'op': 'appendContextEdit', 'targetId': assistant_id, 'replacement': {'content': 'replaced answer'}},
+            {'op': 'appendContextEdit', 'targetId': kept_id, 'replacement': {'content': [{'type': 'text', 'text': 'replaced input'}]}},
+            {'op': 'appendContextEdit', 'targetId': kept_id, 'replacement': None}, {'op': 'snapshot'},
+            {'op': 'appendCompaction', 'summary': 'handoff', 'firstKeptEntryId': None, 'tokensBefore': 10}, {'op': 'snapshot'}]
     checks = []
     checks.append(('adopts entries verbatim', {'op': 'inMemory', 'cwd': '/project', 'entries': verbatim}, {'op': 'snapshot'}, lambda r: r['entries'] == verbatim))
     checks.append(('keeps the loaded leaf so appends continue the conversation', {'op': 'inMemory', 'cwd': '/project', 'entries': leaf}, user('continued'), lambda r: True))
@@ -250,7 +261,7 @@ def load_entries_phase_two(results, sources):
         assert len([t for t in snap['tree'] if t.startswith('0:')]) == 1 and len([t for t in snap['tree'] if t.startswith('1:')]) == 2, ('rebuilds the branch structure rather than a flat chain', snap['tree'])
         assert results[label_index]['labels'].get(labelled_id) == 'checkpoint', ('rebuilds labels', results[label_index]['labels'])
         assert kept_id in results[compaction_index]['context'], ('resolves a compaction against the entry it was written against', results[compaction_index]['context'])
-        base = compaction_index + 1
+        base = compaction_index + 8
         for i, (name, first, second, check) in enumerate(checks):
             r1, r2 = results[base + 2 * i], results[base + 2 * i + 1]
             assert 'error' not in r1, (name, r1)

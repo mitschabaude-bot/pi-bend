@@ -77,6 +77,29 @@ def compaction(~C: Data, ~custom: C -> V.Value, value: S.CompactionEntry<C>) -> 
     case S.CompactionEntry{base, summary, firstKeptEntryId, tokensBefore, details, usageValue, fromHook, systemMessage}:
       based("compaction", base, Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(firstKeptEntryId), Json.field("tokensBefore", Json.natural(tokensBefore), Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Json.optional("usage", usage(usageValue), Json.optionalBoolean("fromHook", fromHook, Json.optional("systemMessage", Maybe.map(&2, Ai.SystemMessage<V.Value>, V.Value, Json.systemMessage, systemMessage), Nil{}))))))))
 
+def editableBlock(value: S.EditableBlock) -> V.Value:
+  match value:
+    case S.EditableText{item}: Json.textContent(item)
+    case S.EditableImage{item}: Json.imageContent(item)
+    case S.EditableThinking{item}: Json.thinkingContent(item)
+    case S.EditableToolCall{item}: Json.toolCall(item)
+
+def editableBlocks(values: List<&2, S.EditableBlock>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case item <> rest: editableBlock(item) <> editableBlocks(rest)
+
+def editableContent(value: S.ContextEditableContent) -> V.Value:
+  match value:
+    case S.ContentText{text}: V.Text{text}
+    case S.ContentBlocks{blocks}: V.ArrayValue{editableBlocks(blocks)}
+
+# A null replacement is written, as upstream writes it.
+def replacementValue(value: Maybe<&2, S.ContextEditableContent>) -> V.Value:
+  match value:
+    case None{}: V.Null{}
+    case Some{content}: Json.object(Json.field("content", editableContent(content), Nil{}))
+
 def entry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +value: S.SessionEntry<D, T, C>) -> V.Value:
   match value:
     case S.SessionMessageEntry{base, message}: based("message", base, Json.field("message", agentMessage(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, message), Nil{}))
@@ -90,6 +113,7 @@ def entry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V
       customBased("custom_message", Json.field("customType", Json.text(customType), Json.field("content", Json.userContent(content), Json.field("display", V.Boolean{display}, Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Nil{})))), base)
     case S.LabelEntry{base, targetId, label}: based("label", base, Json.field("targetId", Json.text(targetId), Json.optionalText("label", label, Nil{})))
     case S.SessionInfoEntry{base, name}: based("session_info", base, Json.optionalText("name", name, Nil{}))
+    case S.ContextEditEntry{base, targetId, replacement}: based("context_edit", base, Json.field("targetId", Json.text(targetId), Json.field("replacement", replacementValue(replacement), Nil{})))
 
 def fileEntry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +value: S.FileEntry<D, T, C>) -> V.Value:
   match value:
@@ -215,6 +239,35 @@ def compactionFields(~C: Data, ~custom: V.Value -> Decoded(C), +fields: R.Record
     systemMessage : Maybe<&2, Ai.SystemMessage<V.Value>> <- Decode.optional(Ai.SystemMessage<V.Value>, fields, "systemMessage", Json.decodeSystemMessage)
     return S.CompactionEntry{base, summary, firstKeptEntryId, tokensBefore, details, usageValue, fromHook, systemMessage}
 
+def editableBlockOf(+kind: String, fields: R.Record<V.Value>) -> Decoded(S.EditableBlock):
+  match kind:
+    case "text": Result.map(&2, &2, Decode.Error, Ai.TextContent, S.EditableBlock, item => S.EditableText{item}, Json.textContentFields(fields))
+    case "image": Result.map(&2, &2, Decode.Error, Ai.ImageContent, S.EditableBlock, item => S.EditableImage{item}, Json.imageContentFields(fields))
+    case "thinking": Result.map(&2, &2, Decode.Error, Ai.ThinkingContent, S.EditableBlock, item => S.EditableThinking{item}, Json.thinkingContentFields(fields))
+    case "toolCall": Result.map(&2, &2, Decode.Error, Ai.ToolCall<V.Value>, S.EditableBlock, item => S.EditableToolCall{item}, Json.toolCallFields(fields))
+    case _: Fail{Decode.InvalidValue{Decode.Field{"type"} <> Nil{}, "text, image, thinking or toolCall"}}
+
+def decodeEditableBlock(value: V.Value) -> Decoded(S.EditableBlock):
+  do Result<&2, &2, Decode.Error, S.EditableBlock>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    kind : String <- tagged(fields, "type")
+    editableBlockOf(kind, fields)
+
+def decodeEditableContent(value: V.Value) -> Decoded(S.ContextEditableContent):
+  match value:
+    case V.Text{body}: Done{S.ContentText{body}}
+    case V.ArrayValue{values}: Result.map(&2, &2, Decode.Error, List<&2, S.EditableBlock>, S.ContextEditableContent, blocks => S.ContentBlocks{blocks}, Decode.items(~S.EditableBlock, ~decodeEditableBlock, values, 0n))
+    case _: Fail{Decode.WrongType{Nil{}, "string or array"}}
+
+def decodeReplacement(value: V.Value) -> Decoded(Maybe<&2, S.ContextEditableContent>):
+  match value:
+    case V.Null{}: Done{None{}}
+    case other:
+      do Result<&2, &2, Decode.Error, Maybe<&2, S.ContextEditableContent>>:
+        +fields : R.Record<V.Value> <- Decode.object(other)
+        content : S.ContextEditableContent <- Decode.required(S.ContextEditableContent, fields, "content", decodeEditableContent)
+        return Some{content}
+
 def entryOf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +kind: String, +fields: R.Record<V.Value>) -> Decoded(S.SessionEntry<D, T, C>):
   match kind:
     case "message":
@@ -268,6 +321,12 @@ def entryOf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~t
         base : S.SessionEntryBase <- baseFields(fields)
         name : Maybe<&2, String> <- Decode.optional(String, fields, "name", Decode.string)
         return S.SessionInfoEntry{base, name}
+    case "context_edit":
+      do Result<&2, &2, Decode.Error, S.SessionEntry<D, T, C>>:
+        base : S.SessionEntryBase <- baseFields(fields)
+        targetId : String <- tagged(fields, "targetId")
+        replacement : Maybe<&2, S.ContextEditableContent> <- Decode.required(Maybe<&2, S.ContextEditableContent>, fields, "replacement", decodeReplacement)
+        return S.ContextEditEntry{base, targetId, replacement}
     case _: Fail{Decode.InvalidValue{Decode.Field{"type"} <> Nil{}, "session entry type"}}
 
 def fileEntryOf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +kind: String, +fields: R.Record<V.Value>) -> Decoded(S.FileEntry<D, T, C>):

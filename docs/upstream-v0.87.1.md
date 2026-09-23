@@ -8,7 +8,7 @@ Between the two commits, 56 non-merge commits touch `packages/{ai,agent,coding-a
 |---|---|---|---|
 | f5c946480 | image input limits | ai types; file-processor, agent-session, read tool, main | types and catalog done; behaviour pending |
 | c596d09d9 | prompt cache warming | ai types (`promptCache`), agent-session, session-manager, settings-manager | `Model.promptCache` done; warming pending |
-| 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | agent package done (`finishTurn`, `prepareRequest`, `peekQueuedMessages`, 24 new named tests); session projection pending |
+| 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | agent package done (`finishTurn`, `prepareRequest`, `peekQueuedMessages`, 24 new named tests); session-manager context edits, `buildSessionProjection` and projected compaction done (session-context-edit.test.ts ported); agent-session request projection and boundaries pending |
 | de2de549b | compaction cancellation races | agent-session | pending |
 | 8bdcd4498 | compact oversized trailing tool results | compaction | done: last valid cut point as fallback; #9740 case in tests/compaction |
 | d192bd6dc | avoid split-turn summary refusals | compaction | done: new prompt, `# Conversation`/`# Instructions` sections |
@@ -41,4 +41,8 @@ Prompt templates were converted with b6419322e. The prompt-template load check c
 ## Test inventory
 
 `tests/upstream-inventory.json` now pins f07218c4d. Suites whose upstream file changed and that were already ported or partial are marked `needs-review` (18) until their diffs are ported; changed suites that were never ported stay pending.
+
+## Context edits: typed replacement content
+
+Upstream's `ContextEditEntry.replacement.content` is the union of the editable roles' content types, assigned to the target message as-is. The port types it as text or a list of text, image, thinking and tool-call blocks, fitted to the target role when projected; text becomes a text block for assistant and tool-result targets, as upstream normalizes it. Blocks a role cannot hold (an image in assistant content, thinking or a tool call in user content) cannot form a typed message, so `appendContextEdit` rejects them and projecting such an edit read from a file fails with `UnfitContextEdit`. Upstream would store the edit and send an ill-typed message to the provider. No upstream test covers this case; this deviation awaits Gregor's review.
 

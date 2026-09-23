@@ -2586,9 +2586,13 @@
     },
     {
       "source": "packages/coding-agent/test/session-context-edit.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "51597d41380eae6054112186b4fafc63a4dd55fe7a3c653914ba20d7189c4c5f"
+      "status": "ported",
+      "ports": [
+        "tests/session-context-edit.bend",
+        "tests/session_file_check.py"
+      ],
+      "sha256": "51597d41380eae6054112186b4fafc63a4dd55fe7a3c653914ba20d7189c4c5f",
+      "notes": "All 18 named cases pass on Bun and native one/four threads over the pure session state and compaction module. session_file_check.py adds context-edit and retain-none compaction appends against the pinned SessionManager, comparing the written JSON entries. Typed adaptation: a replacement is text or content blocks; blocks the target role cannot hold (an image in assistant content, thinking in user content) are rejected by appendContextEdit and fail projection with UnfitContextEdit, where upstream would store and project an ill-typed message."
     },
     {
       "source": "packages/coding-agent/test/session-cwd.test.ts",
@@ -3911,7 +3915,10 @@
     {
       "source": "packages/tui/test/markdown.test.ts",
       "status": "partial",
-      "ports": ["tests/markdown.bend", "tests/markdown-reference.ts"],
+      "ports": [
+        "tests/markdown.bend",
+        "tests/markdown-reference.ts"
+      ],
       "sha256": "1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d",
       "notes": "Core native Markdown rendering and cache invalidation match 40 source-pinned outputs on Bun/native one/four. Advanced Marked grammar, table wrapping/alignment, ANSI restoration, OSC8 links, streaming fences and LaTeX remain pending."
     },

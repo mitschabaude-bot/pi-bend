@@ -196,6 +196,12 @@ def replacedWithReturn(world: World, outcome: Outcome()) -> World & V.Value:
     case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
     case World{_, agentDir, cwd} Done{+session}: (World{Some{session}, agentDir, cwd}, withReturned(session, shape(session)))
 
+# The operation files carry well-formed replacements.
+def replacementOf(found: Maybe<&2, V.Value>) -> Maybe<&2, S.ContextEditableContent>:
+  match found:
+    case None{}: None{}
+    case Some{item}: Result.default(&2, &2, Decode.Error, Maybe<&2, S.ContextEditableContent>, SJ.decodeReplacement(item), None{})
+
 def appended(world: World, outcome: P.Outcome(P.Appended<Unit, Unit, V.Value>), +timestamp: Maybe<&2, F64>) -> World & V.Value:
   match world outcome:
     case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
@@ -248,7 +254,11 @@ def sessionOp(+world: World, +fields: R.Record<V.Value>, +op: String, +session: 
         return appended(world, outcome, None{})
     case "appendCompaction":
       do IO<World & V.Value>:
-        outcome : P.Outcome(P.Appended<Unit, Unit, V.Value>) <- P.appendCompaction(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, session, str(fields, "summary"), str(fields, "firstKeptEntryId"), num(fields, "tokensBefore"), None{}, None{}, None{})
+        outcome : P.Outcome(P.Appended<Unit, Unit, V.Value>) <- P.appendCompaction(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, session, str(fields, "summary"), opt(fields, "firstKeptEntryId"), num(fields, "tokensBefore"), None{}, None{}, None{})
+        return appended(world, outcome, None{})
+    case "appendContextEdit":
+      do IO<World & V.Value>:
+        outcome : P.Outcome(P.Appended<Unit, Unit, V.Value>) <- P.appendContextEdit(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, session, str(fields, "targetId"), replacementOf(value(fields, "replacement")))
         return appended(world, outcome, None{})
     case "branch": IO.pure(World & V.Value, modified(world, P.branch(Unit, Unit, V.Value, session, str(fields, "id"))))
     case "createBranchedSession":

@@ -51,6 +51,9 @@ def stateMessage(error: S.Error) -> String:
     case S.InvalidMessage{}: "Compaction and branch summaries must be appended as entries"
     case S.LabelIdCount{}: "Wrong number of label ids"
     case S.InvalidTimestamp{id, _}: "Entry " ++ id ++ " has an invalid timestamp"
+    case S.NotOnActiveBranch{id}: "Entry " ++ id ++ " is not on the active branch"
+    case S.NotEditable{id}: "Entry " ++ id ++ " does not contribute editable model content"
+    case S.UnfitContextEdit{id}: "Context edit " ++ id ++ " replaces content with blocks its target role cannot hold"
 
 def fileMessage(error: FS.Error) -> String:
   match error:
@@ -870,9 +873,13 @@ def appendModelChange(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~
   +state = stateOf(D, T, C, session)
   append(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, stamp => S.appendModelChange(D, T, C, state, stamp, provider, model))
 
-def appendCompaction(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, summary: String, firstKeptEntryId: String, tokensBefore: Nat, details: Maybe<&2, C>, fromHook: Maybe<&2, Bool>, usage: Maybe<&2, Ai.Usage>) -> IO(Outcome(Appended<D, T, C>)):
+def appendCompaction(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, summary: String, firstKeptEntryId: Maybe<&2, String>, tokensBefore: Nat, details: Maybe<&2, C>, fromHook: Maybe<&2, Bool>, usage: Maybe<&2, Ai.Usage>) -> IO(Outcome(Appended<D, T, C>)):
   +state = stateOf(D, T, C, session)
   append(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, stamp => S.appendCompaction(D, T, C, state, stamp, summary, firstKeptEntryId, tokensBefore, details, fromHook, usage))
+
+def appendContextEdit(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, targetId: String, replacement: Maybe<&2, S.ContextEditableContent>) -> IO(Outcome(Appended<D, T, C>)):
+  +state = stateOf(D, T, C, session)
+  append(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, stamp => S.appendContextEdit(D, T, C, state, stamp, targetId, replacement))
 
 def appendCustomEntry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, customType: String, data: Maybe<&2, C>) -> IO(Outcome(Appended<D, T, C>)):
   +state = stateOf(D, T, C, session)

@@ -109,7 +109,7 @@ def detailsOf(value: V.Value) -> Maybe<&2, Compaction.CompactionDetails>:
     case _: None{}
 
 def recordCompaction(session: Session(), summary: String, firstKeptEntryId: String, tokensBefore: Nat, details: Maybe<&2, Compaction.CompactionDetails>, usage: Maybe<&2, Ai.Usage>) -> IO(Sessions.Outcome(Appended())):
-  Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, summary, firstKeptEntryId, tokensBefore, Maybe.map(&2, Compaction.CompactionDetails, V.Value, detailsValue, details), Some{False{}}, usage)
+  Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, summary, Some{firstKeptEntryId}, tokensBefore, Maybe.map(&2, Compaction.CompactionDetails, V.Value, detailsValue, details), Some{False{}}, usage)
 
 def recordModel(session: Session(), model: Ai.Model<Ai.JsonValue>) -> IO(Sessions.Outcome(Appended())):
   match model:

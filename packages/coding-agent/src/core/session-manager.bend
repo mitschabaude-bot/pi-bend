@@ -23,6 +23,18 @@ type SessionEntryBase is Data:
 type CompactionEntry<-C: Data> is Data:
   CompactionEntry{base: SessionEntryBase, summary: String, firstKeptEntryId: String, tokensBefore: Nat, details: Maybe<&2,C>, usage: Maybe<&2,Ai.Usage>, fromHook: Maybe<&2,Bool>, systemMessage: Maybe<&2,Ai.SystemMessage<Value.Value>>}
 
+# Replacement content for an edited entry: upstream's union of the editable
+# roles' content. Text is kept as text; blocks are fitted to the target's role
+# when projected (a text block for assistant and tool-result text).
+type EditableBlock is Data:
+  EditableText{value: Ai.TextContent}
+  EditableImage{value: Ai.ImageContent}
+  EditableThinking{value: Ai.ThinkingContent}
+  EditableToolCall{value: Ai.ToolCall<Value.Value>}
+type ContextEditableContent is Data:
+  ContentText{text: String}
+  ContentBlocks{blocks: List<&2,EditableBlock>}
+
 # The discriminator is a sum constructor. Extension payloads remain typed;
 # message details use the same three parameters as the native agent stack.
 type SessionEntry<-D: Data,-T: Data,-C: Data> is Data:
@@ -35,6 +47,9 @@ type SessionEntry<-D: Data,-T: Data,-C: Data> is Data:
   CustomMessageEntry{base: SessionEntryBase, customType: String, content: Ai.UserContent, details: Maybe<&2,C>, display: Bool}
   LabelEntry{base: SessionEntryBase, targetId: String, label: Maybe<&2,String>}
   SessionInfoEntry{base: SessionEntryBase, name: Maybe<&2,String>}
+  # Append-only change to one earlier entry's contribution to model context:
+  # None omits the target, a value replaces only its content.
+  ContextEditEntry{base: SessionEntryBase, targetId: String, replacement: Maybe<&2,ContextEditableContent>}
 type FileEntry<-D: Data,-T: Data,-C: Data> is Data:
   Header{value: SessionHeader}
   Entry{value: SessionEntry<D,T,C>}
@@ -44,6 +59,10 @@ type SessionModel is Data:
   SessionModel{provider: String, modelId: String}
 type SessionContext<-D: Data,-T: Data,-C: Data> is Data:
   SessionContext{messages: List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>, thinkingLevel: String, model: Maybe<&2,SessionModel>}
+type ProjectedSessionEntry<-D: Data,-T: Data,-C: Data> is Data:
+  ProjectedSessionEntry{sourceEntry: SessionEntry<D,T,C>, messages: List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>}
+type SessionProjection<-D: Data,-T: Data,-C: Data> is Data:
+  SessionProjection{entries: List<&2,ProjectedSessionEntry<D,T,C>>, messages: List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>, thinkingLevel: String, model: Maybe<&2,SessionModel>}
 type SessionInfo is Data:
   SessionInfo{path: String, id: String, cwd: String, name: Maybe<&2,String>, parentSessionPath: Maybe<&2,String>, created: F64, modified: F64, messageCount: Nat, firstMessage: String, allMessagesText: String}
 
@@ -59,6 +78,10 @@ type Error is Data:
   InvalidMessage{}
   LabelIdCount{}
   InvalidTimestamp{id: String, cause: Date.ParseError}
+  NotOnActiveBranch{id: String}
+  NotEditable{id: String}
+  # Typed messages cannot hold content blocks their role does not allow.
+  UnfitContextEdit{id: String}
 
 def entryBase(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>) -> SessionEntryBase:
   match entry:
@@ -71,6 +94,7 @@ def entryBase(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>) -> Session
     case CustomMessageEntry{base,_,_,_,_}: base
     case LabelEntry{base,_,_}: base
     case SessionInfoEntry{base,_}: base
+    case ContextEditEntry{base,_,_}: base
 
 def baseId(base: SessionEntryBase) -> String:
   match base:
@@ -213,22 +237,119 @@ def getSessionContextSettingsFrom(-D: Data,-T: Data,-C: Data, path: List<&2,Sess
 def getSessionContextSettings(-D: Data,-T: Data,-C: Data, path: List<&2,SessionEntry<D,T,C>>) -> Settings:
   getSessionContextSettingsFrom(D,T,C,path,Settings{"off",None{}})
 
-def messagesFrom(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, reversed: List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>) -> Result<&2,&2,Error,List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>>:
-  match entries:
-    case Nil{}: Done{List.reverse(&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>,reversed)}
-    case entry <> rest:
-      Result.bind(&2,&2,Error,List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>,List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>,sessionEntryToContextMessages(D,T,C,entry),values => messagesFrom(D,T,C,rest,List.reverse.go(&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>,values,reversed)))
+def Msg(-D: Data,-T: Data,-C: Data) -> Data: Agent.AgentMessage<D,T,Messages.CodingMessage<C>>
 
-def contextResult(-D: Data,-T: Data,-C: Data, settings: Settings, messages: Result<&2,&2,Error,List<&2,Agent.AgentMessage<D,T,Messages.CodingMessage<C>>>>) -> Result<&2,&2,Error,SessionContext<D,T,C>>:
-  match settings messages:
-    case _ Fail{cause}: Fail{cause}
-    case Settings{level,model} Done{values}: Done{SessionContext{values,level,model}}
+def userBlocks(blocks: List<&2,EditableBlock>) -> Maybe<&2,List<&2,Ai.TextImageContent>>:
+  match blocks:
+    case Nil{}: Some{Nil{}}
+    case EditableText{value} <> rest: Maybe.map(&2,List<&2,Ai.TextImageContent>,List<&2,Ai.TextImageContent>,tail => Ai.TextImageText{value} <> tail,userBlocks(rest))
+    case EditableImage{value} <> rest: Maybe.map(&2,List<&2,Ai.TextImageContent>,List<&2,Ai.TextImageContent>,tail => Ai.TextImageImage{value} <> tail,userBlocks(rest))
+    case _ <> _: None{}
+
+def assistantBlocks(blocks: List<&2,EditableBlock>) -> Maybe<&2,List<&2,Ai.AssistantContent<Value.Value>>>:
+  match blocks:
+    case Nil{}: Some{Nil{}}
+    case EditableText{value} <> rest: Maybe.map(&2,List<&2,Ai.AssistantContent<Value.Value>>,List<&2,Ai.AssistantContent<Value.Value>>,tail => Ai.AssistantText{value} <> tail,assistantBlocks(rest))
+    case EditableThinking{value} <> rest: Maybe.map(&2,List<&2,Ai.AssistantContent<Value.Value>>,List<&2,Ai.AssistantContent<Value.Value>>,tail => Ai.AssistantThinking{value} <> tail,assistantBlocks(rest))
+    case EditableToolCall{value} <> rest: Maybe.map(&2,List<&2,Ai.AssistantContent<Value.Value>>,List<&2,Ai.AssistantContent<Value.Value>>,tail => Ai.AssistantToolCall{value} <> tail,assistantBlocks(rest))
+    case EditableImage{_} <> _: None{}
+
+def textBlock(text: String) -> EditableBlock: EditableText{Ai.TextContent{text,None{}}}
+
+def userContent(content: ContextEditableContent) -> Maybe<&2,Ai.UserContent>:
+  match content:
+    case ContentText{text}: Some{Ai.UserText{text}}
+    case ContentBlocks{blocks}: Maybe.map(&2,List<&2,Ai.TextImageContent>,Ai.UserContent,values => Ai.UserBlocks{values},userBlocks(blocks))
+
+def resultContent(content: ContextEditableContent) -> Maybe<&2,List<&2,Ai.TextImageContent>>:
+  match content:
+    case ContentText{text}: userBlocks([textBlock(text)])
+    case ContentBlocks{blocks}: userBlocks(blocks)
+
+def assistantContent(content: ContextEditableContent) -> Maybe<&2,List<&2,Ai.AssistantContent<Value.Value>>>:
+  match content:
+    case ContentText{text}: assistantBlocks([textBlock(text)])
+    case ContentBlocks{blocks}: assistantBlocks(blocks)
+
+# Replaces only the content of the editable roles; metadata is kept.
+def editedMessage(-D: Data,-T: Data,-C: Data, +content: ContextEditableContent, message: Msg(D,T,C)) -> Maybe<&2,Msg(D,T,C)>:
+  match message:
+    case Agent.LlmMessage{Ai.User{Ai.UserMessage{_,timestamp}}}: Maybe.map(&2,Ai.UserContent,Msg(D,T,C),value => Agent.LlmMessage{Ai.User{Ai.UserMessage{value,timestamp}}},userContent(content))
+    case Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_,api,provider,model,responseModel,responseId,level,diagnostics,usage,reason,deferred,error,rawReason,endTurn,timestamp}}}:
+      Maybe.map(&2,List<&2,Ai.AssistantContent<Value.Value>>,Msg(D,T,C),value => Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{value,api,provider,model,responseModel,responseId,level,diagnostics,usage,reason,deferred,error,rawReason,endTurn,timestamp}}},assistantContent(content))
+    case Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{id,name,_,details,usage,isError,timestamp}}}:
+      Maybe.map(&2,List<&2,Ai.TextImageContent>,Msg(D,T,C),value => Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{id,name,value,details,usage,isError,timestamp}}},resultContent(content))
+    case Agent.CustomMessage{Messages.Custom{Messages.CustomMessage{kind,_,display,details,timestamp}}}:
+      Maybe.map(&2,Ai.UserContent,Msg(D,T,C),value => Agent.CustomMessage{Messages.Custom{Messages.CustomMessage{kind,value,display,details,timestamp}}},userContent(content))
+    case other: Some{other}
+
+def editedMessages(-D: Data,-T: Data,-C: Data, +content: ContextEditableContent, messages: List<&2,Msg(D,T,C)>) -> Maybe<&2,List<&2,Msg(D,T,C)>>:
+  match messages:
+    case Nil{}: Some{Nil{}}
+    case message <> rest: Maybe.bind(&2,Msg(D,T,C),List<&2,Msg(D,T,C)>,editedMessage(D,T,C,content,message),head => Maybe.map(&2,List<&2,Msg(D,T,C)>,List<&2,Msg(D,T,C)>,tail => head <> tail,editedMessages(D,T,C,content,rest)))
+
+# The latest edit of an entry on the context path, by target id.
+type ContextEdit is Data:
+  ContextEdit{id: String, replacement: Maybe<&2,ContextEditableContent>}
+
+def collectEdits(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, edits: Map<&2,Maybe<&2,ContextEdit>>) -> Map<&2,Maybe<&2,ContextEdit>>:
+  match entries:
+    case Nil{}: edits
+    case ContextEditEntry{SessionEntryBase{id,_,_},target,change} <> rest: collectEdits(D,T,C,rest,Map.set(&2,Maybe<&2,ContextEdit>,edits,target,Some{ContextEdit{id,change}}))
+    case _ <> rest: collectEdits(D,T,C,rest,edits)
+
+def appliedEdit(-D: Data,-T: Data,-C: Data, edit: Maybe<&2,ContextEdit>, messages: List<&2,Msg(D,T,C)>) -> Result<&2,&2,Error,List<&2,Msg(D,T,C)>>:
+  match edit:
+    case None{}: Done{messages}
+    case Some{ContextEdit{_,None{}}}: Done{Nil{}}
+    case Some{ContextEdit{id,Some{content}}}: Maybe.default(&2,Result<&2,&2,Error,List<&2,Msg(D,T,C)>>,Maybe.map(&2,List<&2,Msg(D,T,C)>,Result<&2,&2,Error,List<&2,Msg(D,T,C)>>,values => Done{values},editedMessages(D,T,C,content,messages)),Fail{UnfitContextEdit{id}})
+
+def projectContextEntry(-D: Data,-T: Data,-C: Data, +entry: SessionEntry<D,T,C>, edit: Maybe<&2,ContextEdit>) -> Result<&2,&2,Error,List<&2,Msg(D,T,C)>>:
+  Result.bind(&2,&2,Error,List<&2,Msg(D,T,C)>,List<&2,Msg(D,T,C)>,sessionEntryToContextMessages(D,T,C,entry),messages => appliedEdit(D,T,C,edit,messages))
+
+def editOf(edits: Map<&2,Maybe<&2,ContextEdit>>, id: String) -> Maybe<&2,ContextEdit>:
+  lookupValue(Maybe<&2,ContextEdit>,Map.get(Maybe<&2,ContextEdit>,None{},edits,id))
+
+# buildContextEntries can retain an older compaction whose raw id lies in the
+# newest retained range. Only the newest compaction, first in the list,
+# contributes its checkpoint and summary.
+def projectedMessages(-D: Data,-T: Data,-C: Data, first: Bool, +entry: SessionEntry<D,T,C>, edits: Map<&2,Maybe<&2,ContextEdit>>) -> Result<&2,&2,Error,List<&2,Msg(D,T,C)>>:
+  match first entry:
+    case False{} Compaction{_}: Done{Nil{}}
+    case _ entry: projectContextEntry(D,T,C,entry,editOf(edits,entryId(D,T,C,entry)))
+
+def projectEntries(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, first: Bool, +edits: Map<&2,Maybe<&2,ContextEdit>>, reversed: List<&2,ProjectedSessionEntry<D,T,C>>) -> Result<&2,&2,Error,List<&2,ProjectedSessionEntry<D,T,C>>>:
+  match entries:
+    case Nil{}: Done{List.reverse(&2,ProjectedSessionEntry<D,T,C>,reversed)}
+    case +entry <> rest: Result.bind(&2,&2,Error,List<&2,Msg(D,T,C)>,List<&2,ProjectedSessionEntry<D,T,C>>,projectedMessages(D,T,C,first,entry,edits),messages => projectEntries(D,T,C,rest,False{},edits,ProjectedSessionEntry{entry,messages} <> reversed))
+
+def projectedMessagesOf(-D: Data,-T: Data,-C: Data, entries: List<&2,ProjectedSessionEntry<D,T,C>>) -> List<&2,Msg(D,T,C)>:
+  match entries:
+    case Nil{}: Nil{}
+    case ProjectedSessionEntry{_,messages} <> rest: List.append(&2,Msg(D,T,C),messages,projectedMessagesOf(D,T,C,rest))
+
+def projection(-D: Data,-T: Data,-C: Data, settings: Settings, +entries: List<&2,ProjectedSessionEntry<D,T,C>>) -> SessionProjection<D,T,C>:
+  match settings:
+    case Settings{level,model}: SessionProjection{entries,projectedMessagesOf(D,T,C,entries),level,model}
+
+def projectionFromPath(-D: Data,-T: Data,-C: Data, +path: List<&2,SessionEntry<D,T,C>>) -> Result<&2,&2,Error,SessionProjection<D,T,C>>:
+  +entries = contextEntries(D,T,C,path)
+  Result.map(&2,&2,Error,List<&2,ProjectedSessionEntry<D,T,C>>,SessionProjection<D,T,C>,projected => projection(D,T,C,getSessionContextSettings(D,T,C,path),projected),projectEntries(D,T,C,entries,True{},collectEdits(D,T,C,entries,Map.new(&2,Maybe<&2,ContextEdit>)),Nil{}))
+
+# Provenance-preserving, compaction-aware model context.
+def buildSessionProjection(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, leaf: LeafSelection) -> Result<&2,&2,Error,SessionProjection<D,T,C>>:
+  Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionProjection<D,T,C>,buildSessionPath(D,T,C,entries,leaf),path => projectionFromPath(D,T,C,path))
+
+def projectionContext(-D: Data,-T: Data,-C: Data, value: SessionProjection<D,T,C>) -> SessionContext<D,T,C>:
+  match value:
+    case SessionProjection{_,messages,level,model}: SessionContext{messages,level,model}
 
 def contextFromPath(-D: Data,-T: Data,-C: Data, +path: List<&2,SessionEntry<D,T,C>>) -> Result<&2,&2,Error,SessionContext<D,T,C>>:
-  contextResult(D,T,C,getSessionContextSettings(D,T,C,path),messagesFrom(D,T,C,contextEntries(D,T,C,path),Nil{}))
+  Result.map(&2,&2,Error,SessionProjection<D,T,C>,SessionContext<D,T,C>,value => projectionContext(D,T,C,value),projectionFromPath(D,T,C,path))
 
+# The finalized model context of the canonical projection.
 def buildSessionContext(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, leaf: LeafSelection) -> Result<&2,&2,Error,SessionContext<D,T,C>>:
-  Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionContext<D,T,C>,buildSessionPath(D,T,C,entries,leaf),path => contextFromPath(D,T,C,path))
+  Result.map(&2,&2,Error,SessionProjection<D,T,C>,SessionContext<D,T,C>,value => projectionContext(D,T,C,value),buildSessionProjection(D,T,C,entries,leaf))
 
 # Immutable in-memory session. Supplied stamps keep randomness/time at the IO
 # boundary. History is reversed for constant-time append; the selected leaf is
@@ -297,6 +418,9 @@ def getBranch(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>, selectio
 
 def sessionContext(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Result<&2,&2,Error,SessionContext<D,T,C>>:
   Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionContext<D,T,C>,getBranch(D,T,C,state,Latest{}),path => contextFromPath(D,T,C,path))
+
+def sessionProjection(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Result<&2,&2,Error,SessionProjection<D,T,C>>:
+  Result.bind(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,SessionProjection<D,T,C>,getBranch(D,T,C,state,Latest{}),path => projectionFromPath(D,T,C,path))
 
 def sessionContextEntries(-D: Data,-T: Data,-C: Data, state: SessionManager<D,T,C>) -> Result<&2,&2,Error,List<&2,SessionEntry<D,T,C>>>:
   Result.map(&2,&2,Error,List<&2,SessionEntry<D,T,C>>,List<&2,SessionEntry<D,T,C>>,path => contextEntries(D,T,C,path),getBranch(D,T,C,state,Latest{}))
@@ -465,11 +589,65 @@ def appendCompactionFromContext(-D: Data,-T: Data,-C: Data, state: SessionManage
       snapshot = Maybe.map(&2,Ai.SystemMessage<Value.Value>,Ai.SystemMessage<Value.Value>,value => systemTimestamp(time,value),Transcript.getCurrentSystemMessage(Value.Value,Value.Value,D,T,llmMessages(D,T,C,messages,Nil{})))
       appendChecked(D,T,C,state,Compaction{CompactionEntry{base,summary,keep,tokens,details,usage,fromHook,snapshot}},base)
 
-def appendCompaction(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +stamp: EntryStamp, summary: String, keep: String, tokens: Nat, details: Maybe<&2,C>, fromHook: Maybe<&2,Bool>, usage: Maybe<&2,Ai.Usage>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+# Without a first kept entry the compaction keeps itself: nothing before it
+# stays in context.
+def appendCompaction(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +stamp: EntryStamp, summary: String, firstKept: Maybe<&2,String>, tokens: Nat, details: Maybe<&2,C>, fromHook: Maybe<&2,Bool>, usage: Maybe<&2,Ai.Usage>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
   match stamp:
-    case EntryStamp{id,timestamp}:
+    case EntryStamp{+id,timestamp}:
       base = stampBase(stamp,getLeafId(D,T,C,state))
+      keep = Maybe.default(&2,String,firstKept,id)
       Result.bind(&2,&2,Error,F64,SessionManager<D,T,C>,dated(F64,id,Date.parseIso(timestamp)),time => Result.bind(&2,&2,Error,SessionContext<D,T,C>,SessionManager<D,T,C>,sessionContext(D,T,C,state),context => appendCompactionFromContext(D,T,C,state,base,summary,keep,tokens,details,fromHook,usage,context,time)))
+
+def onBranch(-D: Data,-T: Data,-C: Data, entries: List<&2,SessionEntry<D,T,C>>, +id: String) -> Bool:
+  match entries:
+    case Nil{}: False{}
+    case entry <> rest: Strings.equal(entryId(D,T,C,entry),id) || onBranch(D,T,C,rest,id)
+
+# Assistant and tool-result content is an array, so text becomes a text block.
+def editTarget(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, +edit: Maybe<&2,ContextEditableContent>) -> Maybe<&2,Maybe<&2,ContextEditableContent>>:
+  match entry edit:
+    case CustomMessageEntry{_,_,_,_,_} value: Some{value}
+    case SessionMessageEntry{_,Agent.LlmMessage{Ai.User{_}}} value: Some{value}
+    case SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{_}}} Some{ContentText{text}}: Some{Some{ContentBlocks{[textBlock(text)]}}}
+    case SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{_}}} value: Some{value}
+    case SessionMessageEntry{_,Agent.LlmMessage{Ai.ToolResult{_}}} Some{ContentText{text}}: Some{Some{ContentBlocks{[textBlock(text)]}}}
+    case SessionMessageEntry{_,Agent.LlmMessage{Ai.ToolResult{_}}} value: Some{value}
+    case _ _: None{}
+
+def fitsMessages(-D: Data,-T: Data,-C: Data, +content: ContextEditableContent, messages: Result<&2,&2,Error,List<&2,Msg(D,T,C)>>) -> Bool:
+  match messages:
+    case Fail{_}: True{}
+    case Done{values}: Maybe.is_some(&2,List<&2,Msg(D,T,C)>,editedMessages(D,T,C,content,values))
+
+def fits(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, edit: Maybe<&2,ContextEditableContent>) -> Bool:
+  match edit:
+    case None{}: True{}
+    case Some{content}: fitsMessages(D,T,C,content,sessionEntryToContextMessages(D,T,C,entry))
+
+def appendEdit(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, +stamp: EntryStamp, +target: String, entry: SessionEntry<D,T,C>, normalized: Maybe<&2,Maybe<&2,ContextEditableContent>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match stamp normalized:
+    case _ None{}: Fail{NotEditable{target}}
+    case EntryStamp{+id,_} Some{+edit}:
+      +base = stampBase(stamp,getLeafId(D,T,C,state))
+      Bool.pick(Unit -> Result<&2,&2,Error,SessionManager<D,T,C>>,fits(D,T,C,entry,edit),
+        _ => appendChecked(D,T,C,state,ContextEditEntry{base,target,edit},base),
+        _ => Fail{UnfitContextEdit{id}})(Unit{})
+
+def appendBranchEdit(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, +target: String, +entry: SessionEntry<D,T,C>, edit: Maybe<&2,ContextEditableContent>, branch: Result<&2,&2,Error,List<&2,SessionEntry<D,T,C>>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match branch:
+    case Fail{cause}: Fail{cause}
+    case Done{path}: Bool.pick(Unit -> Result<&2,&2,Error,SessionManager<D,T,C>>,onBranch(D,T,C,path,target),
+      _ => appendEdit(D,T,C,state,stamp,target,entry,editTarget(D,T,C,entry,edit)),
+      _ => Fail{NotOnActiveBranch{target}})(Unit{})
+
+# Append a branch-local edit to an earlier model-visible entry.
+def appendTargetEdit(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, +target: String, edit: Maybe<&2,ContextEditableContent>, found: Maybe<&2,SessionEntry<D,T,C>>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  match found:
+    case None{}: Fail{EntryNotFound{target}}
+    case Some{entry}: appendBranchEdit(D,T,C,state,stamp,target,entry,edit,getBranch(D,T,C,state,Latest{}))
+
+def appendContextEdit(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, +target: String, edit: Maybe<&2,ContextEditableContent>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  appendTargetEdit(D,T,C,state,stamp,target,edit,getEntry(D,T,C,state,target))
 
 def sameParent(left: Maybe<&2,String>, right: Maybe<&2,String>) -> Bool:
   match left right:
@@ -568,7 +746,7 @@ def reparentBase(base: SessionEntryBase, parent: Maybe<&2,String>) -> SessionEnt
   match base:
     case SessionEntryBase{id,_,timestamp}: SessionEntryBase{id,parent,timestamp}
 
-def replacement(links: Map<&2,Maybe<&2,String>>, +id: String) -> String:
+def linkedId(links: Map<&2,Maybe<&2,String>>, +id: String) -> String:
   Maybe.default(&2,String,lookupValue(Maybe<&2,String>,Map.get(Maybe<&2,String>,None{},links,id)),id)
 
 def reparent(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, parent: Maybe<&2,String>, replacements: Map<&2,Maybe<&2,String>>) -> SessionEntry<D,T,C>:
@@ -576,12 +754,13 @@ def reparent(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, parent: May
     case SessionMessageEntry{base,message}: SessionMessageEntry{reparentBase(base,parent),message}
     case ThinkingLevelChangeEntry{base,level}: ThinkingLevelChangeEntry{reparentBase(base,parent),level}
     case ModelChangeEntry{base,provider,model}: ModelChangeEntry{reparentBase(base,parent),provider,model}
-    case Compaction{CompactionEntry{base,summary,keep,tokens,details,usage,hook,system}}: Compaction{CompactionEntry{reparentBase(base,parent),summary,replacement(replacements,keep),tokens,details,usage,hook,system}}
+    case Compaction{CompactionEntry{base,summary,keep,tokens,details,usage,hook,system}}: Compaction{CompactionEntry{reparentBase(base,parent),summary,linkedId(replacements,keep),tokens,details,usage,hook,system}}
     case BranchSummaryEntry{base,from,summary,details,usage,hook}: BranchSummaryEntry{reparentBase(base,parent),from,summary,details,usage,hook}
     case CustomEntry{base,kind,data}: CustomEntry{reparentBase(base,parent),kind,data}
     case CustomMessageEntry{base,kind,content,details,display}: CustomMessageEntry{reparentBase(base,parent),kind,content,details,display}
     case LabelEntry{base,target,label}: LabelEntry{reparentBase(base,parent),target,label}
     case SessionInfoEntry{base,name}: SessionInfoEntry{reparentBase(base,parent),name}
+    case ContextEditEntry{base,target,change}: ContextEditEntry{reparentBase(base,parent),target,change}
 
 def replacePending(pending: List<&2,String>, +next: String, links: Map<&2,Maybe<&2,String>>) -> Map<&2,Maybe<&2,String>>:
   match pending:

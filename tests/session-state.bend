@@ -33,12 +33,13 @@ def append(state: State(), entry: C.E(), usage: Maybe<&2,Ai.Usage>, hook: Maybe<
     case S.SessionMessageEntry{base,message}: S.appendMessage(Unit,Unit,String,state,stamp(base),message)
     case S.ThinkingLevelChangeEntry{base,value}: S.appendThinkingLevelChange(Unit,Unit,String,state,stamp(base),value)
     case S.ModelChangeEntry{base,provider,model}: S.appendModelChange(Unit,Unit,String,state,stamp(base),provider,model)
-    case S.Compaction{S.CompactionEntry{base,summary,keep,tokens,_,_,_,_}}: S.appendCompaction(Unit,Unit,String,state,stamp(base),summary,keep,tokens,details,hook,usage)
+    case S.Compaction{S.CompactionEntry{base,summary,keep,tokens,_,_,_,_}}: S.appendCompaction(Unit,Unit,String,state,stamp(base),summary,Some{keep},tokens,details,hook,usage)
     case S.BranchSummaryEntry{+base,_,summary,_,_,_}: S.branchWithSummary(Unit,Unit,String,state,stamp(base),S.baseParent(base),summary,details,hook,usage)
     case S.CustomEntry{base,kind,data}: S.appendCustomEntry(Unit,Unit,String,state,stamp(base),kind,data)
     case S.CustomMessageEntry{base,kind,content,data,display}: S.appendCustomMessageEntry(Unit,Unit,String,state,stamp(base),kind,content,display,data)
     case S.LabelEntry{base,target,label}: S.appendLabelChange(Unit,Unit,String,state,stamp(base),target,label)
     case S.SessionInfoEntry{base,name}: S.appendSessionInfo(Unit,Unit,String,state,stamp(base),Maybe.default(&2,String,name,""))
+    case S.ContextEditEntry{base,target,change}: S.appendContextEdit(Unit,Unit,String,state,stamp(base),target,change)
 def appendParsed(state: State(), entry: Maybe<&2,C.E()>, usage: String, hook: String, details: String) -> StateResult():
   match entry:
     case None{}: Fail{S.InvalidMessage{}}
@@ -83,6 +84,8 @@ def body(entry: C.E()) -> String:
     case S.CustomMessageEntry{_,_,_,_,_}: "blocks"
     case S.LabelEntry{_,target,label}: "label:" ++ show(target) ++ ":" ++ opt(label)
     case S.SessionInfoEntry{_,name}: "info:" ++ opt(name)
+    case S.ContextEditEntry{_,target,None{}}: "edit:" ++ show(target) ++ ":omit"
+    case S.ContextEditEntry{_,target,Some{_}}: "edit:" ++ show(target) ++ ":replace"
 def entriesText(entries: List<&2,C.E()>, reversed: List<&2,String>) -> String:
   match entries:
     case Nil{}: String.join(List.reverse(&2,String,reversed),";")

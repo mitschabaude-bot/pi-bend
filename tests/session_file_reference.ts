@@ -26,6 +26,7 @@ function run(op:any):any{
   case 'appendCustomEntry':return {id:session.appendCustomEntry(op.customType,op.data)};
   case 'appendLabelChange':return {id:session.appendLabelChange(op.targetId,op.label)};
   case 'appendCompaction':return {id:session.appendCompaction(op.summary,op.firstKeptEntryId,op.tokensBefore)};
+  case 'appendContextEdit':return {id:session.appendContextEdit(op.targetId,op.replacement)};
   case 'branch':session.branch(op.id);return snapshot(session);
   case 'createBranchedSession':{const file=session.createBranchedSession(op.leafId??session.getLeafId());return {...shape(session),returned:file??null};}
   case 'snapshot':return snapshot(session);

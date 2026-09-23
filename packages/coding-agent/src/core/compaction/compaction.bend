@@ -14,6 +14,8 @@ import ../../../../runtime/src/string.bend as Set
 import ../messages.bend as Messages
 import ../session-manager.bend as S
 import ./utils.bend as Utils
+import ../../../../runtime/src/record.bend as Record
+import ../../../../ai/src/utils/schema-json.bend as SchemaJson
 
 # pi `compaction/compaction.ts`: context accounting, the cut point that
 # keeps recent turns, preparation of what to summarize, and the summary
@@ -78,13 +80,40 @@ def assistantChars(blocks: List<&2, Ai.AssistantContent<V.Value>>, chars: F64) -
     case Ai.AssistantThinking{Ai.ThinkingContent{thinking, _, _}} <> rest: assistantChars(rest, F.add(chars, Estimate.textChars(thinking)))
     case Ai.AssistantToolCall{Ai.ToolCall{_, name, arguments, _, _}} <> rest: assistantChars(rest, F.add(chars, F.add(Estimate.textChars(name), Estimate.textChars(Utils.jsonText(arguments)))))
 
+def textBlockChars(blocks: List<&2, Ai.TextContent>, chars: F64) -> F64:
+  match blocks:
+    case Nil{}: chars
+    case Ai.TextContent{text, _} <> rest: textBlockChars(rest, F.add(chars, Estimate.textChars(text)))
+
+def systemChars(content: Ai.SystemContent) -> F64:
+  match content:
+    case Ai.SystemText{text}: Estimate.textChars(text)
+    case Ai.SystemBlocks{blocks}: textBlockChars(blocks, zero())
+
+def sectionValueChars(sections: List<&2, Record.Property<Maybe<&2, String>>>, chars: F64) -> F64:
+  match sections:
+    case Nil{}: chars
+    case Record.Property{_, Some{text}} <> rest: sectionValueChars(rest, F.add(chars, Estimate.textChars(text)))
+    case _ <> rest: sectionValueChars(rest, chars)
+
+def sectionChars(sections: Maybe<&2, Record.Record<Maybe<&2, String>>>) -> F64:
+  match sections:
+    case Some{Record.Record{values}}: sectionValueChars(values, zero())
+    case None{}: zero()
+
+# The added tool declarations as JSON.stringify renders them.
+def toolsChars(tools: Maybe<&2, List<&2, Ai.Tool<V.Value>>>) -> F64:
+  match tools:
+    case None{}: zero()
+    case Some{values}: Estimate.textChars(Estimate.safeJsonStringify(Ai.JsonArray{Estimate.toolValues(~V.Value, ~SchemaJson.toJson, values)}))
+
 # Rough token count of one context message: characters over four, rounded up.
 def estimateTokens(-D: Data, -T: Data, -C: Data, message: Msg(D, T, C)) -> F64:
   match message:
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{content, _}}}: Estimate.tokensForChars(contentChars(content))
     case Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}}: Estimate.tokensForChars(assistantChars(content, zero()))
     case Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{_, _, content, _, _, _, _}}}: Estimate.tokensForChars(Estimate.blockChars(content, zero()))
-    case Agent.LlmMessage{Ai.System{_}}: zero()
+    case Agent.LlmMessage{Ai.System{Ai.SystemMessage{content, sections, added, _, _}}}: Estimate.tokensForChars(F.add(F.add(systemChars(content), sectionChars(sections)), toolsChars(added)))
     case Agent.CustomMessage{Messages.Custom{Messages.CustomMessage{_, content, _, _, _}}}: Estimate.tokensForChars(contentChars(content))
     case Agent.CustomMessage{Messages.BashExecution{Messages.BashExecutionMessage{command, output, _, _, _, _, _, _}}}: Estimate.tokensForChars(F.add(Estimate.textChars(command), Estimate.textChars(output)))
     case Agent.CustomMessage{Messages.BranchSummary{Messages.BranchSummaryMessage{summary, _, _}}}: Estimate.tokensForChars(Estimate.textChars(summary))
@@ -152,25 +181,36 @@ def anyCutPoint(-D: Data, -T: Data, -C: Data, messages: List<&2, Msg(D, T, C)>) 
     case Nil{}: False{}
     case message <> rest: Bool.pick(Unit -> Bool, isCutPointMessage(D, T, C, message), _ => True{}, _ => anyCutPoint(D, T, C, rest))(Unit{})
 
-def isCompactionEntry(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Bool:
-  match entry:
-    case S.Compaction{_}: True{}
-    case _: False{}
+def Projected(-D: Data, -T: Data, -C: Data) -> Data: S.ProjectedSessionEntry<D, T, C>
 
-def isTurnStartEntry(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Bool:
+def projectedMessages(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> List<&2, Msg(D, T, C)>:
   match entry:
-    case S.Compaction{_}: False{}
-    case other: anyTurnStart(D, T, C, contextMessages(D, T, C, other))
+    case S.ProjectedSessionEntry{_, messages}: messages
 
-def isCutPointEntry(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Bool:
+def projectedSource(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> Entry(D, T, C):
   match entry:
-    case S.Compaction{_}: False{}
-    case other: anyCutPoint(D, T, C, contextMessages(D, T, C, other))
+    case S.ProjectedSessionEntry{source, _}: source
+
+def isTurnStartEntry(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> Bool:
+  match entry:
+    case S.ProjectedSessionEntry{S.Compaction{_}, _}: False{}
+    case S.ProjectedSessionEntry{_, messages}: anyTurnStart(D, T, C, messages)
+
+def isCutPointEntry(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> Bool:
+  match entry:
+    case S.ProjectedSessionEntry{S.Compaction{_}, _}: False{}
+    case S.ProjectedSessionEntry{_, messages}: anyCutPoint(D, T, C, messages)
+
+# An unedited entry contributes its own context messages.
+def rawProjection(-D: Data, -T: Data, -C: Data, entries: List<&2, Entry(D, T, C)>) -> List<&2, Projected(D, T, C)>:
+  match entries:
+    case Nil{}: Nil{}
+    case +entry <> rest: S.ProjectedSessionEntry{entry, contextMessages(D, T, C, entry)} <> rawProjection(D, T, C, rest)
 
 type Indexed<-D: Data, -T: Data, -C: Data> is Data:
-  Indexed{index: Nat, entry: Entry(D, T, C)}
+  Indexed{index: Nat, entry: Projected(D, T, C)}
 
-def indexedFrom(-D: Data, -T: Data, -C: Data, entries: List<&2, Entry(D, T, C)>, +index: Nat) -> List<&2, Indexed<D, T, C>>:
+def indexedFrom(-D: Data, -T: Data, -C: Data, entries: List<&2, Projected(D, T, C)>, +index: Nat) -> List<&2, Indexed<D, T, C>>:
   match entries:
     case Nil{}: Nil{}
     case entry <> rest: Indexed{index, entry} <> indexedFrom(D, T, C, rest, Nat.add(index, 1n))
@@ -194,46 +234,123 @@ def findTurnStartIndex(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D
 type CutPointResult is Data:
   CutPointResult{firstKeptEntryIndex: Nat, turnStartIndex: Maybe<&2, Nat>, isSplitTurn: Bool}
 
-def entryTokens(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> F64:
-  estimateMessagesTokens(D, T, C, contextMessages(D, T, C, entry), zero())
+def entryTokens(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> F64:
+  estimateMessagesTokens(D, T, C, projectedMessages(D, T, C, entry), zero())
 
 def firstCutAtOrAfter(cutPoints: List<&2, Nat>, +index: Nat, fallback: Nat) -> Nat:
   match cutPoints:
     case Nil{}: fallback
     case +point <> rest: Bool.pick(Nat, Nat.is_lt(point, index), firstCutAtOrAfter(rest, index, fallback), point)
 
+# Where the backwards walk cut, and whether the recent budget was exceeded.
+type BudgetCut is Data:
+  BudgetCut{index: Nat, exceeded: Bool}
+
 # Walk the range backwards accumulating estimated tokens; the cut is the
 # first cut point at or after the entry that crosses the recent budget, or
 # the last cut point when trailing tool results alone exceed it.
-def accumulateCut(-D: Data, -T: Data, -C: Data, reversed: List<&2, Indexed<D, T, C>>, +accumulated: F64, +keepRecentTokens: F64, +cutPoints: List<&2, Nat>, +fallback: Nat) -> Nat:
+def accumulateCut(-D: Data, -T: Data, -C: Data, reversed: List<&2, Indexed<D, T, C>>, +accumulated: F64, +keepRecentTokens: F64, +cutPoints: List<&2, Nat>, +fallback: Nat) -> BudgetCut:
   match reversed:
-    case Nil{}: fallback
+    case Nil{}: BudgetCut{fallback, False{}}
     case Indexed{index, entry} <> +rest:
       +tokens = entryTokens(D, T, C, entry)
       +next = F.add(accumulated, tokens)
-      Bool.pick(Unit -> Nat, F.isEqual(F.compare(tokens, zero())), _ => accumulateCut(D, T, C, rest, accumulated, keepRecentTokens, cutPoints, fallback), _ => Bool.pick(Unit -> Nat, F.isAtLeast(F.compare(next, keepRecentTokens)), _ => firstCutAtOrAfter(cutPoints, index, Maybe.default(&2, Nat, List.last(&2, Nat, cutPoints), fallback)), _ => accumulateCut(D, T, C, rest, next, keepRecentTokens, cutPoints, fallback))(Unit{}))(Unit{})
+      Bool.pick(Unit -> BudgetCut, F.isEqual(F.compare(tokens, zero())), _ => accumulateCut(D, T, C, rest, accumulated, keepRecentTokens, cutPoints, fallback), _ => Bool.pick(Unit -> BudgetCut, F.isAtLeast(F.compare(next, keepRecentTokens)), _ => BudgetCut{firstCutAtOrAfter(cutPoints, index, Maybe.default(&2, Nat, List.last(&2, Nat, cutPoints), fallback)), True{}}, _ => accumulateCut(D, T, C, rest, next, keepRecentTokens, cutPoints, fallback))(Unit{}))(Unit{})
 
 def rangeReversed(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, +startIndex: Nat, +endIndex: Nat, +reversed: List<&2, Indexed<D, T, C>>) -> List<&2, Indexed<D, T, C>>:
   match indexed:
     case Nil{}: reversed
     case Indexed{+index, entry} <> rest: rangeReversed(D, T, C, rest, startIndex, endIndex, Bool.pick(List<&2, Indexed<D, T, C>>, within(startIndex, endIndex, index), Indexed{index, entry} <> reversed, reversed))
 
-def entryAt(-D: Data, -T: Data, -C: Data, entries: List<&2, Entry(D, T, C)>, index: Nat) -> Maybe<&2, Entry(D, T, C)>:
-  List.get(&2, Entry(D, T, C), entries, index)
+def range(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, +startIndex: Nat, +endIndex: Nat) -> List<&2, Projected(D, T, C)>:
+  match indexed:
+    case Nil{}: Nil{}
+    case Indexed{+index, entry} <> rest:
+      +tail = range(D, T, C, rest, startIndex, endIndex)
+      Bool.pick(List<&2, Projected(D, T, C)>, within(startIndex, endIndex, index), entry <> tail, tail)
 
-def keepsContext(-D: Data, -T: Data, -C: Data, previous: Maybe<&2, Entry(D, T, C)>) -> Bool:
+def entryAt(-D: Data, -T: Data, -C: Data, entries: List<&2, Projected(D, T, C)>, index: Nat) -> Maybe<&2, Projected(D, T, C)>:
+  List.get(&2, Projected(D, T, C), entries, index)
+
+def keepsContext(-D: Data, -T: Data, -C: Data, previous: Maybe<&2, Projected(D, T, C)>) -> Bool:
   match previous:
     case None{}: True{}
-    case Some{S.Compaction{_}}: True{}
-    case Some{entry}: Bool.not(List.is_empty(&2, Msg(D, T, C), contextMessages(D, T, C, entry)))
+    case Some{S.ProjectedSessionEntry{S.Compaction{_}, _}}: True{}
+    case Some{S.ProjectedSessionEntry{_, messages}}: Bool.not(List.is_empty(&2, Msg(D, T, C), messages))
 
 # Entries without context messages before the cut are kept too.
-def slideBack(-D: Data, -T: Data, -C: Data, fuel: Nat, +entries: List<&2, Entry(D, T, C)>, +cutIndex: Nat, +startIndex: Nat) -> Nat:
+def slideBack(-D: Data, -T: Data, -C: Data, fuel: Nat, +entries: List<&2, Projected(D, T, C)>, +cutIndex: Nat, +startIndex: Nat) -> Nat:
   match fuel:
     case 0n: cutIndex
     case 1n+rest: Bool.pick(Unit -> Nat, Bool.or(Bool.not(Nat.is_gt(cutIndex, startIndex)), keepsContext(D, T, C, entryAt(D, T, C, entries, Nat.sub(cutIndex, 1n)))), _ => cutIndex, _ => slideBack(D, T, C, rest, entries, Nat.sub(cutIndex, 1n), startIndex))(Unit{})
 
-def cutResult(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, cutEntry: Maybe<&2, Entry(D, T, C)>, +cutIndex: Nat, startIndex: Nat) -> CutPointResult:
+# A recovery attempt and its omission edits are invisible to the model after
+# the last visible input. The cut advances past that input only for a closed
+# suffix containing an omitted assistant attempt; metadata alone never moves
+# it past unsent input.
+def intrinsicallyVisible(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Bool:
+  match entry:
+    case S.ContextEditEntry{_, _, _}: False{}
+    case other: Bool.not(List.is_empty(&2, Msg(D, T, C), contextMessages(D, T, C, other)))
+
+def isOmitted(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> Bool:
+  match entry:
+    case S.ProjectedSessionEntry{source, messages}: Bool.and(intrinsicallyVisible(D, T, C, source), List.is_empty(&2, Msg(D, T, C), messages))
+
+def omittedIds(-D: Data, -T: Data, -C: Data, suffix: List<&2, Projected(D, T, C)>) -> List<&2, String>:
+  match suffix:
+    case Nil{}: Nil{}
+    case +entry <> rest:
+      +tail = omittedIds(D, T, C, rest)
+      Bool.pick(List<&2, String>, isOmitted(D, T, C, entry), S.entryId(D, T, C, projectedSource(D, T, C, entry)) <> tail, tail)
+
+def listed(ids: List<&2, String>, +id: String) -> Bool:
+  match ids:
+    case Nil{}: False{}
+    case head <> rest: String.eq(head, id) || listed(rest, id)
+
+def replacesOutside(-D: Data, -T: Data, -C: Data, +omitted: List<&2, String>, entry: Projected(D, T, C)) -> Bool:
+  match entry:
+    case S.ProjectedSessionEntry{S.ContextEditEntry{_, target, Some{_}}, _}: Bool.not(listed(omitted, target))
+    case _: False{}
+
+def hasExternalReplacement(-D: Data, -T: Data, -C: Data, suffix: List<&2, Projected(D, T, C)>, +omitted: List<&2, String>) -> Bool:
+  match suffix:
+    case Nil{}: False{}
+    case entry <> rest: replacesOutside(D, T, C, omitted, entry) || hasExternalReplacement(D, T, C, rest, omitted)
+
+def isAssistantEntry(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Bool:
+  match entry:
+    case S.SessionMessageEntry{_, Agent.LlmMessage{Ai.Assistant{_}}}: True{}
+    case _: False{}
+
+def isOmittedAssistant(-D: Data, -T: Data, -C: Data, +entry: Projected(D, T, C)) -> Bool:
+  isAssistantEntry(D, T, C, projectedSource(D, T, C, entry)) && isOmitted(D, T, C, entry)
+
+def hasOmittedAssistant(-D: Data, -T: Data, -C: Data, suffix: List<&2, Projected(D, T, C)>) -> Bool:
+  match suffix:
+    case Nil{}: False{}
+    case entry <> rest: isOmittedAssistant(D, T, C, entry) || hasOmittedAssistant(D, T, C, rest)
+
+def invisibleOrOmitted(-D: Data, -T: Data, -C: Data, +entry: Projected(D, T, C)) -> Bool:
+  match entry:
+    case S.ProjectedSessionEntry{S.Compaction{_}, _}: False{}
+    case S.ProjectedSessionEntry{+source, +messages}: Bool.or(Bool.not(intrinsicallyVisible(D, T, C, source)), isOmitted(D, T, C, S.ProjectedSessionEntry{source, messages}))
+
+def allInvisibleOrOmitted(-D: Data, -T: Data, -C: Data, suffix: List<&2, Projected(D, T, C)>) -> Bool:
+  match suffix:
+    case Nil{}: True{}
+    case entry <> rest: invisibleOrOmitted(D, T, C, entry) && allInvisibleOrOmitted(D, T, C, rest)
+
+def isRecoveryOmissionSuffix(-D: Data, -T: Data, -C: Data, +suffix: List<&2, Projected(D, T, C)>) -> Bool:
+  Bool.not(hasExternalReplacement(D, T, C, suffix, omittedIds(D, T, C, suffix))) && hasOmittedAssistant(D, T, C, suffix) && allInvisibleOrOmitted(D, T, C, suffix)
+
+def advancedCut(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, cut: BudgetCut, +endIndex: Nat) -> Nat:
+  match cut:
+    case BudgetCut{index, False{}}: index
+    case BudgetCut{+index, True{}}: Bool.pick(Nat, isRecoveryOmissionSuffix(D, T, C, range(D, T, C, indexed, Nat.add(index, 1n), endIndex)), Nat.add(index, 1n), index)
+
+def cutResult(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, cutEntry: Maybe<&2, Projected(D, T, C)>, +cutIndex: Nat, startIndex: Nat) -> CutPointResult:
   match cutEntry:
     case None{}: CutPointResult{cutIndex, None{}, False{}}
     case Some{entry}:
@@ -241,16 +358,88 @@ def cutResult(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>,
       +turnStart = Bool.pick(Maybe<&2, Nat>, startsTurn, None{}, findTurnStartIndex(D, T, C, indexed, cutIndex, startIndex, None{}))
       CutPointResult{cutIndex, turnStart, Bool.and(Bool.not(startsTurn), Bool.not(Maybe.is_none(&2, Nat, turnStart)))}
 
-def cutFrom(-D: Data, -T: Data, -C: Data, +entries: List<&2, Entry(D, T, C)>, +indexed: List<&2, Indexed<D, T, C>>, +startIndex: Nat, +endIndex: Nat, keepRecentTokens: F64, cutPoints: List<&2, Nat>) -> CutPointResult:
+def cutFrom(-D: Data, -T: Data, -C: Data, +entries: List<&2, Projected(D, T, C)>, +indexed: List<&2, Indexed<D, T, C>>, +startIndex: Nat, +endIndex: Nat, keepRecentTokens: F64, cutPoints: List<&2, Nat>) -> CutPointResult:
   match cutPoints:
     case Nil{}: CutPointResult{startIndex, None{}, False{}}
     case +first <> rest:
-      +cutIndex = slideBack(D, T, C, endIndex, entries, accumulateCut(D, T, C, rangeReversed(D, T, C, indexed, startIndex, endIndex, Nil{}), zero(), keepRecentTokens, first <> rest, first), startIndex)
+      +budget = accumulateCut(D, T, C, rangeReversed(D, T, C, indexed, startIndex, endIndex, Nil{}), zero(), keepRecentTokens, first <> rest, first)
+      +cutIndex = slideBack(D, T, C, endIndex, entries, advancedCut(D, T, C, indexed, budget, endIndex), startIndex)
       cutResult(D, T, C, indexed, entryAt(D, T, C, entries, cutIndex), cutIndex, startIndex)
 
-def findCutPoint(-D: Data, -T: Data, -C: Data, +entries: List<&2, Entry(D, T, C)>, +startIndex: Nat, +endIndex: Nat, keepRecentTokens: F64) -> CutPointResult:
+# The cut point over the projected entries: context edits change what each
+# entry contributes, so sizes, cut points and turn starts follow the edits.
+def findProjectedCutPoint(-D: Data, -T: Data, -C: Data, +entries: List<&2, Projected(D, T, C)>, +startIndex: Nat, +endIndex: Nat, keepRecentTokens: F64) -> CutPointResult:
   +indexed = indexedFrom(D, T, C, entries, 0n)
   cutFrom(D, T, C, entries, indexed, startIndex, endIndex, keepRecentTokens, findValidCutPoints(D, T, C, indexed, startIndex, endIndex))
+
+# Raw entries cut as their unedited projection.
+def findCutPoint(-D: Data, -T: Data, -C: Data, entries: List<&2, Entry(D, T, C)>, +startIndex: Nat, +endIndex: Nat, keepRecentTokens: F64) -> CutPointResult:
+  findProjectedCutPoint(D, T, C, rawProjection(D, T, C, entries), startIndex, endIndex, keepRecentTokens)
+
+# Projected estimate
+# ------------------
+
+# The raw entry whose projected messages hold the message at `index`.
+def entryHolding(-D: Data, -T: Data, -C: Data, entries: List<&2, Projected(D, T, C)>, +index: Nat) -> Maybe<&2, String>:
+  match entries:
+    case Nil{}: None{}
+    case S.ProjectedSessionEntry{source, messages} <> rest:
+      +count = List.length(&2, Msg(D, T, C), messages)
+      Bool.pick(Unit -> Maybe<&2, String>, Nat.is_lt(index, count), _ => Some{S.entryId(D, T, C, source)}, _ => entryHolding(D, T, C, rest, Nat.sub(index, count)))(Unit{})
+
+def branchIndexOf(-D: Data, -T: Data, -C: Data, entries: List<&2, Entry(D, T, C)>, +id: String, +index: Nat) -> Maybe<&2, Nat>:
+  match entries:
+    case Nil{}: None{}
+    case entry <> rest: Bool.pick(Unit -> Maybe<&2, Nat>, String.eq(S.entryId(D, T, C, entry), id), _ => Some{index}, _ => branchIndexOf(D, T, C, rest, id, Nat.add(index, 1n)))(Unit{})
+
+def invalidates(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Bool:
+  match entry:
+    case S.ContextEditEntry{_, _, _}: True{}
+    case S.Compaction{_}: True{}
+    case _: False{}
+
+def latestInvalidating(-D: Data, -T: Data, -C: Data, entries: List<&2, Entry(D, T, C)>, +index: Nat, found: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
+  match entries:
+    case Nil{}: found
+    case entry <> rest: latestInvalidating(D, T, C, rest, Nat.add(index, 1n), Bool.pick(Maybe<&2, Nat>, invalidates(D, T, C, entry), Some{index}, found))
+
+def after(usage: Maybe<&2, Nat>, latest: Maybe<&2, Nat>) -> Bool:
+  match usage latest:
+    case None{} _: False{}
+    case Some{_} None{}: True{}
+    case Some{u} Some{l}: Nat.is_gt(u, l)
+
+def nonSystemTokens(-D: Data, -T: Data, -C: Data, messages: List<&2, Msg(D, T, C)>, total: F64) -> F64:
+  match messages:
+    case Nil{}: total
+    case Agent.LlmMessage{Ai.System{_}} <> rest: nonSystemTokens(D, T, C, rest, total)
+    case message <> rest: nonSystemTokens(D, T, C, rest, F.add(total, estimateTokens(D, T, C, message)))
+
+def llmMessages(-D: Data, -T: Data, -C: Data, messages: List<&2, Msg(D, T, C)>) -> List<&2, Ai.Message<V.Value, V.Value, D, T>>:
+  match messages:
+    case Nil{}: Nil{}
+    case Agent.LlmMessage{value} <> rest: value <> llmMessages(D, T, C, rest)
+    case _ <> rest: llmMessages(D, T, C, rest)
+
+# Without trustworthy usage: the current system message and every other
+# message, estimated.
+def fullEstimate(-D: Data, -T: Data, -C: Data, +messages: List<&2, Msg(D, T, C)>) -> Estimate.ContextUsageEstimate:
+  +system = Maybe.default(&2, F64, Maybe.map(&2, Ai.SystemMessage<V.Value>, F64, value => estimateTokens(D, T, C, Agent.LlmMessage{Ai.System{value}}), Transcript.getCurrentSystemMessage(V.Value, V.Value, D, T, llmMessages(D, T, C, messages))), zero())
+  +tokens = nonSystemTokens(D, T, C, messages, system)
+  Estimate.ContextUsageEstimate{tokens, zero(), tokens, None{}}
+
+def trustedEstimate(-D: Data, -T: Data, -C: Data, estimate: Estimate.ContextUsageEstimate, +entries: List<&2, Projected(D, T, C)>, +messages: List<&2, Msg(D, T, C)>, +branchEntries: List<&2, Entry(D, T, C)>) -> Estimate.ContextUsageEstimate:
+  match estimate:
+    case Estimate.ContextUsageEstimate{_, _, _, None{}}: fullEstimate(D, T, C, messages)
+    case Estimate.ContextUsageEstimate{tokens, usageTokens, trailing, Some{+index}}:
+      +usageEntry = Maybe.bind(&2, String, Nat, entryHolding(D, T, C, entries, index), id => branchIndexOf(D, T, C, branchEntries, id, 0n))
+      Bool.pick(Unit -> Estimate.ContextUsageEstimate, after(usageEntry, latestInvalidating(D, T, C, branchEntries, 0n, None{})), _ => Estimate.ContextUsageEstimate{tokens, usageTokens, trailing, Some{index}}, _ => fullEstimate(D, T, C, messages))(Unit{})
+
+# Estimate projected context without trusting usage captured before a later
+# edit or compaction.
+def estimateProjectedContextTokens(-D: Data, -T: Data, -C: Data, projection: S.SessionProjection<D, T, C>, +branchEntries: List<&2, Entry(D, T, C)>) -> Estimate.ContextUsageEstimate:
+  match projection:
+    case S.SessionProjection{entries, +messages, _, _}: trustedEstimate(D, T, C, estimateContextTokens(D, T, C, messages), entries, messages, branchEntries)
 
 # Preparation
 # -----------
@@ -258,82 +447,57 @@ def findCutPoint(-D: Data, -T: Data, -C: Data, +entries: List<&2, Entry(D, T, C)
 type CompactionPreparation<-D: Data, -T: Data, -C: Data> is Data:
   CompactionPreparation{firstKeptEntryId: String, messagesToSummarize: List<&2, Msg(D, T, C)>, turnPrefixMessages: List<&2, Msg(D, T, C)>, isSplitTurn: Bool, tokensBefore: F64, previousSummary: Maybe<&2, String>, fileOps: Utils.FileOperations, settings: CompactionSettings}
 
-def lastCompactionIndex(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, found: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
-  match indexed:
-    case Nil{}: found
-    case Indexed{index, S.Compaction{_}} <> rest: lastCompactionIndex(D, T, C, rest, Some{index})
-    case _ <> rest: lastCompactionIndex(D, T, C, rest, found)
-
-def indexOfId(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, +id: String) -> Maybe<&2, Nat>:
-  match indexed:
-    case Nil{}: None{}
-    case Indexed{index, entry} <> rest: Bool.pick(Unit -> Maybe<&2, Nat>, String.eq(S.entryId(D, T, C, entry), id), _ => Some{index}, _ => indexOfId(D, T, C, rest, id))(Unit{})
-
-def compactionOf(-D: Data, -T: Data, -C: Data, entry: Maybe<&2, Entry(D, T, C)>) -> Maybe<&2, S.CompactionEntry<C>>:
-  match entry:
-    case Some{S.Compaction{value}}: Some{value}
-    case _: None{}
-
-def firstConversation(-D: Data, -T: Data, -C: Data, messages: List<&2, Msg(D, T, C)>) -> Maybe<&2, Msg(D, T, C)>:
+def conversationOnly(-D: Data, -T: Data, -C: Data, messages: List<&2, Msg(D, T, C)>) -> List<&2, Msg(D, T, C)>:
   match messages:
-    case Agent.LlmMessage{Ai.System{_}} <> _: None{}
-    case message <> _: Some{message}
-    case Nil{}: None{}
+    case Nil{}: Nil{}
+    case Agent.LlmMessage{Ai.System{_}} <> rest: conversationOnly(D, T, C, rest)
+    case message <> rest: message <> conversationOnly(D, T, C, rest)
 
-
-# The first context message of an entry, unless it is a system message.
-def messageForCompaction(-D: Data, -T: Data, -C: Data, entry: Entry(D, T, C)) -> Maybe<&2, Msg(D, T, C)>:
-  match entry:
-    case S.Compaction{_}: None{}
-    case other: firstConversation(D, T, C, contextMessages(D, T, C, other))
-
-def prependMaybe(-D: Data, -T: Data, -C: Data, message: Maybe<&2, Msg(D, T, C)>, rest: List<&2, Msg(D, T, C)>) -> List<&2, Msg(D, T, C)>:
-  match message:
-    case None{}: rest
-    case Some{value}: value <> rest
+# System messages are prompt state, not conversation; the compaction entry
+# carries their replay.
+def messagesForCompaction(-D: Data, -T: Data, -C: Data, entries: List<&2, Projected(D, T, C)>) -> List<&2, Msg(D, T, C)>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.ProjectedSessionEntry{S.Compaction{_}, _} <> rest: messagesForCompaction(D, T, C, rest)
+    case S.ProjectedSessionEntry{_, messages} <> rest: List.append(&2, Msg(D, T, C), conversationOnly(D, T, C, messages), messagesForCompaction(D, T, C, rest))
 
 def messagesInRange(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, +startIndex: Nat, +endIndex: Nat) -> List<&2, Msg(D, T, C)>:
+  messagesForCompaction(D, T, C, range(D, T, C, indexed, startIndex, endIndex))
+
+# The previous compaction is the projected one that contributes its summary.
+type Previous<-C: Data> is Data:
+  Previous{index: Nat, entry: S.CompactionEntry<C>}
+
+def previousCompaction(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>) -> Maybe<&2, Previous<C>>:
   match indexed:
-    case Nil{}: Nil{}
-    case Indexed{+index, entry} <> rest:
-      +tail = messagesInRange(D, T, C, rest, startIndex, endIndex)
-      Bool.pick(List<&2, Msg(D, T, C)>, within(startIndex, endIndex, index), prependMaybe(D, T, C, messageForCompaction(D, T, C, entry), tail), tail)
+    case Nil{}: None{}
+    case Indexed{index, S.ProjectedSessionEntry{S.Compaction{entry}, _ <> _}} <> _: Some{Previous{index, entry}}
+    case _ <> rest: previousCompaction(D, T, C, rest)
 
 def seededOps(details: Maybe<&2, CompactionDetails>) -> Utils.FileOperations:
   match details:
     case None{}: Utils.createFileOps()
     case Some{CompactionDetails{readFiles, modifiedFiles}}: Utils.FileOperations{Utils.insertAll(readFiles, Set.empty()), Set.empty(), Utils.insertAll(modifiedFiles, Set.empty())}
 
-def previousDetails(~C: Data, ~compactionDetails: C -> Maybe<&2, CompactionDetails>, previous: Maybe<&2, S.CompactionEntry<C>>) -> Maybe<&2, CompactionDetails>:
+def previousDetails(~C: Data, ~compactionDetails: C -> Maybe<&2, CompactionDetails>, previous: Maybe<&2, Previous<C>>) -> Maybe<&2, CompactionDetails>:
   match previous:
-    case Some{S.CompactionEntry{_, _, _, _, Some{details}, _, fromHook, _}}: Bool.pick(Maybe<&2, CompactionDetails>, Maybe.default(&2, Bool, fromHook, False{}), None{}, compactionDetails(details))
+    case Some{Previous{_, S.CompactionEntry{_, _, _, _, Some{details}, _, fromHook, _}}}: Bool.pick(Maybe<&2, CompactionDetails>, Maybe.default(&2, Bool, fromHook, False{}), None{}, compactionDetails(details))
     case _: None{}
 
-def previousSummaryOf(-C: Data, previous: Maybe<&2, S.CompactionEntry<C>>) -> Maybe<&2, String>:
+def previousSummaryOf(-C: Data, previous: Maybe<&2, Previous<C>>) -> Maybe<&2, String>:
   match previous:
-    case Some{S.CompactionEntry{_, summary, _, _, _, _, _, _}}: Some{summary}
+    case Some{Previous{_, S.CompactionEntry{_, summary, _, _, _, _, _, _}}}: Some{summary}
     case None{}: None{}
 
-def previousKept(-C: Data, previous: Maybe<&2, S.CompactionEntry<C>>) -> Maybe<&2, String>:
+# The projection has already selected the previous compaction's retained tail.
+def boundaryStartOf(-C: Data, previous: Maybe<&2, Previous<C>>) -> Nat:
   match previous:
-    case Some{S.CompactionEntry{_, _, firstKeptEntryId, _, _, _, _, _}}: Some{firstKeptEntryId}
-    case None{}: None{}
-
-def boundaryStartOf(previousIndex: Maybe<&2, Nat>, keptIndex: Maybe<&2, Nat>) -> Nat:
-  match previousIndex keptIndex:
-    case None{} _: 0n
-    case Some{_} Some{index}: index
-    case Some{index} None{}: Nat.add(index, 1n)
+    case None{}: 0n
+    case Some{Previous{index, _}}: Nat.add(index, 1n)
 
 def estimateTokensOf(estimate: Estimate.ContextUsageEstimate) -> F64:
   match estimate:
     case Estimate.ContextUsageEstimate{tokens, _, _, _}: tokens
-
-
-def contextTokensOf(-D: Data, -T: Data, -C: Data, context: Result<&2, &2, S.Error, S.SessionContext<D, T, C>>) -> F64:
-  match context:
-    case Done{S.SessionContext{messages, _, _}}: estimateTokensOf(estimateContextTokens(D, T, C, messages))
-    case Fail{_}: zero()
 
 def historyEndOf(cut: CutPointResult) -> Nat:
   match cut:
@@ -349,8 +513,8 @@ def prefixRange(cut: CutPointResult) -> Maybe<&2, Range>:
     case CutPointResult{firstKept, Some{turnStart}, True{}}: Some{Range{turnStart, firstKept}}
     case _: None{}
 
-def prefixMessages(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, range: Maybe<&2, Range>) -> List<&2, Msg(D, T, C)>:
-  match range:
+def prefixMessages(-D: Data, -T: Data, -C: Data, indexed: List<&2, Indexed<D, T, C>>, bounds: Maybe<&2, Range>) -> List<&2, Msg(D, T, C)>:
+  match bounds:
     case None{}: Nil{}
     case Some{Range{turnStart, firstKept}}: messagesInRange(D, T, C, indexed, turnStart, firstKept)
 
@@ -387,20 +551,28 @@ def isSplitOf(cut: CutPointResult) -> Bool:
   match cut:
     case CutPointResult{_, _, split}: split
 
-# upstream prepareCompaction: nothing to do right after a compaction or when
-# the recent window covers everything; the previous compaction's summary and
-# file lists seed the next one.
+def sourceId(-D: Data, -T: Data, -C: Data, entry: Projected(D, T, C)) -> String:
+  S.entryId(D, T, C, projectedSource(D, T, C, entry))
 
-def prepareFrom(~D: Data, ~T: Data, ~C: Data, ~compactionDetails: C -> Maybe<&2, CompactionDetails>, +entries: List<&2, Entry(D, T, C)>, +settings: CompactionSettings, +previous: Maybe<&2, S.CompactionEntry<C>>, previousIndex: Maybe<&2, Nat>) -> Maybe<&2, CompactionPreparation<D, T, C>>:
-  +indexed = indexedFrom(D, T, C, entries, 0n)
-  +boundaryStart = boundaryStartOf(previousIndex, Maybe.bind(&2, String, Nat, previousKept(C, previous), id => indexOfId(D, T, C, indexed, id)))
-  +boundaryEnd = List.length(&2, Entry(D, T, C), entries)
-  +cut = findCutPoint(D, T, C, entries, boundaryStart, boundaryEnd, keepRecentTokensOf(settings))
-  preparation(D, T, C, Maybe.map(&2, Entry(D, T, C), String, entry => S.entryId(D, T, C, entry), entryAt(D, T, C, entries, firstKeptIndexOf(cut))), messagesInRange(D, T, C, indexed, boundaryStart, historyEndOf(cut)), prefixMessages(D, T, C, indexed, prefixRange(cut)), isSplitOf(cut), contextTokensOf(D, T, C, S.contextFromPath(D, T, C, entries)), previousSummaryOf(C, previous), seededOps(previousDetails(~C, ~compactionDetails, previous)), settings)
+# upstream prepareCompaction over the canonical projection: nothing to do
+# right after a compaction or when the recent window covers everything; the
+# previous compaction's summary and file lists seed the next one.
+def prepareProjected(~D: Data, ~T: Data, ~C: Data, ~compactionDetails: C -> Maybe<&2, CompactionDetails>, +pathEntries: List<&2, Entry(D, T, C)>, +settings: CompactionSettings, +projection: S.SessionProjection<D, T, C>) -> Maybe<&2, CompactionPreparation<D, T, C>>:
+  match projection:
+    case S.SessionProjection{+entries, _, _, _}:
+      +indexed = indexedFrom(D, T, C, entries, 0n)
+      +previous = previousCompaction(D, T, C, indexed)
+      +boundaryStart = boundaryStartOf(C, previous)
+      +cut = findProjectedCutPoint(D, T, C, entries, boundaryStart, List.length(&2, Projected(D, T, C), entries), keepRecentTokensOf(settings))
+      preparation(D, T, C, Maybe.map(&2, Projected(D, T, C), String, entry => sourceId(D, T, C, entry), entryAt(D, T, C, entries, firstKeptIndexOf(cut))), messagesInRange(D, T, C, indexed, boundaryStart, historyEndOf(cut)), prefixMessages(D, T, C, indexed, prefixRange(cut)), isSplitOf(cut), estimateTokensOf(estimateProjectedContextTokens(D, T, C, projection, pathEntries)), previousSummaryOf(C, previous), seededOps(previousDetails(~C, ~compactionDetails, previous)), settings)
+
+def prepareFrom(~D: Data, ~T: Data, ~C: Data, ~compactionDetails: C -> Maybe<&2, CompactionDetails>, +pathEntries: List<&2, Entry(D, T, C)>, settings: CompactionSettings, projection: Result<&2, &2, S.Error, S.SessionProjection<D, T, C>>) -> Maybe<&2, CompactionPreparation<D, T, C>>:
+  match projection:
+    case Fail{_}: None{}
+    case Done{value}: prepareProjected(~D, ~T, ~C, ~compactionDetails, pathEntries, settings, value)
 
 def prepareCompaction(~D: Data, ~T: Data, ~C: Data, ~compactionDetails: C -> Maybe<&2, CompactionDetails>, +pathEntries: List<&2, Entry(D, T, C)>, settings: CompactionSettings) -> Maybe<&2, CompactionPreparation<D, T, C>>:
-  +previousIndex = lastCompactionIndex(D, T, C, indexedFrom(D, T, C, pathEntries, 0n), None{})
-  Bool.pick(Unit -> Maybe<&2, CompactionPreparation<D, T, C>>, lastIsCompaction(D, T, C, pathEntries), _ => None{}, _ => prepareFrom(~D, ~T, ~C, ~compactionDetails, pathEntries, settings, compactionOf(D, T, C, Maybe.bind(&2, Nat, Entry(D, T, C), previousIndex, index => entryAt(D, T, C, pathEntries, index))), previousIndex))(Unit{})
+  Bool.pick(Unit -> Maybe<&2, CompactionPreparation<D, T, C>>, lastIsCompaction(D, T, C, pathEntries), _ => None{}, _ => prepareFrom(~D, ~T, ~C, ~compactionDetails, pathEntries, settings, S.buildSessionProjection(D, T, C, pathEntries, S.Latest{})))(Unit{})
 
 # Summarization
 # -------------

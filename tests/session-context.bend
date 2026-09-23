@@ -65,6 +65,9 @@ def error(cause: S.Error) -> String:
     case S.LabelIdCount{}: "label-id-count"
     case S.Cycle{id}: "cycle:" ++ W.showText(id)
     case S.InvalidTimestamp{id,_}: "timestamp:" ++ W.showText(id)
+    case S.NotOnActiveBranch{id}: "off-branch:" ++ W.showText(id)
+    case S.NotEditable{id}: "not-editable:" ++ W.showText(id)
+    case S.UnfitContextEdit{id}: "unfit-edit:" ++ W.showText(id)
 def ids(values: List<&2,E()>, reversed: List<&2,String>) -> String:
   match values:
     case Nil{}: String.join(List.reverse(&2,String,reversed),";")
