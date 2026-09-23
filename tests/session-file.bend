@@ -1,6 +1,7 @@
 import Base
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/utils/json.bend as Render
+import ../packages/ai/src/utils/message-json.bend as Json
 import ../packages/ai/src/utils/schema-json.bend as SchemaJson
 import ../packages/agent/src/types.bend as Agent
 import ../packages/coding-agent/src/core/messages.bend as Messages
@@ -82,11 +83,11 @@ def line(value: V.Value) -> String:
   Maybe.default(&2, String, Render.stringify(SchemaJson.toJson(value)), "null")
 
 def errorLine(message: String) -> V.Value:
-  SJ.object(SJ.field("error", V.Text{message}, Nil{}))
+  Json.object(Json.field("error", V.Text{message}, Nil{}))
 
 def shape(+session: Session()) -> V.Value:
   +state = P.stateOf(Unit, Unit, V.Value, session)
-  SJ.object(SJ.field("sessionId", V.Text{S.getSessionId(Unit, Unit, V.Value, state)}, SJ.field("cwd", V.Text{P.getCwd(Unit, Unit, V.Value, session)}, SJ.field("sessionFile", nullable(P.getSessionFile(Unit, Unit, V.Value, session)), SJ.field("sessionDir", V.Text{P.getSessionDir(Unit, Unit, V.Value, session)}, SJ.field("persisted", V.Boolean{P.isPersisted(Unit, Unit, V.Value, session)}, SJ.field("entries", SJ.natural(List.length(&2, Entry(), S.getEntries(Unit, Unit, V.Value, state))), SJ.field("header", SJ.header(S.getHeader(Unit, Unit, V.Value, state)), Nil{}))))))))
+  Json.object(Json.field("sessionId", V.Text{S.getSessionId(Unit, Unit, V.Value, state)}, Json.field("cwd", V.Text{P.getCwd(Unit, Unit, V.Value, session)}, Json.field("sessionFile", nullable(P.getSessionFile(Unit, Unit, V.Value, session)), Json.field("sessionDir", V.Text{P.getSessionDir(Unit, Unit, V.Value, session)}, Json.field("persisted", V.Boolean{P.isPersisted(Unit, Unit, V.Value, session)}, Json.field("entries", Json.natural(List.length(&2, Entry(), S.getEntries(Unit, Unit, V.Value, state))), Json.field("header", SJ.header(S.getHeader(Unit, Unit, V.Value, state)), Nil{}))))))))
 
 def withReturned(+session: Session(), shaped: V.Value) -> V.Value:
   match shaped:
@@ -135,7 +136,7 @@ def treeOf(count: Nat, result: Result<&2, &2, S.Error, List<&2, S.SessionTreeNod
 def messageCount(result: Result<&2, &2, S.Error, S.SessionContext<Unit, Unit, V.Value>>) -> V.Value:
   match result:
     case Fail{_}: V.Null{}
-    case Done{S.SessionContext{messages, _, _}}: SJ.natural(List.length(&2, Agent.AgentMessage<Unit, Unit, Messages.CodingMessage<V.Value>>, messages))
+    case Done{S.SessionContext{messages, _, _}}: Json.natural(List.length(&2, Agent.AgentMessage<Unit, Unit, Messages.CodingMessage<V.Value>>, messages))
 
 def labelProperty(id: String, label: Maybe<&2, String>, +reversed: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
   match label:
@@ -150,12 +151,12 @@ def labelFields(ids: List<&2, String>, +state: State(), +reversed: List<&2, R.Pr
 def snapshot(+session: Session()) -> V.Value:
   +state = P.stateOf(Unit, Unit, V.Value, session)
   +entries = S.getEntries(Unit, Unit, V.Value, state)
-  SJ.object(SJ.field("sessionId", V.Text{S.getSessionId(Unit, Unit, V.Value, state)}, SJ.field("sessionFile", nullable(P.getSessionFile(Unit, Unit, V.Value, session)), SJ.field("cwd", V.Text{P.getCwd(Unit, Unit, V.Value, session)}, SJ.field("persisted", V.Boolean{P.isPersisted(Unit, Unit, V.Value, session)}, SJ.field("leafId", nullable(S.getLeafId(Unit, Unit, V.Value, state)), SJ.field("entries", V.ArrayValue{entryValues(entries)}, SJ.field("branch", idsOf(S.getBranch(Unit, Unit, V.Value, state, S.Latest{})), SJ.field("tree", treeOf(List.length(&2, Entry(), entries), S.getTree(Unit, Unit, V.Value, state)), SJ.field("context", idsOf(S.sessionContextEntries(Unit, Unit, V.Value, state)), SJ.field("messages", messageCount(S.sessionContext(Unit, Unit, V.Value, state)), SJ.field("labels", V.ObjectValue{R.Record{labelFields(entryIds(entries), state, Nil{})}}, SJ.field("name", nullable(S.getSessionName(Unit, Unit, V.Value, state)), Nil{})))))))))))))
+  Json.object(Json.field("sessionId", V.Text{S.getSessionId(Unit, Unit, V.Value, state)}, Json.field("sessionFile", nullable(P.getSessionFile(Unit, Unit, V.Value, session)), Json.field("cwd", V.Text{P.getCwd(Unit, Unit, V.Value, session)}, Json.field("persisted", V.Boolean{P.isPersisted(Unit, Unit, V.Value, session)}, Json.field("leafId", nullable(S.getLeafId(Unit, Unit, V.Value, state)), Json.field("entries", V.ArrayValue{entryValues(entries)}, Json.field("branch", idsOf(S.getBranch(Unit, Unit, V.Value, state, S.Latest{})), Json.field("tree", treeOf(List.length(&2, Entry(), entries), S.getTree(Unit, Unit, V.Value, state)), Json.field("context", idsOf(S.sessionContextEntries(Unit, Unit, V.Value, state)), Json.field("messages", messageCount(S.sessionContext(Unit, Unit, V.Value, state)), Json.field("labels", V.ObjectValue{R.Record{labelFields(entryIds(entries), state, Nil{})}}, Json.field("name", nullable(S.getSessionName(Unit, Unit, V.Value, state)), Nil{})))))))))))))
 
 def infoValue(info: S.SessionInfo) -> V.Value:
   match info:
     case S.SessionInfo{+path, +id, +cwd, +name, +parentSessionPath, +created, +modified, +messageCount, +firstMessage, +allMessagesText}:
-      SJ.object(SJ.field("path", V.Text{path}, SJ.field("id", V.Text{id}, SJ.field("cwd", V.Text{cwd}, SJ.field("name", nullable(name), SJ.field("parentSessionPath", nullable(parentSessionPath), SJ.field("created", V.Number{created}, SJ.field("modified", V.Number{modified}, SJ.field("messageCount", SJ.natural(messageCount), SJ.field("firstMessage", V.Text{firstMessage}, SJ.field("allMessagesText", V.Text{allMessagesText}, Nil{})))))))))))
+      Json.object(Json.field("path", V.Text{path}, Json.field("id", V.Text{id}, Json.field("cwd", V.Text{cwd}, Json.field("name", nullable(name), Json.field("parentSessionPath", nullable(parentSessionPath), Json.field("created", V.Number{created}, Json.field("modified", V.Number{modified}, Json.field("messageCount", Json.natural(messageCount), Json.field("firstMessage", V.Text{firstMessage}, Json.field("allMessagesText", V.Text{allMessagesText}, Nil{})))))))))))
 
 def infoValues(infos: List<&2, S.SessionInfo>) -> List<&2, V.Value>:
   match infos:
@@ -198,7 +199,7 @@ def replacedWithReturn(world: World, outcome: Outcome()) -> World & V.Value:
 def appended(world: World, outcome: P.Outcome(P.Appended<Unit, Unit, V.Value>), +timestamp: Maybe<&2, F64>) -> World & V.Value:
   match world outcome:
     case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
-    case World{_, agentDir, cwd} Done{P.Appended{session, +id}}: (World{Some{session}, agentDir, cwd}, SJ.object(SJ.field("id", V.Text{id}, SJ.optional("timestamp", Maybe.map(&2, F64, V.Value, time => V.Number{time}, timestamp), Nil{}))))
+    case World{_, agentDir, cwd} Done{P.Appended{session, +id}}: (World{Some{session}, agentDir, cwd}, Json.object(Json.field("id", V.Text{id}, Json.optional("timestamp", Maybe.map(&2, F64, V.Value, time => V.Number{time}, timestamp), Nil{}))))
 
 def modified(world: World, outcome: Outcome()) -> World & V.Value:
   match world outcome:
@@ -213,7 +214,7 @@ def restoredEntries(found: Maybe<&2, List<&2, V.Value>>) -> Maybe<&2, List<&2, S
 
 def migratedValues(migration: SJ.Migration) -> V.Value:
   match migration:
-    case SJ.Migration{_, values}: SJ.object(SJ.field("entries", V.ArrayValue{values}, Nil{}))
+    case SJ.Migration{_, values}: Json.object(Json.field("entries", V.ArrayValue{values}, Nil{}))
 
 def keep(world: World, result: V.Value) -> World & V.Value: (world, result)
 
@@ -267,7 +268,7 @@ def step(world: World, +fields: R.Record<V.Value>, +op: String) -> IO(World & V.
     case World{previous, +agentDir, +cwd} "load":
       do IO<World & V.Value>:
         entries : List<&2, S.FileEntry<Unit, Unit, V.Value>> <- P.loadEntriesFromFile(~Unit, ~Unit, ~V.Value, ~readUnit, ~readUnit, ~readSame, str(fields, "path"))
-        return (World{previous, agentDir, cwd}, SJ.object(SJ.field("entries", V.ArrayValue{fileEntryValues(entries)}, Nil{})))
+        return (World{previous, agentDir, cwd}, Json.object(Json.field("entries", V.ArrayValue{fileEntryValues(entries)}, Nil{})))
     case World{previous, +agentDir, +cwd} "open":
       do IO<World & V.Value>:
         outcome : Outcome() <- P.open(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, str(fields, "path"), opt(fields, "sessionDir"), opt(fields, "cwdOverride"), cwd)
@@ -291,19 +292,19 @@ def step(world: World, +fields: R.Record<V.Value>, +op: String) -> IO(World & V.
     case World{previous, +agentDir, +cwd} "findMostRecent":
       do IO<World & V.Value>:
         found : Maybe<&2, String> <- P.findMostRecentSession(str(fields, "dir"), opt(fields, "cwd"))
-        return (World{previous, agentDir, cwd}, SJ.object(SJ.field("path", nullable(found), Nil{})))
+        return (World{previous, agentDir, cwd}, Json.object(Json.field("path", nullable(found), Nil{})))
     case World{previous, +agentDir, +cwd} "findById":
       do IO<World & V.Value>:
         found : Maybe<&2, String> <- P.findById(str(fields, "cwd"), str(fields, "id"), opt(fields, "sessionDir"), agentDir)
-        return (World{previous, agentDir, cwd}, SJ.object(SJ.field("path", nullable(found), Nil{})))
+        return (World{previous, agentDir, cwd}, Json.object(Json.field("path", nullable(found), Nil{})))
     case World{previous, +agentDir, +cwd} "list":
       do IO<World & V.Value>:
         infos : List<&2, S.SessionInfo> <- P.list(str(fields, "cwd"), opt(fields, "sessionDir"), agentDir)
-        return (World{previous, agentDir, cwd}, SJ.object(SJ.field("sessions", V.ArrayValue{infoValues(infos)}, Nil{})))
+        return (World{previous, agentDir, cwd}, Json.object(Json.field("sessions", V.ArrayValue{infoValues(infos)}, Nil{})))
     case World{previous, +agentDir, +cwd} "listAll":
       do IO<World & V.Value>:
         infos : List<&2, S.SessionInfo> <- P.listAll(opt(fields, "sessionDir"), Path.join(agentDir, "sessions"))
-        return (World{previous, agentDir, cwd}, SJ.object(SJ.field("paths", V.ArrayValue{infoPaths(infos)}, Nil{})))
+        return (World{previous, agentDir, cwd}, Json.object(Json.field("paths", V.ArrayValue{infoPaths(infos)}, Nil{})))
     case World{previous, +agentDir, +cwd} "migrate":
       do IO<World & V.Value>:
         migration : SJ.Migration <- SJ.migrated(Maybe.default(&2, List<&2, V.Value>, valuesOf(value(fields, "entries")), Nil{}))
@@ -311,7 +312,7 @@ def step(world: World, +fields: R.Record<V.Value>, +op: String) -> IO(World & V.
     case World{previous, +agentDir, +cwd} "sleep":
       do IO<World & V.Value>:
         IO.sleep(U32.from_nat(num(fields, "ms")))
-        return (World{previous, agentDir, cwd}, SJ.object(Nil{}))
+        return (World{previous, agentDir, cwd}, Json.object(Nil{}))
     case current other: withSession(current, fields, other)
 
 def perform(+world: World, parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(World & V.Value):

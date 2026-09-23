@@ -1,4 +1,5 @@
 import Base
+import ../../../../ai/src/utils/message-json.bend as Json
 import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/schema-value.bend as V
@@ -11,8 +12,6 @@ import ./edit.bend as Edit
 import ./write.bend as Write
 import ./find.bend as Find
 import ./truncate.bend as Truncate
-import ../../../../runtime/src/record.bend as R
-import ../../../../runtime/src/f64.bend as F
 import ./file-mutation-queue.bend as Queue
 
 # The public coding tools behind one agent-tool type. Upstream erases each
@@ -339,16 +338,8 @@ def disposeTools(owners: List<&1, ToolOwner>) -> IO(Unit):
 # The JSON shape of each tool's details, as the tools' plain objects render
 # upstream; JSON events and session files share it.
 
-def jsonField(key: String, value: V.Value, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  R.Property{key, value} <> rest
 
-def jsonOptional(key: String, value: Maybe<&2, V.Value>, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  match value:
-    case None{}: rest
-    case Some{value}: R.Property{key, value} <> rest
 
-def jsonObject(fields: List<&2, R.Property<V.Value>>) -> V.Value: V.ObjectValue{R.Record{fields}}
-def jsonNatural(value: Nat) -> V.Value: V.Number{F.fromU32(U32.from_nat(value))}
 
 def limitValue(value: Maybe<&2, Truncate.Limit>) -> V.Value:
   match value:
@@ -359,33 +350,33 @@ def limitValue(value: Maybe<&2, Truncate.Limit>) -> V.Value:
 def truncationValue(value: Truncate.TruncationResult) -> V.Value:
   match value:
     case Truncate.TruncationResult{content, truncated, truncatedBy, totalLines, totalBytes, outputLines, outputBytes, lastLinePartial, firstLineExceedsLimit, maxLines, maxBytes}:
-      jsonObject(jsonField("content", V.Text{content}, jsonField("truncated", V.Boolean{truncated}, jsonField("truncatedBy", limitValue(truncatedBy), jsonField("totalLines", jsonNatural(totalLines), jsonField("totalBytes", jsonNatural(totalBytes), jsonField("outputLines", jsonNatural(outputLines), jsonField("outputBytes", jsonNatural(outputBytes), jsonField("lastLinePartial", V.Boolean{lastLinePartial}, jsonField("firstLineExceedsLimit", V.Boolean{firstLineExceedsLimit}, jsonField("maxLines", jsonNatural(maxLines), jsonField("maxBytes", jsonNatural(maxBytes), Nil{}))))))))))))
+      Json.object(Json.field("content", V.Text{content}, Json.field("truncated", V.Boolean{truncated}, Json.field("truncatedBy", limitValue(truncatedBy), Json.field("totalLines", Json.natural(totalLines), Json.field("totalBytes", Json.natural(totalBytes), Json.field("outputLines", Json.natural(outputLines), Json.field("outputBytes", Json.natural(outputBytes), Json.field("lastLinePartial", V.Boolean{lastLinePartial}, Json.field("firstLineExceedsLimit", V.Boolean{firstLineExceedsLimit}, Json.field("maxLines", Json.natural(maxLines), Json.field("maxBytes", Json.natural(maxBytes), Nil{}))))))))))))
 
 def readDetailsValue(value: Maybe<&2, Read.ReadToolDetails>) -> V.Value:
   match value:
-    case None{}: jsonObject(Nil{})
-    case Some{Read.ReadToolDetails{result}}: jsonObject(jsonField("truncation", truncationValue(result), Nil{}))
+    case None{}: Json.object(Nil{})
+    case Some{Read.ReadToolDetails{result}}: Json.object(Json.field("truncation", truncationValue(result), Nil{}))
 
 def bashDetailsValue(value: Maybe<&2, Bash.BashToolDetails>) -> V.Value:
   match value:
-    case None{}: jsonObject(Nil{})
-    case Some{Bash.BashToolDetails{result, fullOutputPath}}: jsonObject(jsonOptional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, result), jsonOptional("fullOutputPath", Maybe.map(&2, String, V.Value, path => V.Text{path}, fullOutputPath), Nil{})))
+    case None{}: Json.object(Nil{})
+    case Some{Bash.BashToolDetails{result, fullOutputPath}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, result), Json.optional("fullOutputPath", Maybe.map(&2, String, V.Value, path => V.Text{path}, fullOutputPath), Nil{})))
 
 def editDetailsValue(value: Edit.EditToolDetails) -> V.Value:
   match value:
-    case Edit.EditToolDetails{diff, patch, firstChangedLine}: jsonObject(jsonField("diff", V.Text{diff}, jsonField("patch", V.Text{patch}, jsonOptional("firstChangedLine", Maybe.map(&2, Nat, V.Value, jsonNatural, firstChangedLine), Nil{}))))
+    case Edit.EditToolDetails{diff, patch, firstChangedLine}: Json.object(Json.field("diff", V.Text{diff}, Json.field("patch", V.Text{patch}, Json.optional("firstChangedLine", Maybe.map(&2, Nat, V.Value, Json.natural, firstChangedLine), Nil{}))))
 
 def findDetailsValue(value: Maybe<&2, Find.FindToolDetails>) -> V.Value:
   match value:
     case None{}: V.Null{}
-    case Some{Find.FindToolDetails{cut, resultLimit}}: jsonObject(jsonOptional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), jsonOptional("resultLimitReached", Maybe.map(&2, Nat, V.Value, jsonNatural, resultLimit), Nil{})))
+    case Some{Find.FindToolDetails{cut, resultLimit}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("resultLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, resultLimit), Nil{})))
 
 def detailsValue(value: ToolDetails) -> V.Value:
   match value:
     case ReadDetails{details}: readDetailsValue(details)
     case BashDetails{details}: bashDetailsValue(details)
     case EditDetails{details}: editDetailsValue(details)
-    case WriteDetails{}: jsonObject(Nil{})
+    case WriteDetails{}: Json.object(Nil{})
     case FindDetails{details}: findDetailsValue(details)
     case RawDetails{raw}: raw
 

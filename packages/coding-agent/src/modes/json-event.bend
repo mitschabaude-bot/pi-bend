@@ -24,12 +24,7 @@ def SessionEvent() -> Data: Runner.RunEvent(Unit, Tools.ToolDetails, Custom())
 def Message() -> Data: Agent.AgentMessage<Unit, Tools.ToolDetails, Custom()>
 def ToolResult() -> Data: Agent.AgentToolResult<Tools.ToolDetails>
 
-def field(key: String, value: V.Value, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  R.Property{key, value} <> rest
 
-def object(fields: List<&2, R.Property<V.Value>>) -> V.Value: V.ObjectValue{R.Record{fields}}
-def text(value: String) -> V.Value: V.Text{value}
-def natural(value: Nat) -> V.Value: V.Number{F.fromU32(U32.from_nat(value))}
 
 def unitDetails(value: Unit) -> V.Value: V.Null{}
 def rawValue(value: V.Value) -> V.Value: value
@@ -54,7 +49,7 @@ def toolResults(values: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> Li
 
 def toolResult(value: ToolResult()) -> V.Value:
   match value:
-    case Agent.AgentToolResult{content, details, usage, terminate}: object(field("content", V.ArrayValue{Json.textImageContents(content)}, field("details", Tools.detailsValue(details), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optionalBoolean("terminate", terminate, Nil{})))))
+    case Agent.AgentToolResult{content, details, usage, terminate}: Json.object(Json.field("content", V.ArrayValue{Json.textImageContents(content)}, Json.field("details", Tools.detailsValue(details), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optionalBoolean("terminate", terminate, Nil{})))))
 
 # Streaming events without snapshots
 # ----------------------------------
@@ -82,42 +77,42 @@ def partialContent(partial: Ai.AssistantMessage<V.Value, Unit>) -> List<&2, Ai.A
 def toolcallStart(index: F64, call: Maybe<&2, Ai.ToolCall<V.Value>>) -> Result<&2, &2, String, V.Value>:
   match call:
     case None{}: Fail{"toolcall_start content at index " ++ Nat.show(indexOf(index)) ++ " is not a tool call"}
-    case Some{Ai.ToolCall{id, name, _, _, _}}: Done{object(field("type", text("toolcall_start"), field("contentIndex", V.Number{index}, field("id", text(id), field("toolName", text(name), Nil{})))))}
+    case Some{Ai.ToolCall{id, name, _, _, _}}: Done{Json.object(Json.field("type", Json.text("toolcall_start"), Json.field("contentIndex", V.Number{index}, Json.field("id", Json.text(id), Json.field("toolName", Json.text(name), Nil{})))))}
 
 def assistantMessageEvent(event: Ai.AssistantMessageEvent<V.Value, Unit>) -> Result<&2, &2, String, V.Value>:
   match event:
-    case Ai.Start{_}: Done{object(field("type", text("start"), Nil{}))}
-    case Ai.TextStart{index, _}: Done{object(field("type", text("text_start"), field("contentIndex", V.Number{index}, Nil{})))}
-    case Ai.TextDelta{index, delta, _}: Done{object(field("type", text("text_delta"), field("contentIndex", V.Number{index}, field("delta", text(delta), Nil{}))))}
-    case Ai.TextEnd{index, content, _}: Done{object(field("type", text("text_end"), field("contentIndex", V.Number{index}, field("content", text(content), Nil{}))))}
-    case Ai.ThinkingStart{index, _}: Done{object(field("type", text("thinking_start"), field("contentIndex", V.Number{index}, Nil{})))}
-    case Ai.ThinkingDelta{index, delta, _}: Done{object(field("type", text("thinking_delta"), field("contentIndex", V.Number{index}, field("delta", text(delta), Nil{}))))}
-    case Ai.ThinkingEnd{index, content, _}: Done{object(field("type", text("thinking_end"), field("contentIndex", V.Number{index}, field("content", text(content), Nil{}))))}
+    case Ai.Start{_}: Done{Json.object(Json.field("type", Json.text("start"), Nil{}))}
+    case Ai.TextStart{index, _}: Done{Json.object(Json.field("type", Json.text("text_start"), Json.field("contentIndex", V.Number{index}, Nil{})))}
+    case Ai.TextDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("text_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
+    case Ai.TextEnd{index, content, _}: Done{Json.object(Json.field("type", Json.text("text_end"), Json.field("contentIndex", V.Number{index}, Json.field("content", Json.text(content), Nil{}))))}
+    case Ai.ThinkingStart{index, _}: Done{Json.object(Json.field("type", Json.text("thinking_start"), Json.field("contentIndex", V.Number{index}, Nil{})))}
+    case Ai.ThinkingDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("thinking_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
+    case Ai.ThinkingEnd{index, content, _}: Done{Json.object(Json.field("type", Json.text("thinking_end"), Json.field("contentIndex", V.Number{index}, Json.field("content", Json.text(content), Nil{}))))}
     case Ai.ToolcallStart{+index, partial}: toolcallStart(index, toolCallAt(partialContent(partial), indexOf(index)))
-    case Ai.ToolcallDelta{index, delta, _}: Done{object(field("type", text("toolcall_delta"), field("contentIndex", V.Number{index}, field("delta", text(delta), Nil{}))))}
-    case Ai.ToolcallEnd{index, call, _}: Done{object(field("type", text("toolcall_end"), field("contentIndex", V.Number{index}, field("toolCall", Json.toolCall(call), Nil{}))))}
-    case Ai.StreamDone{reason, final}: Done{object(field("type", text("done"), field("reason", text(Json.doneReason(reason)), field("message", Json.assistantMessage(~Unit, ~unitDetails, final), Nil{}))))}
-    case Ai.StreamError{reason, failed}: Done{object(field("type", text("error"), field("reason", text(Json.errorReason(reason)), field("error", Json.assistantMessage(~Unit, ~unitDetails, failed), Nil{}))))}
+    case Ai.ToolcallDelta{index, delta, _}: Done{Json.object(Json.field("type", Json.text("toolcall_delta"), Json.field("contentIndex", V.Number{index}, Json.field("delta", Json.text(delta), Nil{}))))}
+    case Ai.ToolcallEnd{index, call, _}: Done{Json.object(Json.field("type", Json.text("toolcall_end"), Json.field("contentIndex", V.Number{index}, Json.field("toolCall", Json.toolCall(call), Nil{}))))}
+    case Ai.StreamDone{reason, final}: Done{Json.object(Json.field("type", Json.text("done"), Json.field("reason", Json.text(Json.doneReason(reason)), Json.field("message", Json.assistantMessage(~Unit, ~unitDetails, final), Nil{}))))}
+    case Ai.StreamError{reason, failed}: Done{Json.object(Json.field("type", Json.text("error"), Json.field("reason", Json.text(Json.errorReason(reason)), Json.field("error", Json.assistantMessage(~Unit, ~unitDetails, failed), Nil{}))))}
 
 def messageUpdate(message: Message(), event: Result<&2, &2, String, V.Value>) -> Result<&2, &2, String, V.Value>:
   match message event:
     case _ Fail{error}: Fail{error}
-    case Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}}} Done{value}: Done{object(field("type", text("message_update"), field("usage", Json.usage(usage), field("assistantMessageEvent", value, Nil{}))))}
+    case Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}}} Done{value}: Done{Json.object(Json.field("type", Json.text("message_update"), Json.field("usage", Json.usage(usage), Json.field("assistantMessageEvent", value, Nil{}))))}
     case _ Done{_}: Fail{"message_update message is not an assistant message"}
 
 # Events other than message_update pass through with their upstream shape.
 def toJsonEvent(event: SessionEvent()) -> Result<&2, &2, String, V.Value>:
   match event:
-    case Agent.AgentStart{}: Done{object(field("type", text("agent_start"), Nil{}))}
-    case Agent.AgentEnd{values}: Done{object(field("type", text("agent_end"), field("messages", V.ArrayValue{messages(values)}, Nil{})))}
-    case Agent.TurnStart{}: Done{object(field("type", text("turn_start"), Nil{}))}
-    case Agent.TurnEnd{value, results}: Done{object(field("type", text("turn_end"), field("message", message(value), field("toolResults", V.ArrayValue{toolResults(results)}, Nil{}))))}
-    case Agent.MessageStart{value}: Done{object(field("type", text("message_start"), field("message", message(value), Nil{})))}
+    case Agent.AgentStart{}: Done{Json.object(Json.field("type", Json.text("agent_start"), Nil{}))}
+    case Agent.AgentEnd{values}: Done{Json.object(Json.field("type", Json.text("agent_end"), Json.field("messages", V.ArrayValue{messages(values)}, Nil{})))}
+    case Agent.TurnStart{}: Done{Json.object(Json.field("type", Json.text("turn_start"), Nil{}))}
+    case Agent.TurnEnd{value, results}: Done{Json.object(Json.field("type", Json.text("turn_end"), Json.field("message", message(value), Json.field("toolResults", V.ArrayValue{toolResults(results)}, Nil{}))))}
+    case Agent.MessageStart{value}: Done{Json.object(Json.field("type", Json.text("message_start"), Json.field("message", message(value), Nil{})))}
     case Agent.MessageUpdate{value, assistantEvent}: messageUpdate(value, assistantMessageEvent(assistantEvent))
-    case Agent.MessageEnd{value}: Done{object(field("type", text("message_end"), field("message", message(value), Nil{})))}
-    case Agent.ToolExecutionStart{toolCallId, toolName, args}: Done{object(field("type", text("tool_execution_start"), field("toolCallId", text(toolCallId), field("toolName", text(toolName), field("args", args, Nil{})))))}
-    case Agent.ToolExecutionUpdate{toolCallId, toolName, args, partialResult}: Done{object(field("type", text("tool_execution_update"), field("toolCallId", text(toolCallId), field("toolName", text(toolName), field("args", args, field("partialResult", toolResult(partialResult), Nil{}))))))}
-    case Agent.ToolExecutionEnd{toolCallId, toolName, result, isError}: Done{object(field("type", text("tool_execution_end"), field("toolCallId", text(toolCallId), field("toolName", text(toolName), field("result", toolResult(result), field("isError", V.Boolean{isError}, Nil{}))))))}
+    case Agent.MessageEnd{value}: Done{Json.object(Json.field("type", Json.text("message_end"), Json.field("message", message(value), Nil{})))}
+    case Agent.ToolExecutionStart{toolCallId, toolName, args}: Done{Json.object(Json.field("type", Json.text("tool_execution_start"), Json.field("toolCallId", Json.text(toolCallId), Json.field("toolName", Json.text(toolName), Json.field("args", args, Nil{})))))}
+    case Agent.ToolExecutionUpdate{toolCallId, toolName, args, partialResult}: Done{Json.object(Json.field("type", Json.text("tool_execution_update"), Json.field("toolCallId", Json.text(toolCallId), Json.field("toolName", Json.text(toolName), Json.field("args", args, Json.field("partialResult", toolResult(partialResult), Nil{}))))))}
+    case Agent.ToolExecutionEnd{toolCallId, toolName, result, isError}: Done{Json.object(Json.field("type", Json.text("tool_execution_end"), Json.field("toolCallId", Json.text(toolCallId), Json.field("toolName", Json.text(toolName), Json.field("result", toolResult(result), Json.field("isError", V.Boolean{isError}, Nil{}))))))}
 
 # Session events
 # --------------
@@ -137,31 +132,31 @@ def reasonName(reason: Session.CompactionReason) -> String:
 
 def retrySource(source: Session.RetrySource) -> List<&2, R.Property<V.Value>>:
   match source:
-    case Session.BranchSummarySource{}: field("source", text("branchSummary"), Nil{})
-    case Session.CompactionSource{reason}: field("source", text("compaction"), field("reason", text(reasonName(reason)), Nil{}))
+    case Session.BranchSummarySource{}: Json.field("source", Json.text("branchSummary"), Nil{})
+    case Session.CompactionSource{reason}: Json.field("source", Json.text("compaction"), Json.field("reason", Json.text(reasonName(reason)), Nil{}))
 
 def compactionDetails(details: Compaction.CompactionDetails) -> V.Value:
   match details:
-    case Compaction.CompactionDetails{readFiles, modifiedFiles}: object(field("readFiles", V.ArrayValue{texts(readFiles)}, field("modifiedFiles", V.ArrayValue{texts(modifiedFiles)}, Nil{})))
+    case Compaction.CompactionDetails{readFiles, modifiedFiles}: Json.object(Json.field("readFiles", V.ArrayValue{texts(readFiles)}, Json.field("modifiedFiles", V.ArrayValue{texts(modifiedFiles)}, Nil{})))
 
 def compactionResult(result: Compaction.CompactionResult) -> V.Value:
   match result:
     case Compaction.CompactionResult{summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter, usage, details}:
-      object(field("summary", text(summary), field("firstKeptEntryId", text(firstKeptEntryId), field("tokensBefore", V.Number{tokensBefore}, Json.optional("estimatedTokensAfter", Maybe.map(&2, F64, V.Value, after => V.Number{after}, estimatedTokensAfter), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optional("details", Maybe.map(&2, Compaction.CompactionDetails, V.Value, compactionDetails, details), Nil{})))))))
+      Json.object(Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(firstKeptEntryId), Json.field("tokensBefore", V.Number{tokensBefore}, Json.optional("estimatedTokensAfter", Maybe.map(&2, F64, V.Value, after => V.Number{after}, estimatedTokensAfter), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optional("details", Maybe.map(&2, Compaction.CompactionDetails, V.Value, compactionDetails, details), Nil{})))))))
 
 def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, String, V.Value>:
   match event:
     case Session.AgentEvent{value}: toJsonEvent(value)
-    case Session.AgentEnd{values, willRetry}: Done{object(field("type", text("agent_end"), field("messages", V.ArrayValue{messages(values)}, field("willRetry", V.Boolean{willRetry}, Nil{}))))}
-    case Session.AgentSettled{}: Done{object(field("type", text("agent_settled"), Nil{}))}
-    case Session.QueueUpdate{steering, followUp}: Done{object(field("type", text("queue_update"), field("steering", V.ArrayValue{texts(steering)}, field("followUp", V.ArrayValue{texts(followUp)}, Nil{}))))}
-    case Session.SessionInfoChanged{name}: Done{object(field("type", text("session_info_changed"), Json.optionalText("name", name, Nil{})))}
-    case Session.ThinkingLevelChanged{level}: Done{object(field("type", text("thinking_level_changed"), field("level", text(Levels.name(level)), Nil{})))}
-    case Session.AutoRetryStart{attempt, maxAttempts, delayMs, errorMessage}: Done{object(field("type", text("auto_retry_start"), field("attempt", natural(attempt), field("maxAttempts", natural(maxAttempts), field("delayMs", V.Number{delayMs}, field("errorMessage", text(errorMessage), Nil{}))))))}
-    case Session.AutoRetryEnd{success, attempt, finalError}: Done{object(field("type", text("auto_retry_end"), field("success", V.Boolean{success}, field("attempt", natural(attempt), Json.optionalText("finalError", finalError, Nil{})))))}
-    case Session.CompactionStart{reason}: Done{object(field("type", text("compaction_start"), field("reason", text(reasonName(reason)), Nil{})))}
-    case Session.CompactionEnd{reason, result, aborted, willRetry, errorMessage}: Done{object(field("type", text("compaction_end"), field("reason", text(reasonName(reason)), Json.optional("result", Maybe.map(&2, Compaction.CompactionResult, V.Value, compactionResult, result), field("aborted", V.Boolean{aborted}, field("willRetry", V.Boolean{willRetry}, Json.optionalText("errorMessage", errorMessage, Nil{})))))))}
-    case Session.SummarizationRetryScheduled{attempt, maxAttempts, delayMs, errorMessage}: Done{object(field("type", text("summarization_retry_scheduled"), field("attempt", natural(attempt), field("maxAttempts", natural(maxAttempts), field("delayMs", V.Number{delayMs}, field("errorMessage", text(errorMessage), Nil{}))))))}
-    case Session.SummarizationRetryAttemptStart{source}: Done{object(field("type", text("summarization_retry_attempt_start"), retrySource(source)))}
-    case Session.SummarizationRetryFinished{}: Done{object(field("type", text("summarization_retry_finished"), Nil{}))}
+    case Session.AgentEnd{values, willRetry}: Done{Json.object(Json.field("type", Json.text("agent_end"), Json.field("messages", V.ArrayValue{messages(values)}, Json.field("willRetry", V.Boolean{willRetry}, Nil{}))))}
+    case Session.AgentSettled{}: Done{Json.object(Json.field("type", Json.text("agent_settled"), Nil{}))}
+    case Session.QueueUpdate{steering, followUp}: Done{Json.object(Json.field("type", Json.text("queue_update"), Json.field("steering", V.ArrayValue{texts(steering)}, Json.field("followUp", V.ArrayValue{texts(followUp)}, Nil{}))))}
+    case Session.SessionInfoChanged{name}: Done{Json.object(Json.field("type", Json.text("session_info_changed"), Json.optionalText("name", name, Nil{})))}
+    case Session.ThinkingLevelChanged{level}: Done{Json.object(Json.field("type", Json.text("thinking_level_changed"), Json.field("level", Json.text(Levels.name(level)), Nil{})))}
+    case Session.AutoRetryStart{attempt, maxAttempts, delayMs, errorMessage}: Done{Json.object(Json.field("type", Json.text("auto_retry_start"), Json.field("attempt", Json.natural(attempt), Json.field("maxAttempts", Json.natural(maxAttempts), Json.field("delayMs", V.Number{delayMs}, Json.field("errorMessage", Json.text(errorMessage), Nil{}))))))}
+    case Session.AutoRetryEnd{success, attempt, finalError}: Done{Json.object(Json.field("type", Json.text("auto_retry_end"), Json.field("success", V.Boolean{success}, Json.field("attempt", Json.natural(attempt), Json.optionalText("finalError", finalError, Nil{})))))}
+    case Session.CompactionStart{reason}: Done{Json.object(Json.field("type", Json.text("compaction_start"), Json.field("reason", Json.text(reasonName(reason)), Nil{})))}
+    case Session.CompactionEnd{reason, result, aborted, willRetry, errorMessage}: Done{Json.object(Json.field("type", Json.text("compaction_end"), Json.field("reason", Json.text(reasonName(reason)), Json.optional("result", Maybe.map(&2, Compaction.CompactionResult, V.Value, compactionResult, result), Json.field("aborted", V.Boolean{aborted}, Json.field("willRetry", V.Boolean{willRetry}, Json.optionalText("errorMessage", errorMessage, Nil{})))))))}
+    case Session.SummarizationRetryScheduled{attempt, maxAttempts, delayMs, errorMessage}: Done{Json.object(Json.field("type", Json.text("summarization_retry_scheduled"), Json.field("attempt", Json.natural(attempt), Json.field("maxAttempts", Json.natural(maxAttempts), Json.field("delayMs", V.Number{delayMs}, Json.field("errorMessage", Json.text(errorMessage), Nil{}))))))}
+    case Session.SummarizationRetryAttemptStart{source}: Done{Json.object(Json.field("type", Json.text("summarization_retry_attempt_start"), retrySource(source)))}
+    case Session.SummarizationRetryFinished{}: Done{Json.object(Json.field("type", Json.text("summarization_retry_finished"), Nil{}))}
 

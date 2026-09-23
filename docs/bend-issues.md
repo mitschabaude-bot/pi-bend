@@ -1075,3 +1075,7 @@ A project parser defect, not a compiler defect: decoding `"\\ud83d\\ude00"` buil
 ### BEND-019 recurrence: Input long-prefix rendering (2026-09-23)
 
 Input component validation using `build/bend-process-files/bend2/main.ts` again hit the hosted Base `String.take` stack ceiling on a 30,000-character prefix; native rendering passed. This is the previously diagnosed non-tail recursive prefix construction, not a new compiler investigation or a claim about the separately patched CLI toolchain above. Input uses a local tail-recursive prefix accumulator, preserving its full input range. The real 30,000-character paste/render/undo trace and a 10,000-mark grapheme pass Bun and optimized native one/four; see `tests/input.md`. No compiler patch was installed.
+
+### BEND-019 recurrence: session-file long-path case under the shared compiler (2026-09-23)
+
+`python3 tests/session_file_check.py --runner build/session-file.js` now fails on the file-operations scenario whose stored `cwd` is a very long path: the Bun runner exits with `bend: memory fault (machine stack overflow?)`. The committed tree (1b6b867) fails identically, so this is not caused by a source change; the shared checkout's compiler (`build/bend-process-files/bend2/main.ts`) lacks the JS explicit-stack patch that the earlier Bun pass used. Native one/four-thread runs pass all 370 operations. Classified as a BEND-019 recurrence (non-tail recursion in the JS lowering on long inputs); the frame was not instrumented this time. Regression command: the checker above with `--runner build/session-file.js`.

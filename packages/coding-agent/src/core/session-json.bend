@@ -19,23 +19,10 @@ import ./session-manager.bend as S
 
 def Decoded(-A: Data) -> Data: Result<&2, &2, Decode.Error, A>
 
-def field(key: String, value: V.Value, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  R.Property{key, value} <> rest
 
-def optional(key: String, +value: Maybe<&2, V.Value>, +rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  match value:
-    case None{}: rest
-    case Some{value}: R.Property{key, value} <> rest
 
-def object(fields: List<&2, R.Property<V.Value>>) -> V.Value: V.ObjectValue{R.Record{fields}}
-def text(value: String) -> V.Value: V.Text{value}
-def natural(value: Nat) -> V.Value: V.Number{F.fromU32(U32.from_nat(value))}
 
-def optionalText(key: String, value: Maybe<&2, String>, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  optional(key, Maybe.map(&2, String, V.Value, text, value), rest)
 
-def optionalBoolean(key: String, value: Maybe<&2, Bool>, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:
-  optional(key, Maybe.map(&2, Bool, V.Value, flag => V.Boolean{flag}, value), rest)
 
 def nullableText(+value: Maybe<&2, String>) -> V.Value:
   match value:
@@ -48,34 +35,34 @@ def nullableText(+value: Maybe<&2, String>) -> V.Value:
 def header(value: S.SessionHeader) -> V.Value:
   match value:
     case S.SessionHeader{version, id, timestamp, cwd, parentSession}:
-      object(field("type", text("session"), optional("version", Maybe.map(&2, Nat, V.Value, natural, version), field("id", text(id), field("timestamp", text(timestamp), field("cwd", text(cwd), optionalText("parentSession", parentSession, Nil{})))))))
+      Json.object(Json.field("type", Json.text("session"), Json.optional("version", Maybe.map(&2, Nat, V.Value, Json.natural, version), Json.field("id", Json.text(id), Json.field("timestamp", Json.text(timestamp), Json.field("cwd", Json.text(cwd), Json.optionalText("parentSession", parentSession, Nil{})))))))
 
 # Entry members shared by every entry type, in upstream's order.
 def based(kind: String, base: S.SessionEntryBase, rest: List<&2, R.Property<V.Value>>) -> V.Value:
   match base:
     case S.SessionEntryBase{id, parentId, timestamp}:
-      object(field("type", text(kind), field("id", text(id), field("parentId", nullableText(parentId), field("timestamp", text(timestamp), rest)))))
+      Json.object(Json.field("type", Json.text(kind), Json.field("id", Json.text(id), Json.field("parentId", nullableText(parentId), Json.field("timestamp", Json.text(timestamp), rest)))))
 
 # Upstream places custom entries' own members before the shared ones.
 def customBased(kind: String, own: List<&2, R.Property<V.Value>>, base: S.SessionEntryBase) -> V.Value:
   match base:
     case S.SessionEntryBase{id, parentId, timestamp}:
-      object(field("type", text(kind), List.append(&2, R.Property<V.Value>, own, field("id", text(id), field("parentId", nullableText(parentId), field("timestamp", text(timestamp), Nil{}))))))
+      Json.object(Json.field("type", Json.text(kind), List.append(&2, R.Property<V.Value>, own, Json.field("id", Json.text(id), Json.field("parentId", nullableText(parentId), Json.field("timestamp", Json.text(timestamp), Nil{}))))))
 
 def bashExecution(value: Messages.BashExecutionMessage) -> V.Value:
   match value:
     case Messages.BashExecutionMessage{command, output, exitCode, cancelled, truncated, fullOutputPath, timestamp, excludeFromContext}:
-      object(field("role", text("bashExecution"), field("command", text(command), field("output", text(output), optional("exitCode", Maybe.map(&2, U32, V.Value, code => V.Number{F.fromU32(code)}, exitCode), field("cancelled", V.Boolean{cancelled}, field("truncated", V.Boolean{truncated}, optionalText("fullOutputPath", fullOutputPath, field("timestamp", V.Number{timestamp}, optionalBoolean("excludeFromContext", excludeFromContext, Nil{}))))))))))
+      Json.object(Json.field("role", Json.text("bashExecution"), Json.field("command", Json.text(command), Json.field("output", Json.text(output), Json.optional("exitCode", Maybe.map(&2, U32, V.Value, code => V.Number{F.fromU32(code)}, exitCode), Json.field("cancelled", V.Boolean{cancelled}, Json.field("truncated", V.Boolean{truncated}, Json.optionalText("fullOutputPath", fullOutputPath, Json.field("timestamp", V.Number{timestamp}, Json.optionalBoolean("excludeFromContext", excludeFromContext, Nil{}))))))))))
 
 def codingMessage(~C: Data, ~custom: C -> V.Value, +value: Messages.CodingMessage<C>) -> V.Value:
   match value:
     case Messages.BashExecution{value}: bashExecution(value)
     case Messages.Custom{Messages.CustomMessage{customType, content, display, details, timestamp}}:
-      object(field("role", text("custom"), field("customType", text(customType), field("content", Json.userContent(content), field("display", V.Boolean{display}, optional("details", Maybe.map(&2, C, V.Value, custom, details), field("timestamp", V.Number{timestamp}, Nil{})))))))
+      Json.object(Json.field("role", Json.text("custom"), Json.field("customType", Json.text(customType), Json.field("content", Json.userContent(content), Json.field("display", V.Boolean{display}, Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Json.field("timestamp", V.Number{timestamp}, Nil{})))))))
     case Messages.BranchSummary{Messages.BranchSummaryMessage{summary, fromId, timestamp}}:
-      object(field("role", text("branchSummary"), field("summary", text(summary), field("fromId", nullableText(fromId), field("timestamp", V.Number{timestamp}, Nil{})))))
+      Json.object(Json.field("role", Json.text("branchSummary"), Json.field("summary", Json.text(summary), Json.field("fromId", nullableText(fromId), Json.field("timestamp", V.Number{timestamp}, Nil{})))))
     case Messages.CompactionSummary{Messages.CompactionSummaryMessage{summary, tokensBefore, timestamp}}:
-      object(field("role", text("compactionSummary"), field("summary", text(summary), field("tokensBefore", natural(tokensBefore), field("timestamp", V.Number{timestamp}, Nil{})))))
+      Json.object(Json.field("role", Json.text("compactionSummary"), Json.field("summary", Json.text(summary), Json.field("tokensBefore", Json.natural(tokensBefore), Json.field("timestamp", V.Number{timestamp}, Nil{})))))
 
 def agentMessage(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +value: Agent.AgentMessage<D, T, Messages.CodingMessage<C>>) -> V.Value:
   match value:
@@ -88,21 +75,21 @@ def usage(value: Maybe<&2, Ai.Usage>) -> Maybe<&2, V.Value>:
 def compaction(~C: Data, ~custom: C -> V.Value, value: S.CompactionEntry<C>) -> V.Value:
   match value:
     case S.CompactionEntry{base, summary, firstKeptEntryId, tokensBefore, details, usageValue, fromHook, systemMessage}:
-      based("compaction", base, field("summary", text(summary), field("firstKeptEntryId", text(firstKeptEntryId), field("tokensBefore", natural(tokensBefore), optional("details", Maybe.map(&2, C, V.Value, custom, details), optional("usage", usage(usageValue), optionalBoolean("fromHook", fromHook, optional("systemMessage", Maybe.map(&2, Ai.SystemMessage<V.Value>, V.Value, Json.systemMessage, systemMessage), Nil{}))))))))
+      based("compaction", base, Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(firstKeptEntryId), Json.field("tokensBefore", Json.natural(tokensBefore), Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Json.optional("usage", usage(usageValue), Json.optionalBoolean("fromHook", fromHook, Json.optional("systemMessage", Maybe.map(&2, Ai.SystemMessage<V.Value>, V.Value, Json.systemMessage, systemMessage), Nil{}))))))))
 
 def entry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +value: S.SessionEntry<D, T, C>) -> V.Value:
   match value:
-    case S.SessionMessageEntry{base, message}: based("message", base, field("message", agentMessage(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, message), Nil{}))
-    case S.ThinkingLevelChangeEntry{base, thinkingLevel}: based("thinking_level_change", base, field("thinkingLevel", text(thinkingLevel), Nil{}))
-    case S.ModelChangeEntry{base, provider, modelId}: based("model_change", base, field("provider", text(provider), field("modelId", text(modelId), Nil{})))
+    case S.SessionMessageEntry{base, message}: based("message", base, Json.field("message", agentMessage(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, message), Nil{}))
+    case S.ThinkingLevelChangeEntry{base, thinkingLevel}: based("thinking_level_change", base, Json.field("thinkingLevel", Json.text(thinkingLevel), Nil{}))
+    case S.ModelChangeEntry{base, provider, modelId}: based("model_change", base, Json.field("provider", Json.text(provider), Json.field("modelId", Json.text(modelId), Nil{})))
     case S.Compaction{value}: compaction(~C, ~custom, value)
     case S.BranchSummaryEntry{base, fromId, summary, details, usageValue, fromHook}:
-      based("branch_summary", base, field("fromId", text(fromId), field("summary", text(summary), optional("details", Maybe.map(&2, C, V.Value, custom, details), optional("usage", usage(usageValue), optionalBoolean("fromHook", fromHook, Nil{}))))))
-    case S.CustomEntry{base, customType, data}: customBased("custom", field("customType", text(customType), optional("data", Maybe.map(&2, C, V.Value, custom, data), Nil{})), base)
+      based("branch_summary", base, Json.field("fromId", Json.text(fromId), Json.field("summary", Json.text(summary), Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Json.optional("usage", usage(usageValue), Json.optionalBoolean("fromHook", fromHook, Nil{}))))))
+    case S.CustomEntry{base, customType, data}: customBased("custom", Json.field("customType", Json.text(customType), Json.optional("data", Maybe.map(&2, C, V.Value, custom, data), Nil{})), base)
     case S.CustomMessageEntry{base, customType, content, details, display}:
-      customBased("custom_message", field("customType", text(customType), field("content", Json.userContent(content), field("display", V.Boolean{display}, optional("details", Maybe.map(&2, C, V.Value, custom, details), Nil{})))), base)
-    case S.LabelEntry{base, targetId, label}: based("label", base, field("targetId", text(targetId), optionalText("label", label, Nil{})))
-    case S.SessionInfoEntry{base, name}: based("session_info", base, optionalText("name", name, Nil{}))
+      customBased("custom_message", Json.field("customType", Json.text(customType), Json.field("content", Json.userContent(content), Json.field("display", V.Boolean{display}, Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Nil{})))), base)
+    case S.LabelEntry{base, targetId, label}: based("label", base, Json.field("targetId", Json.text(targetId), Json.optionalText("label", label, Nil{})))
+    case S.SessionInfoEntry{base, name}: based("session_info", base, Json.optionalText("name", name, Nil{}))
 
 def fileEntry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +value: S.FileEntry<D, T, C>) -> V.Value:
   match value:
@@ -349,7 +336,7 @@ def parseSessionEntries(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> De
 # Older files are brought to the current version on their parsed JSON objects:
 # v1 → v2 adds id/parentId chains (and resolves compaction indices to ids),
 # v2 → v3 renames the hookMessage role to custom. Fresh ids come from the
-# caller, one per non-header object, as upstream draws them from randomUUID.
+# caller, one per non-header Json.object, as upstream draws them from randomUUID.
 
 def textField(found: Maybe<&2, V.Value>) -> String:
   match found:
@@ -389,7 +376,7 @@ def setField(value: V.Value, key: String, item: V.Value) -> V.Value:
 
 def versioned(heading: Bool, +value: V.Value, +version: Nat) -> V.Value:
   match heading:
-    case True{}: setField(value, "version", natural(version))
+    case True{}: setField(value, "version", Json.natural(version))
     case False{}: value
 
 def withVersion(+value: V.Value, version: Nat) -> V.Value: versioned(isHeader(value), value, version)
@@ -407,7 +394,7 @@ def applyIds(values: List<&2, V.Value>, assigned: List<&2, Maybe<&2, String>>, +
     case Nil{} _: List.reverse(&2, V.Value, reversed)
     case value <> rest Nil{}: applyIds(rest, Nil{}, previous, withVersion(value, 2n) <> reversed)
     case value <> rest None{} <> more: applyIds(rest, more, previous, withVersion(value, 2n) <> reversed)
-    case value <> rest Some{+id} <> more: applyIds(rest, more, Some{id}, setField(setField(value, "id", text(id)), "parentId", nullableText(previous)) <> reversed)
+    case value <> rest Some{+id} <> more: applyIds(rest, more, Some{id}, setField(setField(value, "id", Json.text(id)), "parentId", nullableText(previous)) <> reversed)
 
 def assignedAt(assigned: List<&2, Maybe<&2, String>>, index: Nat) -> Maybe<&2, String>:
   match assigned index:
@@ -423,7 +410,7 @@ def keptIndexField(found: Maybe<&2, V.Value>) -> Maybe<&2, Nat>:
 def keptEntryId(+fields: R.Record<V.Value>, found: Maybe<&2, String>) -> V.Value:
   match found:
     case None{}: V.ObjectValue{fields}
-    case Some{id}: V.ObjectValue{R.set(V.Value, fields, "firstKeptEntryId", text(id))}
+    case Some{id}: V.ObjectValue{R.set(V.Value, fields, "firstKeptEntryId", Json.text(id))}
 
 def resolvedIndex(+fields: R.Record<V.Value>, index: Maybe<&2, Nat>, assigned: List<&2, Maybe<&2, String>>) -> V.Value:
   match index:
@@ -450,7 +437,7 @@ def messageRole(fields: R.Record<V.Value>) -> String:
 def renamed(rename: Bool, +fields: R.Record<V.Value>) -> V.Value:
   match rename:
     case False{}: V.ObjectValue{fields}
-    case True{}: V.ObjectValue{R.set(V.Value, fields, "message", setField(Maybe.default(&2, V.Value, R.get(V.Value, fields, "message"), V.Null{}), "role", text("custom")))}
+    case True{}: V.ObjectValue{R.set(V.Value, fields, "message", setField(Maybe.default(&2, V.Value, R.get(V.Value, fields, "message"), V.Null{}), "role", Json.text("custom")))}
 
 def renamedRole(+value: V.Value) -> V.Value:
   renamed(String.eq(kindOf(value), "message") && String.eq(messageRole(fieldsOf(value)), "hookMessage"), fieldsOf(value))

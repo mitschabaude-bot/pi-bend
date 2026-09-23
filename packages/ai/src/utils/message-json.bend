@@ -21,6 +21,7 @@ def optional(key: String, value: Maybe<&2, V.Value>, rest: List<&2, R.Property<V
 def text(value: String) -> V.Value: V.Text{value}
 def number(value: F64) -> V.Value: V.Number{value}
 def boolean(value: Bool) -> V.Value: V.Boolean{value}
+def natural(value: Nat) -> V.Value: V.Number{U32.to_f64(U32.from_nat(value))}
 def object(fields: List<&2, R.Property<V.Value>>) -> V.Value: V.ObjectValue{R.Record{fields}}
 
 def optionalText(key: String, value: Maybe<&2, String>, rest: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<V.Value>>:

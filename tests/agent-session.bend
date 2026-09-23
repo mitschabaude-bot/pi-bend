@@ -21,6 +21,7 @@ import ../packages/coding-agent/src/core/session-manager.bend as S
 import ../packages/coding-agent/src/core/settings-manager.bend as Settings
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
+import ../packages/ai/src/utils/message-json.bend as Json
 
 # AgentSession scenarios over a faux provider that answers each request with
 # the next scripted text, as upstream's registerFauxProvider does. The
@@ -394,13 +395,13 @@ def retryScenario(+dir: String, agentDir: String, responses: String, cancel: Str
 # lets automatic compaction act on the prompts.
 def reportCompact(result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Unit):
   match result:
-    case Done{value}: printed(Done{JsonEvent.object(JsonEvent.field("type", JsonEvent.text("compact_result"), JsonEvent.field("result", JsonEvent.compactionResult(value), Nil{})))})
+    case Done{value}: printed(Done{Json.object(Json.field("type", Json.text("compact_result"), Json.field("result", JsonEvent.compactionResult(value), Nil{})))})
     case Fail{error}: IO.print("{\"type\":\"compact_failed\",\"error\":" ++ Decode.quote(error) ++ "}")
 
 def reportMessages(session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     current : List<&2, Session.Message()> <- Session.messages(session)
-    printed(Done{JsonEvent.object(JsonEvent.field("type", JsonEvent.text("messages"), JsonEvent.field("messages", V.ArrayValue{JsonEvent.messages(current)}, Nil{})))})
+    printed(Done{Json.object(Json.field("type", Json.text("messages"), Json.field("messages", V.ArrayValue{JsonEvent.messages(current)}, Nil{})))})
 
 def reportCompacting(session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
