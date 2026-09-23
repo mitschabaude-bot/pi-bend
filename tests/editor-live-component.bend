@@ -41,7 +41,7 @@ def runLoaded(words: Segmenter.Context) -> IO(Unit):
     +paint : Callback.Callback<String,String> <- Callback.create(~Unit,~String,~String,~identity,Unit{})
     +submit : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~submitted,output)
     editor : Editor.Editor <- Editor.new(Editor.EditorTheme{paint,Select.SelectListTheme{paint,paint,paint,paint,paint}},None{})
-    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{}}),words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
+    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{},None{}}),words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
     borrowed(Live.borrow(owner),rows,output)
     Callback.dispose(String,String,paint)
     Callback.dispose(String,Unit,submit)

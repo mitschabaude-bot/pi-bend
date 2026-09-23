@@ -93,6 +93,15 @@ def textState(state: State) -> IO(State & String):
 def text(handle: Handle) -> IO(String):
   match handle:
     case Handle{resource}: Serial.run(State,String,resource,textState)
+def setTextState(state: State,value: String) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      do IO<State & Unit>:
+        next : Editor.Editor <- Editor.setText(editor,value)
+        return (State{next,words,bindings,keyboard,rows,error},Unit{})
+def setText(handle: Handle,value: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => setTextState(state,value))
 
 def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<State>) -> IO(Owner):
   match pair:

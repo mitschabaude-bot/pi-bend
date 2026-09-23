@@ -1454,6 +1454,22 @@ def queue(session: AgentSession, behavior: StreamingBehavior, text: String, imag
 def steer(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, Steer{}, text, images)
 def followUp(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, FollowUp{}, text, images)
 
+type QueuedMessages is Data:
+  QueuedMessages{steering: List<&2, String>, followUp: List<&2, String>}
+def clearedQueues(state: Shared) -> Shared & QueuedMessages:
+  match state:
+    case Shared{session, steering, following, listeners, active, lastAssistant, retry, compaction}:
+      (Shared{session, Nil{}, Nil{}, listeners, active, lastAssistant, retry, compaction}, QueuedMessages{steering, following})
+def clearQueue(session: AgentSession) -> IO(QueuedMessages):
+  match session:
+    case AgentSession{+agent, +shared, _, _, _, _}:
+      do IO<QueuedMessages>:
+        cleared : QueuedMessages <- R.modify(Shared, QueuedMessages, shared, clearedQueues)
+        Agent.clearSteeringQueue(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.clearFollowUpQueue(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        emitQueueUpdate(shared)
+        return cleared
+
 def promptWhile(session: AgentSession, streaming: Bool, +text: String, +images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
   match streaming behavior:
     case False{} _: runAgentPrompt(session, text, images)

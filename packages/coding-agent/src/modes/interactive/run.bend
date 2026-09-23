@@ -3,6 +3,7 @@ import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/deferred.bend as Deferred
+import ../../../../runtime/src/date.bend as Date
 import ../../../../runtime/src/filesystem.bend as Filesystem
 import ../../../../runtime/src/f64.bend as F
 import ../../../../runtime/src/posix-path.bend as Path
@@ -23,6 +24,7 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
 import ./theme/color.bend as Color
 import ./theme/markdown-theme.bend as MarkdownTheme
@@ -216,13 +218,76 @@ type ThemeStartup is Data:
   ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,setting: Maybe<&2,String>,builtinDir: String,customDir: String}
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
+type Interaction is Data:
+  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>}
 type ThemeContext is Data:
-  ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,setting: Maybe<&2,String>,builtinDir: String,customDir: String}
+  ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,setting: Maybe<&2,String>,builtinDir: String,customDir: String,interaction: Interaction}
+type KeyInput is Data:
+  KeyInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,lastClear: Ref.Ref<Maybe<&2,F64>>}
+type ControlSink is Data:
+  ControlSink{editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
-  match context: case ThemeContext{theme,_,_,_,_}: theme
+  match context: case ThemeContext{theme,_,_,_,_,_}: theme
+def contextInteraction(context: ThemeContext) -> Interaction:
+  match context: case ThemeContext{_,_,_,_,_,interaction}: interaction
+def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
+  match interaction: case Interaction{_,lastClear}: lastClear
+def recordEditor(interaction: Interaction,handle: Live.Handle) -> IO(Unit):
+  match interaction: case Interaction{editor,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+def keyControl(input: KeyInput,control: Controller.Control) -> IO(Unit):
+  match input:
+    case KeyInput{queue,_,failure,_}:
+      do IO<Unit>:
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitControl(queue,control)
+        Interactive.submittedResult(failure,result)
+def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) -> IO(Unit):
+  match previous:
+    case Some{earlier}: Bool.pick(Unit -> IO(Unit),F64.is_lt(F.subtract(now,earlier),U32.to_f64(500)),_ => do IO<Unit>:
+      settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
+      return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{})
+    case None{}: IO.pure(Unit,Unit{})
+def cleared(input: KeyInput) -> IO(Unit):
+  match input:
+    case KeyInput{_,stop,_,lastClear}:
+      do IO<Unit>:
+        +now : F64 <- Date.now()
+        previous : Maybe<&2,F64> <- Ref.swap(Maybe<&2,F64>,lastClear,Some{now})
+        doubleClear(previous,now,stop)
+def queuedFollowUp(input: KeyInput,+text: String) -> IO(Unit):
+  match input:
+    case KeyInput{queue,_,failure,_}:
+      Bool.pick(Unit -> IO(Unit),String.is_empty(text),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submit(queue,Controller.Submission{text,Nil{},Some{Session.FollowUp{}}})
+        Interactive.submittedResult(failure,result))(Unit{})
+def keyAction(input: KeyInput,action: Editor.EditorAction) -> IO(Unit):
+  match action:
+    case Editor.Interrupt{text}: keyControl(input,Controller.Interrupt{text})
+    case Editor.Dequeue{text}: keyControl(input,Controller.Dequeue{text})
+    case Editor.Clear{}: cleared(input)
+    case Editor.FollowUp{text}: queuedFollowUp(input,text)
+def changedEditor(target: Maybe<&2,Live.Handle>,value: String,count: Nat) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}: Bool.pick(Unit -> IO(Unit),Nat.is_gt(count,0n),_ => Live.setText(handle,value),_ => IO.pure(Unit,Unit{}))(Unit{})
+def controlResult(sink: ControlSink,result: Controller.ControlResult) -> IO(Unit):
+  match sink result:
+    case ControlSink{editor,failure,redraw} Controller.ControlResult{text,+total}:
+      do IO<Unit>:
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        changedEditor(target,text,total)
+        message : String <- IO.pure(String,Bool.pick(String,Nat.is_eq(total,0n),"No queued messages to restore","Restored " ++ Nat.show(total) ++ Bool.pick(String,Nat.is_eq(total,1n)," queued message"," queued messages") ++ " to editor"))
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
+        Interactive.requestRender(redraw)
+def disposeInteraction(interaction: Interaction) -> IO(Unit):
+  match interaction:
+    case Interaction{editor,lastClear}:
+      do IO<Unit>:
+        oldEditor : Maybe<&2,Live.Handle> <- Ref.dispose(Maybe<&2,Live.Handle>,editor)
+        oldClear : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastClear)
+        return Unit{}
 def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
   match context:
-    case ThemeContext{theme,transcript,setting,builtinDir,customDir}:
+    case ThemeContext{theme,transcript,setting,builtinDir,customDir,_}:
       ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,setting,builtinDir,customDir}
 def selectionTheme(value: ThemeController.Selection) -> Theme.Theme:
   match value: case ThemeController.Selection{_,_,_,theme,_,_,_}: theme
@@ -329,7 +394,7 @@ def processEditor(view: View.View,editorComponent: Component.Component,foot: Foo
   processEditorBorrowed(View.borrow(view),editorComponent,foot,stopped,redraw,queue,initial,context)
 def process(view: View.View,editor: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   processEditor(view,editor,foot,stopped,redraw,queue,initial,context)
-def finish(outcome: View.View & Result<&2,&2,Error,Unit>,controller: Controller.Controller,transcript: Transcript.Owner,live: Live.Owner,foot: FooterOwner,submitted: Callback.Callback<String,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,stopped: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def finish(outcome: View.View & Result<&2,&2,Error,Unit>,controller: Controller.Controller,transcript: Transcript.Owner,live: Live.Owner,foot: FooterOwner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,stopped: Deferred.Deferred<Unit>,interaction: Interaction) -> IO(Result<&2,&2,Error,Unit>):
   match outcome:
     case (view,result):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -339,28 +404,32 @@ def finish(outcome: View.View & Result<&2,&2,Error,Unit>,controller: Controller.
         Live.dispose(live)
         disposeFooter(foot)
         Callback.dispose(String,Unit,submitted)
+        Callback.dispose(Editor.EditorAction,Unit,keys)
         Callback.dispose(String,String,paint)
         MarkdownTheme.dispose(styles)
         oldRows : Nat <- Ref.dispose(Nat,rows)
         oldRedraw : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
         Deferred.dispose(Unit,stopped)
+        disposeInteraction(interaction)
         return result
 
-def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,view: View.View,+foot: FooterOwner,controller: Controller.Controller,queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,view: View.View,+foot: FooterOwner,controller: Controller.Controller,queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
-    case (live,component,_):
+    case (live,component,handle):
       do IO<Result<&2,&2,Error,Unit>>:
+        recordEditor(contextInteraction(context),handle)
         outcome : View.View & Result<&2,&2,Error,Unit> <- process(view,component,foot,stopped,redraw,queue,initial,context)
-        finish(outcome,controller,transcript,live,foot,submitted,paint,styles,rows,redraw,stopped)
-def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,foot: FooterOwner,words: Words.Context,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+        finish(outcome,controller,transcript,live,foot,submitted,keys,paint,styles,rows,redraw,stopped,contextInteraction(context))
+def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (paint,uiTheme):
       do IO<Result<&2,&2,Error,Unit>>:
         editor : Editor.Editor <- Editor.new(uiTheme,None{})
-        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submitted},None{}}))
+        +keys : Callback.Callback<Editor.EditorAction,Unit> <- Callback.create(~KeyInput,~Editor.EditorAction,~Unit,~keyAction,KeyInput{queue,stopped,footerFailure(foot),lastClearOf(contextInteraction(context))})
+        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submitted},None{},Some{keys}}))
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
-        live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
-        runLive(Live.borrow(live),view,foot,controller,queue,transcript,submitted,paint,styles,rows,redraw,stopped,initial,context)
+        live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
+        runLive(Live.borrow(live),view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
 def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (controller,+queue):
@@ -381,8 +450,11 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot)})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{footerFailure(foot),redraw})
         commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~Interactive.CommandSink,~Commands.Action,~Unit,~Interactive.commandResult,Interactive.CommandSink{footerFailure(foot),redraw})
-        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver},Some{commandObserver})
-        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,setting,builtinDir,customDir})
+        +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
+        +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
+        controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,footerFailure(foot),redraw})
+        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver})
+        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,setting,builtinDir,customDir,Interaction{editorHandle,lastClear}})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live}:
