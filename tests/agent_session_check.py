@@ -66,6 +66,24 @@ def main():
     kinds = [e for e in events if e['type'] == 'entries'][0]['kinds']
     assert kinds == ['thinking_level_change:off', 'model_change:faux/faux-model', 'session_info:title'], kinds
     checks += 5
+    # while the first request is held open, prompt() without a behavior is refused; steer/followUp queue and are delivered after the turn and after the run (agent-session-concurrent; agent-session-prompt; agent-session-queue)
+    events = run(runner, args.threads, 'busy', work)
+    streaming = [e['value'] for e in events if e['type'] == 'streaming']
+    assert streaming == [True, False], streaming
+    refused = [e for e in events if e['type'] == 'prompt_while_streaming'][0]
+    assert refused['ok'] is False and refused['error'] == "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.", refused
+    assert [e['ok'] for e in events if e['type'] in ('steer_while_streaming', 'follow_up_while_streaming')] == [True, True]
+    updates = [(e['steering'], e['followUp']) for e in events if e['type'] == 'queue_update']
+    assert updates == [(['steered'], []), (['steered'], ['later']), ([], ['later']), ([], [])], updates
+    starts = [e['message']['content'][0]['text'] for e in events if e['type'] == 'message_start' and e['message']['role'] == 'user']
+    assert starts == ['hello', 'steered', 'later'], starts
+    ends = [e['message']['content'][0]['text'] for e in events if e['type'] == 'message_end' and e['message']['role'] == 'assistant']
+    assert ends == ['answer', 'again', 'finally'], ends
+    order = [e['type'] for e in events if e['type'] in ('turn_start', 'turn_end', 'prompt_while_streaming', 'agent_end', 'prompt_done')]
+    assert order == ['turn_start', 'prompt_while_streaming', 'turn_end', 'turn_start', 'turn_end', 'turn_start', 'turn_end', 'agent_end', 'prompt_done'], order
+    session = [e for e in events if e['type'] == 'session'][0]
+    assert session['entries'] == 6, session
+    checks += 8
     print('agent-session: %d checks passed' % checks)
 
 if __name__ == '__main__':

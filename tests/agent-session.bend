@@ -29,8 +29,28 @@ def Input() -> Data: T.StreamInput<Unit, Tools.ToolDetails, Runtime.LoopConfig()
 def Output() -> Type: Result<&2, &1, Tools.ToolError, T.StreamLease<Unit, Tools.ToolError>>
 def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
 
+# A gate holds one request open: the provider reports `started` and waits
+# for `release`, which keeps the session streaming for the busy scenario.
+type Gate is Data:
+  Gate{started: Chan(Unit), release: Chan(Unit)}
+
 type Faux is Data:
-  Faux{responses: R.Ref<List<&2, String>>, streams: R.Ref<List<&2, EventStream()>>}
+  Faux{responses: R.Ref<List<&2, String>>, streams: R.Ref<List<&2, EventStream()>>, gates: R.Ref<List<&2, Gate>>}
+
+def popGate(gates: List<&2, Gate>) -> List<&2, Gate> & Maybe<&2, Gate>:
+  match gates:
+    case Nil{}: (Nil{}, None{})
+    case gate <> rest: (rest, Some{gate})
+
+def holdAt(gate: Maybe<&2, Gate>) -> IO(Unit):
+  match gate:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{Gate{started, release}}:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        R.requireSent(sent)
+        released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return Unit{}
 
 def fauxModel() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"faux-model", "Faux", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Nil{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
@@ -48,8 +68,10 @@ def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, Unit>) 
 
 def provider(faux: Faux, input: Input()) -> IO(Output()):
   match faux:
-    case Faux{responses, streams}:
+    case Faux{responses, streams, gates}:
       do IO<Output()>:
+        gate : Maybe<&2, Gate> <- R.modify(List<&2, Gate>, Maybe<&2, Gate>, gates, remaining => popGate(remaining))
+        holdAt(gate)
         +text : String <- R.modify(List<&2, String>, String, responses, remaining => popResponse(remaining))
         +now : F64 <- Date.now()
         +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
@@ -92,11 +114,12 @@ def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) ->
   match pair:
     case Tuple{_, manager}: manager
 
-def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>) -> IO(Fixture):
+def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
   do IO<Fixture>:
     +responseRef : R.Ref<List<&2, String>> <- R.new(List<&2, String>, responses)
     +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
-    +stream : Runtime.Stream() <- C.create(~Faux, ~Input(), ~Output(), ~provider, Faux{responseRef, streams})
+    +gateRef : R.Ref<List<&2, Gate>> <- R.new(List<&2, Gate>, gates)
+    +stream : Runtime.Stream() <- C.create(~Faux, ~Input(), ~Output(), ~provider, Faux{responseRef, streams, gateRef})
     +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
     +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
     +converter : Runtime.Converter() <- Runtime.createConverter(False{})
@@ -106,7 +129,7 @@ def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, response
     +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd)
     +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
     Session.subscribe(session, listener)
-    return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams}}
+    return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef}}
 
 def disposeStreams(streams: List<&2, EventStream()>) -> IO(Unit):
   match streams:
@@ -118,7 +141,7 @@ def disposeStreams(streams: List<&2, EventStream()>) -> IO(Unit):
 
 def teardown(value: Fixture) -> IO(Unit):
   match value:
-    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{responses, streams}}:
+    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{responses, streams, gates}}:
       do IO<Unit>:
         Session.unsubscribe(session, listener)
         C.dispose(Session.AgentSessionEvent, Unit, listener)
@@ -132,6 +155,8 @@ def teardown(value: Fixture) -> IO(Unit):
         remaining : List<&2, String> <- R.dispose(List<&2, String>, responses)
         opened : List<&2, EventStream()> <- R.dispose(List<&2, EventStream()>, streams)
         disposeStreams(opened)
+        unused : List<&2, Gate> <- R.dispose(List<&2, Gate>, gates)
+        return Unit{}
 
 def reportPrompt(result: Result<&2, &2, String, Unit>) -> IO(Unit):
   match result:
@@ -154,7 +179,7 @@ def persistScenario(+dir: String, +agentDir: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
-    +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> Nil{})
+    +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> Nil{}, Nil{})
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "hello", Nil{}, None{})
     reportPrompt(result)
     reportSession(sessionOf(value))
@@ -166,7 +191,7 @@ def queueScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
-    +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> "again" <> Nil{})
+    +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> "again" <> Nil{}, Nil{})
     Session.steer(sessionOf(value), "steered", Nil{})
     Session.followUp(sessionOf(value), "later", Nil{})
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "hello", Nil{}, None{})
@@ -203,7 +228,7 @@ def mutateScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
-    +value : Fixture <- fixture(stored, dir, agentDir, Nil{})
+    +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
     thinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(sessionOf(value), Ai.Thinking{Ai.High{}})
     reportOutcome("set_thinking", thinking)
     model : Result<&2, &2, String, Unit> <- Session.setModel(sessionOf(value), fauxModel())
@@ -213,12 +238,59 @@ def mutateScenario(+dir: String, agentDir: String) -> IO(Unit):
     reportEntries(sessionOf(value))
     teardown(value)
 
+# busy: while the first request is held open, a plain prompt is refused with
+# upstream's message, steer/followUp are queued, and the run finishes both.
+def promptInBackground(session: Session.AgentSession, done: Chan(Result<&2, &2, String, Unit>)) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.prompt(session, "hello", Nil{}, None{})
+    sent : Bool <- Chan.send(Result<&2, &2, String, Unit>, done, result)
+    R.requireSent(sent)
+
+def reportStreaming(session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    streaming : Bool <- Session.isStreaming(session)
+    IO.print("{\"type\":\"streaming\",\"value\":" ++ Bool.pick(String, streaming, "true", "false") ++ "}")
+
+def reportFinished(finished: Maybe<&1, Result<&2, &2, String, Unit>>) -> IO(Unit):
+  match finished:
+    case Some{result}: reportPrompt(result)
+    case None{}: reportPrompt(Fail{"prompt fiber did not finish"})
+
+def busyScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Result<&2, &2, String, Unit>) <- Chan.new(Result<&2, &2, String, Unit>, 1)
+    +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> "again" <> "finally" <> Nil{}, Gate{started, release} <> Nil{})
+    IO.spawn(Unit, promptInBackground(sessionOf(value), done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    reportStreaming(sessionOf(value))
+    refused : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "too early", Nil{}, None{})
+    reportOutcome("prompt_while_streaming", refused)
+    steered : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "steered", Nil{}, Some{Session.Steer{}})
+    reportOutcome("steer_while_streaming", steered)
+    followed : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "later", Nil{}, Some{Session.FollowUp{}})
+    reportOutcome("follow_up_while_streaming", followed)
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    R.requireSent(sent)
+    finished : Maybe<&1, Result<&2, &2, String, Unit>> <- Chan.recv(Result<&2, &2, String, Unit>, done)
+    reportFinished(finished)
+    reportStreaming(sessionOf(value))
+    reportSession(sessionOf(value))
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, release)
+    Chan.close(Result<&2, &2, String, Unit>, done)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persist" <> dir <> agentDir <> Nil{}: persistScenario(dir, agentDir)
     case "queue" <> dir <> agentDir <> Nil{}: queueScenario(dir, agentDir)
     case "mutate" <> dir <> agentDir <> Nil{}: mutateScenario(dir, agentDir)
-    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate> <dir> <agentDir>")
+    case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
+    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy> <dir> <agentDir>")
 
 def main() -> IO(Unit):
   do IO<Unit>:

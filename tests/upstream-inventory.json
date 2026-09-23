@@ -1405,9 +1405,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ee68d2e2521a8405531daa434f6fd28173095ef8ca341e21be06d141679c74aa"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "ee68d2e2521a8405531daa434f6fd28173095ef8ca341e21be06d141679c74aa",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
@@ -2600,7 +2605,7 @@
       ],
       "sha256": "5ac5275be8e0ddb9fc2c1dbaef31ba3a096d6a51e73d65866c4cb4282b28e6ae",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'prompts while idle and records a single text response' is the persist scenario of tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, the streaming busy error and the no-model/no-auth errors remain pending."
+      "notes": "'prompts while idle and records a single text response' (persist scenario) and 'throws when prompted during streaming without a streamingBehavior' (busy scenario, provider held on a gate) are in tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
