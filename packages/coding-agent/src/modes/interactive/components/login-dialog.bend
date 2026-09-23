@@ -101,8 +101,12 @@ def open(host: Host) -> IO(Unit):
       do IO<Unit>:
         Component.setFocused(editor,False{})
         Ref.write(State,state,Waiting{})
+def withCode(current: State,url: String,code: String) -> State & Unit:
+  match current:
+    case Waiting{}: (Device{url,code},Unit{})
+    case _: (current,Unit{})
 def showCode(host: Host,url: String,code: String) -> IO(Unit):
-  match host: case Host{state,_,_,_,_,_}: Ref.write(State,state,Device{url,code})
+  match host: case Host{state,_,_,_,_,_}: Ref.modify(State,Unit,state,current => withCode(current,url,code))
 def close(host: Host) -> IO(Unit):
   match host:
     case Host{state,editor,_,_,_,_}:
