@@ -164,6 +164,45 @@ def compaction_checks(runner, threads, work):
     checks += 2
     return checks
 
+def bash_checks(runner, threads, work):
+    events = run(runner, threads, 'bash', work)
+    states = {e['label']: (e['running'], e['pending']) for e in events if e['type'] == 'bash_state'}
+    results = {e['label']: e for e in events if e['type'] in ('bash_result', 'bash_failed')}
+    # records bash results immediately while idle (suite/agent-session-bash-persistence.test.ts)
+    assert states['idle_record'] == (False, False)
+    first = [e for e in events if e['type'] == 'messages'][0]['messages']
+    assert first[-1]['role'] == 'bashExecution' and first[-1]['command'] == 'echo hi' and first[-1]['output'] == 'hi', first
+    assert [e for e in events if e['type'] == 'entries'][0]['kinds'] == ['message']
+    # executes bash commands and records the result (the JS lane has no process spawning)
+    local = results['local']
+    if runner.endswith('.js'):
+        assert local['type'] == 'bash_failed' and local['error'].startswith('spawn:'), local
+    else:
+        assert local['type'] == 'bash_result' and 'hello' in local['output'] and local['exitCode'] == 0, local
+        assert {'type': 'bash_execution_update', 'delta': 'hello'} in events, 'local output streams without an id'
+    # records bash output through custom operations; streams bash output to the callback and session events
+    assert results['custom']['output'] == 'hello world' and results['custom']['exitCode'] == 0, results['custom']
+    assert only(events, 'callback_deltas')['deltas'] == ['hello ', 'world']
+    assert [e for e in events if e['type'] == 'bash_execution_update' and 'id' in e] == [
+        {'type': 'bash_execution_update', 'id': 'bash-1', 'delta': 'hello '},
+        {'type': 'bash_execution_update', 'id': 'bash-1', 'delta': 'world'}]
+    # keeps newer bash execution tracked when an older execution finishes; abortBash cancels the rest
+    assert states['both_running'] == (True, False) and states['after_first'] == (True, False) and states['after_abort'] == (False, False), states
+    assert results['first']['cancelled'] is False and results['second']['cancelled'] is True, results
+    assert [(e['command'], e['aborted']) for e in events if e['type'] == 'exec_signal'] == [('first', False), ('second', True)]
+    final = [e for e in events if e['type'] == 'messages'][-1]['messages']
+    recorded = ['echo hi', 'custom', 'first', 'second'] if runner.endswith('.js') else ['echo hi', "printf 'hello'", 'custom', 'first', 'second']
+    assert [(m['role'], m['command']) for m in final] == [('bashExecution', c) for c in recorded], final
+    # defers bash results while streaming and flushes them before the next prompt
+    events = run(runner, threads, 'bash_deferred', work)
+    states = {e['label']: (e['running'], e['pending']) for e in events if e['type'] == 'bash_state'}
+    snapshots = [[m['role'] for m in e['messages']] for e in events if e['type'] == 'messages']
+    assert states['while_streaming'] == (False, True) and 'bashExecution' not in snapshots[0], (states, snapshots)
+    assert states['settled'] == (False, False) and snapshots[1] == ['user', 'assistant', 'bashExecution'], (states, snapshots)
+    assert snapshots[2] == ['user', 'assistant', 'bashExecution', 'user', 'assistant'], snapshots
+    assert [e for e in events if e['type'] == 'entries'][0]['kinds'] == ['message'] * 5
+    return 9
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--runner', default='build/agent-session.js')
@@ -274,6 +313,7 @@ def main():
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
     assert types(events)[-9:-4] == ['auto_retry_start', 'entry_appended', 'auto_retry_end', 'agent_settled', 'prompt_done'], types(events)
     checks += 4
+    checks += bash_checks(runner, args.threads, work)
     checks += compaction_checks(runner, args.threads, work)
     print('agent-session: %d checks passed' % checks)
 

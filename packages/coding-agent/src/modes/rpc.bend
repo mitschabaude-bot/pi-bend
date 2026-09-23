@@ -355,8 +355,8 @@ def lastText(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
 type Cleared is Data: Cleared{steering: List<&2,String>,followUp: List<&2,String>}
 def clearState(current: Session.Shared) -> Session.Shared & Cleared:
   match current:
-    case Session.Shared{stored,steering,followUp,listeners,active,last,retry,compaction}:
-      (Session.Shared{stored,Nil{},Nil{},listeners,active,last,retry,compaction},Cleared{steering,followUp})
+    case Session.Shared{stored,steering,followUp,listeners,active,last,retry,compaction, bash}:
+      (Session.Shared{stored,Nil{},Nil{},listeners,active,last,retry,compaction, bash},Cleared{steering,followUp})
 def clearedValue(value: Cleared) -> V.Value:
   match value:
     case Cleared{steering,followUp}: MessageJson.object(MessageJson.field("steering",V.ArrayValue{Events.texts(steering)},MessageJson.field("followUp",V.ArrayValue{Events.texts(followUp)},Nil{})))
@@ -435,7 +435,7 @@ def queueModeName(value: AgentTypes.QueueMode) -> String:
     case AgentTypes.OneAtATime{}: "one-at-a-time"
 def pendingCount(value: Session.Shared) -> Nat:
   match value:
-    case Session.Shared{_,steering,followUp,_,_,_,_,_}: List.length(&2,String,steering) + List.length(&2,String,followUp)
+    case Session.Shared{_,steering,followUp,_,_,_,_,_, _}: List.length(&2,String,steering) + List.length(&2,String,followUp)
 def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> V.Value:
   MessageJson.object(MessageJson.field("model",ModelJson.model(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
 def settingsCompaction(session: Session.AgentSession) -> Bool:

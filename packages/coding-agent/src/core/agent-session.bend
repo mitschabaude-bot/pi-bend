@@ -30,6 +30,11 @@ import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
 import ./tools/index.bend as Tools
 import ./system-prompt.bend as Prompt
+import ./bash-executor.bend as BashExec
+import ./tools/bash.bend as Bash
+import ../config.bend as Config
+import ../utils/paths.bend as Paths
+import ../../../runtime/src/filesystem.bend as FS
 import ../../../ai/src/utils/transcript.bend as Transcript
 
 # The upstream AgentSession core: the owner of one Agent and its session
@@ -171,6 +176,7 @@ type AgentSessionEvent is Data:
   SummarizationRetryAttemptStart{source: RetrySource}
   SummarizationRetryFinished{}
   EntryAppended{entry: Entry()}
+  BashExecutionUpdate{id: Maybe<&2, String>, delta: String}
 
 def Listener() -> Data: C.Callback<AgentSessionEvent, Unit>
 
@@ -192,8 +198,16 @@ type LastTurn is Data:
   LastTurn{message: Ai.AssistantMessage<V.Value, Unit>, entryId: Maybe<&2, String>, toolResultIds: List<&2, String>}
 
 # The mutable session state shared with the agent's event handler.
+# User bash commands: the abort controllers of those running, keyed by the
+# ticket each start takes, and results recorded while the agent streams,
+# appended once the run settles.
+type RunningBash is Data:
+  RunningBash{ticket: Nat, controller: A.AbortController<Unit>}
+type BashState is Data:
+  BashState{running: List<&2, RunningBash>, next: Nat, pending: List<&2, Message()>}
+
 type Shared is Data:
-  Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: Bool, lastAssistant: Maybe<&2, LastTurn>, retry: RetryState, compaction: CompactionState}
+  Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: Bool, lastAssistant: Maybe<&2, LastTurn>, retry: RetryState, compaction: CompactionState, bash: BashState}
 
 def Turn() -> Data: Agent.Turn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
 def TurnUpdate() -> Data: Agent.Update(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
@@ -212,15 +226,15 @@ type AgentSession is Data:
 
 def sharedSession(state: Shared) -> Session():
   match state:
-    case Shared{session, _, _, _, _, _, _, _}: session
+    case Shared{session, _, _, _, _, _, _, _, _}: session
 
 def withSession(state: Shared, session: Session()) -> Shared:
   match state:
-    case Shared{_, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}
+    case Shared{_, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}
 
 def withRunActive(state: Shared, runActive: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, _, lastAssistant, retry, compaction}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}
+    case Shared{session, steering, followUp, listeners, _, lastAssistant, retry, compaction, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}
 
 def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Unit):
   match listeners:
@@ -232,7 +246,7 @@ def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Un
 
 def listenersOf(state: Shared) -> List<&2, Listener()>:
   match state:
-    case Shared{_, _, _, listeners, _, _, _, _}: listeners
+    case Shared{_, _, _, listeners, _, _, _, _, _}: listeners
 
 def emit(shared: R.Ref<Shared>, event: AgentSessionEvent) -> IO(Unit):
   do IO<Unit>:
@@ -241,7 +255,7 @@ def emit(shared: R.Ref<Shared>, event: AgentSessionEvent) -> IO(Unit):
 
 def queueEvent(state: Shared) -> AgentSessionEvent:
   match state:
-    case Shared{_, steering, followUp, _, _, _, _, _}: QueueUpdate{steering, followUp}
+    case Shared{_, steering, followUp, _, _, _, _, _, _}: QueueUpdate{steering, followUp}
 
 def emitQueueUpdate(+shared: R.Ref<Shared>) -> IO(Unit):
   do IO<Unit>:
@@ -258,17 +272,17 @@ def removeFirst(values: List<&2, String>, +wanted: String) -> Maybe<&2, List<&2,
     case Nil{}: None{}
     case +value <> +rest: Bool.pick(Unit -> Maybe<&2, List<&2, String>>, String.eq(value, wanted), _ => Some{rest}, _ => Maybe.map(&2, List<&2, String>, List<&2, String>, others => value <> others, removeFirst(rest, wanted)))(Unit{})
 
-def dequeuedFrom(+session: Session(), +steering: List<&2, String>, +followUp: List<&2, String>, listeners: List<&2, Listener()>, +runActive: Bool, +lastAssistant: Maybe<&2, LastTurn>, +retry: RetryState, +compaction: CompactionState, fromSteering: Maybe<&2, List<&2, String>>, fromFollowUp: Maybe<&2, List<&2, String>>) -> Shared & Bool:
+def dequeuedFrom(+session: Session(), +steering: List<&2, String>, +followUp: List<&2, String>, listeners: List<&2, Listener()>, +runActive: Bool, +lastAssistant: Maybe<&2, LastTurn>, +retry: RetryState, +compaction: CompactionState, +bash: BashState, fromSteering: Maybe<&2, List<&2, String>>, fromFollowUp: Maybe<&2, List<&2, String>>) -> Shared & Bool:
   match fromSteering fromFollowUp:
-    case Some{remaining} _: (Shared{session, remaining, followUp, listeners, runActive, lastAssistant, retry, compaction}, True{})
-    case None{} Some{remaining}: (Shared{session, steering, remaining, listeners, runActive, lastAssistant, retry, compaction}, True{})
-    case None{} None{}: (Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}, False{})
+    case Some{remaining} _: (Shared{session, remaining, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}, True{})
+    case None{} Some{remaining}: (Shared{session, steering, remaining, listeners, runActive, lastAssistant, retry, compaction, bash}, True{})
+    case None{} None{}: (Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}, False{})
 
 # The steering queue is searched first, then the follow-up queue, as upstream.
 def dequeued(state: Shared, +text: String) -> Shared & Bool:
   match state:
-    case Shared{session, +steering, +followUp, listeners, runActive, lastAssistant, retry, compaction}:
-      dequeuedFrom(session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, removeFirst(steering, text), removeFirst(followUp, text))
+    case Shared{session, +steering, +followUp, listeners, runActive, lastAssistant, retry, compaction, bash}:
+      dequeuedFrom(session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash, removeFirst(steering, text), removeFirst(followUp, text))
 
 def blockText(blocks: List<&2, Ai.TextImageContent>) -> String:
   match blocks:
@@ -328,11 +342,11 @@ def stored(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO(U
 
 def withLastTurn(state: Shared, lastTurn: Maybe<&2, LastTurn>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, _, retry, compaction}: Shared{session, steering, followUp, listeners, runActive, lastTurn, retry, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, _, retry, compaction, bash}: Shared{session, steering, followUp, listeners, runActive, lastTurn, retry, compaction, bash}
 
 def lastTurnOf(state: Shared) -> Maybe<&2, LastTurn>:
   match state:
-    case Shared{_, _, _, _, _, lastTurn, _, _}: lastTurn
+    case Shared{_, _, _, _, _, lastTurn, _, _, _}: lastTurn
 
 def withToolResult(lastTurn: Maybe<&2, LastTurn>, id: Maybe<&2, String>) -> Maybe<&2, LastTurn>:
   match lastTurn id:
@@ -463,28 +477,28 @@ def turnIds(turn: LastTurn) -> List<&2, String>:
 
 def retryOf(state: Shared) -> RetryState:
   match state:
-    case Shared{_, _, _, _, _, _, retry, _}: retry
+    case Shared{_, _, _, _, _, _, retry, _, _}: retry
 
 def withAttempt(state: Shared, attempt: Nat) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, _, contextWindow, sleeping}, compaction}:
-      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, _, contextWindow, sleeping}, compaction, bash}:
+      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction, bash}
 
 # Clears the attempt counter and returns the count it had.
 def resetAttempt(state: Shared) -> Shared & Nat:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, previous, contextWindow, sleeping}, compaction}:
-      (Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, 0n, contextWindow, sleeping}, compaction}, previous)
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, previous, contextWindow, sleeping}, compaction, bash}:
+      (Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, 0n, contextWindow, sleeping}, compaction, bash}, previous)
 
 def withSleeping(state: Shared, sleeping: Maybe<&2, A.AbortController<Unit>>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, _}, compaction}:
-      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, _}, compaction, bash}:
+      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction, bash}
 
 def withContextWindow(state: Shared, contextWindow: F64) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, _, sleeping}, compaction}:
-      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, _, sleeping}, compaction, bash}:
+      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction, bash}
 
 def retryPolicy(resolved: Settings.ResolvedRetrySettings) -> Retry.RetryPolicy:
   match resolved:
@@ -501,7 +515,7 @@ def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextW
 
 def willRetryAfterAgentEnd(state: Shared, messages: List<&2, Message()>) -> Bool:
   match state:
-    case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}, _}:
+    case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}, _, _}:
       Bool.and(enabled, Bool.and(Nat.is_lt(attempt, maxRetries), retryableLast(lastAssistantIn(messages, None{}), contextWindow)))
 
 def sessionEventIn(state: Shared, event: SessionEvent()) -> AgentSessionEvent:
@@ -526,7 +540,7 @@ def succeededRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason) -> IO(Unit
 
 def markOverflow(state: Shared, attempted: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{_, manual, auto}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{_, manual, auto}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}, bash}
 
 # A completed or aborted assistant message re-arms the one overflow recovery.
 def settleOverflow(shared: R.Ref<Shared>, stopReason: Ai.StopReason) -> IO(Unit):
@@ -568,7 +582,7 @@ def handleAgentEvent(shared: R.Ref<Shared>, input: Agent.Input<SessionEvent()>) 
 # Listeners are the caller's callbacks: unsubscribe returns them to the caller.
 def addListener(state: Shared, listener: Listener()) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: Shared{session, steering, followUp, List.append(&2, Listener(), listeners, listener <> Nil{}), runActive, lastAssistant, retry, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}: Shared{session, steering, followUp, List.append(&2, Listener(), listeners, listener <> Nil{}), runActive, lastAssistant, retry, compaction, bash}
 
 def subscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
@@ -581,7 +595,7 @@ def withoutListener(listeners: List<&2, Listener()>, +listener: Listener()) -> L
 
 def removedListener(state: Shared, listener: Listener()) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: Shared{session, steering, followUp, withoutListener(listeners, listener), runActive, lastAssistant, retry, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}: Shared{session, steering, followUp, withoutListener(listeners, listener), runActive, lastAssistant, retry, compaction, bash}
 
 def unsubscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
@@ -614,13 +628,238 @@ def abortBoth(compaction: CompactionState) -> IO(Unit):
 
 def compactionOf(state: Shared) -> CompactionState:
   match state:
-    case Shared{_, _, _, _, _, _, _, compaction}: compaction
+    case Shared{_, _, _, _, _, _, _, compaction, _}: compaction
 
 # upstream abortCompaction: cancel manual and automatic compaction in progress.
 def abortCompactions(shared: R.Ref<Shared>) -> IO(Unit):
   do IO<Unit>:
     state : Shared <- R.read(Shared, shared)
     abortBoth(compactionOf(state))
+
+def runActiveOf(value: Shared) -> Bool:
+  match value:
+    case Shared{_, _, _, _, runActive, _, _, _, _}: runActive
+
+# User bash
+# ---------
+
+type BashOptions is Data:
+  BashOptions{excludeFromContext: Maybe<&2, Bool>, id: Maybe<&2, String>, operations: Maybe<&2, Bash.BashOperations>}
+
+def bashDefaults() -> BashOptions: BashOptions{None{}, None{}, None{}}
+
+def bashOf(state: Shared) -> BashState:
+  match state:
+    case Shared{_, _, _, _, _, _, _, _, bash}: bash
+
+def startedBash(state: Shared, controller: A.AbortController<Unit>) -> Shared & Nat:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{running, +next, pending}}: (Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{RunningBash{next, controller} <> running, next + 1n, pending}}, next)
+
+def withoutTicket(running: List<&2, RunningBash>, +ticket: Nat) -> List<&2, RunningBash>:
+  match running:
+    case Nil{}: Nil{}
+    case RunningBash{+current, +controller} <> +rest: Bool.pick(Unit -> List<&2, RunningBash>, Nat.is_eq(current, ticket), _ => rest, _ => RunningBash{current, controller} <> withoutTicket(rest, ticket))(Unit{})
+
+def finishedBash(state: Shared, ticket: Nat) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{running, next, pending}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{withoutTicket(running, ticket), next, pending}}
+
+def deferredBash(state: Shared, message: Message()) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{running, next, pending}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{running, next, List.append(&2, Message(), pending, message <> Nil{})}}
+
+def takenPending(state: Shared) -> Shared & List<&2, Message()>:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{running, next, pending}}: (Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, BashState{running, next, Nil{}}}, pending)
+
+def abortRunning(running: List<&2, RunningBash>) -> IO(Unit):
+  match running:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case RunningBash{_, controller} <> rest:
+      do IO<Unit>:
+        won : Bool <- A.abort(Unit, controller, None{})
+        abortRunning(rest)
+
+def runningOf(bash: BashState) -> List<&2, RunningBash>:
+  match bash:
+    case BashState{running, _, _}: running
+
+def pendingOf(bash: BashState) -> List<&2, Message()>:
+  match bash:
+    case BashState{_, _, pending}: pending
+
+def abortBashIn(shared: R.Ref<Shared>) -> IO(Unit):
+  do IO<Unit>:
+    state : Shared <- R.read(Shared, shared)
+    abortRunning(runningOf(bashOf(state)))
+
+# upstream abortBash: cancel every running bash command.
+def abortBash(session: AgentSession) -> IO(Unit):
+  match session:
+    case AgentSession{_, shared, _, _, _, _}: abortBashIn(shared)
+
+def isBashRunning(session: AgentSession) -> IO(Bool):
+  match session:
+    case AgentSession{_, shared, _, _, _, _}:
+      do IO<Bool>:
+        state : Shared <- R.read(Shared, shared)
+        return Bool.not(List.is_empty(&2, RunningBash, runningOf(bashOf(state))))
+
+def hasPendingBashMessages(session: AgentSession) -> IO(Bool):
+  match session:
+    case AgentSession{_, shared, _, _, _, _}:
+      do IO<Bool>:
+        state : Shared <- R.read(Shared, shared)
+        return Bool.not(List.is_empty(&2, Message(), pendingOf(bashOf(state))))
+
+def appendAll(+shared: R.Ref<Shared>, messages: List<&2, Message()>) -> IO(Unit):
+  match messages:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case message <> rest:
+      do IO<Unit>:
+        state : Shared <- R.read(Shared, shared)
+        outcome : Sessions.Outcome(Appended()) <- recordMessage(sharedSession(state), message)
+        stored(shared, outcome)
+        appendAll(shared, rest)
+
+def appendPending(agent: Runtime.Owner(), +shared: R.Ref<Shared>, pending: List<&2, Message()>) -> IO(Unit):
+  match pending:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case message <> rest:
+      do IO<Unit>:
+        appendAll(shared, message <> rest)
+        refreshContext(agent, shared)
+
+# upstream _flushPendingBashMessages: bash results recorded during a run are
+# appended once it settles, keeping tool calls next to their results.
+def flushPendingBash(agent: Runtime.Owner(), +shared: R.Ref<Shared>) -> IO(Unit):
+  do IO<Unit>:
+    pending : List<&2, Message()> <- R.modify(Shared, List<&2, Message()>, shared, takenPending)
+    appendPending(agent, shared, pending)
+
+def bashMessage(command: String, result: BashExec.BashResult, excludeFromContext: Maybe<&2, Bool>, timestamp: F64) -> Message():
+  match result:
+    case BashExec.BashResult{output, exitCode, cancelled, truncated, fullOutputPath}: T.CustomMessage{Messages.BashExecution{Messages.BashExecutionMessage{command, output, exitCode, cancelled, truncated, fullOutputPath, timestamp, excludeFromContext}}}
+
+def recordBashWhile(agent: Runtime.Owner(), +shared: R.Ref<Shared>, streaming: Bool, +message: Message()) -> IO(Unit):
+  match streaming:
+    case True{}: R.modify(Shared, Unit, shared, current => (deferredBash(current, message), Unit{}))
+    case False{}: appendPending(agent, shared, message <> Nil{})
+
+# upstream recordBashResult: while the agent streams the result waits for the
+# run to settle.
+def recordBashResult(session: AgentSession, command: String, result: BashExec.BashResult, excludeFromContext: Maybe<&2, Bool>) -> IO(Unit):
+  match session:
+    case AgentSession{agent, +shared, _, _, _, _}:
+      do IO<Unit>:
+        now : F64 <- Date.now()
+        current : Shared <- R.read(Shared, shared)
+        recordBashWhile(agent, shared, runActiveOf(current), bashMessage(command, result, excludeFromContext, now))
+
+type ChunkSink is Data:
+  ChunkSink{onChunk: Maybe<&2, C.Callback<String, Unit>>, shared: R.Ref<Shared>, id: Maybe<&2, String>}
+
+def callChunk(onChunk: Maybe<&2, C.Callback<String, Unit>>, delta: String) -> IO(Unit):
+  match onChunk:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{callback}: C.call(String, Unit, callback, delta)
+
+def deliverChunk(sink: ChunkSink, +delta: String) -> IO(Unit):
+  match sink:
+    case ChunkSink{onChunk, shared, id}:
+      do IO<Unit>:
+        callChunk(onChunk, delta)
+        emit(shared, BashExecutionUpdate{id, delta})
+
+def forwardChunk(sink: ChunkSink, delta: String) -> IO(Unit): deliverChunk(sink, delta)
+
+def prefixedCommand(prefix: Maybe<&2, String>, +command: String) -> String:
+  match prefix:
+    case None{}: command
+    case Some{""}: command
+    case Some{value}: value ++ "\n" ++ command
+
+def shellPathResult(result: Result<&2, &2, Paths.Error, Maybe<&2, String>>) -> Result<&2, &2, String, Maybe<&2, String>>:
+  match result:
+    case Fail{_}: Fail{"Invalid shellPath setting"}
+    case Done{path}: Done{path}
+
+def shellPathOf(settings: Settings.SettingsManager, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> Result<&2, &2, String, Maybe<&2, String>>:
+  match environment:
+    case Fail{error}: Fail{FS.errorMessage(error)}
+    case Done{paths}: shellPathResult(Settings.getShellPath(paths, settings))
+
+def disposeOwnedOperations(owned: Bool, operations: Bash.BashOperations) -> IO(Unit):
+  match owned:
+    case True{}: Bash.disposeOperations(operations)
+    case False{}: IO.pure(Unit, Unit{})
+
+def executed(result: Result<&2, &2, BashExec.Error, BashExec.BashResult>) -> Result<&2, &2, String, BashExec.BashResult>:
+  match result:
+    case Fail{error}: Fail{BashExec.errorMessage(error)}
+    case Done{value}: Done{value}
+
+def runBorrowed(+command: String, cwd: String, operations: Bash.BashOperations, +options: BashExec.BashExecutorOptions, pair: BashExec.ExecutorOwner & BashExec.ExecutorHandle) -> IO(Result<&2, &2, String, BashExec.BashResult>):
+  match pair:
+    case Tuple{owner, handle}:
+      do IO<Result<&2, &2, String, BashExec.BashResult>>:
+        result : Result<&2, &2, BashExec.Error, BashExec.BashResult> <- BashExec.executeBashWithOperations(handle, command, cwd, operations, options)
+        BashExec.disposeExecutor(owner)
+        return executed(result)
+
+def runBash(+command: String, cwd: String, operations: Bash.BashOperations, +options: BashExec.BashExecutorOptions) -> IO(Result<&2, &2, String, BashExec.BashResult>):
+  do IO<Result<&2, &2, String, BashExec.BashResult>>:
+    owner : BashExec.ExecutorOwner <- BashExec.createExecutor()
+    runBorrowed(command, cwd, operations, options, BashExec.borrowExecutor(owner))
+
+def recordedBash(+session: AgentSession, command: String, excludeFromContext: Maybe<&2, Bool>, +result: Result<&2, &2, String, BashExec.BashResult>) -> IO(Result<&2, &2, String, BashExec.BashResult>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, String, BashExec.BashResult>, Fail{error})
+    case Done{+value}:
+      do IO<Result<&2, &2, String, BashExec.BashResult>>:
+        recordBashResult(session, command, value, excludeFromContext)
+        return Done{value}
+
+def withOperations(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.Callback<String, Unit>>, excludeFromContext: Maybe<&2, Bool>, id: Maybe<&2, String>, owned: Bool, +operations: Bash.BashOperations) -> IO(Result<&2, &2, String, BashExec.BashResult>):
+  match session:
+    case AgentSession{_, +shared, _, settings, cwd, _}:
+      do IO<Result<&2, &2, String, BashExec.BashResult>>:
+        +controller : A.AbortController<Unit> <- A.new(Unit)
+        ticket : Nat <- R.modify(Shared, Nat, shared, current => startedBash(current, controller))
+        +sink : C.Callback<String, Unit> <- C.create(~ChunkSink, ~String, ~Unit, ~forwardChunk, ChunkSink{onChunk, shared, id})
+        ran : Result<&2, &2, String, BashExec.BashResult> <- runBash(prefixedCommand(Settings.getShellCommandPrefix(settings), command), cwd, operations, BashExec.BashExecutorOptions{Some{sink}, Some{A.signal(Unit, controller)}})
+        result : Result<&2, &2, String, BashExec.BashResult> <- recordedBash(session, command, excludeFromContext, ran)
+        R.modify(Shared, Unit, shared, current => (finishedBash(current, ticket), Unit{}))
+        C.dispose(String, Unit, sink)
+        A.dispose(Unit, controller)
+        disposeOwnedOperations(owned, operations)
+        return result
+
+def withLocalOperations(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.Callback<String, Unit>>, excludeFromContext: Maybe<&2, Bool>, id: Maybe<&2, String>, binDir: Config.Located(), shellPath: Result<&2, &2, String, Maybe<&2, String>>) -> IO(Result<&2, &2, String, BashExec.BashResult>):
+  match binDir shellPath:
+    case Fail{error} _: IO.pure(Result<&2, &2, String, BashExec.BashResult>, Fail{FS.errorMessage(error)})
+    case Done{_} Fail{error}: IO.pure(Result<&2, &2, String, BashExec.BashResult>, Fail{error})
+    case Done{directory} Done{path}:
+      do IO<Result<&2, &2, String, BashExec.BashResult>>:
+        +operations : Bash.BashOperations <- Bash.createLocalBashOperations(directory, path)
+        withOperations(session, command, onChunk, excludeFromContext, id, True{}, operations)
+
+def settingsOf(session: AgentSession) -> Settings.SettingsManager:
+  match session:
+    case AgentSession{_, _, _, settings, _, _}: settings
+
+# upstream executeBash: run a user command with the configured prefix and
+# shell, stream its output as bash_execution_update events and record the
+# result; abortBash cancels it.
+def executeBash(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.Callback<String, Unit>>, options: BashOptions) -> IO(Result<&2, &2, String, BashExec.BashResult>):
+  match options:
+    case BashOptions{excludeFromContext, id, Some{operations}}: withOperations(session, command, onChunk, excludeFromContext, id, False{}, operations)
+    case BashOptions{excludeFromContext, id, None{}}:
+      do IO<Result<&2, &2, String, BashExec.BashResult>>:
+        binDir : Config.Located() <- Config.getBinDir()
+        environment : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(Runtime.urlContext())
+        withLocalOperations(session, command, onChunk, excludeFromContext, id, binDir, shellPathOf(settingsOf(session), environment))
 
 # Abort the agent and disconnect; the agent itself belongs to the runtime.
 def dispose(session: AgentSession) -> IO(Unit):
@@ -629,6 +868,7 @@ def dispose(session: AgentSession) -> IO(Unit):
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
+        abortBashIn(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         Agent.unsubscribe(SessionEvent(), Runtime.Error(), subscription)
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
@@ -660,10 +900,6 @@ def messages(session: AgentSession) -> IO(List<&2, Message()>):
   do IO<List<&2, Message()>>:
     current : AgentState() <- state(session)
     return stateMessages(current)
-
-def runActiveOf(value: Shared) -> Bool:
-  match value:
-    case Shared{_, _, _, _, runActive, _, _, _}: runActive
 
 def isStreaming(session: AgentSession) -> IO(Bool):
   match session:
@@ -731,11 +967,11 @@ type Step is Data:
 
 def takeLastAssistant(state: Shared) -> Shared & Maybe<&2, LastTurn>:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: (Shared{session, steering, followUp, listeners, runActive, None{}, retry, compaction}, lastAssistant)
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}: (Shared{session, steering, followUp, listeners, runActive, None{}, retry, compaction, bash}, lastAssistant)
 
 def contextWindowOf(state: Shared) -> F64:
   match state:
-    case Shared{_, _, _, _, _, _, RetryState{_, _, contextWindow, _}, _}: contextWindow
+    case Shared{_, _, _, _, _, _, RetryState{_, _, contextWindow, _}, _, _}: contextWindow
 
 def errorText(errorMessage: Maybe<&2, String>) -> String:
   match errorMessage:
@@ -792,19 +1028,19 @@ def prepareRetry(agent: Runtime.Owner(), +shared: R.Ref<Shared>, turn: LastTurn,
 
 def setManualController(state: Shared, manual: Maybe<&2, A.AbortController<Unit>>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, _, auto}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, _, auto}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}, bash}
 
 def setAutoController(state: Shared, auto: Maybe<&2, A.AbortController<Unit>>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, _}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, _}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}, bash}
 
 def overflowAttemptedOf(state: Shared) -> Bool:
   match state:
-    case Shared{_, _, _, _, _, _, _, CompactionState{attempted, _, _}}: attempted
+    case Shared{_, _, _, _, _, _, _, CompactionState{attempted, _, _}, _}: attempted
 
 def policyOf(state: Shared) -> Retry.RetryPolicy:
   match state:
-    case Shared{_, _, _, _, _, _, RetryState{policy, _, _, _}, _}: policy
+    case Shared{_, _, _, _, _, _, RetryState{policy, _, _, _}, _, _}: policy
 
 def compactionSettingsOf(resolved: Settings.ResolvedCompactionSettings) -> Compaction.CompactionSettings:
   match resolved:
@@ -1344,7 +1580,7 @@ def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
 def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String, +loadout: Runtime.Loadout) -> IO(AgentSession):
   do IO<AgentSession>:
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, Ai.modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, Ai.modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
     +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -1430,13 +1666,14 @@ def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.Ima
         step : Step <- stepOf(agent, shared, settings, result)
         outcome : Result<&2, &2, String, Unit> <- runUntilSettled(1000n, agent, shared, settings, step)
         setRunActive(shared, False{})
+        flushPendingBash(agent, shared)
         emit(shared, AgentSettled{})
         return outcome
 
 def queued(state: Shared, behavior: StreamingBehavior, +text: String) -> Shared:
   match state behavior:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction} Steer{}: Shared{session, List.append(&2, String, steering, text <> Nil{}), followUp, listeners, runActive, lastAssistant, retry, compaction}
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction} FollowUp{}: Shared{session, steering, List.append(&2, String, followUp, text <> Nil{}), listeners, runActive, lastAssistant, retry, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash} Steer{}: Shared{session, List.append(&2, String, steering, text <> Nil{}), followUp, listeners, runActive, lastAssistant, retry, compaction, bash}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash} FollowUp{}: Shared{session, steering, List.append(&2, String, followUp, text <> Nil{}), listeners, runActive, lastAssistant, retry, compaction, bash}
 
 # Queue a message for the running agent: steering interrupts after the
 # current turn, follow-ups wait for the run to end.
@@ -1465,8 +1702,8 @@ type QueuedMessages is Data:
   QueuedMessages{steering: List<&2, String>, followUp: List<&2, String>}
 def clearedQueues(state: Shared) -> Shared & QueuedMessages:
   match state:
-    case Shared{session, steering, following, listeners, active, lastAssistant, retry, compaction}:
-      (Shared{session, Nil{}, Nil{}, listeners, active, lastAssistant, retry, compaction}, QueuedMessages{steering, following})
+    case Shared{session, steering, following, listeners, active, lastAssistant, retry, compaction, bash}:
+      (Shared{session, Nil{}, Nil{}, listeners, active, lastAssistant, retry, compaction, bash}, QueuedMessages{steering, following})
 def clearQueue(session: AgentSession) -> IO(QueuedMessages):
   match session:
     case AgentSession{+agent, +shared, _, _, _, _}:
@@ -1477,9 +1714,16 @@ def clearQueue(session: AgentSession) -> IO(QueuedMessages):
         emitQueueUpdate(shared)
         return cleared
 
-def promptWhile(session: AgentSession, streaming: Bool, +text: String, +images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
+def flushPending(session: AgentSession) -> IO(Unit):
+  match session:
+    case AgentSession{agent, shared, _, _, _, _}: flushPendingBash(agent, shared)
+
+def promptWhile(+session: AgentSession, streaming: Bool, +text: String, +images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
   match streaming behavior:
-    case False{} _: runAgentPrompt(session, text, images)
+    case False{} _:
+      do IO<Result<&2, &2, String, Unit>>:
+        flushPending(session)
+        runAgentPrompt(session, text, images)
     case True{} None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."})
     case True{} Some{chosen}:
       do IO<Result<&2, &2, String, Unit>>:
@@ -1639,7 +1883,7 @@ def navigateLocated(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Sess
 
 def navigateSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Shared, +targetId: String) -> IO(Result<&2, &2, String, Navigation>):
   match snapshot:
-    case Shared{+current, _, _, _, _, _, _, _}:
+    case Shared{+current, _, _, _, _, _, _, _, _}:
       +tree = stateOf(current)
       navigateLocated(agent, shared, current, targetId, tree, S.getLeafId(Unit, Tools.ToolDetails, V.Value, tree))
 
@@ -1681,8 +1925,8 @@ def unsavedSource(+current: Session(), leafId: Maybe<&2, String>) -> Bool:
 
 def forkShared(previous: Shared, next: Session()) -> Shared:
   match previous:
-    case Shared{_, _, _, listeners, _, _, RetryState{policy, _, window, _}, _}:
-      Shared{next, Nil{}, Nil{}, listeners, False{}, None{}, RetryState{policy, 0n, window, None{}}, CompactionState{False{}, None{}, None{}}}
+    case Shared{_, _, _, listeners, _, _, RetryState{policy, _, window, _}, _, bash}:
+      Shared{next, Nil{}, Nil{}, listeners, False{}, None{}, RetryState{policy, 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, bash}
 
 def finishFork(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +next: Session(), text: String, previousSessionFile: Maybe<&2, String>, reset: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Fork>):
   match reset:
@@ -1723,7 +1967,7 @@ def forkFound(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(),
 
 def forkSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Shared, entryId: String) -> IO(Result<&2, &2, String, Fork>):
   match snapshot:
-    case Shared{+current, _, _, _, _, _, _, _}:
+    case Shared{+current, _, _, _, _, _, _, _, _}:
       forkFound(agent, shared, current, S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(current), entryId))
 
 # Fork before a user message into a new session, returning that message's text

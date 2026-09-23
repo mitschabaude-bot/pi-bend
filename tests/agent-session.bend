@@ -23,6 +23,10 @@ import ../packages/coding-agent/src/core/settings-manager.bend as Settings
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
 import ../packages/ai/src/utils/message-json.bend as Json
+import ../packages/coding-agent/src/core/bash-executor.bend as BashExec
+import ../packages/coding-agent/src/core/tools/bash.bend as Bash
+import ../packages/runtime/src/child-process.bend as Child
+import ../packages/runtime/src/utf8.bend as Utf8
 
 # AgentSession scenarios over a faux provider that answers each request with
 # the next scripted text, as upstream's registerFauxProvider does. The
@@ -553,6 +557,173 @@ def compactScenario(+dir: String, +agentDir: String, prompts: String, responses:
     reportSession(sessionOf(value))
     teardown(value)
 
+# bash: user bash commands (suite/agent-session-bash-persistence.test.ts).
+def ExecResult() -> Data: Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>
+def BashOutcome() -> Data: Result<&2, &2, String, BashExec.BashResult>
+
+def exitText(code: Maybe<&2, U32>) -> String:
+  match code:
+    case None{}: "null"
+    case Some{value}: Nat.show(U32.to_nat(value))
+
+def flag(value: Bool) -> String: Bool.pick(String, value, "true", "false")
+
+def reportBash(+label: String, result: BashOutcome()) -> IO(Unit):
+  match result:
+    case Done{BashExec.BashResult{output, exitCode, cancelled, truncated, _}}: IO.print("{\"type\":\"bash_result\",\"label\":" ++ Decode.quote(label) ++ ",\"output\":" ++ Decode.quote(output) ++ ",\"exitCode\":" ++ exitText(exitCode) ++ ",\"cancelled\":" ++ flag(cancelled) ++ ",\"truncated\":" ++ flag(truncated) ++ "}")
+    case Fail{error}: IO.print("{\"type\":\"bash_failed\",\"label\":" ++ Decode.quote(label) ++ ",\"error\":" ++ Decode.quote(error) ++ "}")
+
+def reportBashState(+session: Session.AgentSession, +label: String) -> IO(Unit):
+  do IO<Unit>:
+    running : Bool <- Session.isBashRunning(session)
+    pending : Bool <- Session.hasPendingBashMessages(session)
+    IO.print("{\"type\":\"bash_state\",\"label\":" ++ Decode.quote(label) ++ ",\"running\":" ++ flag(running) ++ ",\"pending\":" ++ flag(pending) ++ "}")
+
+def sendText(onData: C.Callback<List<&2, U32>, Result<&2, &2, String, Unit>>, text: String) -> IO(Unit):
+  do IO<Unit>:
+    written : Result<&2, &2, String, Unit> <- C.call(List<&2, U32>, Result<&2, &2, String, Unit>, onData, Utf8.encode(text))
+    return Unit{}
+
+# Custom operations writing "hello " and "world" through onData.
+def streamingExec(env: Unit, input: Bash.BashExecutionInput) -> IO(ExecResult()):
+  match input:
+    case Bash.BashExecutionInput{_, _, +onData, _, _, _}:
+      do IO<ExecResult()>:
+        sendText(onData, "hello ")
+        sendText(onData, "world")
+        return Done{Some{0}}
+
+# Controlled operations: announce the invocation, wait for release, report
+# whether the signal was aborted by then and exit 0.
+type Hold is Data:
+  Hold{label: String, entered: Chan(Unit), release: Chan(Unit)}
+
+def heldExec(hold: Hold, input: Bash.BashExecutionInput) -> IO(ExecResult()):
+  match hold input:
+    case Hold{label, entered, release} Bash.BashExecutionInput{_, _, _, signal, _, _}:
+      do IO<ExecResult()>:
+        sent : Bool <- Chan.send(Unit, entered, Unit{})
+        R.requireSent(sent)
+        released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        aborted : Bool <- Child.parentAborted(signal)
+        IO.print("{\"type\":\"exec_signal\",\"command\":" ++ Decode.quote(label) ++ ",\"aborted\":" ++ flag(aborted) ++ "}")
+        return Done{Some{0}}
+
+def heldOperations(hold: Hold) -> IO(Bash.BashOperations):
+  do IO<Bash.BashOperations>:
+    exec : C.Callback<Bash.BashExecutionInput, ExecResult()> <- C.create(~Hold, ~Bash.BashExecutionInput, ~ExecResult(), ~heldExec, hold)
+    return Bash.BashOperations{exec}
+
+def collect(chunks: R.Ref<List<&2, String>>, delta: String) -> IO(Unit):
+  R.modify(List<&2, String>, Unit, chunks, old => (List.append(&2, String, old, delta <> Nil{}), Unit{}))
+
+def bashInBackground(session: Session.AgentSession, command: String, operations: Bash.BashOperations, +done: Chan(BashOutcome())) -> IO(Unit):
+  do IO<Unit>:
+    result : BashOutcome() <- Session.executeBash(session, command, None{}, Session.BashOptions{None{}, None{}, Some{operations}})
+    sent : Bool <- Chan.send(BashOutcome(), done, result)
+    R.requireSent(sent)
+
+def reportReceived(+label: String, received: Maybe<&1, BashOutcome()>) -> IO(Unit):
+  match received:
+    case Some{result}: reportBash(label, result)
+    case None{}: reportBash(label, Fail{"bash fiber did not finish"})
+
+def hiResult() -> BashExec.BashResult: BashExec.BashResult{"hi", Some{0}, False{}, False{}, None{}}
+
+def customScenario(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +chunks : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
+    +collector : C.Callback<String, Unit> <- C.create(~R.Ref<List<&2, String>>, ~String, ~Unit, ~collect, chunks)
+    exec : C.Callback<Bash.BashExecutionInput, ExecResult()> <- C.create(~Unit, ~Bash.BashExecutionInput, ~ExecResult(), ~streamingExec, Unit{})
+    +operations : Bash.BashOperations = Bash.BashOperations{exec}
+    custom : BashOutcome() <- Session.executeBash(session, "custom", Some{collector}, Session.BashOptions{None{}, Some{"bash-1"}, Some{operations}})
+    reportBash("custom", custom)
+    C.dispose(String, Unit, collector)
+    Bash.disposeOperations(operations)
+    deltas : List<&2, String> <- R.dispose(List<&2, String>, chunks)
+    IO.print("{\"type\":\"callback_deltas\",\"deltas\":[" ++ String.join(quotedAll(deltas), ",") ++ "]}")
+
+def concurrentScenario(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +entered1 : Chan(Unit) <- Chan.new(Unit, 1)
+    +release1 : Chan(Unit) <- Chan.new(Unit, 1)
+    +entered2 : Chan(Unit) <- Chan.new(Unit, 1)
+    +release2 : Chan(Unit) <- Chan.new(Unit, 1)
+    +done1 : Chan(BashOutcome()) <- Chan.new(BashOutcome(), 1)
+    +done2 : Chan(BashOutcome()) <- Chan.new(BashOutcome(), 1)
+    +first : Bash.BashOperations <- heldOperations(Hold{"first", entered1, release1})
+    +second : Bash.BashOperations <- heldOperations(Hold{"second", entered2, release2})
+    IO.spawn(Unit, bashInBackground(session, "first", first, done1))
+    IO.spawn(Unit, bashInBackground(session, "second", second, done2))
+    began1 : Maybe<&1, Unit> <- Chan.recv(Unit, entered1)
+    began2 : Maybe<&1, Unit> <- Chan.recv(Unit, entered2)
+    reportBashState(session, "both_running")
+    sent1 : Bool <- Chan.send(Unit, release1, Unit{})
+    R.requireSent(sent1)
+    finished1 : Maybe<&1, BashOutcome()> <- Chan.recv(BashOutcome(), done1)
+    reportReceived("first", finished1)
+    reportBashState(session, "after_first")
+    Session.abortBash(session)
+    sent2 : Bool <- Chan.send(Unit, release2, Unit{})
+    R.requireSent(sent2)
+    finished2 : Maybe<&1, BashOutcome()> <- Chan.recv(BashOutcome(), done2)
+    reportReceived("second", finished2)
+    reportBashState(session, "after_abort")
+    Bash.disposeOperations(first)
+    Bash.disposeOperations(second)
+    Chan.close(Unit, entered1)
+    Chan.close(Unit, release1)
+    Chan.close(Unit, entered2)
+    Chan.close(Unit, release2)
+    Chan.close(BashOutcome(), done1)
+    Chan.close(BashOutcome(), done2)
+
+def bashScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
+    Session.recordBashResult(sessionOf(value), "echo hi", hiResult(), None{})
+    reportBashState(sessionOf(value), "idle_record")
+    reportMessages(sessionOf(value))
+    reportEntries(sessionOf(value))
+    local : BashOutcome() <- Session.executeBash(sessionOf(value), "printf 'hello'", None{}, Session.bashDefaults())
+    reportBash("local", local)
+    customScenario(sessionOf(value))
+    concurrentScenario(sessionOf(value))
+    reportMessages(sessionOf(value))
+    teardown(value)
+
+# bash_deferred: a result recorded while the agent streams waits for the run
+# to settle, then precedes the next prompt.
+def bashDeferredScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Result<&2, &2, String, Unit>) <- Chan.new(Result<&2, &2, String, Unit>, 1)
+    +value : Fixture <- fixture(stored, dir, agentDir, "done" <> "after flush" <> Nil{}, Gate{started, release} <> Nil{})
+    IO.spawn(Unit, promptInBackground(sessionOf(value), done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    Session.recordBashResult(sessionOf(value), "echo hi", hiResult(), None{})
+    reportBashState(sessionOf(value), "while_streaming")
+    reportMessages(sessionOf(value))
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    R.requireSent(sent)
+    finished : Maybe<&1, Result<&2, &2, String, Unit>> <- Chan.recv(Result<&2, &2, String, Unit>, done)
+    reportFinished(finished)
+    reportBashState(sessionOf(value), "settled")
+    reportMessages(sessionOf(value))
+    next : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "next turn", Nil{}, None{})
+    reportPrompt(next)
+    reportMessages(sessionOf(value))
+    reportEntries(sessionOf(value))
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, release)
+    Chan.close(Result<&2, &2, String, Unit>, done)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persist" <> dir <> agentDir <> Nil{}: persistScenario(dir, agentDir)
@@ -564,7 +735,9 @@ def run(args: List<String>) -> IO(Unit):
     case "navigate" <> dir <> agentDir <> Nil{}: navigationScenario(dir, agentDir)
     case "fork" <> dir <> agentDir <> Nil{}: forkScenario(dir, agentDir, False{})
     case "fork_persisted" <> dir <> agentDir <> Nil{}: forkScenario(dir, agentDir, True{})
-    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy|navigate|fork|fork_persisted> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
+    case "bash" <> dir <> agentDir <> Nil{}: bashScenario(dir, agentDir)
+    case "bash_deferred" <> dir <> agentDir <> Nil{}: bashDeferredScenario(dir, agentDir)
+    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy|navigate|fork|fork_persisted|bash|bash_deferred> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
 
 def main() -> IO(Unit):
   do IO<Unit>:
