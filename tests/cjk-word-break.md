@@ -49,3 +49,5 @@ All ICU source references use [`unicode-org/icu`, tag `release-78.3`](https://gi
 The adjacent dictionary manifest records the source URL/hash and packed asset hash. `icu78-cjk.LICENSE` retains the complete ICU license and the complete cjdict source notices, including the dictionary's underlying Libtabe/IPADIC notices and its account of removing CC-CEDICT-only words. Generated Unicode property predicates use the existing SHA-pinned UCD17 archive and Unicode License V3.
 
 Root integration at `64fab36`/`f226504` regenerated both assets, rebuilt all fixtures with the shared compiler, and passed all 315,968 prefix and 2,151 segmentation comparisons on Bun/native one/four plus the complete NFKC boundary oracle. Logs: `build/cjk-dictionary-check.log` and `build/cjk-word-break-check.log`.
+
+After the checked-Nat cost change `d5da8dc`, root rebuilt and reran the full 2,151-boundary corpus, the high-starting-cost invariance check and complete normalization-boundary oracle on all three backends. Log: `build/cjk-word-break-nat-check.log`.

@@ -29,3 +29,5 @@ python3 tests/word_navigation_check.py --upstream ../pi-mono
 The oracle needs Bun and a checkout of the pinned source; its temporary TypeScript and all compiled outputs stay under ignored `build/`.
 
 Root integration regenerated the word property data from the hash-pinned local UCD archive and independently rebuilt both fixtures with the shared compiler. All three backends pass the complete boundary and navigation runners described above.
+
+Root integration at `a5b2fb5` rebuilt both fixtures with the shared compiler and passed all 1,262 navigation cases on Bun/native one/four, including checked callback failures. Log: `build/word-navigation-checked-check.log`.
