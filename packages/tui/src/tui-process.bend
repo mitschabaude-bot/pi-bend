@@ -1,0 +1,74 @@
+import Base
+import ./overlays.bend as O
+import ./terminal.bend as Terminal
+import ./tui-base.bend as Tui
+import ./tui-main-screen.bend as Screen
+
+# Rendering is a transaction: the owner publishes mouse bounds and the screen
+# retains its new diff state only after every ordered terminal effect succeeds.
+type Session is Data: Session{tui: Tui.TuiBase,screen: Screen.State}
+type Error is Data:
+  Composition{cause: Tui.Error}
+  InvalidFrame{cause: Screen.RenderError}
+  Output{cause: Terminal.Error}
+type Draw is Data:
+  Drawn{session: Session}
+  Rejected{session: Session,cause: Error}
+
+def initial() -> Session: Session{Tui.newTui(),Screen.initial()}
+def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
+  match tui:
+    case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,Tui.RenderSchedule{_,_,_,_,_,stopped},show,clear}:
+      Screen.Options{termux,clear,Bool.not(List.is_empty(&2,O.Entry,entries)),show,stopped}
+def frame(prepared: Tui.PreparedFrame,width: Nat,height: Nat) -> Screen.Frame:
+  match prepared:
+    case Tui.PreparedFrame{_,_,lines,cursor}: Screen.Frame{lines,cursor,width,height}
+def planned(+prepared: Tui.PreparedFrame,screen: Screen.State,termux: Bool,width: Nat,height: Nat) -> Result<&2,&2,Screen.RenderError,Screen.Plan>:
+  match prepared:
+    case Tui.PreparedFrame{+tui,_,_,_}:
+      Screen.checkedPlan(screen,frame(prepared,width,height),options(tui,termux))
+
+def effect(handle: Terminal.Handle,value: Screen.Effect) -> IO(Result<&2,&2,Terminal.Error,Unit>):
+  match value:
+    case Screen.Write{value}: Terminal.write(handle,value)
+    case Screen.Visibility{True{}}: Terminal.showCursor(handle)
+    case Screen.Visibility{False{}}: Terminal.hideCursor(handle)
+@unsafe def writeNext(+handle: Terminal.Handle,batch: Maybe<&2,Screen.Batch>) -> IO(Result<&2,&2,Terminal.Error,Unit>):
+  match batch:
+    case None{}: IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}})
+    case Some{Screen.Batch{value,rest}}:
+      do IO<Result<&2,&2,Terminal.Error,Unit>>:
+        +result : Result<&2,&2,Terminal.Error,Unit> <- effect(handle,value)
+        Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),Result.is_done(&2,&2,Terminal.Error,Unit,result),
+          _ => writeNext(handle,Screen.nextEffect(rest)),
+          _ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,result))(Unit{})
+def writeEffects(handle: Terminal.Handle,output: Screen.Stream) -> IO(Result<&2,&2,Terminal.Error,Unit>):
+  writeNext(handle,Screen.nextEffect(output))
+def finished(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,prepared: Tui.PreparedFrame,next: Screen.State) -> Draw:
+  match result old:
+    case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),next}}
+    case Fail{error} Session{tui,screen}: Rejected{Session{tui,Screen.resetRenderState(screen)},Output{error}}
+def executePlan(result: Result<&2,&2,Screen.RenderError,Screen.Plan>,old: Session,prepared: Tui.PreparedFrame,handle: Terminal.Handle) -> IO(Draw):
+  match result:
+    case Fail{error}: IO.pure(Draw,Rejected{old,InvalidFrame{error}})
+    case Done{Screen.Plan{next,output,_}}:
+      do IO<Draw>:
+        written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(handle,output)
+        return finished(written,old,prepared,next)
+def executePrepared(result: Tui.ResultOf(Tui.PreparedFrame),+old: Session,handle: Terminal.Handle,termux: Bool,width: Nat,height: Nat) -> IO(Draw):
+  match result:
+    case Fail{error}: IO.pure(Draw,Rejected{old,Composition{error}})
+    case Done{+prepared}:
+      match old:
+        case Session{_,+screen}: executePlan(planned(prepared,screen,termux,width,height),old,prepared,handle)
+def sized(+session: Session,handle: Terminal.Handle,termux: Bool,+columns: U32,+rows: U32) -> IO(Draw):
+  match session:
+    case Session{+tui,_}:
+      do IO<Draw>:
+        prepared : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(tui,U32.to_nat(columns),U32.to_nat(rows))
+        executePrepared(prepared,session,handle,termux,U32.to_nat(columns),U32.to_nat(rows))
+def draw(session: Session,+handle: Terminal.Handle,termux: Bool) -> IO(Draw):
+  do IO<Draw>:
+    columns : U32 <- Terminal.getColumns(handle)
+    rows : U32 <- Terminal.getRows(handle)
+    sized(session,handle,termux,columns,rows)
