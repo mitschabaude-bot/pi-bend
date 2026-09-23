@@ -20,6 +20,7 @@ APIS = {
     'openai-codex-responses': 'T.OpenAICodexResponsesApi{}',
     'openai-completions': 'T.OpenAICompletionsApi{}',
     'azure-openai-responses': 'T.AzureOpenAIResponsesApi{}',
+    'google-generative-ai': 'T.GoogleGenerativeAiApi{}',
 }
 RESPONSES_COMPAT = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
 AFFINITY = {'openai-session': 'T.OpenAISession{}', 'openai-no-session': 'T.OpenAINoSession{}', 'openrouter-session': 'T.OpenRouterSession{}'}
