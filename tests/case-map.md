@@ -11,8 +11,10 @@ The main scan carries whether a cased scalar precedes the current position throu
 ```sh
 python3 scripts/generate-case-map.py --check
 bun "$BEND" tests/case-map.bend -o build/case-map.js
-bun "$BEND" tests/case-map.bend -o build/case-map
+BEND="$BEND" BEND_TUS=8 sh scripts/build-pure.sh tests/case-map.bend build/case-map
 python3 tests/case_map_check.py
 ```
 
 Validation used `/home/agent/code/pi-bend-tls/build/bend-process-files/bend2/main.ts`. Tables are covered by the runtime's existing Unicode License V3 file. This dependency unblocks case-insensitive SelectList filtering; it does not implement locale collation or the pending Intl word-segmentation dictionaries/models.
+
+Root integration regenerated the pinned tables and independently rebuilt hosted/native artifacts with the unchanged shared compiler. All three backends pass 2,204 exact comparisons, the scalar-domain digest and all four long cases.
