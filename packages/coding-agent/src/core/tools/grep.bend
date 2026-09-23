@@ -41,7 +41,7 @@ type GrepToolOptions is Data:
 type GrepContext is Data:
   GrepContext{cwd: Maybe<&2,String>}
 type Invocation is Data:
-  Invocation{paths: Paths.Environment,cwd: String,operations: Maybe<&2,GrepOperations>}
+  Invocation{paths: Paths.Environment,tools: Tools.ToolsManager,cwd: String,operations: Maybe<&2,GrepOperations>}
 type ToolOwner is Type:
   ToolOwner{tool: Agent.AgentTool<Maybe<&2,GrepToolDetails>,Error>}
 
@@ -379,15 +379,15 @@ def withRg(rgPath: Maybe<&2,String>) -> ResultOf(String):
   match rgPath:
     case None{}: Fail{Operation{"ripgrep (rg) is not available and could not be downloaded"}}
     case Some{path}: Done{path}
-def ensureRg() -> IO(ResultOf(String)):
+def ensureRg(tools: Tools.ToolsManager) -> IO(ResultOf(String)):
   do IO<ResultOf(String)>:
-    rgPath : Maybe<&2,String> <- Tools.ensureTool(Tools.Rg{},None{})
+    rgPath : Maybe<&2,String> <- Tools.ensureTool(tools,Tools.Rg{},None{})
     return withRg(rgPath)
 
 def execute(environment: Invocation,+path: String,pattern: String,glob: Maybe<&2,String>,insensitive: Bool,literal: Bool,+context: Nat,+limit: Nat,+signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match environment:
-    case Invocation{_,_,+operations}:
-      then(String,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,ensureRg(),+rgPath =>
+    case Invocation{_,tools,_,+operations}:
+      then(String,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,ensureRg(tools),+rgPath =>
         then(Bool,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,isDirectory(operations,path),directory =>
           then(Collected,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,IO.bind(Run,ResultOf(Collected),search(rgPath,rgArguments(insensitive,literal,glob,pattern,path),limit,signal),run => ran(rgPath,run)),collected =>
             format(path,directory,context,limit,operations,collected))))
@@ -425,7 +425,7 @@ def resolved(environment: Invocation,input: GrepToolInput,signal: Maybe<&2,Abort
     case GrepToolInput{pattern,_,glob,insensitive,literal,context,limit} Done{path}: execute(environment,path,pattern,glob,Maybe.default(&2,Bool,insensitive,False{}),Maybe.default(&2,Bool,literal,False{}),Maybe.default(&2,Nat,context,0n),Nat.max(1n,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT())),signal)
 def invokeInput(+environment: Invocation,context: GrepContext,signal: Maybe<&2,Abort.AbortSignal<Unit>>,+input: GrepToolInput) -> IO(ToolResult()):
   match environment context input:
-    case Invocation{paths,cwd,_} GrepContext{override} GrepToolInput{_,path,_,_,_,_,_}:
+    case Invocation{paths,_,cwd,_} GrepContext{override} GrepToolInput{_,path,_,_,_,_,_}:
       resolved(environment,input,signal,Paths.resolveToCwd(paths,Text.orElse(path,"."),Text.orElse(override,cwd)))
 def invokeWithContext(environment: Invocation,context: GrepContext,request: Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>) -> IO(ToolResult()):
   match request:
@@ -455,11 +455,11 @@ def grepSchema() -> Value.Value:
     Record.Property{"context",parameter("number","Number of lines to show before and after each match (default: 0)")} <>
     Record.Property{"limit",parameter("number","Maximum number of matches to return (default: 100)")} <> Nil{}}}} <>
     Record.Property{"required",Value.ArrayValue{Value.Text{"pattern"} <> Nil{}}} <> Nil{}}}
-def createGrepTool(paths: Paths.Environment,cwd: String,options: GrepToolOptions) -> IO(ToolOwner):
+def createGrepTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: String,options: GrepToolOptions) -> IO(ToolOwner):
   match options:
     case GrepToolOptions{operations}:
       do IO<ToolOwner>:
-        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,~ToolResult(),~invoke,Invocation{paths,cwd,operations})
+        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,~ToolResult(),~invoke,Invocation{paths,tools,cwd,operations})
         return ToolOwner{Agent.AgentTool{"grep","Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",grepSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"grep",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,GrepToolDetails>,Error>:
   match owner:

@@ -47,6 +47,7 @@ import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ./resource-loader.bend as Resources
 import ./diagnostics.bend as Diagnostics
 import ./tools/index.bend as Tools
+import ../utils/tools-manager.bend as Manager
 import ./tools/file-mutation-queue.bend as Queue
 
 # The owned services behind one agent: transport, credentials, model runtime,
@@ -431,8 +432,9 @@ def seedSessionId(seed: SessionSeed) -> String:
 def agentOptions(prompt: String, model: Models.Model(), thinking: Ai.ModelThinkingLevel, tools: List<&2, Tools.Tool()>, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<Unit, Details(), Custom(), Error(), Unit>:
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{prompt}, Some{model}, Some{thinking}, Some{tools}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
-def environment(paths: Paths.Environment, cwd: String, agentDir: String, queue: Queue.Queue) -> Tools.Environment:
-  Tools.Environment{paths, cwd, Path.join(agentDir, "bin"), queue}
+# The tools download fd and rg through the agent's own fetch.
+def environment(paths: Paths.Environment, cwd: String, agentDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue) -> Tools.Environment:
+  Tools.Environment{paths, cwd, Manager.ToolsManager{Path.join(agentDir, "bin"), urlContext(), Some{fetch}}, queue}
 
 def pathsError(error: FS.Error) -> String: "Could not resolve the working directory"
 
@@ -470,11 +472,11 @@ def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storage
     Storage.dispose(storage)
     disposeTransport(transport)
 
-def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cwd: String, agentDir: String, borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
+def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cwd: String, agentDir: String, fetch: Fetch.Fetch(Unit), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
   match borrowed:
     case Tuple{queue, handle}:
       do IO<Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)>:
-        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, handle), Tools.defaultOptions())
+        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, fetch, handle), Tools.defaultOptions())
         return (queue, Tools.borrowTools(owners))
 
 def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prompt: String, +model: Models.Model(), +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
@@ -486,10 +488,10 @@ def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageSt
 
 def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
-    case Transport{+authorizer, runtime, fetch} Done{prompt} Done{+model}:
+    case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
-        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, Queue.borrow(queue))
+        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, fetch, Queue.borrow(queue))
         +stream : Stream() <- createStream(authorizer)
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)

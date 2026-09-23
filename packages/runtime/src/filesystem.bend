@@ -248,3 +248,76 @@ def readDirectory(path: String) -> IO(Result<&2,&2,Error,List<&2,DirectoryEntry>
   do IO<Result<&2,&2,Error,List<&2,DirectoryEntry>>>:
     result : Result<&1,&1,U32 & String,List<(List<&2,U32> & U32)>> <- Directory.read_bytes(path)
     return directoryResult(result)
+
+def unit(result: Result<&1,&1,U32 & String,Unit>) -> Result<&2,&2,Error,Unit>: system(Unit,result)
+
+def rename(from: String, to: String) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    result : Result<&1,&1,U32 & String,Unit> <- File.rename(from,to)
+    return unit(result)
+
+def chmod(path: String, mode: U32) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    result : Result<&1,&1,U32 & String,Unit> <- File.chmod(path,mode)
+    return unit(result)
+
+# Removal work: visit a path, or remove a directory whose entries are gone.
+type Removal is Data:
+  Visit{path: String}
+  Rmdir{path: String}
+
+def childVisits(+path: String,entries: List<&2,DirectoryEntry>,rest: List<&2,Removal>) -> List<&2,Removal>:
+  match entries:
+    case Nil{}: rest
+    case DirectoryEntry{name,_} <> more: Visit{child(path,name)} <> childVisits(path,more,rest)
+
+def missing(+force: Bool,+message: String,rest: List<&2,Removal>) -> Result<&2,&2,Error,List<&2,Removal>>:
+  Bool.pick(Result<&2,&2,Error,List<&2,Removal>>,force,Done{rest},Fail{System{2,message}})
+
+def existing(+path: String,directory: Bool,deep: Bool,rest: List<&2,Removal>) -> IO(Result<&2,&2,Error,List<&2,Removal>>):
+  match directory deep:
+    case True{} False{}: IO.pure(Result<&2,&2,Error,List<&2,Removal>>,Fail{System{21,"Is a directory"}})
+    case True{} True{}:
+      do IO<Result<&2,&2,Error,List<&2,Removal>>>:
+        entries : Result<&2,&2,Error,List<&2,DirectoryEntry>> <- readDirectory(path)
+        return Result.map(&2,&2,Error,List<&2,DirectoryEntry>,List<&2,Removal>,values => childVisits(path,values,Rmdir{path} <> rest),entries)
+    case _ _:
+      do IO<Result<&2,&2,Error,List<&2,Removal>>>:
+        result : Result<&1,&1,U32 & String,Unit> <- File.unlink(path)
+        return Result.map(&2,&2,Error,Unit,List<&2,Removal>,_ => rest,unit(result))
+
+def visited(+path: String,deep: Bool,force: Bool,rest: List<&2,Removal>,status: Result<&1,&1,U32 & String,U32>) -> IO(Result<&2,&2,Error,List<&2,Removal>>):
+  match status:
+    case Fail{(2,message)}: IO.pure(Result<&2,&2,Error,List<&2,Removal>>,missing(force,message,rest))
+    case Fail{(code,message)}: IO.pure(Result<&2,&2,Error,List<&2,Removal>>,Fail{System{code,message}})
+    case Done{value}: existing(path,U32.is_eq(value,2),deep,rest)
+
+def removed(+path: String,rest: List<&2,Removal>,result: Result<&1,&1,U32 & String,Unit>) -> Result<&2,&2,Error,List<&2,Removal>>:
+  Result.map(&2,&2,Error,Unit,List<&2,Removal>,_ => rest,unit(result))
+
+def step(+recursive: Bool,+force: Bool,work: List<&2,Removal>) -> IO(Result<&2,&2,Error,List<&2,Removal>>):
+  match work:
+    case Nil{}: IO.pure(Result<&2,&2,Error,List<&2,Removal>>,Done{Nil{}})
+    case Visit{+path} <> rest:
+      do IO<Result<&2,&2,Error,List<&2,Removal>>>:
+        status : Result<&1,&1,U32 & String,U32> <- File.link_kind(path)
+        visited(path,recursive,force,rest,status)
+    case Rmdir{+path} <> rest:
+      do IO<Result<&2,&2,Error,List<&2,Removal>>>:
+        result : Result<&1,&1,U32 & String,Unit> <- Directory.remove(path)
+        return removed(path,rest,result)
+
+# The filesystem, not the input, bounds the traversal.
+@unsafe def drain(+recursive: Bool,+force: Bool,work: Result<&2,&2,Error,List<&2,Removal>>) -> IO(Result<&2,&2,Error,Unit>):
+  match work:
+    case Fail{error}: IO.pure(Result<&2,&2,Error,Unit>,Fail{error})
+    case Done{Nil{}}: IO.pure(Result<&2,&2,Error,Unit>,Done{Unit{}})
+    case Done{work}:
+      do IO<Result<&2,&2,Error,Unit>>:
+        next : Result<&2,&2,Error,List<&2,Removal>> <- step(recursive,force,work)
+        drain(recursive,force,next)
+
+# Node's fs.rmSync: with force a missing path is not an error, a directory
+# needs recursive, and symbolic links are removed rather than followed.
+def remove(path: String,recursive: Bool,force: Bool) -> IO(Result<&2,&2,Error,Unit>):
+  drain(recursive,force,Done{[Visit{path}]})

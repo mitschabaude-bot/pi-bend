@@ -11,13 +11,15 @@ import ./bash.bend as Bash
 import ./edit.bend as Edit
 import ./write.bend as Write
 import ./find.bend as Find
+import ./grep.bend as Grep
+import ../../utils/tools-manager.bend as Manager
 import ./truncate.bend as Truncate
 import ./file-mutation-queue.bend as Queue
 
 # The public coding tools behind one agent-tool type. Upstream erases each
 # tool's details to `any`; here the details and errors are explicit sums, and
 # every tool is bridged into AgentTool<ToolDetails, ToolError> without
-# changing what the model sees. powershell, grep and ls are not registered yet.
+# changing what the model sees. powershell and ls are not registered yet.
 
 type ToolName is Data:
   ReadTool{}
@@ -25,6 +27,7 @@ type ToolName is Data:
   EditTool{}
   WriteTool{}
   FindTool{}
+  GrepTool{}
 
 def allToolNames() -> List<&2, ToolName>: [ReadTool{}, BashTool{}, EditTool{}, WriteTool{}]
 
@@ -35,6 +38,7 @@ def toolName(name: ToolName) -> String:
     case EditTool{}: "edit"
     case WriteTool{}: "write"
     case FindTool{}: "find"
+    case GrepTool{}: "grep"
 
 def parseToolName(text: String) -> Maybe<&2, ToolName>:
   match text:
@@ -43,6 +47,7 @@ def parseToolName(text: String) -> Maybe<&2, ToolName>:
     case "edit": Some{EditTool{}}
     case "write": Some{WriteTool{}}
     case "find": Some{FindTool{}}
+    case "grep": Some{GrepTool{}}
     case _: None{}
 
 # RawDetails holds tool details restored from a session file: upstream stores
@@ -53,6 +58,7 @@ type ToolDetails is Data:
   EditDetails{value: Edit.EditToolDetails}
   WriteDetails{}
   FindDetails{value: Maybe<&2, Find.FindToolDetails>}
+  GrepDetails{value: Maybe<&2, Grep.GrepToolDetails>}
   RawDetails{value: V.Value}
 
 # Failure carries loop-level messages (validation, declaration, provider)
@@ -63,6 +69,7 @@ type ToolError is Data:
   EditFailed{cause: Edit.Error}
   WriteFailed{cause: Write.Error}
   FindFailed{cause: Find.Error}
+  GrepFailed{cause: Grep.Error}
   Failure{message: String}
 
 def fileError(error: FS.Error) -> String:
@@ -87,6 +94,7 @@ def errorMessage(error: ToolError) -> String:
     case EditFailed{cause}: Edit.errorMessage(cause)
     case WriteFailed{cause}: writeMessage(cause)
     case FindFailed{cause}: Find.errorMessage(cause)
+    case GrepFailed{cause}: Grep.errorMessage(cause)
     case Failure{message}: message
 
 def failure(message: String) -> ToolError: Failure{message}
@@ -106,6 +114,7 @@ def promptSnippet(name: ToolName) -> String:
     case EditTool{}: "Make precise file edits with exact text replacement, including multiple disjoint edits in one call"
     case WriteTool{}: "Create or overwrite files"
     case FindTool{}: "Find files by glob pattern (respects .gitignore)"
+    case GrepTool{}: Grep.promptSnippet()
 
 def promptGuidelines(name: ToolName) -> List<&2, String>:
   match name:
@@ -114,6 +123,7 @@ def promptGuidelines(name: ToolName) -> List<&2, String>:
     case EditTool{}: ["Use edit for precise changes (edits[].oldText must match exactly)", "When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls", "Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.", "Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions."]
     case WriteTool{}: ["Use write only for new files or complete rewrites."]
     case FindTool{}: Nil{}
+    case GrepTool{}: Nil{}
 
 # Bridges
 # -------
@@ -142,6 +152,8 @@ def writeDetails(value: Unit) -> ToolDetails: WriteDetails{}
 def writeFailed(error: Write.Error) -> ToolError: WriteFailed{error}
 def findDetails(value: Maybe<&2, Find.FindToolDetails>) -> ToolDetails: FindDetails{value}
 def findFailed(error: Find.Error) -> ToolError: FindFailed{error}
+def grepDetails(value: Maybe<&2, Grep.GrepToolDetails>) -> ToolDetails: GrepDetails{value}
+def grepFailed(error: Grep.Error) -> ToolError: GrepFailed{error}
 
 # Streaming updates are forwarded into the loop wrapped in the details sum.
 def bashUpdate(callback: Update(), value: Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>) -> IO(Unit):
@@ -180,6 +192,7 @@ type Owned is Type:
   OwnedEdit{owner: Edit.ToolOwner, prepare: Prepare()}
   OwnedWrite{owner: Write.ToolOwner}
   OwnedFind{owner: Find.ToolOwner}
+  OwnedGrep{owner: Grep.ToolOwner}
 
 # The bridged tool borrows the underlying tool's callbacks; dispose retires
 # the bridges before the tool.
@@ -200,6 +213,7 @@ def disposeOwned(owned: Owned) -> IO(Unit):
         Edit.disposeTool(owner)
     case OwnedWrite{owner}: Write.disposeTool(owner)
     case OwnedFind{owner}: Find.disposeTool(owner)
+    case OwnedGrep{owner}: Grep.disposeTool(owner)
 
 def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
@@ -209,15 +223,15 @@ def disposeTool(owner: ToolOwner) -> IO(Unit):
         disposeOwned(owned)
 
 type ToolsOptions is Data:
-  ToolsOptions{read: Maybe<&2, Read.ReadToolOptions>, bash: Maybe<&2, Bash.BashToolOptions>, edit: Maybe<&2, Edit.EditToolOptions>, write: Maybe<&2, Write.WriteToolOptions>, find: Maybe<&2, Find.FindToolOptions>}
+  ToolsOptions{read: Maybe<&2, Read.ReadToolOptions>, bash: Maybe<&2, Bash.BashToolOptions>, edit: Maybe<&2, Edit.EditToolOptions>, write: Maybe<&2, Write.WriteToolOptions>, find: Maybe<&2, Find.FindToolOptions>, grep: Maybe<&2, Grep.GrepToolOptions>}
 
-def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{}, None{}}
+def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{}, None{}, None{}}
 
 # What every tool constructor needs besides its own options: the resolved
-# path environment, the working directory, pi's managed bin directory (fd, rg)
-# and the shared file-mutation queue.
+# path environment, the working directory, the manager of pi's bin directory
+# (fd, rg) and the shared file-mutation queue.
 type Environment is Data:
-  Environment{paths: Paths.Environment, cwd: String, binDir: String, queue: Queue.Queue}
+  Environment{paths: Paths.Environment, cwd: String, tools: Manager.ToolsManager, queue: Queue.Queue}
 
 # The bridged tool keeps the tool's metadata and runs through the registry's
 # execution callback; tools without argument preparation share it.
@@ -245,10 +259,21 @@ def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Maybe<&2, Find.FindToolDe
 
 def createFindTool(environment: Environment, options: Maybe<&2, Find.FindToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, _, _}:
+    case Environment{paths, cwd, tools, _}:
       do IO<ToolOwner>:
-        owner : Find.ToolOwner <- Find.createFindTool(paths, cwd, Maybe.default(&2, Find.FindToolOptions, options, Find.FindToolOptions{None{}}))
+        owner : Find.ToolOwner <- Find.createFindTool(paths, tools, cwd, Maybe.default(&2, Find.FindToolOptions, options, Find.FindToolOptions{None{}}))
         bridgedFind(Find.borrowTool(owner))
+
+def bridgedGrep(pair: Grep.ToolOwner & Agent.AgentTool<Maybe<&2, Grep.GrepToolDetails>, Grep.Error>) -> IO(ToolOwner):
+  match pair:
+    case (owner, tool): bridged(~Maybe<&2, Grep.GrepToolDetails>, ~Grep.Error, ~grepDetails, ~grepFailed, OwnedGrep{owner}, tool)
+
+def createGrepTool(environment: Environment, options: Maybe<&2, Grep.GrepToolOptions>) -> IO(ToolOwner):
+  match environment:
+    case Environment{paths, cwd, tools, _}:
+      do IO<ToolOwner>:
+        owner : Grep.ToolOwner <- Grep.createGrepTool(paths, tools, cwd, Maybe.default(&2, Grep.GrepToolOptions, options, Grep.GrepToolOptions{None{}}))
+        bridgedGrep(Grep.borrowTool(owner))
 
 def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2, Bash.BashToolDetails>, Bash.Error>) -> IO(ToolOwner):
   match pair:
@@ -259,7 +284,7 @@ def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2, Bash.BashToolDe
 
 def createBashTool(environment: Environment, options: Maybe<&2, Bash.BashToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{_, cwd, binDir, _}:
+    case Environment{_, cwd, Manager.ToolsManager{binDir, _, _}, _}:
       do IO<ToolOwner>:
         owner : Bash.ToolOwner <- Bash.createBashTool(binDir, cwd, Maybe.default(&2, Bash.BashToolOptions, options, Bash.BashToolOptions{None{}, None{}, None{}, None{}, None{}}))
         bridgedBash(Bash.borrowTool(owner))
@@ -297,11 +322,12 @@ def createWriteTool(environment: Environment, options: Maybe<&2, Write.WriteTool
 
 def createTool(name: ToolName, environment: Environment, options: ToolsOptions) -> IO(ToolOwner):
   match name options:
-    case ReadTool{} ToolsOptions{read, _, _, _, _}: createReadTool(environment, read)
-    case BashTool{} ToolsOptions{_, bash, _, _, _}: createBashTool(environment, bash)
-    case EditTool{} ToolsOptions{_, _, edit, _, _}: createEditTool(environment, edit)
-    case WriteTool{} ToolsOptions{_, _, _, write, _}: createWriteTool(environment, write)
-    case FindTool{} ToolsOptions{_, _, _, _, find}: createFindTool(environment, find)
+    case ReadTool{} ToolsOptions{read, _, _, _, _, _}: createReadTool(environment, read)
+    case BashTool{} ToolsOptions{_, bash, _, _, _, _}: createBashTool(environment, bash)
+    case EditTool{} ToolsOptions{_, _, edit, _, _, _}: createEditTool(environment, edit)
+    case WriteTool{} ToolsOptions{_, _, _, write, _, _}: createWriteTool(environment, write)
+    case FindTool{} ToolsOptions{_, _, _, _, find, _}: createFindTool(environment, find)
+    case GrepTool{} ToolsOptions{_, _, _, _, _, grep}: createGrepTool(environment, grep)
 
 def createTools(names: List<&2, ToolName>, +environment: Environment, +options: ToolsOptions) -> IO(List<&1, ToolOwner>):
   match names:
@@ -371,6 +397,11 @@ def findDetailsValue(value: Maybe<&2, Find.FindToolDetails>) -> V.Value:
     case None{}: V.Null{}
     case Some{Find.FindToolDetails{cut, resultLimit}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("resultLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, resultLimit), Nil{})))
 
+def grepDetailsValue(value: Maybe<&2, Grep.GrepToolDetails>) -> V.Value:
+  match value:
+    case None{}: V.Null{}
+    case Some{Grep.GrepToolDetails{cut, limit, lines}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("matchLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, limit), Json.optional("linesTruncated", Maybe.map(&2, Bool, V.Value, flag => V.Boolean{flag}, lines), Nil{}))))
+
 def detailsValue(value: ToolDetails) -> V.Value:
   match value:
     case ReadDetails{details}: readDetailsValue(details)
@@ -378,5 +409,6 @@ def detailsValue(value: ToolDetails) -> V.Value:
     case EditDetails{details}: editDetailsValue(details)
     case WriteDetails{}: Json.object(Nil{})
     case FindDetails{details}: findDetailsValue(details)
+    case GrepDetails{details}: grepDetailsValue(details)
     case RawDetails{raw}: raw
 

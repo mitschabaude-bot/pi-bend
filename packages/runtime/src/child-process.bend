@@ -5,6 +5,7 @@ import ./deferred.bend as Deferred
 import ./utf8.bend as Utf8
 import ./filesystem.bend as FS
 import ./string.bend as Strings
+import ./ref.bend as Ref
 
 # The process owner stays unreaped until the caller has retired its timeout
 # and abort observers. Pipe readers and idle timers finish before this returns.
@@ -625,3 +626,43 @@ def spawnSearched(command: String, args: List<String>, cwd: String, signals: Lis
 # own consumers, and any of the signals interrupts the process.
 def spawn(command: String, args: List<String>, cwd: String, env: List<String>, signals: List<&2,Abort.AbortSignal<Unit>>, onStdout: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>, onStderr: Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>) -> IO(Result<&2,&2,ExecutionError,U32>):
   spawnSearched(command,args,cwd,signals,onStdout,onStderr,withSearchPath(env,None{}))
+
+# Node's spawnSync without a shell: both streams are captured whole.
+type Completed is Data:
+  Completed{result: Result<&2,&2,ExecutionError,U32>, stdout: List<&2,U32>, stderr: List<&2,U32>}
+
+type Captured is Data:
+  Captured{stdout: List<&2,U32>, stderr: List<&2,U32>}
+
+def appendOut(bytes: List<&2,U32>, captured: Captured) -> Captured & Unit:
+  match captured:
+    case Captured{stdout,stderr}: (Captured{List.append(&2,U32,List.reverse(&2,U32,bytes),stdout),stderr},Unit{})
+
+def appendErr(bytes: List<&2,U32>, captured: Captured) -> Captured & Unit:
+  match captured:
+    case Captured{stdout,stderr}: (Captured{stdout,List.append(&2,U32,List.reverse(&2,U32,bytes),stderr)},Unit{})
+
+def captureOut(state: Ref.Ref<Captured>, bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    Ref.modify(Captured,Unit,state,captured => appendOut(bytes,captured))
+    return Done{Unit{}}
+
+def captureErr(state: Ref.Ref<Captured>, bytes: List<&2,U32>) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    Ref.modify(Captured,Unit,state,captured => appendErr(bytes,captured))
+    return Done{Unit{}}
+
+def completed(result: Result<&2,&2,ExecutionError,U32>, captured: Captured) -> Completed:
+  match captured:
+    case Captured{stdout,stderr}: Completed{result,List.reverse(&2,U32,stdout),List.reverse(&2,U32,stderr)}
+
+def spawnSync(command: String, args: List<String>, cwd: String, env: List<String>, signals: List<&2,Abort.AbortSignal<Unit>>) -> IO(Completed):
+  do IO<Completed>:
+    +state : Ref.Ref<Captured> <- Ref.new(Captured,Captured{Nil{},Nil{}})
+    +stdout : Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- Callback.create(~Ref.Ref<Captured>,~List<&2,U32>,~Result<&2,&2,String,Unit>,~captureOut,state)
+    +stderr : Callback.Callback<List<&2,U32>,Result<&2,&2,String,Unit>> <- Callback.create(~Ref.Ref<Captured>,~List<&2,U32>,~Result<&2,&2,String,Unit>,~captureErr,state)
+    result : Result<&2,&2,ExecutionError,U32> <- spawn(command,args,cwd,env,signals,stdout,stderr)
+    Callback.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,stdout)
+    Callback.dispose(List<&2,U32>,Result<&2,&2,String,Unit>,stderr)
+    captured : Captured <- Ref.dispose(Captured,state)
+    return completed(result,captured)

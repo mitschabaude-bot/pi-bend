@@ -1079,3 +1079,13 @@ Input component validation using `build/bend-process-files/bend2/main.ts` again 
 ### BEND-019 recurrence: session-file long-path case under the shared compiler (2026-09-23)
 
 `python3 tests/session_file_check.py --runner build/session-file.js` now fails on the file-operations scenario whose stored `cwd` is a very long path: the Bun runner exits with `bend: memory fault (machine stack overflow?)`. The committed tree (1b6b867) fails identically, so this is not caused by a source change; the shared checkout's compiler (`build/bend-process-files/bend2/main.ts`) lacks the JS explicit-stack patch that the earlier Bun pass used. Native one/four-thread runs pass all 370 operations. Classified as a BEND-019 recurrence (non-tail recursion in the JS lowering on long inputs); the frame was not instrumented this time. Regression command: the checker above with `--runner build/session-file.js`.
+
+### BEND-031 recurrence: filesystem.remove (2026-09-23)
+
+`FS.remove` hit the misleading "match on a parameter or field" error while matching `status recursive`, whose columns do not follow parameter order. The reduced form is BEND-031's `tests/compiler-match-parameter-order.bend`. The code now matches one scrutinee at a time.
+
+## BEND-033 — Multi-threaded native runtime slows a sequential HTTPS request 3.7× (2026-09-23)
+
+Status: confirmed performance cliff, cause not investigated (no compiler work without Gregor's direction). One `getLatestVersion` request (TLS 1.3 GET to github.com and a 302 response) costs 3.46 s of CPU on `--threads 1`. On `--threads 2` or `4` the same request takes 12.9 s, with user time ≈ wall time, so one core spins rather than the work parallelizing. Upstream's 10 s version-check timeout therefore fires at the default thread count, which is the CPU count. The complete rg download and install takes 14.7 s on one thread and 44.9 s on four. Certificate-chain verification alone is about 8 ms native (`tests/certificate-benchmark.md`), so the cost lies elsewhere in the request path.
+
+Reproducer: `tests/https-thread-cliff.bend`, which creates the CLI transport and runs two `Tools.getLatestVersion` calls with monotonic timestamps. Build it with `BEND=build/bend-process-files/bend2/main.ts BEND_TUS=4 sh scripts/build-pure.sh tests/https-thread-cliff.bend build/https-thread-cliff`, then run `build/https-thread-cliff --threads 1` and `--threads 4`. perf is unavailable on this host (`perf_event_paranoid`) and there is no gdb, so no profile yet.

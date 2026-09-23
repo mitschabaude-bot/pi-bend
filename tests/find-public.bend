@@ -2,6 +2,7 @@ import Base
 import ../packages/coding-agent/src/core/tools/find.bend as L
 import ../packages/coding-agent/src/core/tools/truncate.bend as T
 import ../packages/coding-agent/src/utils/paths.bend as Paths
+import ../packages/coding-agent/src/utils/tools-manager.bend as Tools
 import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
 import ../packages/runtime/src/callback.bend as C
@@ -17,8 +18,15 @@ import ../packages/runtime/src/string.bend as S
 import ../packages/runtime/src/utf8.bend as U
 import ../packages/runtime/src/base64.bend as B
 
+def urlContext() -> URL.Context:
+  URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}
+
 def environment(cwd: String,home: String) -> Paths.Environment:
-  Paths.Environment{cwd,home,URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}}
+  Paths.Environment{cwd,home,urlContext()}
+
+# rg and fd come from the temporary home's bin directory; nothing downloads.
+def manager(home: String) -> Tools.ToolsManager:
+  Tools.ToolsManager{home ++ "/.pi/agent/bin",urlContext(),None{}}
 
 def encoded(value: String) -> String: B.encoded(U.encode(value),"")
 def check(value: Bool, message: String) -> IO(Unit):
@@ -122,18 +130,18 @@ def execute(mode: String,+cwd: String,+home: String,pattern: String,path: String
     case "relative": IO.print("relative:" ++ encoded(L.relativizeFindResultPath(path,cwd)))
     case "native":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createFindTool(environment(cwd,home),cwd,L.FindToolOptions{None{}})
+        owner : L.ToolOwner <- L.createFindTool(environment(cwd,home),manager(home),cwd,L.FindToolOptions{None{}})
         call(L.borrowTool(owner),arguments(pattern,path,maximum),A.signal(Unit,controller))
     case "context":
       do IO<Unit>:
-        result : L.ToolResult() <- L.invokeWithContext(L.Invocation{environment(cwd,home),"/",None{}},L.FindContext{Some{cwd}},Agent.ToolExecutionInput{"find-context",arguments(pattern,path,maximum),Some{A.signal(Unit,controller)},None{}})
+        result : L.ToolResult() <- L.invokeWithContext(L.Invocation{environment(cwd,home),manager(home),"/",None{}},L.FindContext{Some{cwd}},Agent.ToolExecutionInput{"find-context",arguments(pattern,path,maximum),Some{A.signal(Unit,controller)},None{}})
         report(result)
     case mode:
       +mode = {mode: String}
       do IO<Unit>:
         +ops : L.FindOperations <- operations(Injection{mode,entries,controller})
         cancel(mode,"preabort",controller)
-        owner : L.ToolOwner <- L.createFindTool(environment(cwd,home),cwd,L.FindToolOptions{Some{ops}})
+        owner : L.ToolOwner <- L.createFindTool(environment(cwd,home),manager(home),cwd,L.FindToolOptions{Some{ops}})
         call(L.borrowTool(owner),arguments(pattern,path,maximum),A.signal(Unit,controller))
         reuse(mode,ops)
         L.dispose(ops)

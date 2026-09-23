@@ -8,7 +8,7 @@
   - A pattern containing `/` gets `--full-path`, plus a leading `**/` unless it starts with `/`, `**/` or is `**`.
 - stdout is split into lines as Node's readline does (`\n`, `\r\n` and a lone `\r`), then each line is trimmed, empty lines are dropped and the rest are relativized.
 - A failing exit with output still lists the output. Without output it reports fd's trimmed stderr, or "fd exited with code N".
-- A failure to start reports "Failed to run fd: spawn PATH ENOENT". A missing fd reports "fd is not available and could not be downloaded". The release download is still pending in tools-manager.
+- A failure to start reports "Failed to run fd: spawn PATH ENOENT". An fd that tools-manager can neither find nor download reports "fd is not available and could not be downloaded".
 - An abort at any point reports "Operation aborted", since upstream listens from the start.
 - The default path does not check that the search path exists; fd's own "not a directory" error surfaces.
 
