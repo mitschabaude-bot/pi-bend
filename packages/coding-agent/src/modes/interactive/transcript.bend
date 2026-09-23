@@ -207,6 +207,28 @@ def seed(-G: Data,-D: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.Agen
         begun : Bool <- accept(G,D,C,handle,Agent.MessageStart{message})
         ended : Bool <- accept(G,D,C,handle,Agent.MessageEnd{message})
         seed(G,D,C,handle,rest)
+def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme) -> IO(List<&1,Entry>):
+  match entries:
+    case Nil{}: IO.pure(List<&1,Entry>,Nil{})
+    case MessageEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Messages.Owner <- Messages.rethemeOwner(owner,theme)
+        next : List<&1,Entry> <- rethemeEntries(rest,theme)
+        return MessageEntry{kept} <> next
+    case ToolEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Tool.Owner <- Tool.rethemeOwner(owner,theme)
+        next : List<&1,Entry> <- rethemeEntries(rest,theme)
+        return ToolEntry{kept} <> next
+def rethemed(state: State,+theme: Theme.Theme) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,nextId,view,_,styles}:
+      do IO<State & Unit>:
+        next : List<&1,Entry> <- rethemeEntries(entries,theme)
+        return (State{next,tools,active,nextId,view,theme,styles},Unit{})
+def retheme(handle: Handle,theme: Theme.Theme) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => rethemed(state,theme))
 def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
   match entries:
     case Nil{}: IO.pure(Unit,Unit{})

@@ -187,6 +187,11 @@ def renderAssistant(state: AssistantMessage,+width: Nat) -> IO(List<&2,String>):
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
 type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage}
+def retheme(body: Body,theme: Theme.Theme) -> Body:
+  match body:
+    case UserBody{UserMessage{text,pad,_,styles}}: UserBody{UserMessage{text,pad,theme,styles}}
+    case AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,_,styles}}:
+      AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,theme,styles}}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
@@ -210,6 +215,13 @@ def create(id: Component.ComponentId,body: Body) -> IO(Owner):
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
     case Owner{+state,+component,render,invalidate}: (Owner{state,component,render,invalidate},component,Handle{state})
+def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
+  match owner:
+    case Owner{+state,+component,render,invalidate}:
+      do IO<Owner>:
+        body : Body <- Ref.read(Body,state)
+        Ref.write(Body,state,retheme(body,theme))
+        return Owner{state,component,render,invalidate}
 def set(handle: Handle,body: Body) -> IO(Unit):
   match handle:
     case Handle{state}: Ref.write(Body,state,body)

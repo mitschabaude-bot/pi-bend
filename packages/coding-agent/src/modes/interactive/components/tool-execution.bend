@@ -49,6 +49,8 @@ def setExpanded(state: ToolExecution,expanded: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,_,images,partial,started,complete,theme,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell}
 def setShowImages(state: ToolExecution,images: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell}
+def retheme(state: ToolExecution,theme: Theme.Theme) -> ToolExecution:
+  match state: case ToolExecution{name,id,args,result,expanded,images,partial,started,complete,_,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell}
 def context(state: ToolExecution,width: Nat) -> RenderContext:
   match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,_,_}: RenderContext{name,id,args,result,expanded,partial,started,complete,width}
 def title(state: ToolExecution) -> IO(String):
@@ -360,6 +362,13 @@ def create(id: Component.ComponentId,value: ToolExecution) -> IO(Owner):
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
     case Owner{+state,+component,draw,invalidate}: (Owner{state,component,draw,invalidate},component,Handle{state})
+def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
+  match owner:
+    case Owner{+state,+component,draw,invalidate}:
+      do IO<Owner>:
+        value : ToolExecution <- Ref.read(ToolExecution,state)
+        Ref.write(ToolExecution,state,retheme(value,theme))
+        return Owner{state,component,draw,invalidate}
 def set(handle: Handle,value: ToolExecution) -> IO(Unit):
   match handle: case Handle{state}: Ref.write(ToolExecution,state,value)
 def current(handle: Handle) -> IO(ToolExecution):
