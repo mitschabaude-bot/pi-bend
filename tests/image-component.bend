@@ -6,6 +6,7 @@ import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/json.bend as J
+import ../packages/runtime/src/f64.bend as F
 import ../packages/ai/src/utils/json.bend as Render
 import ../packages/ai/src/utils/schema-json.bend as SchemaJson
 
@@ -21,7 +22,11 @@ def number(value: V.Value) -> F64:
   match value:
     case V.Number{value}: value
     case _: U32.to_f64(0)
-def n(value: V.Value) -> Nat: U32.to_nat(F64.to_u32(number(value)))
+def natural(value: Result<&2,&2,F.Error,Nat>) -> Nat:
+  match value:
+    case Done{value}: value
+    case Fail{_}: 0n
+def n(value: V.Value) -> Nat: natural(F.convert(number(value)))
 def b(value: V.Value) -> Bool:
   match value:
     case V.Boolean{value}: value

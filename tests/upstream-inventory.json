@@ -3720,16 +3720,18 @@
     },
     {
       "source": "packages/tui/test/terminal-image.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/terminal-image.bend",
         "tests/terminal-image-state.bend",
         "tests/terminal_image_check.py",
         "tests/terminal_image_named.ts",
-        "tests/terminal-image-map.json"
+        "tests/terminal-image-map.json",
+        "tests/image-component.bend",
+        "tests/image_component_check.py"
       ],
       "sha256": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2",
-      "notes": "Module protocols, metadata, capability state, sizing, crop and fallback assertions pass Bun/native one/four. Three Image component assertions remain pending; named coverage and strict-input corrections are documented in tests/terminal-image-map.json and tests/terminal-image.md. Native tmux probes and shared process lifecycle gates pass."
+      "notes": "Module protocols, metadata, capability state, sizing, crop and fallback assertions and all three Image component assertions pass Bun/native one/four. Image coverage includes 115 cache/render sequences and five invalid cases; terminal-image coverage includes 764 comparisons, 95 named results and 18 documented corrections. Native tmux probes and shared process lifecycle gates pass. See tests/terminal-image.md and tests/image-component.md."
     },
     {
       "source": "packages/tui/test/terminal.test.ts",

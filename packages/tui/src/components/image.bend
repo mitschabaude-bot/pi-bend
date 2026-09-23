@@ -98,7 +98,7 @@ def imageResult(+image: ImageComponent,width: Nat,environment: Terminal.Environm
     case Terminal.TerminalCapabilities{protocol,_,_} Done{Terminal.Rendered{terminal,Some{Terminal.RenderResult{sequence,_,rows,id}}}}:
       IO.pure(Result<&2,&2,Error,Rendered>,completed(image,terminal,width,imageLines(protocol,sequence,rows)))
 def widthLimit(width: Nat,configured: Maybe<&2,F64>) -> F64:
-  Number.maximum(Number.fromU32(1),Number.minimum(Number.fromU32(U32.from_nat(Nat.min(width-2n,4294967295n))),Maybe.default(&2,F64,configured,Number.fromU32(60))))
+  Number.maximum(Number.fromU32(1),Number.minimum(Number.fromNat(width-2n),Maybe.default(&2,F64,configured,Number.fromU32(60))))
 def maximumHeight(configured: Maybe<&2,F64>,width: F64,cells: Terminal.CellDimensions) -> F64:
   match configured cells:
     case Some{value} _: value

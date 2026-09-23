@@ -73,11 +73,10 @@ def byteCount(bytes: List<&2,U32>,count: Nat) -> Nat:
     case Nil{}: count
     case _ <> rest: byteCount(rest,count + 1n)
 def positive(+value: F64) -> Bool: Number.isFinite(Number.decode(value)) && F64.is_gt(value,Number.fromU32(0))
-def boundedCells(+value: F64) -> Bool: positive(value) && F64.is_le(value,Number.fromU32(4294967295))
 def validHeight(value: Maybe<&2,F64>) -> Bool:
   match value:
     case None{}: True{}
-    case Some{value}: boundedCells(value)
+    case Some{value}: positive(value)
 def pixelDimensions(value: ImageDimensions) -> Bool:
   match value:
     case ImageDimensions{width,height}: U32.is_gt(width,0) && U32.is_gt(height,0)
@@ -85,7 +84,10 @@ def validCells(value: CellDimensions) -> Bool:
   match value:
     case CellDimensions{width,height}: positive(width) && positive(height)
 def floorCells(value: F64) -> F64: Number.maximum(Number.fromU32(1),Number.truncate(value))
-def ceilCells(value: F64) -> Nat: U32.to_nat(F64.to_u32(Number.ceil(value)))
+def cellSize(columns: Result<&2,&2,Number.Error,Nat>,rows: Result<&2,&2,Number.Error,Nat>) -> Result<&2,&2,Error,ImageCellSize>:
+  match columns rows:
+    case Done{width} Done{height}: Done{ImageCellSize{width,height}}
+    case _ _: Fail{InvalidDimensions{}}
 def heightScale(value: Maybe<&2,F64>,cellHeight: F64,imageHeight: F64,widthScale: F64) -> F64:
   match value:
     case None{}: widthScale
@@ -104,9 +106,9 @@ def calculateSize(dimensions: ImageDimensions,+maxWidth: F64,+maxHeight: Maybe<&
       +scale = heightScale(maxHeight,cellHeight,imageHeight,widthScale)
       +columns = Number.maximum(Number.fromU32(1),Number.minimum(columnsLimit,Number.ceil(Number.divide(Number.multiply(imageWidth,scale),cellWidth))))
       +rows = Number.maximum(Number.fromU32(1),boundRows(maxHeight,Number.ceil(Number.divide(Number.multiply(imageHeight,scale),cellHeight))))
-      Bool.pick(Unit -> Result<&2,&2,Error,ImageCellSize>,boundedCells(columns) && boundedCells(rows),_ => Done{ImageCellSize{ceilCells(columns),ceilCells(rows)}},_ => Fail{InvalidDimensions{}})(Unit{})
+      cellSize(Number.convert(columns),Number.convert(rows))
 def calculateImageCellSize(+dimensions: ImageDimensions,+maxWidth: F64,+maxHeight: Maybe<&2,F64>,+cells: CellDimensions) -> Result<&2,&2,Error,ImageCellSize>:
-  valid = pixelDimensions(dimensions) && boundedCells(maxWidth) && validHeight(maxHeight) && validCells(cells)
+  valid = pixelDimensions(dimensions) && positive(maxWidth) && validHeight(maxHeight) && validCells(cells)
   Bool.pick(Unit -> Result<&2,&2,Error,ImageCellSize>,valid,_ => calculateSize(dimensions,maxWidth,maxHeight,cells),_ => Fail{InvalidDimensions{}})(Unit{})
 def imageRows(value: Result<&2,&2,Error,ImageCellSize>) -> Result<&2,&2,Error,Nat>:
   match value:
@@ -167,7 +169,7 @@ def dimensionText(value: ImageDimension) -> Result<&2,&2,Error,String>:
     case Auto{}: Done{"auto"}
     case Cells{+count}: Bool.pick(Result<&2,&2,Error,String>,Nat.is_gt(count,0n),Done{Nat.show(count)},Fail{InvalidDimensions{}})
     case Pixels{+count}: Bool.pick(Result<&2,&2,Error,String>,Nat.is_gt(count,0n),Done{Nat.show(count) ++ "px"},Fail{InvalidDimensions{}})
-    case Percent{+value}: Bool.pick(Result<&2,&2,Error,String>,boundedCells(value),Done{F64.show(value) ++ "%"},Fail{InvalidDimensions{}})
+    case Percent{+value}: Bool.pick(Result<&2,&2,Error,String>,positive(value),Done{F64.show(value) ++ "%"},Fail{InvalidDimensions{}})
 def dimensionParameter(name: String,value: Maybe<&2,ImageDimension>) -> Result<&2,&2,Error,String>:
   match value:
     case None{}: Done{""}

@@ -121,6 +121,10 @@ def fromU64(value: W.U64) -> F64:
 
 def fromU32(value: U32) -> F64: U32.to_f64(value)
 
+# Nat's checked 48-bit range is exactly representable in binary64.
+def fromNat(+value: Nat) -> F64:
+  fromU64(W.U64{U32.from_nat(value / (65536n * 65536n)),U32.from_nat(value % (65536n * 65536n))})
+
 def integralFinite(+exponent: U32, +significand: W.U64) -> Bool:
   +shift = U32.to_nat(U32.min((1075 - U32.min(exponent, 1075) : U32), 64))
   W.equal(significand, W.shiftLeft(W.shiftRight(significand, shift), shift))
@@ -244,5 +248,4 @@ def fromRatio(negative: Bool, numerator: B.BigNat, denominator: B.BigNat) -> May
       +target = B.shiftLeft(numerator, 1074n)
       bounds = bracket(63n, target, divisor, Bounds{W.zero(), W.U64{2146435072, 0}})
       Some{signed(negative, roundedRatio(target, divisor, bounds))}
-
 

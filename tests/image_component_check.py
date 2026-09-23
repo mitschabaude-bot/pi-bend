@@ -5,7 +5,10 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def run(command,values):
  p=subprocess.run(command+[json.dumps(values,ensure_ascii=False,separators=(',',':'))],cwd=ROOT,text=True,capture_output=True,timeout=90)
- assert p.returncode==0,(p.returncode,p.stderr[-3000:]);return json.loads(p.stdout)
+ assert p.returncode==0,(p.returncode,p.stderr[-3000:])
+ result=json.loads(p.stdout)
+ assert isinstance(result,list) and len(result)==len(values),('result count',len(result),len(values))
+ return result
 def batch(command,values):
  result=[]
  for i in range(0,len(values),8):result+=run(command,values[i:i+8])
@@ -35,6 +38,9 @@ def corpus():
  a.append(dict(data='AAAA',mime='image/png',dimensions=dims(20,20),env={},steps=[{'width':10},{'width':10,'caps':{'images':'kitty','trueColor':True,'hyperlinks':True}},{'width':10,'invalidate':True},{'width':11,'caps':{'images':'iterm2','trueColor':True,'hyperlinks':True}},{'width':11,'caps':{'images':None,'trueColor':False,'hyperlinks':False}},{'width':11,'invalidate':True}]))
  for program in ['unknown','kitty']:
   a.append(dict(data='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmP8AAAAASUVORK5CYII=',mime='image/png',env={'TERM_PROGRAM':program},steps=[{'width':10}]))
+ for width in [4294967295,4294967296,5000000002,281474976710655]:
+  for program in ['kitty','iterm.app']:
+   a.append(dict(data='AAAA',mime='image/png',env={'TERM_PROGRAM':program},dimensions=dims(4294967295,1),options={'imageId':42,'maxWidthCells':10000000000,'maxHeightCells':3},cells=dims(1,1),steps=[{'width':width}]))
  return a
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--upstream',default='../pi-mono');p.add_argument('--width-reference',default='/home/agent/code/pi-bend-tui-ansi/build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('command',nargs='+');args=p.parse_args()
