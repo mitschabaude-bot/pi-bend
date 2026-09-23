@@ -40,14 +40,17 @@ def project_directory(sessions: Path, cwd: Path) -> Path:
     return directory
 
 
-def run(binary: Path, cwd: Path, agent: Path, sessions: Path, threads: int, keys: list[bytes]) -> str:
+def run(binary: Path, cwd: Path, agent: Path, sessions: Path, threads: int, keys: list[bytes], extra_env: dict[str, str] | None = None) -> str:
     master, slave = pty.openpty()
+    environment = os.environ.copy()
+    environment.update(extra_env or {})
     process = subprocess.Popen(
         [str(binary), "--threads", str(threads), str(cwd), str(agent), str(sessions)],
         stdin=slave,
         stdout=slave,
         stderr=slave,
         cwd=cwd,
+        env=environment,
     )
     os.close(slave)
     chunks: list[bytes] = []
@@ -66,10 +69,12 @@ def run(binary: Path, cwd: Path, agent: Path, sessions: Path, threads: int, keys
         drain(0.35)
         for key in keys:
             os.write(master, key)
-            drain(0.2)
-        drain(0.5)
-        if process.poll() is None:
-            raise AssertionError("picker did not exit after selection or cancellation")
+            drain(0.3)
+        drain(1.5)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired as error:
+            raise AssertionError("picker did not exit after selection or cancellation: " + b"".join(chunks).decode("utf-8", "replace")[-2000:]) from error
         return b"".join(chunks).decode("utf-8", "replace")
     finally:
         if process.poll() is None:
@@ -105,6 +110,43 @@ def main() -> None:
 
         output = run(binary, local, agent, sessions, 4, [b"\x13", b"\x1b"])
         assert "Recent" in output and "PICKER CANCEL" in output, output
+
+        output = run(binary, local, agent, sessions, 1, [b"\x10", b"\x1b"])
+        assert "Path on" in output and str(parent)[:30] in output, output
+
+        output = run(binary, local, agent, sessions, 4, [b'"Named alpha"', b"\r"])
+        assert "PICKER SELECT " + str(parent) in output, output
+
+        output = run(binary, local, agent, sessions, 1, [b"\t", b"re:^beta", b"\r"])
+        assert "PICKER SELECT " + str(other) in output, output
+
+        output = run(binary, local, agent, sessions, 4, [b"re:[", b"\x1b"])
+        assert "Invalid regex" in output and "PICKER CANCEL" in output, output
+
+        output = run(binary, local, agent, sessions, 4, [b"\x04", b"\x1b", b"\r"])
+        assert "Trash this session?" in output and parent.exists(), output
+
+        fake_bin = root / "bin"
+        fake_bin.mkdir()
+        trash = root / "trash"
+        trash.mkdir()
+        gio = fake_bin / "gio"
+        gio.write_text('#!/bin/sh\nprintf "%s\\n" "$1" > "$PI_TEST_TRASH_DIR/called"\nmv -- "$2" "$PI_TEST_TRASH_DIR/$(basename "$2")"\n')
+        gio.chmod(0o755)
+        trash_env = {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "PI_TEST_TRASH_DIR": str(trash)}
+        output = run(binary, local, agent, sessions, 1, [b"\x04", b"\r", b"\x1b"], trash_env)
+        assert "Session moved to trash" in output and "PICKER CANCEL" in output and not parent.exists(), output
+        assert (trash / parent.name).exists() and (trash / "called").read_text().strip() == "trash"
+
+        gio.write_text("#!/bin/sh\nexit 1\n")
+        output = run(binary, local, agent, sessions, 4, [b"\x04", b"\r", b"\x1b"], trash_env)
+        assert "Session deleted" in output and "PICKER CANCEL" in output and not child.exists(), output
+
+        (agent / "keybindings.json").write_text('{"app.session.togglePath":"ctrl+g"}')
+        output = run(binary, local, agent, sessions, 4, [b"\x07", b"\x1b"])
+        assert "Path on" in output and "PICKER CANCEL" in output, output
+        output = run(binary, local, agent, sessions, 1, [b"\x10", b"\x1b"])
+        assert "Path on" not in output and "PICKER CANCEL" in output, output
 
     print("PASS native picker PTY (threads 1 and 4)")
 
