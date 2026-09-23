@@ -75,8 +75,31 @@ def scenario(threads, mode):
             assert b"user: first" in output[start:], (threads, mode)
             if mode == "tree":
                 assert b"assistant: late-response" in output[start:], (threads, mode)
+                controls_at = len(output)
+                os.write(master, b"late")
+                deadline = time.monotonic() + 5
+                while b"(1/1)" not in output[controls_at:]:
+                    read_for(.08)
+                    assert time.monotonic() < deadline, (threads, "search", bytes(output[-1200:]))
+                assert b"Type to search:" in output[controls_at:]
+                os.write(master, b"\x1b")
+                read_for(.4)
+                controls_at = len(output)
+                os.write(master, b"\x0f")
+                read_for(.4)
+                assert b"[no-tools]" in output[controls_at:], (threads, "filter", bytes(output[-1200:]))
+                os.write(master, b"\x1b[A")
+                read_for(.2)
+                controls_at = len(output)
+                os.write(master, b"\x1b[1;5D")
+                read_for(.4)
+                assert b"(1/1)" in output[controls_at:], (threads, "fold", bytes(output[-1200:]))
+                controls_at = len(output)
+                os.write(master, b"\x1b[1;5C")
+                read_for(.4)
+                assert b"(1/2)" in output[controls_at:], (threads, "unfold", bytes(output[-1200:]))
             selected_at = len(output)
-            os.write(master, b"\x1b[A\r" if mode == "tree" else b"\r")
+            os.write(master, b"\r")
             deadline = time.monotonic() + 5
             while b"first" not in output[selected_at:] and time.monotonic() < deadline:
                 read_for(.08)

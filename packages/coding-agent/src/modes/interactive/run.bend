@@ -307,20 +307,28 @@ def openCandidate(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Ma
   Bool.pick(Unit -> IO(Unit),Selector.hasRows(state),_ => do IO<Unit>:
     target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
     openTree(target,state),_ => selectorNotice(failure,empty))(Unit{})
-def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>) -> IO(Unit):
+def selectorFilter(value: Settings.TreeFilterMode) -> Selector.Filter:
+  match value:
+    case Settings.DefaultFilter{}: Selector.Default{}
+    case Settings.NoTools{}: Selector.NoTools{}
+    case Settings.UserOnly{}: Selector.UserOnly{}
+    case Settings.LabeledOnly{}: Selector.LabeledOnly{}
+    case Settings.AllEntries{}: Selector.All{}
+def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>,filter: Selector.Filter) -> IO(Unit):
   match result:
     case Fail{_}: selectorNotice(failure,"Cannot load session tree")
-    case Done{nodes}: openCandidate(selector,failure,Selector.create(nodes,leaf,Selector.TreeMode{},24n),"No entries in session")
-def selectorFromState(mode: Selector.Mode,+state: Session.State(),selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>) -> IO(Unit):
+    case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,Selector.TreeMode{},24n,filter),"No entries in session")
+def selectorFromState(mode: Selector.Mode,+state: Session.State(),filter: Selector.Filter,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>) -> IO(Unit):
   match mode:
-    case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state))
+    case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state),filter)
     case Selector.ForkMode{}: openCandidate(selector,failure,Selector.createFork(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state),24n),"No user messages found")
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case KeyInput{_,_,failure,_,_,selector,session,_}:
+    case KeyInput{_,_,failure,_,_,selector,+session,_}:
       do IO<Unit>:
         current : Session.Session() <- Session.sessionOf(session)
-        selectorFromState(mode,Session.stateOf(current),selector,failure)
+        filter : Settings.TreeFilterMode <- Session.treeFilterMode(session)
+        selectorFromState(mode,Session.stateOf(current),selectorFilter(filter),selector,failure)
 def actionDouble(input: KeyInput,action: Settings.DoubleEscapeAction) -> IO(Unit):
   match action:
     case Settings.Tree{}: openedTree(input,Selector.TreeMode{})

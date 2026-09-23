@@ -2114,3 +2114,10 @@ def doubleEscapeAction(session: AgentSession) -> IO(Settings.DoubleEscapeAction)
       do IO<Settings.DoubleEscapeAction>:
         current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getDoubleEscapeAction(current)
+
+def treeFilterMode(session: AgentSession) -> IO(Settings.TreeFilterMode):
+  match session:
+    case AgentSession{_,_,_,settings,_,_}:
+      do IO<Settings.TreeFilterMode>:
+        current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
+        return Settings.getTreeFilterMode(current)
