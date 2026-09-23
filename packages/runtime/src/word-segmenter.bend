@@ -2,18 +2,19 @@ import Base
 import ./word-rules.bend as Rules
 import ./cjk-dictionary.bend as Dictionary
 import ./cjk-word-break.bend as Cjk
-import ./khmer-word-break.bend as Khmer
-import ./khmer-word-data.bend as KhmerData
+import ./sea-word-break.bend as Sea
+import ./sea-word-data.bend as SeaData
 
-# ICU78 default word rules with explicitly preloaded CJK and Khmer lexical segmentation.
-# Missing Thai/Myanmar/Lao engines are reported, never approximated by UAX.
-type Context is Data: Context{rules: Rules.Rules,cjk: Cjk.Context,khmer: Dictionary.Trie}
+# ICU78 default word rules with explicitly preloaded CJK, Khmer and Lao lexical segmentation.
+# Missing Thai/Myanmar engines are reported, never approximated by UAX.
+type Context is Data: Context{rules: Rules.Rules,cjk: Cjk.Context,khmer: Sea.Context,lao: Sea.Context}
 type Segment is Data: Segment{text: String,isWordLike: Bool,status: U32}
 type Error is Data: MissingEngine{language: String} InvalidState{}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
-def create(rules: Rules.Rules,dictionary: Dictionary.Trie,khmer: Dictionary.Trie) -> Context: Context{rules,Cjk.create(dictionary),khmer}
+def create(rules: Rules.Rules,dictionary: Dictionary.Trie,khmer: Dictionary.Trie,lao: Dictionary.Trie) -> Context:
+  Context{rules,Cjk.create(dictionary),Sea.Context{SeaData.Khmer{},khmer},Sea.Context{SeaData.Lao{},lao}}
 
-type Mode is Data: Outside{} CjkRange{} KoreanRange{} KhmerRange{}
+type Mode is Data: Outside{} CjkRange{} KoreanRange{} KhmerRange{} LaoRange{}
 type DictionaryScan is Data:
   Active{position: Nat,start: Nat,mode: Mode,reversed: String,breaks: List<&2,Nat>}
   Failed{error: Error}
@@ -24,8 +25,9 @@ def internalBreaks(ends: List<&2,Nat>,+start: Nat,reversed: List<&2,Nat>) -> Lis
     case endpoint <> rest: internalBreaks(rest,start,(start + endpoint) <> reversed)
 def rangeEnds(context: Context,mode: Mode,text: String) -> List<&2,Nat>:
   match context mode:
-    case Context{_,_,khmer} KhmerRange{}: Khmer.boundaries(khmer,text)
-    case Context{_,cjk,_} _: Cjk.boundaries(cjk,text)
+    case Context{_,_,khmer,_} KhmerRange{}: Sea.boundaries(khmer,text)
+    case Context{_,_,_,lao} LaoRange{}: Sea.boundaries(lao,text)
+    case Context{_,cjk,_,_} _: Cjk.boundaries(cjk,text)
 def flush(context: Context,mode: Mode,start: Nat,reversed: String,breaks: List<&2,Nat>) -> List<&2,Nat>:
   match reversed:
     case SNil{}: breaks
@@ -35,13 +37,14 @@ def continues(mode: Mode,char: Char) -> Bool:
     case Outside{}: False{}
     case CjkRange{}: Cjk.handles(char)
     case KoreanRange{}: Cjk.hangul(char)
-    case KhmerRange{}: KhmerData.handles(char)
+    case KhmerRange{}: SeaData.handles(SeaData.Khmer{},char)
+    case LaoRange{}: SeaData.handles(SeaData.Lao{},char)
 def engine(kind: U32,char: Char,+position: Nat,breaks: List<&2,Nat>) -> DictionaryScan:
   match kind:
     case 1: Active{Succ{position},position,CjkRange{},SCon{char,""},breaks}
     case 2: Active{Succ{position},position,KoreanRange{},SCon{char,""},breaks}
     case 3: Failed{MissingEngine{"Thai"}}
-    case 4: Failed{MissingEngine{"Lao"}}
+    case 4: Active{Succ{position},position,LaoRange{},SCon{char,""},breaks}
     case 5: Failed{MissingEngine{"Myanmar"}}
     case 6: Active{Succ{position},position,KhmerRange{},SCon{char,""},breaks}
     case 7: Active{Succ{position},position,CjkRange{},SCon{char,""},breaks}
@@ -52,7 +55,7 @@ def begin(+properties: U32,+char: Char,+position: Nat,+breaks: List<&2,Nat>) -> 
     _ => Active{Succ{position},Succ{position},Outside{},"",breaks})(Unit{})
 def properties(context: Context,char: Char) -> U32:
   match context:
-    case Context{rules,_,_}: Rules.properties(rules,char)
+    case Context{rules,_,_,_}: Rules.properties(rules,char)
 def feed(+context: Context,+char: Char,value: DictionaryScan) -> DictionaryScan:
   match value:
     case Failed{error}: Failed{error}
@@ -108,7 +111,7 @@ def region(context: Context,value: Maybe<&2,Rules.Region>,reversed: List<&2,Segm
         _ => Done{Work{rest,Segment{text,U32.is_ge(status,100) && U32.is_lt(status,500),status} <> reversed}})(Unit{})
 def next(+context: Context,value: Work) -> ResultOf(Work):
   match context value:
-    case Context{rules,_,_} Work{text,reversed}: region(context,Rules.next(rules,text),reversed)
+    case Context{rules,_,_,_} Work{text,reversed}: region(context,Rules.next(rules,text),reversed)
 def segmentsLoop(fuel: Nat,+context: Context,result: ResultOf(Work)) -> ResultOf(List<&2,Segment>):
   match fuel result:
     case _ Fail{error}: Fail{error}

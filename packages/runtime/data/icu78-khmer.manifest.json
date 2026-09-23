@@ -8,6 +8,7 @@
   "bytes": 967939,
   "sha256": "cd632a651879df97ebe8ce254d8b91de05b9a20786ae5a51be47d13a8bb18688",
   "max_word_length": 19,
+  "max_prefix_candidates": 8,
   "format": "ICUKHM01: magic8,nodeCount:u32le,wordCount:u32le; CJK radix record format with cost0 terminal,255 nonterminal; edge labels capped20",
   "license": "icu78-khmer.LICENSE",
   "unicode_sha256": "2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e"

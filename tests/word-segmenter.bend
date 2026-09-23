@@ -2,11 +2,12 @@ import Base
 import ../packages/runtime/src/word-segmenter.bend as W
 import ../packages/runtime/src/word-rules.bend as R
 import ../packages/runtime/src/cjk-dictionary.bend as D
-import ../packages/runtime/src/khmer-word-data.bend as K
+import ../packages/runtime/src/sea-word-data.bend as K
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/json.bend as J
 import ../packages/runtime/src/schema-value.bend as V
+import ../packages/runtime/src/string.bend as Text
 
 def encoded(values: List<&2,W.Segment>,reversed: List<&2,String>) -> String:
   match values:
@@ -18,36 +19,53 @@ def shown(result: W.ResultOf(List<&2,W.Segment>)) -> String:
     case Done{values}: encoded(values,Nil{})
     case Fail{W.MissingEngine{language}}: J.quote("MissingEngine:" ++ language)
     case Fail{W.InvalidState{}}: J.quote("InvalidState")
-def cases(+context: W.Context,values: List<&2,V.Value>) -> IO(Unit):
+def compared(context: W.Context,+expected: String,result: Result<&2,&2,J.ParseError,V.Value>) -> Bool:
+  match result:
+    case Done{V.Text{text}}: Text.equal(shown(W.segments(context,text)),expected)
+    case _: False{}
+def row(context: W.Context,fields: List<&2,String>) -> Bool:
+  match fields:
+    case encodedText <> expected <> Nil{}: compared(context,expected,J.parse(encodedText))
+    case _: False{}
+def cases(+context: W.Context,values: List<&2,String>,count: Nat) -> Result<&2,&2,String,Nat>:
   match values:
-    case Nil{}: IO.pure(Unit,Unit{})
-    case V.Text{text} <> rest:
-      do IO<Unit>:
-        IO.print(shown(W.segments(context,text)))
-        cases(context,rest)
-    case _: IO.die(Unit,1,"expected strings")
-def inputs(context: W.Context,result: Result<&2,&2,J.ParseError,V.Value>) -> IO(Unit):
+    case Nil{}: Done{count}
+    case +text <> +rest:
+      Bool.pick(Unit -> Result<&2,&2,String,Nat>,row(context,Text.split(text,'\t')),
+        _ => cases(context,rest,Succ{count}),_ => Fail{text})(Unit{})
+def checked(result: Result<&2,&2,String,Nat>) -> IO(Unit):
   match result:
-    case Done{V.ArrayValue{values}}: cases(context,values)
-    case _: IO.die(Unit,1,"expected JSON array")
-def rulesDecoded(khmer: D.Trie,dictionary: D.Trie,input: String,result: R.Parsed(R.Rules)) -> IO(Unit):
+    case Done{count}: IO.print(Nat.show(count))
+    case Fail{message}: IO.die(Unit,1,"word mismatch: " ++ message)
+def rulesDecoded(lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: R.Parsed(R.Rules)) -> IO(Unit):
   match result:
-    case Done{rules}: inputs(W.create(rules,dictionary,khmer),J.parse(input))
+    case Done{rules}: checked(cases(W.create(rules,dictionary,khmer,lao),Text.split(input,'\n'),0n))
     case Fail{_}: IO.die(Unit,1,"invalid word rules")
-def rulesRead(khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+def rulesRead(lao: D.Trie,khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
   match result:
-    case Done{bytes}: rulesDecoded(khmer,dictionary,input,R.decode(bytes))
+    case Done{bytes}: rulesDecoded(lao,khmer,dictionary,input,R.decode(bytes))
     case Fail{_}: IO.die(Unit,1,"word rules read failed")
+def laoDecoded(khmer: D.Trie,dictionary: D.Trie,input: String,result: D.Parsed(D.Trie)) -> IO(Unit):
+  match result:
+    case Done{lao}:
+      do IO<Unit>:
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-word-rules.bin")
+        rulesRead(lao,khmer,dictionary,input,bytes)
+    case Fail{_}: IO.die(Unit,1,"invalid Lao dictionary")
+def laoRead(khmer: D.Trie,dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+  match result:
+    case Done{bytes}: laoDecoded(khmer,dictionary,input,K.decodeLao(bytes))
+    case Fail{_}: IO.die(Unit,1,"Lao dictionary read failed")
 def khmerDecoded(dictionary: D.Trie,input: String,result: D.Parsed(D.Trie)) -> IO(Unit):
   match result:
     case Done{khmer}:
       do IO<Unit>:
-        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-word-rules.bin")
-        rulesRead(khmer,dictionary,input,bytes)
+        bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("packages/runtime/data/icu78-lao.bin")
+        laoRead(khmer,dictionary,input,bytes)
     case Fail{_}: IO.die(Unit,1,"invalid Khmer dictionary")
 def khmerRead(dictionary: D.Trie,input: String,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
   match result:
-    case Done{bytes}: khmerDecoded(dictionary,input,K.decode(bytes))
+    case Done{bytes}: khmerDecoded(dictionary,input,K.decodeKhmer(bytes))
     case Fail{_}: IO.die(Unit,1,"Khmer dictionary read failed")
 def decoded(result: D.Parsed(D.Trie),input: String) -> IO(Unit):
   match result:
@@ -74,7 +92,7 @@ def arguments(args: List<String>) -> IO(Unit):
       do IO<Unit>:
         bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
         fixture(bytes)
-    case _: IO.die(Unit,1,"expected JSON fixture path")
+    case _: IO.die(Unit,1,"expected TSV fixture path")
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()

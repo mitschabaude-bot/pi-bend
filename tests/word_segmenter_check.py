@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('backends',nargs='*',default=['bun','native-1','native-4']);a=p.parse_args()
 version=json.loads(subprocess.check_output(['node','-p','JSON.stringify({icu:process.versions.icu,unicode:process.versions.unicode})'],text=True));assert version=={'icu':'78.3','unicode':'17.0'},version
 cases=['ー'*12,'ｰ'*12,'ﾞ'*12,'ﾟ'*12,'','hello world','foo.bar','foo:bar','path/to/file','a_b','123abc','abc123','1カ2','_カナ123','你好world 123 foo.bar!','English日本語test','한국어test','א\'אב 1.5','カ\u0301ナ','中\u0301中','㌕世界','a\u200d👩🏽\u200d💻','🇦🇧🇨🇩🇪','\r\n',' \u0301 ','\ufeffx','᠀᠀','ภาษา','日本ภาษา','ພາສາ','မြန်မာ','ភាសា']
-missing={27:'Thai',28:'Thai',29:'Lao',30:'Myanmar'}
+missing={27:'Thai',28:'Thai',30:'Myanmar'}
 units=['a','1','_',"'",'.',' ','\u0301','\u200d','中','カ','ー','😀']
 cases += [''.join(parts) for parts in itertools.product(units,repeat=3)]
 # Preserve the official Unicode corpus, but compare ICU's tailoring/statuses.
@@ -32,6 +32,13 @@ khmer_chars=[chr(cp) for cp in range(0x1780,0x17e0)]
 cases += [''.join(random.choices(khmer_chars,k=random.randrange(1,32))) for _ in range(2048)]
 cases += ['a'+word+'中 1'+word+'カ' for word in random.sample(khmer_words,512)]
 cases += ['ភាសាខ្មែរ '*4000,'ក'*20000,'ក'+'ា'*20000,'ភាសា\u0301ខ្មែរ','ភាសា\u200dខ្មែរ']
+lao_words=sorted({line.split('#')[0].strip() for line in (ROOT/'build/icu78-source/laodict.txt').read_text(encoding='utf-8-sig').splitlines() if line.split('#')[0].strip()})
+cases += lao_words
+cases += [''.join(random.choices(lao_words,k=random.randrange(2,6))) for _ in range(2048)]
+lao_chars=[chr(cp) for cp in range(0xe80,0xee0)]
+cases += [''.join(random.choices(lao_chars,k=random.randrange(1,32))) for _ in range(2048)]
+cases += ['a'+word+'ភាសាខ្មែរ 1'+word+'中' for word in random.sample(lao_words,512)]
+cases += ['ພາສາລາວ '*4000,'ກ'*20000,'ກ'+'ິ'*20000,'ພາສາ\u0301ລາວ','ພາສາ\u200dລາວ']
 cases += ['hello世界 123カタカナ. '*2000,'a'*100000,'ー'*20000,'_カ\u0301ナ'*4000,'a.'+'\u0301'*100000+'!']
 fixture=ROOT/'build/word-segmenter-fixture.json';fixture.write_text(json.dumps(cases,ensure_ascii=False))
 subprocess.run(['cc','-shared','-fPIC','-I/usr/include/node','tests/icu78_word_rules_oracle.c','-o','build/icu78-word-rules.node'],cwd=ROOT,check=True)
@@ -49,10 +56,11 @@ for(const text of JSON.parse(fs.readFileSync(process.argv[1]))){
 '''
 expected=[json.loads(line) for line in subprocess.check_output(['node','-e',oracle,str(fixture)],cwd=ROOT,text=True,timeout=60).rstrip('\n').split('\n')]
 for i,language in missing.items():expected[i]='MissingEngine:'+language
+fixture=ROOT/'build/word-segmenter-expected.tsv'
+fixture.write_text('\n'.join(json.dumps(text,ensure_ascii=False)+'\t'+json.dumps(want,ensure_ascii=False,separators=(',',':')) for text,want in zip(cases,expected)))
 for backend in a.backends:
  cmd=['bun','build/word-segmenter.js'] if backend=='bun' else ['build/word-segmenter','--threads',backend[-1]]
  start=time.monotonic();result=subprocess.run(cmd+[str(fixture)],cwd=ROOT,capture_output=True,text=True,timeout=120)
  assert result.returncode==0 and not result.stderr,(backend,result.returncode,result.stderr)
- actual=[json.loads(line) for line in result.stdout.rstrip('\n').split('\n')];assert len(actual)==len(expected),(backend,len(actual),len(expected))
- for i,(got,want) in enumerate(zip(actual,expected)):assert got==want,(backend,i,repr(cases[i]),got,want)
+ assert result.stdout.strip()==str(len(cases)),(backend,result.stdout,len(cases))
  print(f'{backend}: {len(cases)} exact mixed-text/status results and typed missing-engine cases pass ({time.monotonic()-start:.3f}s)',flush=True)
