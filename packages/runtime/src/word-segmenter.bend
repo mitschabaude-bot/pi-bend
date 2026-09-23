@@ -4,6 +4,7 @@ import ./cjk-dictionary.bend as Dictionary
 import ./cjk-word-break.bend as Cjk
 import ./sea-word-break.bend as Sea
 import ./sea-word-data.bend as SeaData
+import ./filesystem.bend as FS
 
 # ICU78 word rules with preloaded CJK and Southeast Asian dictionaries.
 # The pinned reference runtime has no Thai/Myanmar LSTM model resources.
@@ -13,6 +14,55 @@ type Error is Data: MissingEngine{language: String} InvalidState{}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
 def create(rules: Rules.Rules,dictionary: Dictionary.Trie,khmer: Dictionary.Trie,lao: Dictionary.Trie,thai: Dictionary.Trie,myanmar: Dictionary.Trie) -> Context:
   Context{rules,Cjk.create(dictionary),Sea.Context{SeaData.Khmer{},khmer},Sea.Context{SeaData.Lao{},lao},Sea.Context{SeaData.Thai{},thai},Sea.Context{SeaData.Myanmar{},myanmar}}
+
+type LoadError is Data:
+  ReadFailed{path: String,cause: FS.Error}
+  InvalidAsset{path: String}
+def Loaded(-A: Data) -> Data: Result<&2,&2,LoadError,A>
+def checkedTrie(path: String,result: Dictionary.Parsed(Dictionary.Trie)) -> Loaded(Dictionary.Trie):
+  match result:
+    case Done{trie}: Done{trie}
+    case Fail{_}: Fail{InvalidAsset{path}}
+def decodedTrie(path: String,decode: List<&2,U32> -> Dictionary.Parsed(Dictionary.Trie),read: Result<&2,&2,FS.Error,List<&2,U32>>) -> Loaded(Dictionary.Trie):
+  match read:
+    case Fail{cause}: Fail{ReadFailed{path,cause}}
+    case Done{bytes}: checkedTrie(path,decode(bytes))
+def loadTrie(+path: String,decode: List<&2,U32> -> Dictionary.Parsed(Dictionary.Trie)) -> IO(Loaded(Dictionary.Trie)):
+  do IO<Loaded(Dictionary.Trie)>:
+    read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
+    return decodedTrie(path,decode,read)
+def checkedRules(path: String,result: Rules.Parsed(Rules.Rules)) -> Loaded(Rules.Rules):
+  match result:
+    case Done{rules}: Done{rules}
+    case Fail{_}: Fail{InvalidAsset{path}}
+def decodedRules(path: String,read: Result<&2,&2,FS.Error,List<&2,U32>>) -> Loaded(Rules.Rules):
+  match read:
+    case Fail{cause}: Fail{ReadFailed{path,cause}}
+    case Done{bytes}: checkedRules(path,Rules.decode(bytes))
+def loadRules(+path: String) -> IO(Loaded(Rules.Rules)):
+  do IO<Loaded(Rules.Rules)>:
+    read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
+    return decodedRules(path,read)
+def assembled(cjk: Loaded(Dictionary.Trie),khmer: Loaded(Dictionary.Trie),lao: Loaded(Dictionary.Trie),thai: Loaded(Dictionary.Trie),myanmar: Loaded(Dictionary.Trie),rules: Loaded(Rules.Rules)) -> Loaded(Context):
+  match cjk khmer lao thai myanmar rules:
+    case Fail{error} _ _ _ _ _: Fail{error}
+    case _ Fail{error} _ _ _ _: Fail{error}
+    case _ _ Fail{error} _ _ _: Fail{error}
+    case _ _ _ Fail{error} _ _: Fail{error}
+    case _ _ _ _ Fail{error} _: Fail{error}
+    case _ _ _ _ _ Fail{error}: Fail{error}
+    case Done{cjk} Done{khmer} Done{lao} Done{thai} Done{myanmar} Done{rules}: Done{create(rules,cjk,khmer,lao,thai,myanmar)}
+# The caller supplies the installed data directory. All six versioned assets
+# are required; a missing or corrupt engine is an initialization error.
+def loadDefault(+directory: String) -> IO(Loaded(Context)):
+  do IO<Loaded(Context)>:
+    cjk : Loaded(Dictionary.Trie) <- loadTrie(directory ++ "/icu78-cjk.bin",Dictionary.decode)
+    khmer : Loaded(Dictionary.Trie) <- loadTrie(directory ++ "/icu78-khmer.bin",SeaData.decodeKhmer)
+    lao : Loaded(Dictionary.Trie) <- loadTrie(directory ++ "/icu78-lao.bin",SeaData.decodeLao)
+    thai : Loaded(Dictionary.Trie) <- loadTrie(directory ++ "/icu78-thai.bin",SeaData.decodeThai)
+    myanmar : Loaded(Dictionary.Trie) <- loadTrie(directory ++ "/icu78-burmese.bin",SeaData.decodeMyanmar)
+    rules : Loaded(Rules.Rules) <- loadRules(directory ++ "/icu78-word-rules.bin")
+    return assembled(cjk,khmer,lao,thai,myanmar,rules)
 
 type Mode is Data: Outside{} CjkRange{} KoreanRange{} KhmerRange{} LaoRange{} ThaiRange{} MyanmarRange{}
 type DictionaryScan is Data:

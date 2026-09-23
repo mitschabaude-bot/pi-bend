@@ -5,20 +5,14 @@ import ../packages/tui/src/components/select-list.bend as Select
 import ../packages/tui/src/component.bend as Component
 import ../packages/tui/src/keybindings.bend as Keybindings
 import ../packages/tui/src/keys.bend as Keys
-import ../packages/tui/src/word-navigation.bend as Word
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/record.bend as Record
-import ../packages/runtime/src/u32-table.bend as Table
-import ../packages/runtime/src/word-rules.bend as Rules
-import ../packages/runtime/src/cjk-dictionary.bend as Dictionary
 import ../packages/runtime/src/word-segmenter.bend as Segmenter
 
 def identity(ignored: Unit,value: String) -> IO(String): IO.pure(String,value)
 def submitted(output: Ref.Ref<List<&2,String>>,value: String) -> IO(Unit):
   Ref.modify(List<&2,String>,Unit,output,values => (value <> values,Unit{}))
-def words() -> Segmenter.Context:
-  Segmenter.create(Rules.Rules{Table.fromSortedEntries(Rules.State,Nil{}),Table.fromSortedEntries(U32,Nil{})},Dictionary.Trie{"",0,Table.fromSortedEntries(Dictionary.Trie,Nil{})},Dictionary.Trie{"",0,Table.fromSortedEntries(Dictionary.Trie,Nil{})},Dictionary.Trie{"",0,Table.fromSortedEntries(Dictionary.Trie,Nil{})},Dictionary.Trie{"",0,Table.fromSortedEntries(Dictionary.Trie,Nil{})},Dictionary.Trie{"",0,Table.fromSortedEntries(Dictionary.Trie,Nil{})})
 def check(value: Bool,message: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,message))(Unit{})
 def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>) -> IO(Unit):
@@ -40,17 +34,25 @@ def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,r
 def borrowed(pair: Live.Owner & Component.Component & Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>) -> IO(Unit):
   match pair:
     case (owner,component,handle): run(owner,component,handle,rows,output)
-def main() -> IO(Unit):
+def runLoaded(words: Segmenter.Context) -> IO(Unit):
   do IO<Unit>:
     +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
     +output : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
     +paint : Callback.Callback<String,String> <- Callback.create(~Unit,~String,~String,~identity,Unit{})
     +submit : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~submitted,output)
     editor : Editor.Editor <- Editor.new(Editor.EditorTheme{paint,Select.SelectListTheme{paint,paint,paint,paint,paint}},None{})
-    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{}}),words(),Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
+    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{}}),words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
     borrowed(Live.borrow(owner),rows,output)
     Callback.dispose(String,String,paint)
     Callback.dispose(String,Unit,submit)
     oldRows : Nat <- Ref.dispose(Nat,rows)
     oldOutput : List<&2,String> <- Ref.dispose(List<&2,String>,output)
     IO.print("editor component rendered, accepted input and submitted")
+def loaded(result: Segmenter.Loaded(Segmenter.Context)) -> IO(Unit):
+  match result:
+    case Done{words}: runLoaded(words)
+    case Fail{_}: IO.die(Unit,1,"word assets did not load")
+def main() -> IO(Unit):
+  do IO<Unit>:
+    words : Segmenter.Loaded(Segmenter.Context) <- Segmenter.loadDefault("packages/runtime/data")
+    loaded(words)
