@@ -145,3 +145,44 @@ def composed(base: Layout.Segments,overlay: Layout.WidthResult,+startCol: Nat,+o
 def compositeTuiLine(+baseLine: String,overlayLine: String,+startCol: Nat,+overlayWidth: Nat,+totalWidth: Nat) -> String:
   Bool.pick(Unit -> String,Image.isImageLine(baseLine),_ => baseLine,
     _ => composed(Layout.extractSegments(baseLine,startCol,startCol + overlayWidth,totalWidth - startCol - overlayWidth,True{}),Layout.sliceWithWidth(overlayLine,0n,overlayWidth,True{}),startCol,overlayWidth,totalWidth))(Unit{})
+
+# Final frame preparation keeps image payloads untouched and extracts only the
+# lowest visible cursor marker, retaining markers outside the displayed viewport.
+type CursorPosition is Data: CursorPosition{row: Nat,col: Nat}
+type CursorFrame is Data: CursorFrame{lines: List<&2,String>,cursor: Maybe<&2,CursorPosition>}
+type Marker is Data: Marker{before: String,after: String}
+def marker(text: String,+reversed: String) -> Maybe<&2,Marker>:
+  match text:
+    case SNil{}: None{}
+    case SCon{+char,+rest}:
+      +text = {SCon{char,rest}: String}
+      Bool.pick(Unit -> Maybe<&2,Marker>,String.starts_with(text,CURSOR_MARKER()),
+        _ => Some{Marker{String.reverse(reversed),String.drop(text,7n)}},
+        _ => marker(rest,SCon{char,reversed}))(Unit{})
+type CursorSearch is Data:
+  Searching{reversed: List<&2,String>,suffix: List<&2,String>,height: Nat,row: Nat}
+  CursorFound{frame: CursorFrame}
+def cursorLine(found: Maybe<&2,Marker>,row: Nat,line: String,remaining: List<&2,String>,suffix: List<&2,String>,height: Nat) -> CursorSearch:
+  match found:
+    case Some{Marker{+before,after}}: CursorFound{CursorFrame{List.append(&2,String,List.reverse(&2,String,remaining),(before ++ after) <> suffix),Some{CursorPosition{row,Layout.visibleWidth(before)}}}}
+    case None{}: Searching{remaining,line <> suffix,height,row}
+def cursorStep(search: CursorSearch) -> CursorSearch:
+  match search:
+    case Searching{Nil{},suffix,_,_}: CursorFound{CursorFrame{suffix,None{}}}
+    case Searching{remaining,suffix,Zero{},_}: CursorFound{CursorFrame{List.append(&2,String,List.reverse(&2,String,remaining),suffix),None{}}}
+    case Searching{+line <> remaining,suffix,Succ{left},row}: cursorLine(marker(line,""),row - 1n,line,remaining,suffix,left)
+    case result: result
+def cursorScan(fuel: Nat,search: CursorSearch) -> CursorFrame:
+  match fuel search:
+    case _ CursorFound{frame}: frame
+    case Zero{} Searching{remaining,suffix,_,_}: CursorFrame{List.append(&2,String,List.reverse(&2,String,remaining),suffix),None{}}
+    case Succ{left} searching: cursorScan(left,cursorStep(searching))
+def extractCursorPosition(+lines: List<&2,String>,height: Nat) -> CursorFrame:
+  +length = List.length(&2,String,lines)
+  cursorScan(Succ{length},Searching{List.reverse(&2,String,lines),Nil{},height,length})
+def resetLines(lines: List<&2,String>,reversed: List<&2,String>) -> List<&2,String>:
+  match lines:
+    case Nil{}: List.reverse(&2,String,reversed)
+    case +line <> rest:
+      resetLines(rest,Bool.pick(Unit -> String,Image.isImageLine(line),_ => line,_ => Layout.normalizeTerminalOutput(line) ++ segmentReset())(Unit{}) <> reversed)
+def applyLineResets(lines: List<&2,String>) -> List<&2,String>: resetLines(lines,Nil{})
