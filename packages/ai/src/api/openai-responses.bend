@@ -1245,10 +1245,6 @@ def settled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +events: Ev
         finalizer
         return RunResult{terminal, cleanup}
 
-def modelProvider(model: T.Model<T.JsonValue>) -> String:
-  match model:
-    case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
-
 def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, +events: Events.AssistantMessageEventStream(V.Value, G), timestamp: F64, finalizer: IO(Unit), pair: SignalOwner<Reason> & Signal(Reason)) -> IO(RunResult<Reason, G, E>):
   match pair:
     case (owner, +parent):
@@ -1256,7 +1252,7 @@ def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~
         preparation : Result<&2, &2, PreparationError, Prepared> <- prepare(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, userAgent(config))
         outcome : Outcome<Reason, G, E> <- preparedRequest(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, initialMessage(G, model, timestamp), events, parent, preparation)
         aborted : Bool <- Abort.aborted(Reason, parent)
-        settled(~Reason, ~G, ~E, ~render, events, modelProvider(model), owner, finalizer, aborted, outcome)
+        settled(~Reason, ~G, ~E, ~render, events, T.modelProvider(model), owner, finalizer, aborted, outcome)
 
 # The body of upstream `stream`'s async task: try everything, then settle the
 # message, publish `done`/`error` and end the canonical stream.

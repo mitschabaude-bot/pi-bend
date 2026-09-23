@@ -446,10 +446,6 @@ def summarizationContext(-D: Data, -T: Data, promptText: String, now: F64) -> Ai
 def summaryBudget(factor: F64, reserveTokens: F64, +modelMaxTokens: F64) -> F64:
   F.minimum(F.truncate(F.multiply(factor, reserveTokens)), Bool.pick(F64, F.isGreater(F.compare(modelMaxTokens, zero())), modelMaxTokens, F.infinity(False{})))
 
-def modelMaxTokens(model: Ai.Model<Ai.JsonValue>) -> F64:
-  match model:
-    case Ai.Model{_, _, _, _, _, _, _, _, _, _, maxTokens, _, _, _}: maxTokens
-
 type Summary is Data:
   Summary{text: String, usage: Ai.Usage}
 
@@ -502,10 +498,10 @@ def summarize(~D: Data, ~T: Data, summarizer: Summarizer(D, T), promptText: Stri
 # upstream generateSummaryWithUsage: the conversation, an optional previous
 # summary and the (update) prompt, within 80% of the reserve.
 def generateSummaryWithUsage(~D: Data, ~T: Data, ~C: Data, summarizer: Summarizer(D, T), messages: List<&2, Msg(D, T, C)>, model: Ai.Model<Ai.JsonValue>, reserveTokens: F64, signal: Maybe<&2, A.AbortSignal<Unit>>, customInstructions: Maybe<&2, String>, +previousSummary: Maybe<&2, String>, retry: Maybe<&2, Retry.RetryPolicy>, callbacks: Maybe<&2, Retry.RetryCallbacks()>) -> IO(Result<&2, &2, String, Summary>):
-  summarize(~D, ~T, summarizer, conversationBlock(D, T, C, messages) ++ previousBlock(previousSummary) ++ withFocus(basePromptFor(previousSummary), customInstructions), summaryBudget(F.divide(F.fromU32(4), F.fromU32(5)), reserveTokens, modelMaxTokens(model)), "Summarization", signal, retry, callbacks)
+  summarize(~D, ~T, summarizer, conversationBlock(D, T, C, messages) ++ previousBlock(previousSummary) ++ withFocus(basePromptFor(previousSummary), customInstructions), summaryBudget(F.divide(F.fromU32(4), F.fromU32(5)), reserveTokens, Ai.modelMaxTokens(model)), "Summarization", signal, retry, callbacks)
 
 def generateTurnPrefixSummary(~D: Data, ~T: Data, ~C: Data, summarizer: Summarizer(D, T), messages: List<&2, Msg(D, T, C)>, model: Ai.Model<Ai.JsonValue>, reserveTokens: F64, signal: Maybe<&2, A.AbortSignal<Unit>>, retry: Maybe<&2, Retry.RetryPolicy>, callbacks: Maybe<&2, Retry.RetryCallbacks()>) -> IO(Result<&2, &2, String, Summary>):
-  summarize(~D, ~T, summarizer, conversationBlock(D, T, C, messages) ++ TURN_PREFIX_SUMMARIZATION_PROMPT(), summaryBudget(F.divide(F.fromU32(1), F.fromU32(2)), reserveTokens, modelMaxTokens(model)), "Turn prefix summarization", signal, retry, callbacks)
+  summarize(~D, ~T, summarizer, conversationBlock(D, T, C, messages) ++ TURN_PREFIX_SUMMARIZATION_PROMPT(), summaryBudget(F.divide(F.fromU32(1), F.fromU32(2)), reserveTokens, Ai.modelMaxTokens(model)), "Turn prefix summarization", signal, retry, callbacks)
 
 def addMaybe(left: Maybe<&2, F64>, right: Maybe<&2, F64>) -> Maybe<&2, F64>:
   match left right:

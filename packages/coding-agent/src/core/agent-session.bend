@@ -123,29 +123,9 @@ def stateModel(value: AgentState()) -> Ai.Model<Ai.JsonValue>:
   match value:
     case T.AgentState{model, _, _, _, _, _, _, _}: model
 
-def modelProvider(model: Ai.Model<Ai.JsonValue>) -> String:
-  match model:
-    case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
-
-def modelIdOf(model: Ai.Model<Ai.JsonValue>) -> String:
-  match model:
-    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
-
-def modelContextWindow(model: Ai.Model<Ai.JsonValue>) -> F64:
-  match model:
-    case Ai.Model{_, _, _, _, _, _, _, _, _, contextWindow, _, _, _, _}: contextWindow
-
-def modelMaxTokens(model: Ai.Model<Ai.JsonValue>) -> F64:
-  match model:
-    case Ai.Model{_, _, _, _, _, _, _, _, _, _, maxTokens, _, _, _}: maxTokens
-
 def modelIdentity(model: Ai.Model<Ai.JsonValue>) -> Settings.ModelIdentity:
   match model:
     case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _}: Settings.ModelIdentity{provider, id}
-
-def modelReasoning(model: Ai.Model<Ai.JsonValue>) -> Bool:
-  match model:
-    case Ai.Model{_, _, _, _, _, reasoning, _, _, _, _, _, _, _, _}: reasoning
 
 def stateThinking(value: AgentState()) -> Ai.ModelThinkingLevel:
   match value:
@@ -830,8 +810,8 @@ def skipsCheck(settings: Compaction.CompactionSettings, skipAborted: Bool, +assi
 # upstream _checkCompaction's decision (Plan.decideCompaction) from the
 # assistant message, the model and the session's compaction boundary.
 def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool) -> Plan.CompactionPlan:
-  +sameModel = Bool.and(String.eq(assistantProvider(assistant), modelProvider(model)), String.eq(assistantModel(assistant), modelIdOf(model)))
-  Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, modelMaxTokens(model))), isStop(assistantStop(assistant)), attempted, thresholdReached(settings, modelContextWindow(model), thresholdTokens(assistant, messages, boundary)))
+  +sameModel = Bool.and(String.eq(assistantProvider(assistant), Ai.modelProvider(model)), String.eq(assistantModel(assistant), Ai.modelId(model)))
+  Plan.decideCompaction(skipsCheck(settings, skipAborted, assistant, boundary), Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, Ai.modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, Ai.modelMaxTokens(model))), isStop(assistantStop(assistant)), attempted, thresholdReached(settings, Ai.modelContextWindow(model), thresholdTokens(assistant, messages, boundary)))
 
 # The summarizer: the agent's stream function with fresh options.
 type SummarizerEnv is Data:
@@ -840,7 +820,7 @@ type SummarizerEnv is Data:
 def reasoningOption(model: Ai.Model<Ai.JsonValue>, thinking: Ai.ModelThinkingLevel) -> Maybe<&2, Ai.ThinkingLevel>:
   match thinking:
     case Ai.Off{}: None{}
-    case Ai.Thinking{level}: Bool.pick(Maybe<&2, Ai.ThinkingLevel>, modelReasoning(model), Some{level}, None{})
+    case Ai.Thinking{level}: Bool.pick(Maybe<&2, Ai.ThinkingLevel>, Ai.modelReasoning(model), Some{level}, None{})
 
 def summaryOptions(model: Ai.Model<Ai.JsonValue>, thinking: Ai.ModelThinkingLevel, signal: A.AbortSignal<Unit>, requestId: String, maxTokens: F64) -> Ai.SimpleStreamOptions<Ai.JsonValue, A.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Runtime.Error()>:
   Ai.SimpleStreamOptions{Some{signal}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{maxTokens}, None{}, Some{Ai.CacheNone{}}, Some{requestId}, None{}, None{}, None{}, reasoningOption(model, thinking), None{}, None{}}
@@ -1068,7 +1048,7 @@ def contextMessagesIn(context: Context()) -> List<&2, Message()>:
     case T.AgentContext{kept, _}: kept
 
 def overThreshold(settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, messages: List<&2, Message()>) -> Bool:
-  +contextWindow = modelContextWindow(model)
+  +contextWindow = Ai.modelContextWindow(model)
   Bool.and(F.isGreater(F.compare(contextWindow, F.fromU32(0))), Compaction.shouldCompact(Compaction.estimateTokensOf(Compaction.estimateContextTokens(Unit, Tools.ToolDetails, V.Value, messages)), contextWindow, compactionSettingsFor(settings, model)))
 
 def compactIfOver(over: Bool, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>, +context: Context()) -> IO(Context()):
@@ -1118,7 +1098,7 @@ def nextTurnHook(env: NextTurnEnv, input: T.ToolHookInput<Turn()>) -> IO(TurnRes
 def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String) -> IO(AgentSession):
   do IO<AgentSession>:
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, Ai.modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}})
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
     +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -1378,7 +1358,7 @@ def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Resul
         Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         Agent.setThinkingLevel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, clamped(current, stateThinking(current)))
-        R.modify(Shared, Unit, shared, current => (withContextWindow(current, modelContextWindow(model)), Unit{}))
+        R.modify(Shared, Unit, shared, current => (withContextWindow(current, Ai.modelContextWindow(model)), Unit{}))
         stored : Shared <- R.read(Shared, shared)
         outcome : Sessions.Outcome(Appended()) <- recordModel(sharedSession(stored), model)
         recorded(shared, outcome)
