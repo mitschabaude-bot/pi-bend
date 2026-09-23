@@ -5,6 +5,8 @@ import ../../../../../tui/src/components/box.bend as Box
 import ../../../../../tui/src/components/text.bend as TuiText
 import ../../../../../tui/src/utils.bend as U
 import ../../../../../runtime/src/callback.bend as Callback
+import ../../../../../runtime/src/ref.bend as Ref
+import ../../../../../tui/src/component.bend as Component
 import ../../../../../runtime/src/schema-value.bend as Value
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../ai/src/utils/json.bend as Json
@@ -159,3 +161,36 @@ def render(+state: ToolExecution,width: Nat) -> IO(List<&2,String>):
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Generic{}}: generic(state,width)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result}}: boxed(state,call,result,width)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result}}: selfRendered(state,call,result,width)
+
+# The viewport keeps this component mounted while the transcript replaces its
+# immutable state as tool events arrive.
+type Owner is Type:
+  Owner{state: Ref.Ref<ToolExecution>,component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{state: Ref.Ref<ToolExecution>}
+def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
+  match handle:
+    case Handle{state}:
+      do IO<List<&2,String>>:
+        value : ToolExecution <- Ref.read(ToolExecution,state)
+        render(value,width)
+def noInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def create(id: Component.ComponentId,value: ToolExecution) -> IO(Owner):
+  do IO<Owner>:
+    +state : Ref.Ref<ToolExecution> <- Ref.new(ToolExecution,value)
+    +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state})
+    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~noInvalidate,Unit{})
+    return Owner{state,Component.Component{id,draw,None{},None{},invalidate,None{},False{}},draw,invalidate}
+def borrow(owner: Owner) -> Owner & Component.Component & Handle:
+  match owner:
+    case Owner{+state,+component,draw,invalidate}: (Owner{state,component,draw,invalidate},component,Handle{state})
+def set(handle: Handle,value: ToolExecution) -> IO(Unit):
+  match handle: case Handle{state}: Ref.write(ToolExecution,state,value)
+def current(handle: Handle) -> IO(ToolExecution):
+  match handle: case Handle{state}: Ref.read(ToolExecution,state)
+def dispose(owner: Owner) -> IO(Unit):
+  match owner:
+    case Owner{state,_,draw,invalidate}:
+      do IO<Unit>:
+        old : ToolExecution <- Ref.dispose(ToolExecution,state)
+        Callback.dispose(Nat,List<&2,String>,draw)
+        Callback.dispose(Unit,Unit,invalidate)
