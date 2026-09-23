@@ -877,7 +877,10 @@ def newInteractive(host: Host(),_: Unit) -> IO(Result<&2,&2,String,Unit>):
   SessionRuntime.newSession(Services,host,None{})
 def loginInteractive(_: Unit,request: InteractiveRun.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:
-    case InteractiveRun.LoginRequest{signal,notice}: AuthLogin.authenticate(CodexOAuth.deviceEndpoints(),signal,notice)
+    case InteractiveRun.LoginRequest{provider,signal,notice,manual}:
+      match provider:
+        case "anthropic": AuthLogin.authenticateAnthropic(signal,manual)
+        case _: AuthLogin.authenticate(CodexOAuth.deviceEndpoints(),signal,notice)
 def refreshInteractive(host: Host(),_: Unit) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:
     catalog : Catalog <- SessionRuntime.withServices(Services,Catalog,host,catalogOf,Catalog{Nil{},Nil{}})

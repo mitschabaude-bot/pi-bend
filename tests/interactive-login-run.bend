@@ -10,6 +10,7 @@ import ../packages/coding-agent/src/cli/auth-login.bend as AuthLogin
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/ai/src/auth/oauth/openai-codex.bend as Codex
 import ../packages/ai/src/providers/openai-codex.models.bend as CodexModels
+import ../packages/ai/src/providers/anthropic.models.bend as AnthropicModels
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/schema-value.bend as Schema
@@ -33,9 +34,12 @@ def rebound(binding: Binding,live: Session.AgentSession) -> IO(Unit): reboundCop
 def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.newSession(Services(),runtime,None{})
 def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:
-    case Run.LoginRequest{signal,notice}: AuthLogin.authenticate(Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"},signal,notice)
+    case Run.LoginRequest{provider,signal,notice,manual}:
+      match provider:
+        case "anthropic": AuthLogin.authenticateAnthropicWithTokenURL(base ++ "/anthropic-token",signal,manual)
+        case _: AuthLogin.authenticate(Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"},signal,notice)
 def login(base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()): loginCopied(base,request)
-def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> CodexModels.OPENAI_CODEX_MODELS())
+def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> List.append(&2,Models.Model(),CodexModels.OPENAI_CODEX_MODELS(),AnthropicModels.ANTHROPIC_MODELS()))
 def requireSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
   match result:
     case Done{session}: IO.pure(Session.Session(),session)

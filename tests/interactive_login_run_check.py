@@ -42,6 +42,12 @@ class Handler(BaseHTTPRequestHandler):
             status, data = (403, {"error": "deviceauth_authorization_pending"}) if Handler.generation == 1 else (200, {"authorization_code": "auth_test", "code_verifier": "verifier_test"})
         elif self.path == "/exchange":
             status, data = 200, {"access_token": access, "refresh_token": "refresh_test", "expires_in": 3600}
+        elif self.path == "/anthropic-token":
+            request = json.loads(body)
+            assert request["grant_type"] == "authorization_code"
+            assert request["code"] == "anthropic_test"
+            assert request["state"] == request["code_verifier"]
+            status, data = 200, {"access_token": "anthropic_access", "refresh_token": "anthropic_refresh", "expires_in": 3600}
         else:
             status, data = 404, {"error": "bad path"}
         wire = json.dumps(data).encode()
@@ -83,11 +89,15 @@ def scenario(threads):
                 until(b"faux-model")
                 before = len(output)
                 os.write(master, b"/login\r")
+                until(b"Choose a provider", before)
+                os.write(master, b"1")
                 until(b"ABCD-EFGH", before)
                 os.write(master, b"\x1b")
                 until(b"Login cancelled", before)
                 before = len(output)
                 os.write(master, b"/login\r")
+                until(b"Choose a provider", before)
+                os.write(master, b"1")
                 until(b"ABCD-EFGH", before)
                 until(b"Logged in to OpenAI Codex", before)
                 before = len(output)
@@ -97,6 +107,20 @@ def scenario(threads):
                 assert saved["access"] == access and saved["refresh"] == "refresh_test"
                 assert [item[1] for item in Handler.seen].count("/usercode") == 2
                 assert any(item[1] == "/exchange" for item in Handler.seen)
+                os.write(master, b"\x1b")
+                time.sleep(.3)
+                at = len(output)
+                os.write(master, b"/login\r")
+                until(b"Choose a provider", at)
+                os.write(master, b"2")
+                until(b"Paste authorization code", at)
+                os.write(master, b"anthropic_test\r")
+                until(b"Logged in to Anthropic", at)
+                at = len(output)
+                os.write(master, b"/model\r")
+                until(b"anthropic/claude", at)
+                anthropic = json.loads((agent_dir / "auth.json").read_text())["anthropic"]
+                assert anthropic["access"] == "anthropic_access" and anthropic["refresh"] == "anthropic_refresh"
                 os.write(master, b"\x1b")
                 time.sleep(.3)
                 at = len(output)
@@ -114,7 +138,7 @@ def scenario(threads):
                 os.close(master)
                 os.close(slave)
         server.shutdown()
-    print(f"native{threads}: mounted /login device code, Esc cancellation, auth.json, refreshed /model")
+    print(f"native{threads}: Codex and Anthropic /login, cancellation, auth.json, refreshed /model")
 
 for threads in (1, 4):
     scenario(threads)
