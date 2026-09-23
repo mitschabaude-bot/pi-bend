@@ -1,0 +1,38 @@
+--- a/bend2/effs/process.c
++++ b/bend2/effs/process.c
+@@ -144,11 +144,15 @@
+   return work->code ? process_spawn_pack(e,work) : io_work(work,process_spawn_call,process_spawn_pack);
+ }
+ #ifdef CID_PROCESS_SPAWN
+-Term process_spawn_run(Env e, Term* f, IoWork* w) { return process_spawn_start(e,f,w,true); }
++Term process_spawn_run(Env e, Term* f, IoWork* w) {
++  return process_spawn_start(e,f,w,true);
++}
+ static void __attribute__((constructor)) process_spawn_use(void) { io_eff(CID_PROCESS_SPAWN,process_spawn_run,0); }
+ #endif
+ #ifdef CID_PROCESS_SPAWN_NULL_STDIN
+-Term process_spawn_null_stdin_run(Env e, Term* f, IoWork* w) { return process_spawn_start(e,f,w,false); }
++Term process_spawn_null_stdin_run(Env e, Term* f, IoWork* w) {
++  return process_spawn_start(e,f,w,false);
++}
+ static void __attribute__((constructor)) process_spawn_null_stdin_use(void) { io_eff(CID_PROCESS_SPAWN_NULL_STDIN,process_spawn_null_stdin_run,0); }
+ #endif
+ #endif
+@@ -190,11 +194,15 @@
+   return io_work(work,process_wait_call,process_wait_pack);
+ }
+ #ifdef CID_PROCESS_WAIT
+-Term process_wait_run(Env e, Term* f, IoWork* w) { return process_wait_start(e,f[0],w,false); }
++Term process_wait_run(Env e, Term* f, IoWork* w) {
++  return process_wait_start(e,f[0],w,false);
++}
+ static void __attribute__((constructor)) process_wait_use(void) { io_eff(CID_PROCESS_WAIT,process_wait_run,0); }
+ #endif
+ #ifdef CID_PROCESS_CLOSE_CHECKED
+-Term process_close_checked_run(Env e, Term* f, IoWork* w) { return process_wait_start(e,f[0],w,true); }
++Term process_close_checked_run(Env e, Term* f, IoWork* w) {
++  return process_wait_start(e,f[0],w,true);
++}
+ static void __attribute__((constructor)) process_close_checked_use(void) { io_eff(CID_PROCESS_CLOSE_CHECKED,process_close_checked_run,0); }
+ #endif
+ #endif

@@ -1,0 +1,389 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3192,3 +3192,61 @@
+ def System.error_name(code: U32) -> IO(Maybe<&2, String>):
+   import "./effs/system_error_name.c"
+   import "./effs/system_error_name.js"
++
++# POSIX subprocess owners. A control is harmless after its owner is retired.
++# wait observes exit without reaping: the PID remains reserved until close_checked.
++# close_checked waits/reaps; killing and timeout policy belong to callers.
++law Process:
++  Type
++law ProcessControl:
++  Data
++law Pipe:
++  Type
++law PipeCancel:
++  Data
++
++type ProcessStatus is Data:
++  ProcessExited{code: U32}
++  ProcessSignalled{signal: U32}
++
++# argv excludes argv[0]; environment entries have the OS form NAME=value.
++# Each returned pipe is (owner,cancel): stdin, stdout, stderr respectively.
++def Process.spawn(path: String, argv: List<String>, cwd: String, environment: List<String>) -> IO(Result<&1,&1,U32 & String,Process & ProcessControl & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++def Process.wait(owner: Process) -> IO(Process & Result<&1,&1,U32 & String,ProcessStatus>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++def Process.signal(control: ProcessControl, signal: U32) -> IO(Result<&1,&1,U32 & String,Bool>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++def Process.close_checked(owner: Process) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++# Snapshot the inherited environment. Values are decoded as UTF-8, like get_env.
++def IO.environment() -> IO(List<String>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++# maxBytes must be 1..65536. Empty successful output means EOF.
++def Pipe.read(owner: Pipe, maxBytes: U32) -> IO(Pipe & Result<&1,&1,U32 & String,List<&2,U32>>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++# One write of at most 65536 bytes, possibly partial; advance by returned count.
++def Pipe.write(owner: Pipe, bytes: List<&2,U32>) -> IO(Pipe & Result<&1,&1,U32 & String,U32>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++# Permanent cancellation wakes pending IO with ECANCELED, retaining the owner.
++def Pipe.cancel(control: PipeCancel) -> IO(Bool):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++def Pipe.close_checked(owner: Pipe) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/process.c"
++  import "./effs/process.js"
+--- /dev/null
++++ b/bend2/effs/process.c
+@@ -0,0 +1,306 @@
++// POSIX syscall marshalling only. All capability/parked-queue changes occur on
++// the IO loop. Waiting observes with WNOWAIT; only retirement releases the PID.
++#include <spawn.h>
++#include <sys/wait.h>
++extern char** environ;
++
++typedef struct {
++  u32 gen, next, live, kind, cancelled;
++  int fd;
++  pid_t pid;
++  IoAct* waiter;
++} ProcessResource;
++static ProcessResource* process_resources;
++static u32 process_length, process_idle = ~0u;
++
++static ProcessResource* process_at(Term handle, u32 kind) {
++  u64 id = io_hand_v(handle);
++  u32 index = (u32)id & 0xFFFFFF;
++  ProcessResource* row = index < process_length ? process_resources + index : NULL;
++  return row && row->live && row->kind == kind && row->gen == (u32)(id >> 24) ? row : NULL;
++}
++static Term process_resource(u32 kind, int value) {
++  u32 index = process_idle;
++  if (index != ~0u) process_idle = process_resources[index].next;
++  else {
++    if (process_length == (1u << 24)) err_fail("too many process resources");
++    if ((process_length & (process_length-1)) == 0)
++      process_resources = io_mem(realloc(process_resources,
++        (process_length ? 2*process_length : 1)*sizeof(ProcessResource)));
++    index = process_length++; process_resources[index].gen = 0;
++  }
++  ProcessResource* row = process_resources + index;
++  row->gen++; row->live = 1; row->kind = kind; row->fd = value;
++  row->pid = value; row->cancelled = 0; row->waiter = NULL;
++  return io_hand(((u64)row->gen << 24) | index);
++}
++static void process_retire(ProcessResource* row) {
++  row->live = 0;
++  if (row->gen != 0xFFFFFFFFu) {
++    row->next = process_idle; process_idle = (u32)(row - process_resources);
++  }
++}
++
++#ifdef CID_PROCESS_SPAWN
++typedef struct {
++  char* path; char* cwd; char** argv; char** env;
++  pid_t pid; int pipes[6];
++} ProcessSpawn;
++static void process_strings_free(char** strings) {
++  if (strings) { for (size_t i=0; strings[i]; i++) free(strings[i]); free(strings); }
++}
++static char** process_strings(Env e, Term list, const char* first, bool environment, u32* error) {
++  size_t size = 0, cap = 8;
++  char** strings = io_mem(calloc(cap, sizeof(char*)));
++  if (first) strings[size++] = io_mem(strdup(first));
++  while (term_aux(list) == CID_CON) {
++    Term fields[2];
++    spare_free(e, cls_fit(2), ctr_take(e, list, 2, fields));
++    u64 length = 0;
++    char* text = io_cstr(e, fields[0], &length);
++    if (io_nul(text,length)) *error = EILSEQ;
++    if (environment && (text[0] == '=' || !strchr(text,'='))) *error = EINVAL;
++    if (size+1 == cap) { cap *= 2; strings = io_mem(realloc(strings, cap*sizeof(char*))); }
++    strings[size++] = text; list = fields[1];
++  }
++  strings[size] = NULL;
++  return strings;
++}
++static void process_spawn_call(IoWork* work) {
++  ProcessSpawn* s = (ProcessSpawn*)work->data;
++  posix_spawn_file_actions_t actions;
++  posix_spawnattr_t attributes;
++  bool have_actions = false, have_attributes = false;
++  int error = posix_spawn_file_actions_init(&actions);
++  if (error) goto done;
++  have_actions = true;
++  error = posix_spawnattr_init(&attributes);
++  if (error) goto done;
++  have_attributes = true;
++  for (int i=0; i<6; i+=2) {
++    if (pipe2(s->pipes+i, O_CLOEXEC) < 0) { error=errno; goto done; }
++    for (int j=i; j<i+2; j++) {
++      // dup2 must not close a pipe accidentally when the parent lacked stdio.
++      if (s->pipes[j] < 3) {
++        int fd = fcntl(s->pipes[j], F_DUPFD_CLOEXEC, 3);
++        if (fd < 0) { error=errno; goto done; }
++        close(s->pipes[j]); s->pipes[j]=fd;
++      }
++    }
++    int parent = s->pipes[i + (i == 0 ? 1 : 0)];
++    if (fcntl(parent,F_SETFL,O_NONBLOCK) < 0) { error=errno; goto done; }
++  }
++  error=posix_spawn_file_actions_adddup2(&actions,s->pipes[0],0);
++  if (!error) error=posix_spawn_file_actions_adddup2(&actions,s->pipes[3],1);
++  if (!error) error=posix_spawn_file_actions_adddup2(&actions,s->pipes[5],2);
++  if (!error) error=posix_spawn_file_actions_addchdir_np(&actions,s->cwd);
++  if (!error) error=posix_spawn_file_actions_addclosefrom_np(&actions,3);
++  sigset_t defaults, mask;
++  sigfillset(&defaults); sigemptyset(&mask);
++  if (!error) error=posix_spawnattr_setsigdefault(&attributes,&defaults);
++  if (!error) error=posix_spawnattr_setsigmask(&attributes,&mask);
++  if (!error) error=posix_spawnattr_setflags(&attributes,
++    POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
++  if (!error) error=posix_spawn(&s->pid,s->path,&actions,&attributes,s->argv,s->env);
++ done:
++  if (have_attributes) posix_spawnattr_destroy(&attributes);
++  if (have_actions) posix_spawn_file_actions_destroy(&actions);
++  for (int i=0; i<6; i++)
++    if (s->pipes[i] >= 0 && (error || i==0 || i==3 || i==5)) {
++      close(s->pipes[i]); s->pipes[i]=-1;
++    }
++  work->code=error;
++}
++static Term process_spawn_pack(Env e, IoWork* work) {
++  ProcessSpawn* s=(ProcessSpawn*)work->data;
++  Term result;
++  if (work->code) result=io_fail(e,work->code,NULL);
++  else {
++    Term process=process_resource(0,s->pid);
++    Term input=process_resource(1,s->pipes[1]);
++    Term output=process_resource(2,s->pipes[2]);
++    Term error=process_resource(2,s->pipes[4]);
++    result=io_done(e,io_tup(e,process,io_tup(e,process,
++      io_tup(e,io_tup(e,input,input),io_tup(e,io_tup(e,output,output),io_tup(e,error,error))))));
++  }
++  free(s->path); free(s->cwd); process_strings_free(s->argv); process_strings_free(s->env); free(s);
++  return result;
++}
++Term process_spawn_run(Env e, Term* fields, IoWork* work) {
++  ProcessSpawn* s=io_mem(calloc(1,sizeof(ProcessSpawn)));
++  work->data=(char*)s; work->code=0;
++  for (int i=0; i<6; i++) s->pipes[i]=-1;
++  u64 path_length=0,cwd_length=0;
++  s->path=io_cstr(e,fields[0],&path_length);
++  s->cwd=io_cstr(e,fields[2],&cwd_length);
++  if (io_nul(s->path,path_length) || io_nul(s->cwd,cwd_length)) work->code=EILSEQ;
++  s->argv=process_strings(e,fields[1],s->path,false,&work->code);
++  s->env=process_strings(e,fields[3],NULL,true,&work->code);
++  return work->code ? process_spawn_pack(e,work) : io_work(work,process_spawn_call,process_spawn_pack);
++}
++static void __attribute__((constructor)) process_spawn_use(void) { io_eff(CID_PROCESS_SPAWN,process_spawn_run,0); }
++#endif
++
++#if defined(CID_PROCESS_WAIT) || defined(CID_PROCESS_CLOSE_CHECKED)
++static void process_wait_call(IoWork* work) {
++  siginfo_t* info=(siginfo_t*)work->data;
++  int result;
++  do result=waitid(P_PID,(id_t)work->hand,info,WEXITED | WNOWAIT); while (result<0 && errno==EINTR);
++  io_sys_end(work,result);
++}
++static Term process_wait_pack(Env e, IoWork* work) {
++  ProcessResource* row=process_at((Term)work->size,0);
++  if (!row || row->waiter!=(IoAct*)work) err_fail("invalid process wait completion");
++  row->waiter=NULL;
++  siginfo_t info=*(siginfo_t*)work->data; free(work->data);
++  if (work->word) {
++    // The leader remains a zombie until this IO-loop transaction, so no other
++    // control operation can observe a recycled PID between reaping/retirement.
++    int result;
++    do result=waitpid(row->pid,NULL,0); while (result<0 && errno==EINTR);
++    u32 error=result<0 ? errno : work->code;
++    process_retire(row);
++    return error ? io_fail(e,error,NULL) : io_done(e,term_pak(CID_UNIT,0));
++  }
++#ifdef CID_PROCESS_WAIT
++  Term status=work->code ? io_fail(e,work->code,NULL) : io_done(e,
++    term_pak(info.si_code==CLD_EXITED ? CID_PROCESSEXITED : CID_PROCESSSIGNALLED,(u32)info.si_status));
++  return io_tup(e,(Term)work->size,status);
++#else
++  err_fail("invalid process wait mode"); return 0;
++#endif
++}
++static Term process_wait_start(Env e, Term owner, IoWork* work, bool close_owner) {
++  ProcessResource* row=process_at(owner,0);
++  if (!row || row->waiter) err_fail("invalid process owner");
++  row->waiter=(IoAct*)work; work->size=owner; work->hand=row->pid; work->word=close_owner;
++  work->data=io_mem(calloc(1,sizeof(siginfo_t)));
++  return io_work(work,process_wait_call,process_wait_pack);
++}
++#ifdef CID_PROCESS_WAIT
++Term process_wait_run(Env e, Term* f, IoWork* w) { return process_wait_start(e,f[0],w,false); }
++static void __attribute__((constructor)) process_wait_use(void) { io_eff(CID_PROCESS_WAIT,process_wait_run,0); }
++#endif
++#ifdef CID_PROCESS_CLOSE_CHECKED
++Term process_close_checked_run(Env e, Term* f, IoWork* w) { return process_wait_start(e,f[0],w,true); }
++static void __attribute__((constructor)) process_close_checked_use(void) { io_eff(CID_PROCESS_CLOSE_CHECKED,process_close_checked_run,0); }
++#endif
++#endif
++
++#ifdef CID_PROCESS_SIGNAL
++Term process_signal_run(Env e, Term* f, IoWork* w) {
++  ProcessResource* row=process_at(f[0],0);
++  if (!row) return io_done(e,term_pak(CID_FALSE,0));
++  if (f[1]==0 || f[1]>=NSIG) return io_fail(e,EINVAL,NULL);
++  int result=kill(-row->pid,(int)f[1]);
++  if (result<0 && errno==ESRCH) result=kill(row->pid,(int)f[1]);
++  if (result<0 && errno!=ESRCH) return io_fail(e,errno,NULL);
++  return io_done(e,term_pak(result==0 ? CID_TRUE : CID_FALSE,0));
++}
++static void __attribute__((constructor)) process_signal_use(void) { io_eff(CID_PROCESS_SIGNAL,process_signal_run,0); }
++#endif
++
++#ifdef CID_IO_ENVIRONMENT
++Term io_environment_run(Env e, Term* f, IoWork* w) {
++  size_t size=0; while (environ[size]) size++;
++  Term result=term_pak(CID_NIL,0);
++  while (size) { const char* text=environ[--size]; result=io_node(e,CID_CON,io_str(e,text,strlen(text)),result,IO_HOTS & 16); }
++  return result;
++}
++static void __attribute__((constructor)) io_environment_use(void) { io_eff(CID_IO_ENVIRONMENT,io_environment_run,0); }
++#endif
++
++#if defined(CID_PIPE_READ) || defined(CID_PIPE_WRITE)
++static Term pipe_more(Env e, IoWork* w) {
++  ProcessResource* row=process_at((Term)w->size,w->hand);
++  if (!row) err_fail("invalid pipe completion");
++  ssize_t size;
++  do size=w->hand==1 ? write(row->fd,w->data,(size_t)w->made) : read(row->fd,w->data,(size_t)w->made);
++  while (size<0 && errno==EINTR);
++  if (size<0 && (errno==EAGAIN || errno==EWOULDBLOCK)) {
++    row->waiter=(IoAct*)w;
++    return io_wait_on(w,row->fd,w->hand==1 ? POLLOUT : POLLIN,pipe_more);
++  }
++  row->waiter=NULL;
++  Term result;
++  if (size<0) result=io_fail(e,errno,NULL);
++  else if (w->hand==1) result=io_done(e,(u32)size);
++  else {
++    Term bytes=term_pak(CID_NIL,0);
++    for (ssize_t i=size; i>0; i--) bytes=io_node(e,CID_CON,(uint8_t)w->data[i-1],bytes,IO_HOTS & 16);
++    result=io_done(e,bytes);
++  }
++  free(w->data);
++  return io_tup(e,(Term)w->size,result);
++}
++static ProcessResource* pipe_owner(Term handle) {
++  ProcessResource* row=process_at(handle,1);
++  if (!row) row=process_at(handle,2);
++  if (!row || row->waiter) err_fail("invalid pipe owner");
++  return row;
++}
++#ifdef CID_PIPE_READ
++Term pipe_read_run(Env e, Term* f, IoWork* w) {
++  ProcessResource* row=pipe_owner(f[0]);
++  if (row->kind!=2 || row->cancelled || f[1]==0 || f[1]>65536)
++    return io_tup(e,f[0],io_fail(e,row->kind!=2 ? EBADF : row->cancelled ? ECANCELED : EINVAL,NULL));
++  w->size=f[0]; w->hand=2; w->made=f[1]; w->data=io_mem(malloc((size_t)w->made));
++  return pipe_more(e,w);
++}
++static void __attribute__((constructor)) pipe_read_use(void) { io_eff(CID_PIPE_READ,pipe_read_run,0); }
++#endif
++#ifdef CID_PIPE_WRITE
++Term pipe_write_run(Env e, Term* f, IoWork* w) {
++  ProcessResource* row=pipe_owner(f[0]);
++  Term list=f[1]; u32 error=row->kind!=1 ? EBADF : row->cancelled ? ECANCELED : 0;
++  size_t capacity=64,size=0;
++  w->data=io_mem(malloc(capacity));
++  while (term_aux(list)==CID_CON) {
++    Term fields[2]; spare_free(e,cls_fit(2),ctr_take(e,list,2,fields));
++    if (fields[0]>255 || size==65536) error=EINVAL;
++    if (!error) {
++      if (size==capacity) { capacity*=2; w->data=io_mem(realloc(w->data,capacity)); }
++      w->data[size++]=(char)fields[0];
++    }
++    list=fields[1];
++  }
++  if (error) { free(w->data); return io_tup(e,f[0],io_fail(e,error,NULL)); }
++  w->size=f[0]; w->hand=1; w->made=size;
++  return pipe_more(e,w);
++}
++static void __attribute__((constructor)) pipe_write_use(void) { io_eff(CID_PIPE_WRITE,pipe_write_run,0); }
++#endif
++#endif
++
++#ifdef CID_PIPE_CANCEL
++Term pipe_cancel_run(Env e, Term* f, IoWork* w) {
++  ProcessResource* row=process_at(f[0],1);
++  if (!row) row=process_at(f[0],2);
++  if (!row || row->cancelled) return term_pak(CID_FALSE,0);
++  row->cancelled=1;
++  IoAct* activation=row->waiter;
++  if (activation) {
++    IoAct* previous=NULL; IoAct* current=io_park.head;
++    while (current && current!=activation) { previous=current; current=current->next; }
++    if (!current) err_fail("pipe operation was not parked");
++    if (previous) previous->next=activation->next; else io_park.head=activation->next;
++    if (io_park.last==activation) io_park.last=previous;
++    free(activation->work.data); activation->time=0;
++    activation->item=io_tup(e,f[0],io_fail(e,ECANCELED,NULL));
++    row->waiter=NULL; io_push(&io_runs,activation);
++  }
++  return term_pak(CID_TRUE,0);
++}
++static void __attribute__((constructor)) pipe_cancel_use(void) { io_eff(CID_PIPE_CANCEL,pipe_cancel_run,0); }
++#endif
++#ifdef CID_PIPE_CLOSE_CHECKED
++Term pipe_close_checked_run(Env e, Term* f, IoWork* w) {
++  ProcessResource* row=process_at(f[0],1);
++  if (!row) row=process_at(f[0],2);
++  if (!row || row->waiter) err_fail("invalid pipe close owner");
++  int result=close(row->fd); u32 error=result<0 ? errno : 0;
++  process_retire(row);
++  return error ? io_fail(e,error,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++static void __attribute__((constructor)) pipe_close_checked_use(void) { io_eff(CID_PIPE_CLOSE_CHECKED,pipe_close_checked_run,0); }
++#endif
+--- /dev/null
++++ b/bend2/effs/process.js
+@@ -0,0 +1,13 @@
++// Native POSIX implementation first; no weaker PID-lifetime approximation.
++function process_spawn(path, argv, cwd, environment) { return io_fail(38); }
++function process_wait(owner) { throw Error('native POSIX Process required'); }
++function process_signal(control, signal) { return io_fail(38); }
++function process_close_checked(owner) { throw Error('native POSIX Process required'); }
++function pipe_read(owner, maximum) { throw Error('native POSIX Pipe required'); }
++function pipe_write(owner, bytes) { throw Error('native POSIX Pipe required'); }
++function pipe_cancel(control) { return {$: 'False'}; }
++function pipe_close_checked(owner) { throw Error('native POSIX Pipe required'); }
++function io_environment() {
++  return Object.entries(process.env).reduceRight((tail, [key,value]) =>
++    ({$: 'Con', head: key + '=' + value, tail}), {$: 'Nil'});
++}

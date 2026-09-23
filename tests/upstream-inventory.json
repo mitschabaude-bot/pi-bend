@@ -1,5 +1,5 @@
 {
-  "revision": "46c9de402bddf46b03c3b9f46487b777aaa41861",
+  "revision": "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
   "suites": [
     {
       "source": "packages/agent/docs/mobile-handoff/01-harness/01-delta/delta.test.ts",
@@ -17,10 +17,11 @@
         "packages/agent/test/agent-loop-parallel.bend",
         "packages/agent/test/agent-loop-steering.bend",
         "packages/agent/test/agent-loop-turns.bend",
-        "packages/agent/test/agent-loop-termination.bend"
+        "packages/agent/test/agent-loop-termination.bend",
+        "packages/agent/test/agent-loop-turn-decisions.bend"
       ],
-      "sha256": "47cdde0c9b42b99baed7d2d8aeca2409b9465b1155b3b060b59ae20535cf9f53",
-      "notes": "All 24 named upstream cases ported across seven native fixtures and rebuilt/passed on one and four threads. Original meaningful assertions retained; typed errors/default selection, immutable hook updates and system field equality replace JS exceptions/omission/mutation/identity. Channel gates replace timing assumptions. This status covers this pinned test suite, not the higher-level Agent API, complete schema integration or providers. Supplemental wrapper/failure tests are tracked separately."
+      "sha256": "7701c3f05ebd19421b72da3257464745a84607ec03ae505ae6d7d8759506401e",
+      "notes": "All 33 named upstream cases (v0.87.1) ported across eight native fixtures; agent-loop-turn-decisions.bend holds the finishTurn/prepareRequest cases, with it.each rows as separate scenarios and rebuilt/passed on one and four threads. Original meaningful assertions retained; typed errors/default selection, immutable hook updates and system field equality replace JS exceptions/omission/mutation/identity. Channel gates replace timing assumptions. This status covers this pinned test suite, not the higher-level Agent API, complete schema integration or providers. Supplemental wrapper/failure tests are tracked separately. Supplemental agent-validation.bend covers strict default validation: unlike upstream, coercible scalar mismatches are rejected before execution; optional-null normalization remains. Both original/prepared call paths retain typed failures. Explicit coercion APIs are still available; see packages/agent/README.md."
     },
     {
       "source": "packages/agent/test/agent.test.ts",
@@ -33,10 +34,11 @@
         "packages/agent/test/agent-busy.bend",
         "packages/agent/test/agent-declarations.bend",
         "packages/agent/test/agent-turn-options.bend",
-        "packages/agent/test/agent-late-updates.bend"
+        "packages/agent/test/agent-late-updates.bend",
+        "packages/agent/test/agent-continuation.bend"
       ],
-      "sha256": "c749bae5d7d9787b9f64009c065210c51622ad04dfd941388fee6b668c5b29f4",
-      "notes": "All 27 named upstream cases mapped across eight native fixtures; all pass together on one and four threads with exact upstream names checked once per run. Meaningful original assertions retained. Typed errors, immutable snapshots, explicit optional callbacks and channel/abort barriers replace JS exceptions, reference assertions and timer polling. Empty argument/detail fixture adapters use Unit where their values are not asserted; declaration schema structure is retained. This status covers the pinned Agent test suite, not full Agent API/configuration accessors, complete schema validation/inference, providers or package parity."
+      "sha256": "2f49e60cd4dcd3f3518b4e92b13c39f8127bd06d9b812d97653fac71fc83964c",
+      "notes": "All 34 named upstream cases (v0.87.1) mapped across nine native fixtures; agent-continuation.bend holds the continuation-queue, finishTurn-queue and peekQueuedMessages cases, with it.each rows as separate scenarios; all pass together on one and four threads with exact upstream names checked once per run. Meaningful original assertions retained. Typed errors, immutable snapshots, explicit optional callbacks and channel/abort barriers replace JS exceptions, reference assertions and timer polling. Empty argument/detail fixture adapters use Unit where their values are not asserted; declaration schema structure is retained. This status covers the pinned Agent test suite, not full Agent API/configuration accessors, complete schema validation/inference, providers or package parity. Supplemental agent-validation.bend covers strict default validation: unlike upstream, coercible scalar mismatches are rejected before execution; optional-null normalization remains. Both original/prepared call paths retain typed failures. Explicit coercion APIs are still available; see packages/agent/README.md."
     },
     {
       "source": "packages/agent/test/e2e.test.ts",
@@ -90,7 +92,7 @@
       "source": "packages/agent/test/harness/execution-tools.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d4260596c010722df7fe9c316f2bedeb7e0b4b628fa6aaaa2578ec2c7ad9c6a8"
+      "sha256": "7eccabe1a14e65570b854555cbd794c6febd0ef9ba4e1637a4be995343d03518"
     },
     {
       "source": "packages/agent/test/harness/gating-storage.test.ts",
@@ -181,6 +183,138 @@
       "status": "pending",
       "ports": [],
       "sha256": "47fa1c86d271f1048c38f14c81112a9d13c72f6ac6ee0ffade32fb5640615c63"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/atomicity.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "f767bd807bfbb81781b1fea01efc5f60e826436344f52ba258464e7c3c6595fe"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/authority.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "e60bd4630302baa0bbed343e59f0a9a2f3bec5d2dbb7a878a27026baf118d69a"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/busy.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "371e4dbb449fa6c17039e8ea1a80af4ff8253555964c68b6536deb22cdfa3bab"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/chord.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "991c65a39563368c80ee1b85fad427cb5871fd2615d288ad727431099f43ae01"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/hardening.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "8007a8a6a911b617818439768ac7a021f0d626830e8363ccca8fc05158dccdf5"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/kinds.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "1ae2b1d727390fb12d0c7e8c28113fa838ee5d221a8f80ce0870688690201398"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/membrane.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "8cd3dafe9b4daf88abcc389fce9e24e22e12132405e7c614f487b75574ffc81e"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/reads.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "c8056aaf95213b059ae258c64a00092179263bd678e0f23900ec9913fb12d8f1"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/recovery.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "1c6de9ada1e6674612b5ecbca8c56154cc625bc348393914e255df4ee7c06647"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/retention.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "dc19ffe7ffeb9dcc01387826f444619a6ac7e5ff64c1182d2c959d09974c3dd4"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/spec-context-capabilities.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "babb0b531c310d004c0241160e3afdb947d6216470b8f76238bb775a0efe0740"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/spec-plugins-lifecycle.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "89e0b2b786c6ca88055b3eac1a7b15deb285f81c628b6826036c30e5ed54db5b"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/spec-scheduler-process.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "62747e35cdf0a7cb17bab7ba96b4a4d91c6f3ccbdac549a107b09c490ab6ed7d"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/spec-storage-history.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "5e92fdfd13d1a1ecf906fc07435d2cf80d5243860e4bad8923085423dd8f505a"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/spec-transactions.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "7de147e80e1a69b1255262ab12eb6db5e102d8c1898e3bcdadf4070d0b5987e4"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/spec-view-events.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "17acb4e09d19a5bcc9beee4c706472daf75fa4cca285dde9ff4a91485c328ef6"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/subagent.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "2b4b5513abe8d1a3f9849f6ec4864722a5532225d8633492b31361ef1ccde7ca"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/tool-bounds.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "383d9d9c536691929f1e85696ab64b1cf4ff5c36683894e71247654bf96c9cc3"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/turn.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "dedc1ae7ea45f68422794e8cd2483ca4fd8c5e13dfff43dc4d086b0b2b3bf485"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/view.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "f7830f576325040463362bbe6bf8197635c5e6dac632362649603c5860a6e4b9"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/waiters.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "906e4b2d797f507a601c5ab36937523dc2f32281884ad2d374204c004f60de5f"
+    },
+    {
+      "source": "packages/agent/test/harness/pico3/watch.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "8ba160c792ab80afd336e24eb111717368ee3e5bad4671ce9f9571d2133ddb7b"
     },
     {
       "source": "packages/agent/test/harness/prompt-templates.test.ts",
@@ -330,7 +464,7 @@
       "source": "packages/agent/test/harness/tools.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "5418020581f401a10277b999d8dcf06cc7ef21d7f79ee57e681913e0546f4edb"
+      "sha256": "46bb70115b774389979fbc1cd2811a509da2734082536f0386ffb103cac98003"
     },
     {
       "source": "packages/agent/test/harness/truncate.test.ts",
@@ -501,7 +635,7 @@
       "source": "packages/ai/test/bedrock-convert-messages.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "799e257d2667e124d6083b7d9fa9a42c81ab565e2a3d0708e98ec7dcf7cb433c"
+      "sha256": "6b2f1cbd68b20b0442a25de1c9380050347d02b64b64620905114eb666f9dbcf"
     },
     {
       "source": "packages/ai/test/bedrock-credentials.test.ts",
@@ -561,7 +695,7 @@
       "source": "packages/ai/test/cache-retention.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "055c51d96ed5c8fd87c8b2173e9450d3e5671680476314c0b0ea5eb402e863ec"
+      "sha256": "5888d3d3b6236aca974ce3c60577ff9008fca21a4024c6f2ff159a6d52d529fa"
     },
     {
       "source": "packages/ai/test/cloudflare-ai-binding.test.ts",
@@ -583,11 +717,11 @@
     },
     {
       "source": "packages/ai/test/constrained-sampling.test.ts",
-      "status": "ported",
+      "status": "needs-review",
       "ports": [
         "packages/ai/test/constrained-sampling.bend"
       ],
-      "sha256": "1c1ba81ee0a026e175bd654b443bfae3093d2003942cb27c9f29a5e6edc5aadf",
+      "sha256": "23fd75e3869712320954feb046258e94ef2962c7bc54999eb3a76dd45a3ace60",
       "notes": "All six original named cases pass on one/four threads: strict/grammar capability conversion and fallback/rejection, unchanged tool declarations, unsafe-schema policies, grammar call/result replay, append-only grammar JSON deltas and streamed initial custom input. The public asynchronous processor receives the sample_tool-to-payload mapping; the retained start snapshot contains a, final sole tool call contains abc, concatenated emitted deltas parse to payload abc and final stop reason is toolUse. Native immutable schema builders, result values and event snapshots replace JS mutation while retaining all meaningful original assertions."
     },
     {
@@ -603,13 +737,13 @@
       "source": "packages/ai/test/context-overflow.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "c77944b0f44aad14d0114c0e5d15a4cf9d0af37b83b3fe536e91308b41ddd90f"
+      "sha256": "3c02bec11a56c48b1ab1bba98b5ea79f5452ceb074f61528da77973bfdb15d85"
     },
     {
       "source": "packages/ai/test/cross-provider-handoff.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "5b0f67257f1ad7e456c0ae433801122494a4ba98f6f24d45899d8df120e607f7"
+      "sha256": "a793fcacb5e9b7ab0beec89767fc39e96bd7014060a84bce0abc351c31c0069a"
     },
     {
       "source": "packages/ai/test/empty.test.ts",
@@ -661,13 +795,13 @@
       "source": "packages/ai/test/fireworks-model-generation.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "634d707d7f1c5e1ac4dd494961cf654a173e568159fa8a123554cea62d4f4d76"
+      "sha256": "6df658ba6d2a30d9d6f1b9638613ebd1b8be591241d15023ed1bf2b7beafdfda"
     },
     {
       "source": "packages/ai/test/fireworks-models.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "514ca8c2ecc4272e9e84e26ba63734990d07ccdb77ebf4fd7807b278024da2f8"
+      "sha256": "a53f779f80d2a2f7c4bb77ed9b2e309d1cdb71d27da459dc3c34317a68a0a60d"
     },
     {
       "source": "packages/ai/test/generate-models-strict.test.ts",
@@ -679,7 +813,7 @@
       "source": "packages/ai/test/github-copilot-anthropic.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "832dc421a65e81b4a48beb7700dffc8b07dc46a537a19078e0c20ff710e74d9a"
+      "sha256": "8ce02dfd3b28205d4d25cb614f042cdd19e84ea9109c0af6108869ae1d5ef73b"
     },
     {
       "source": "packages/ai/test/github-copilot-oauth.test.ts",
@@ -797,12 +931,24 @@
     },
     {
       "source": "packages/ai/test/max-thinking.test.ts",
-      "status": "partial",
+      "status": "needs-review",
       "ports": [
         "packages/ai/test/model-thinking.bend"
       ],
-      "sha256": "ce3f28d5754c29e4550398227f271f6e26ce0d3914822f27297805acd3932baa",
+      "sha256": "dfa570b185133172b9cdf731fc91835df38649ad12ffe37ff17fed240ca59592",
       "notes": "Two standalone named cases are ported with original model fields/assertions: ordinary reasoning models opt in to max, and a hole between high and max clamps upward. Catalog-backed cases and Codex provider payload cases remain pending. Supplemental direct-upstream helper tests cover 212 configurations and every typed requested level; model registry/provider parity is not claimed."
+    },
+    {
+      "source": "packages/ai/test/message-types.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "b288469cca9b6a4b975aaf3c68dd71334d913f8d935222d4727df056b534652c"
+    },
+    {
+      "source": "packages/ai/test/meta-oauth.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "d78eea9109de93748c6bede3c4a9fec1f0e494013328ee7d54244f5269ea520e"
     },
     {
       "source": "packages/ai/test/mistral-http-transport.test.ts",
@@ -832,7 +978,7 @@
       "source": "packages/ai/test/model-catalog-types.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "a7f9f14d66494cab002e0950871bc882753d971b891d2f3d9b09364b19ee6673"
+      "sha256": "c47f1953bc68f6af093ead5618100f2cb6e20feda121f891c3fbfd3c303ecdb5"
     },
     {
       "source": "packages/ai/test/model-data-validation.test.ts",
@@ -943,13 +1089,13 @@
       "source": "packages/ai/test/openai-completions-tool-choice.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "0da7db4277f771706cddcd10fafdb9f35b25a7395c801f43208eb87f375d7146"
+      "sha256": "0eabc918c66894434e9d48f60bc77a57317e213132dd7c50120e9a3dc4289b64"
     },
     {
       "source": "packages/ai/test/openai-completions-tool-result-images.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "aa9664ca2800a3aefd857e6045eaa641aada535528f54f0cceae2144a687ded1"
+      "sha256": "3a7cd0c2ae1cb81491f8b99876ea14753df9436b5ec5a672bdd2149eedff9ad0"
     },
     {
       "source": "packages/ai/test/openai-completions-vllm-priority.test.ts",
@@ -972,7 +1118,7 @@
         "tests/responses_params_check.py",
         "tests/responses_request_check.py"
       ],
-      "sha256": "6cd2cc313079c4a3836bc93be5362aaf6b3ebd38b51cc4a81fad7770830ce5f8",
+      "sha256": "aeeb537956357d192f62848ce7a7fe71584b249ab34716d282b654fdbfd829f0",
       "notes": "Component evidence: 9,219 compatibility/cache comparisons, 168 environment comparisons, 914 field-assembly comparisons against buildParams with substituted converted inputs, and 192 full request-builder comparisons with actual transcript/message/tool converters pass on one/four native threads. The original suite remains pending because it invokes the complete provider with captured HTTP requests; explicit-header merging, public options/wrapper, hooks and transport integration remain unfinished."
     },
     {
@@ -1076,9 +1222,14 @@
     },
     {
       "source": "packages/ai/test/overflow.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "079fa15d056a6187d3a1507f1f4a67d88e6b686e1d380ec4fe2b3f6c650bd219"
+      "status": "needs-review",
+      "ports": [
+        "tests/retry-classify.bend",
+        "tests/retry_classify_check.py"
+      ],
+      "sha256": "f63a109436e369e32b788ec8eb3065e34cc04c6d952326f7ad6951a83506bbbd",
+      "implementation": "packages/ai/src/utils/overflow.bend",
+      "notes": "All isContextOverflow and isRecoverableLength cases are in the differential corpus of tests/retry_classify_check.py, compared with the pinned overflow.ts."
     },
     {
       "source": "packages/ai/test/pi-messages.test.ts",
@@ -1131,7 +1282,7 @@
       "source": "packages/ai/test/providers.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "169944b6e8539cc3767a261e46a1f3031b8e8963f234a0bd1de241002dcf66c2"
+      "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6"
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",
@@ -1144,6 +1295,12 @@
       "status": "pending",
       "ports": [],
       "sha256": "7e744c72d5b94e6a7d270665401824dd6f30cd871dc9a2e8df34895d9727c286"
+    },
+    {
+      "source": "packages/ai/test/radius-provider.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "4b2d6baef41c603d1f750017bfbc6cf73488675b478e62d8d7c00597bfce8fed"
     },
     {
       "source": "packages/ai/test/reasoning-options.test.ts",
@@ -1159,9 +1316,14 @@
     },
     {
       "source": "packages/ai/test/retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3b94867dcfc5f363927dd28838ccb8b4da87fadfab2dd145b71a520a60c5b3a8"
+      "status": "partial",
+      "ports": [
+        "tests/retry-classify.bend",
+        "tests/retry_classify_check.py"
+      ],
+      "sha256": "3b94867dcfc5f363927dd28838ccb8b4da87fadfab2dd145b71a520a60c5b3a8",
+      "implementation": "packages/ai/src/utils/retry.bend",
+      "notes": "Every classification message and the retryDelayMs cases are in the differential corpus of tests/retry_classify_check.py (upstream oracle plus pinned expectations). retryAssistantCall (the summarization retry loop) is not ported yet."
     },
     {
       "source": "packages/ai/test/sampling-options.test.ts",
@@ -1173,13 +1335,13 @@
       "source": "packages/ai/test/stream.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "8d22f2776c120ddfd34e98a545e831cbc863d093912031ad55cf1044c51fcc6f"
+      "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42"
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "ce468daf5a7695347c723c88540d9a0712177eb3ddfc664057303db77482c2d2"
+      "sha256": "d684347596f6b2af364e85163860616e1faa1d4ae3cc35139782cb49a1ad8c83"
     },
     {
       "source": "packages/ai/test/system-message-replay.test.ts",
@@ -1214,7 +1376,7 @@
       "source": "packages/ai/test/tokens.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "f5c2a331a518d3ebff120fdb62f2fe77b9686f8ecdeb5e6d585149b91733e565"
+      "sha256": "512c3bd3ab7a6fb77056284350d751be6a57c57f1a709081b42e5aef4017f735"
     },
     {
       "source": "packages/ai/test/tool-call-id-normalization.test.ts",
@@ -1263,12 +1425,12 @@
     },
     {
       "source": "packages/ai/test/validation.test.ts",
-      "status": "partial",
+      "status": "needs-review",
       "ports": [
         "packages/ai/test/plain-validation-upstream.bend",
         "packages/ai/test/plain-validation-cases-upstream.bend"
       ],
-      "sha256": "8f7ca3341b6e4ab7d052df57c834f3219c8c82b4cf4a914d1b442c005aae2d37",
+      "sha256": "26b5fee2cb64eb5df1e9accdbc478d4bc055c7110c1a66d0f01327a067e953d5",
       "notes": "Six original named cases are ported with 24 assertions: plain-JSON primitive coercion, nullable local-reference preservation, nullable oneOf preservation, nullable union coercion, nullable arrays (native compiled checker and public validation), and invalid primitive coercions. Supplemental tests compare 285 composed outcomes, 54 complete messages and 536 acyclic local-reference outcomes/exact messages with actual validateToolArguments, and exercise native formatted rejection through agent preparation/execution. Builder-specific conversion, recursive/external references, anchors, remaining schema vocabulary and the other named cases remain pending; this is not complete validation parity."
     },
     {
@@ -1281,7 +1443,7 @@
       "source": "packages/ai/test/xai-responses.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "fb53a5643cf66039c3a12dc9f88548052e684aa24673cae440f5dd346dadb391"
+      "sha256": "72532da3c743d81dd1d8b1aaaa37a794f599a4ecd30e2c1eb1e5e3885c942851"
     },
     {
       "source": "packages/ai/test/xhigh.test.ts",
@@ -1305,7 +1467,7 @@
       "source": "packages/ai/test/zai-coding-plan-models.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "1fb5a28d95dc68d9eee89f4019694d957e6c41d16eb2552fa1ecfa53d51ca1c1"
+      "sha256": "d4020126a964b8a67d3a13fe7694b6cec2ab26eeed1a05285ccebef239a69bb9"
     },
     {
       "source": "packages/ai/test/zen.test.ts",
@@ -1332,10 +1494,22 @@
       "sha256": "8270a710fe003103141f1a72c01af0655a8863233f8cba3b96a041443e9cfe82"
     },
     {
+      "source": "packages/chord/test/delta-clone.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "0ca90da58d5516239f729d3215e4b7af13e025f152b2e0c5b00f09ef79764683"
+    },
+    {
+      "source": "packages/chord/test/delta-retention.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "eef13e41464c7713ba9420ef0d9ea896fe00bf2869b015da0d12660110caa96f"
+    },
+    {
       "source": "packages/chord/test/delta.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "60866233caa8a6ef020a5a61fa6e70f2730e3651122382769eef6de19a8cb139"
+      "sha256": "94bf8e1b881cbf14e0e94c88a3f52cafe3baf19869822863c13ebeff73d1d5db"
     },
     {
       "source": "packages/chord/test/facet-loader.test.ts",
@@ -1347,7 +1521,7 @@
       "source": "packages/chord/test/facets.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "f49ce64d95acf84b937d4766400bba275417396629d820bf558ca052456521c4"
+      "sha256": "4a4b278991587a07e887d28ce0b60b943d98e189e6906b58fe7ce3a28baaf775"
     },
     {
       "source": "packages/chord/test/json.test.ts",
@@ -1359,13 +1533,43 @@
       "source": "packages/chord/test/service-wire.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "8cd222f5031692392bb164fe01475113e04f8b419f4f53495b19046da7bb71a0"
+      "sha256": "fdcddf841cc596ef90972f6243f2b0ce005c7b4a7bafd77eeb717f5e169dfceb"
     },
     {
       "source": "packages/chord/test/services.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "1566a822bcf93a6c95eaa102a255a97df4c20948f25b278c8f192b5e63a73ce9"
+      "sha256": "a8634093c3692fd539921b176280a7c1c160e264549355c4c93fd0eb1ebde391"
+    },
+    {
+      "source": "packages/chord/test/state-diff.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "21b816da09a635cad0b6e8bacc0d6c12996367ab583870c41eda9ecf94cb230b"
+    },
+    {
+      "source": "packages/chord/test/state-draft.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "19fb87ca894a2b8762170f0197cdfb50c30c4fd691f3a8f0697b3f127d2837f4"
+    },
+    {
+      "source": "packages/chord/test/state-fuzz.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "358466f871ed6525120edd33a21e34d7453ba76e16aacac54ac6373c52aa1997"
+    },
+    {
+      "source": "packages/chord/test/state-value.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "49e4ba9d52ad10b487288a6ded06be00e178c0d6fb1ee7f350544d3b28221992"
+    },
+    {
+      "source": "packages/chord/test/state.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "390db7aaa39fd6a0ae6de9fe4ce962588687dcf51b38c7b324c3ab6678721834"
     },
     {
       "source": "packages/client/test/client.test.ts",
@@ -1399,15 +1603,28 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "13520564c4a3b70d0f6bd125d1fab07ae7ca148fbecd12cecc5c0e8651a0a146"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "13520564c4a3b70d0f6bd125d1fab07ae7ca148fbecd12cecc5c0e8651a0a146",
+      "notes": "Manual compact(), valid session state, persisted compaction entry and compaction events run over the faux provider instead of a live model; the --no-session in-memory case is not ported."
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ee68d2e2521a8405531daa434f6fd28173095ef8ca341e21be06d141679c74aa"
+      "status": "needs-review",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "0c2409ec9ce8b4b060c4ecb1fd779ed3412e997f81d372fd0ddbdbbd3f1ed0ac",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
@@ -1423,9 +1640,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1f366be0938adbf8aaba0469fb1acc3b8b9b33ffdd2a4b7d66530e799ac6c900"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "1f366be0938adbf8aaba0469fb1acc3b8b9b33ffdd2a4b7d66530e799ac6c900",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'retries after a transient error and succeeds' and 'exhausts max retries and emits failure' are retry scenarios of tests/agent_session_check.py; 'caps agent retry delay' is covered on retryDelayMs by tests/retry_classify_check.py. Delayed message_end handling, provider network_error failures and tool-call recovery remain pending."
     },
     {
       "source": "packages/coding-agent/test/agent-session-runtime-events.test.ts",
@@ -1437,7 +1659,7 @@
       "source": "packages/coding-agent/test/agent-session-stats.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "71970b299c1f94783874ba1d6228ec584bcd435b5db859564750c72524bda3af"
+      "sha256": "dc40827bab481ef671a0ca76eb0fe7d79458e12974b90ca12472262248943afe"
     },
     {
       "source": "packages/coding-agent/test/agent-session-tree-navigation.test.ts",
@@ -1447,21 +1669,36 @@
     },
     {
       "source": "packages/coding-agent/test/ansi-utils.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/ansi.bend",
+        "tests/ansi_check.py"
+      ],
+      "notes": "Named RIS, single-byte ESC and combined color/hyperlink assertions pass on native one/four workers. Non-string rejection is static; generated malformed-regex compatibility is deliberately adapted, not claimed identical. See tests/ansi.md.",
       "sha256": "c0deb09e3f927314fbd60a5484d961497826254279398aaadaa3517567053cec"
     },
     {
       "source": "packages/coding-agent/test/args.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "55660408eaa82498adfcf5b91df15658796919797dba9472922e5805ede575b0"
+      "status": "needs-review",
+      "ports": [
+        "tests/cli-args.bend",
+        "tests/cli_args_check.py",
+        "tests/cli_args_reference.ts"
+      ],
+      "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md.",
+      "sha256": "e418975576b51f7495c5c823e9866c38afddc91dbd54577894e7f1a31511e056"
     },
     {
       "source": "packages/coding-agent/test/assistant-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "115f5f8261312edb53325023f1b221f210c0eddcae38aa1003867eda49f92d20"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "tests/interactive-messages.bend",
+        "tests/interactive_messages_reference.ts",
+        "tests/interactive_messages_check.py"
+      ],
+      "sha256": "115f5f8261312edb53325023f1b221f210c0eddcae38aa1003867eda49f92d20",
+      "notes": "Byte-exact colored-terminal snapshots for text, adjacent/hidden thinking, streaming content replacement, length/aborted/error stops and tool-call error suppression pass Bun/native1/native4; Ai.AssistantMessage projection is exercised. Per-run mouse toggle, Markdown transformer context/chaining/exception recovery, invalidation and full named suite remain pending; see tests/interactive-messages.md."
     },
     {
       "source": "packages/coding-agent/test/auth-check.test.ts",
@@ -1471,9 +1708,15 @@
     },
     {
       "source": "packages/coding-agent/test/auth-storage.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe"
+      "status": "partial",
+      "ports": [
+        "tests/auth-storage.bend",
+        "tests/auth_storage_check.py",
+        "tests/auth-storage-lock.bend",
+        "tests/auth_storage_lock_check.py"
+      ],
+      "sha256": "513f35d1adec13ba026a7e73b9d8fd2b98f416d102c6c061f976a3d5e468b2fe",
+      "notes": "Ported: reads and resolves stored API-key credentials; resolves command-backed API-key credentials (native lanes; the JS backend has no process primitive); returns OAuth credentials unchanged; credential-scoped env takes precedence and remains inspectable; modify persists a credential while preserving unrelated external edits; modify with undefined leaves the current credential unchanged; delete removes one credential while preserving others; in-memory storage implements the same credential-store behavior; does not overwrite malformed auth files (plus private-file creation, BOM stripping and invalid-credential rejection on write). Interprocess read/modify/delete leases now cover 24 mixed Node/Bend updates, cancellation before/during callbacks and lock waits, compromise-before-write detection, malformed-file cleanup and unrelated-entry preservation on Bun/native one/four. Coalesced revision-based reloads, complete Models refresh-failure cases and the full auth suite remain pending; see tests/auth-storage-lock.md."
     },
     {
       "source": "packages/coding-agent/test/bash-close-hang-windows.test.ts",
@@ -1506,6 +1749,12 @@
       "sha256": "26109a8c04018b0a43ca44006067ce576c8272332e805cae909b88bf519af286"
     },
     {
+      "source": "packages/coding-agent/test/bug-report.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "a94efa535af1bf50dc5ee948bc65d9578fbe1bdcc4400489727d6bde241eba91"
+    },
+    {
       "source": "packages/coding-agent/test/builtin-tool-strict-mode.test.ts",
       "status": "pending",
       "ports": [],
@@ -1515,7 +1764,13 @@
       "source": "packages/coding-agent/test/cache-stats.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "4bfc836f78eef10c16e4a3c018945021b62a40973719247a0ab09ee4ff82a603"
+      "sha256": "7c2b46ca4a37b4f716dd3c0c55e41d11812fa3b4bfff01a3d28e906b78a3506f"
+    },
+    {
+      "source": "packages/coding-agent/test/cache-warmer.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "a3a1f077a7a3bdd57a93e1d946f507a5d0ffc5a92e64f89f9adba0d330c751ed"
     },
     {
       "source": "packages/coding-agent/test/changelog.test.ts",
@@ -1557,7 +1812,13 @@
       "source": "packages/coding-agent/test/clipboard.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "15426ef38fe028c12b6477af92f93882bc14695fc10684eac0e1490f2a88cf09"
+      "sha256": "0c89cc3ad50766d0498863b96afed372c0aa0883d8f6b93fe7637cebe6ec2155"
+    },
+    {
+      "source": "packages/coding-agent/test/collapsible-message-components.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "6fea83d6a520c34a927be61f11cb664e683fff647f77661ee1472f51ba8edae5"
     },
     {
       "source": "packages/coding-agent/test/compaction-extensions-example.test.ts",
@@ -1573,21 +1834,33 @@
     },
     {
       "source": "packages/coding-agent/test/compaction-serialization.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "df31e877e71f47217acf1e2e730eab258f849869b1e282eeea567caa03f6ec54"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/coding-agent/src/core/compaction/utils.bend",
+        "tests/compaction.bend",
+        "tests/compaction_check.py"
+      ],
+      "sha256": "df31e877e71f47217acf1e2e730eab258f849869b1e282eeea567caa03f6ec54",
+      "notes": "All three serializeConversation truncation cases."
     },
     {
       "source": "packages/coding-agent/test/compaction-summary-reasoning.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "3f4baa6f1bbda2583b8008a90c4ccb72c38c230449a659b7c7058dc585d9dc5f"
+      "sha256": "f62656a452475d9adaea20e7ae789f6ba05431c8874cf3023fc06427611e62c6"
     },
     {
       "source": "packages/coding-agent/test/compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a547c4418820637cf891af72659044d8dc904f4f2f6a477cc83189c602adc671"
+      "status": "needs-review",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/coding-agent/src/core/compaction/utils.bend",
+        "tests/compaction.bend",
+        "tests/compaction_check.py"
+      ],
+      "sha256": "829f29b4dc268b77baa4904c6283206ff19993f65e4503bcc1ce995be26c4b3b",
+      "notes": "Token calculation, getLastAssistantUsage, estimateContextTokens, shouldCompact, findCutPoint, buildSessionContext and prepareCompaction cases pinned to upstream expectations (tests/compaction.md). The large-session fixture and the ANTHROPIC_OAUTH_TOKEN LLM summarization cases are not ported."
     },
     {
       "source": "packages/coding-agent/test/config-value-migration.test.ts",
@@ -1600,6 +1873,12 @@
       "status": "pending",
       "ports": [],
       "sha256": "6fd2f5ad5cfaba3287808e206d2d37880146eeeb3113f8905cca34f00e50c2cf"
+    },
+    {
+      "source": "packages/coding-agent/test/crash-log.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "27de661cb40634b0e441e52537aaf52380a08ff0dbd823e3b7b96ae20bc5f641"
     },
     {
       "source": "packages/coding-agent/test/credential-print.test.ts",
@@ -1633,9 +1912,14 @@
     },
     {
       "source": "packages/coding-agent/test/edit-tool-legacy-input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f1db5bc4684c9d148a1c65160d097f617c5613716196a23442146b669ba163a7"
+      "status": "partial",
+      "ports": [
+        "tests/edit-public.bend",
+        "tests/edit_public_check.py"
+      ],
+      "sha256": "f1db5bc4684c9d148a1c65160d097f617c5613716196a23442146b669ba163a7",
+      "implementation": "packages/coding-agent/src/core/tools/edit.bend",
+      "notes": "Canonical batches, intentional top-level legacy pairs and their append order are covered through createEditTool. User-approved strict parsing rejects stringified arrays, non-array edits, partial pairs and non-object arguments. Immutable preparation preserves extra fields. Extension ToolDefinition/context integration remains pending; see tests/edit-tool.md."
     },
     {
       "source": "packages/coding-agent/test/edit-tool-no-full-redraw.test.ts",
@@ -1671,7 +1955,7 @@
       "source": "packages/coding-agent/test/experimental-client-tui.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "760c28e9d85cac81702f324c42888587f3d43d9ac0e6df74c53af0e0af41db33"
+      "sha256": "f71d860e274b55e1d574ec8412e2c88820de5a59e2e5b863ccad890777a7f412"
     },
     {
       "source": "packages/coding-agent/test/experimental-internal-process.test.ts",
@@ -1791,7 +2075,7 @@
       "source": "packages/coding-agent/test/extensions-runner.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "38866b7e0e8a73383d604340e5ee89b55ce4abd97137fd7000f7e8808fc46ec7"
+      "sha256": "f6ce2f169d04c748e3587ca42c797ed3acf71152903b45b6340c1208845c7dbb"
     },
     {
       "source": "packages/coding-agent/test/external-editor.test.ts",
@@ -1801,9 +2085,18 @@
     },
     {
       "source": "packages/coding-agent/test/file-mutation-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d65f903a056b4cbfd33850986b5a5ffec394b8340a1db491737f892d0e2d4462"
+      "status": "partial",
+      "ports": [
+        "tests/file-mutation-queue.bend",
+        "tests/file_mutation_queue_check.py",
+        "tests/edit-operations.bend",
+        "tests/edit_operations_check.py",
+        "tests/write-tool.bend",
+        "tests/write_tool_check.py"
+      ],
+      "sha256": "d65f903a056b4cbfd33850986b5a5ffec394b8340a1db491737f892d0e2d4462",
+      "implementation": "packages/coding-agent/src/core/tools/file-mutation-queue.bend",
+      "notes": "Shared queue serialization, different-file parallelism and symlink aliases are covered with deterministic channel gates. Actual edit execution now preserves parallel edits and retains the queue during aborted in-flight edit writes before a queued write, including symlink aliases. Write execution separately covers aborted in-flight write retention. Exact public-factory coverage of every upstream mixed-tool scenario remains to be audited; suite stays partial."
     },
     {
       "source": "packages/coding-agent/test/first-time-setup-fork.test.ts",
@@ -1837,9 +2130,14 @@
     },
     {
       "source": "packages/coding-agent/test/frontmatter.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "88309e13d75cec874a1fa43b921c4bb3dbcbce55c6ace5acf9742e81667ad2dd"
+      "status": "ported",
+      "ports": [
+        "tests/frontmatter.bend",
+        "tests/frontmatter_check.py",
+        "tests/frontmatter_reference.ts"
+      ],
+      "sha256": "88309e13d75cec874a1fa43b921c4bb3dbcbce55c6ace5acf9742e81667ad2dd",
+      "notes": "All eight pinned named cases and their nine outputs pass on Bun/native one/four, plus BOM/newline and strict fence/nonmapping adaptations (13 outputs total). 226 supplemental YAML comparisons pass. Typed parser errors preserve the asserted line/column; complete-line fences and mapping metadata reject malformed cases. This suite status does not claim full YAML grammar parity; remaining dependency gaps are explicit in tests/frontmatter.md."
     },
     {
       "source": "packages/coding-agent/test/git-merge-and-resolve-extension.test.ts",
@@ -1867,21 +2165,39 @@
     },
     {
       "source": "packages/coding-agent/test/image-process.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f224c8f9d567594d7013f0ea158d2c2863cfddce0e346cff7e0b0e16bf7583dd"
+      "status": "needs-review",
+      "ports": [
+        "tests/image-process.bend",
+        "tests/image_process_check.py"
+      ],
+      "sha256": "5519a74fccb82fdfbef288c4f40613059addcbf49c50c44999df04fe6f53f0f7",
+      "notes": "All three original BMP assertions are covered with the upstream red 1x1 BMP bytes: magic detection through the public read tool, PNG attachment/conversion hint without resizing, and conversion before default resizing. The harness runs pinned process-image source as its oracle and checks PNG magic explicitly. All three backends pass; this suite does not establish complete image codec or async-worker coverage."
     },
     {
       "source": "packages/coding-agent/test/image-processing.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "70609067f3771b306e928d7763227f778aff98065876f6d959391100b6584d4f"
+      "status": "partial",
+      "ports": [
+        "tests/image-convert.bend",
+        "tests/image_convert_check.py",
+        "tests/image-resize-policy.bend",
+        "tests/image_resize_policy_check.py",
+        "tests/image-process.bend",
+        "tests/image_process_check.py"
+      ],
+      "sha256": "70609067f3771b306e928d7763227f778aff98065876f6d959391100b6584d4f",
+      "notes": "Native conversion, original-byte preservation, dimension/byte-limit resizing, inability to fit, and dimension notes have pinned-source differential coverage on Bun/native1/native4. JPEG input and the upstream XMP-before-EXIF orientation pipeline case also pass through public read. WebP lossless/lossy decoding, alpha and first-frame composition are integrated; async worker behavior remains pending."
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f77a92109158e558cc26430a80f82351bd1ef4884d494ab643c29652c00bc25c"
+      "status": "needs-review",
+      "ports": [
+        "tests/read-public.bend",
+        "tests/image_process_check.py",
+        "tests/file-processor.bend",
+        "tests/file_processor_check.py"
+      ],
+      "sha256": "49913b4a056d53ed3df4686836fad1431e4e43f280c81baf049c3969e7965554",
+      "notes": "Both original caller assertions pass: public read returns text-only omission, and CLI file processing emits omission text with no image attachment. Fixtures exercise real malformed image processing instead of mocking a null resize result. Bun and optimized native one/four-thread checks pass; this suite does not establish image-worker scheduling or complete CLI parity."
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",
@@ -1905,7 +2221,13 @@
       "source": "packages/coding-agent/test/interactive-mode-assistant-diagnostics.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "cfee3dedb0d22ea9a132051a3ff12244e6944086e36c1336a06f6c28228c4046"
+      "sha256": "a7903ba4e536f809ed4bc7fa30a11d52841cf64dc1d4ec0a3a7c137b18128b94"
+    },
+    {
+      "source": "packages/coding-agent/test/interactive-mode-bug-report-hint.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "6f8a040919a1d6fb3ac9eb4341287f19bf34aaa69339f578458f4d7e9145b612"
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-clone-command.test.ts",
@@ -1917,7 +2239,7 @@
       "source": "packages/coding-agent/test/interactive-mode-compaction.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "77c0b0dbf5c17abdad220467f546c013648efee2857c06fd718d52d7e58421af"
+      "sha256": "ef2a9834d3166ad4a7b124dd8fb3c0edcf1892305ebd8bb739a81a20674cab6e"
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-import-command.test.ts",
@@ -1957,21 +2279,33 @@
     },
     {
       "source": "packages/coding-agent/test/keybindings-migration.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e83d8d2f8ab68d0b775feb3b818ee1748d36ba4bb8834a45a536acede00868ac"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/keybindings.bend",
+        "tests/app-keybindings.bend",
+        "tests/app-keybindings_reference.ts",
+        "tests/app-keybindings_check.py"
+      ],
+      "sha256": "e83d8d2f8ab68d0b775feb3b818ee1748d36ba4bb8834a45a536acede00868ac",
+      "notes": "All five Windows/default tests and the migration file-loading test are covered on Bun/native one/four. The first two migration tests only have their pure transformations covered: startup migration file-rewrite orchestration remains pending. 516 actual-source cases, 13 real-file cases and four reload cases cover explicit platform/WSL defaults, canonical-name precedence, unknown actions, typed malformed-input failure and retained immutable state. See tests/app-keybindings.md; interactive UI integration is separate."
     },
     {
       "source": "packages/coding-agent/test/keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d1098c41c0cbee8518a433542d68c837ab66e2f53415480602dfee59cd2a20b0"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/keybindings.bend",
+        "tests/app-keybindings.bend",
+        "tests/app-keybindings_reference.ts",
+        "tests/app-keybindings_check.py"
+      ],
+      "sha256": "d1098c41c0cbee8518a433542d68c837ab66e2f53415480602dfee59cd2a20b0",
+      "notes": "All five Windows/default tests and the migration file-loading test are covered on Bun/native one/four. The first two migration tests only have their pure transformations covered: startup migration file-rewrite orchestration remains pending. 516 actual-source cases, 13 real-file cases and four reload cases cover explicit platform/WSL defaults, canonical-name precedence, unknown actions, typed malformed-input failure and retained immutable state. See tests/app-keybindings.md; interactive UI integration is separate."
     },
     {
       "source": "packages/coding-agent/test/llama-extension.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "7484e95faf1618ab394e81ad86161f0379eed3cae3992eb347c929656d4380cf"
+      "sha256": "458534294a1c7abd9f96293a2fe7a0add16b58a37eda94a1b20bf5f6c814d52b"
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",
@@ -2001,13 +2335,13 @@
       "source": "packages/coding-agent/test/model-registry.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "fb6e04cf846a3beef712946ebf615b764c04208624f2c0e6ae9ec9f66fd613ce"
+      "sha256": "2b8c24d61e5684264c087c7fd064e3fbe1d93369943cd9936833f474276963fd"
     },
     {
       "source": "packages/coding-agent/test/model-resolver.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "aca6f2653e21fa3888824185a4c9b5721e89367374d7c48426f6844b763c99ed"
+      "sha256": "1764d9ef39b2be9ed2a2521b565ca8da61baa425ce1b76c47b75e8c694d93ecf"
     },
     {
       "source": "packages/coding-agent/test/model-runtime-auth-options.test.ts",
@@ -2113,21 +2447,30 @@
     },
     {
       "source": "packages/coding-agent/test/print-mode.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "e8eeb3e47b86659cb1ceb0c1bab32fc95d9318bfbda05db127d404fd2e4d52a7",
+      "notes": "The harness drives the native CLI: help/version/diagnostic exits, session flag conflicts, invalid ids, invalid session files, settings warnings and, with PI_BEND_LIVE=1, text output, piped stdin, the JSON session header and event sequence (agent_settled from AgentSession), snapshot-free message_update events, non-zero exit on request errors and a resumed stored session whose prompt and reply are persisted. Pending: session_shutdown (an extension-runner event; extensions are not ported), SIGTERM/SIGHUP exits (no signal primitive)."
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b926313ab33852fe61bbbfe4813d0806dabe2cdbd9d0a697ebcb913b6aec84c3"
+      "status": "needs-review",
+      "ports": [
+        "tests/prompt-templates.bend",
+        "tests/prompt_templates_check.py",
+        "tests/prompt_templates_load_check.py",
+        "tests/prompt_templates_reference.ts"
+      ],
+      "sha256": "4e6a5d427a78abe7c5ed92f71600f8777fddfd0f1f0d3cb1eb0a7e8655ecd2ee",
+      "notes": "All pinned pure assertions (119 original-only captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md."
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "788a11a2184fdfc25566f4d84457363b3560db25dbac0607807dadf1f034ae0f"
+      "sha256": "f4cfc14df90a8f3555d6e514e28fdf46cc1cdc967cf030c171a65996dd3c7f06"
     },
     {
       "source": "packages/coding-agent/test/remote-catalog-provider.test.ts",
@@ -2137,15 +2480,27 @@
     },
     {
       "source": "packages/coding-agent/test/resolve-config-value.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "da87e84e5a4aae4b671140ad33b19b4438bb3b97e8699acf5c13c97bf403608c"
+      "status": "partial",
+      "ports": [
+        "tests/config-value.bend",
+        "tests/config_value_check.py"
+      ],
+      "sha256": "da87e84e5a4aae4b671140ad33b19b4438bb3b97e8699acf5c13c97bf403608c",
+      "notes": "Ported: literals/environment templates/escapes; credential-scoped env precedence; shell command execution and trimming; command failures; caching until cleared; environment values never cached (per-run env); uncached resolution. Command cases run on native lanes only (no JS process primitive). Pending: the Windows stdin-transport shell case."
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4d7043fbae033b5398db34046feea2ac3e910079e8def6a1d198b7c840190fb0"
+      "status": "needs-review",
+      "ports": [
+        "tests/project-context.bend",
+        "tests/project_context_check.py",
+        "tests/project_context_reference.ts",
+        "tests/runtime-context.bend",
+        "tests/runtime_context_check.py"
+      ],
+      "sha256": "1ebd3d0a1f10f0a2dec6fdbab7a75bc8c85c681190bcba1ae9e3d6b2a68b2f6d",
+      "implementation": "packages/coding-agent/src/core/resource-loader.bend",
+      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md."
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",
@@ -2191,9 +2546,13 @@
     },
     {
       "source": "packages/coding-agent/test/runtime-credentials.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409"
+      "status": "partial",
+      "ports": [
+        "tests/auth-storage.bend",
+        "tests/auth_storage_check.py"
+      ],
+      "sha256": "dbc0fab5e3f7e6f59c0a9947feaa16a574ae03783d7510894096e02cf1ceb409",
+      "notes": "Ported: runtime overrides mask stored credentials without persisting; enumeration merges overrides without exposing keys; delete clears both the override and persisted credential. Pending: forwards operation signals to the persistent store; keeps a runtime override when persistent deletion is cancelled."
     },
     {
       "source": "packages/coding-agent/test/scoped-models-selector.test.ts",
@@ -2229,19 +2588,38 @@
       "source": "packages/coding-agent/test/sdk-stream-options.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "a0004c6f90a65196cd9b135ba3bbeae9fd8b18da61c39a766eb58ae73e04cf4e"
+      "sha256": "2bd2362c91704e04ebd6dff6b6d1ec4db3f545104c2345b240c3633a667ce10e"
+    },
+    {
+      "source": "packages/coding-agent/test/session-context-edit.test.ts",
+      "status": "ported",
+      "ports": [
+        "tests/session-context-edit.bend",
+        "tests/session_file_check.py"
+      ],
+      "sha256": "51597d41380eae6054112186b4fafc63a4dd55fe7a3c653914ba20d7189c4c5f",
+      "notes": "All 18 named cases pass on Bun and native one/four threads over the pure session state and compaction module. session_file_check.py adds context-edit and retain-none compaction appends against the pinned SessionManager, comparing the written JSON entries. Typed adaptation: a replacement is text or content blocks; blocks the target role cannot hold (an image in assistant content, thinking in user content) are rejected by appendContextEdit and fail projection with UnfitContextEdit, where upstream would store and project an ill-typed message."
     },
     {
       "source": "packages/coding-agent/test/session-cwd.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2e8d17d803f72089efbd6aff8458c9307532425952060515bde2052d3f8e8089"
+      "status": "partial",
+      "ports": [
+        "tests/print_cli_check.py",
+        "tests/session_file_check.py"
+      ],
+      "sha256": "2e8d17d803f72089efbd6aff8458c9307532425952060515bde2052d3f8e8089",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The missing stored cwd is detected and reported with the upstream message before the runtime is created (print mode exits 1), and open() honours a cwd override (session harness). The AgentSessionRuntime factory case is pending with that module."
     },
     {
       "source": "packages/coding-agent/test/session-file-invalid.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f4bb8926eace65475052884f90f3358da758c60e04bc80783ad44279dfb7eddb"
+      "status": "ported",
+      "ports": [
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "f4bb8926eace65475052884f90f3358da758c60e04bc80783ad44279dfb7eddb",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The native CLI run with --session on a non-session file exits 1 with 'Error: Session file is not a valid pi session: <path>', prints no stack, and leaves the file unchanged."
     },
     {
       "source": "packages/coding-agent/test/session-id-readonly.test.ts",
@@ -2251,63 +2629,116 @@
     },
     {
       "source": "packages/coding-agent/test/session-info-modified-timestamp.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "eda6144dda92760ec70f2e3dc1da518e63826cbf52bb9b3346b3ee332be62a80"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "eda6144dda92760ec70f2e3dc1da518e63826cbf52bb9b3346b3ee332be62a80",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "Passes on Bun and native one/four threads: list() reports the last assistant message timestamp, not the file mtime."
     },
     {
       "source": "packages/coding-agent/test/session-manager/build-context.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e4f1c5ef931609100a5350129151d147f7d58bea4df0d9e1676fe60d06aed6c0"
+      "status": "ported",
+      "ports": [
+        "tests/session-context.bend",
+        "tests/session_context_check.py",
+        "tests/session_context_reference.ts"
+      ],
+      "sha256": "e4f1c5ef931609100a5350129151d147f7d58bea4df0d9e1676fe60d06aed6c0",
+      "notes": "All 16 original cases and 37 captured public calls pass on Bun/native one/four. 505 total context comparisons, 156 raw paths, strict invalid-tree/timestamp checks and 10,000-entry context pass. Full-path settings, branch selection, latest compaction, retained prefix and captured system messages preserved. Duplicate/empty IDs and cycles return typed errors; original missing-leaf fallback and orphan truncation retained. Persistence, migrations and other SessionManager methods remain pending; tests/session-context.md records scope."
     },
     {
       "source": "packages/coding-agent/test/session-manager/custom-session-id.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "551b05e9d0081ed678bf1af4e4854dd1784ed81c651ff8caf6ea6bffe73a1ae9"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "551b05e9d0081ed678bf1af4e4854dd1784ed81c651ff8caf6ea6bffe73a1ae9",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "All 13 cases pass on Bun and native one/four threads, including the ten rejected ids, persisted file naming and forks."
     },
     {
       "source": "packages/coding-agent/test/session-manager/file-operations.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "71b66d7b2fb5b84528f93b4488cafc1a9186239522ca0dd604be15a745f6229d"
+      "status": "needs-review",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "b43bca02bb2769161f5fb41d7000499d4c9b2e98e9ff1a69b9861281fa948b49",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "All loadEntriesFromFile, header discovery, scan-limit, findMostRecentSession, flat custom directory and corrupted-file cases pass on Bun and native one/four threads against the pinned SessionManager. Pending: 'opens session files larger than Node's max string length' (a JavaScript string-limit case with a 512 MiB sparse file). See tests/session-persistence.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/labels.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "072829ad416a5c73c1618c8761bb63bcd8d4b80b589f742ef768ee822714234d"
+      "status": "ported",
+      "ports": [
+        "tests/session-state.bend",
+        "tests/session_state_check.py",
+        "tests/session_state_reference.ts"
+      ],
+      "sha256": "072829ad416a5c73c1618c8761bb63bcd8d4b80b589f742ef768ee822714234d",
+      "implementation": "packages/coding-agent/src/core/session-manager.bend",
+      "notes": "All nine original label tests pass, including clear/replace, tree labels/timestamps, missing-target rejection and fork reconnection/filtering. Together the two suites execute 37 original tests and 155 full state comparisons on Bun/native one/four, with atomic rejection checks and 10,001-node wide/deep trees. Immutable transitions take explicit entry IDs/timestamps; persistence and external-entry restoration remain separate work. See tests/session-state.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/load-entries.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fd0ce2facdce5ea9b6a666675ad32adcd1568c8a66a2fd69fe6d614617c77e68"
+      "status": "partial",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "fd0ce2facdce5ea9b6a666675ad32adcd1568c8a66a2fd69fe6d614617c77e68",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "13 of 14 cases pass through inMemory with restored entries on Bun and native one/four threads. 'adopts headerless entries as current-version without migrating them' keeps a hookMessage role that the typed messages cannot represent. See tests/session-persistence.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/migration.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7e936fe5402e4225854eeaf4fb0505ece574e3774e1aef97a8c121c34fd48877"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "7e936fe5402e4225854eeaf4fb0505ece574e3774e1aef97a8c121c34fd48877",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "Both cases pass on the JSON-object migration (fresh ids drawn from the OS) on Bun and native one/four threads."
     },
     {
       "source": "packages/coding-agent/test/session-manager/save-entry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "530b961602e351e7d3ff987487350888218e8e51be3f8e6eebf12677b2dd622e"
+      "status": "ported",
+      "ports": [
+        "tests/session-file.bend",
+        "tests/session_file_check.py",
+        "tests/session_file_reference.ts"
+      ],
+      "sha256": "530b961602e351e7d3ff987487350888218e8e51be3f8e6eebf12677b2dd622e",
+      "implementation": "packages/coding-agent/src/core/session-persistence.bend",
+      "notes": "Passes on Bun and native one/four threads through the persisting append API."
     },
     {
       "source": "packages/coding-agent/test/session-manager/tree-traversal.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3a80de63661cb02f98df3bc1eebece12e8e4a56032bdad3b6ad0583b25f20d8c"
+      "status": "partial",
+      "ports": [
+        "tests/session-state.bend",
+        "tests/session_state_check.py",
+        "tests/session_state_reference.ts"
+      ],
+      "sha256": "3a80de63661cb02f98df3bc1eebece12e8e4a56032bdad3b6ad0583b25f20d8c",
+      "implementation": "packages/coding-agent/src/core/session-manager.bend",
+      "notes": "The original in-memory append/branch/tree/fork tests pass; three named filesystem/reload tests remain pending. Together the two suites execute 37 original tests and 155 full state comparisons on Bun/native one/four, with atomic rejection checks and 10,001-node wide/deep trees. Immutable transitions take explicit entry IDs/timestamps; persistence and external-entry restoration remain separate work. See tests/session-state.md."
     },
     {
       "source": "packages/coding-agent/test/session-selector-path-delete.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "7b7ed0b973d06169c7b83acaa42063ac57ef459f3deaece7e38cd739fd02a1e2"
+      "sha256": "85351c5f1b8a76aea913059aae9f115e35bee5e8a2e31224ff3d13438e795810"
     },
     {
       "source": "packages/coding-agent/test/session-selector-rename.test.ts",
@@ -2335,21 +2766,42 @@
     },
     {
       "source": "packages/coding-agent/test/settings-manager-bug.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e39903068d13ee29f8d235a485829a418b7ca1613b92058fca8a9b3c7f69e546"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "e39903068d13ee29f8d235a485829a418b7ca1613b92058fca8a9b3c7f69e546",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-manager-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ae8aa7c6425592805b45a4f104908052d9a05f832655428beea78591903bb25c"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "ae8aa7c6425592805b45a4f104908052d9a05f832655428beea78591903bb25c",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "76c00c69d710e7d9ef5b62692166db1d73f6ab203a3648a2c43665f24e644ff1"
+      "status": "needs-review",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend",
+        "tests/settings-manager.bend",
+        "tests/settings_manager_check.py",
+        "tests/settings-files.bend",
+        "tests/settings_files_check.py"
+      ],
+      "sha256": "9174509b95e92feaf18cb5adf77e601c5c631c5b875eca5906c949653f3edbe3",
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",
@@ -2359,8 +2811,17 @@
     },
     {
       "source": "packages/coding-agent/test/skills.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts",
+        "tests/skills.bend",
+        "tests/skills_check.py",
+        "tests/skills_reference.mjs",
+        "tests/skills_reference.ts"
+      ],
+      "notes": "All 28 pinned named assertions are represented: seven formatting cases retain direct system-prompt coverage, and the original loader calls compare complete typed results. Native discovery, metadata validation, ignore precedence, canonical-file deduplication, configured paths and collisions pass 37 complete loader comparisons plus seven explicit native policy cases on Bun/native one/four. Strict metadata and UTF8 rejection, scalar validation lengths, cycle diagnostics and corrected escaped-exclamation ignore handling are documented in tests/skills.md. Resource-loader/CLI wiring and complete YAML dependency grammar remain separate work.",
       "sha256": "f7d5fe8633df112c10c61c4ee17748ad1f7069f76d71fb8357d7e27a17b2a533"
     },
     {
@@ -2388,6 +2849,12 @@
       "sha256": "12681289bbd11e254a85930156bf1cad17d12debe64c60d0f4445a44c2c9ac76"
     },
     {
+      "source": "packages/coding-agent/test/suite/agent-session-boundaries.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "7c8af99ccea292b31a84443ee0b8a570c4d50714c6333ac6c66cf8219580d58f"
+    },
+    {
       "source": "packages/coding-agent/test/suite/agent-session-compaction-model-overrides.test.ts",
       "status": "pending",
       "ports": [],
@@ -2395,45 +2862,79 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dd06cc2e00be07d4eedaa1ed5993f277b768fdfcf116f7b118e881f9f17ae337"
+      "status": "needs-review",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "a20cd44a3a24debefc9eba72fb9ab07033221de0c6075e67e40081074829da02",
+      "notes": "Faux-provider scenarios cover persisted manual compaction usage, abortCompaction and abort() waiting for idle, one overflow compact-and-retry, the recovery-failed report, threshold compaction, and no compaction below the threshold or when disabled. Extension-provided summaries, system-state checkpoints, queued prompts during compaction, auth/model-override cases, length-stop recovery and the _checkCompaction boundary cases with stale or error usage are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-model-extension.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "faa5d0bb64fea33d75cc10456fba48d190f6040510b62bb4fba197b7095099c5"
+      "status": "needs-review",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "0b1a86e5b1beb1824867a05029a7e6cfd3ad31b8173e6eb13b94bf09ce934a52",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5ac5275be8e0ddb9fc2c1dbaef31ba3a096d6a51e73d65866c4cb4282b28e6ae"
+      "status": "needs-review",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "51130e6ca7339ff3a6d09cb244533a9c4a82b8251dc1a62b03f2870bb77ecced",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'prompts while idle and records a single text response' (persist scenario) and 'throws when prompted during streaming without a streamingBehavior' (busy scenario, provider held on a gate) are in tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6419227d98849f6aed17e9262cfa13d85bb18f59b1040ba8b687f9f487771fdb"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "6419227d98849f6aed17e9262cfa13d85bb18f59b1040ba8b687f9f487771fdb",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'delivers follow-up messages only after the current run finishes' is the queue scenario of tests/agent_session_check.py over a text-only turn (steering joins the first turn, the follow-up starts the second). Extension-origin messages, input handlers, one-at-a-time/all modes and custom-message delivery remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-retry-events.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f7c0c98ad81307cadf89b57643e63aa75dc2cd29ef35d59925ae18dde58e65a7"
+      "status": "needs-review",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "6093646e00ca0bbf9b070ec189e4caa08567baba80897e0177854e3dc31a8734",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "The six retry cases (transient success, multiple failures, exhausted budget, disabled, non-retryable, abortRetry cancellation) are the retry scenarios of tests/agent_session_check.py over a faux provider. Delayed message_end handling, tool-call recovery, extension event ordering, the event-order characterizations, message_update deltas and aborted runs remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2b940dfac449b6e7dea886ab202051c41520a4580b67de8d3642e849da842561"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/print_cli_check.py"
+      ],
+      "sha256": "2b940dfac449b6e7dea886ab202051c41520a4580b67de8d3642e849da842561",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'persists message_end assistant replacements to the session manager' is covered by the persist scenario of tests/agent_session_check.py (faux provider) and end to end by the live stored-session check (assistant entry equals the final message_end message). Session switching, forking and runtime replacement remain pending with the AgentSessionRuntime port."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-tool-result-images.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "ddc5fb3a7b4d6300b8ce938dcc8958dc4cbe75649421a612109bb4213515686d"
+      "sha256": "106f068005ed81834bbc63d0b60cbbfb3be22831344d57d5b9f09554a0836bd2"
     },
     {
       "source": "packages/coding-agent/test/suite/lax-message-content.test.ts",
@@ -2491,15 +2992,23 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3302-find-path-glob.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d9bb34b773d7865109e41ac09146fa3c2c670cc594bb5a350e2d8e30230939db"
+      "status": "ported",
+      "ports": [
+        "tests/find-public.bend",
+        "tests/find_public_check.py"
+      ],
+      "sha256": "d9bb34b773d7865109e41ac09146fa3c2c670cc594bb5a350e2d8e30230939db",
+      "notes": "Native public find preserves the original POSIX assertions, including full-path glob matching, independently checked flat/deep ignore scopes, root relativization and injected results. 85 scenarios pass Bun/native one/four. Five Windows path.win32 cases remain pending in the root-relativization suite. Native policies and dependency coverage are documented in tests/find-public.md; CLI registry and JSON details are integrated and exercised through a live native model/tool loop; renderers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3303-find-nested-gitignore.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "40748b486bf64c9feaacb3e0f411ffec5fdc145cca3dad0f62c680e0673b959f"
+      "status": "ported",
+      "ports": [
+        "tests/find-public.bend",
+        "tests/find_public_check.py"
+      ],
+      "sha256": "40748b486bf64c9feaacb3e0f411ffec5fdc145cca3dad0f62c680e0673b959f",
+      "notes": "Native public find preserves the original POSIX assertions, including full-path glob matching, independently checked flat/deep ignore scopes, root relativization and injected results. 85 scenarios pass Bun/native one/four. Five Windows path.win32 cases remain pending in the root-relativization suite. Native policies and dependency coverage are documented in tests/find-public.md; CLI registry and JSON details are integrated and exercised through a live native model/tool loop; renderers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3317-network-connection-lost-retry.test.ts",
@@ -2557,21 +3066,37 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/bash-tool.bend",
+        "tests/bash_tool_check.py"
+      ],
+      "notes": "Retained injected onData is called after public execution returns and before ToolOwner disposal; it is ignored without changing output or emitting another update. Passes Bun and native one/four workers; see tests/bash-tool.md.",
       "sha256": "9d6fc0d457e6d7470246d821deec9937d428e86fdad6858d05e7d5c956802f8c"
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5217-compaction-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "376c9329976962af494917b8f066d504391a793653739593738b6303aa9278b5"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "376c9329976962af494917b8f066d504391a793653739593738b6303aa9278b5",
+      "notes": "compaction_start/compaction_end carry manual, threshold and overflow reasons with willRetry; the extension session_before_compact/session_compact events are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5303-bash-output-truncation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d38754f1abadb955553f0d2ce3276f580fb07ca9b937e0d4abe3b6226d2e3b87"
+      "status": "partial",
+      "ports": [
+        "tests/child-process.bend",
+        "tests/child_process_check.py"
+      ],
+      "sha256": "d38754f1abadb955553f0d2ce3276f580fb07ca9b937e0d4abe3b6226d2e3b87",
+      "notes": "Native child-process draining covers sustained post-exit output and quiet inherited pipes on explicit one/four threads. Virtual-clock 99ms/100ms assertions and hosted process execution remain pending; scope in tests/child-process.md."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5433-extension-oauth-prompt-input.test.ts",
@@ -2629,9 +3154,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6104-find-root-relativization.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5868521c64a301d49b018b82749f74b69bbe26c35a68122816398fbf7d33ea63"
+      "status": "partial",
+      "ports": [
+        "tests/find-public.bend",
+        "tests/find_public_check.py"
+      ],
+      "sha256": "5868521c64a301d49b018b82749f74b69bbe26c35a68122816398fbf7d33ea63",
+      "notes": "Native public find preserves the original POSIX assertions, including full-path glob matching, independently checked flat/deep ignore scopes, root relativization and injected results. 85 scenarios pass Bun/native one/four. Five Windows path.win32 cases remain pending in the root-relativization suite. Native policies and dependency coverage are documented in tests/find-public.md; CLI registry and JSON details are integrated and exercised through a live native model/tool loop; renderers remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6162-extension-active-tools-next-turn.test.ts",
@@ -2665,9 +3194,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6647-compaction-retries-transient-stream-drop.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dd9172e0d2d2547a89c8c065e51431a6906d68ce0c6323c6baa732bf90aecb14"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "dd9172e0d2d2547a89c8c065e51431a6906d68ce0c6323c6baa732bf90aecb14",
+      "notes": "All five cases: transient retry and success, non-retryable error, retry disabled, maxRetries exhaustion and abortCompaction during the backoff."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6768-copilot-compaction-base-url.test.ts",
@@ -2701,9 +3238,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7048-compaction-truncated-summary.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3db8ba6972e64c5365c48f87250d496d2c71703e717737cd4bb9496bea876f94"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "3db8ba6972e64c5365c48f87250d496d2c71703e717737cd4bb9496bea876f94",
+      "notes": "A length-limited summary fails compaction and leaves no compaction entry."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7150-rpc-prompt-during-compaction.test.ts",
@@ -2805,7 +3350,7 @@
       "source": "packages/coding-agent/test/suite/regressions/8237-node-sea-extension-loading.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "3055484d3d4e930f2b713d7f0eecde82fc1a706f71b0d4e2ec46c847acb0eec2"
+      "sha256": "21cb3ab08f4c5e54b338cf004cdbc335964318647cc2d88c247f234e91af1720"
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8261-subagent-project-trust.test.ts",
@@ -2880,6 +3425,24 @@
       "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482"
     },
     {
+      "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "7e1894d5f9c014b61c1cbce24981910bb26c356f834ae42b461a8fa4008cbaf1"
+    },
+    {
+      "source": "packages/coding-agent/test/suite/regressions/9540-extension-loader-lazy.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "d9fa808503eca882b7b812166051860a669b7cf312ed4a927cbc54808170affc"
+    },
+    {
+      "source": "packages/coding-agent/test/suite/regressions/9789-context-handler-system-messages.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "c1a3b358edc5b5264a6d9b984874928cacb6043e14ec6ccf3ced3ca1a4975ff5"
+    },
+    {
       "source": "packages/coding-agent/test/suite/regressions/extension-factory-cache.test.ts",
       "status": "pending",
       "ports": [],
@@ -2911,14 +3474,24 @@
     },
     {
       "source": "packages/coding-agent/test/system-prompt-updates.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
+      ],
+      "notes": "The two pure section-diff and forced-state cases pass; SDK/session prompt-update integration and event behavior remain pending. See tests/system-prompt.md.",
       "sha256": "fdcbb342c29bb3419bd40794781cab92c2f5423908c60bdc7095ae3b434045d0"
     },
     {
       "source": "packages/coding-agent/test/system-prompt.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/system-prompt.bend",
+        "tests/system_prompt_check.py",
+        "tests/system_prompt_reference.ts"
+      ],
+      "notes": "All 16 named pure prompt cases pass through typed section/state/text APIs; exact output and 150KB context checks pass Bun/native one/four. Explicit documentation paths and immutable value adaptation are documented in tests/system-prompt.md.",
       "sha256": "9d13dce2509400f5d383615c4b583b39a375401423bceaa5ed98aa10cdb4f101"
     },
     {
@@ -2935,9 +3508,14 @@
     },
     {
       "source": "packages/coding-agent/test/theme-detection.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "cdcfc3ba8f799d3f16fad7c2ba9de24e63edc6e15a46d2adef8f78fa7c899c49"
+      "status": "partial",
+      "ports": [
+        "tests/theme-detection.bend",
+        "tests/theme-detection-reference.ts",
+        "tests/theme_detection_check.py"
+      ],
+      "sha256": "cdcfc3ba8f799d3f16fad7c2ba9de24e63edc6e15a46d2adef8f78fa7c899c49",
+      "notes": "Pure theme-setting, COLORFGBG, ANSI index and RGB classification plus auto-query precedence match 1,599 pinned cases on Bun/native one/four. Actual terminal query, timeout and notification ownership remain pending."
     },
     {
       "source": "packages/coding-agent/test/theme-export.test.ts",
@@ -2959,9 +3537,15 @@
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "306cdb60b39fd974269c1d296a1eb2be94b4ac72cdabe02d8e440db4dafada25"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend",
+        "tests/tool-execution.bend",
+        "tests/tool_execution_reference.ts",
+        "tests/tool_execution_check.py"
+      ],
+      "sha256": "84f8301e4effa29bc10f0db865b7e9b8a6e798da9160986a5ff9e2ff785de1c9",
+      "notes": "39 source-hash-pinned raw ANSI snapshots cover generic/custom tool displays plus read/bash/edit/write pending/partial/final/error frames, read range/expansion, bash tail preview and write content preview/expansion on Bun/native1/native4. Syntax highlighting, edit diff/details, visual wrapping, durations, images, mouse expansion and the full named suite remain pending; see tests/tool-execution.md."
     },
     {
       "source": "packages/coding-agent/test/tool-result-images.test.ts",
@@ -2983,15 +3567,41 @@
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108"
+      "status": "partial",
+      "ports": [
+        "tests/write-tool.bend",
+        "tests/write_tool_check.py",
+        "tests/write-public.bend",
+        "tests/write_public_check.py",
+        "tests/edit-diff.bend",
+        "tests/edit-public.bend",
+        "tests/edit_public_check.py",
+        "tests/edit-operations.bend",
+        "tests/edit_operations_check.py",
+        "tests/read-public.bend",
+        "tests/read_public_check.py",
+        "tests/read-operations.bend",
+        "tests/read_operations_check.py",
+        "tests/bash-tool.bend",
+        "tests/bash_tool_check.py",
+        "tests/bash-executor.bend",
+        "tests/bash_executor_check.py",
+        "tests/ls-public.bend",
+        "tests/ls_public_check.py",
+        "tests/find-public.bend",
+        "tests/find_public_check.py",
+        "tests/grep-public.bend",
+        "tests/grep_public_check.py"
+      ],
+      "sha256": "e461130856be728e261f7f1e1a65bc44f7ec5415c12c84a18f3be22cf6b89108",
+      "implementation": "packages/coding-agent/src/core/tools/",
+      "notes": "Public createWriteTool covers file contents, exact results and parent creation. Public createEditTool now covers actual filesystem access/read/write, exact success text and diff/patch details, original-snapshot batches, BOM/CRLF restoration, fuzzy untouched-line preservation, and cancellation/queue ownership. Pure matching and Unicode17 NFKC have independent differential/conformance coverage. User-approved strict malformed input/UTF8 policy and native character positions are documented in tests/edit-tool.md. Extension context overrides, tool definitions, renderers and remaining tools are pending; this suite is partial. Public createReadTool now covers actual text files, path fallbacks, arguments, truncation, cancellation and borrowed callback ownership; injected image processing checks exact upstream results. Default PNG/GIF/BMP/JPEG/WebP processing is integrated; image worker scheduling and rendering remain pending (tests/read-tool.md). Public Bash covers native execution, hooks/context, streaming/truncation, cancellation, late callbacks and owned cleanup (tests/bash-tool.md); renderers, other platforms and the remaining tools stay pending. User Bash executeBashWithOperations now covers the named local sanitization and line-only full-output assertions, with split-stream corrections and checked cleanup (tests/bash-executor.md). Native ls covers the original dotfile/directory listing and context cwd assertions, native/injected filesystem operations, cancellation, successful-stat limits and byte truncation (tests/ls-public.md). Ordering remains explicitly injected pending the locale-policy decision; canonical default factory and rendering remain pending. Public find runs fd as upstream does and covers hidden files, Git ignore scopes, glob parse errors, flag-like patterns and context cwd against an fd-driven oracle (84 scenarios, native one/four); see tests/find-public.md. Find registry and JSON details are integrated and live-tested with stored Codex OAuth; rendering remains pending. Public grep runs rg as upstream does (tools-manager lookup of the bin directory and PATH; the release download is pending), preserves four mapped source assertions and passes 112 scenarios on native one/four against an rg-driven oracle of upstream's formatting; registry integration and rendering remain pending (tests/grep-public.md)."
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "4593cd80a2e52fa1e2329b31df17ba5b1c8bab6c6608b029303799aed5b96853"
+      "sha256": "352f03c2400bad730c05d5a427d4d7d2f08a102e67c4a7d1ebc97b6cac856734"
     },
     {
       "source": "packages/coding-agent/test/trigger-compact-extension.test.ts",
@@ -3019,15 +3629,57 @@
     },
     {
       "source": "packages/coding-agent/test/user-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0bcfcb88a1fdbcee065acd15f0bbc8b3d3bcfa23420743777aa154e6b2f0d831"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "tests/interactive-messages.bend",
+        "tests/interactive_messages_reference.ts",
+        "tests/interactive_messages_check.py"
+      ],
+      "sha256": "0bcfcb88a1fdbcee065acd15f0bbc8b3d3bcfa23420743777aa154e6b2f0d831",
+      "notes": "Byte-exact colored-terminal user background, padding, OSC 133 markers pass Bun/native1/native4. Markdown transformer context/chaining/invalidation and full named suite remain pending; see tests/interactive-messages.md."
     },
     {
       "source": "packages/coding-agent/test/version-check.test.ts",
       "status": "pending",
       "ports": [],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7"
+    },
+    {
+      "source": "packages/durable/test/memory-storage.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "25a5d84468fb69bcd9dfc092fc50d6ee361a9e73e3bb3c74b907781abba194cf"
+    },
+    {
+      "source": "packages/durable/test/sqlite-facade.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "7dfe16f998186ba27887bac1d808b07fc93cd7c1ac58746ba51fc0605fab60cc"
+    },
+    {
+      "source": "packages/durable/test/sqlite-migrations.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "648721a7a8a136b540f9de5af01d03ab0d961a32c906218dfd8c56e4d7694c9d"
+    },
+    {
+      "source": "packages/durable/test/sqlite-storage.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "71d106a39c5133e3f2a6444254dc09d77660390b9b37effcd4d798915c911cbe"
+    },
+    {
+      "source": "packages/durable/test/storage-runtime-boundary.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "e99845fe934919e2c6cdd67572766a17f1dd0d69f4f7296f88c3a0ed021c45c6"
+    },
+    {
+      "source": "packages/durable/test/types.test.ts",
+      "status": "pending",
+      "ports": [],
+      "sha256": "611f7d8c463b85e0571eed1f62865f2b15e5a5717b01989d7d8bbc7c7f888ba1"
     },
     {
       "source": "packages/evals/test/acme-server.test.ts",
@@ -3168,16 +3820,33 @@
       "sha256": "663e7d3b42332dccffc96c3b79c599918a67bd67dd8ae3f3d951ac12f21c1dad"
     },
     {
-      "source": "packages/tui/test/autocomplete.test.ts",
+      "source": "packages/tui/test/autocomplete-skill-slash.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "a2fb7cd38b95666955439b3f9207321c35e42be235935a12fa150eb54c02cb35"
+      "sha256": "627c312bde9a434b9a30bf567dea3640159b5c245f54fcd2a75dd8d54c55c728"
+    },
+    {
+      "source": "packages/tui/test/autocomplete.test.ts",
+      "status": "needs-review",
+      "ports": [
+        "tests/autocomplete.bend",
+        "tests/autocomplete_check.py"
+      ],
+      "sha256": "23d6aaa52acc11f9a36d667e6783ca2fb9041509aadacc127a9701768f93b40f",
+      "notes": "All 27 original test bodies execute through the native provider on Bun/native one/four, supplemented by live-source calls and native-policy checks. Locale-default ordering remains pending; source item-set comparisons deliberately ignore ordering while original ranking assertions remain unchanged. Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md. Generic editor-provider integration and Windows behavior remain pending."
     },
     {
       "source": "packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "89f2ce2cf538aedb404b872aba345309b92c6f44375ea1882e0540c4900dfb00"
+      "status": "ported",
+      "ports": [
+        "tests/terminal-image.bend",
+        "tests/terminal-image-state.bend",
+        "tests/terminal_image_check.py",
+        "tests/terminal_image_named.ts",
+        "tests/terminal-image-map.json"
+      ],
+      "sha256": "89f2ce2cf538aedb404b872aba345309b92c6f44375ea1882e0540c4900dfb00",
+      "notes": "All current-implementation recognizer assertions execute unchanged and replay on Bun/native one/four. The historical test of a deliberately broken old recognizer is excluded rather than recreated; see tests/terminal-image-map.json."
     },
     {
       "source": "packages/tui/test/editor-history-keybindings.test.ts",
@@ -3189,49 +3858,87 @@
       "source": "packages/tui/test/editor.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "9480436c75c6775df38608e14a67309355689887cf3b3634b12f3b2b5210cb7d"
+      "sha256": "b25d663eda552a486aa35965441b6fae056414b2b5750ddec96b69faec72bdd6"
     },
     {
       "source": "packages/tui/test/fuzzy.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5945d422c5728860dff14331a69f56a30f781d0343c87ab18b4e1a2454766798"
+      "status": "ported",
+      "ports": [
+        "tests/fuzzy.bend",
+        "tests/fuzzy_check.py",
+        "tests/fuzzy_reference.mts"
+      ],
+      "sha256": "5945d422c5728860dff14331a69f56a30f781d0343c87ab18b4e1a2454766798",
+      "notes": "All 14 original named tests (18 public calls) plus 1,988 total differential comparisons pass Bun/native one/four. Unicode scalar positions and simple folding replace UTF16 positions and JS lowercasing; stable ranking, token conjunction and alphanumeric fallback preserved. See tests/fuzzy.md. No terminal selector or model-listing integration claimed."
     },
     {
       "source": "packages/tui/test/input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dcbed4da6d52e41dd52faaef9861ee4662806d5529e33b612f22e691e9a51386"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/components/input.bend",
+        "tests/input.bend",
+        "tests/input_reference.ts",
+        "tests/input_check.py"
+      ],
+      "sha256": "dcbed4da6d52e41dd52faaef9861ee4662806d5529e33b612f22e691e9a51386",
+      "notes": "All 36 original tests (47 traces), 274 additional sequences, 11 approved scanner corrections and checked missing-engine propagation pass Bun/native one/four. Immutable state and borrowed callbacks; see tests/input.md. Default loaded lexical-context and whole-renderer integration are separate."
     },
     {
       "source": "packages/tui/test/keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c3c102e5f10c01bc34eeb9a009372f422640988d033d19ae1cecf6ea5d6763f4"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/keybindings.bend",
+        "tests/keybindings.bend",
+        "tests/keybindings_reference.ts",
+        "tests/keybindings_check.py"
+      ],
+      "sha256": "c3c102e5f10c01bc34eeb9a009372f422640988d033d19ae1cecf6ea5d6763f4",
+      "notes": "All seven original named tests / 29 assertions replay against the typed immutable manager on Bun and O1 native one/four; 31,589 source queries across 152 managers also pass. Explicit native semantic key-identity deduplication/conflicts are tested separately from source behavior. Definitions, config replacement, unbinding, matching, descriptions and unknown actions are covered; process globals become explicit owner state. See tests/keybindings.md. Full editor integration remains separate."
     },
     {
       "source": "packages/tui/test/keys.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a5fd7e9285669f79a5ee5d242e05e5d5b90e9fc358913f3175b9d393461750d9"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/keys.bend",
+        "tests/keys.bend",
+        "tests/keys_reference.ts",
+        "tests/keys_check.py"
+      ],
+      "sha256": "a5fd7e9285669f79a5ee5d242e05e5d5b90e9fc358913f3175b9d393461750d9",
+      "notes": "All 250 actual assertions across all 60 pinned named tests replay on Bun and O1 native one/four. Additional 59,984 separate API comparisons, 1,576 boundaries and four long scans pass. Typed KeyId and explicit terminal context replace string-union/global state; documented malformed-input and non-BMP truncation corrections are in tests/keys.md. This covers keyboard parsing/matching, not the complete terminal/editor."
     },
     {
       "source": "packages/tui/test/latex.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "e14761fc5da9de05c49cb5228f4d8440e185adffbb6baeb8cdcbce0bb5c06efa"
+      "sha256": "870a9507190a830e1aac7398d4b4f6c2b2cc6982b9fac288aa4b299956561ebf"
     },
     {
       "source": "packages/tui/test/layout.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb"
+      "status": "partial",
+      "ports": [
+        "tests/stack.bend",
+        "tests/stack_reference.ts",
+        "tests/stack_check.py",
+        "tests/scroll-layout.bend",
+        "tests/scroll_layout_check.py",
+        "tests/layout-tree.bend",
+        "tests/layout_tree_check.py",
+        "tests/tui-layout.bend",
+        "tests/tui_layout_check.py"
+      ],
+      "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb",
+      "notes": "Direct stack sizing/rendering, nested minimum sizing, HStack allocation, ScrollView inside VStack, ScrollView state/follow, direct viewport scrollbar glyph geometry, and TuiBase commit/scroll/resize frames match source-pinned Bun/native one/four; see tests/stack.md and tests/scroll-layout.md. Kitty cropping, styled/background-preserving scrollbar overlays, nested ScrollView content, huge sparse content, arbitrary tree caching/invalidation and full source suite remain pending."
     },
     {
       "source": "packages/tui/test/markdown.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0c7efb9cd5641e2db0d95975d8701966b863bd71d0730dd615bd178b0bf0baa4"
+      "status": "partial",
+      "ports": [
+        "tests/markdown.bend",
+        "tests/markdown-reference.ts"
+      ],
+      "sha256": "1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d",
+      "notes": "Core native Markdown rendering and cache invalidation match 40 source-pinned outputs on Bun/native one/four. Advanced Marked grammar, table wrapping/alignment, ANSI restoration, OSC8 links, streaming fences and LaTeX remain pending."
     },
     {
       "source": "packages/tui/test/mouse-components.test.ts",
@@ -3277,20 +3984,26 @@
     },
     {
       "source": "packages/tui/test/regression-overlay-cjk-boundary.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "51438c36784bb4ffb6304e1d179eb9daa046b8b93c80582c87c41f6415449b20"
+      "status": "ported",
+      "ports": [
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py",
+        "tests/tui-composite.bend",
+        "tests/tui_composite_check.py"
+      ],
+      "sha256": "51438c36784bb4ffb6304e1d179eb9daa046b8b93c80582c87c41f6415449b20",
+      "notes": "All four original named cases are covered: helper assertions through ANSI layout and both full compositor results through the native TUI compositor, with hash-checked source execution and exact output comparisons on Bun/native one/four. Interactive overlay lifecycle remains outside this regression suite; see tests/tui-composite.md."
     },
     {
       "source": "packages/tui/test/regression-regional-indicator-width.test.ts",
       "status": "partial",
       "ports": [
-        "tests/unicode_test.py"
+        "tests/visible-width.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
       ],
       "sha256": "a057bc5b61cd287e2f2f554e878222ebace84a515e6cf67b87191eba5c91ae47",
-      "pending": [
-        "wraps intermediate partial-flag list line before overflow"
-      ]
+      "notes": "Native width observations and intermediate partial-flag wrapping now pass through pure Bend on all three backends; see tests/visible-width.md and tests/ansi-layout.md."
     },
     {
       "source": "packages/tui/test/regression-sigwinch-kill-eacces.test.ts",
@@ -3300,63 +4013,113 @@
     },
     {
       "source": "packages/tui/test/select-list.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0135b531ef8dfe52de6625c2004a4ed95566214bc9860068106c862efcf22376"
+      "status": "ported",
+      "ports": [
+        "tests/select-list.bend",
+        "tests/select_list_check.py",
+        "tests/select_list_reference.ts"
+      ],
+      "sha256": "0135b531ef8dfe52de6625c2004a4ed95566214bc9860068106c862efcf22376",
+      "notes": "All five original named tests and 235 supplemental rendering/filter/input/callback sequences pass Bun and native one/four threads; immutable state and explicit borrowed callback/context APIs are documented in tests/select-list.md. Renderer integration remains separate."
     },
     {
       "source": "packages/tui/test/settings-list.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "36418fe2495b92835c24a15129c5371f2dcffdfb72d0ecce7208b1ab0056062d"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/components/settings-list.bend",
+        "tests/settings-list.bend",
+        "tests/settings_list_reference.ts",
+        "tests/settings_list_check.py"
+      ],
+      "sha256": "36418fe2495b92835c24a15129c5371f2dcffdfb72d0ecce7208b1ab0056062d",
+      "notes": "Both original tests and 115 additional state/render/callback sequences pass Bun/native one/four. Immutable state and borrowed callbacks; see tests/settings-list.md. Default loaded lexical-context and whole-renderer integration are separate."
     },
     {
       "source": "packages/tui/test/stdin-buffer.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8"
+      "status": "partial",
+      "ports": [
+        "tests/stdin-buffer.bend",
+        "tests/stdin_buffer_check.py",
+        "tests/stdin_buffer_original.mts",
+        "tests/stdin_buffer_reference.mts",
+        "tests/stdin-buffer-async.bend",
+        "tests/stdin_buffer_async_check.py"
+      ],
+      "sha256": "750cd76af81de27bd8bfa5ef8b6f0ca4eff73c0bf977d7a8349b0d31756baff8",
+      "notes": "All 59 original reference tests execute with assertions and recorded operations replay as pure transitions (421 traces). An owned asynchronous driver additionally passes 74 real timer/lifecycle/UTF8 scenarios on Bun/native one/four, including Node StringDecoder comparisons and callback reentry/retirement. The explicit async API does not reproduce synchronous EventEmitter callback timing; direct legacy Buffer high-byte Meta conversion and complete terminal integration remain pending. Existing 18,012 strict UTF8 checks pass all three backends. See tests/stdin-buffer.md."
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/ansi-utils.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "notes": "Native normalization, observed widths, slice helper widths and overlay segment widths are covered; input/editor/TUI component cases remain pending. See tests/ansi-layout.md.",
       "sha256": "59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419"
     },
     {
       "source": "packages/tui/test/terminal-colors.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/terminal-colors.bend"
+      ],
+      "notes": "All four original pure parser tests execute and replay against native Bend. 1,010 source comparisons, six documented strictness corrections and two long-input checks pass Bun/native one/four. The five TUI background-query lifecycle/dispatch tests remain pending. See tests/terminal-colors.md.",
       "sha256": "83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566"
     },
     {
       "source": "packages/tui/test/terminal-image.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2"
+      "status": "ported",
+      "ports": [
+        "tests/terminal-image.bend",
+        "tests/terminal-image-state.bend",
+        "tests/terminal_image_check.py",
+        "tests/terminal_image_named.ts",
+        "tests/terminal-image-map.json",
+        "tests/image-component.bend",
+        "tests/image_component_check.py"
+      ],
+      "sha256": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2",
+      "notes": "Module protocols, metadata, capability state, sizing, crop and fallback assertions and all three Image component assertions pass Bun/native one/four. Image coverage includes 115 cache/render sequences and five invalid cases; terminal-image coverage includes 764 comparisons, 95 named results and 18 documented corrections. Native tmux probes and shared process lifecycle gates pass. See tests/terminal-image.md and tests/image-component.md."
     },
     {
       "source": "packages/tui/test/terminal.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b63dbc3886282a7642c5af452a28ada1888d941352e1e514a1049ff1bed0ced4"
+      "status": "partial",
+      "ports": [
+        "tests/terminal-protocol.bend",
+        "tests/terminal.bend"
+      ],
+      "sha256": "b63dbc3886282a7642c5af452a28ada1888d941352e1e514a1049ff1bed0ced4",
+      "notes": "All 21 original source tests execute in the reference harness; 19 recorded pure helper calls and 90 negotiation traces replay on Bun/native one/four. The owned Linux driver passes 35 PTY/file scenarios on native one/four, including descriptor reuse, signals, cleanup, cancellation and directory log naming across time zones. This does not cover native Windows/macOS terminal setup or modifier sensing, socket-backed stdio, or complete interactive TUI integration. See tests/terminal.md."
     },
     {
       "source": "packages/tui/test/truncate-to-width.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/ansi-utils.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "notes": "Native normalization/width observations and all nine truncation cases are covered across tests/ansi-utils.md, tests/visible-width.md and tests/ansi-layout.md.",
       "sha256": "fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8"
     },
     {
       "source": "packages/tui/test/truncated-text.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ba67883169e19dcb2013498d4b6659daa82b63daf01399f8471dc2b88b598141"
+      "status": "ported",
+      "ports": [
+        "tests/text-components.bend",
+        "tests/text_components_check.py",
+        "tests/text_components_reference.ts"
+      ],
+      "sha256": "ba67883169e19dcb2013498d4b6659daa82b63daf01399f8471dc2b88b598141",
+      "notes": "All nine original named test bodies execute in the hash-checked reference; native render results match on Bun/native one/four. Supplemental comparisons cover Text callbacks/cache behavior and strict native normalization; see tests/text-components.md."
     },
     {
       "source": "packages/tui/test/tui-alt-screen.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "9be15e6cf3896ffd872449792d051044288dab3b3634f4b4806e5d5c04128703"
+      "sha256": "1c3e5210d61e0bbf322a218fc77efe90469ce741aeb718589ddb4c497089edd7"
     },
     {
       "source": "packages/tui/test/tui-cell-size-input.test.ts",
@@ -3384,14 +4147,23 @@
     },
     {
       "source": "packages/tui/test/word-navigation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "63ad66c3b23643ef248292a8c72cbf38e8126bc43da3df69a83b71397bc635ac"
+      "status": "partial",
+      "ports": [
+        "tests/word-navigation.bend",
+        "tests/word_navigation_check.py"
+      ],
+      "sha256": "63ad66c3b23643ef248292a8c72cbf38e8126bc43da3df69a83b71397bc635ac",
+      "notes": "Injected navigation has 1,260 hash-pinned source comparisons on Bun/native one/four, including 220 documented punctuation-progress corrections. Unicode default word boundaries have separate conformance coverage, but are not used as the Intl-compatible default; dictionary/LSTM lexical segmentation and that default upstream suite remain pending. See tests/word-navigation.md."
     },
     {
       "source": "packages/tui/test/wrap-ansi.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/visible-width.bend",
+        "tests/ansi-layout.bend",
+        "tests/ansi_layout_check.py"
+      ],
+      "notes": "Native width observations and all 16 wrapping cases are covered across tests/visible-width.md and tests/ansi-layout.md; native layout results are compared exactly.",
       "sha256": "9c238d85ad676ca6d4e063caa8d44d493b0c220dd9aba9ea11a31d51c92d791d"
     }
   ]

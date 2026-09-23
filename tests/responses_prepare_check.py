@@ -12,9 +12,9 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from upstream_pin import PIN
 
 ROOT = Path(__file__).resolve().parents[1]
-PIN = '46c9de402bddf46b03c3b9f46487b777aaa41861'
 FIELDS = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
 assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT.parent / 'pi-mono', text=True).strip() == PIN
 

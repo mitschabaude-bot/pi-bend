@@ -32,11 +32,11 @@ for (const fixture of JSON.parse(text)) {
     return mode === 1 ? [{role:'custom',name}] : [];
   };
   const config = {
-    shouldStopAfterTurn: async completed => {
-      if (names(completed.context.messages) !== expectedContext || names(completed.newMessages) !== expectedHistory) throw new Error('source stop-hook snapshot mismatch');
-      await record('stop');
-      if (fixture.stopMode === 2) throw new Error('stop failed');
-      return fixture.stopMode === 1;
+    finishTurn: async completed => {
+      if (names(completed.context.messages) !== expectedContext || names(completed.newMessages) !== expectedHistory) throw new Error('source finishTurn snapshot mismatch');
+      await record('finish');
+      if (fixture.finishMode === 2) throw new Error('finish failed');
+      return fixture.finishMode === 1 ? {action: 'end'} : undefined;
     },
     getSteeringMessages: async () => responding ? queued('steering', fixture.steeringMode) : [],
     getFollowUpMessages: async () => queued('follow', fixture.followMode),
@@ -49,7 +49,7 @@ for (const fixture of JSON.parse(text)) {
     for (const key of ['start:call','end:call','message_start:call','message_end:call']) await record(key);
     return {messages:[toolResult],terminate:fixture.terminate};
   };
-  // Preserve runLoop's actual history, turn-end, stop, steering and follow-up
+  // Preserve runLoop's actual history, finishTurn, turn-end, steering and follow-up
   // control flow. Provider/declaration/tool helpers isolate this turn phase.
   const run = new Function('streamAssistantResponse', 'executeToolCalls', 'failToolCallsFromTruncatedMessage', 'declareToolChanges', stripTypeScriptTypes(body) + ';return runLoop;')(stream, execute, execute, (_context, messages) => messages);
   let category = 0, error = '';

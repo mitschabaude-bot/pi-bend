@@ -59,7 +59,7 @@ def same(left: T.StreamOptions<V.Value, String, String, String, String>, right: 
 
 def model(window: F64, maxTokens: F64, sampling: Maybe<&2, R.Record<V.Value>>) -> T.Model<V.Value>:
   +zero = F.fromU32(0)
-  T.Model{"test", "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, window, maxTokens, sampling, None{}, None{}}
+  T.Model{"test", "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, window, maxTokens, sampling, None{}, None{}}
 
 def check(model: T.Model<V.Value>, context: T.TranscriptContext<V.Value, V.Value, Unit, Unit>, options: Maybe<&2, T.SimpleStreamOptions<V.Value, String, String, String, String>>, key: Maybe<&2, String>, expected: T.StreamOptions<V.Value, String, String, String, String>, label: String) -> IO(Unit):
   Assert.assertion(same(O.buildBaseOptions(~Unit, ~Unit, ~V.Value, ~String, ~String, ~String, ~String, model, context, options, key), expected), label)

@@ -11,7 +11,7 @@ import ../../../runtime/test/schema.bend as Assert
 
 def makeModel() -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{"gpt-test", "GPT Test", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", False{}, None{}, T.InputText{} <> T.InputImage{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  T.Model{"gpt-test", "GPT Test", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", False{}, None{}, T.InputText{} <> T.InputImage{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def inputs() -> List<&2, Stream.ResponseStreamEvent>:
   Stream.ContentEvent{Stream.Added{F.fromU32(0), Stream.CustomItem{"ctc_1", "call_1", "sample_tool", Some{"a"}, None{}}}} <>

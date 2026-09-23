@@ -101,6 +101,34 @@ type AssistantContent<-Arguments: Data> is Data:
 type AssistantMessage<-Arguments: Data, -DiagnosticDetails: Data> is Data:
   AssistantMessage{content: List<&2, AssistantContent<Arguments>>, api: Api(), provider: ProviderId(), model: String, responseModel: Maybe<&2, String>, responseId: Maybe<&2, String>, providerThinkingLevel: Maybe<&2, String>, diagnostics: Maybe<&2, List<&2, Diagnostics.AssistantMessageDiagnostic<DiagnosticDetails>>>, usage: Usage, stopReason: StopReason, deferred: Maybe<&2, DeferredHandle>, errorMessage: Maybe<&2, String>, rawStopReason: Maybe<&2, String>, endTurn: Maybe<&2, Bool>, timestamp: F64}
 
+def assistantContent(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> List<&2, AssistantContent<A>>:
+  match message:
+    case AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
+
+def assistantProvider(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> ProviderId():
+  match message:
+    case AssistantMessage{_, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
+
+def assistantModel(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> String:
+  match message:
+    case AssistantMessage{_, _, _, model, _, _, _, _, _, _, _, _, _, _, _}: model
+
+def assistantUsage(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> Usage:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}: usage
+
+def assistantStopReason(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> StopReason:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, _, stopReason, _, _, _, _, _}: stopReason
+
+def assistantErrorMessage(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> Maybe<&2, String>:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, errorMessage, _, _, _}: errorMessage
+
+def assistantTimestamp(-A: Data, -D: Data, message: AssistantMessage<A, D>) -> F64:
+  match message:
+    case AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, _, _, _, timestamp}: timestamp
+
 # Restricted terminal reasons preserve upstream Extract<StopReason, ...>.
 type DoneReason is Data:
   DoneStop{}
@@ -343,11 +371,44 @@ type ModelInput is Data:
 # Compatibility depends on the actual API field, preserving the conditional
 # upstream contract. Sampling values remain caller-typed opaque data; this does
 # not replace provider payloads or validated argument types with untyped JSON.
+type ModelImageResizeOptions is Data:
+  ModelImageResizeOptions{maxWidth: Maybe<&2, F64>, maxHeight: Maybe<&2, F64>, maxBytes: Maybe<&2, F64>, jpegQuality: Maybe<&2, F64>}
+
+type ModelImageInputLimits is Data:
+  ModelImageInputLimits{resize: Maybe<&2, ModelImageResizeOptions>, maxPerMessage: Maybe<&2, F64>, maxPerRequest: Maybe<&2, F64>}
+
+type ModelInputLimits is Data:
+  ModelInputLimits{maxRequestBytes: Maybe<&2, F64>, images: Maybe<&2, ModelImageInputLimits>}
+
+# Prompt cache lifetimes per retention tier ("none" has no lifetime).
+type ModelPromptCache is Data:
+  ModelPromptCache{short: Maybe<&2, F64>, long: Maybe<&2, F64>}
+
 type Model<-SamplingValue: Data> is Data:
-  Model{id: String, name: String, api: ModelApi, provider: ProviderId(), baseUrl: String, reasoning: Bool, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, contextWindow: F64, maxTokens: F64, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, compat: Maybe<&2, ModelCompatibility(api)>}
+  Model{id: String, name: String, api: ModelApi, provider: ProviderId(), baseUrl: String, reasoning: Bool, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, inputLimits: Maybe<&2, ModelInputLimits>, cost: ModelCost, promptCache: Maybe<&2, ModelPromptCache>, contextWindow: F64, maxTokens: F64, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, compat: Maybe<&2, ModelCompatibility(api)>}
+
+def modelId(model: Model<JsonValue>) -> String:
+  match model:
+    case Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
+
+def modelProvider(model: Model<JsonValue>) -> String:
+  match model:
+    case Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
+
+def modelReasoning(model: Model<JsonValue>) -> Bool:
+  match model:
+    case Model{_, _, _, _, _, reasoning, _, _, _, _, _, _, _, _, _, _}: reasoning
+
+def modelContextWindow(model: Model<JsonValue>) -> F64:
+  match model:
+    case Model{_, _, _, _, _, _, _, _, _, _, _, contextWindow, _, _, _, _}: contextWindow
+
+def modelMaxTokens(model: Model<JsonValue>) -> F64:
+  match model:
+    case Model{_, _, _, _, _, _, _, _, _, _, _, _, maxTokens, _, _, _}: maxTokens
 
 type ImagesModel<-SamplingValue: Data> is Data:
-  ImagesModel{id: String, name: String, api: ImagesApi(), provider: ImagesProviderId(), baseUrl: String, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, cost: ModelCost, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, output: List<&2, ModelInput>}
+  ImagesModel{id: String, name: String, api: ImagesApi(), provider: ImagesProviderId(), baseUrl: String, thinkingLevelMap: Maybe<&2, ThinkingLevelMap>, input: List<&2, ModelInput>, inputLimits: Maybe<&2, ModelInputLimits>, cost: ModelCost, promptCache: Maybe<&2, ModelPromptCache>, samplingParams: Maybe<&2, Record.Record<SamplingValue>>, headers: Maybe<&2, Record.Record<String>>, output: List<&2, ModelInput>}
 
 # Shared request options from types.ts. Fetch, Signal and Telemetry remain
 # explicit caller types until their complete runtime interfaces are integrated.

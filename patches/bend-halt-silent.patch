@@ -1,0 +1,29 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -5798,12 +5807,15 @@
+   return buf;
+ }
+ 
++// An empty halt message exits silently; a message prints as one line.
+ OUTLINE void io_errs(Env e, Term s) {
+   u64   n    = 0;
+   char* text = io_cstr(e, s, &n);
+-  io_sync();
+-  io_out(stderr, text, n);
+-  io_out(stderr, "\n", 1);
++  if (n > 0) {
++    io_sync();
++    io_out(stderr, text, n);
++    io_out(stderr, "\n", 1);
++  }
+   free(text);
+ }
+ 
+@@ -6565,6 +6577,7 @@
+ }
+ 
+ function io_errs(message) {
++  if (message === "") return;
+   io_out(2, io_bytes(message + "\n"));
+ }
+ 

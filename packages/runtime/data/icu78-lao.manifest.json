@@ -1,0 +1,15 @@
+{
+  "source": "https://raw.githubusercontent.com/unicode-org/icu/release-78.3/icu4c/source/data/brkitr/dictionaries/laodict.txt",
+  "source_sha256": "3c876934a3fa81031d2333525eafaca6a7c9f842e3b98f18c38880420afb5d36",
+  "icu": "78.3",
+  "unicode": "17.0",
+  "entries": 30550,
+  "nodes": 37598,
+  "bytes": 346517,
+  "sha256": "aef684770d7e6096ccedf3ec7cf8a4b5db011dc3093a9d0003e617845c94ddce",
+  "max_word_length": 32,
+  "max_prefix_candidates": 6,
+  "format": "ICULAO01: magic8,nodeCount:u32le,wordCount:u32le; CJK radix record format with cost0 terminal,255 nonterminal; edge labels capped20",
+  "license": "icu78-lao.LICENSE",
+  "unicode_sha256": "2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e"
+}

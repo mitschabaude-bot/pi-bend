@@ -9,6 +9,8 @@ import ../utils/headers.bend as ProviderHeaders
 import ../utils/provider-retry.bend as Retry
 import ../utils/thinking-levels.bend as Thinking
 import ../utils/transcript.bend as Transcript
+import ../utils/jwt.bend as Jwt
+import ../utils/text.bend as Text
 import ./constrained-sampling.bend as Sampling
 import ./github-copilot-headers.bend as Copilot
 import ./openai-client.bend as Client
@@ -50,7 +52,7 @@ import ../../../runtime/src/http-message.bend as Header
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Reason>
 def StreamOptions(-Reason: Data, -Telemetry: Data, -E: Data) -> Data: T.StreamOptions<T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>
 def SimpleStreamOptions(-Reason: Data, -Telemetry: Data, -E: Data) -> Data: T.SimpleStreamOptions<T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>
-def Context(-G: Data, -D: Data) -> Data: T.TranscriptContext<V.Value, R.Record<V.Value>, G, D>
+def Context(-G: Data, -D: Data) -> Data: T.TranscriptContext<V.Value, V.Value, G, D>
 def ReaderError(-Reason: Data) -> Data: Stream.ReaderError<Sse.TransportError(Reason)>
 
 # Options
@@ -108,6 +110,13 @@ def settings(-Reason: Data, -Telemetry: Data, -E: Data, options: OpenAIResponses
 # --------------------------------
 
 # Required<OpenAIResponsesCompat>: every upstream field retains its name.
+# The model's API selects the endpoint: the SDK's Responses resource or the
+# ChatGPT Codex backend, which shares the wire protocol but not URL, headers
+# or the request body's framing.
+type Endpoint is Data:
+  ResponsesEndpoint{}
+  CodexEndpoint{}
+
 type ResolvedCompat is Data:
   ResolvedCompat{supportsDeveloperRole: Bool, supportsMidConvoSystemMessages: Bool, sessionAffinityFormat: T.SessionAffinityFormat, supportsLongCacheRetention: Bool, supportsStrictMode: Bool, supportsOpenAIGrammarTools: Bool, supportsAdditionalTools: Bool, supportsToolSearch: Bool, supportsExplicitPromptCacheMode: Bool, supportsMaxOutputTokens: Bool}
 
@@ -183,12 +192,12 @@ def nonblankHeader(value: T.Nullable<String>) -> Bool:
 def matchingHeader(entries: List<&2, R.Property<T.Nullable<String>>>, +name: String) -> Bool:
   match entries:
     case Nil{}: False{}
-    case R.Property{key, value} <> rest: (String.eq(Header.lowercase(key), name) && nonblankHeader(value)) || matchingHeader(rest, name)
+    case R.Property{key, value} <> rest: (String.eq(Space.asciiLower(key), name) && nonblankHeader(value)) || matchingHeader(rest, name)
 
 def hasHeader(headers: Maybe<&2, T.ProviderHeaders()>, name: String) -> Bool:
   match headers:
     case None{}: False{}
-    case Some{R.Record{entries}}: matchingHeader(entries, Header.lowercase(name))
+    case Some{R.Record{entries}}: matchingHeader(entries, Space.asciiLower(name))
 
 def headerCredential(provider: String, +headers: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, String, String>:
   Bool.pick(Result<&2, &2, String, String>, hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization"), Done{"unused"}, Fail{provider})
@@ -317,8 +326,8 @@ def xaiInclude(provider: String, fields: R.Record<T.JsonValue>) -> R.Record<T.Js
 
 def addReasoning(fields: R.Record<T.JsonValue>, model: T.Model<T.JsonValue>, +effort: Maybe<&2, T.ThinkingLevel>, summary: Maybe<&2, T.Nullable<ReasoningSummary>>) -> R.Record<T.JsonValue>:
   match model:
-    case T.Model{_, _, _, _, _, False{}, _, _, _, _, _, _, _, _}: fields
-    case T.Model{_, _, _, +provider, _, True{}, mapping, _, _, _, _, _, _, _}:
+    case T.Model{_, _, _, _, _, False{}, _, _, _, _, _, _, _, _, _, _}: fields
+    case T.Model{_, _, _, +provider, _, True{}, mapping, _, _, _, _, _, _, _, _, _}:
       +selected = summaryText(summary)
       xaiInclude(provider, configuredReasoning(reasoningRequested(effort, selected), fields, provider, mapping, effort, selected))
 
@@ -371,40 +380,85 @@ def tierValue(value: Maybe<&2, T.Nullable<ServiceTier>>) -> Maybe<&2, T.Nullable
 # The final wire object from already-encoded input items and tools.
 def assembledParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, retention: T.CacheRetention) -> T.JsonValue:
   match model options:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, maxTokens, _, _, session, _, _, effort, summary, tier, choice}:
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, maxTokens, _, _, session, _, _, effort, summary, tier, choice}:
       fields = baseFields(id, input, compat, retention, session)
       budgeted = optionalNumber(fields, "max_output_tokens", outputTokens(maxOutputSupport(compat), maxTokens))
       configured = optionalNullableString(optionalNumber(budgeted, "temperature", temperature), "service_tier", tierValue(tier))
       toolFields = optionalValue(addTools(configured, tools), "tool_choice", choice)
       T.JsonObject{samplingFields(addReasoning(toolFields, model, effort, summary), sampling)}
 
-def toolOptions(compat: ResolvedCompat) -> Shared.ConvertResponsesToolsOptions:
-  match compat:
-    case ResolvedCompat{_, _, _, _, strict, grammar, _, _, _, _}: Shared.ConvertResponsesToolsOptions{None{}, Some{strict}, Some{grammar}, None{}}
+# Codex wire object: instructions instead of an input system message, low
+# verbosity text, encrypted reasoning always included, parallel tool calls,
+# an explicit tool choice, and no output-token budget or cache retention.
+def codexParams(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, retention: T.CacheRetention, instructions: String) -> T.JsonValue:
+  match model options:
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, sampling, _, _, _, session, _, _, effort, summary, tier, choice}:
+      fields = {R.Record{R.Property{"model", T.JsonString{id}} <> R.Property{"store", T.JsonBoolean{False{}}} <> R.Property{"stream", T.JsonBoolean{True{}}} <> R.Property{"instructions", T.JsonString{instructions}} <> R.Property{"input", T.JsonArray{input}} <> R.Property{"text", T.JsonObject{R.Record{R.Property{"verbosity", T.JsonString{"low"}} <> Nil{}}}} <> R.Property{"include", T.JsonArray{T.JsonString{"reasoning.encrypted_content"} <> Nil{}}} <> Nil{}} : R.Record<T.JsonValue>}
+      keyed = optionalString(fields, "prompt_cache_key", promptCacheKey(retention, session))
+      chosen = R.set(T.JsonValue, R.set(T.JsonValue, keyed, "tool_choice", Maybe.default(&2, T.JsonValue, choice, T.JsonString{"auto"})), "parallel_tool_calls", T.JsonBoolean{True{}})
+      configured = optionalNullableString(optionalNumber(chosen, "temperature", temperature), "service_tier", tierValue(tier))
+      T.JsonObject{samplingFields(addReasoning(addTools(configured, tools), model, effort, summary), sampling)}
 
-def messageOptions(+compat: ResolvedCompat, grammar: R.Record<String>) -> Shared.ConvertResponsesMessagesOptions:
+def endpointParams(-Reason: Data, -Telemetry: Data, -E: Data, endpoint: Endpoint, instructions: Maybe<&2, String>, model: T.Model<T.JsonValue>, input: List<&2, T.JsonValue>, tools: List<&2, T.JsonValue>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, compat: ResolvedCompat, retention: T.CacheRetention) -> T.JsonValue:
+  match endpoint instructions:
+    case ResponsesEndpoint{} _: assembledParams(Reason, Telemetry, E, model, input, tools, options, compat, retention)
+    case CodexEndpoint{} text: codexParams(Reason, Telemetry, E, model, input, tools, options, retention, Maybe.default(&2, String, text, "You are a helpful assistant."))
+
+def nonemptyInstructions(text: String) -> Maybe<&2, String>:
+  match text:
+    case SNil{}: None{}
+    case value: Some{value}
+
+def systemText(message: Maybe<&2, T.SystemMessage<V.Value>>) -> Maybe<&2, String>:
+  match message:
+    case None{}: None{}
+    case Some{value}: nonemptyInstructions(Text.renderComplete(V.Value, value))
+
+# The leading system message becomes Codex `instructions`; empty text falls
+# back to the upstream default.
+def instructions(-G: Data, -D: Data, endpoint: Endpoint, context: Context(G, D)) -> Maybe<&2, String>:
+  match endpoint context:
+    case ResponsesEndpoint{} _: None{}
+    case CodexEndpoint{} T.TranscriptContext{messages}: systemText(Transcript.getInitialSystemMessage(V.Value, V.Value, G, D, messages))
+
+def defaultToolStrict(endpoint: Endpoint) -> Maybe<&2,T.Nullable<Bool>>:
+  match endpoint:
+    case ResponsesEndpoint{}: None{}
+    case CodexEndpoint{}: Some{T.NullValue{}}
+
+def toolOptions(compat: ResolvedCompat, endpoint: Endpoint) -> Shared.ConvertResponsesToolsOptions:
+  match compat:
+    case ResolvedCompat{_, _, _, _, strict, grammar, _, _, _, _}: Shared.ConvertResponsesToolsOptions{defaultToolStrict(endpoint), Some{strict}, Some{grammar}, None{}}
+
+# The Codex backend carries the system prompt as `instructions`, not as input.
+def includeSystemPrompt(endpoint: Endpoint) -> Maybe<&2, Bool>:
+  match endpoint:
+    case ResponsesEndpoint{}: None{}
+    case CodexEndpoint{}: Some{False{}}
+
+def messageOptions(+compat: ResolvedCompat, grammar: R.Record<String>, +endpoint: Endpoint) -> Shared.ConvertResponsesMessagesOptions:
   match compat:
     case ResolvedCompat{_, midConvo, _, _, strict, grammarSupport, additional, search, _, _}:
-      Shared.ConvertResponsesMessagesOptions{None{}, Some{grammar}, Some{midConvo}, Some{additional}, Some{search}, Some{Shared.ConvertResponsesToolsOptions{None{}, Some{strict}, Some{grammarSupport}, None{}}}}
+      Shared.ConvertResponsesMessagesOptions{includeSystemPrompt(endpoint), Some{grammar}, Some{midConvo}, Some{additional}, Some{search}, Some{Shared.ConvertResponsesToolsOptions{defaultToolStrict(endpoint), Some{strict}, Some{grammarSupport}, None{}}}}
 
 def requestTools(-G: Data, -D: Data, context: Context(G, D), compat: ResolvedCompat) -> Transcript.TranscriptTools<V.Value>:
   match context compat:
-    case T.TranscriptContext{messages} ResolvedCompat{_, _, _, _, _, _, additional, search, _, _}: Transcript.resolveTranscriptTools(V.Value, R.Record<V.Value>, G, D, messages, additional || search)
+    case T.TranscriptContext{messages} ResolvedCompat{_, _, _, _, _, _, additional, search, _, _}: Transcript.resolveTranscriptTools(V.Value, V.Value, G, D, messages, additional || search)
 
-def convertedTools(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, items: List<&2, Shared.ResponseInputItem>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, compat: ResolvedCompat, retention: T.CacheRetention, tools: Result<&2, &2, Sampling.Error, List<&2, Shared.OpenAITool>>) -> Result<&2, &2, BuildError, T.JsonValue>:
+def convertedTools(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, items: List<&2, Shared.ResponseInputItem>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, compat: ResolvedCompat, retention: T.CacheRetention, endpoint: Endpoint, instructions: Maybe<&2, String>, tools: Result<&2, &2, Sampling.Error, List<&2, Shared.OpenAITool>>) -> Result<&2, &2, BuildError, T.JsonValue>:
   match tools:
     case Fail{error}: Fail{ToolConversion{error}}
-    case Done{converted}: Done{assembledParams(Reason, Telemetry, E, model, inputJson(items), toolsJson(converted), options, compat, retention)}
+    case Done{converted}: Done{endpointParams(Reason, Telemetry, E, endpoint, instructions, model, inputJson(items), toolsJson(converted), options, compat, retention)}
 
-def convertedParams(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, input: Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>>, tools: Transcript.TranscriptTools<V.Value>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, retention: T.CacheRetention) -> Result<&2, &2, BuildError, T.JsonValue>:
+def convertedParams(-Reason: Data, -Telemetry: Data, -E: Data, model: T.Model<T.JsonValue>, input: Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>>, tools: Transcript.TranscriptTools<V.Value>, options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, retention: T.CacheRetention, +endpoint: Endpoint, instructions: Maybe<&2, String>) -> Result<&2, &2, BuildError, T.JsonValue>:
   match input tools:
     case Fail{error} _: Fail{MessageConversion{error}}
-    case Done{items} Transcript.TranscriptTools{values, _}: convertedTools(Reason, Telemetry, E, model, items, options, compat, retention, Shared.convertResponsesTools(values, Some{toolOptions(compat)}))
+    case Done{items} Transcript.TranscriptTools{values, _}: convertedTools(Reason, Telemetry, E, model, items, options, compat, retention, endpoint, instructions, Shared.convertResponsesTools(values, Some{toolOptions(compat, endpoint)}))
 
-def buildParams(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, +model: T.Model<T.JsonValue>, +context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention) -> IO(Result<&2, &2, BuildError, T.JsonValue>):
+def buildParams(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, +model: T.Model<T.JsonValue>, +context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, +compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention, +endpoint: Endpoint) -> IO(Result<&2, &2, BuildError, T.JsonValue>):
   do IO<Result<&2, &2, BuildError, T.JsonValue>>:
-    input : Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>> <- Shared.convertResponsesMessages(~G, ~D, ~T.JsonValue, model, context, OPENAI_TOOL_CALL_PROVIDERS(), Some{messageOptions(compat, grammar)})
-    return convertedParams(Reason, Telemetry, E, model, input, requestTools(G, D, context, compat), options, compat, retention)
+    input : Result<&2, &2, Shared.MessageError, List<&2, Shared.ResponseInputItem>> <- Shared.convertResponsesMessagesWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~Shared.parameterValue, ~Shared.parameterValue, ~Shared.conversionClock, model, context, OPENAI_TOOL_CALL_PROVIDERS(), Some{messageOptions(compat, grammar, endpoint)})
+    return convertedParams(Reason, Telemetry, E, model, input, requestTools(G, D, context, compat), options, compat, retention, endpoint, instructions(G, D, endpoint, context))
 
 # Preparation
 # -----------
@@ -412,27 +466,34 @@ def buildParams(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, +
 type PreparationError is Data:
   UnsupportedApi{api: T.ModelApi}
   MissingApiKey{provider: String}
+  MissingAccountId{}
   GrammarFailure{cause: Sampling.Error}
   PayloadFailure{cause: BuildError}
 
 # Everything `stream` computes before touching the network. No socket,
 # callback or task is acquired by preparation.
 type Prepared is Data:
-  Prepared{apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), payload: T.JsonValue, compat: ResolvedCompat, grammarToolInputProperties: R.Record<String>, cacheRetention: T.CacheRetention}
+  Prepared{apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), payload: T.JsonValue, compat: ResolvedCompat, grammarToolInputProperties: R.Record<String>, cacheRetention: T.CacheRetention, endpoint: Endpoint, accountId: Maybe<&2, String>, sessionId: Maybe<&2, String>}
 
 type ModelSettings is Data:
-  ModelSettings{provider: String, baseUrl: String, headers: Maybe<&2, R.Record<String>>, compat: ResolvedCompat}
+  ModelSettings{provider: String, baseUrl: String, headers: Maybe<&2, R.Record<String>>, compat: ResolvedCompat, endpoint: Endpoint}
 
-# Azure and Codex have their own provider entry points; a dynamically selected
-# model must still satisfy this provider's API type.
+# Codex assumes strict-mode support unless the model explicitly disables it.
+def getCodexCompat(provider: String, baseUrl: String, compat: Maybe<&2,T.OpenAIResponsesCompat>) -> ResolvedCompat:
+  match compat:
+    case None{}: getCompat(provider,baseUrl,Some{T.OpenAIResponsesCompat{None{},None{},None{},None{},Some{True{}},None{},None{},None{},None{},None{}}})
+    case Some{T.OpenAIResponsesCompat{developer,midConvo,affinity,longCache,strict,grammar,additional,search,explicitCache,maxOutput}}:
+      getCompat(provider,baseUrl,Some{T.OpenAIResponsesCompat{developer,midConvo,affinity,longCache,Some{boolDefault(strict,True{})},grammar,additional,search,explicitCache,maxOutput}})
+
 def compatible(api: T.ModelApi, +provider: String, +baseUrl: String, headers: Maybe<&2, R.Record<String>>, compat: Maybe<&2, T.ModelCompatibility(api)>) -> Result<&2, &2, PreparationError, ModelSettings>:
   match api:
-    case T.OpenAIResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, getCompat(provider, baseUrl, compat)}}
+    case T.OpenAIResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, getCompat(provider, baseUrl, compat), ResponsesEndpoint{}}}
+    case T.OpenAICodexResponsesApi{}: Done{ModelSettings{provider, baseUrl, headers, getCodexCompat(provider, baseUrl, compat), CodexEndpoint{}}}
     case other: Fail{UnsupportedApi{other}}
 
 def modelSettings(model: T.Model<T.JsonValue>) -> Result<&2, &2, PreparationError, ModelSettings>:
   match model:
-    case T.Model{_, _, api, provider, baseUrl, _, _, _, _, _, _, _, headers, compat}: compatible(api, provider, baseUrl, headers, compat)
+    case T.Model{_, _, api, provider, baseUrl, _, _, _, _, _, _, _, _, _, headers, compat}: compatible(api, provider, baseUrl, headers, compat)
 
 def grammarResult(result: Result<&2, &2, Sampling.Error, R.Record<String>>) -> Result<&2, &2, PreparationError, R.Record<String>>:
   match result:
@@ -442,7 +503,7 @@ def grammarResult(result: Result<&2, &2, Sampling.Error, R.Record<String>>) -> R
 def grammarProperties(-G: Data, -D: Data, context: Context(G, D), compat: ResolvedCompat) -> Result<&2, &2, PreparationError, R.Record<String>>:
   match context compat:
     case T.TranscriptContext{messages} ResolvedCompat{_, _, _, _, _, enabled, _, _, _, _}:
-      grammarResult(Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, R.Record<V.Value>, G, D, messages)}, enabled))
+      grammarResult(Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, G, D, messages)}, enabled))
 
 def credentialResult(result: Result<&2, &2, String, String>) -> Result<&2, &2, PreparationError, String>:
   match result:
@@ -453,10 +514,26 @@ def credential(-Reason: Data, -Telemetry: Data, -E: Data, provider: String, opti
   match options:
     case OpenAIResponsesOptions{_, _, apiKey, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: credentialResult(getClientApiKey(provider, apiKey, headers))
 
-def finishPreparation(apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention, payload: Result<&2, &2, BuildError, T.JsonValue>) -> Result<&2, &2, PreparationError, Prepared>:
+def finishPreparation(apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention, endpoint: Endpoint, accountId: Maybe<&2, String>, sessionId: Maybe<&2, String>, payload: Result<&2, &2, BuildError, T.JsonValue>) -> Result<&2, &2, PreparationError, Prepared>:
   match payload:
     case Fail{cause}: Fail{PayloadFailure{cause}}
-    case Done{value}: Done{Prepared{apiKey, baseUrl, headers, value, compat, grammar, retention}}
+    case Done{value}: Done{Prepared{apiKey, baseUrl, headers, value, compat, grammar, retention, endpoint, accountId, sessionId}}
+
+def accountFound(found: Maybe<&2, String>) -> Result<&2, &2, PreparationError, Maybe<&2, String>>:
+  match found:
+    case None{}: Fail{MissingAccountId{}}
+    case Some{id}: Done{Some{id}}
+
+# The Codex backend reads the ChatGPT account id from the bearer token.
+def codexAccount(endpoint: Endpoint, apiKey: String) -> Result<&2, &2, PreparationError, Maybe<&2, String>>:
+  match endpoint:
+    case ResponsesEndpoint{}: Done{None{}}
+    case CodexEndpoint{}: accountFound(Jwt.chatgptAccountId(apiKey))
+
+def finishedPreparation(apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), compat: ResolvedCompat, grammar: R.Record<String>, retention: T.CacheRetention, endpoint: Endpoint, sessionId: Maybe<&2, String>, account: Result<&2, &2, PreparationError, Maybe<&2, String>>, payload: Result<&2, &2, BuildError, T.JsonValue>) -> Result<&2, &2, PreparationError, Prepared>:
+  match account:
+    case Fail{cause}: Fail{cause}
+    case Done{accountId}: finishPreparation(apiKey, baseUrl, headers, compat, grammar, retention, endpoint, accountId, sessionId, payload)
 
 def optionEnv(-Reason: Data, -Telemetry: Data, -E: Data, options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> Maybe<&2, T.ProviderEnv()>:
   match options:
@@ -482,23 +559,23 @@ def affinity(compat: ResolvedCompat) -> T.SessionAffinityFormat:
   match compat:
     case ResolvedCompat{_, _, format, _, _, _, _, _, _, _}: format
 
-def preparedWith(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, configuration: ModelSettings, apiKey: String, +grammar: R.Record<String>) -> IO(Result<&2, &2, PreparationError, Prepared>):
+def preparedWith(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, configuration: ModelSettings, +apiKey: String, +grammar: R.Record<String>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match configuration:
-    case ModelSettings{+provider, +baseUrl, modelHeaders, +compat}:
+    case ModelSettings{+provider, +baseUrl, modelHeaders, +compat, +endpoint}:
       do IO<Result<&2, &2, PreparationError, Prepared>>:
         +retention : T.CacheRetention <- resolveCacheRetention(optionRetention(Reason, Telemetry, E, options), optionEnv(Reason, Telemetry, E, options))
-        +resolved : Context(G, D) = Transcript.resolveTranscript(V.Value, R.Record<V.Value>, G, D, context, Some{midConversation(compat)})
-        merged : T.ProviderHeaders() = clientHeaders(V.Value, R.Record<V.Value>, G, D, agent, provider, modelHeaders, resolved, affinity(compat), cacheSessionId(retention, optionSession(Reason, Telemetry, E, options)), optionHeaders(Reason, Telemetry, E, options))
-        payload : Result<&2, &2, BuildError, T.JsonValue> <- buildParams(~Reason, ~Telemetry, ~E, ~G, ~D, model, resolved, options, compat, grammar, retention)
-        return finishPreparation(apiKey, baseUrl, merged, compat, grammar, retention, payload)
+        +resolved : Context(G, D) = Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{midConversation(compat)})
+        merged : T.ProviderHeaders() = clientHeaders(V.Value, V.Value, G, D, agent, provider, modelHeaders, resolved, affinity(compat), cacheSessionId(retention, optionSession(Reason, Telemetry, E, options)), optionHeaders(Reason, Telemetry, E, options))
+        payload : Result<&2, &2, BuildError, T.JsonValue> <- buildParams(~Reason, ~Telemetry, ~E, ~G, ~D, model, resolved, options, compat, grammar, retention, endpoint)
+        return finishedPreparation(apiKey, baseUrl, merged, compat, grammar, retention, endpoint, promptCacheKey(retention, optionSession(Reason, Telemetry, E, options)), codexAccount(endpoint, apiKey), payload)
 
 def compatOf(configuration: ModelSettings) -> ResolvedCompat:
   match configuration:
-    case ModelSettings{_, _, _, compat}: compat
+    case ModelSettings{_, _, _, compat, _}: compat
 
 def providerOf(configuration: ModelSettings) -> String:
   match configuration:
-    case ModelSettings{provider, _, _, _}: provider
+    case ModelSettings{provider, _, _, _, _}: provider
 
 def withGrammar(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, configuration: ModelSettings, apiKey: String, grammar: Result<&2, &2, PreparationError, R.Record<String>>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match grammar:
@@ -508,7 +585,7 @@ def withGrammar(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, m
 def withCredential(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, +context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, +configuration: ModelSettings, key: Result<&2, &2, PreparationError, String>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match key:
     case Fail{cause}: IO.pure(Result<&2, &2, PreparationError, Prepared>, Fail{cause})
-    case Done{apiKey}: withGrammar(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, agent, configuration, apiKey, grammarProperties(G, D, Transcript.resolveTranscript(V.Value, R.Record<V.Value>, G, D, context, Some{midConversation(compatOf(configuration))}), compatOf(configuration)))
+    case Done{apiKey}: withGrammar(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, agent, configuration, apiKey, grammarProperties(G, D, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{midConversation(compatOf(configuration))}), compatOf(configuration)))
 
 def preparedSettings(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, resolved: Result<&2, &2, PreparationError, ModelSettings>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match resolved:
@@ -547,7 +624,7 @@ def scaled(multiplier: Maybe<&2, F64>, usage: T.Usage) -> T.Usage:
 # one leaves the usage untouched, including its cost total.
 def applyServiceTierPricing(model: T.Model<T.JsonValue>, serviceTier: Maybe<&2, String>, usage: T.Usage) -> T.Usage:
   match model:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: scaled(getServiceTierCostMultiplier(id, serviceTier), usage)
+    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: scaled(getServiceTierCostMultiplier(id, serviceTier), usage)
 
 # Errors
 # ------
@@ -594,6 +671,7 @@ def describePreparation(cause: PreparationError) -> String:
   match cause:
     case UnsupportedApi{api}: "OpenAI Responses provider does not support API: " ++ Api.name(api)
     case MissingApiKey{provider}: "No API key for provider: " ++ provider
+    case MissingAccountId{}: "Failed to extract accountId from token"
     case GrammarFailure{why}: Sampling.errorMessage(why)
     case PayloadFailure{why}: describePayload(why)
 
@@ -755,7 +833,7 @@ type RunResult<-Reason: Data, -G: Data, -E: Data> is Data:
 
 def initialMessage(-G: Data, model: T.Model<T.JsonValue>, timestamp: F64) -> T.AssistantMessage<V.Value, G>:
   match model:
-    case T.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}:
+    case T.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}:
       +zero = F.fromU32(0)
       T.AssistantMessage{Nil{}, Api.name(api), provider, id, None{}, None{}, None{}, None{}, T.Usage{zero, zero, zero, zero, None{}, None{}, zero, T.UsageCost{zero, zero, zero, zero, zero}}, T.Pending{}, None{}, None{}, None{}, None{}, timestamp}
 
@@ -818,12 +896,13 @@ def complete(~Reason: Data, ~E: Data, ~render: E -> String, -G: Data, provider: 
 # -------------
 
 # Native runtime settings that upstream obtains from the host platform.
+# TLS authorizer callbacks in security are borrowed for the entire run.
 type Config is Data:
-  Config{url: URL.Context, defaults: Client.Defaults, files: Fetch.Files, transport: HTTP.Options, diagnosticLimit: Nat, synthesize: Bool}
+  Config{url: URL.Context, defaults: Client.Defaults, files: Fetch.Files, transport: HTTP.Options, security: HTTP.Security, diagnosticLimit: Nat, synthesize: Bool}
 
 def userAgent(config: Config) -> String:
   match config:
-    case Config{_, Client.Defaults{name, _, _, _}, _, _, _, _}: name
+    case Config{_, Client.Defaults{name, _, _, _}, _, _, _, _, _}: name
 
 # Transport
 # ---------
@@ -851,21 +930,21 @@ def nativePair(-Reason: Data, pair: Fetch.Runtime & Fetch.Fetch(Reason)) -> Tran
   match pair:
     case (runtime, fetch): Native{runtime, fetch}
 
-def nativeTransport(~Reason: Data, -E: Data, result: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(Result<&2, &1, Error<Reason, E>, Transport<Reason>>):
+def nativeTransport(~Reason: Data, -E: Data, security: HTTP.Security, result: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(Result<&2, &1, Error<Reason, E>, Transport<Reason>>):
   match result:
     case Fail{cause}: IO.pure(Result<&2, &1, Error<Reason, E>, Transport<Reason>>, Fail{InitializationFailure{cause}})
     case Done{runtime}:
       do IO<Result<&2, &1, Error<Reason, E>, Transport<Reason>>>:
-        pair : Fetch.Runtime & Fetch.Fetch(Reason) <- Fetch.callback(~Reason, runtime)
+        pair : Fetch.Runtime & Fetch.Fetch(Reason) <- Fetch.callbackWithSecurity(~Reason, runtime, security)
         return Done{nativePair(Reason, pair)}
 
 def openTransport(~Reason: Data, ~E: Data, config: Config, custom: Maybe<&2, Fetch.Fetch(Reason)>) -> IO(Result<&2, &1, Error<Reason, E>, Transport<Reason>>):
   match config custom:
     case _ Some{fetch}: IO.pure(Result<&2, &1, Error<Reason, E>, Transport<Reason>>, Done{Custom{fetch}})
-    case Config{_, _, files, transport, _, _} None{}:
+    case Config{_, _, files, transport, security, _, _} None{}:
       do IO<Result<&2, &1, Error<Reason, E>, Transport<Reason>>>:
         runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.create(files, transport)
-        nativeTransport(~Reason, E, runtime)
+        nativeTransport(~Reason, E, security, runtime)
 
 # Acquisition
 # -----------
@@ -909,7 +988,7 @@ def attempted(~Reason: Data, ~E: Data, environment: AttemptEnvironment<Reason>, 
 
 def acquire(~Reason: Data, ~E: Data, config: Config, fetch: Fetch.Fetch(Reason), request: Client.Request, parent: Signal(Reason), retry: Retry.ProviderRetryOptions<Reason>) -> IO(Acquired(Reason, E)):
   match config:
-    case Config{_, _, _, _, limit, _}:
+    case Config{_, _, _, _, _, limit, _}:
       do IO<Acquired(Reason, E)>:
         +date : C.Callback<String, F64> <- Retry.dateParser()
         seeded : Result<&2, &1, Seed.SeedError, Retry.Runtime<Reason>> <- Retry.new(~Reason, date)
@@ -1068,7 +1147,7 @@ def opened(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<T.JsonValue>, optio
 # body borrowed. The transport outlives the body.
 def process(~Reason: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, options: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), response: Response.Response<Client.State(Reason)>) -> IO(Outcome<Reason, G, E>):
   match config response:
-    case Config{_, _, _, _, _, synthesize} Response.Response{_, body}:
+    case Config{_, _, _, _, _, _, synthesize} Response.Response{_, body}:
       do IO<Outcome<Reason, G, E>>:
         pair : Sse.Body(Reason) & Sse.Cursor<Sse.TransportError(Reason)> <- Sse.fromBody(~Reason, body, hooks, synthesize)
         opened(~Reason, ~G, ~E, model, options, output, events, pair)
@@ -1126,12 +1205,13 @@ def requested(~Reason: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hoo
 
 def streamOptions(prepared: Prepared, tier: Maybe<&2, T.Nullable<ServiceTier>>) -> Stream.OpenAIResponsesStreamOptions:
   match prepared tier:
-    case Prepared{_, _, _, _, _, grammar, _} Some{T.PresentValue{selected}}: Stream.OpenAIResponsesStreamOptions{Some{tierName(selected)}, grammar}
-    case Prepared{_, _, _, _, _, grammar, _} _: Stream.OpenAIResponsesStreamOptions{None{}, grammar}
+    case Prepared{_, _, _, _, _, grammar, _, _, _, _} Some{T.PresentValue{selected}}: Stream.OpenAIResponsesStreamOptions{Some{tierName(selected)}, grammar}
+    case Prepared{_, _, _, _, _, grammar, _, _, _, _} _: Stream.OpenAIResponsesStreamOptions{None{}, grammar}
 
 def envelope(config: Config, prepared: Prepared, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, Client.RequestError, Client.Request>:
   match config prepared:
-    case Config{url, defaults, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
+    case Config{url, defaults, _, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _, ResponsesEndpoint{}, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
+    case Config{url, defaults, _, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _, CodexEndpoint{}, accountId, sessionId}: Client.prepareCodexRequest(url, defaults, apiKey, Maybe.default(&2, String, accountId, ""), headers, sessionId, baseUrl, timeout, payload)
 
 def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), +prepared: Prepared, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>, payload: Result<&2, &2, E, T.JsonValue>) -> IO(Outcome<Reason, G, E>):
   match options retry payload:
@@ -1149,10 +1229,10 @@ def retryOptions(-Reason: Data, -Telemetry: Data, -E: Data, +parent: Signal(Reas
 def preparedRequest(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), result: Result<&2, &2, PreparationError, Prepared>) -> IO(Outcome<Reason, G, E>):
   match options result:
     case _ Fail{cause}: IO.pure(Outcome<Reason, G, E>, Outcome{output, Some{PreparationFailure{cause}}, None{}})
-    case OpenAIResponsesOptions{_, _, _, _, _, hook, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} Done{Prepared{apiKey, baseUrl, headers, +payload, compat, grammar, retention}}:
+    case OpenAIResponsesOptions{_, _, _, _, _, hook, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} Done{Prepared{apiKey, baseUrl, headers, +payload, compat, grammar, retention, endpoint, accountId, sessionId}}:
       do IO<Outcome<Reason, G, E>>:
         chosen : Result<&2, &2, E, T.JsonValue> <- payloadHook(E, payload, model, hook)
-        selectedPayload(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, output, events, parent, Prepared{apiKey, baseUrl, headers, payload, compat, grammar, retention}, retryOptions(Reason, Telemetry, E, parent, options), chosen)
+        selectedPayload(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, output, events, parent, Prepared{apiKey, baseUrl, headers, payload, compat, grammar, retention, endpoint, accountId, sessionId}, retryOptions(Reason, Telemetry, E, parent, options), chosen)
 
 def settled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +events: Events.AssistantMessageEventStream(V.Value, G), provider: String, owner: SignalOwner<Reason>, finalizer: IO(Unit), aborted: Bool, outcome: Outcome<Reason, G, E>) -> IO(RunResult<Reason, G, E>):
   match outcome:
@@ -1165,10 +1245,6 @@ def settled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +events: Ev
         finalizer
         return RunResult{terminal, cleanup}
 
-def modelProvider(model: T.Model<T.JsonValue>) -> String:
-  match model:
-    case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
-
 def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, +events: Events.AssistantMessageEventStream(V.Value, G), timestamp: F64, finalizer: IO(Unit), pair: SignalOwner<Reason> & Signal(Reason)) -> IO(RunResult<Reason, G, E>):
   match pair:
     case (owner, +parent):
@@ -1176,7 +1252,7 @@ def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~
         preparation : Result<&2, &2, PreparationError, Prepared> <- prepare(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, userAgent(config))
         outcome : Outcome<Reason, G, E> <- preparedRequest(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, initialMessage(G, model, timestamp), events, parent, preparation)
         aborted : Bool <- Abort.aborted(Reason, parent)
-        settled(~Reason, ~G, ~E, ~render, events, modelProvider(model), owner, finalizer, aborted, outcome)
+        settled(~Reason, ~G, ~E, ~render, events, T.modelProvider(model), owner, finalizer, aborted, outcome)
 
 # The body of upstream `stream`'s async task: try everything, then settle the
 # message, publish `done`/`error` and end the canonical stream.
@@ -1204,8 +1280,6 @@ def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~rende
     timestamp : F64 <- Date.now()
     +hooks : Sse.Hooks<Sse.TransportError(Reason)> <- Sse.defaultHooks(~(Sse.TransportError(Reason)))
     streamAt(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, timestamp, Sse.disposeHooks(Sse.TransportError(Reason), hooks))
-
-def encodeArguments(value: R.Record<V.Value>) -> T.JsonValue: Convert.toJson(V.ObjectValue{value})
 
 def choiceValue(value: Maybe<&2, T.ToolChoice>) -> Maybe<&2, T.JsonValue>:
   match value:
@@ -1236,4 +1310,4 @@ def simpleApiKey(-Reason: Data, -Telemetry: Data, -E: Data, options: Maybe<&2, S
 # streamSimple: base options with the model's defaults and context budget,
 # tool choice, and the reasoning level clamped to the model's support.
 def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, +model: T.Model<T.JsonValue>, +context: Context(G, D), +options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Run<Reason, G, E>):
-  stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~R.Record<V.Value>, ~G, ~D, ~T.JsonValue, ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~encodeArguments, model, context, options, simpleApiKey(Reason, Telemetry, E, options)), simpleSettings(Reason, Telemetry, E, model, options)))
+  stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~Convert.toJson, model, context, options, simpleApiKey(Reason, Telemetry, E, options)), simpleSettings(Reason, Telemetry, E, model, options)))

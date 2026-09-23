@@ -74,7 +74,8 @@ def alphabet(+value: U32) -> Char:
 def octets(bytes: List<&2,U32>) -> Bool:
   match bytes:
     case Nil{}: True{}
-    case byte <> rest: U32.is_le(byte,255) && octets(rest)
+    case byte <> rest:
+      Bool.pick(Unit -> Bool,U32.is_le(byte,255),unit => octets(rest),unit => False{})(Unit{})
 
 def encoded(bytes: List<&2,U32>, reversed: String) -> String:
   match bytes:

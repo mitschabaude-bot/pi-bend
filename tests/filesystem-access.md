@@ -1,0 +1,11 @@
+# Filesystem access and OS error names
+
+`patches/bend-filesystem-access.patch` adds two OS primitives to the existing filesystem patches. `File.access(path, mode)` performs POSIX access checking without opening or modifying the file; modes 0–7 combine existence/execute/write/read checks. It returns the existing numeric errno and OS message shape. NUL paths return EILSEQ, and invalid modes return EINVAL. Paths remain raw byte strings until the syscall; no normalization occurs in the effect.
+
+`System.error_name(code)` returns an optional symbolic errno name. Native glibc 2.32+ uses `strerrorname_np`; other native libc versions return None. Hosted Bun uses Node's `util.getSystemErrorName`, returning None for unknown, zero, or out-of-range codes. This support boundary is explicit: callers retain numeric errors when a symbolic name is unavailable. It does not hardcode Linux errno numbers into tool logic.
+
+Apply after the existing filesystem patches with `patch -p2 < patches/bend-filesystem-access.patch` from the compiler's bend2 directory. Build `tests/filesystem-access.bend` with that candidate compiler using `scripts/build-pure.sh` and `-o build/filesystem-access.js`; run `python3 tests/filesystem_access_check.py`.
+
+The isolated candidate passes Bun, native one thread, and native four threads. Each backend checks all eight access modes over five permission configurations, regular files, symlink aliases, directories, missing files, dangling links, non-directory parents, and empty paths. It also verifies NUL/invalid-mode errors, ENOENT/EACCES/EISDIR names, unknown names, and unchanged file bytes. The tests use temporary files only. SHA-256 generated C is byte-identical between the otherwise identical installed baseline and candidate, so unrelated code has no execution or generated-code cost. No compiler core changes or global installation were made.
+
+After review, the declarations and four effect files were installed in the ordinary, native and cap-hot toolchains. The installed ordinary JS and native C paths were rebuilt and this entire fixture passed again on all three backends. Compiler core hashes remained unchanged; installation backups and hashes are documented in `patches/README.md`.

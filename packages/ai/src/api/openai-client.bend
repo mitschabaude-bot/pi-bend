@@ -325,6 +325,59 @@ def addressed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders
 def prepareRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
   addressed(configuration, apiKey, client, timeout, payload, responsesURL(context, baseUrl))
 
+# Codex requests
+# --------------
+
+# The Codex backend is not an SDK resource. Its path is `<base>/codex/responses`
+# (a base already naming `/codex` or `/codex/responses` is kept, trailing
+# slashes are dropped, an empty base means chatgpt.com/backend-api) and its
+# headers are fixed: no retry counter, no timeout field, SSE accept.
+def stripLeadingSlashes(text: String) -> String:
+  match text:
+    case SCon{'/', rest}: stripLeadingSlashes(rest)
+    case other: other
+
+def codexSuffix(+base: String) -> String:
+  Bool.pick(String, String.ends_with(base, "/codex/responses"), base, Bool.pick(String, String.ends_with(base, "/codex"), base ++ "/responses", base ++ "/codex/responses"))
+
+def codexBase(+base: String) -> String:
+  Bool.pick(String, String.is_empty(String.trim(base)), "https://chatgpt.com/backend-api", base)
+
+def codexAddress(base: String) -> String:
+  codexSuffix(String.reverse(stripLeadingSlashes(String.reverse(codexBase(base)))))
+
+def codexURL(context: Absolute.Context, base: String) -> Result<&2, &2, URLError, URL.URL>:
+  parsedURL(Absolute.parse(context, codexAddress(base)))
+
+def sessionHeaders(fields: T.ProviderHeaders(), sessionId: Maybe<&2, String>) -> T.ProviderHeaders():
+  match sessionId:
+    case None{}: fields
+    case Some{+id}: R.set(T.Nullable<String>, R.set(T.Nullable<String>, fields, "session-id", T.PresentValue{id}), "x-client-request-id", T.PresentValue{id})
+
+def codexHeaders(configuration: Defaults, token: String, accountId: String, sessionId: Maybe<&2, String>) -> T.ProviderHeaders():
+  match configuration:
+    case Defaults{userAgent, _, _, _}:
+      sessionHeaders(R.Record{R.Property{"Authorization", T.PresentValue{"Bearer " ++ token}} <> R.Property{"chatgpt-account-id", T.PresentValue{accountId}} <> R.Property{"originator", T.PresentValue{"pi"}} <> R.Property{"User-Agent", T.PresentValue{userAgent}} <> R.Property{"OpenAI-Beta", T.PresentValue{"responses=experimental"}} <> R.Property{"accept", T.PresentValue{"text/event-stream"}} <> R.Property{"content-type", T.PresentValue{"application/json"}} <> Nil{}}, sessionId)
+
+# Model/options headers first, then the fixed Codex headers override them.
+def serializedCodex(fixed: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, timeout: F64, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
+  match body:
+    case Fail{cause}: Fail{cause}
+    case Done{text}: completed(url, text, timeout, assembled(build(Some{client} <> Some{fixed} <> Nil{})))
+
+def timedCodex(fixed: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, payload: T.JsonValue, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, RequestError, Request>:
+  match timeout:
+    case Fail{cause}: Fail{HeaderRejected{cause}}
+    case Done{value}: serializedCodex(fixed, client, url, value, serialize(payload))
+
+def addressedCodex(fixed: T.ProviderHeaders(), client: T.ProviderHeaders(), timeout: Maybe<&2, F64>, payload: T.JsonValue, url: Result<&2, &2, URLError, URL.URL>) -> Result<&2, &2, RequestError, Request>:
+  match url:
+    case Fail{cause}: Fail{URLFailure{cause}}
+    case Done{value}: timedCodex(fixed, client, value, payload, validateTimeout(effectiveTimeout(timeout)))
+
+def prepareCodexRequest(context: Absolute.Context, configuration: Defaults, token: String, accountId: String, client: T.ProviderHeaders(), sessionId: Maybe<&2, String>, baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
+  addressedCodex(codexHeaders(configuration, token, accountId, sessionId), client, timeout, payload, codexURL(context, baseUrl))
+
 # Status boundary
 # ---------------
 
@@ -518,7 +571,7 @@ def Outcome(-Reason: Data) -> Type: Result<&2, &1, Retry.RequestFailure<AttemptE
 
 def input(-Reason: Data, request: Request, signal: Fetch.Signal(Reason)) -> Fetch.Input<Reason>:
   match request:
-    case Request{url, method, headers, body, _}: Fetch.Input{url, String.to_upper(method), headers, body, signal}
+    case Request{url, method, headers, body, _}: Fetch.Input{url, String.to_upper(method), headers, H.Text{body}, signal}
 
 def timeout(request: Request) -> Result<&2, &2, Duration.MillisecondsError, U32>:
   match request:

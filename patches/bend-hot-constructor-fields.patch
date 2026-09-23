@@ -1,0 +1,12 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -2286,6 +2286,9 @@
+ 
+ function emit_ctr(fl: File, x: Of<"Ctr">, ty: HTerm | null): Val {
+   const [adt, u] = ctr_adt(fl, x, ty);
++  // A hot generic constructor seals its concrete fields, even when the
++  // constructed value is immediately boxed without a typed binding.
++  if (fl.hot.has(x.k)) facts_hot(fl, adt, true);
+   if (u !== null) {
+     return val_new([`${u}ull`], W32, true);
+   }

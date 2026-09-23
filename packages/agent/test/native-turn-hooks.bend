@@ -15,7 +15,7 @@ import ../../runtime/src/fetch.bend as Fetch
 
 def Config() -> Data: ConfigTest.Config()
 def QueueResult() -> Data: Result<&2, &2, String, H.Messages()>
-def StopResult() -> Data: Result<&2, &2, String, Bool>
+def StopResult() -> Data: Result<&2, &2, String, Maybe<&2, T.AgentTurnDecision>>
 def PrepareResult() -> Data: Result<&2, &2, String, Maybe<&2, H.Update()>>
 def StateResult() -> Data: Result<&2, &2, String, ConfigTest.State()>
 def Log() -> Data: R.Ref<List<&2, String>>
@@ -28,14 +28,14 @@ def queue(logValue: Log(), input: Unit) -> IO(QueueResult()):
     log(logValue, "queue")
     return Done{T.CustomMessage{"queued"} <> Nil{}}
 
-def stop(logValue: Log(), input: H.Turn()) -> IO(StopResult()):
+def stop(logValue: Log(), input: T.ToolHookInput<H.Turn()>) -> IO(StopResult()):
   do IO<StopResult()>:
-    log(logValue, "stop")
-    return Done{True{}}
+    log(logValue, "finish")
+    return Done{Some{T.EndTurn{}}}
 
 def prepare(logValue: Log(), input: H.Turn()) -> IO(PrepareResult()):
   match input:
-    case T.ShouldStopAfterTurnContext{_, _, context, _}:
+    case T.AgentTurnContext{_, _, context, _}:
       do IO<PrepareResult()>:
         log(logValue, "prepare")
         return Done{Some{T.AgentLoopTurnUpdate{Some{context}, Some{T.CustomMessage{"updated guidance"} <> Nil{}}, None{}, Some{Ai.Off{}}}}}
@@ -52,8 +52,9 @@ def checkQueue(result: QueueResult(), expected: String) -> IO(Unit):
 
 def checkStop(result: StopResult(), expected: Bool) -> IO(Unit):
   match result:
-    case Done{value}: Test.assertion(Bool.not(Bool.xor(value, expected)), "stop decision changed")
-    case Fail{_}: Test.assertion(False{}, "unexpected stop error")
+    case Done{Some{T.EndTurn{}}}: Test.assertion(expected, "finishTurn decision changed")
+    case Done{None{}}: Test.assertion(Bool.not(expected), "finishTurn decision changed")
+    case _: Test.assertion(False{}, "unexpected finishTurn result")
 
 def checkPrepared(result: StateResult()) -> IO(Unit):
   match result:
@@ -65,10 +66,10 @@ def main() -> IO(Unit):
   do IO<Unit>:
     +logValue : Log() <- R.new(List<&2, String>, Nil{})
     +queued : C.Callback<Unit, QueueResult()> <- C.create(~Log(), ~Unit, ~QueueResult(), ~queue, logValue)
-    +stopped : C.Callback<H.Turn(), StopResult()> <- C.create(~Log(), ~H.Turn(), ~StopResult(), ~stop, logValue)
+    +stopped : C.Callback<T.ToolHookInput<H.Turn()>, StopResult()> <- C.create(~Log(), ~T.ToolHookInput<H.Turn()>, ~StopResult(), ~stop, logValue)
     +prepared : C.Callback<H.Turn(), PrepareResult()> <- C.create(~Log(), ~H.Turn(), ~PrepareResult(), ~prepare, logValue)
     +converter : ConfigTest.Converter() <- C.create(~Unit, ~H.Messages(), ~ConfigTest.Output(), ~ConfigTest.forbidden, Unit{})
-    +config : Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, Some{stopped}, Some{prepared}, Some{queued}, Some{queued}, None{}, None{}, None{}}
+    +config : Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, Some{stopped}, None{}, Some{prepared}, Some{queued}, Some{queued}, None{}, None{}, None{}}
     steering : QueueResult() <- Loop.pollSteeringMessages(Unit, String, String, String, Unit, config)
     checkQueue(steering, "queued")
     pending : QueueResult() <- Loop.repollSteeringMessages(Unit, String, String, String, Unit, config, T.CustomMessage{"already pending"} <> Nil{})
@@ -77,24 +78,24 @@ def main() -> IO(Unit):
     checkQueue(followup, "queued")
     +zero : F64 = F.fromU32(0)
     +context : H.Context() = T.AgentContext{Nil{}, None{}}
-    +completed : H.Turn() = T.ShouldStopAfterTurnContext{Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}), Nil{}, context, Nil{}}
-    decision : StopResult() <- Loop.shouldStopAfterTurn(Unit, String, String, String, Unit, config, completed)
+    +completed : H.Turn() = T.AgentTurnContext{Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.Stop{}), Nil{}, context, Nil{}}
+    decision : StopResult() <- Loop.finishTurn(Unit, String, String, String, Unit, config, completed, None{})
     checkStop(decision, True{})
     updated : StateResult() <- Loop.prepareNextTurn(Unit, String, String, String, Unit, context, config, completed)
     checkPrepared(updated)
     missing : QueueResult() <- Loop.readQueuedMessages(Unit, String, String, String, None{})
     checkQueue(missing, "")
-    disabled : StopResult() <- Loop.invokeShouldStopAfterTurn(Unit, String, String, String, completed, None{})
+    disabled : StopResult() <- Loop.invokeFinishTurn(Unit, String, String, String, completed, None{}, None{})
     checkStop(disabled, False{})
     +failed : C.Callback<Unit, QueueResult()> <- C.create(~Unit, ~Unit, ~QueueResult(), ~queueFailure, Unit{})
     failure : QueueResult() <- Loop.readQueuedMessages(Unit, String, String, String, Some{failed})
     checkQueue(failure, "queue failed")
     trace : List<&2, String> <- R.read(List<&2, String>, logValue)
-    Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), "queue|queue|stop|prepare"), "hook order or pending-queue short-circuit changed")
+    Test.assertion(String.eq(String.join(List.reverse(&2, String, trace), "|"), "queue|queue|finish|prepare"), "hook order or pending-queue short-circuit changed")
     C.dispose(Unit, QueueResult(), queued)
     C.dispose(Unit, QueueResult(), failed)
-    C.dispose(H.Turn(), StopResult(), stopped)
+    C.dispose(T.ToolHookInput<H.Turn()>, StopResult(), stopped)
     C.dispose(H.Turn(), PrepareResult(), prepared)
     C.dispose(H.Messages(), ConfigTest.Output(), converter)
     discarded : List<&2, String> <- R.dispose(List<&2, String>, logValue)
-    IO.print("PASS native queue polling, stop hooks, explicit next-turn updates and failures")
+    IO.print("PASS native queue polling, finishTurn, explicit next-turn updates and failures")

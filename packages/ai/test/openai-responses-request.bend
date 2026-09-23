@@ -12,7 +12,7 @@ import ./openai-responses-policy-runner.bend as P
 
 def model(compat: Maybe<&2, T.OpenAIResponsesCompat>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{"target", "Target", T.OpenAIResponsesApi{}, "openai", "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
+  T.Model{"target", "Target", T.OpenAIResponsesApi{}, "openai", "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
 
 def schema() -> V.Value:
   V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"input", V.ObjectValue{R.Record{R.Property{"type", V.Text{"string"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"input"} <> Nil{}}} <> Nil{}}}
@@ -20,16 +20,24 @@ def schema() -> V.Value:
 def tool(name: String, grammar: Bool) -> T.Tool<V.Value>:
   T.Tool{name, "A tool", schema(), Bool.pick(Maybe<&2, T.ToolConstrainedSampling>, grammar, Some{T.SamplingConfigured{T.GrammarSampling{T.GrammarVariants{Some{"start: /[a-z]+/"}, None{}}}}}, None{})}
 
-def Messages() -> Data: List<&2, T.Message<V.Value, R.Record<V.Value>, Unit, Unit>>
+def Messages() -> Data: List<&2, T.Message<V.Value, V.Value, Unit, Unit>>
+
+def toolRoundTrip() -> Messages():
+  +zero = F.fromU32(0)
+  arguments = {V.ObjectValue{R.Record{R.Property{"input", V.Text{"hello"}} <> Nil{}}} : V.Value}
+  call = {T.AssistantToolCall{T.ToolCall{"call_fixture", "tool", arguments, None{}, None{}}} : T.AssistantContent<V.Value>}
+  usage = {T.Usage{zero, zero, zero, zero, None{}, None{}, zero, T.UsageCost{zero, zero, zero, zero, zero}} : T.Usage}
+  T.Assistant{T.AssistantMessage{call <> Nil{}, "openai-responses", "openai", "target", None{}, None{}, None{}, None{}, usage, T.ToolUse{}, None{}, None{}, None{}, None{}, F.fromU32(2)}} <> T.ToolResult{T.ToolResultMessage{"call_fixture", "tool", T.TextImageText{T.TextContent{"done", None{}}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}
 
 def later(mode: U32) -> Messages():
   match mode:
     case 2: T.System{T.SystemMessage{T.SystemText{"updated"}, None{}, Some{tool("later", False{}) <> Nil{}}, None{}, F.fromU32(2)}} <> T.User{T.UserMessage{T.UserText{"again"}, F.fromU32(3)}} <> Nil{}
     case 3: T.System{T.SystemMessage{T.SystemText{"updated"}, None{}, None{}, Some{T.ToolReference{"tool"} <> Nil{}}, F.fromU32(2)}} <> Nil{}
     case 4: T.System{T.SystemMessage{T.SystemText{"updated"}, None{}, Some{T.Tool{"tool", "Redefined", schema(), None{}} <> Nil{}}, None{}, F.fromU32(2)}} <> Nil{}
+    case 6: toolRoundTrip()
     case _: Nil{}
 
-def context(+mode: U32) -> T.TranscriptContext<V.Value, R.Record<V.Value>, Unit, Unit>:
+def context(+mode: U32) -> T.TranscriptContext<V.Value, V.Value, Unit, Unit>:
   tools = Bool.pick(Maybe<&2, List<&2, T.Tool<V.Value>>>, U32.is_eq(mode, 0), None{}, Some{tool("tool", U32.is_eq(mode, 5)) <> Nil{}})
   T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"initial"}, None{}, tools, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"hello"}, F.fromU32(1)}} <> later(mode)}
 
@@ -51,7 +59,7 @@ def check(actual: V.Value, expected: Result<&2, &2, Parse.ParseError, V.Value>) 
 
 def run(mode: String, +flags: String, expected: String) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2, &2, Request.BuildError, T.JsonValue> <- Request.buildParams(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, model(P.compat(String.split(flags, '.'))), context(H.decimal(mode, 0)), settings(), Request.getCompat("openai", "https://example.test", P.compat(String.split(flags, '.'))), R.new(String), T.CacheLong{})
+    result : Result<&2, &2, Request.BuildError, T.JsonValue> <- Request.buildParams(~Unit, ~Unit, ~Unit, ~Unit, ~Unit, model(P.compat(String.split(flags, '.'))), context(H.decimal(mode, 0)), settings(), Request.getCompat("openai", "https://example.test", P.compat(String.split(flags, '.'))), R.new(String), T.CacheLong{}, Request.ResponsesEndpoint{})
     check(output(result), Parse.parse(H.fromScalars(H.parseNumbers(expected))))
 
 def all(arguments: List<String>) -> IO(Unit):

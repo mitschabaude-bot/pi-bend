@@ -1,6 +1,7 @@
 import Base
 import ../packages/runtime/src/ecdsa.bend as P
 import ../packages/runtime/src/big-nat.bend as Big
+import ../packages/runtime/src/prime-field.bend as Field
 import ../packages/runtime/src/string.bend as Split
 import ./aes128-gcm.bend as Bytes
 import ../packages/runtime/src/der.bend as DER
@@ -15,7 +16,7 @@ def error(cause: P.Error) -> String:
 
 def show(+selected: P.Curve,point: P.Point) -> String:
   match point:
-    case P.Point{x,y}: Bytes.show(4 <> DER.append(Big.toBigEndian(P.width(selected),x),Big.toBigEndian(P.width(selected),y)))
+    case P.Point{x,y}: Bytes.show(4 <> DER.append(Big.toBigEndian(P.width(selected),Field.toBig(x)),Big.toBigEndian(P.width(selected),Field.toBig(y))))
 
 def key(+selected: P.Curve,result: Result<&2,&2,P.Error,P.Point>) -> String:
   match result:
@@ -32,6 +33,11 @@ def multiplied(+selected: P.Curve,scalar: List<&2,U32>, result: Result<&2,&2,P.E
     case Fail{cause}: error(cause)
     case Done{value}: point(selected,P.normalize(selected,P.multiply(selected,scalar,value,P.infinity())))
 
+def jointlyMultiplied(+selected: P.Curve, a: List<&2,U32>, b: List<&2,U32>, result: Result<&2,&2,P.Error,P.Point>) -> String:
+  match result:
+    case Fail{cause}: error(cause)
+    case Done{value}: point(selected,P.normalize(selected,P.joint(selected,a,b,value)))
+
 def verified(result: Result<&2,&2,P.Error,Unit>) -> String:
   match result:
     case Fail{cause}: error(cause)
@@ -39,7 +45,7 @@ def verified(result: Result<&2,&2,P.Error,Unit>) -> String:
 
 def added(+selected: P.Curve,left: P.Point, right: P.Point) -> Maybe<&2,P.Point>:
   match left:
-    case P.Point{x,y}: P.normalize(selected,P.addPoint(selected,P.Jacobian{x,y,Big.one()},right))
+    case P.Point{x,y}: P.normalize(selected,P.addPoint(selected,P.Jacobian{x,y,Field.one()},right))
 
 def addition(+selected: P.Curve,result: Result<&2,&2,P.Error,Maybe<&2,P.Point>>) -> String:
   match result:
@@ -53,11 +59,13 @@ def hashAlgorithm(selected: P.Curve) -> P.HashAlgorithm:
 
 def run(+selected: P.Curve,parts: List<&2,String>) -> String:
   match parts:
+    case "w" <> bytes <> Nil{}: Bytes.show(P.windowDigits(Bytes.bytes(bytes)))
     case "a" <> left <> right <> Nil{}:
       addition(selected,Result.bind(&2,&2,P.Error,P.Point,Maybe<&2,P.Point>,P.publicKey(selected,Bytes.bytes(left)), l =>
         Result.bind(&2,&2,P.Error,P.Point,Maybe<&2,P.Point>,P.publicKey(selected,Bytes.bytes(right)), r => Done{added(selected,l,r)})))
     case "k" <> bytes <> Nil{}: key(selected,P.publicKey(selected,Bytes.bytes(bytes)))
     case "m" <> bytes <> scalar <> Nil{}: multiplied(selected,Bytes.bytes(scalar),P.publicKey(selected,Bytes.bytes(bytes)))
+    case "j" <> bytes <> a <> b <> Nil{}: jointlyMultiplied(selected,Bytes.bytes(a),Bytes.bytes(b),P.publicKey(selected,Bytes.bytes(bytes)))
     case "v" <> bytes <> message <> signature <> Nil{}:
       verified(Result.bind(&2,&2,P.Error,P.Point,Unit,P.publicKey(selected,Bytes.bytes(bytes)), public => P.verify(selected,hashAlgorithm(selected),public,Bytes.bytes(message),Bytes.bytes(signature))))
     case _: "invalid"

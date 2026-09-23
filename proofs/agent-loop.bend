@@ -72,9 +72,17 @@ def Laws.a_batch_terminates_only_when_every_call_opted_in(State, Message, Error,
     case True{}: {==}
     case False{}: {==}
 
-def Laws.queued_messages_continue_the_run_without_ending_it(DiagnosticDetails, Details, Custom, Error, completed, sink, head, tail): {==}
+def Laws.queued_messages_continue_the_run_without_ending_it(DiagnosticDetails, Details, Custom, Error, completed, sink, explicit, head, tail):
+  match explicit:
+    case True{}: {==}
+    case False{}: {==}
 
-def Laws.a_failed_queue_read_fails_the_turn(DiagnosticDetails, Details, Custom, Error, completed, sink, error): {==}
+def Laws.a_failed_queue_read_fails_the_turn(DiagnosticDetails, Details, Custom, Error, completed, sink, explicit, error):
+  match explicit:
+    case True{}: {==}
+    case False{}: {==}
+
+def Laws.an_explicit_continuation_without_queued_messages_continues_on_the_current_context(DiagnosticDetails, Details, Custom, Error, completed, sink): {==}
 
 def Laws.only_length_stops_are_truncated(DiagnosticDetails, content, api, provider, model, responseModel, responseId, level, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp):
   match reason:

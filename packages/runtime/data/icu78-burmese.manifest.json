@@ -1,0 +1,15 @@
+{
+  "source": "https://raw.githubusercontent.com/unicode-org/icu/release-78.3/icu4c/source/data/brkitr/dictionaries/burmesedict.txt",
+  "source_sha256": "61d8abc3d9102b2f9bf0c9f44db0d7ab89b18172d8cd26832e4c83174bd8673b",
+  "icu": "78.3",
+  "unicode": "17.0",
+  "entries": 41120,
+  "nodes": 50284,
+  "bytes": 542711,
+  "sha256": "7f1783e6264de496bcc84b86a487644ef5a66f35410fa084e1de470b2c565d29",
+  "max_word_length": 33,
+  "max_prefix_candidates": 8,
+  "format": "ICUMYM01: magic8,nodeCount:u32le,wordCount:u32le; CJK radix record format with cost0 terminal,255 nonterminal; edge labels capped20",
+  "license": "icu78-burmese.LICENSE",
+  "unicode_sha256": "2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e"
+}

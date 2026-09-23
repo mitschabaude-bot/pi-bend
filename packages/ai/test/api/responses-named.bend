@@ -11,7 +11,7 @@ import ./responses-messages.bend as Fixture
 # registration/loading is outside these message-conversion contracts.
 def model(api: T.ModelApi, provider: String, id: String) -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{id,"Fixture",api,provider,"https://example.invalid",True{},None{},T.InputText{} <> Nil{},T.ModelCost{zero,zero,zero,zero,None{}},F.fromU32(400000),F.fromU32(128000),None{},None{},None{}}
+  T.Model{id,"Fixture",api,provider,"https://example.invalid",True{},None{},T.InputText{} <> Nil{},None{},T.ModelCost{zero,zero,zero,zero,None{}},None{},F.fromU32(400000),F.fromU32(128000),None{},None{},None{}}
 
 def assistant(content: List<&2,T.AssistantContent<R.Record<V.Value>>>, api: String, provider: String, id: String, stop: T.StopReason) -> T.Message<V.Value,R.Record<V.Value>,Unit,Unit>:
   T.Assistant{Fixture.assistant(content,api,provider,id,stop)}

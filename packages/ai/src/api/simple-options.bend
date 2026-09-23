@@ -72,7 +72,7 @@ def estimatedTokens(value: Estimate.ContextUsageEstimate) -> F64:
 
 def contextWindow(-V: Data, model: T.Model<V>) -> F64:
   match model:
-    case T.Model{_, _, _, _, _, _, _, _, _, window, _, _, _, _}: window
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, window, _, _, _, _}: window
 
 def clampMaxTokensToContextWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~V: Data, ~encodeParameters: P -> T.JsonValue, ~encodeArguments: A -> T.JsonValue, model: T.Model<V>, context: T.TranscriptContext<P, A, G, D>, maxTokens: F64) -> F64:
   contextCeiling(contextWindow(V, model), estimatedTokens(Estimate.estimateContextTokensWith(~P, ~A, ~G, ~D, ~encodeParameters, ~encodeArguments, context)), maxTokens)
@@ -113,7 +113,7 @@ def projectedOptions(-V: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -E
 
 def baseModel(-V: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, model: T.Model<V>, estimated: F64, options: Maybe<&2, T.SimpleStreamOptions<V, Signal, Telemetry, Fetch, Error>>, apiKey: Maybe<&2, String>) -> T.StreamOptions<V, Signal, Telemetry, Fetch, Error>:
   match model:
-    case T.Model{_, _, _, _, _, _, _, _, _, window, modelMax, sampling, _, _}:
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, window, modelMax, sampling, _, _}:
       baseFields(V, Signal, Telemetry, Fetch, Error, window, estimated, modelMax, sampling, apiKey, projectedOptions(V, Signal, Telemetry, Fetch, Error, options))
 
 def buildBaseOptionsWith(~P: Data, ~A: Data, ~G: Data, ~D: Data, ~V: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, ~encodeParameters: P -> T.JsonValue, ~encodeArguments: A -> T.JsonValue, model: T.Model<V>, context: T.TranscriptContext<P, A, G, D>, options: Maybe<&2, T.SimpleStreamOptions<V, Signal, Telemetry, Fetch, Error>>, apiKey: Maybe<&2, String>) -> T.StreamOptions<V, Signal, Telemetry, Fetch, Error>:

@@ -1,0 +1,158 @@
+{
+  "samples": [
+    {
+      "threads": 1,
+      "process-primitive": 202.143531,
+      "process-baseline": 215.828686
+    },
+    {
+      "threads": 1,
+      "process-baseline": 190.47,
+      "process-primitive": 192.584973
+    },
+    {
+      "threads": 1,
+      "process-primitive": 191.082204,
+      "process-baseline": 193.947771
+    },
+    {
+      "threads": 1,
+      "process-baseline": 198.314898,
+      "process-primitive": 198.61663
+    },
+    {
+      "threads": 1,
+      "process-primitive": 202.172542,
+      "process-baseline": 205.005029
+    },
+    {
+      "threads": 1,
+      "process-baseline": 203.242809,
+      "process-primitive": 198.288048
+    },
+    {
+      "threads": 1,
+      "process-primitive": 198.336428,
+      "process-baseline": 200.878424
+    },
+    {
+      "threads": 1,
+      "process-baseline": 201.249356,
+      "process-primitive": 214.550328
+    },
+    {
+      "threads": 1,
+      "process-primitive": 207.256923,
+      "process-baseline": 191.180434
+    },
+    {
+      "threads": 1,
+      "process-baseline": 190.728751,
+      "process-primitive": 189.651325
+    },
+    {
+      "threads": 1,
+      "process-primitive": 191.973719,
+      "process-baseline": 198.54361
+    },
+    {
+      "threads": 1,
+      "process-baseline": 200.818913,
+      "process-primitive": 208.36751
+    },
+    {
+      "threads": 1,
+      "process-primitive": 197.0589,
+      "process-baseline": 207.855477
+    },
+    {
+      "threads": 1,
+      "process-baseline": 194.906127,
+      "process-primitive": 191.580997
+    },
+    {
+      "threads": 1,
+      "process-primitive": 191.660337,
+      "process-baseline": 192.396672
+    },
+    {
+      "threads": 4,
+      "process-primitive": 188.795509,
+      "process-baseline": 190.761662
+    },
+    {
+      "threads": 4,
+      "process-baseline": 190.981563,
+      "process-primitive": 191.332465
+    },
+    {
+      "threads": 4,
+      "process-primitive": 194.406224,
+      "process-baseline": 190.914443
+    },
+    {
+      "threads": 4,
+      "process-baseline": 195.766012,
+      "process-primitive": 191.158064
+    },
+    {
+      "threads": 4,
+      "process-primitive": 196.593017,
+      "process-baseline": 189.489763
+    },
+    {
+      "threads": 4,
+      "process-baseline": 190.821602,
+      "process-primitive": 192.372132
+    },
+    {
+      "threads": 4,
+      "process-primitive": 195.011647,
+      "process-baseline": 191.194185
+    },
+    {
+      "threads": 4,
+      "process-baseline": 194.149982,
+      "process-primitive": 196.569657
+    },
+    {
+      "threads": 4,
+      "process-primitive": 196.886719,
+      "process-baseline": 199.392525
+    },
+    {
+      "threads": 4,
+      "process-baseline": 193.329917,
+      "process-primitive": 199.493675
+    },
+    {
+      "threads": 4,
+      "process-primitive": 193.508228,
+      "process-baseline": 202.675605
+    },
+    {
+      "threads": 4,
+      "process-baseline": 201.574188,
+      "process-primitive": 197.587273
+    },
+    {
+      "threads": 4,
+      "process-primitive": 192.961225,
+      "process-baseline": 190.183048
+    },
+    {
+      "threads": 4,
+      "process-baseline": 200.19315,
+      "process-primitive": 190.715191
+    },
+    {
+      "threads": 4,
+      "process-primitive": 192.438022,
+      "process-baseline": 189.762905
+    }
+  ],
+  "hashes": {
+    "process-baseline": "ed31dcc774e2ccf632166e745165780f76090afcd98850e2654f543c66a57cc2",
+    "process-primitive": "fe6703155d2ca9717454a0c9e7d7f31e9da0043b244325ba5fe5da5b5db0c9fb"
+  }
+}

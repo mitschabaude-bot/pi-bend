@@ -13,7 +13,7 @@ import ./json-value-data.bend as Data
 
 def prepareModel(provider: String, compat: Maybe<&2, T.OpenAIResponsesCompat>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{"target", "Target", T.OpenAIResponsesApi{}, provider, "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, Some{R.Record{R.Property{"User-Agent", "model-agent"} <> R.Property{"authorization", "model-only"} <> Nil{}}}, compat}
+  T.Model{"target", "Target", T.OpenAIResponsesApi{}, provider, "https://example.test", True{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, Some{R.Record{R.Property{"User-Agent", "model-agent"} <> R.Property{"authorization", "model-only"} <> Nil{}}}, compat}
 
 def callerHeaders(scenario: U32) -> Maybe<&2, T.ProviderHeaders()>:
   match scenario:
@@ -83,6 +83,7 @@ def stringsValue(values: R.Record<String>) -> V.Value:
 def preparationError(cause: Prepare.PreparationError) -> String:
   match cause:
     case Prepare.MissingApiKey{provider}: "No API key for provider: " ++ provider
+    case Prepare.MissingAccountId{}: "Failed to extract accountId from token"
     case Prepare.GrammarFailure{error}: Sampling.errorMessage(error)
     case Prepare.PayloadFailure{_}: "payload conversion failed"
     case Prepare.UnsupportedApi{_}: "unsupported API"
@@ -90,7 +91,7 @@ def preparationError(cause: Prepare.PreparationError) -> String:
 def preparationValue(result: Result<&2, &2, Prepare.PreparationError, Prepare.Prepared>) -> V.Value:
   match result:
     case Fail{cause}: V.ObjectValue{R.Record{R.Property{"error", V.Text{preparationError(cause)}} <> Nil{}}}
-    case Done{Prepare.Prepared{apiKey, baseUrl, headers, payload, compat, declarations, retention}}:
+    case Done{Prepare.Prepared{apiKey, baseUrl, headers, payload, compat, declarations, retention, _, _, _}}:
       V.ObjectValue{R.Record{R.Property{"apiKey", V.Text{apiKey}} <> R.Property{"baseUrl", V.Text{baseUrl}} <> R.Property{"headers", headersValue(headers)} <> R.Property{"payload", Data.project(payload)} <> R.Property{"compat", V.Text{P.showCompat(compat)}} <> R.Property{"grammar", stringsValue(declarations)} <> R.Property{"retention", V.Text{P.showRetention(retention)}} <> Nil{}}}
 
 def prepareCase(mode: String, flags: String, scenario: String, provider: String, expected: String) -> IO(Unit):

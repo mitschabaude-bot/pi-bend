@@ -22,7 +22,7 @@ for(const mode of [0,1,2]){
  const trace=[];let agent,calls=0;
  const live=signal=>{assert.ok(signal);assert.equal(signal.aborted,false);};
  const handlers=name=>({
-  shouldStopAfterTurn:async(context,signal)=>{live(signal);trace.push('s'+name);return name==='b';},
+  finishTurn:async(context,signal)=>{live(signal);trace.push('s'+name);return name==='b'?{action:'end'}:undefined;},
   prepareNextTurn:async signal=>{live(signal);trace.push('l'+name);},
   prepareNextTurnWithContext:async(context,signal)=>{live(signal);assert.equal(context.toolResults.length,1);assert.equal(context.context.messages.at(-1).role,'toolResult');trace.push('c'+name);agent.prepareNextTurnWithContext=undefined;}
  });
@@ -33,18 +33,18 @@ for(const mode of [0,1,2]){
   if(index===0){
    if(mode===0)Object.assign(agent,second);
    if(mode===1)agent.prepareNextTurn=second.prepareNextTurn;
-   if(mode===2)Object.assign(agent,{shouldStopAfterTurn:undefined,prepareNextTurn:undefined,prepareNextTurnWithContext:undefined});
+   if(mode===2)Object.assign(agent,{finishTurn:undefined,prepareNextTurn:undefined,prepareNextTurnWithContext:undefined});
   }
   const tool=[0,1,3,4].includes(index);
   const message=tool?{...assistant(),content:[{type:'toolCall',id:'call',name:'echo',arguments:{}}],stopReason:'toolUse'}:assistant();
   return {result:async()=>message,async *[Symbol.asyncIterator](){yield {type:'done',reason:message.stopReason,message};}};
  };
  agent=new Agent({streamFn,initialState:{tools:[{name:'echo',label:'Echo',description:'Echo',parameters:{type:'object'},execute:async()=>({content:[],details:null})}]}});
- assert.equal(agent.shouldStopAfterTurn,undefined);assert.equal(agent.prepareNextTurn,undefined);assert.equal(agent.prepareNextTurnWithContext,undefined);
- if(mode!==1)Object.assign(agent,{shouldStopAfterTurn:first.shouldStopAfterTurn,prepareNextTurn:first.prepareNextTurn});
+ assert.equal(agent.finishTurn,undefined);assert.equal(agent.prepareNextTurn,undefined);assert.equal(agent.prepareNextTurnWithContext,undefined);
+ if(mode!==1)Object.assign(agent,{finishTurn:first.finishTurn,prepareNextTurn:first.prepareNextTurn});
  await agent.prompt('first');
  assert.equal(agent.prepareNextTurnWithContext,undefined);
- assert.equal(agent.shouldStopAfterTurn,mode===0?second.shouldStopAfterTurn:undefined);
+ assert.equal(agent.finishTurn,mode===0?second.finishTurn:undefined);
  assert.equal(agent.prepareNextTurn,mode===2?undefined:second.prepareNextTurn);
  await agent.prompt('next');
  assert.equal(calls,mode===0?4:6);

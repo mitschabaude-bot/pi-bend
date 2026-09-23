@@ -7,10 +7,33 @@ import Base
 def whitespace(+code: U32) -> Bool:
   (U32.is_ge(code, 9) && U32.is_le(code, 13)) || U32.is_eq(code, 32) || U32.is_eq(code, 160) || U32.is_eq(code, 5760) || (U32.is_ge(code, 8192) && U32.is_le(code, 8202)) || U32.is_eq(code, 8232) || U32.is_eq(code, 8233) || U32.is_eq(code, 8239) || U32.is_eq(code, 8287) || U32.is_eq(code, 12288) || U32.is_eq(code, 65279)
 
+# JavaScript's trimStart, trimEnd and trim over the same whitespace.
+def trimStart(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{Chr{+code}, +rest}: Bool.pick(Unit -> String, whitespace(code), _ => trimStart(rest), _ => SCon{Chr{code}, rest})(Unit{})
+
+def trimEnd(text: String) -> String: String.reverse(trimStart(String.reverse(text)))
+def trim(text: String) -> String: trimEnd(trimStart(text))
+
+# ASCII case folding for protocol tokens and ASCII keywords; other code points
+# are unchanged.
+def asciiLower(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{Chr{+code}, rest}:
+      SCon{Chr{Bool.pick(U32, U32.is_ge(code, 65) && U32.is_le(code, 90), (code + 32 : U32), code)}, asciiLower(rest)}
+
+# JavaScript's `value || fallback` for an optional string.
+def orElse(value: Maybe<&2, String>, +fallback: String) -> String:
+  match value:
+    case Some{SCon{first, rest}}: SCon{first, rest}
+    case _: fallback
+
 def blank(text: String) -> Bool:
   match text:
     case SNil{}: True{}
-    case SCon{Chr{code}, rest}: whitespace(code) && blank(rest)
+    case SCon{Chr{code}, rest}: Bool.pick(Unit -> Bool,whitespace(code),_ => blank(rest),_ => False{})(Unit{})
 
 
 # UTF-16 code-unit budgets over native characters. No surrogate characters are

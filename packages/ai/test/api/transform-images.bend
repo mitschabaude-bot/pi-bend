@@ -20,7 +20,7 @@ def sameContent(left: List<&2, Ai.TextImageContent>, right: List<&2, Ai.TextImag
 
 def model(vision: Bool) -> Ai.Model<Unit>:
   +zero = F.fromU32(0)
-  Ai.Model{"test", "Test", Ai.OpenAIResponsesApi{}, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Bool.pick(List<&2, Ai.ModelInput>, vision, Ai.InputImage{} <> Nil{}, Nil{}), Ai.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  Ai.Model{"test", "Test", Ai.OpenAIResponsesApi{}, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Bool.pick(List<&2, Ai.ModelInput>, vision, Ai.InputImage{} <> Nil{}, Nil{}), None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def checkMessages(messages: List<&2, Ai.Message<Unit, Unit, Unit, String>>, user: List<&2, Ai.TextImageContent>, tool: List<&2, Ai.TextImageContent>, label: String) -> IO(Unit):
   match messages:

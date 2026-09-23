@@ -15,23 +15,22 @@ for(const f of JSON.parse(input)){
    if(kind!=='legacy'&&context.newMessages[0].content!==marker)throw Error('wrong context');
    log+=label+'@'+marker+'@'+(!signal?'none':signal.aborted?'aborted':'live')+';';
    if(f.fail)throw Error(label);
-   return kind==='stop'?version==='A':{messages:[{role:'custom',content:label}],thinkingLevel:'off'};
+   return {messages:[{role:'custom',content:label}],thinkingLevel:'off'};
   };
-  hooks[version]={stop:(context,signal)=>invoke('stop',context,signal),legacy:signal=>invoke('legacy',undefined,signal),context:(context,signal)=>invoke('context',context,signal)};
+  hooks[version]={legacy:signal=>invoke('legacy',undefined,signal),context:(context,signal)=>invoke('context',context,signal)};
  }
  const agent=new Agent({streamFn:()=>{throw Error('unexpected provider')}});
- const set=(version,mode,stop)=>{agent.shouldStopAfterTurn=stop?hooks[version].stop:undefined;agent.prepareNextTurn=mode&1?hooks[version].legacy:undefined;agent.prepareNextTurnWithContext=mode&2?hooks[version].context:undefined;};
+ const set=(version,mode)=>{agent.prepareNextTurn=mode&1?hooks[version].legacy:undefined;agent.prepareNextTurnWithContext=mode&2?hooks[version].context:undefined;};
  const outcomes=[];
  const checkpoint=async(config,marker)=>{
   const turn={message:{role:'assistant',content:[]},toolResults:[],context:{messages:[{role:'user',content:marker}]},newMessages:[{role:'custom',content:marker}]};
-  try{outcomes.push(config.shouldStopAfterTurn?(await config.shouldStopAfterTurn(turn)?'true':'false'):'missing');}catch(e){outcomes.push('error:'+e.message);}
   try{const value=config.prepareNextTurn?await config.prepareNextTurn(turn):'missing';outcomes.push(value==='missing'?'missing':value?.messages[0].content??'none');}catch(e){outcomes.push('error:'+e.message);}
  };
- set('A',f.initial,f.stop);const original=agent.createLoopConfig();await checkpoint(original,'initial');
+ set('A',f.initial);const original=agent.createLoopConfig();await checkpoint(original,'initial');
  let release;const run=agent.runWithLifecycle(async()=>await new Promise(resolve=>{release=resolve}));
- set('B',f.later,true);await checkpoint(original,'active');const fresh=agent.createLoopConfig();await checkpoint(fresh,'fresh');
+ set('B',f.later);await checkpoint(original,'active');const fresh=agent.createLoopConfig();await checkpoint(fresh,'fresh');
  agent.abort();await checkpoint(original,'aborted');release();await run;
- set('B',0,true);await checkpoint(original,'idle');
+ set('B',0);await checkpoint(original,'idle');
  results.push(log+'#'+outcomes.join(','));
 }
 process.stdout.write(JSON.stringify(results));

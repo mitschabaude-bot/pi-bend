@@ -22,6 +22,8 @@ def report(value: Result<&2, &2, File.FileError<String>, Settings.Settings>) -> 
     case Fail{File.File{Fold.InvalidReadSize{}}}: IO.print("size")
     case Fail{File.File{Fold.Open{code, _}}}: IO.print("open:" ++ U32.show(code))
     case Fail{File.File{Fold.Read{code, _}}}: IO.print("read:" ++ U32.show(code))
+    case Fail{File.File{Fold.Close{code, _}}}: IO.print("close:" ++ U32.show(code))
+    case Fail{File.File{Fold.ReadAndClose{code, _, close, _}}}: IO.print("read-close:" ++ U32.show(code) ++ ":" ++ U32.show(close))
 
 def read(rejectInput: Bool, path: String, chunk: U32, limit: Nat, overrides: Settings.Overrides) -> IO(Result<&2, &2, File.FileError<String>, Settings.Settings>):
   match rejectInput:

@@ -1,0 +1,11 @@
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const source = readFileSync('/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts','utf8');
+assert.equal(createHash('sha256').update(source).digest('hex'),'c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a');
+const start = source.indexOf('function hexToRgb(');
+const end = source.indexOf('function resolveVarRefs(',start);
+assert(start >= 0 && end > start);
+const compiled = new Bun.Transpiler({loader:'ts'}).transformSync(source.slice(start,end));
+const {hexTo256,fgAnsi,bgAnsi} = new Function(compiled+';return {hexTo256,fgAnsi,bgAnsi};')();
+for(const hex of process.argv.slice(2)) console.log([hexTo256(hex),fgAnsi(hex,'truecolor'),fgAnsi(hex,'256color'),bgAnsi(hex,'truecolor'),bgAnsi(hex,'256color')].join('|'));

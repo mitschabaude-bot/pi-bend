@@ -36,14 +36,6 @@ def truncated(cut: Budget.Cut) -> String:
 def truncateErrorText(text: String, maxChars: Nat) -> String:
   truncated(Budget.take(text, maxChars))
 
-def trimLeading(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code}, +rest}: Bool.pick(String, Space.whitespace(code), trimLeading(rest), SCon{Chr{code}, rest})
-
-def trim(text: String) -> String:
-  String.reverse(trimLeading(String.reverse(trimLeading(text))))
-
 def encodedBody(value: Maybe<&2, String>) -> Result<&2, &2, NormalizationError, Maybe<&2, String>>:
   match value:
     case None{}: Fail{NonJsonBody{}}
@@ -68,7 +60,7 @@ def cleanBody(body: Maybe<&2, String>) -> Maybe<&2, String>:
   match body:
     case None{}: None{}
     case Some{text}:
-      +cleaned = trim(text)
+      +cleaned = Space.trim(text)
       nonemptyBody(String.is_empty(cleaned), cleaned)
 
 def carries(message: String, body: Maybe<&2, String>) -> Bool:

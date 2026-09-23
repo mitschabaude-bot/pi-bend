@@ -50,7 +50,7 @@ for (const fixture of JSON.parse(input)) {
   const config = {
     model:{api:'original',provider:'custom-provider'},
     convertToLlm: async messages => {trace.push('convert');if (fixture.kind === 5) throw new Error('conversion failed');return messages.map(m => m.role === 'custom' ? {...m,role:'user'} : m);},
-    shouldStopAfterTurn: async completed => {snapshot(completed);trace.push('stop');if (fixture.kind === 6) throw new Error('stop failed');return fixture.stop;},
+    finishTurn: async completed => {snapshot(completed);trace.push('finish');if (fixture.kind === 6) throw new Error('finish failed');return fixture.stop ? {action:'end'} : undefined;},
     prepareNextTurn: async completed => {snapshot(completed);trace.push('prepare');return {messages:[custom('prepared')],model:{api:'changed',provider:'custom-provider'},thinkingLevel:'off'};},
     getSteeringMessages: async () => {trace.push('steering');updateDefault('steering');return fixture.steering && steering++ === 1 ? [custom('steering')] : [];},
     getFollowUpMessages: async () => {trace.push('follow');return fixture.follow && follow++ === 0 ? [custom('follow')] : [];},
@@ -83,7 +83,7 @@ for (const fixture of JSON.parse(input)) {
     else if (fixture.entry === 1) history = await run.runAgentLoop([custom('prompt')],context,config,emit,undefined,selected);
     else history = await run.runAgentLoopContinue(context,config,emit,undefined,selected);
   }
-  catch (cause) {if (!['provider open failed','conversion failed','stop failed','delivery failed','Cannot continue: no messages in context','Cannot continue from message role: assistant','No default stream function configured. Pass streamFn explicitly or call setDefaultStreamFn().'].includes(cause.message)) throw cause; error = cause.message;}
+  catch (cause) {if (!['provider open failed','conversion failed','finish failed','delivery failed','Cannot continue: no messages in context','Cannot continue from message role: assistant','No default stream function configured. Pass streamFn explicitly or call setDefaultStreamFn().'].includes(cause.message)) throw cause; error = cause.message;}
   results.push({history:error ? '' : names(history),error,trace:trace.join('|'),requests:requests.join(';'),providers,executions,validations});
 }
 process.stdout.write(JSON.stringify(results));

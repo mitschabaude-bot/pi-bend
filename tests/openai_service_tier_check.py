@@ -2,6 +2,7 @@
 import argparse,hashlib,json,math,random,re,struct,subprocess
 from pathlib import Path
 from bend_toolchain import BEND
+from upstream_pin import PIN
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
 parser.add_argument('--prefix',default='build/openai-service-tier')
@@ -19,7 +20,7 @@ for _ in range(240):
     cost=[math.ldexp(rng.uniform(-1,1),rng.randrange(-1073,1024)) for _ in range(5)]
     rows.append(dict(model=rng.choice(models),tier=rng.choice(tiers),cost=[words(n) for n in cost]))
 commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
-assert commit.startswith('46c9de402')
+assert commit.startswith(PIN[:9])
 wanted=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/openai_service_tier_reference.mts'],cwd=ROOT,input=json.dumps(rows),text=True))
 args=[','.join([r['model'],r['tier'] or '-']+[';'.join(map(str,n)) for n in r['cost']]) for r in rows]
 # The pricing fixture is pure: no channels, timers or sockets to audit.

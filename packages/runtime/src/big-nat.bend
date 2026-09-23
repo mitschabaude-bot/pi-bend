@@ -1,9 +1,8 @@
 import Base
 
-# Exact unsigned integers, little-endian base-2^32 limbs. Canonical zero is an
-# empty list; the final limb of a nonzero value is nonzero. Limb products use
-# the native high-word multiply; carries and borrows come from wrapped
-# comparisons. Factories/operations maintain these invariants.
+# Exact unsigned integers, little-endian base-2^16 limbs. Canonical zero is an
+# empty list; all limbs fit 16 bits and the final limb of a nonzero value is nonzero.
+# Factories/operations maintain these invariants without native integer glue.
 type BigNat is Data:
   BigNat{limbs: List<&2, U32>}
 
@@ -23,7 +22,7 @@ def trim(limbs: List<&2, U32>) -> List<&2, U32>:
 def zero() -> BigNat: BigNat{Nil{}}
 def one() -> BigNat: BigNat{1 <> Nil{}}
 def fromU32(+value: U32) -> BigNat:
-  BigNat{trim(value <> Nil{})}
+  BigNat{trim(U32.and(value, 65535) <> U32.shrn(value, 16n) <> Nil{})}
 
 def isZero(value: BigNat) -> Bool:
   match value:
@@ -53,38 +52,33 @@ def equalOrder(order: Cmp) -> Bool:
 
 def equal(left: BigNat, right: BigNat) -> Bool: equalOrder(compare(left, right))
 
-# A wrapped sum is smaller than an addend exactly when it carried.
-def carried(+sum: U32, addend: U32) -> U32:
-  Bool.pick(U32, U32.is_lt(sum, addend), 1, 0)
-
-def addLimbs(left: List<&2, U32>, right: List<&2, U32>, +carry: U32) -> List<&2, U32>:
+def addLimbs(left: List<&2, U32>, right: List<&2, U32>, carry: U32) -> List<&2, U32>:
   match left right:
     case Nil{} Nil{}: trimHead(carry, Nil{})
-    case +a <> xs Nil{}:
+    case a <> xs Nil{}:
       +sum = (a + carry : U32)
-      sum <> addLimbs(xs, Nil{}, carried(sum, a))
-    case Nil{} +b <> ys:
+      U32.and(sum, 65535) <> addLimbs(xs, Nil{}, U32.shrn(sum, 16n))
+    case Nil{} b <> ys:
       +sum = (b + carry : U32)
-      sum <> addLimbs(Nil{}, ys, carried(sum, b))
-    case +a <> xs +b <> ys:
-      +partial = (a + b : U32)
-      +sum = (partial + carry : U32)
-      sum <> addLimbs(xs, ys, (carried(partial, a) + carried(sum, partial) : U32))
+      U32.and(sum, 65535) <> addLimbs(Nil{}, ys, U32.shrn(sum, 16n))
+    case a <> xs b <> ys:
+      +sum = (a + b + carry : U32)
+      U32.and(sum, 65535) <> addLimbs(xs, ys, U32.shrn(sum, 16n))
 
 def add(left: BigNat, right: BigNat) -> BigNat:
   match left right:
     case BigNat{a} BigNat{b}: BigNat{addLimbs(a, b, 0)}
 
-# Called only after checking left >= right. A wrapped difference borrows
-# exactly when the subtrahend exceeds the minuend, checked before wrapping.
+# Called only after checking left >= right. Borrow arithmetic uses modulo U32,
+# then masks the low limb; the comparison computes the outgoing borrow exactly.
 def subtractLimbs(left: List<&2, U32>, right: List<&2, U32>, +borrow: U32) -> List<&2, U32>:
   match left right:
     case Nil{} _: Nil{}
     case +a <> xs Nil{}:
-      (a - borrow : U32) <> subtractLimbs(xs, Nil{}, carried(a, borrow))
-    case +a <> xs +b <> ys:
-      +partial = (a - b : U32)
-      (partial - borrow : U32) <> subtractLimbs(xs, ys, (carried(a, b) + carried(partial, borrow) : U32))
+      U32.and((a - borrow : U32), 65535) <> subtractLimbs(xs, Nil{}, Bool.pick(U32, U32.is_lt(a, borrow), 1, 0))
+    case +a <> xs b <> ys:
+      +amount = (b + borrow : U32)
+      U32.and((a - amount : U32), 65535) <> subtractLimbs(xs, ys, Bool.pick(U32, U32.is_lt(a, amount), 1, 0))
 
 def subtractOrdered(order: Cmp, left: BigNat, right: BigNat) -> Maybe<&2, BigNat>:
   match order left right:
@@ -94,14 +88,13 @@ def subtractOrdered(order: Cmp, left: BigNat, right: BigNat) -> Maybe<&2, BigNat
 def subtract(+left: BigNat, +right: BigNat) -> Maybe<&2, BigNat>:
   subtractOrdered(compare(left, right), left, right)
 
-# A limb times a factor plus a carry is below 2^64: the high word plus at
-# most one carried bit is the next carry.
-def multiplyLimb(limbs: List<&2, U32>, +factor: U32, +carry: U32) -> List<&2, U32>:
+# factor <= 65535. A limb product plus its carry is at most 2^32-1.
+def multiplyLimb(limbs: List<&2, U32>, +factor: U32, carry: U32) -> List<&2, U32>:
   match limbs:
     case Nil{}: trimHead(carry, Nil{})
-    case +head <> rest:
-      +low = (U32.mul(head, factor) + carry : U32)
-      low <> multiplyLimb(rest, factor, (U32.mul_hi(head, factor) + carried(low, carry) : U32))
+    case head <> rest:
+      +product = (head * factor + carry : U32)
+      U32.and(product, 65535) <> multiplyLimb(rest, factor, U32.shrn(product, 16n))
 
 def multiplyLimbs(left: List<&2, U32>, +right: List<&2, U32>) -> List<&2, U32>:
   match left:
@@ -124,7 +117,7 @@ def shiftLeft(value: BigNat, +count: Nat) -> BigNat:
   match value:
     case BigNat{Nil{}}: zero()
     case BigNat{head <> rest}:
-      BigNat{prefixZeros(count / 32n, multiplyLimb(head <> rest, U32.shln(1, count % 32n), 0))}
+      BigNat{prefixZeros(count / 16n, multiplyLimb(head <> rest, U32.shln(1, count % 16n), 0))}
 
 def powerLoop(exponent: Nat, +base: BigNat, accumulator: BigNat) -> BigNat:
   match exponent:
@@ -149,12 +142,12 @@ def divideWord(count: Nat, +word: U32, +divisor: BigNat, state: Division) -> Div
   match count:
     case 0n: state
     case 1n+n:
-      divideWord(n, U32.shl(word), divisor, divideBit(U32.shrn(word, 31n), divisor, state))
+      divideWord(n, U32.and(U32.shl(word), 65535), divisor, divideBit(U32.shrn(word, 15n), divisor, state))
 
 def divideLimbs(limbs: List<&2, U32>, +divisor: BigNat, state: Division) -> Division:
   match limbs:
     case Nil{}: state
-    case head <> rest: divideLimbs(rest, divisor, divideWord(32n, head, divisor, state))
+    case head <> rest: divideLimbs(rest, divisor, divideWord(16n, head, divisor, state))
 
 # Binary long division has one step per input bit, with no artificial size cap.
 def divide(dividend: BigNat, divisor: BigNat) -> Maybe<&2, Division>:
@@ -165,17 +158,14 @@ def divide(dividend: BigNat, divisor: BigNat) -> Maybe<&2, Division>:
 type SmallDivision is Data:
   SmallDivision{quotient: BigNat, remainder: U32}
 
-# divisor is in [1, 65535]. A limb is divided as two 16-bit halves so that
-# remainder*65536+half stays representable; the remainder is below the
-# divisor, so each half quotient fits 16 bits. Processing most-significant
-# first builds little-endian quotient limbs.
+# divisor is in [1, 65535]. remainder*65536+limb is then exactly representable
+# by U32. Processing most-significant first builds little-endian quotient limbs.
 def divideSmallLimbs(limbs: List<&2, U32>, +divisor: U32, quotient: List<&2, U32>, remainder: U32) -> SmallDivision:
   match limbs:
     case Nil{}: SmallDivision{BigNat{trim(quotient)}, remainder}
-    case +head <> rest:
-      +high = (remainder * 65536 + U32.shrn(head, 16n) : U32)
-      +low = ((high % divisor : U32) * 65536 + U32.and(head, 65535) : U32)
-      divideSmallLimbs(rest, divisor, U32.or(U32.shln((high / divisor : U32), 16n), (low / divisor : U32)) <> quotient, (low % divisor : U32))
+    case head <> rest:
+      +current = (remainder * 65536 + head : U32)
+      divideSmallLimbs(rest, divisor, (current / divisor : U32) <> quotient, (current % divisor : U32))
 
 def divideSmallRaw(dividend: BigNat, divisor: U32) -> SmallDivision:
   match dividend:
@@ -213,9 +203,9 @@ def toDecimal(value: BigNat) -> String:
   match value:
     case BigNat{Nil{}}: "0"
     case BigNat{+limbs}:
-      # Each 32-bit limb contributes at most ten decimal digits. This is a
+      # Each 16-bit limb contributes less than five decimal digits. This is a
       # proven input-size bound for termination, not a fixed precision limit.
-      showDigits(List.length(&2, U32, limbs) * 10n, divideSmallRaw(BigNat{limbs}, 10), "")
+      showDigits(List.length(&2, U32, limbs) * 5n, divideSmallRaw(BigNat{limbs}, 10), "")
 
 # Big-endian octet conversion; callers validate byte ranges. Fixed-width
 # output requires that the number fits in the requested width.
@@ -232,9 +222,36 @@ def remainder(division: Division) -> BigNat:
   match division:
     case Division{_, value}: value
 
+def remainderBitResult(order: Cmp, value: BigNat, divisor: BigNat) -> BigNat:
+  match order value divisor:
+    case LT{} value _: value
+    case _ BigNat{a} BigNat{b}: BigNat{trim(subtractLimbs(a, b, 0))}
+
+def remainderWord(count: Nat, +word: U32, +divisor: BigNat, value: BigNat) -> BigNat:
+  match count:
+    case 0n: value
+    case 1n+n:
+      +next = add(shiftLeft(value, 1n), fromU32(U32.shrn(word, 15n)))
+      remainderWord(n, U32.and(U32.shl(word), 65535), divisor, remainderBitResult(compare(next, divisor), next, divisor))
+
+def remainderLimb(order: Cmp, next: BigNat, word: U32, divisor: BigNat, value: BigNat) -> BigNat:
+  match order:
+    case LT{}: next
+    case _: remainderWord(16n, word, divisor, value)
+
+def remainderLimbs(limbs: List<&2, U32>, +divisor: BigNat, +value: BigNat) -> BigNat:
+  match limbs:
+    case Nil{}: value
+    case +head <> rest:
+      +next = add(shiftLeft(value, 16n), fromU32(head))
+      remainderLimbs(rest, divisor, remainderLimb(compare(next, divisor), next, head, divisor, value))
+
+# Modular arithmetic needs only the remainder. Constructing and shifting the
+# discarded quotient at every input bit adds work to every field multiplication.
+# A whole limb can be appended directly while the prefix is below the modulus.
 def reduce(value: BigNat, modulus: BigNat) -> BigNat:
   match value:
-    case BigNat{limbs}: remainder(divideLimbs(List.reverse(&2, U32, limbs), modulus, Division{zero(), zero()}))
+    case BigNat{limbs}: remainderLimbs(List.reverse(&2, U32, limbs), modulus, zero())
 
 def multiplyBit(set: Bool, squared: BigNat, base: BigNat, modulus: BigNat) -> BigNat:
   match set:
@@ -257,7 +274,7 @@ def writeBigEndian(count: Nat, step: SmallDivision, bytes: List<&2, U32>) -> Lis
     case 0n _: bytes
     case 1n+count SmallDivision{quotient, byte}: writeBigEndian(count, divideSmallRaw(quotient, 256), byte <> bytes)
 
-# Montgomery arithmetic for an odd modulus of k limbs, R = 2^(32k). A value
+# Montgomery arithmetic for an odd modulus of k limbs, R = 2^(16k). A value
 # is kept as a*R mod m; a product of two such values is reduced word by word:
 # k times, add u*m for the u that clears the low limb, then drop that limb.
 # Every step is linear in k, so a modular product is quadratic, where the
@@ -265,18 +282,18 @@ def writeBigEndian(count: Nat, step: SmallDivision, bytes: List<&2, U32>) -> Lis
 type Montgomery is Data:
   Montgomery{modulus: List<&2, U32>, width: Nat, negInverse: U32}
 
-# -m^-1 mod 2^32 by Newton's iteration from the low limb (odd): each step
+# -m^-1 mod 2^16 by Newton's iteration from the low limb (odd): each step
 # doubles the correct bits, and m0*m0 = 1 mod 8 seeds three of them.
 def newtonInverse(fuel: Nat, +m0: U32, +inverse: U32) -> U32:
   match fuel:
     case 0n: inverse
-    case 1n+n: newtonInverse(n, m0, (inverse * U32.sub(2, (m0 * inverse : U32)) : U32))
+    case 1n+n: newtonInverse(n, m0, U32.and((inverse * U32.sub(2, (m0 * inverse : U32)) : U32), 65535))
 
 def montgomery(limbs: List<&2, U32>) -> Montgomery:
   match limbs:
     case Nil{}: Montgomery{Nil{}, 0n, 0}
     case +m0 <> +rest:
-      Montgomery{m0 <> rest, List.length(&2, U32, m0 <> rest), U32.sub(0, newtonInverse(5n, m0, m0))}
+      Montgomery{m0 <> rest, List.length(&2, U32, m0 <> rest), U32.and(U32.sub(65536, newtonInverse(4n, m0, m0)), 65535)}
 
 def dropLow(limbs: List<&2, U32>) -> List<&2, U32>:
   match limbs:
@@ -292,7 +309,7 @@ def reduceSteps(steps: Nat, space: Montgomery, +value: List<&2, U32>) -> List<&2
   match steps space:
     case 0n _: value
     case 1n+n Montgomery{+modulus, width, +negInverse}:
-      +factor = (lowLimb(value) * negInverse : U32)
+      +factor = U32.and((lowLimb(value) * negInverse : U32), 65535)
       reduceSteps(n, Montgomery{modulus, width, negInverse}, dropLow(addLimbs(value, multiplyLimb(modulus, factor, 0), 0)))
 
 def montgomeryFinish(order: Cmp, value: List<&2, U32>, modulus: List<&2, U32>) -> BigNat:
@@ -330,7 +347,7 @@ def montgomeryPower(exponent: List<&2, U32>, +space: Montgomery, +base: BigNat, 
 # Enters Montgomery form: a*R mod m through the general reduction, once.
 def montgomeryEnter(space: Montgomery, value: BigNat, modulus: BigNat) -> BigNat:
   match space:
-    case Montgomery{_, width, _}: reduce(shiftLeft(value, Nat.mul(width, 32n)), modulus)
+    case Montgomery{_, width, _}: reduce(shiftLeft(value, Nat.mul(width, 16n)), modulus)
 
 def limbsOf(value: BigNat) -> List<&2, U32>:
   match value:

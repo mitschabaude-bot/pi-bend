@@ -1,0 +1,18 @@
+import fs from 'node:fs';
+import assert from 'node:assert';
+import {createHash} from 'node:crypto';
+import {stripTypeScriptTypes} from 'node:module';
+const root='../pi-mono/packages/tui/';
+for(const [file,hash] of [['src/terminal-colors.ts','2aa702f6e59dc51d78be64516f40c46981780a00d1f0900fb5504ad9da67b9e6'],['test/terminal-colors.test.ts','83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566']])assert.equal(createHash('sha256').update(fs.readFileSync(root+file)).digest('hex'),hash);
+const strip=(file:string)=>stripTypeScriptTypes(fs.readFileSync(root+file,'utf8')).replace(/^import[\s\S]*?;\s*$/gm,'').replace(/^export /gm,'');
+const names=['isOsc11BackgroundColorResponse','parseOsc11BackgroundColor','parseTerminalColorSchemeReport'];
+const api=new Function(strip('src/terminal-colors.ts')+';return {'+names.join(',')+'}')();
+const tests:any[]=[],observations:any[]=[];
+const wrapped=Object.fromEntries(names.map(name=>[name,(text:string)=>{const value=api[name](text);observations.push(text);return value}]));
+const describe=(name:string,body:()=>void)=>{if(name.startsWith('parse'))body()};
+const it=(name:string,body:()=>void)=>tests.push({name,body});
+new Function('assert','describe','it',...names,strip('test/terminal-colors.test.ts'))(assert,describe,it,...names.map(n=>wrapped[n]));
+for(const test of tests)test.body();
+const cases=JSON.parse(fs.readFileSync(0,'utf8'));
+const evaluate=(text:string)=>names.map(name=>api[name](text)??null);
+console.log(JSON.stringify({names:tests.map(t=>t.name),observations,original:observations.map(evaluate),results:cases.map(evaluate)}));

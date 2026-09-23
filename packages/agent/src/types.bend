@@ -126,11 +126,27 @@ type BeforeToolCallContext<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom
 type AfterToolCallContext<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data> is Data:
   AfterToolCallContext{assistantMessage: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, toolCall: AgentToolCall, args: Schema.Value, result: AgentToolResult<ToolDetails>, isError: Bool, context: AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>}
 
-type ShouldStopAfterTurnContext<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data> is Data:
-  ShouldStopAfterTurnContext{message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, toolResults: List<&2, Ai.ToolResultMessage<ToolDetails>>, context: AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, newMessages: AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)}
+# A completed turn: the assistant message, its tool results, the context with
+# both appended, and the run's new messages.
+type AgentTurnContext<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data> is Data:
+  AgentTurnContext{message: Ai.AssistantMessage<Schema.Value, DiagnosticDetails>, toolResults: List<&2, Ai.ToolResultMessage<ToolDetails>>, context: AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, newMessages: AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)}
 
 def PrepareNextTurnContext(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data) -> Data:
-  ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>
+  AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>
+
+# finishTurn's decision. None preserves normal scheduling; ContinueTurn ensures
+# one more provider request, which tool results or queued messages may satisfy.
+type AgentTurnDecision is Data:
+  ContinueTurn{}
+  EndTurn{}
+
+# The runtime state available immediately before a conversational request.
+type PrepareRequestContext<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data> is Data:
+  PrepareRequestContext{context: AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, model: Ai.Model<Ai.JsonValue>, thinkingLevel: ThinkingLevel()}
+
+# Replacements for this and later requests of the run.
+type AgentRequestUpdate<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data> is Data:
+  AgentRequestUpdate{context: Maybe<&2, AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, model: Maybe<&2, Ai.Model<Ai.JsonValue>>, thinkingLevel: Maybe<&2, ThinkingLevel()>}
 
 type AgentLoopTurnUpdate<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data> is Data:
   AgentLoopTurnUpdate{context: Maybe<&2, AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, messages: Maybe<&2, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>, model: Maybe<&2, Ai.Model<Ai.JsonValue>>, thinkingLevel: Maybe<&2, ThinkingLevel()>}
@@ -144,13 +160,19 @@ type TransformContextInput<-Messages: Data> is Data:
 type ToolHookInput<-Context: Data> is Data:
   ToolHookInput{context: Context, signal: Maybe<&2, Abort.AbortSignal<Unit>>}
 
+# Runs after each assistant response and its tool results, before turn_end.
+def FinishTurn(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data) -> Data: Callback.Callback<ToolHookInput<AgentTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, AgentTurnDecision>>>
+
+# Runs before every provider request of the run.
+def PrepareRequest(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data) -> Data: Callback.Callback<ToolHookInput<PrepareRequestContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, AgentRequestUpdate<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>
+
 type AgentLoopConfig<-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data> is Data:
-  AgentLoopConfig{options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError>, model: Ai.Model<Ai.JsonValue>, convertToLlm: Callback.Callback<AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), Result<&2, &2, ExecutionError, List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, ToolDetails>>>>, transformContext: Maybe<&2, Callback.Callback<TransformContextInput<AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>, Result<&2, &2, ExecutionError, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>, getApiKey: Maybe<&2, Callback.Callback<String, Result<&2, &2, ExecutionError, Maybe<&2, String>>>>, shouldStopAfterTurn: Maybe<&2, Callback.Callback<ShouldStopAfterTurnContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>, Result<&2, &2, ExecutionError, Bool>>>, prepareNextTurn: Maybe<&2, Callback.Callback<PrepareNextTurnContext(DiagnosticDetails, ToolDetails, Custom, ExecutionError), Result<&2, &2, ExecutionError, Maybe<&2, AgentLoopTurnUpdate<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>>, getSteeringMessages: Maybe<&2, Callback.Callback<Unit, Result<&2, &2, ExecutionError, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>, getFollowUpMessages: Maybe<&2, Callback.Callback<Unit, Result<&2, &2, ExecutionError, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>, toolExecution: Maybe<&2, ToolExecutionMode>, beforeToolCall: Maybe<&2, Callback.Callback<ToolHookInput<BeforeToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, BeforeToolCallUpdate<AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>>, afterToolCall: Maybe<&2, Callback.Callback<ToolHookInput<AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, AfterToolCallResult<ToolDetails>>>>>}
+  AgentLoopConfig{options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError>, model: Ai.Model<Ai.JsonValue>, convertToLlm: Callback.Callback<AgentMessageArray(DiagnosticDetails, ToolDetails, Custom), Result<&2, &2, ExecutionError, List<&2, Ai.Message<Schema.Value, Schema.Value, DiagnosticDetails, ToolDetails>>>>, transformContext: Maybe<&2, Callback.Callback<TransformContextInput<AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>, Result<&2, &2, ExecutionError, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>, getApiKey: Maybe<&2, Callback.Callback<String, Result<&2, &2, ExecutionError, Maybe<&2, String>>>>, finishTurn: Maybe<&2, FinishTurn(DiagnosticDetails, ToolDetails, Custom, ExecutionError)>, prepareRequest: Maybe<&2, PrepareRequest(DiagnosticDetails, ToolDetails, Custom, ExecutionError)>, prepareNextTurn: Maybe<&2, Callback.Callback<PrepareNextTurnContext(DiagnosticDetails, ToolDetails, Custom, ExecutionError), Result<&2, &2, ExecutionError, Maybe<&2, AgentLoopTurnUpdate<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>>, getSteeringMessages: Maybe<&2, Callback.Callback<Unit, Result<&2, &2, ExecutionError, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>, getFollowUpMessages: Maybe<&2, Callback.Callback<Unit, Result<&2, &2, ExecutionError, AgentMessageArray(DiagnosticDetails, ToolDetails, Custom)>>>, toolExecution: Maybe<&2, ToolExecutionMode>, beforeToolCall: Maybe<&2, Callback.Callback<ToolHookInput<BeforeToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, BeforeToolCallUpdate<AgentContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>>>>, afterToolCall: Maybe<&2, Callback.Callback<ToolHookInput<AfterToolCallContext<DiagnosticDetails, ToolDetails, Custom, ExecutionError>>, Result<&2, &2, ExecutionError, Maybe<&2, AfterToolCallResult<ToolDetails>>>>>}
 
 # Structural projection only: preserve provider options and callback identity.
 def toSimpleStreamOptions(-DiagnosticDetails: Data, -ToolDetails: Data, -Custom: Data, -ExecutionError: Data, -Telemetry: Data, config: AgentLoopConfig<DiagnosticDetails, ToolDetails, Custom, ExecutionError, Telemetry>) -> Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), ExecutionError>:
   match config:
-    case AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _}: options
+    case AgentLoopConfig{options, _, _, _, _, _, _, _, _, _, _, _, _}: options
 
 # Options is explicit because Bend lacks TypeScript structural subtyping.
 # Standalone providers instantiate SimpleStreamOptions; the agent uses its full

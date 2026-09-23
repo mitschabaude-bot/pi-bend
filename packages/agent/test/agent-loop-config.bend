@@ -21,10 +21,10 @@ def Snapshot() -> Data: Binding.Snapshot<Unit, Unit, String, String, Unit>
 def converterBody(unused: Unit, messages: Messages()) -> IO(Converted()):
   IO.pure(Converted(), Done{State.defaultConvertToLlm(Unit, Unit, String, String, messages)})
 def base(converter: C.Callback<Messages(), Converted()>) -> Config():
-  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(123)}, None{}, None{}, None{}, Some{Ai.Sse{}}, None{}, Some{"session"}, None{}, None{}, None{}, Some{Ai.Medium{}}, None{}, None{}}, State.defaultModel(Ai.JsonValue), converter, None{}, None{}, None{}, None{}, None{}, None{}, Some{T.Sequential{}}, None{}, None{}}
+  T.AgentLoopConfig{Ai.SimpleStreamOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(123)}, None{}, None{}, None{}, Some{Ai.Sse{}}, None{}, Some{"session"}, None{}, None{}, None{}, Some{Ai.Medium{}}, None{}, None{}}, State.defaultModel(Ai.JsonValue), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{T.Sequential{}}, None{}, None{}}
 def model() -> Ai.Model<Ai.JsonValue>:
   +zero = F.fromU32(0)
-  Ai.Model{"current", "Current", Ai.CustomModelApi{"custom"}, "provider", "", False{}, None{}, Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
+  Ai.Model{"current", "Current", Ai.CustomModelApi{"custom"}, "provider", "", False{}, None{}, Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, zero, zero, None{}, None{}, None{}}
 def thinking(index: U32) -> T.ThinkingLevel():
   match index:
     case 0: Ai.Off{}
@@ -46,12 +46,12 @@ def equal(order: Maybe<&2, Cmp>) -> Bool:
     case _: False{}
 def header(value: Snapshot()) -> String:
   match value:
-    case Binding.Snapshot{context, T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, Some{retry}, _, _, _, Some{Ai.Sse{}}, _, Some{"session"}, _, _, _, reasoning, _, _}, Ai.Model{"current", _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, Some{T.Sequential{}}, _, _}}:
+    case Binding.Snapshot{context, T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, Some{retry}, _, _, _, Some{Ai.Sse{}}, _, Some{"session"}, _, _, _, reasoning, _, _}, Ai.Model{"current", _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, Some{T.Sequential{}}, _, _}}:
       Bool.pick(String, equal(F.compare(retry, F.fromU32(123))), "current;" ++ level(reasoning) ++ ";session;sse;123;sequential;" ++ contextKey(context) ++ ";0", "wrong retry cap")
     case _: "wrong configuration"
 def selected(config: Config(), steering: Bool) -> Maybe<&2, C.Callback<Unit, Result<&2, &2, String, Messages()>>>:
   match config:
-    case T.AgentLoopConfig{_, _, _, _, _, _, _, getSteeringMessages, getFollowUpMessages, _, _, _}: Bool.pick(Maybe<&2, C.Callback<Unit, Result<&2, &2, String, Messages()>>>, steering, getSteeringMessages, getFollowUpMessages)
+    case T.AgentLoopConfig{_, _, _, _, _, _, _, _, getSteeringMessages, getFollowUpMessages, _, _, _}: Bool.pick(Maybe<&2, C.Callback<Unit, Result<&2, &2, String, Messages()>>>, steering, getSteeringMessages, getFollowUpMessages)
 def batch(result: Result<&2, &2, String, Messages()>) -> String:
   match result:
     case Done{messages}: String.join(QueueTest.names(messages), ",")

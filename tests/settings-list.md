@@ -1,0 +1,25 @@
+# SettingsList component
+
+`packages/tui/src/components/settings-list.bend` ports the pinned `pi-mono` revision `46c9de402` SettingsList. It preserves value cycling, explicit selection/value updates, label-based search, configurable keybindings, scroll ranges, themed labels/values/descriptions/hints, mouse press/click anchoring and wheel selection, submenu delegation and completion navigation. The search editor is the native Input component.
+
+State is immutable. `new` receives the items, viewport count, theme, change/cancel callbacks, optional search options and a borrowed completion dispatcher. `updateValue` and `selectItem` return the updated state; `render` returns `IO(SettingsList & List<String>)` so search-input horizontal scrolling is retained. `handleMouse` returns the next state and optional canonical Component mouse response. `handleInput` takes explicit keybindings, keyboard protocol state and a checked word-segmenter context/callback/atomic predicate, returning `IO(Word.ResultOf(SettingsList))`. The application owns loading the native word-segmenter assets and propagating unsupported-engine errors; focused source lexical fixtures exercise the component's checked interface without providing production segmentation.
+
+Themes, change/cancel handlers, submenu factories, the completion dispatcher and canonical child Component callbacks are borrowed and remain caller-owned. A submenu factory receives `SubmenuRequest{currentValue,done}` and returns a canonical `Component`. `SubmenuDone{itemId,dispatch}` retains the originating item ID and the existing borrowed dispatcher; opening a submenu allocates no new callback handle. `complete(done,selectedValue,navigateTo)` delivers a typed completion. The owner queues it and applies `completeSubmenu` to the next SettingsList state before the next event/render. This explicit state-transition boundary replaces callbacks mutating a captured component; it does not emulate synchronous mutation/reentrancy during a factory or another callback. Retained completions continue to update their original item even after another submenu opens. Completion applies the value/change callback before closing/restoring selection or navigating and activating the target; an unknown nonempty target retains the current selection and activates it, matching source behavior.
+
+Mouse results use the shared typed representation: absent capture/focus flags are false. Submenus may return a local or already-dispatched response; SettingsList preserves either representation and requests focus. Search-row mouse input delegates to Input, and the separator row remains inactive. Labels and values are width-limited with the shared ANSI utilities; the source's untruncated empty-list message and description behavior are retained.
+
+Both original `settings-list.test.ts` assertions run unchanged against hash-pinned upstream source and their traces replay natively. A further 115 deterministic sequences compare every step's item values, selected item, search text, submenu presence, rendered lines, mouse response and ordered callback arguments. Coverage includes remapped/Kitty keys, active-search spaces, unknown and empty values, empty lists, zero/narrow/wide widths, scrolling, descriptions, styling, Unicode grapheme rendering, press/click anchoring, ignored mouse events, submenu render/input/invalidate/mouse forwarding, cancellation, chained navigation and retained completion origins. Source mouse results normalize omitted false capture/focus flags to the native typed representation; no rendered or state expectations are weakened. The fixture owns and retires all borrowed handles, including every child component.
+
+Search uses the existing Fuzzy module's documented Unicode-scalar/simple-fold policy (`tests/select-list.md`); these fixtures do not establish exact JavaScript UTF-16/full-lowercase scoring for every Unicode query. Component adapters/renderer wiring, native default word-context loading and whole-terminal integration remain separate integration work. No new generic laws are claimed by this component fixture.
+
+Build and validate using the shared compiler and the existing test-only `get-east-asian-width` dependency under `build/input-reference/node_modules`:
+
+```sh
+bun "$BEND" tests/settings-list.bend -o build/settings-list.js
+BEND="$BEND" BEND_TUS=8 sh scripts/build-pure.sh tests/settings-list.bend build/settings-list
+python3 tests/settings_list_check.py
+```
+
+The checker defaults to Bun and O1 native with one/four threads. Positional backend names and `--prefix` select isolated artifacts. Shared inventory and integration documentation are maintained by the integrating agent.
+
+Actual native-context integration is validated by [text-components-native-word.md](text-components-native-word.md): 200 source-compared sequences feed six loaded native ICU assets through both Input and SettingsList using `Word.nativeSegments`, covering all reference dictionary languages, search cursor/text, selection and deterministic Common marks.

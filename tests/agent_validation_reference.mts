@@ -18,7 +18,9 @@ const body=stripTypeScriptTypes(source.slice(source.indexOf('function defaultCon
 const {Agent}=new Function('createInitialSystemMessage','getCurrentSystemMessage','getCurrentSystemPrompt','toToolDeclaration','getDefaultStreamFn','runAgentLoop','runAgentLoopContinue',body+';return {Agent};')(createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration,getDefaultStreamFn,runAgentLoop,runAgentLoopContinue);
 const parameters={type:'object',properties:{value:{type:'number'},note:{type:'string'}},required:['value'],additionalProperties:false};
 for(const valid of [true,false]){
- const raw={value:valid?'42':'bad',note:null};
+ // The shared subset supplies an actual number; coercible strings are rejected
+ // by Bend's deliberately strict default agent validator in separate cases.
+ const raw={value:valid?42:'bad',note:null};
  const expected=valid?'accepted':'Validation failed for tool "echo":\n  - value: must be number\n\nReceived arguments:\n'+JSON.stringify(raw,null,2);
  let requests=0,executions=0;
  const provider=async(model,context,options)=>{

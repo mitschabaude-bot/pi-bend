@@ -6,7 +6,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 rng = random.Random(4648)
-cases = []
+cases = [('large',base64.b64encode(b'x' * 196608).decode('ascii')),('large-invalid','error')]
 
 def csv(data):
     return ','.join(map(str,data))

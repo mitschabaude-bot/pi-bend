@@ -1,0 +1,11 @@
+{
+  "source": "https://raw.githubusercontent.com/unicode-org/icu/release-78.3/icu4c/source/data/brkitr/dictionaries/cjdict.txt",
+  "source_sha256": "e73fd72048981d0cc13e9dc436a7eaba07ffb6eff58c8a59dc75c1df746663a0",
+  "icu": "78.3",
+  "format": "ICUCJK01: magic8, nodeCount:u32le, wordCount:u32le; postorder node(cost:u8 or255, children:u16le, reversed edges(labelLength:u8, label:utf16le))",
+  "entries": 315964,
+  "nodes": 330447,
+  "bytes": 2204725,
+  "sha256": "ed1703695b68da44a3bc97df2651316838693cf238fe472133a2796bf9c96f22",
+  "license": "icu78-cjk.LICENSE"
+}

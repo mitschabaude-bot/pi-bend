@@ -183,6 +183,39 @@ def Laws.drain(A, queue):
       %FifoLaws.fifo_dequeue(A, messages) : {Laws.observe(A, Queue.drainedOne(A, Fifo.dequeue(A, messages))) == one(A, _) : Laws.Delivery<A>}
       one_observation(A, Fifo.dequeue(A, messages))
 
+def firstOf(-A: Data, removal: FifoLaws.Removal<A>) -> List<&2, A>:
+  match removal:
+    case FifoLaws.Removal{_, None{}}: Nil{}
+    case FifoLaws.Removal{_, Some{value}}: value <> Nil{}
+
+law one_peek:
+  for -A: Data
+  for pair: Fifo.Queue<A> & Maybe<&2, A>
+  {Queue.peekedOne(A, pair) == firstOf(A, FifoLaws.observe(A, pair)) : List<&2, A>}
+
+def one_peek(A, pair):
+  match pair:
+    case Tuple{_, None{}}: {==}
+    case Tuple{_, Some{_}}: {==}
+
+law one_peek_sequence:
+  for -A: Data
+  for values: List<&2, A>
+  {firstOf(A, FifoLaws.uncons(A, values)) == Laws.emittedOf(A, Laws.delivered(A, Laws.Snapshot{T.OneAtATime{}, values})) : List<&2, A>}
+
+def one_peek_sequence(A, values):
+  match values:
+    case Nil{}: {==}
+    case _ <> _: {==}
+
+def Laws.peek(A, queue):
+  match queue:
+    case Queue.PendingMessageQueue{T.All{}, _}: {==}
+    case Queue.PendingMessageQueue{T.OneAtATime{}, messages}:
+      %one_peek_sequence(A, Fifo.drain(A, messages)) : {Queue.peekedOne(A, Fifo.dequeue(A, messages)) == _ : List<&2, A>}
+      %FifoLaws.fifo_dequeue(A, messages) : {Queue.peekedOne(A, Fifo.dequeue(A, messages)) == firstOf(A, _) : List<&2, A>}
+      one_peek(A, Fifo.dequeue(A, messages))
+
 law reverse_nonempty:
   for -A: Data
   for values: List<&2, A>

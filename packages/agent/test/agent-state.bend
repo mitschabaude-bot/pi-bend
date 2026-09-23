@@ -25,10 +25,6 @@ def toolNames(tools: List<&2, T.AgentTool<String, String>>) -> List<&2, String>:
   match tools:
     case Nil{}: Nil{}
     case T.AgentTool{name, _, _, _, _, _, _, _, _} <> rest: name <> toolNames(rest)
-def modelId(model: Ai.Model<Ai.JsonValue>) -> String:
-  match model:
-    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
-
 def thinking(level: T.ThinkingLevel()) -> String:
   match level:
     case Ai.Off{}: "off"
@@ -47,7 +43,7 @@ def declaredNames(tools: List<&2, Ai.Tool<V.Value>>) -> String:
 def keyFields(prompt: String, state: Value()) -> String:
   match state:
     case T.AgentState{model, level, tools, +messages, streaming, message, pending, error}:
-      modelId(model) ++ ";" ++ thinking(level) ++ ";" ++ String.join(toolNames(tools), ",") ++ ";" ++ prompt ++ ";" ++ H.names(messages) ++ ";" ++ Bool.pick(String, streaming, "1", "0") ++ ";" ++ partial(message) ++ ";" ++ String.join(Set.toList(pending), ",") ++ ";" ++ Maybe.default(&2, String, error, "none") ++ ";" ++ declaredNames(Transcript.getCurrentTools(V.Value, V.Value, Unit, String, H.converted(messages))) ++ ";" ++ H.llmNames(State.defaultConvertToLlm(Unit, String, String, String, messages))
+      Ai.modelId(model) ++ ";" ++ thinking(level) ++ ";" ++ String.join(toolNames(tools), ",") ++ ";" ++ prompt ++ ";" ++ H.names(messages) ++ ";" ++ Bool.pick(String, streaming, "1", "0") ++ ";" ++ partial(message) ++ ";" ++ String.join(Set.toList(pending), ",") ++ ";" ++ Maybe.default(&2, String, error, "none") ++ ";" ++ declaredNames(Transcript.getCurrentTools(V.Value, V.Value, Unit, String, H.converted(messages))) ++ ";" ++ H.llmNames(State.defaultConvertToLlm(Unit, String, String, String, messages))
 def key(+state: Value()) -> String:
   keyFields(State.systemPromptState(Unit, String, String, String, state), state)
 
@@ -108,7 +104,7 @@ def step(index: U32, state: Value()) -> Value():
 def zero(value: F64) -> Bool: V.equal(V.Number{value}, V.Number{F.fromU32(0)})
 def defaultModelMatches(model: Ai.Model<Ai.JsonValue>) -> Bool:
   match model:
-    case Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, maximum, None{}, None{}, None{}}:
+    case Ai.Model{"unknown", "unknown", Ai.CustomModelApi{"unknown"}, "unknown", "", False{}, None{}, Nil{}, _, Ai.ModelCost{a, b, c, d, None{}}, _, context, maximum, None{}, None{}, None{}}:
       zero(a) && zero(b) && zero(c) && zero(d) && zero(context) && zero(maximum)
     case _: False{}
 

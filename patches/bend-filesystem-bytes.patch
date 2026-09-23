@@ -1,0 +1,160 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3198,3 +3198,13 @@
+ def System.error_name(code: U32) -> IO(Maybe<&2, String>):
+   import "./effs/system_error_name.c"
+   import "./effs/system_error_name.js"
++
++# Exact stat size, high/low words, following symbolic links. No content read.
++def File.size_bytes(path: String) -> IO(Result<&1, &1, U32 & String, U32 & U32>):
++  import "./effs/file_size_bytes.c"
++  import "./effs/file_size_bytes.js"
++
++# Write validated raw octets, retaining the owned File on success or failure.
++def File.write_bytes(file: File, data: List<&2, U32>) -> IO(File & Result<&1, &1, U32 & String, Unit>):
++  import "./effs/file_write_bytes.c"
++  import "./effs/file_write_bytes.js"
+--- a/bend2/effs/file_open_mode.c
++++ b/bend2/effs/file_open_mode.c
+@@ -4,6 +4,9 @@
+ static int file_open_mode_flags(const char* mode) {
+   if (strcmp(mode, "r") == 0) {
+     return O_RDONLY;
++  }
++  if (strcmp(mode, "wx") == 0) {
++    return O_WRONLY | O_CREAT | O_EXCL;
+   }
+   if (strcmp(mode, "w") == 0) {
+     return O_WRONLY | O_CREAT | O_TRUNC;
+--- a/bend2/effs/file_open_mode.js
++++ b/bend2/effs/file_open_mode.js
+@@ -6,7 +6,7 @@
+   if (name.includes(0)) {
+     return io_fail(process.platform === "darwin" ? 92 : 84);
+   }
+-  if (!["r", "w", "a"].includes(mode)) {
++  if (!["r", "w", "wx", "a"].includes(mode)) {
+     return io_fail(22);
+   }
+   try {
+--- /dev/null
++++ b/bend2/effs/file_size_bytes.c
+@@ -0,0 +1,29 @@
++#include <sys/stat.h>
++
++static void file_size_bytes_call(IoWork* w) {
++  struct stat info;
++  io_sys_end(w, stat(w->data, &info));
++  if (w->code == 0) {
++    if (info.st_size < 0) w->code = EOVERFLOW;
++    else w->size = (u64)info.st_size;
++  }
++}
++
++static Term file_size_bytes_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, io_tup(e, (u32)(w->size >> 32), (u32)w->size));
++}
++
++Term file_size_bytes_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e, f[0], &w->size);
++  if (io_nul(w->data, w->size)) {
++    w->code = EILSEQ;
++    return file_size_bytes_pack(e, w);
++  }
++  return io_work(w, file_size_bytes_call, file_size_bytes_pack);
++}
++
++static void __attribute__((constructor)) file_size_bytes_use(void) {
++  io_eff(CID_FILE_SIZE_BYTES, file_size_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_size_bytes.js
+@@ -0,0 +1,11 @@
++function file_size_bytes(path) {
++  const bytes = io_bytes(path);
++  if (bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try {
++    const size = require("fs").statSync(bytes.length ? Buffer.from(bytes) : "", {bigint: true}).size;
++    if (size < 0n || size > 0xffffffffffffffffn) return io_fail(require("os").constants.errno.EOVERFLOW);
++    return io_done(io_tup(Number(size >> 32n), Number(size & 0xffffffffn)));
++  } catch (error) {
++    return io_fail(Math.abs(error.errno ?? 5));
++  }
++}
+--- /dev/null
++++ b/bend2/effs/file_write_bytes.c
+@@ -0,0 +1,49 @@
++static void file_write_bytes_call(IoWork* w) {
++  u64 at = 0;
++  while (at < w->size) {
++    u64 remaining = w->size - at;
++    size_t count = remaining > INT32_MAX ? INT32_MAX : (size_t)remaining;
++    ssize_t n = write((int)w->hand, w->data + at, count);
++    if (n < 0 && errno == EINTR) continue;
++    if (n <= 0) {
++      w->code = n < 0 ? errno : EIO;
++      return;
++    }
++    at += (u64)n;
++  }
++}
++
++static Term file_write_bytes_pack(Env e, IoWork* w) {
++  free(w->data);
++  Term result = w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(CID_UNIT, 0));
++  return io_tup(e, io_hand(w->hand), result);
++}
++
++Term file_write_bytes_run(Env e, Term* f, IoWork* w) {
++  w->code = 0;
++  w->hand = (intptr_t)io_hand_v(f[0]);
++  u64 capacity = 64;
++  w->data = io_mem(malloc(capacity));
++  w->size = 0;
++  Term bytes = f[1];
++  while (term_aux(bytes) == CID_CON) {
++    Term fields[2];
++    spare_free(e, cls_fit(2), ctr_take(e, bytes, 2, fields));
++    if (fields[0] > 255) w->code = EINVAL;
++    if (w->code == 0) {
++      if (w->size == capacity) {
++        capacity *= 2;
++        w->data = io_mem(realloc(w->data, capacity));
++      }
++      w->data[w->size++] = (char)fields[0];
++    }
++    bytes = fields[1];
++  }
++  return w->code ? file_write_bytes_pack(e, w)
++    : io_work(w, file_write_bytes_call, file_write_bytes_pack);
++}
++
++static void __attribute__((constructor)) file_write_bytes_use(void) {
++  io_eff(CID_FILE_WRITE_BYTES, file_write_bytes_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_write_bytes.js
+@@ -0,0 +1,20 @@
++function file_write_bytes(file, data) {
++  const bytes = [];
++  for (let node = data; node.$ === "Con"; node = node.tail) {
++    if (node.head > 255) return io_tup(file, io_fail(22));
++    bytes.push(node.head);
++  }
++  const buffer = Uint8Array.from(bytes), fs = require("fs");
++  let at = 0;
++  while (at < buffer.length) {
++    try {
++      const written = fs.writeSync(file, buffer, at, buffer.length - at, null);
++      if (written === 0) return io_tup(file, io_fail(5));
++      at += written;
++    } catch (error) {
++      if (error.code === "EINTR") continue;
++      return io_tup(file, io_fail(Math.abs(error.errno ?? 5)));
++    }
++  }
++  return io_tup(file, io_done({$: "Unit"}));
++}

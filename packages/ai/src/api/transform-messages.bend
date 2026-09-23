@@ -49,7 +49,7 @@ def supportsImages(input: List<&2, Ai.ModelInput>) -> Bool:
 
 def imageCapability(-J: Data, model: Ai.Model<J>) -> Bool:
   match model:
-    case Ai.Model{_, _, _, _, _, _, _, input, _, _, _, _, _, _}: supportsImages(input)
+    case Ai.Model{_, _, _, _, _, _, _, input, _, _, _, _, _, _, _, _}: supportsImages(input)
 
 def downgradeSelected(-P: Data, -A: Data, -G: Data, -D: Data, enabled: Bool, messages: List<&2, Ai.Message<P, A, G, D>>) -> List<&2, Ai.Message<P, A, G, D>>:
   match enabled:
@@ -66,7 +66,7 @@ type Target is Data:
 
 def target(-J: Data, model: Ai.Model<J>) -> Target:
   match model:
-    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}: Target{Api.name(api), provider, id}
+    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Target{Api.name(api), provider, id}
 
 def sameModel(-A: Data, -G: Data, target: Target, source: Ai.AssistantMessage<A, G>) -> Bool:
   match target source:
@@ -129,10 +129,6 @@ def withContent(-A: Data, -G: Data, source: Ai.AssistantMessage<A, G>, content: 
     case Ai.AssistantMessage{_, api, provider, model, responseModel, responseId, thinkingLevel, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}:
       Ai.AssistantMessage{content, api, provider, model, responseModel, responseId, thinkingLevel, diagnostics, usage, reason, deferred, error, rawReason, endTurn, timestamp}
 
-def assistantContent(-A: Data, -G: Data, source: Ai.AssistantMessage<A, G>) -> List<&2, Ai.AssistantContent<A>>:
-  match source:
-    case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: content
-
 def rememberId(+old: String, +new: String, +ids: R.Record<String>) -> R.Record<String>:
   Bool.pick(R.Record<String>, String.eq(old, new), ids, R.set(String, ids, old, new))
 
@@ -188,7 +184,7 @@ def transformOne(-P: Data, -A: Data, -G: Data, -D: Data, -J: Data, -E: Data, mes
     case Ai.Assistant{+source} FirstPass{reversed, ids}:
       do IO<Result<&2, &2, E, FirstPass<P, A, G, D>>>:
         +same : Bool = sameModel(A, G, target(J, model), source)
-        result : Result<&2, &2, E, NormalizedContent<A>> <- normalizeAssistant(A, G, J, E, same, replayContent(A, assistantContent(A, G, source), same), model, source, normalizer, ids)
+        result : Result<&2, &2, E, NormalizedContent<A>> <- normalizeAssistant(A, G, J, E, same, replayContent(A, Ai.assistantContent(A, G, source), same), model, source, normalizer, ids)
         return transformedAssistant(P, A, G, D, E, source, reversed, result)
     case Ai.ToolResult{result} FirstPass{reversed, +ids}:
       IO.pure(Result<&2, &2, E, FirstPass<P, A, G, D>>, Done{FirstPass{Ai.ToolResult{mappedResult(D, result, ids)} <> reversed, ids}})

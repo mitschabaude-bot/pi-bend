@@ -6,7 +6,7 @@ import ../../runtime/src/f64.bend as F
 # The dependent API argument binds the type of compat at construction time.
 def model(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(api)>) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, T.InputText{} <> T.InputImage{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
+  T.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, T.InputText{} <> T.InputImage{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, compat}
 
 def category(api: T.ModelApi) -> U32:
   match api:

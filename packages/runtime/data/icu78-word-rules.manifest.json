@@ -1,0 +1,16 @@
+{
+  "icu": "78.3",
+  "unicode": "17.0",
+  "source": "https://raw.githubusercontent.com/unicode-org/icu/release-78.3/icu4c/source/data/brkitr/rules/word.txt",
+  "source_sha256": "8c623551556473c97f32a1ecc22716c4d73fbf71b8dc500a4b461302ca146171",
+  "compiled_rules_sha256": "b72fd92aefc26d34b070b3bddfa9edcce3beb4f3eec7fe3bc8a77c577a08c1f0",
+  "scalar_categories_sha256": "baf2903cc7d4559e25e221fced822edd10bb2036ee883de682877b36dcd726b9",
+  "states": 58,
+  "categories": 31,
+  "dictionary_start": 24,
+  "property_ranges": 2316,
+  "bytes": 15884,
+  "sha256": "6cc2b768d3f20f2b26d88dd7a6d4eda1100b03ec73919757d9689b12953dc289",
+  "license": "icu78-cjk.LICENSE",
+  "format": "ICUWRD01; states,categories,dictionaryStart,rangeCount:u16le; state(accept:u8,status:u16le,targets:categories*u8); ranges(start:u32le,categoryAndEngine:u16le)"
+}

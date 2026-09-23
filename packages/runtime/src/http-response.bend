@@ -1,4 +1,5 @@
 import Base
+import ./text.bend as Text
 import ./http-message.bend as Head
 import ./callback.bend as C
 import ./bounded.bend as Bytes
@@ -89,7 +90,7 @@ def token(value: String, state: Connection) -> Connection:
 def tokens(values: List<&2, String>, state: Connection) -> Connection:
   match values:
     case Nil{}: state
-    case value <> rest: tokens(rest, token(Head.lowercase(Head.trimHeader(value)), state))
+    case value <> rest: tokens(rest, token(Text.asciiLower(Head.trimHeader(value)), state))
 
 def field(name: String, value: String, state: Connection) -> Connection:
   match name:
@@ -99,7 +100,7 @@ def field(name: String, value: String, state: Connection) -> Connection:
 def terminationFields(values: List<&2, Head.Header>, state: Connection) -> Connection:
   match values:
     case Nil{}: state
-    case Head.Header{name, value} <> rest: terminationFields(rest, field(Head.lowercase(name), value, state))
+    case Head.Header{name, value} <> rest: terminationFields(rest, field(Text.asciiLower(name), value, state))
 
 def persistent(modern: Bool, state: Connection) -> Bool:
   match state:

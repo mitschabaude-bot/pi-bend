@@ -37,7 +37,7 @@ def initial(mode: U32, execute: Executor()) -> Maybe<&2, State.AgentInitialState
     case 3: Some{State.AgentInitialState{Some{"You are helpful."}, None{}, None{}, H.tools(9, execute), Some{H.user("old") <> Nil{}}}}
     case _: None{}
 def options(initial: Maybe<&2, State.AgentInitialState<Unit, Unit, String, String>>, stream: StreamFunction()) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
-  Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  Options.AgentOptions{initial, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def create(mode: U32) -> IO(Fixture):
   do IO<Fixture>:
     +stream : StreamFunction() <- C.create(~Unit, ~H.ProviderInput(), ~H.ProviderOutput(), ~unused, Unit{})
@@ -66,12 +66,12 @@ def comparison(value: Maybe<&2, Cmp>) -> Bool:
 def equals(value: F64, expected: U32) -> Bool: comparison(F.compare(value, F.fromU32(expected)))
 def completeModel(model: Ai.Model<Ai.JsonValue>, expectedApi: String) -> Bool:
   match model:
-    case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Ai.ModelCost{a, b, c, d, None{}}, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)
+    case Ai.Model{"test", "Test", api, "test-provider", "https://example.test", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, _, Ai.ModelCost{a, b, c, d, None{}}, _, context, output, None{}, None{}, None{}}: String.eq(Api.name(api), expectedApi) && equals(a, 0) && equals(b, 0) && equals(c, 0) && equals(d, 0) && equals(context, 128000) && equals(output, 4096)
     case _: False{}
 def emptyPending(values: Set.StringSet) -> Bool: Nat.is_eq(List.length(&2, String, Set.toList(values)), 0n)
 def defaultState(value: Snapshot()) -> Bool:
   match value:
-    case T.AgentState{Ai.Model{"unknown", _, _, _, _, _, _, _, _, _, _, _, _, _}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)
+    case T.AgentState{Ai.Model{"unknown", _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)
     case _: False{}
 def customState(value: Snapshot()) -> Bool:
   match value:

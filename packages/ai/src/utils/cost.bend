@@ -48,7 +48,7 @@ def compute(cost: T.ModelCost, usage: T.Usage) -> T.UsageCost:
 
 def modelCost(-SamplingValue: Data, model: T.Model<SamplingValue>) -> T.ModelCost:
   match model:
-    case T.Model{_, _, _, _, _, _, _, _, cost, _, _, _, _, _}: cost
+    case T.Model{_, _, _, _, _, _, _, _, _, cost, _, _, _, _, _, _}: cost
 
 # Return the computed value; the caller decides where to retain it.
 def calculate(-SamplingValue: Data, model: T.Model<SamplingValue>, usage: T.Usage) -> T.UsageCost:

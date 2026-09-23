@@ -44,9 +44,6 @@ def valid(message: Ai.AssistantMessage<Schema.Value, Unit>, aborted: Bool, expec
     case Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"", None{}}} <> Nil{}, "failure-api", "failure-provider", "failure-model", None{}, None{}, None{}, None{}, usage, stop, None{}, Some{error}, None{}, None{}, +timestamp}:
       usageZero(usage) && reason(stop, aborted) && String.eq(error, expected) && atMost(lower, timestamp) && atMost(timestamp, upper)
     case _: False{}
-def timestamp(message: Ai.AssistantMessage<Schema.Value, Unit>) -> F64:
-  match message:
-    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, _, _, _, value}: value
 def stampState(previous: Maybe<&2, F64>, +value: F64) -> Maybe<&2, F64> & Bool:
   match previous:
     case None{}: (Some{value}, True{})
@@ -89,7 +86,7 @@ def body(environment: Environment, input: EventTest.Input()) -> IO(Emission.Emis
         +message : Ai.AssistantMessage<Schema.Value, Unit> <- eventMessage(event)
         upper : F64 <- Date.now()
         Test.assertion(valid(message, aborted, error, lower, upper), "failure content, metadata, usage, reason, error or wall-clock timestamp differs")
-        stable : Bool <- R.modify(Maybe<&2, F64>, Bool, stamp, previous => stampState(previous, timestamp(message)))
+        stable : Bool <- R.modify(Maybe<&2, F64>, Bool, stamp, previous => stampState(previous, Ai.assistantTimestamp(Schema.Value, Unit, message)))
         Test.assertion(stable, "all failure events share one timestamp")
         cancelled : Bool <- Abort.aborted(Unit, signal)
         Test.assertion(Bool.not(Bool.xor(cancelled, aborted)), "failure listener gets the active cancellation signal")
@@ -119,7 +116,7 @@ def resultKey(result: EventTest.Outcome()) -> String:
     case Fail{Events.OutsideRun{message}}: "outside:" ++ message
 def model() -> Ai.Model<Ai.JsonValue>:
   +zero = F.fromU32(0)
-  Ai.Model{"failure-model", "Failure", Ai.CustomModelApi{"failure-api"}, "failure-provider", "", False{}, None{}, Nil{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, zero, zero, None{}, None{}, None{}}
+  Ai.Model{"failure-model", "Failure", Ai.CustomModelApi{"failure-api"}, "failure-provider", "", False{}, None{}, Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, zero, zero, None{}, None{}, None{}}
 def scenario(+aborted: Bool, +error: String, +failStage: U32, +failListener: U32, expected: String) -> IO(Unit):
   do IO<Unit>:
     Test.assertion(valid(Failure.failureMessage(Unit, model(), aborted, error, F.fromU32(42)), aborted, error, F.fromU32(42), F.fromU32(42)), "explicit failure constructor preserves timestamp and complete message shape")

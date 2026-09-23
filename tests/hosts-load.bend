@@ -19,6 +19,8 @@ def report(~DecodeError: Data, ~showError: DecodeError -> String, name: String, 
     case Fail{Load.Loading{File.File{Fold.InvalidReadSize{}}}}: IO.print("size")
     case Fail{Load.Loading{File.File{Fold.Open{code, _}}}}: IO.print("open:" ++ U32.show(code))
     case Fail{Load.Loading{File.File{Fold.Read{code, _}}}}: IO.print("read:" ++ U32.show(code))
+    case Fail{Load.Loading{File.File{Fold.Close{code, _}}}}: IO.print("close:" ++ U32.show(code))
+    case Fail{Load.Loading{File.File{Fold.ReadAndClose{code, _, close, _}}}}: IO.print("read-close:" ++ U32.show(code) ++ ":" ++ U32.show(close))
 
 def read(reject: Bool, path: String, chunk: U32, limit: Nat) -> IO(Result<&2, &2, Load.LoadError<String>, List<&2, Hosts.Entry<Parser.Address>>>):
   match reject:

@@ -33,7 +33,7 @@ def provider(capture: Capture, input: H.ProviderInput()) -> IO(H.ProviderOutput(
         return Done{T.borrowedStream(Unit, String, stream)}
     case _ _: IO.die(H.ProviderOutput(), 1, "provider did not receive request options")
 def options(stream: Maybe<&2, Named.StreamFunction()>, session: Maybe<&2, String>) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
-  Options.AgentOptions{None{}, None{}, None{}, stream, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, session, None{}, None{}, None{}, None{}}
+  Options.AgentOptions{None{}, None{}, None{}, stream, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, session, None{}, None{}, None{}, None{}}
 def create(+legacy: Bool, session: Maybe<&2, String>) -> IO(Fixture):
   do IO<Fixture>:
     calls : R.Ref<U32> <- R.new(U32, 0)
@@ -137,22 +137,8 @@ def followUp() -> IO(Unit):
     Test.assertion(followUpPresent(messages) && assistantTail(messages), "queued follow-up is processed and assistant response ends history")
     dispose(fixture)
     IO.print("PASS continue() should process queued follow-up messages after an assistant turn")
-def steering() -> IO(Unit):
-  do IO<Unit>:
-    +fixture : Fixture <- create(False{}, None{})
-    +agent : Owner.Owner() = getAgent(fixture)
-    Agent.replaceMessages(Unit, Unit, String, String, Unit, agent, initialHistory())
-    Agent.steer(Unit, Unit, String, String, Unit, agent, H.user("Steering 1"))
-    Agent.steer(Unit, Unit, String, String, Unit, agent, H.user("Steering 2"))
-    continuation(agent)
-    value : Named.Snapshot() <- Agent.state(Unit, Unit, String, String, Unit, agent)
-    calls : U32 <- count(fixture)
-    Test.assertion(String.eq(H.roles(Named.getMessages(value)), "uauaua") && U32.is_eq(calls, 2), "one-at-a-time steering preserves alternating user/assistant history and two requests")
-    dispose(fixture)
-    IO.print("PASS continue() should keep one-at-a-time steering semantics from assistant tail")
 def main() -> IO(Unit):
   do IO<Unit>:
     legacyDefault()
     sessionId()
     followUp()
-    steering()

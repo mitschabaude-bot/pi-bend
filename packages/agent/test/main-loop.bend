@@ -26,8 +26,10 @@ def Assistant() -> Data: Ai.AssistantMessage<V.Value, Unit>
 def StreamValue() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
 def ProviderOutput() -> Type: Result<&2, &1, String, T.StreamLease<Unit, String>>
 def ProviderInput() -> Data: T.StreamInput<Unit, String, H.Config()>
-def Turn() -> Data: T.ShouldStopAfterTurnContext<Unit, String, String, String>
+def Turn() -> Data: T.AgentTurnContext<Unit, String, String, String>
 def Update() -> Data: T.AgentLoopTurnUpdate<Unit, String, String, String>
+def FinishInput() -> Data: T.ToolHookInput<Turn()>
+def FinishOutput() -> Data: Result<&2, &2, String, Maybe<&2, T.AgentTurnDecision>>
 def PrepareOutput() -> Data: Result<&2, &2, String, Maybe<&2, Update()>>
 def QueueOutput() -> Data: Result<&2, &2, String, H.Messages()>
 def Outcome() -> Data: Result<&2, &2, String, H.Messages()>
@@ -237,17 +239,21 @@ def queue(environment: Queue, unused: Unit) -> IO(QueueOutput()):
         changeDefault(defaults, name)
         return queueValue(enabled, name, Bool.pick(Bool, String.eq(name, "steering"), U32.is_eq(index, 1), U32.is_eq(index, 0)))
 
-def stop(environment: Stopping, input: Turn()) -> IO(Result<&2, &2, String, Bool>):
+def decision(shouldStop: Bool) -> Maybe<&2, T.AgentTurnDecision>:
+  match shouldStop:
+    case True{}: Some{T.EndTurn{}}
+    case False{}: None{}
+def stop(environment: Stopping, input: FinishInput()) -> IO(FinishOutput()):
   match environment input:
-    case Stopping{shouldStop, recording, baseline, fail} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
-      do IO<Result<&2, &2, String, Bool>>:
-        Test.assertion(String.eq(names(context), baseline ++ names(history)), "stop hook sees committed context and generated history")
-        log(recording, "stop")
-        return Bool.pick(Result<&2, &2, String, Bool>, fail, Fail{"stop failed"}, Done{shouldStop})
+    case Stopping{shouldStop, recording, baseline, fail} T.ToolHookInput{T.AgentTurnContext{_, _, T.AgentContext{context, _}, history}, _}:
+      do IO<FinishOutput()>:
+        Test.assertion(String.eq(names(context), baseline ++ names(history)), "finishTurn sees committed context and generated history")
+        log(recording, "finish")
+        return Bool.pick(FinishOutput(), fail, Fail{"finish failed"}, Done{decision(shouldStop)})
 
 def prepare(environment: Preparing, input: Turn()) -> IO(PrepareOutput()):
   match environment input:
-    case Preparing{recording, baseline} T.ShouldStopAfterTurnContext{_, _, T.AgentContext{context, _}, history}:
+    case Preparing{recording, baseline} T.AgentTurnContext{_, _, T.AgentContext{context, _}, history}:
       do IO<PrepareOutput()>:
         Test.assertion(String.eq(names(context), baseline ++ names(history)), "next-turn hook receives the completed snapshot")
         log(recording, "prepare")
@@ -371,7 +377,7 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     +replacement : C.Callback<ProviderInput(), ProviderOutput()> <- C.create(~Provider, ~ProviderInput(), ~ProviderOutput(), ~provider, Provider{kind, providerCount, recording, requests, streams, "provider:replacement", gate})
     StreamFn.setDefaultStreamFn(Unit, String, H.Config(), String, registry, initialDefault(policy, providerCallback, replacement))
     +defaults : Defaults = Defaults{policy, registry, providerCallback, replacement}
-    +stopHook : C.Callback<Turn(), Result<&2, &2, String, Bool>> <- C.create(~Stopping, ~Turn(), ~Result<&2, &2, String, Bool>, ~stop, Stopping{shouldStop, recording, baseline(mode), U32.is_eq(kind, 6)})
+    +stopHook : C.Callback<FinishInput(), FinishOutput()> <- C.create(~Stopping, ~FinishInput(), ~FinishOutput(), ~stop, Stopping{shouldStop, recording, baseline(mode), U32.is_eq(kind, 6)})
     +prepareHook : C.Callback<Turn(), PrepareOutput()> <- C.create(~Preparing, ~Turn(), ~PrepareOutput(), ~prepare, Preparing{recording, baseline(mode)})
     +steering : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"steering", steeringEnabled, steeringCount, recording, defaults})
     +follow : C.Callback<Unit, QueueOutput()> <- C.create(~Queue, ~Unit, ~QueueOutput(), ~queue, Queue{"follow", followEnabled, followCount, recording, defaults})
@@ -382,7 +388,7 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     +batches : Main.Batches(Unit, String, String, String) <- Main.newBatches(Unit, String, String, String)
     schema : V.Value = V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"object"}} <> Record.Property{"properties", H.field(V.ObjectValue{Record.Record{Record.Property{"type", V.Text{"number"}} <> Nil{}}})} <> Record.Property{"required", V.ArrayValue{V.Text{"value"} <> Nil{}}} <> Nil{}}}
     context : H.Context() = entryContext(mode, T.AgentTool{"echo", "", schema, None{}, "Echo", None{}, executor, None{}, None{}} <> Nil{})
-    config : H.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
+    config : H.Config() = T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"original"}, None{}), converter, None{}, None{}, Some{stopHook}, None{}, Some{prepareHook}, Some{steering}, Some{follow}, None{}, None{}, None{}}
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     outcome : Outcome() <- invokeRuntime(streamed, gate, mode, policy, registry, Main.LoopCapture{Main.Services{Some{Abort.signal(Unit, controller)}, validator, aborted, emitter, sink, updates, batches, "empty"}, providerCallback}, context, config, expectedEvents, expectedHistory, expectedError)
     checked(outcome, expectedHistory, expectedError)
@@ -399,7 +405,7 @@ def scenarioRuntime(+streamed: Bool, +mode: U32, +policy: U32, +kind: U32, termi
     C.dispose(H.ExecuteInput(), H.ExecuteOutput(), executor)
     C.dispose(H.Input(), H.Checked(), validator)
     C.dispose(H.Messages(), H.Converted(), converter)
-    C.dispose(Turn(), Result<&2, &2, String, Bool>, stopHook)
+    C.dispose(FinishInput(), FinishOutput(), stopHook)
     C.dispose(Turn(), PrepareOutput(), prepareHook)
     C.dispose(Unit, QueueOutput(), steering)
     C.dispose(Unit, QueueOutput(), follow)

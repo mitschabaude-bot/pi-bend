@@ -23,7 +23,7 @@ def shown(usage: T.Usage) -> String:
 
 def model(modelId: String) -> T.Model<T.JsonValue>:
   +zero = F.fromU32(0)
-  T.Model{modelId, "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  T.Model{modelId, "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def values(modelId: String, serviceTier: Maybe<&2, String>, input: Maybe<&2, F64>, output: Maybe<&2, F64>, read: Maybe<&2, F64>, write: Maybe<&2, F64>, total: Maybe<&2, F64>) -> IO(Unit):
   match input output read write total:

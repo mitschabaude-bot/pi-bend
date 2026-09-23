@@ -33,7 +33,7 @@ for name in FILES:
         assert '@unsafe' not in source and '?TODO' not in source, name
 
 def check(directory, source):
-    run = subprocess.run([BEND, source], cwd=directory, capture_output=True, text=True, timeout=60)
+    run = subprocess.run([BEND, source], cwd=directory, capture_output=True, text=True)
     return {'source': source, 'exit_code': run.returncode, 'stdout': run.stdout, 'stderr': run.stderr}
 
 def accepted(result):

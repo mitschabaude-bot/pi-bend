@@ -24,6 +24,6 @@ Shipping priority: build a fully native model-request and tool-execution loop th
 
 Current priority from Gregor: return to porting pi. The last bounded compiler attempt (dependency ordering) was rejected at 131 seconds versus the installed 124 seconds. Do not open further compiler investigations without new direction. The installed compiler already takes about 124 seconds at 7.29 GiB on the archived full fixture. Prioritize clean, minimal, logically structured, tasteful Bend code; choose modules by responsibility rather than implementation steps, and avoid unnecessary generic forwarding layers.
 
-Coordination between agents sharing this checkout happens in `AGENT-LOG.md` (append-only). Read it before starting work and append an entry before touching shared paths and after each commit.
+Coordinate through `AGENT-LOG.md` (append-only). Read only the last 30 lines, then use targeted `rg` searches if needed; never load the whole log. Reserve shared paths before editing and record committed handoffs. Keep entries to 1–3 short sentences: ownership, commit/result, next action or blocker. Put detailed evidence in the relevant test output or document, and link it instead of repeating it.
 
 Latest compiler priority from Gregor: this machine has enough memory; compilation speed now matters more than further memory reduction. Keep Bun as the default rather than switching to slower Node. Reject memory optimizations that slow compilation; Node may still be used for diagnostic allocation profiling.

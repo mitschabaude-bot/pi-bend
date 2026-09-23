@@ -12,10 +12,21 @@ def decoded(result: Result<&2,&2,Codec.Error,List<&2,U32>>) -> String:
     case Fail{_}: "error"
     case Done{value}: Bytes.show(value)
 
-def run(+text: String) -> String:
+def repeatedBytes(count: Nat, reversed: List<&2,U32>) -> List<&2,U32>:
+  match count:
+    case 0n: reversed
+    case 1n+rest: repeatedBytes(rest,120 <> reversed)
+
+def runSmall(+text: String) -> String:
   Bool.pick(Unit -> String,String.starts_with(text,"e:"),
     unit => encoded(Codec.encode(Bytes.bytes(String.drop(text,2n)))),
     unit => decoded(Codec.decode(String.drop(text,2n))))(Unit{})
+
+def run(text: String) -> String:
+  match text:
+    case "large": encoded(Codec.encode(repeatedBytes(196608n,Nil{})))
+    case "large-invalid": encoded(Codec.encode(repeatedBytes(196608n,256 <> Nil{})))
+    case other: runSmall(other)
 
 def arguments(values: List<String>) -> IO(Unit):
   match values:

@@ -1,0 +1,52 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3208,3 +3208,8 @@
+ def File.write_bytes(file: File, data: List<&2, U32>) -> IO(File & Result<&1, &1, U32 & String, Unit>):
+   import "./effs/file_write_bytes.c"
+   import "./effs/file_write_bytes.js"
++
++# Follow symbolic links and inspect metadata; never open file content.
++def File.is_file(path: String) -> IO(Result<&1, &1, U32 & String, Bool>):
++  import "./effs/file_is_file.c"
++  import "./effs/file_is_file.js"
+--- /dev/null
++++ b/bend2/effs/file_is_file.c
+@@ -0,0 +1,26 @@
++#include <sys/stat.h>
++
++static void file_is_file_call(IoWork* w) {
++  struct stat info;
++  io_sys_end(w, stat(w->data, &info));
++  if (!w->code) w->size = S_ISREG(info.st_mode);
++}
++
++static Term file_is_file_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(w->size ? CID_TRUE : CID_FALSE, 0));
++}
++
++Term file_is_file_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e, f[0], &w->size);
++  if (io_nul(w->data, w->size)) {
++    w->code = EILSEQ;
++    return file_is_file_pack(e, w);
++  }
++  return io_work(w, file_is_file_call, file_is_file_pack);
++}
++
++static void __attribute__((constructor)) file_is_file_use(void) {
++  io_eff(CID_FILE_IS_FILE, file_is_file_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_is_file.js
+@@ -0,0 +1,9 @@
++function file_is_file(path) {
++  const bytes = io_bytes(path);
++  if (bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try {
++    return io_done(require("fs").statSync(bytes.length ? Buffer.from(bytes) : "").isFile());
++  } catch (error) {
++    return io_fail(Math.abs(error.errno ?? 5));
++  }
++}

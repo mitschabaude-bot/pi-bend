@@ -1186,6 +1186,9 @@ def file(error: Fold.Error) -> String:
     case Fold.InvalidReadSize{}: "Invalid resolver file read size"
     case Fold.Open{code, message}: operatingSystem("Could not open resolver configuration", code, message)
     case Fold.Read{code, message}: operatingSystem("Could not read resolver configuration", code, message)
+    case Fold.Close{code, message}: operatingSystem("Could not close resolver configuration", code, message)
+    case Fold.ReadAndClose{rc, rm, cc, cm}:
+      operatingSystem("Could not read resolver configuration", rc, rm) ++ "; " ++ operatingSystem("Could not close resolver configuration", cc, cm)
 
 def decoding(error: UTF8.Error) -> String:
   match error:

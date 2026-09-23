@@ -74,9 +74,20 @@ for c in cases:
     if len(c)==3:native.append(c);continue
     status,message,bodies,prefix=c
     native.append([status,message,[None if b is not None and b[0] in ['unread','private'] else b for b in bodies],prefix])
+# Native strings hold Unicode scalars only, and the strict JSON decoder
+# rejects lone surrogate escapes (2f7b589), so upstream inputs containing an
+# isolated UTF-16 surrogate have no native counterpart. They are recorded,
+# not run.
+def lone_surrogate(value):
+    return any(0xd800<=ord(ch)<=0xdfff for ch in json.dumps(value,ensure_ascii=False))
+unrepresentable=[i for i,c in enumerate(cases) if lone_surrogate(c)]
+(ROOT/'build/error-body-unrepresentable.json').write_text(json.dumps([{'case':i,'name':names[i],'upstream':expected[i]} for i in unrepresentable],indent=2)+'\n')
+assert len(unrepresentable)==4 and all(names[i]=='UTF-16 truncation boundary' for i in unrepresentable), unrepresentable
+runnable=[i for i in range(len(cases)) if i not in unrepresentable]
 for threads in ['1','4']:
-    for start in range(0,len(cases),12):
-        args=[encode([c,e]) for c,e in zip(native[start:start+12],expected[start:start+12])]
+    for start in range(0,len(runnable),12):
+        chunk=runnable[start:start+12]
+        args=[encode([native[i],expected[i]]) for i in chunk]
         result=subprocess.run([str(ROOT/'build/error-body-runner'),'--threads',threads,*args],cwd=ROOT,text=True,capture_output=True,timeout=120)
-        assert result.returncode==0,(threads,start,names[start:start+12],result.stdout,result.stderr)
-    print(f'PASS {len(cases)} actual-pi provider-error comparisons on {threads} threads')
+        assert result.returncode==0,(threads,start,[names[i] for i in chunk],result.stdout,result.stderr)
+    print(f'PASS {len(runnable)} actual-pi provider-error comparisons on {threads} threads ({len(unrepresentable)} lone-surrogate inputs not representable natively)')

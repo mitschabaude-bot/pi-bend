@@ -21,7 +21,7 @@ def user(text: String, timestamp: U32) -> T.Message<V.Value, V.Value, Unit, Unit
 
 def model() -> T.Model<Unit>:
   +zero = F.fromU32(0)
-  T.Model{"test-model", "Test Model", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{zero, zero, zero, zero, None{}}, F.fromU32(10000), F.fromU32(8000), None{}, None{}, None{}}
+  T.Model{"test-model", "Test Model", T.OpenAIResponsesApi{}, "openai", "https://api.openai.com/v1", False{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(10000), F.fromU32(8000), None{}, None{}, None{}}
 
 def maxTokens(options: T.StreamOptions<Unit, Unit, Unit, Unit, String>) -> Bool:
   match options:

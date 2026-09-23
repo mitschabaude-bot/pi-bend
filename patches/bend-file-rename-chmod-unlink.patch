@@ -1,0 +1,138 @@
+diff -ruN a/bend2/base.bend b/bend2/base.bend
+--- a/bend2/base.bend	2026-09-23 10:47:02.237502098 +0200
++++ b/bend2/base.bend	2026-09-23 10:51:11.616942706 +0200
+@@ -3308,3 +3308,20 @@
+ def File.set_times_milliseconds(path: String, high: U32, low: U32) -> IO(Result<&1,&1,U32 & String,Unit>):
+   import "./effs/file_set_times_milliseconds.c"
+   import "./effs/file_set_times_milliseconds.js"
++
++# rename(2), chmod(2) with permission bits up to 0o7777, and unlink(2) of a
++# non-directory entry. Recursive and forced removal stay Bend policy.
++def File.rename(from: String, to: String) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/file_rename.c"
++  import "./effs/file_rename.js"
++def File.chmod(path: String, mode: U32) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/file_chmod.c"
++  import "./effs/file_chmod.js"
++def File.unlink(path: String) -> IO(Result<&1,&1,U32 & String,Unit>):
++  import "./effs/file_unlink.c"
++  import "./effs/file_unlink.js"
++# lstat(2) kind without following a final symbolic link: 0 other, 1 regular
++# file, 2 directory, 3 symbolic link.
++def File.link_kind(path: String) -> IO(Result<&1,&1,U32 & String,U32>):
++  import "./effs/file_link_kind.c"
++  import "./effs/file_link_kind.js"
+diff -ruN a/bend2/effs/file_chmod.c b/bend2/effs/file_chmod.c
+--- a/bend2/effs/file_chmod.c	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_chmod.c	2026-09-23 10:47:02.242502127 +0200
+@@ -0,0 +1,13 @@
++#include <sys/stat.h>
++static void file_chmod_call(IoWork* w) { io_sys_end(w, chmod(w->data, (mode_t)w->word)); }
++static Term file_chmod_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term file_chmod_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e,f[0],&w->size);
++  w->word = (u32)f[1];
++  if (io_nul(w->data,w->size) || w->word > 07777) { w->code = io_nul(w->data,w->size) ? EILSEQ : EINVAL; return file_chmod_pack(e,w); }
++  return io_work(w,file_chmod_call,file_chmod_pack);
++}
++static void __attribute__((constructor)) file_chmod_use(void) { io_eff(CID_FILE_CHMOD,file_chmod_run,0); }
+diff -ruN a/bend2/effs/file_chmod.js b/bend2/effs/file_chmod.js
+--- a/bend2/effs/file_chmod.js	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_chmod.js	2026-09-23 10:47:02.243502132 +0200
+@@ -0,0 +1,7 @@
++function file_chmod(path, mode) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  if(mode > 0o7777) return io_fail(22);
++  try { require("fs").chmodSync(Buffer.from(bytes), mode); return io_done({$: "Unit"}); }
++  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}
+diff -ruN a/bend2/effs/file_link_kind.c b/bend2/effs/file_link_kind.c
+--- a/bend2/effs/file_link_kind.c	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_link_kind.c	2026-09-23 10:51:11.620942729 +0200
+@@ -0,0 +1,16 @@
++#include <sys/stat.h>
++static void file_link_kind_call(IoWork* w) {
++  struct stat info;
++  io_sys_end(w, lstat(w->data, &info));
++  if (!w->code) w->word = S_ISREG(info.st_mode) ? 1 : S_ISDIR(info.st_mode) ? 2 : S_ISLNK(info.st_mode) ? 3 : 0;
++}
++static Term file_link_kind_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,w->word);
++}
++Term file_link_kind_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e,f[0],&w->size);
++  if (io_nul(w->data,w->size)) { w->code=EILSEQ; return file_link_kind_pack(e,w); }
++  return io_work(w,file_link_kind_call,file_link_kind_pack);
++}
++static void __attribute__((constructor)) file_link_kind_use(void) { io_eff(CID_FILE_LINK_KIND,file_link_kind_run,0); }
+diff -ruN a/bend2/effs/file_link_kind.js b/bend2/effs/file_link_kind.js
+--- a/bend2/effs/file_link_kind.js	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_link_kind.js	2026-09-23 10:51:11.622942741 +0200
+@@ -0,0 +1,8 @@
++function file_link_kind(path) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try {
++    const info=require("fs").lstatSync(Buffer.from(bytes));
++    return io_done(info.isFile() ? 1 : info.isDirectory() ? 2 : info.isSymbolicLink() ? 3 : 0);
++  } catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}
+diff -ruN a/bend2/effs/file_rename.c b/bend2/effs/file_rename.c
+--- a/bend2/effs/file_rename.c	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_rename.c	2026-09-23 10:47:02.240502115 +0200
+@@ -0,0 +1,14 @@
++#include <stdio.h>
++static void file_rename_call(IoWork* w) { io_sys_end(w, rename(w->data, w->text)); }
++static Term file_rename_pack(Env e, IoWork* w) {
++  free(w->data); free(w->text);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term file_rename_run(Env e, Term* f, IoWork* w) {
++  u64 size=0;
++  w->data = io_cstr(e,f[0],&w->size);
++  w->text = io_cstr(e,f[1],&size);
++  if (io_nul(w->data,w->size) || io_nul(w->text,size)) { w->code=EILSEQ; return file_rename_pack(e,w); }
++  return io_work(w,file_rename_call,file_rename_pack);
++}
++static void __attribute__((constructor)) file_rename_use(void) { io_eff(CID_FILE_RENAME,file_rename_run,0); }
+diff -ruN a/bend2/effs/file_rename.js b/bend2/effs/file_rename.js
+--- a/bend2/effs/file_rename.js	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_rename.js	2026-09-23 10:47:02.241502121 +0200
+@@ -0,0 +1,6 @@
++function file_rename(from, to) {
++  const source=io_bytes(from), target=io_bytes(to);
++  if(source.includes(0) || target.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try { require("fs").renameSync(Buffer.from(source), Buffer.from(target)); return io_done({$: "Unit"}); }
++  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}
+diff -ruN a/bend2/effs/file_unlink.c b/bend2/effs/file_unlink.c
+--- a/bend2/effs/file_unlink.c	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_unlink.c	2026-09-23 10:47:02.243502132 +0200
+@@ -0,0 +1,12 @@
++#include <unistd.h>
++static void file_unlink_call(IoWork* w) { io_sys_end(w, unlink(w->data)); }
++static Term file_unlink_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e,w->code,NULL) : io_done(e,term_pak(CID_UNIT,0));
++}
++Term file_unlink_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e,f[0],&w->size);
++  if (io_nul(w->data,w->size)) { w->code=EILSEQ; return file_unlink_pack(e,w); }
++  return io_work(w,file_unlink_call,file_unlink_pack);
++}
++static void __attribute__((constructor)) file_unlink_use(void) { io_eff(CID_FILE_UNLINK,file_unlink_run,0); }
+diff -ruN a/bend2/effs/file_unlink.js b/bend2/effs/file_unlink.js
+--- a/bend2/effs/file_unlink.js	1970-01-01 01:00:00.000000000 +0100
++++ b/bend2/effs/file_unlink.js	2026-09-23 10:47:02.244502138 +0200
+@@ -0,0 +1,6 @@
++function file_unlink(path) {
++  const bytes=io_bytes(path);
++  if(bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  try { require("fs").unlinkSync(Buffer.from(bytes)); return io_done({$: "Unit"}); }
++  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
++}

@@ -19,6 +19,7 @@ import ./http-exchange.bend as Route
 import ./hosts.bend as HostsResolve
 import ./connection-driver.bend as Driver
 import ./connection-driver.bend as Connection
+import ./tls-socket.bend as TLS
 import ./socket.bend as Socket
 import ./socket.bend as Upload
 import ./dns-resolver.bend as Resolver
@@ -34,10 +35,9 @@ import ./hosts.bend as File
 import ./utf8.bend as UTF8
 import ./random.bend as Index
 
-# Native replacement for the host platform's `fetch`: a cleartext HTTP/1.1
-# request over the pure DNS resolver and socket exchange. A request acquires
-# the response through its final headers and leaves the body unread; the body
-# owns its transport until the caller closes it. HTTPS is rejected by the plan.
+# Native HTTP/1.1 fetch over the pure DNS resolver and plain/TLS socket exchange.
+# A request acquires final response headers and leaves the body unread; the
+# body owns its transport until closed. HTTPS requires an explicit authorizer.
 
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Deadline.Cause<Reason>>
 def Transport(-Reason: Data) -> Type: Exchange.Exchange<Deadline.Cause<Reason>>
@@ -45,7 +45,7 @@ def SourceError() -> Data: HostsFile.LoadError<UTF8.Error>
 def HostsResult() -> Data: Result<&2, &2, SourceError(), List<&2, Hosts.Entry<File.Address>>>
 
 type Input<-Reason: Data> is Data:
-  Input{url: URL.URL, method: String, headers: Headers.Headers, body: String, signal: Signal(Reason)}
+  Input{url: URL.URL, method: String, headers: Headers.Headers, body: Body.Input, signal: Signal(Reason)}
 
 type Error<-Reason: Data> is Data:
   InvalidRequest{cause: Request.URLRequestError}
@@ -105,7 +105,7 @@ def dispose(runtime: Runtime) -> IO(Unit):
 # --------
 
 type Context is Data:
-  Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options}
+  Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options, security: HTTP.Security}
 
 def headed(-Reason: Data, resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, result: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>>) -> Result_(Reason):
   match result:
@@ -125,26 +125,32 @@ def reported(~Reason: Data, report: HTTP.Report<Deadline.Cause<Reason>, SourceEr
 def prepared(~Reason: Data, context: Context, signal: Signal(Reason), request: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Result_(Reason)):
   match context request:
     case _ Fail{cause}: IO.pure(Result_(Reason), Fail{InvalidRequest{cause}})
-    case Context{resolver, hosts, options} Done{request}:
+    case Context{resolver, hosts, options, security} Done{request}:
       do IO<Result_(Reason)>:
-        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startResolvedExchange(~Deadline.Cause<Reason>, ~(SourceError()), resolver, signal, hosts, options, request)
+        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startResolvedWithSecurity(~Deadline.Cause<Reason>, ~(SourceError()), security, resolver, signal, hosts, options, request)
         reported(~Reason, report)
 
 def invoke(~Reason: Data, context: Context, input: Input<Reason>) -> IO(Result_(Reason)):
   match input:
-    case Input{url, method, headers, body, signal}: prepared(~Reason, context, signal, Request.prepareURL(url, method, headers, Body.Text{body}))
+    case Input{url, method, headers, body, signal}: prepared(~Reason, context, signal, Request.prepareURL(url, method, headers, body))
 
-def borrowed(~Reason: Data, +hosts: HostsResult(), +options: HTTP.Options, pair: Resolver.Owner & Resolver.Resolver) -> IO(Runtime & Fetch(Reason)):
+def borrowed(~Reason: Data, security: HTTP.Security, +hosts: HostsResult(), +options: HTTP.Options, pair: Resolver.Owner & Resolver.Resolver) -> IO(Runtime & Fetch(Reason)):
   match pair:
     case Tuple{owner, resolver}:
       do IO<Runtime & Fetch(Reason)>:
-        fetch : Fetch(Reason) <- C.create(~Context, ~Input<Reason>, ~(Result_(Reason)), ~(invoke(~Reason)), Context{resolver, hosts, options})
+        fetch : Fetch(Reason) <- C.create(~Context, ~Input<Reason>, ~(Result_(Reason)), ~(invoke(~Reason)), Context{resolver, hosts, options, security})
         return (Runtime{owner, hosts, options}, fetch)
 
 # The callback borrows the runtime's resolver: retire it before the runtime.
 def callback(~Reason: Data, runtime: Runtime) -> IO(Runtime & Fetch(Reason)):
   match runtime:
-    case Runtime{resolver, hosts, options}: borrowed(~Reason, hosts, options, Resolver.borrow(resolver))
+    case Runtime{resolver, hosts, options}: borrowed(~Reason, HTTP.NoTLS{}, hosts, options, Resolver.borrow(resolver))
+
+# The fetch callback borrows the supplied authorizer factory as well as the
+# resolver. Retire fetch callbacks before disposing either owner.
+def callbackWithSecurity(~Reason: Data, runtime: Runtime, security: HTTP.Security) -> IO(Runtime & Fetch(Reason)):
+  match runtime:
+    case Runtime{resolver, hosts, options}: borrowed(~Reason, security, hosts, options, Resolver.borrow(resolver))
 
 def retire(-Reason: Data, fetch: Fetch(Reason)) -> IO(Unit):
   C.dispose(Input<Reason>, Result_(Reason), fetch)
@@ -204,6 +210,7 @@ def socket(-Reason: Data, error: Socket.Error<Deadline.Cause<Reason>>) -> Catego
 def source(-Reason: Data, error: Source.SocketSourceError<Deadline.Cause<Reason>>) -> Category:
   match error:
     case Source.SocketSourceSocketFailure{cause}: socket(Reason, cause)
+    case Source.TLSSourceFailure{TLS.Network{cause}}: socket(Reason, cause)
     case Source.UploadFailure{Upload.WriteFailure{cause, None{}}}: socket(Reason, cause)
     case _: NonRetryable{}
 
@@ -235,6 +242,7 @@ def exchangeCategory(-Reason: Data, error: HTTP.ResolvedExchangeError<Deadline.C
     case HTTP.ResolvedExchangeConnectionFailure{Connection.ProgressAborted{why}}: requestAbort(Reason, why)
     case HTTP.ResolvedExchangeConnectionFailure{_}: NonRetryable{}
     case HTTP.ResolvedExchangeFailure{Exchange.SocketFailure{cause}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{Exchange.TLSStartFailure{TLS.Network{cause}}}: socket(Reason, cause)
     case HTTP.ResolvedExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
     case HTTP.ResolvedExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
     case HTTP.ResolvedExchangeFailure{_}: NonRetryable{}

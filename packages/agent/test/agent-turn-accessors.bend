@@ -24,29 +24,31 @@ def Turn() -> Data: Options.Turn(Unit, Unit, String, String)
 def Update() -> Data: Options.Update(Unit, Unit, String, String)
 def Input() -> Data: T.ToolHookInput<Turn()>
 def Prepared() -> Data: Hooks.PrepareResult(Update(), String)
-def Stop() -> Data: Hooks.StopHook(Turn(), String)
+def Stop() -> Data: T.FinishTurn(Unit, Unit, String, String)
+def Finished() -> Data: Result<&2, &2, String, Maybe<&2, T.AgentTurnDecision>>
 def Legacy() -> Data: Hooks.LegacyHook(Update(), String)
 def ContextHook() -> Data: Hooks.ContextHook(Turn(), Update(), String)
-def Values() -> Data: Options.TurnHooks(Unit, Unit, String, String)
+type Values is Data:
+  Values{finish: Maybe<&2, Stop()>, legacy: Maybe<&2, Legacy()>, context: Maybe<&2, ContextHook()>}
 type Handlers is Data:
   Handlers{stop: Stop(), legacy: Legacy(), context: ContextHook()}
-def install(+agent: Owner.Owner(), values: Values()) -> IO(Unit):
+def install(+agent: Owner.Owner(), values: Values) -> IO(Unit):
   match values:
-    case Hooks.Hooks{stop, legacy, context}:
+    case Values{stop, legacy, context}:
       do IO<Unit>:
-        Agent.setShouldStopAfterTurn(Unit, Unit, String, String, Unit, agent, stop)
+        Agent.setFinishTurn(Unit, Unit, String, String, Unit, agent, stop)
         Agent.setPrepareNextTurn(Unit, Unit, String, String, Unit, agent, legacy)
         Agent.setPrepareNextTurnWithContext(Unit, Unit, String, String, Unit, agent, context)
-def read(+agent: Owner.Owner()) -> IO(Values()):
-  do IO<Values()>:
-    stop : Maybe<&2, Stop()> <- Agent.getShouldStopAfterTurn(Unit, Unit, String, String, Unit, agent)
+def read(+agent: Owner.Owner()) -> IO(Values):
+  do IO<Values>:
+    stop : Maybe<&2, Stop()> <- Agent.getFinishTurn(Unit, Unit, String, String, Unit, agent)
     legacy : Maybe<&2, Legacy()> <- Agent.getPrepareNextTurn(Unit, Unit, String, String, Unit, agent)
     context : Maybe<&2, ContextHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Unit, String, String, Unit, agent)
-    return Hooks.Hooks{stop, legacy, context}
+    return Values{stop, legacy, context}
 def sameStop(left: Maybe<&2, Stop()>, right: Maybe<&2, Stop()>) -> Bool:
   match left right:
     case None{} None{}: True{}
-    case Some{a} Some{b}: C.same(Input(), Result<&2, &2, String, Bool>, a, b)
+    case Some{a} Some{b}: C.same(Input(), Finished(), a, b)
     case _ _: False{}
 def sameLegacy(left: Maybe<&2, Legacy()>, right: Maybe<&2, Legacy()>) -> Bool:
   match left right:
@@ -58,25 +60,25 @@ def sameContext(left: Maybe<&2, ContextHook()>, right: Maybe<&2, ContextHook()>)
     case None{} None{}: True{}
     case Some{a} Some{b}: C.same(Input(), Prepared(), a, b)
     case _ _: False{}
-def same(left: Values(), right: Values()) -> Bool:
+def same(left: Values, right: Values) -> Bool:
   match left right:
-    case Hooks.Hooks{a, b, c} Hooks.Hooks{d, e, f}: sameStop(a, d) && sameLegacy(b, e) && sameContext(c, f)
+    case Values{a, b, c} Values{d, e, f}: sameStop(a, d) && sameLegacy(b, e) && sameContext(c, f)
 
 
-def initial(mode: U32, handlers: Handlers) -> Values():
+def initial(mode: U32, handlers: Handlers) -> Values:
   match mode handlers:
-    case 1 _: Hooks.Hooks{None{}, None{}, None{}}
-    case _ Handlers{stop, legacy, _}: Hooks.Hooks{Some{stop}, Some{legacy}, None{}}
-def replacement(mode: U32, handlers: Handlers) -> Values():
+    case 1 _: Values{None{}, None{}, None{}}
+    case _ Handlers{stop, legacy, _}: Values{Some{stop}, Some{legacy}, None{}}
+def replacement(mode: U32, handlers: Handlers) -> Values:
   match mode handlers:
-    case 0 Handlers{stop, legacy, context}: Hooks.Hooks{Some{stop}, Some{legacy}, Some{context}}
-    case 1 Handlers{_, legacy, _}: Hooks.Hooks{None{}, Some{legacy}, None{}}
-    case _ _: Hooks.Hooks{None{}, None{}, None{}}
-def expectedCurrent(mode: U32, handlers: Handlers) -> Values():
+    case 0 Handlers{stop, legacy, context}: Values{Some{stop}, Some{legacy}, Some{context}}
+    case 1 Handlers{_, legacy, _}: Values{None{}, Some{legacy}, None{}}
+    case _ _: Values{None{}, None{}, None{}}
+def expectedCurrent(mode: U32, handlers: Handlers) -> Values:
   match mode handlers:
-    case 0 Handlers{stop, legacy, _}: Hooks.Hooks{Some{stop}, Some{legacy}, None{}}
-    case 1 Handlers{_, legacy, _}: Hooks.Hooks{None{}, Some{legacy}, None{}}
-    case _ _: Hooks.Hooks{None{}, None{}, None{}}
+    case 0 Handlers{stop, legacy, _}: Values{Some{stop}, Some{legacy}, None{}}
+    case 1 Handlers{_, legacy, _}: Values{None{}, Some{legacy}, None{}}
+    case _ _: Values{None{}, None{}, None{}}
 def live(value: Maybe<&2, Run.RunSignal()>) -> IO(Unit):
   match value:
     case Some{signal}:
@@ -86,13 +88,18 @@ def live(value: Maybe<&2, Run.RunSignal()>) -> IO(Unit):
     case _: Test.assertion(False{}, "turn callback signal missing")
 type Capture is Data:
   Capture{name: String, trace: R.Ref<String>, slot: R.Ref<Maybe<&2, Owner.Owner()>>}
-def stop(capture: Capture, input: Input()) -> IO(Result<&2, &2, String, Bool>):
+def ends(finished: Bool) -> Maybe<&2, T.AgentTurnDecision>:
+  match finished:
+    case True{}: Some{T.EndTurn{}}
+    case False{}: None{}
+def decision(+name: String) -> Maybe<&2, T.AgentTurnDecision>: ends(String.eq(name, "b"))
+def stop(capture: Capture, input: Input()) -> IO(Finished()):
   match capture input:
     case Capture{+name, trace, _} T.ToolHookInput{_, signal}:
-      do IO<Result<&2, &2, String, Bool>>:
+      do IO<Finished()>:
         live(signal)
         R.modify(String, Unit, trace, old => (old ++ "s" ++ name ++ ";", Unit{}))
-        return Done{String.eq(name, "b")}
+        return Done{decision(name)}
 def legacy(capture: Capture, signal: Maybe<&2, Run.RunSignal()>) -> IO(Prepared()):
   match capture:
     case Capture{name, trace, _}:
@@ -107,7 +114,7 @@ def toolTail(messages: H.Messages()) -> Bool:
     case Nil{}: False{}
 def context(capture: Capture, input: Input()) -> IO(Prepared()):
   match capture input:
-    case Capture{name, trace, slot} T.ToolHookInput{T.ShouldStopAfterTurnContext{_, _ <> Nil{}, T.AgentContext{messages, _}, _}, signal}:
+    case Capture{name, trace, slot} T.ToolHookInput{T.AgentTurnContext{_, _ <> Nil{}, T.AgentContext{messages, _}, _}, signal}:
       do IO<Prepared()>:
         live(signal)
         Test.assertion(toolTail(messages), "context preparation sees one completed tool result and transcript tail")
@@ -119,7 +126,7 @@ def context(capture: Capture, input: Input()) -> IO(Prepared()):
     case _ _: IO.die(Prepared(), 1, "unexpected preparation context")
 def handlers(+capture: Capture) -> IO(Handlers):
   do IO<Handlers>:
-    a : Stop() <- C.create(~Capture, ~Input(), ~Result<&2, &2, String, Bool>, ~stop, capture)
+    a : Stop() <- C.create(~Capture, ~Input(), ~Finished(), ~stop, capture)
     b : Legacy() <- C.create(~Capture, ~Maybe<&2, Run.RunSignal()>, ~Prepared(), ~legacy, capture)
     c : ContextHook() <- C.create(~Capture, ~Input(), ~Prepared(), ~context, capture)
     return Handlers{a, b, c}
@@ -163,21 +170,21 @@ def create(capture: ProviderCapture) -> IO(Named.Fixture):
 
 def exercise(+agent: Owner.Owner(), +mode: U32, first: Handlers, second: Handlers) -> IO(Unit):
   do IO<Unit>:
-    empty : Values() <- read(agent)
-    Test.assertion(same(empty, Hooks.Hooks{None{}, None{}, None{}}), "all turn callbacks initially absent")
-    +values : Values() = initial(mode, first)
+    empty : Values <- read(agent)
+    Test.assertion(same(empty, Values{None{}, None{}, None{}}), "all turn callbacks initially absent")
+    +values : Values = initial(mode, first)
     install(agent, values)
-    assigned : Values() <- read(agent)
+    assigned : Values <- read(agent)
     Test.assertion(same(assigned, values), "individual setters preserve the other turn callbacks")
     Behavior.prompt(agent, "first")
-    current : Values() <- read(agent)
+    current : Values <- read(agent)
     Test.assertion(same(current, expectedCurrent(mode, second)), "getters reflect live replacement and clearing")
     Behavior.prompt(agent, "next")
 def disposeHandlers(values: Handlers) -> IO(Unit):
   match values:
     case Handlers{stop, legacy, context}:
       do IO<Unit>:
-        C.dispose(Input(), Result<&2, &2, String, Bool>, stop)
+        C.dispose(Input(), Finished(), stop)
         C.dispose(Maybe<&2, Run.RunSignal()>, Prepared(), legacy)
         C.dispose(Input(), Prepared(), context)
 def scenario(+mode: U32, expected: String) -> IO(Unit):
@@ -195,7 +202,7 @@ def scenario(+mode: U32, expected: String) -> IO(Unit):
     +actual : String <- R.read(String, trace)
     Test.assertion(String.eq(actual, expected), "turn hook capture/live-selection order mismatch: " ++ actual)
     count : U32 <- R.read(U32, calls)
-    Test.assertion(U32.is_eq(count, Bool.pick(U32, U32.is_eq(mode, 0), 4, 6)), "captured stop hook preserves request count")
+    Test.assertion(U32.is_eq(count, Bool.pick(U32, U32.is_eq(mode, 0), 4, 6)), "captured finishTurn preserves request count")
     Named.dispose(fixture)
     disposeHandlers(first)
     disposeHandlers(second)

@@ -1,0 +1,166 @@
+--- a/bend2/comp.ts
++++ b/bend2/comp.ts
+@@ -3515,6 +3524,149 @@
+     : js_call(fl, ck.k, ck.args, true)) + ";");
+ }
+ 
++// Explicit stack
++// ==============
++
++// A def whose arms call itself outside tail position would recurse on the
++// JS stack, which JavaScriptCore caps far below native depth (BEND-019). Such
++// a def is re-emitted as a loop: a non-tail self-call pushes the rest of its
++// arm as a frame on a heap stack and continues with the callee's arguments;
++// a tail self-call just continues; every other return breaks out. The frames
++// are then applied innermost first. Closures inside an arm keep ordinary
++// recursion, as do second self-calls of the same arm (they run inside the
++// frame). The native backend is unaffected.
++
++// Split a JS argument list at top-level commas.
++function js_split_args(text: string): string[] {
++  const out: string[] = [];
++  let depth = 0;
++  let start = 0;
++  let quote: string | null = null;
++  for (let i = 0; i < text.length; i += 1) {
++    const ch = text[i];
++    if (quote !== null) {
++      if (ch === "\\") i += 1;
++      else if (ch === quote) quote = null;
++    } else if (ch === "\"" || ch === "'" || ch === "`") {
++      quote = ch;
++    } else if (ch === "(" || ch === "[" || ch === "{") {
++      depth += 1;
++    } else if (ch === ")" || ch === "]" || ch === "}") {
++      depth -= 1;
++    } else if (ch === "," && depth === 0) {
++      out.push(text.slice(start, i).trim());
++      start = i + 1;
++    }
++  }
++  const last = text.slice(start).trim();
++  if (last !== "") out.push(last);
++  return out;
++}
++
++// The index just past the parenthesis group opening at `open`.
++function js_close(text: string, open: number): number {
++  let depth = 0;
++  let quote: string | null = null;
++  for (let i = open; i < text.length; i += 1) {
++    const ch = text[i];
++    if (quote !== null) {
++      if (ch === "\\") i += 1;
++      else if (ch === quote) quote = null;
++    } else if (ch === "\"" || ch === "'" || ch === "`") {
++      quote = ch;
++    } else if (ch === "(" || ch === "[" || ch === "{") {
++      depth += 1;
++    } else if (ch === ")" || ch === "]" || ch === "}") {
++      depth -= 1;
++      if (depth === 0) return i + 1;
++    }
++  }
++  die("an unbalanced expression in " + text);
++}
++
++function js_indent(line: string): number {
++  return line.length - line.trimStart().length;
++}
++
++function js_stackify(body: string[], token: string, params: string[]): string[] {
++  const call = "run_loop(" + token + "(";
++  const jump = "return run_jump(" + token + ", [";
++  const eligible = body.some((line) => !line.includes("run_clo(")
++    && (line.includes(call) || line.trimStart().startsWith(jump)));
++  if (!eligible) return body;
++  const pad = (n: number) => FILE_INDENT.slice(0, n);
++  // Each iteration rebinds the parameters as fresh constants so frames close
++  // over that iteration's values; the loop carries the next values apart.
++  const jumpTo = (indent: number, args: string[]): string[] => {
++    if (args.length !== params.length) die("a self-call arity mismatch in " + token);
++    const temps = args.map((a, i) => `const $a${i} = ${a};`);
++    const sets = params.map((_, i) => `$c${i} = $a${i};`);
++    return [...temps, ...sets, "continue $outer;"].map((l) => pad(indent) + l);
++  };
++  const out: string[] = [];
++  let i = 0;
++  while (i < body.length) {
++    const line = body[i];
++    const indent = js_indent(line);
++    const text = line.trim();
++    if (line.includes("run_clo(")) {
++      out.push(text.startsWith("return ")
++        ? pad(indent) + "$result = " + text.slice("return ".length, -1) + "; break $outer;"
++        : line);
++      i += 1;
++      continue;
++    }
++    if (text.startsWith(jump) && text.endsWith("]);")) {
++      out.push(...jumpTo(indent, js_split_args(text.slice(jump.length, -3))));
++      i += 1;
++      continue;
++    }
++    const at = text.indexOf(call);
++    if (at < 0) {
++      out.push(text.startsWith("return ")
++        ? pad(indent) + "$result = " + text.slice("return ".length, -1) + "; break $outer;"
++        : line);
++      i += 1;
++      continue;
++    }
++    // The first self-call of this arm: its arguments continue the loop, the
++    // surrounding statement and the arm's remaining lines become the frame.
++    const argsOpen = at + call.length - 1;
++    const argsEnd = js_close(text, argsOpen);
++    const args = js_split_args(text.slice(argsOpen + 1, argsEnd - 1));
++    const callEnd = js_close(text, at + "run_loop".length);
++    const hole = text.slice(0, at) + "$v" + text.slice(callEnd);
++    let frame: string[];
++    let consumed = 1;
++    if (hole.startsWith("return ")) {
++      frame = [`$stack.push(($v) => (${hole.slice("return ".length, -1)}));`];
++    } else {
++      const rest: string[] = [];
++      let j = i + 1;
++      while (j < body.length && js_indent(body[j]) >= indent) {
++        rest.push(pad(2) + body[j].slice(indent));
++        j += 1;
++      }
++      consumed = j - i;
++      frame = ["$stack.push(($v) => {", pad(2) + hole, ...rest, "});"];
++    }
++    out.push(...frame.map((l) => pad(indent) + l), ...jumpTo(indent, args));
++    i += consumed;
++  }
++  return [
++    "const $stack = [];",
++    "let $result;",
++    ...params.map((p, i) => `let $c${i} = ${p};`),
++    "$outer: while (true) {",
++    ...params.map((p, i) => pad(2) + `const ${p} = $c${i};`),
++    ...out.map((l) => pad(2) + l),
++    "}",
++    "$result = run_loop($result);",
++    "while ($stack.length > 0) $result = run_loop($stack.pop()($result));",
++    "return $result;",
++  ];
++}
++
+ function js_def(fl: File, k: Bend.Name, def: Def): void {
+   fl.fresh = new Map();
+   fl.fuel = 64;
+@@ -3533,6 +3686,13 @@
+           }_need, args: [${params.join(", ")}], kont: ${kont[0]} };`);
+       }
+     });
++  if (def.i === undefined && fl.emit) {
++    const body = fl.seg.lines.splice(start + 1, fl.seg.lines.length - start - 2);
++    const base = fl.tab * 2 + 2;
++    const inner = body.map((l) => l.slice(base));
++    const rebuilt = js_stackify(inner, js_sat(k), params);
++    fl.seg.lines.splice(start + 1, 0, ...rebuilt.map((l) => FILE_INDENT.slice(0, base) + l));
++  }
+   file_push(fl, "");
+ }
+ 

@@ -27,7 +27,7 @@ def ResponseResult() -> Data: Result<&2, &2, String, Unit>
 def Response() -> Data: Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, String)
 def model(value: Ai.Model<Ai.JsonValue>) -> Bool:
   match value:
-    case Ai.Model{"unknown", _, _, "unknown", _, _, _, _, _, _, _, _, _, _}: True{}
+    case Ai.Model{"unknown", _, _, "unknown", _, _, _, _, _, _, _, _, _, _, _, _}: True{}
     case _: False{}
 def response() -> Ai.ProviderResponse:
   Ai.ProviderResponse{F.fromU32(200), Record.Record{Record.Property{"x-fixture", "yes"} <> Nil{}}}
@@ -82,7 +82,7 @@ def same(left: Bindings, right: Bindings) -> Bool:
     case Bindings{a, b} Bindings{c, d}: samePayload(a, c) && sameResponse(b, d)
 def config(value: H.Config()) -> Bindings:
   match value:
-    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, payload, response, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}: Bindings{payload, response}
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, payload, response, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}: Bindings{payload, response}
 def payloadSuccess(value: PayloadResult()) -> Bool:
   match value:
     case Done{Some{Ai.JsonNull{}}}: True{}

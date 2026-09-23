@@ -42,3 +42,19 @@ def scan(text: String, +separator: Char, state: State) -> List<&2, String>:
 
 def split(text: String, separator: Char) -> List<&2, String>:
   scan(text, separator, State{"", Nil{}})
+
+# Scalar equality need not reconstruct the compared strings. The base ordering
+# operation does reconstruct them and consumes machine stack on long prefixes.
+def equalFrom(left: String, right: String, same: Bool) -> Bool:
+  match left right same:
+    case _ _ False{}: False{}
+    case SNil{} SNil{} True{}: True{}
+    case SCon{a,restA} SCon{b,restB} True{}: equalFrom(restA,restB,Char.is_eq(a,b))
+    case _ _ True{}: False{}
+
+def equal(left: String, right: String) -> Bool:
+  equalFrom(left,right,True{})
+
+# Preserve a path as one POSIX shell argument. File IO rejects NUL paths.
+def quoteShell(value: String) -> String:
+  "'" ++ String.join(split(value, '\''), "'\\\''") ++ "'"

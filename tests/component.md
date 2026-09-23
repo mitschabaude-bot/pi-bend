@@ -1,0 +1,17 @@
+# Components, containers and mouse dispatch
+
+`packages/tui/src/component.bend` ports the shared component interface, `Container`, `dispatchMouseEvent` and `retargetMouseEvent` from pinned pi-mono `46c9de402`. `tui.bend` supplies the common mouse types and exact `CURSOR_MARKER` sequence. Interactive terminal rendering, component adapters and renderer-level focus/capture ownership remain separate work; these helpers do not establish full TUI parity.
+
+A `Component` borrows typed render, invalidate and optional input, mouse and focus callbacks. The renderer assigns a unique `ComponentId` when registering a component and retains that identity while any frame, focus or capture refers to it. A dispatch target contains this ID and its coordinate transform rather than a JavaScript object reference. The owning renderer must retain callback resources until all such references have retired. This module does not allocate or dispose borrowed callbacks. `wantsKeyRelease` remains a component capability for the renderer's input filter.
+
+Containers are immutable. `addChild`, `removeChild` and `clear` return the next container; removal deletes the first matching occurrence. `renderContainer` returns the next container and its concatenated lines. Callers keep this returned state to retain the displayed layout. Children render and invalidate in order. The cached mouse layout describes the last displayed frame: structural edits do not change it until another render. When mouse-event width differs, hit testing measures every current child in order without replacing the cached frame. A child which declines an event does not cause propagation into another row. Out-of-height events produce no child callbacks.
+
+Local mouse results imply handling when any of handled, capture or focus is requested. Explicit render suppression survives dispatch. Nested dispatch results preserve the concrete target and transform; a parent with delegated keyboard input may replace only the focus target. Signed local and absolute coordinates remain signed when retargeting a captured event outside the component. Modifier, button, event type and wheel/click fields are preserved.
+
+`tests/component_reference.ts` verifies the source hash before extracting and executing the actual upstream container/dispatch functions. The Bend fixture owns and disposes all callback handles and records render, invalidation and mouse callbacks. The 255 differential traces cover every handling/capture/focus/render-flag combination, zero-height children, duplicate child entries, removal/clear before rerender, width changes, negative/out-of-bounds coordinates, nested dispatch metadata, parent focus delegation, 100 randomized operation sequences and 100 captured-event transforms with all event fields. All 255 traces pass on Bun and O1 native with one/four threads (`build/component-final-bun-check.log`, `build/component-final-native-check.log`); the shared module also typechecks after moving the cursor marker to its canonical TUI module. These are source comparisons, not generic proofs or the full `mouse-components.test.ts` integration suite; that suite remains pending.
+
+```sh
+bun build/bend-process-files/bend2/main.ts tests/component.bend -o build/component-final.js
+BEND=build/bend-process-files/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh tests/component.bend build/component-final
+python3 tests/component_check.py --prefix build/component-final
+```

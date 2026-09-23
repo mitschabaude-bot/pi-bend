@@ -1,0 +1,120 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3047,3 +3047,16 @@
+ def Directory.current_bytes() -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
+   import "./effs/directory_current_bytes.c"
+   import "./effs/directory_current_bytes.js"
++
++
++# Creation permissions are filtered by the process umask; existing files keep
++# their permissions. Modes are the same r/w/a accepted by File.open.
++def File.open_mode(path: String, mode: String, permissions: U32) ->
++  IO(Result<&1, &1, U32 & String, File>):
++  import "./effs/file_open_mode.c"
++  import "./effs/file_open_mode.js"
++
++# Consume the handle and attempt close exactly once, returning any OS error.
++def File.close_checked(file: File) -> IO(Result<&1, &1, U32 & String, Unit>):
++  import "./effs/file_close_checked.c"
++  import "./effs/file_close_checked.js"
+--- /dev/null
++++ b/bend2/effs/file_open_mode.c
+@@ -0,0 +1,44 @@
++// File
++// ====
++
++static int file_open_mode_flags(const char* mode) {
++  if (strcmp(mode, "r") == 0) {
++    return O_RDONLY;
++  }
++  if (strcmp(mode, "w") == 0) {
++    return O_WRONLY | O_CREAT | O_TRUNC;
++  }
++  if (strcmp(mode, "a") == 0) {
++    return O_WRONLY | O_CREAT | O_APPEND;
++  }
++  return -1;
++}
++
++static void file_open_mode_call(IoWork* w) {
++  w->made = (intptr_t)io_sys_end(w, open(w->data, (int)w->word, (mode_t)w->hand));
++}
++
++static Term file_open_mode_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code != 0 ? io_fail(e, w->code, NULL)
++    : io_done(e, io_hand(w->made));
++}
++
++Term file_open_mode_run(Env e, Term* f, IoWork* w) {
++  w->hand = (intptr_t)(u32)f[2];
++  uint64_t mn = 0;
++  w->data = io_cstr(e, f[0], &w->size);
++  char* mode = io_cstr(e, f[1], &mn);
++  int flags = io_nul(mode, mn) ? -1 : file_open_mode_flags(mode);
++  free(mode);
++  w->word = (uint32_t)flags;
++  if (io_nul(w->data, w->size) || flags < 0) {
++    w->code = io_nul(w->data, w->size) ? EILSEQ : EINVAL;
++    return file_open_mode_pack(e, w);
++  }
++  return io_work(w, file_open_mode_call, file_open_mode_pack);
++}
++
++static void __attribute__((constructor)) file_open_mode_use(void) {
++  io_eff(CID_FILE_OPEN_MODE, file_open_mode_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_open_mode.js
+@@ -0,0 +1,19 @@
++// File
++// ====
++
++function file_open_mode(path, mode, permissions) {
++  const name = io_bytes(path);
++  if (name.includes(0)) {
++    return io_fail(process.platform === "darwin" ? 92 : 84);
++  }
++  if (!["r", "w", "a"].includes(mode)) {
++    return io_fail(22);
++  }
++  try {
++    const fd = require("fs")
++      .openSync(name.length > 0 ? Buffer.from(name) : "", mode, permissions);
++    return io_done(fd);
++  } catch (e) {
++    return io_fail(-e.errno);
++  }
++}
+--- /dev/null
++++ b/bend2/effs/file_close_checked.c
+@@ -0,0 +1,18 @@
++static void file_close_checked_call(IoWork* w) {
++  // Retrying close after EINTR can close a descriptor already reused elsewhere.
++  io_sys_end(w, close((int)w->hand));
++}
++
++static Term file_close_checked_pack(Env e, IoWork* w) {
++  return w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(CID_UNIT, 0));
++}
++
++Term file_close_checked_run(Env e, Term* f, IoWork* w) {
++  w->hand = (intptr_t)io_hand_v(f[0]);
++  return io_work(w, file_close_checked_call, file_close_checked_pack);
++}
++
++static void __attribute__((constructor)) file_close_checked_use(void) {
++  io_eff(CID_FILE_CLOSE_CHECKED, file_close_checked_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_close_checked.js
+@@ -0,0 +1,8 @@
++function file_close_checked(file) {
++  try {
++    require("fs").closeSync(file);
++    return io_done({$: "Unit"});
++  } catch (e) {
++    return io_fail(-e.errno);
++  }
++}

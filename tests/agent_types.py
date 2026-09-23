@@ -11,12 +11,25 @@ BUILD.mkdir(exist_ok=True)
 source = (ROOT.parent / 'pi-mono/packages/agent/src/types.ts').read_text()
 native = (ROOT / 'packages/agent/src/types.bend').read_text()
 
-for name in ('BeforeToolCallResult', 'AfterToolCallResult', 'AgentContext', 'BeforeToolCallContext', 'AfterToolCallContext', 'ShouldStopAfterTurnContext', 'AgentLoopTurnUpdate'):
+for name in ('BeforeToolCallResult', 'AfterToolCallResult', 'AgentContext', 'BeforeToolCallContext', 'AfterToolCallContext', 'AgentTurnContext', 'PrepareRequestContext', 'AgentLoopTurnUpdate'):
     upstream = re.search(r'export interface ' + name + r'\s*\{(.*?)\n}', source, re.S).group(1)
     expected = dict(re.findall(r'^\t(\w+)(\??):', upstream, re.M))
     record = re.search(r'^  ' + name + r'\{([^\n]*)\}', native, re.M).group(1)
     actual = {name: '?' if ty.startswith('Maybe<') else '' for name, ty in re.findall(r'(\w+):\s*([^,}]+)', record)}
     assert actual == expected, (name, expected, actual)
+
+def native_fields(name):
+    record = re.search(r'^  ' + name + r'\{([^\n]*)\}', native, re.M).group(1)
+    return {field: '?' if ty.startswith('Maybe<') else '' for field, ty in re.findall(r'(\w+):\s*([^,}]+)', record)}
+
+# AgentRequestUpdate = Omit<AgentLoopTurnUpdate, "messages">.
+assert 'export type AgentRequestUpdate = Omit<AgentLoopTurnUpdate, "messages">;' in source
+turn_update = native_fields('AgentLoopTurnUpdate')
+del turn_update['messages']
+assert native_fields('AgentRequestUpdate') == turn_update
+# The { action } union becomes one constructor per action.
+assert 'export type AgentTurnDecision = { action: "continue" } | { action: "end" };' in source
+assert re.search(r'type AgentTurnDecision is Data:\n  ContinueTurn\{\}\n  EndTurn\{\}', native)
 
 union = source.split('export type AgentEvent =', 1)[1]
 expected_events = {}
@@ -37,7 +50,7 @@ for threads in ('1', '4'):
 subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/context.bend', 'build/test-agent-context'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run(['build/test-agent-context', '--threads', threads], cwd=ROOT, check=True, timeout=30)
-assert 'export interface PrepareNextTurnContext extends ShouldStopAfterTurnContext {}' in source
-assert re.search(r'def PrepareNextTurnContext\([^\n]*\) -> Data:\n  ShouldStopAfterTurnContext<', native)
+assert 'export interface PrepareNextTurnContext extends AgentTurnContext {}' in source
+assert re.search(r'def PrepareNextTurnContext\([^\n]*\) -> Data:\n  AgentTurnContext<', native)
 
-print('PASS ten upstream agent event field sets, seven context/hook record field sets and the prepare-next-turn alias')
+print('PASS ten upstream agent event field sets, eight context/hook record field sets, the request update, turn decision and prepare-next-turn alias')

@@ -1,0 +1,12 @@
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+const source=readFileSync('/home/agent/code/pi-mono/packages/tui/src/tui.ts','utf8');
+assert.equal(createHash('sha256').update(source).digest('hex'),'2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675');
+const parseStart=source.indexOf('function parseSizeValue(');
+const parser=source.slice(parseStart,source.indexOf('/**',parseStart));
+const start=source.indexOf('\tprivate resolveOverlayLayout(');
+const methods=source.slice(start,source.indexOf('\n\t/** Composite all overlays',start));
+const compiled=new Bun.Transpiler({loader:'ts'}).transformSync(parser+'\nclass Resolver {\n'+methods+'\n}');
+const resolver=new Function(compiled+';return new Resolver()')();
+console.log(JSON.stringify(JSON.parse(process.argv[2]).map((v:any)=>{const out=resolver.resolveOverlayLayout(v.options,v.height,v.columns,v.rows);return {...out,maxHeight:out.maxHeight??null};})));

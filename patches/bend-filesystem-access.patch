@@ -1,0 +1,88 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3066,3 +3066,13 @@
+ def Directory.home_bytes() -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
+   import "./effs/directory_home_bytes.c"
+   import "./effs/directory_home_bytes.js"
++
++# POSIX access modes: existence=0, execute=1, write=2, read=4 (bitwise combined).
++def File.access(path: String, mode: U32) -> IO(Result<&1, &1, U32 & String, Unit>):
++  import "./effs/file_access.c"
++  import "./effs/file_access.js"
++
++# Symbolic OS errno name when the host provides one; unknown codes return None.
++def System.error_name(code: U32) -> IO(Maybe<&2, String>):
++  import "./effs/system_error_name.c"
++  import "./effs/system_error_name.js"
+--- /dev/null
++++ b/bend2/effs/file_access.c
+@@ -0,0 +1,23 @@
++static void file_access_call(IoWork* w) {
++  io_sys_end(w, access(w->data, (int)w->word));
++}
++
++static Term file_access_pack(Env e, IoWork* w) {
++  free(w->data);
++  return w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(CID_UNIT, 0));
++}
++
++Term file_access_run(Env e, Term* f, IoWork* w) {
++  w->data = io_cstr(e, f[0], &w->size);
++  w->word = (u32)f[1];
++  if (io_nul(w->data, w->size) || w->word > 7) {
++    w->code = io_nul(w->data, w->size) ? EILSEQ : EINVAL;
++    return file_access_pack(e, w);
++  }
++  return io_work(w, file_access_call, file_access_pack);
++}
++
++static void __attribute__((constructor)) file_access_use(void) {
++  io_eff(CID_FILE_ACCESS, file_access_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/file_access.js
+@@ -0,0 +1,11 @@
++function file_access(path, mode) {
++  const bytes = io_bytes(path);
++  if (bytes.includes(0)) return io_fail(process.platform === "darwin" ? 92 : 84);
++  if (mode > 7) return io_fail(22);
++  try {
++    require("fs").accessSync(bytes.length ? Buffer.from(bytes) : "", mode);
++    return io_done({$: "Unit"});
++  } catch (error) {
++    return io_fail(-error.errno);
++  }
++}
+--- /dev/null
++++ b/bend2/effs/system_error_name.c
+@@ -0,0 +1,17 @@
++#include <limits.h>
++
++Term system_error_name_run(Env e, Term* f, IoWork* w) {
++  const char* name = NULL;
++  u32 code = (u32)f[0];
++#ifdef __GLIBC__
++#if __GLIBC_PREREQ(2, 32)
++  if (code > 0 && code <= INT_MAX) name = strerrorname_np((int)code);
++#endif
++#endif
++  return name ? io_box(e, CID_SOME, io_str(e, name, strlen(name)), IO_HOTS & 32)
++    : term_pak(CID_NONE, 0);
++}
++
++static void __attribute__((constructor)) system_error_name_use(void) {
++  io_eff(CID_SYSTEM_ERROR_NAME, system_error_name_run, 0);
++}
+--- /dev/null
++++ b/bend2/effs/system_error_name.js
+@@ -0,0 +1,9 @@
++function system_error_name(code) {
++  if (code === 0 || code > 0x7fffffff) return {$: "None"};
++  try {
++    const name = require("util").getSystemErrorName(-code);
++    return name.startsWith("Unknown system error") ? {$: "None"} : {$: "Some", value: name};
++  } catch {
++    return {$: "None"};
++  }
++}

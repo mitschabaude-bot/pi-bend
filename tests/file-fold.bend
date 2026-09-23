@@ -28,6 +28,8 @@ def status(result: Result<&2, &2, Fold.Error, Fold.Completion>) -> String:
     case Fail{Fold.InvalidReadSize{}}: "size"
     case Fail{Fold.Open{code, _}}: "open:" ++ U32.show(code)
     case Fail{Fold.Read{code, _}}: "read:" ++ U32.show(code)
+    case Fail{Fold.Close{code, _}}: "close:" ++ U32.show(code)
+    case Fail{Fold.ReadAndClose{code, _, close, _}}: "read-close:" ++ U32.show(code) ++ ":" ++ U32.show(close)
 
 def report(result: Fold.Outcome<State>) -> IO(Unit):
   match result:

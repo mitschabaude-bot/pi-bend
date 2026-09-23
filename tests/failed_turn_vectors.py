@@ -9,7 +9,7 @@ reference = json.loads(subprocess.check_output(['node', 'tests/failed_turn_refer
 reasons = {'pending':'Pending','stop':'Stop','length':'Length','toolUse':'ToolUse','deferred':'Deferred','error':'Error','aborted':'Aborted'}
 lines = ['import Base', 'import ../packages/agent/test/failed-turn.bend as T', 'import ../packages/ai/src/types.bend as Ai', 'def main() -> IO(Unit):', '  do IO<Unit>:']
 for case in reference['cases']:
-    args = ['Ai.'+reasons[case['reason']]+'{}', str(case['failAt'] if case['failAt']>=0 else 4294967295), json.dumps(case['result']), json.dumps(case['trace']+'|' if case['trace'] else ''), str(case['calls'])]
+    args = ['Ai.'+reasons[case['reason']]+'{}', str(case['failAt'] if case['failAt']>=0 else 4294967295), 'True{}' if case['finishFails'] else 'False{}', json.dumps(case['result']), json.dumps(case['trace']+'|' if case['trace'] else ''), str(case['calls'])]
     lines.append('    T.run(' + ', '.join(args) + ')')
 lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream assistant completion cases")')
 source = BUILD / 'failed-turn-vectors.bend'

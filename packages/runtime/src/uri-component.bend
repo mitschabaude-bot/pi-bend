@@ -28,7 +28,7 @@ def begin(+byte: U32) -> Maybe<&2, Step>:
 def finishScalar(complete: Bool, remaining: U32, +scalar: U32, +minimum: U32) -> Maybe<&2, Step>:
   match complete:
     case False{}: Some{Step{Pending{remaining, scalar, minimum}, ""}}
-    case True{}: Bool.pick(Maybe<&2, Step>, U32.is_ge(scalar, minimum) && U32.is_le(scalar, 1114111) && Bool.not(U32.is_ge(scalar, 55296) && U32.is_le(scalar, 57343)), Some{Step{Ready{}, SCon{Chr{scalar}, ""}}}, None{})
+    case True{}: Bool.pick(Unit -> Maybe<&2, Step>, U32.is_ge(scalar, minimum) && U32.is_le(scalar, 1114111) && Bool.not(U32.is_ge(scalar, 55296) && U32.is_le(scalar, 57343)), _ => Some{Step{Ready{}, SCon{Chr{scalar}, ""}}}, _ => None{})(Unit{})
 
 def continuation(valid: Bool, +remaining: U32, scalar: U32, minimum: U32, byte: U32) -> Maybe<&2, Step>:
   match valid:

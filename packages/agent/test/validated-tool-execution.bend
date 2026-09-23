@@ -58,7 +58,7 @@ def emit(unused: Unit, event: EventValue()) -> IO(E.Emission<String>):
   IO.die(E.Emission<String>, 1, "this executor emits no updates")
 
 def config(converter: C.Callback<Messages(), Converted()>) -> Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
 def executed(result: Result<&2, &2, String, Loop.ExecutedToolCallOutcome<String>>) -> IO(Unit):
   match result:

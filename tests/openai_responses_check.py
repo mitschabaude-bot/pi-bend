@@ -8,6 +8,7 @@ Requests, retries, bodies and peer closure are asserted by the server.
 import argparse,hashlib,json,os,re,socket,struct,subprocess,tempfile,threading,time
 from pathlib import Path
 from scoped_session_audit import prepare
+from upstream_pin import PIN
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--prefix',type=Path,default=ROOT/'build/openai-responses')
@@ -81,7 +82,7 @@ prepared=oracle('responses_prepare_reference.mts',[dict(model={**model,'id':c.ge
 grammar=oracle('openai_provider_grammar_reference.mts',dict(model=model,events=tool_events,grammar=prepared[1]['grammar']))
 assert prepared[1]['grammar']=={'tool':'program'} and grammar['content'][0]['arguments']=={'program':'alpha'},(prepared[1],grammar)
 reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
-assert reference_commit.startswith('46c9de402')
+assert reference_commit.startswith(PIN[:9])
 def oracle_case(c,p):
     value=dict(mode=c['oracle'],events=[] if c['mode']==32 else c['events'],statuses=c['statuses'],supplied=c['supplied'],defaultPricing=True,sdkStatusError=True,abortCallerOnIteratorClose=False,preaborted=c.get('preaborted',False),structuredPayload=True,params=p.get('payload'),serviceTier=c.get('serviceTier'),modelId=c.get('modelId'),grammar=p.get('grammar',{}))
     if 'error' in p:value['preparationError']=p['error']

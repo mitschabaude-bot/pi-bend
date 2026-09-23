@@ -34,14 +34,20 @@ def sameOrder(actual: Cmp, expected: Cmp) -> Bool:
     case GT{} GT{}: True{}
     case _ _: False{}
 
+def checkRemainder(a: B.BigNat, b: B.BigNat, expected: Maybe<&2, B.Division>) -> IO(Unit):
+  match expected:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{B.Division{_, value}}: assertion(B.equal(B.reduce(a, b), value), "modular reduction")
+
 def check(test: Case) -> IO(Unit):
   match test:
-    case Case{+label, +a, +b, shift, sum, product, difference, division, shifted, order, +decimal, small, smallDivision}:
+    case Case{+label, +a, +b, shift, sum, product, difference, +division, shifted, order, +decimal, small, smallDivision}:
       do IO<Unit>:
         assertion(B.equal(B.add(a, b), sum), label ++ " addition")
         assertion(B.equal(B.multiply(a, b), product), label ++ " multiplication")
         assertion(sameMaybe(B.subtract(a, b), difference), label ++ " subtraction")
         assertion(sameDivision(B.divide(a, b), division), label ++ " division")
+        checkRemainder(a, b, division)
         assertion(B.equal(B.shiftLeft(a, shift), shifted), label ++ " shift")
         assertion(sameOrder(B.compare(a, b), order), label ++ " comparison")
         assertion(String.eq(B.toDecimal(a), decimal), label ++ " decimal formatting")

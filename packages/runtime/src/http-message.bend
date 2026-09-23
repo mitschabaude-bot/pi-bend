@@ -2,6 +2,7 @@ import Base
 import ./u64.bend as W
 import ./big-nat.bend as N
 import ./utf8.bend as Utf8
+import ./text.bend as Text
 import ./url.bend as URL
 import ./url.bend as Host
 import ./calendar.bend as Calendar
@@ -55,15 +56,9 @@ def validName(text: String) -> Bool:
     case SNil{}: False{}
     case SCon{Chr{code}, rest}: isTokenByte(code) && validTokens(rest)
 
-def lowercase(text: String) -> String:
-  match text:
-    case SNil{}: SNil{}
-    case SCon{Chr{+code}, rest}:
-      SCon{Chr{Bool.pick(U32, between(code, 65, 90), (code + 32 : U32), code)}, lowercase(rest)}
-
 def checkedName(valid: Bool, name: String) -> Result<&2, &2, HeaderSyntaxError, String>:
   match valid:
-    case True{}: Done{lowercase(name)}
+    case True{}: Done{Text.asciiLower(name)}
     case False{}: Fail{InvalidName{}}
 
 def normalizeName(+name: String) -> Result<&2, &2, HeaderSyntaxError, String>:
@@ -545,7 +540,7 @@ def normalizedRequestMethod(lower: String, original: String) -> Result<&2, &2, R
 def checkedRequestMethod(valid: Bool, +method: String) -> Result<&2, &2, RequestMethodError, String>:
   match valid:
     case False{}: Fail{InvalidMethod{}}
-    case True{}: normalizedRequestMethod(lowercase(method), method)
+    case True{}: normalizedRequestMethod(Text.asciiLower(method), method)
 
 def normalizeRequestMethod(+method: String) -> Result<&2, &2, RequestMethodError, String>:
   checkedRequestMethod(validName(method), method)
@@ -690,7 +685,7 @@ def collectContentLength(fields: List<&2, Header>, result: Result<&2, &2, Length
     case _ Fail{error}: Fail{error}
     case Nil{} Done{value}: Done{value}
     case Header{name, value} <> rest Done{previous}:
-      collectContentLength(rest, contentLengthField(String.eq(lowercase(name), "content-length"), previous, value))
+      collectContentLength(rest, contentLengthField(String.eq(Text.asciiLower(name), "content-length"), previous, value))
 
 def fromFields(fields: List<&2, Header>) -> Result<&2, &2, LengthError, Maybe<&2, W.U64>>:
   collectContentLength(fields, Done{None{}})
@@ -1069,7 +1064,7 @@ def spaces(text: String) -> String:
 # This classifies the installed Fetch parser's wire framing. It is not a
 # generic transfer-coding grammar or a compression decoder.
 def classify(value: String) -> Transfer:
-  token = lowercase(String.reverse(spaces(String.reverse(trimLeading(last(String.split(value, ',')))))))
+  token = Text.asciiLower(String.reverse(spaces(String.reverse(trimLeading(last(String.split(value, ',')))))))
   Bool.pick(Transfer, String.eq(token, "chunked"), ChunkedTransfer{}, OtherTransfer{})
 
 def transferValue(previous: Transfer, value: String) -> Transfer:
@@ -1102,7 +1097,7 @@ def collectFramingFields(fields: List<&2, Header>, state: Result<&2, &2, Framing
   match fields state:
     case _ Fail{error}: Fail{error}
     case Nil{} Done{result}: Done{result}
-    case Header{name, value} <> rest Done{result}: collectFramingFields(rest, framingField(lowercase(name), value, result))
+    case Header{name, value} <> rest Done{result}: collectFramingFields(rest, framingField(Text.asciiLower(name), value, result))
 
 # Consume validated received fields, before they are coalesced for public use.
 def analyze(fields: List<&2, Header>) -> Result<&2, &2, FramingFieldsFieldError, Fields>:

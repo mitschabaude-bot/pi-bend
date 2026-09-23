@@ -48,12 +48,12 @@ def Laws.explicit_cache_mode_supersedes_retention_header(developer, midConvo, af
 
 def Laws.absent_service_tier_keeps_usage(model, usage):
   match model:
-    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _}: {==}
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: {==}
 
 def Laws.default_service_tier_keeps_usage(model, usage):
   match model:
-    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _}: {==}
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: {==}
 
 def Laws.auto_service_tier_keeps_usage(model, usage):
   match model:
-    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _}: {==}
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: {==}

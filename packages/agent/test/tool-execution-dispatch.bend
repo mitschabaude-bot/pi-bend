@@ -26,7 +26,7 @@ def content(empty: Bool) -> List<&2, Ai.AssistantContent<V.Value>>:
       Ai.AssistantText{Ai.TextContent{"before", None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call", "echo", H.field(V.Text{"42"}), None{}, None{}}} <> Ai.AssistantText{Ai.TextContent{"between", None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"bad", "badtool", H.field(V.Text{"bad"}), None{}, None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"missing", "absent", H.field(V.Text{"42"}), None{}, None{}}} <> Nil{}
 
 def configuration(mode: Maybe<&2, T.ToolExecutionMode>, converter: C.Callback<H.Messages(), H.Converted()>, beforeHook: C.Callback<S.BeforeInput(), S.BeforeOutput()>, hook: C.Callback<S.AfterInput(), S.AfterOutput()>) -> H.Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, mode, Some{beforeHook}, Some{hook}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, mode, Some{beforeHook}, Some{hook}}
 
 def expectedEvents(empty: Bool, sequential: Bool) -> List<&2, String>:
   match empty sequential:

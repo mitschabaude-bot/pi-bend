@@ -67,7 +67,7 @@ def terminalResult(events: List<&2, T.AssistantMessageEvent<V.Value, Unit>>, upd
 # The pricing hooks are pure defaults here; finalization consumes the model
 # only for its cost table.
 def costModel(prices: T.ModelCost) -> T.Model<Unit>:
-  T.Model{"test", "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, prices, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
+  T.Model{"test", "Test", T.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, T.InputText{} <> Nil{}, None{}, prices, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, None{}}
 
 def apply(run: Run, action: Action, prices: T.ModelCost) -> Run:
   match run action:

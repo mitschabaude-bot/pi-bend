@@ -87,7 +87,7 @@ def batchAborted(signal: R.Ref<Bool>, unused: Unit) -> IO(Bool): R.read(Bool, si
 def render(error: String) -> String: error
 
 def configuration(converter: C.Callback<H.Messages(), H.Converted()>, beforeHook: C.Callback<BeforeInput(), BeforeOutput()>, hook: C.Callback<AfterInput(), AfterOutput()>) -> H.Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{beforeHook}, Some{hook}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), Model.model(Ai.CustomModelApi{"custom"}, None{}), converter, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{beforeHook}, Some{hook}}
 
 def equal(left: List<&2, String>, right: List<&2, String>) -> Bool:
   match left right:

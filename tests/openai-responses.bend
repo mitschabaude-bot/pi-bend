@@ -11,6 +11,7 @@ import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/f64.bend as F
 import ../packages/runtime/src/u64.bend as W
 import ../packages/runtime/src/fetch.bend as Fetch
+import ../packages/runtime/src/http-exchange.bend as HTTP
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/url.bend as Absolute
@@ -248,7 +249,7 @@ def tier(mode: U32) -> Maybe<&2, T.Nullable<P.ServiceTier>>:
     case _: None{}
 
 def model(mode: U32, port: U32) -> T.Model<T.JsonValue>:
-  T.Model{Bool.pick(String, U32.is_eq(mode, 26), "gpt-5.5", "test"), "Test", T.OpenAIResponsesApi{}, "openai", "http://127.0.0.1:" ++ U32.show(port) ++ "/v1", False{}, None{}, T.InputText{} <> Nil{}, T.ModelCost{F.fromU32(1000000), F.fromU32(2000000), F.fromU32(3000000), F.fromU32(4000000), None{}}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, Some{T.OpenAIResponsesCompat{None{}, None{}, None{}, None{}, None{}, Some{True{}}, None{}, None{}, None{}, None{}}}}
+  T.Model{Bool.pick(String, U32.is_eq(mode, 26), "gpt-5.5", "test"), "Test", T.OpenAIResponsesApi{}, "openai", "http://127.0.0.1:" ++ U32.show(port) ++ "/v1", False{}, None{}, T.InputText{} <> Nil{}, None{}, T.ModelCost{F.fromU32(1000000), F.fromU32(2000000), F.fromU32(3000000), F.fromU32(4000000), None{}}, None{}, F.fromU32(128000), F.fromU32(4096), None{}, None{}, Some{T.OpenAIResponsesCompat{None{}, None{}, None{}, None{}, None{}, Some{True{}}, None{}, None{}, None{}, None{}}}}
 
 def grammarSchema() -> V.Value:
   V.ObjectValue{R.Record{R.Property{"type", V.Text{"object"}} <> R.Property{"properties", V.ObjectValue{R.Record{R.Property{"program", V.ObjectValue{R.Record{R.Property{"type", V.Text{"string"}} <> Nil{}}}} <> Nil{}}}} <> R.Property{"required", V.ArrayValue{V.Text{"program"} <> Nil{}}} <> Nil{}}}
@@ -260,7 +261,7 @@ def context() -> P.Context(Unit, Unit):
   T.TranscriptContext{T.System{T.SystemMessage{T.SystemText{"initial"}, None{}, Some{grammarTool() <> Nil{}}, None{}, F.fromU32(1)}} <> T.User{T.UserMessage{T.UserText{"hello"}, F.fromU32(1)}} <> Nil{}}
 
 def config(files: Fetch.Files) -> P.Config:
-  P.Config{Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}}, Client.Defaults{"pi-bend-test", R.new(String), None{}, None{}}, files, Setup.options(0, False{}), 65536n, False{}}
+  P.Config{Absolute.Context{Label.Context{MappingData.table(), NormalizationData.tables(), PropertiesData.table()}, Domain.Options{Label.LabelOptions{False{}, False{}, True{}, Mapping.Nontransitional{}}, True{}, False{}}}, Client.Defaults{"pi-bend-test", R.new(String), None{}, None{}}, files, Setup.options(0, False{}), HTTP.NoTLS{}, 65536n, False{}}
 
 def options(+mode: U32, supplied: Bool, parent: Abort.AbortSignal<String>, payloadHook: T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, String), responseHook: T.ResponseCallback(T.Model<T.JsonValue>, String)) -> P.OpenAIResponsesOptions<String, Unit, String>:
   P.fromStreamOptions(String, Unit, String, T.StreamOptions{Bool.pick(Maybe<&2, Abort.AbortSignal<String>>, supplied, Some{parent}, None{}), None{}, Some{Bool.pick(String, U32.is_eq(mode, 30), "", "fixture-key")}, None{}, Some{R.new(String)}, Some{payloadHook}, Some{responseHook}, None{}, Some{F.fromU32(1000)}, Some{Bool.pick(F64, U32.is_eq(mode, 22), F.nan(), F.fromU32(2))}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, P.ResponsesSettings{None{}, None{}, tier(mode), None{}})

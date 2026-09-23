@@ -222,6 +222,16 @@ law drain:
   for +queue: Queue.PendingMessageQueue<A>
   {observe(A, Queue.drainPending(A, queue)) == delivered(A, snapshot(A, queue)) : Delivery<A>}
 
+def emittedOf(-A: Data, delivery: Delivery<A>) -> List<&2, A>:
+  match delivery:
+    case Delivery{_, emitted}: emitted
+
+# Previewing a queue yields exactly the messages a drain would deliver.
+law peek:
+  for -A: Data
+  for +queue: Queue.PendingMessageQueue<A>
+  {Queue.peekPending(A, queue) == emittedOf(A, delivered(A, snapshot(A, queue))) : List<&2, A>}
+
 law has_items:
   for -A: Data
   for +queue: Queue.PendingMessageQueue<A>

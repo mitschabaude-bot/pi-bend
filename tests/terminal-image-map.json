@@ -1,0 +1,532 @@
+[
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / iTerm2 image protocol / should detect iTerm2 image escape sequence at start of line",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / iTerm2 image protocol / should detect iTerm2 image escape sequence with text before it",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / iTerm2 image protocol / should detect iTerm2 image escape sequence in middle of long line",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / iTerm2 image protocol / should detect iTerm2 image escape sequence at end of line",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / iTerm2 image protocol / should detect minimal iTerm2 image escape sequence",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Kitty image protocol / should detect Kitty image escape sequence at start of line",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Kitty image protocol / should detect Kitty image escape sequence with text before it",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Kitty image protocol / should detect Kitty image escape sequence with padding",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Bug regression tests / should detect image sequences in very long lines (304k+ chars)",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Bug regression tests / should detect image sequences when terminal doesn't support images",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Bug regression tests / should detect image sequences with ANSI codes before them",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Bug regression tests / should detect image sequences with ANSI codes after them",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in plain text lines",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in lines with only ANSI codes",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in lines with cursor movement codes",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in lines with partial iTerm2 sequences",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in lines with partial Kitty sequences",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in empty lines",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Negative cases - lines without images / should not detect images in lines with newlines only",
+    "status": "ported",
+    "captured_results": 2,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Mixed content scenarios / should detect images when line has both Kitty and iTerm2 sequences",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Mixed content scenarios / should detect image in line with multiple text and image segments",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "isImageLine / Mixed content scenarios / should not falsely detect image in line with file path containing keywords",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / defaults to hyperlinks: false for unknown terminals",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / applies environment overrides",
+    "status": "ported",
+    "captured_results": 2,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / preserves auto-detection for auto environment overrides",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / applies and clears programmatic overrides",
+    "status": "ported",
+    "captured_results": 2,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / bypasses the tmux probe when hyperlinks are overridden",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables hyperlinks under tmux when the client forwards them",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / disables hyperlinks under tmux when the client does not forward them",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / checks tmux capability when TERM starts with 'tmux'",
+    "status": "ported",
+    "captured_results": 2,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / forces hyperlinks: false when TERM starts with 'screen'",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables hyperlinks for Ghostty",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / does not disable Ghostty images solely because cmux is present",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables hyperlinks for Kitty",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables hyperlinks for WezTerm",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables images and hyperlinks for Warp via TERM_PROGRAM",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables images and hyperlinks for Warp via WARP_SESSION_ID",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables images and hyperlinks for Warp via WARP_TERMINAL_SESSION_UUID",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / disables images for Warp inside tmux",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables hyperlinks for iTerm2",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables hyperlinks for VSCode",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables Alacritty capabilities for Zed",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables truecolor and hyperlinks for Windows Terminal outside multiplexers",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / enables truecolor without hyperlinks for JetBrains terminal",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / does not inherit Windows Terminal truecolor through tmux",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "detectCapabilities / trusts explicit truecolor hints through tmux",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "iTerm2 image encoding / includes the decoded payload size in OSC 1337 metadata",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / can request no terminal-side cursor movement",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / suppresses Kitty replies for delete commands",
+    "status": "ported",
+    "captured_results": 3,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / preserves renderImage's default terminal-side cursor movement",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / can opt renderImage into no terminal-side cursor movement",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / registers metadata and crops a partially visible placement",
+    "status": "ported",
+    "captured_results": 3,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / creates placement-only commands for uploaded and cropped images",
+    "status": "ported",
+    "captured_results": 3,
+    "additional": "Cache/probe transitions and registry generations also run in terminal-image-state.bend."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / honors maxHeightCells by reducing rendered width",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "imageFallback / shortens home-prefixed absolute paths without hyperlinks",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "imageFallback / wraps shortened absolute paths in OSC 8 file links when hyperlinks are enabled",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "imageFallback / leaves bare basenames unchanged and does not hyperlink them",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "imageFallback / omits filename segment when not provided",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "hyperlink / wraps text in OSC 8 open and close sequences",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "hyperlink / preserves ANSI styling inside the hyperlink",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "hyperlink / works with empty text",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "hyperlink / works with file:// URIs",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Bug scenario: Terminal without image support / new implementation returns true correctly",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Bug scenario: Terminal without image support / new implementation detects Kitty sequences in any position",
+    "status": "ported",
+    "captured_results": 5,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Bug scenario: Terminal without image support / new implementation detects iTerm2 sequences in any position",
+    "status": "ported",
+    "captured_results": 5,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Integration: Tool execution scenario / detects image sequences in read tool output",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Integration: Tool execution scenario / detects Kitty sequences from Image component",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Integration: Tool execution scenario / handles ANSI codes before image sequences",
+    "status": "ported",
+    "captured_results": 3,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Crash scenario simulation / does NOT crash on very long lines with image sequences",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Crash scenario simulation / handles lines exactly matching crash log dimensions",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Negative cases: Don't false positive / does not detect images in regular long text",
+    "status": "ported",
+    "captured_results": 1,
+    "additional": null
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Negative cases: Don't false positive / does not detect images in lines with file paths",
+    "status": "ported",
+    "captured_results": 4,
+    "additional": null
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / caps Image component height to a square pixel box by default",
+    "status": "ported",
+    "fixture": "image-component.bend",
+    "validation": "image_component_check.py executes the original assertions and compares complete rendered lines."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / places image sequence on first line with empty padding rows",
+    "status": "ported",
+    "fixture": "image-component.bend",
+    "validation": "image_component_check.py executes the original assertions and compares complete rendered lines."
+  },
+  {
+    "source": "terminal-image.test.ts",
+    "test": "Kitty image cursor movement / truncates long image fallback lines to render width",
+    "status": "ported",
+    "fixture": "image-component.bend",
+    "validation": "image_component_check.py executes the original assertions and compares complete rendered lines."
+  },
+  {
+    "source": "bug-regression-isimageline-startswith-bug.test.ts",
+    "test": "Bug regression: isImageLine() crash with image escape sequences / Bug scenario: Terminal without image support / old implementation would return false, causing crash",
+    "status": "excluded-historical-broken-implementation"
+  }
+]

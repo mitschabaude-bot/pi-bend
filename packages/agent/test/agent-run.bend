@@ -79,7 +79,7 @@ def listener(capture: ListenerCapture, input: Listeners.Input<EventValue()>) -> 
         return Emission.EmissionReady{Bool.pick(Result<&2, &2, String, Unit>, (U32.is_eq(mode, 2) && String.eq(eventName(event), "agent_start")) || (U32.is_eq(mode, 8) && String.eq(eventName(event), "start:a")), Fail{"listener failed"}, Done{Unit{}})}
 def converter(unused: Unit, messages: Messages()) -> IO(Converted()): IO.pure(Converted(), Done{State.defaultConvertToLlm(Unit, Unit, String, String, messages)})
 def config(convert: C.Callback<Messages(), Converted()>) -> Config():
-  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), State.defaultModel(Ai.JsonValue), convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  T.AgentLoopConfig{Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String), State.defaultModel(Ai.JsonValue), convert, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def validate(mode: U32, input: Loop.ToolValidationInput) -> IO(Result<&2, &2, String, Schema.Value>):
   match mode:
     case 9: IO.pure(Result<&2, &2, String, Schema.Value>, Done{Schema.Null{}})
@@ -122,7 +122,7 @@ def requestAdded(+old: String, request: String) -> String & Bool:
   (old ++ request ++ ";", String.is_empty(old))
 def provider(capture: ProviderCapture, input: ProviderInput()) -> IO(ProviderOutput()):
   match capture input:
-    case ProviderCapture{runtime, +mode, streams, requests} T.StreamInput{_, Ai.TranscriptContext{messages}, Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{Some{+signal}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _}}}:
+    case ProviderCapture{runtime, +mode, streams, requests} T.StreamInput{_, Ai.TranscriptContext{messages}, Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{Some{+signal}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}}}:
       do IO<ProviderOutput()>:
         cancelled : Bool <- Abort.aborted(Unit, signal)
         Test.assertion(Bool.not(cancelled), "new run forwards its live uncancelled signal")
