@@ -1,0 +1,191 @@
+import Base
+import ../../../../agent/src/types.bend as Agent
+import ../../../../runtime/src/callback.bend as Callback
+import ../../../../runtime/src/deferred.bend as Deferred
+import ../../../../runtime/src/filesystem.bend as Filesystem
+import ../../../../runtime/src/posix-path.bend as Path
+import ../../../../runtime/src/record.bend as Record
+import ../../../../runtime/src/ref.bend as Ref
+import ../../../../runtime/src/word-segmenter.bend as Words
+import ../../../../tui/src/component.bend as Component
+import ../../../../tui/src/components/editor.bend as Editor
+import ../../../../tui/src/components/editor-component.bend as Live
+import ../../../../tui/src/components/select-list.bend as Select
+import ../../../../tui/src/keybindings.bend as Keybindings
+import ../../../../tui/src/keys.bend as Keys
+import ../../../../tui/src/tui-base.bend as Tui
+import ../../../../tui/src/tui-main-screen.bend as Screen
+import ../../../../tui/src/tui-process.bend as Process
+import ../../../../tui/src/terminal.bend as Terminal
+import ../../core/agent-runtime.bend as Runtime
+import ../../core/agent-session.bend as Session
+import ./components/footer.bend as Footer
+import ./theme/color.bend as Color
+import ./theme/markdown-theme.bend as MarkdownTheme
+import ./theme/theme.bend as Theme
+import ./interactive-mode.bend as Interactive
+import ./session-controller.bend as Controller
+import ./transcript.bend as Transcript
+import ./viewport.bend as View
+
+type Error is Data:
+  WordData{cause: Words.LoadError}
+  ThemeData{cause: Theme.LoadError}
+  Layout{cause: Tui.Error}
+  TerminalStart{cause: Terminal.Error}
+
+def wordError(error: Words.LoadError) -> String:
+  match error:
+    case Words.ReadFailed{path,cause}: "Cannot load word data " ++ path ++ ": " ++ Filesystem.errorMessage(cause)
+    case Words.InvalidAsset{path}: "Invalid word data: " ++ path
+def themeError(error: Theme.LoadError) -> String:
+  match error:
+    case Theme.Read{cause}: "Cannot load theme: " ++ Filesystem.errorMessage(cause)
+    case Theme.Decode{_}: "Invalid theme encoding"
+    case Theme.Invalid{_}: "Invalid theme"
+    case Theme.NotFound{name}: "Theme not found: " ++ name
+def errorMessage(error: Error) -> String:
+  match error:
+    case WordData{cause}: wordError(cause)
+    case ThemeData{cause}: themeError(cause)
+    case Layout{_}: "Cannot mount interactive layout"
+    case TerminalStart{Terminal.System{operation,_,message}}: "Terminal " ++ operation ++ ": " ++ message
+    case TerminalStart{_}: "Cannot start terminal"
+
+type FooterPaint is Data: FooterPaint{state: Footer.State,theme: Theme.Theme}
+type FooterOwner is Data: FooterOwner{component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+
+def footerLines(paint: FooterPaint,width: Nat) -> IO(List<&2,String>):
+  match paint: case FooterPaint{state,theme}: Footer.render(state,theme,width)
+def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def footer(cwd: String,home: Maybe<&2,String>,theme: Theme.Theme) -> IO(FooterOwner):
+  do IO<FooterOwner>:
+    +state : Footer.State <- IO.pure(Footer.State,Footer.State{cwd,home,None{},None{},None{},"off",Footer.emptyUsage(),None{},None{},None{},0n,False{},False{},False{},Nil{}})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~FooterPaint,~Nat,~List<&2,String>,~footerLines,FooterPaint{state,theme})
+    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
+    return FooterOwner{Component.Component{Component.ComponentId{3n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
+def footerComponent(owner: FooterOwner) -> Component.Component:
+  match owner: case FooterOwner{component,_,_}: component
+def disposeFooter(owner: FooterOwner) -> IO(Unit):
+  match owner:
+    case FooterOwner{_,render,invalidate}:
+      do IO<Unit>:
+        Callback.dispose(Nat,List<&2,String>,render)
+        Callback.dispose(Unit,Unit,invalidate)
+
+def editorTheme(theme: Theme.Theme) -> IO(Callback.Callback<String,String> & Editor.EditorTheme):
+  do IO<Callback.Callback<String,String> & Editor.EditorTheme>:
+    +paint : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"accent")
+    return (paint,Editor.EditorTheme{paint,Select.SelectListTheme{paint,paint,paint,paint,paint}})
+def clear(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,_: Unit) -> IO(Unit):
+  Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw,None{})
+
+def processResult(result: Result<&2,&2,Terminal.Error,Process.Active>) -> Result<&2,&2,Error,Unit>:
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{cause}: Fail{TerminalStart{cause}}
+def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>) -> IO(View.View & Result<&2,&2,Error,Unit>):
+  match mounted:
+    case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
+    case (view,_,Done{base}):
+      do IO<View.View & Result<&2,&2,Error,Unit>>:
+        +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~Interactive.Startup,~Process.QueryReady,~Unit,~Interactive.onReady,Interactive.Startup{redraw,queue,initial})
+        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~clear,redraw)
+        +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
+        +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
+        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{base,Screen.initial()},components,ids),stopped,False{},ready,stopping)
+        Callback.dispose(Process.QueryReady,Unit,ready)
+        Callback.dispose(Unit,Unit,stopping)
+        return (view,processResult(outcome))
+
+def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handle,+editorComponent: Component.Component,+foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>) -> IO(View.View & Result<&2,&2,Error,Unit>):
+  match borrowed:
+    case (view,document,_):
+      do IO<View.View & Result<&2,&2,Error,Unit>>:
+        mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mount(view,editorComponent,footerComponent(foot))
+        processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial)
+def processEditor(view: View.View,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>) -> IO(View.View & Result<&2,&2,Error,Unit>):
+  processEditorBorrowed(View.borrow(view),editorComponent,foot,stopped,redraw,queue,initial)
+def process(view: View.View,editor: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>) -> IO(View.View & Result<&2,&2,Error,Unit>):
+  processEditor(view,editor,foot,stopped,redraw,queue,initial)
+def finish(outcome: View.View & Result<&2,&2,Error,Unit>,controller: Controller.Controller,transcript: Transcript.Owner,live: Live.Owner,foot: FooterOwner,submitted: Callback.Callback<String,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,stopped: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Error,Unit>):
+  match outcome:
+    case (view,result):
+      do IO<Result<&2,&2,Error,Unit>>:
+        Controller.stop(controller)
+        Transcript.dispose(transcript)
+        View.dispose(view)
+        Live.dispose(live)
+        disposeFooter(foot)
+        Callback.dispose(String,Unit,submitted)
+        Callback.dispose(String,String,paint)
+        MarkdownTheme.dispose(styles)
+        oldRows : Nat <- Ref.dispose(Nat,rows)
+        oldRedraw : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
+        Deferred.dispose(Unit,stopped)
+        return result
+
+def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,view: View.View,+foot: FooterOwner,controller: Controller.Controller,queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>) -> IO(Result<&2,&2,Error,Unit>):
+  match borrowed:
+    case (live,component,_):
+      do IO<Result<&2,&2,Error,Unit>>:
+        outcome : View.View & Result<&2,&2,Error,Unit> <- process(view,component,foot,stopped,redraw,queue,initial)
+        finish(outcome,controller,transcript,live,foot,submitted,paint,styles,rows,redraw,stopped)
+def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Context,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Result<&2,&2,Error,Unit>):
+  match pair:
+    case (paint,uiTheme):
+      do IO<Result<&2,&2,Error,Unit>>:
+        editor : Editor.Editor <- Editor.new(uiTheme,None{})
+        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submitted},None{}}))
+        +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
+        live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
+        foot : FooterOwner <- footer(cwd,home,theme)
+        runLive(Live.borrow(live),view,foot,controller,queue,transcript,submitted,paint,styles,rows,redraw,stopped,initial)
+def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,+stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Result<&2,&2,Error,Unit>):
+  match pair:
+    case (controller,+queue):
+      do IO<Result<&2,&2,Error,Unit>>:
+        submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped})
+        paintPair : Callback.Callback<String,String> & Editor.EditorTheme <- editorTheme(theme)
+        startPaint(paintPair,controller,queue,submitted,view,transcript,styles,initial,cwd,home,theme,words,stopped,redraw)
+def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,styles: MarkdownTheme.Styles,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Context) -> IO(Result<&2,&2,Error,Unit>):
+  match borrowed:
+    case (transcript,+transcriptHandle):
+      do IO<Result<&2,&2,Error,Unit>>:
+        existing : List<&2,Session.Message()> <- Session.messages(session)
+        Transcript.seed(Unit,Runtime.Details(),Runtime.Custom(),transcriptHandle,existing)
+        +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
+        +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+        listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Interactive.Events,~Session.AgentSessionEvent,~Unit,~Interactive.onSessionEvent,Interactive.Events{transcriptHandle,redraw})
+        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n)
+        startController(controllerPair,view,transcript,styles,initial,cwd,home,theme,words,stopped,redraw)
+def startStyles(styles: MarkdownTheme.Styles,view: View.View,viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context) -> IO(Result<&2,&2,Error,Unit>):
+  match styles:
+    case MarkdownTheme.Styles{+markdown,callbacks}:
+      do IO<Result<&2,&2,Error,Unit>>:
+        transcript : Transcript.Owner <- Transcript.create(viewHandle,theme,markdown)
+        startTranscript(Transcript.borrow(transcript),view,MarkdownTheme.Styles{markdown,callbacks},session,initial,cwd,home,theme,words)
+def startView(borrowed: View.View & Component.Component & View.Handle,styles: MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Context) -> IO(Result<&2,&2,Error,Unit>):
+  match borrowed:
+    case (view,_,viewHandle):
+      startStyles(styles,view,viewHandle,session,initial,cwd,home,theme,words)
+def started(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    styles : MarkdownTheme.Styles <- MarkdownTheme.create(theme)
+    view : View.View <- View.create(Component.ComponentId{1n})
+    startView(View.borrow(view),styles,session,initial,cwd,home,theme,words)
+def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Context,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Result<&2,&2,Error,Unit>):
+  match loaded:
+    case Fail{cause}: IO.pure(Result<&2,&2,Error,Unit>,Fail{ThemeData{cause}})
+    case Done{theme}: started(session,initial,cwd,home,theme,words)
+def withWords(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,assetsRoot: String,loaded: Words.Loaded(Words.Context)) -> IO(Result<&2,&2,Error,Unit>):
+  match loaded:
+    case Fail{cause}: IO.pure(Result<&2,&2,Error,Unit>,Fail{WordData{cause}})
+    case Done{words}:
+      do IO<Result<&2,&2,Error,Unit>>:
+        theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"),Path.join(agentDir,"themes"),Color.TrueColor{})
+        themed(session,initial,cwd,home,words,theme)
+def run(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,+assetsRoot: String) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    words : Words.Loaded(Words.Context) <- Words.loadDefault(Path.join(assetsRoot,"packages/runtime/data"))
+    withWords(session,initial,cwd,home,agentDir,assetsRoot,words)
