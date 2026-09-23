@@ -1,0 +1,35 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -2501,8 +2501,18 @@
+   ty: HTerm | null): Val {
+   const m = term_spine(fl, x);
+   const k = (m.t as Of<"Ref">).k;
+-  const args = emit_each(fl, m.args);
+   const op = eff_name(k);
++  // Word operators take words: a boxed argument (say a generic function's
++  // Bool result) is unboxed to its parameter's layout before the template
++  // reads it as a word.
++  const word = /^(bool|u32|nat|f32|f64|char)_/.test(op);
++  const args = emit_each(fl, m.args).map((v, j) => {
++    if (!word || !lay_box(v.lay)) return v;
++    const dom = tele_unbind(fl.book, (fl.book.tlds[k] as Bend.Def).T)
++      .doms[m.all.indexOf(m.args[j])]?.[2];
++    const lay = dom === undefined ? BOX : lay_of(fl.book, dom);
++    return lay_box(lay) ? v : val_to(fl, v, lay);
++  });
+   // An intrinsic that installs count cells (blk_new, blk_keep: clone's C
+   // too) heats its element type.
+   if ("array_get array_new array_clone".includes(op)
+@@ -2530,7 +2540,11 @@
+   }
+   const dup = typeof it.C === "string" && /\$(\d)[^]*\$\1/.test(it.C);
+   const out = tpl(it.C as Gen, dup ? ws.map((a) => emit_alias(fl, a, "a")) : ws);
+-  const lay = lay_of(fl.book, ty);
++  // A word template's result is its declared word, whatever the context
++  // expects (an argument of another intrinsic is emitted untyped).
++  const ret = lay_of(fl.book,
++    tele_unbind(fl.book, (fl.book.tlds[k] as Bend.Def).T).ret);
++  const lay = word && !lay_box(ret) ? ret : lay_of(fl.book, ty);
+   return val_new([out], lay.ks.length === 1 ? lay : BOX);
+ }
+ 
