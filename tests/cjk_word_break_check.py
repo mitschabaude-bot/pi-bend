@@ -36,6 +36,6 @@ for backend in a.backends:
  assert result.returncode==0 and not result.stderr,(backend,result.returncode,result.stderr)
  actual=[json.loads(line) for line in result.stdout.splitlines()]
  assert len(actual)==len(expected),(backend,len(actual),len(expected))
- for i,(got,want) in enumerate(zip(actual,expected)):assert got==want,(backend,i,cases[i],got,want)
- print(f'{backend}: {len(cases)} exact ICU78.3 CJK boundary comparisons pass ({time.monotonic()-start:.3f}s)',flush=True)
+ for i,(got,want) in enumerate(zip(actual,expected)):assert got==[want,want],(backend,i,cases[i],got,want)
+ print(f'{backend}: {len(cases)} exact ICU78.3 CJK boundary comparisons plus high-cost invariance pass ({time.monotonic()-start:.3f}s)',flush=True)
 print('NFKC boundary-before: entire Unicode domain matches ICU78.3')

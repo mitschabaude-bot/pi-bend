@@ -62,12 +62,14 @@ def katakanaCost(length: Nat) -> U32:
     case 8n: 480
     case _: 8192
 
-type Path is Data: Path{cost: U32,ends: List<&2,Nat>}
-def cheaper(cost: U32,current: Maybe<&2,Path>) -> Bool:
+# Native Nat costs use checked arithmetic; None denotes infinity. Scores
+# beyond U32 must retain their ordering rather than wrap.
+type Path is Data: Path{cost: Nat,ends: List<&2,Nat>}
+def cheaper(cost: Nat,current: Maybe<&2,Path>) -> Bool:
   match current:
-    case None{}: U32.is_lt(cost,4294967295)
-    case Some{Path{old,_}}: U32.is_lt(cost,old)
-def relax(distance: Nat,+cost: U32,+ends: List<&2,Nat>,window: List<&2,Maybe<&2,Path>>) -> List<&2,Maybe<&2,Path>>:
+    case None{}: True{}
+    case Some{Path{old,_}}: Nat.is_lt(cost,old)
+def relax(distance: Nat,+cost: Nat,+ends: List<&2,Nat>,window: List<&2,Maybe<&2,Path>>) -> List<&2,Maybe<&2,Path>>:
   match distance window:
     case Zero{} +current <> rest: Bool.pick(Maybe<&2,Path>,cheaper(cost,current),Some{Path{cost,ends}},current) <> rest
     case Succ{left} current <> rest: current <> relax(left,cost,ends,rest)
@@ -76,7 +78,7 @@ def candidates(matches: List<&2,Dictionary.Match>,+position: Nat,+best: Path,win
   match matches best:
     case Nil{} _: window
     case Dictionary.Match{+length,cost} <> rest Path{+total,+ends}:
-      candidates(rest,position,Path{total,ends},relax(length,(total + cost: U32),(position + length) <> ends,window))
+      candidates(rest,position,Path{total,ends},relax(length,total + U32.to_nat(cost),(position + length) <> ends,window))
 def single(matches: List<&2,Dictionary.Match>) -> Bool:
   match matches:
     case Dictionary.Match{1n,_} <> _: True{}
@@ -87,7 +89,7 @@ def katakanaCandidate(enabled: Bool,+length: Nat,position: Nat,best: Path,+windo
   match best:
     case Path{total,ends}:
       Bool.pick(Unit -> List<&2,Maybe<&2,Path>>,enabled && Nat.is_lt(length,20n),
-        _ => relax(length,(total + katakanaCost(length): U32),(position + length) <> ends,window),_ => window)(Unit{})
+        _ => relax(length,total + U32.to_nat(katakanaCost(length)),(position + length) <> ends,window),_ => window)(Unit{})
 def shift(window: List<&2,Maybe<&2,Path>>) -> List<&2,Maybe<&2,Path>>:
   match window:
     case _ <> rest: List.append(&2,Maybe<&2,Path>,rest,None{} <> Nil{})
@@ -115,7 +117,7 @@ def project(targets: List<&2,Nat>,offsets: List<&2,Nat>,+index: Nat,+previous: N
     case _ _: List.reverse(&2,Nat,reversed)
 def divided(dictionary: Dictionary.Trie,value: Normalized) -> List<&2,Nat>:
   match value:
-    case Normalized{text,offsets}: project(solve(text,dictionary,0n,False{},Some{Path{0,Nil{}}} <> emptyWindow(20n)),offsets,0n,0n,Nil{})
+    case Normalized{text,offsets}: project(solve(text,dictionary,0n,False{},Some{Path{0n,Nil{}}} <> emptyWindow(20n)),offsets,0n,0n,Nil{})
 def boundaries(context: Context,text: String) -> List<&2,Nat>:
   match context:
     case Context{dictionary,tables}: divided(dictionary,normalized(tables,text))
