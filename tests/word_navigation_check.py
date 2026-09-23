@@ -1,5 +1,5 @@
 """Source-oracle navigation with injected segmentation; no production Intl dependency."""
-import argparse, json, subprocess, itertools
+import argparse, json, subprocess, itertools, hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
@@ -7,8 +7,10 @@ p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
 p.add_argument('--upstream',type=Path,default=ROOT.parent/'pi-mono')
 a=p.parse_args()
 source=(a.upstream/'packages/tui/src/word-navigation.ts').read_text()
+assert hashlib.sha256(source.encode()).hexdigest()=='b73e915a524926ac8881731e89026b0bc7b5b0bd465de67257af81a420465c7f'
 source=source[source.index('const wordSegmenter'):].replace('getWordSegmenter()', 'new Intl.Segmenter("en",{granularity:"word"})')
 utils=(a.upstream/'packages/tui/src/utils.ts').read_text()
+assert hashlib.sha256(utils.encode()).hexdigest()=='014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3'
 punctuation=next(line for line in utils.splitlines() if line.startswith('export const PUNCTUATION_REGEX'))
 oracle=ROOT/'build/word-navigation-oracle.ts'
 oracle.write_text(punctuation+'\nconst isWhitespaceChar=(s:string)=>/\\s/.test(s);\n'+source+'''

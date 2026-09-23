@@ -3683,9 +3683,14 @@
     },
     {
       "source": "packages/tui/test/truncated-text.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ba67883169e19dcb2013498d4b6659daa82b63daf01399f8471dc2b88b598141"
+      "status": "ported",
+      "ports": [
+        "tests/text-components.bend",
+        "tests/text_components_check.py",
+        "tests/text_components_reference.ts"
+      ],
+      "sha256": "ba67883169e19dcb2013498d4b6659daa82b63daf01399f8471dc2b88b598141",
+      "notes": "All nine original named test bodies execute in the hash-checked reference; native render results match on Bun/native one/four. Supplemental comparisons cover Text callbacks/cache behavior and strict native normalization; see tests/text-components.md."
     },
     {
       "source": "packages/tui/test/tui-alt-screen.test.ts",
@@ -3719,9 +3724,13 @@
     },
     {
       "source": "packages/tui/test/word-navigation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "63ad66c3b23643ef248292a8c72cbf38e8126bc43da3df69a83b71397bc635ac"
+      "status": "partial",
+      "ports": [
+        "tests/word-navigation.bend",
+        "tests/word_navigation_check.py"
+      ],
+      "sha256": "63ad66c3b23643ef248292a8c72cbf38e8126bc43da3df69a83b71397bc635ac",
+      "notes": "Injected navigation has 1,260 hash-pinned source comparisons on Bun/native one/four, including 220 documented punctuation-progress corrections. Unicode default word boundaries have separate conformance coverage, but are not used as the Intl-compatible default; dictionary/LSTM lexical segmentation and that default upstream suite remain pending. See tests/word-navigation.md."
     },
     {
       "source": "packages/tui/test/wrap-ansi.test.ts",
