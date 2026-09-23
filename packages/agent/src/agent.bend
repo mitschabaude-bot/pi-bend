@@ -1329,6 +1329,16 @@ def getStreamFunction(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, 
       do IO<T.StreamFn(G, D, Config(G, D, M, E, Telemetry), E)>:
         current : Options<G, D, M, E, Telemetry> <- R.read(Options<G, D, M, E, Telemetry>, options)
         optionsStreamFunction(G, D, M, E, Telemetry, current)
+def optionsConfig(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, options: Options<G, D, M, E, Telemetry>) -> Config(G, D, M, E, Telemetry):
+  match options:
+    case Options{config, _, _, _}: config
+# The current loop configuration, for callers composing their own requests.
+def getConfig(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agent: Agent<G, D, M, E, Telemetry>) -> IO(Config(G, D, M, E, Telemetry)):
+  match agent:
+    case Agent{_, _, options, _, _, _}:
+      do IO<Config(G, D, M, E, Telemetry)>:
+        current : Options<G, D, M, E, Telemetry> <- R.read(Options<G, D, M, E, Telemetry>, options)
+        return optionsConfig(G, D, M, E, Telemetry, current)
 def configConvertToLlm(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, config: Config(G, D, M, E, Telemetry)) -> Converter(G, D, M, E):
   match config:
     case T.AgentLoopConfig{_, _, value, _, _, _, _, _, _, _, _, _}: value

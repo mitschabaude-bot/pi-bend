@@ -11,6 +11,7 @@ import ../core/tools/index.bend as Tools
 import ../core/messages.bend as Messages
 import ../core/session-json.bend as SessionJson
 import ../core/agent-session.bend as Session
+import ../core/compaction/compaction.bend as Compaction
 
 # Session event shape emitted by the JSON stdout protocol. Cumulative assistant
 # snapshots are removed from streaming wire events: `message_start` provides
@@ -128,6 +129,26 @@ def texts(values: List<&2, String>) -> List<&2, V.Value>:
     case Nil{}: Nil{}
     case value <> rest: V.Text{value} <> texts(rest)
 
+def reasonName(reason: Session.CompactionReason) -> String:
+  match reason:
+    case Session.Manual{}: "manual"
+    case Session.Threshold{}: "threshold"
+    case Session.Overflow{}: "overflow"
+
+def retrySource(source: Session.RetrySource) -> List<&2, R.Property<V.Value>>:
+  match source:
+    case Session.BranchSummarySource{}: field("source", text("branchSummary"), Nil{})
+    case Session.CompactionSource{reason}: field("source", text("compaction"), field("reason", text(reasonName(reason)), Nil{}))
+
+def compactionDetails(details: Compaction.CompactionDetails) -> V.Value:
+  match details:
+    case Compaction.CompactionDetails{readFiles, modifiedFiles}: object(field("readFiles", V.ArrayValue{texts(readFiles)}, field("modifiedFiles", V.ArrayValue{texts(modifiedFiles)}, Nil{})))
+
+def compactionResult(result: Compaction.CompactionResult) -> V.Value:
+  match result:
+    case Compaction.CompactionResult{summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter, usage, details}:
+      object(field("summary", text(summary), field("firstKeptEntryId", text(firstKeptEntryId), field("tokensBefore", V.Number{tokensBefore}, Json.optional("estimatedTokensAfter", Maybe.map(&2, F64, V.Value, after => V.Number{after}, estimatedTokensAfter), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optional("details", Maybe.map(&2, Compaction.CompactionDetails, V.Value, compactionDetails, details), Nil{})))))))
+
 def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, String, V.Value>:
   match event:
     case Session.AgentEvent{value}: toJsonEvent(value)
@@ -138,4 +159,9 @@ def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, Strin
     case Session.ThinkingLevelChanged{level}: Done{object(field("type", text("thinking_level_changed"), field("level", text(Levels.name(level)), Nil{})))}
     case Session.AutoRetryStart{attempt, maxAttempts, delayMs, errorMessage}: Done{object(field("type", text("auto_retry_start"), field("attempt", natural(attempt), field("maxAttempts", natural(maxAttempts), field("delayMs", V.Number{delayMs}, field("errorMessage", text(errorMessage), Nil{}))))))}
     case Session.AutoRetryEnd{success, attempt, finalError}: Done{object(field("type", text("auto_retry_end"), field("success", V.Boolean{success}, field("attempt", natural(attempt), Json.optionalText("finalError", finalError, Nil{})))))}
+    case Session.CompactionStart{reason}: Done{object(field("type", text("compaction_start"), field("reason", text(reasonName(reason)), Nil{})))}
+    case Session.CompactionEnd{reason, result, aborted, willRetry, errorMessage}: Done{object(field("type", text("compaction_end"), field("reason", text(reasonName(reason)), Json.optional("result", Maybe.map(&2, Compaction.CompactionResult, V.Value, compactionResult, result), field("aborted", V.Boolean{aborted}, field("willRetry", V.Boolean{willRetry}, Json.optionalText("errorMessage", errorMessage, Nil{})))))))}
+    case Session.SummarizationRetryScheduled{attempt, maxAttempts, delayMs, errorMessage}: Done{object(field("type", text("summarization_retry_scheduled"), field("attempt", natural(attempt), field("maxAttempts", natural(maxAttempts), field("delayMs", V.Number{delayMs}, field("errorMessage", text(errorMessage), Nil{}))))))}
+    case Session.SummarizationRetryAttemptStart{source}: Done{object(field("type", text("summarization_retry_attempt_start"), retrySource(source)))}
+    case Session.SummarizationRetryFinished{}: Done{object(field("type", text("summarization_retry_finished"), Nil{}))}
 

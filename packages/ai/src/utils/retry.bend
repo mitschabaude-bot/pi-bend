@@ -1,5 +1,8 @@
 import Base
 import ../types.bend as T
+import ./provider-retry.bend as ProviderRetry
+import ../../../runtime/src/abort.bend as A
+import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/regex.bend as Regex
 import ../../../runtime/src/f64.bend as F
 
@@ -87,3 +90,112 @@ def retryDelayMs(baseDelayMs: F64, maxAgentDelayMs: Maybe<&2, F64>, attempt: Nat
 def policyDelayMs(policy: RetryPolicy, attempt: Nat) -> F64:
   match policy:
     case RetryPolicy{_, _, baseDelayMs, maxAgentDelayMs}: retryDelayMs(baseDelayMs, maxAgentDelayMs, attempt)
+
+# Retried calls
+# -------------
+# upstream RetryCallbacks: one callback receives the three notices.
+
+type RetryNotice is Data:
+  RetryScheduled{attempt: Nat, maxAttempts: Nat, delayMs: F64, errorMessage: String}
+  RetryAttemptStart{}
+  RetryFinished{success: Bool, attempt: Nat, finalError: Maybe<&2, String>}
+
+def RetryCallbacks() -> Data: C.Callback<RetryNotice, Unit>
+
+def notify(callbacks: Maybe<&2, RetryCallbacks()>, notice: RetryNotice) -> IO(Unit):
+  match callbacks:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{callback}: C.call(RetryNotice, Unit, callback, notice)
+
+type LastRetry is Data:
+  LastRetry{attempt: Nat, errorMessage: String}
+
+def finishedNotice(last: Maybe<&2, LastRetry>, success: Bool, finalError: Maybe<&2, String>) -> Maybe<&2, RetryNotice>:
+  match last:
+    case None{}: None{}
+    case Some{LastRetry{attempt, _}}: Some{RetryFinished{success, attempt, finalError}}
+
+def notifyMaybe(callbacks: Maybe<&2, RetryCallbacks()>, notice: Maybe<&2, RetryNotice>) -> IO(Unit):
+  match notice:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{value}: notify(callbacks, value)
+
+def maxAttemptsOf(policy: Maybe<&2, RetryPolicy>) -> Nat:
+  match policy:
+    case Some{RetryPolicy{True{}, maxRetries, _, _}}: maxRetries
+    case _: 0n
+
+def delayOf(policy: Maybe<&2, RetryPolicy>, attempt: Nat) -> F64:
+  match policy:
+    case Some{value}: policyDelayMs(value, attempt)
+    case None{}: F.fromU32(0)
+
+def errorTextOf(errorMessage: Maybe<&2, String>) -> String:
+  match errorMessage:
+    case Some{SNil{}}: "Unknown error"
+    case Some{text}: text
+    case None{}: "Unknown error"
+
+# An aborted backoff returns the failed response marked aborted, without its error text.
+def abortedResponse(-Arguments: Data, -DiagnosticDetails: Data, message: T.AssistantMessage<Arguments, DiagnosticDetails>) -> T.AssistantMessage<Arguments, DiagnosticDetails>:
+  match message:
+    case T.AssistantMessage{content, api, provider, model, responseModel, responseId, providerThinkingLevel, diagnostics, usage, _, deferred, _, rawStopReason, endTurn, timestamp}:
+      T.AssistantMessage{content, api, provider, model, responseModel, responseId, providerThinkingLevel, diagnostics, usage, T.Aborted{}, deferred, None{}, rawStopReason, endTurn, timestamp}
+
+# The loop's states: call the producer, sleep before a retry, resume after
+# the sleep, or settle with the response.
+type Loop<-Arguments: Data, -DiagnosticDetails: Data> is Data:
+  Call{attempt: Nat, last: Maybe<&2, LastRetry>}
+  Backoff{attempt: Nat, errorMessage: String, response: T.AssistantMessage<Arguments, DiagnosticDetails>}
+  Resume{attempt: Nat, errorMessage: String}
+  Settled{response: T.AssistantMessage<Arguments, DiagnosticDetails>, notice: Maybe<&2, RetryNotice>}
+
+def stopReasonOf(-Arguments: Data, -DiagnosticDetails: Data, message: T.AssistantMessage<Arguments, DiagnosticDetails>) -> T.StopReason:
+  match message:
+    case T.AssistantMessage{_, _, _, _, _, _, _, _, _, stopReason, _, _, _, _, _}: stopReason
+
+def errorMessageOf(-Arguments: Data, -DiagnosticDetails: Data, message: T.AssistantMessage<Arguments, DiagnosticDetails>) -> Maybe<&2, String>:
+  match message:
+    case T.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, errorMessage, _, _, _}: errorMessage
+
+def decideAfter(-Arguments: Data, -DiagnosticDetails: Data, +response: T.AssistantMessage<Arguments, DiagnosticDetails>, +attempt: Nat, +last: Maybe<&2, LastRetry>, maxAttempts: Nat, stopReason: T.StopReason, +errorMessage: Maybe<&2, String>, retryable: Bool) -> Loop<Arguments, DiagnosticDetails>:
+  match stopReason:
+    case T.Aborted{}: Settled{response, finishedNotice(last, False{}, None{})}
+    case T.Error{}: Bool.pick(Loop<Arguments, DiagnosticDetails>, Bool.or(Bool.not(Nat.is_lt(attempt, maxAttempts)), Bool.not(retryable)), Settled{response, finishedNotice(last, False{}, errorMessage)}, Backoff{Nat.add(attempt, 1n), errorTextOf(errorMessage), response})
+    case _: Settled{response, finishedNotice(last, True{}, None{})}
+
+def afterResponse(-Arguments: Data, -DiagnosticDetails: Data, +response: T.AssistantMessage<Arguments, DiagnosticDetails>, attempt: Nat, last: Maybe<&2, LastRetry>, maxAttempts: Nat) -> Loop<Arguments, DiagnosticDetails>:
+  decideAfter(Arguments, DiagnosticDetails, response, attempt, last, maxAttempts, stopReasonOf(Arguments, DiagnosticDetails, response), errorMessageOf(Arguments, DiagnosticDetails, response), isRetryableAssistantError(Arguments, DiagnosticDetails, response))
+
+def afterSleep(-Arguments: Data, -DiagnosticDetails: Data, slept: Result<&2, &2, ProviderRetry.SleepError, Unit>, attempt: Nat, errorMessage: String, response: T.AssistantMessage<Arguments, DiagnosticDetails>) -> Loop<Arguments, DiagnosticDetails>:
+  match slept:
+    case Done{_}: Resume{attempt, errorMessage}
+    case Fail{_}: Settled{abortedResponse(Arguments, DiagnosticDetails, response), Some{RetryFinished{False{}, attempt, Some{errorMessage}}}}
+
+def retryStep(~Arguments: Data, ~DiagnosticDetails: Data, ~Env: Data, ~produce: Env -> IO(T.AssistantMessage<Arguments, DiagnosticDetails>), fuel: Nat, +env: Env, +policy: Maybe<&2, RetryPolicy>, +signal: Maybe<&2, A.AbortSignal<Unit>>, +callbacks: Maybe<&2, RetryCallbacks()>, state: Loop<Arguments, DiagnosticDetails>) -> IO(T.AssistantMessage<Arguments, DiagnosticDetails>):
+  match fuel state:
+    case _ Settled{response, notice}:
+      do IO<T.AssistantMessage<Arguments, DiagnosticDetails>>:
+        notifyMaybe(callbacks, notice)
+        return response
+    case 0n Call{_, _}: produce(env)
+    case 0n Backoff{_, _, response}: IO.pure(T.AssistantMessage<Arguments, DiagnosticDetails>, response)
+    case 0n Resume{_, _}: produce(env)
+    case 1n+rest Call{attempt, last}:
+      do IO<T.AssistantMessage<Arguments, DiagnosticDetails>>:
+        response : T.AssistantMessage<Arguments, DiagnosticDetails> <- produce(env)
+        retryStep(~Arguments, ~DiagnosticDetails, ~Env, ~produce, rest, env, policy, signal, callbacks, afterResponse(Arguments, DiagnosticDetails, response, attempt, last, maxAttemptsOf(policy)))
+    case 1n+rest Backoff{+attempt, +errorMessage, response}:
+      do IO<T.AssistantMessage<Arguments, DiagnosticDetails>>:
+        notify(callbacks, RetryScheduled{attempt, maxAttemptsOf(policy), delayOf(policy, attempt), errorMessage})
+        slept : Result<&2, &2, ProviderRetry.SleepError, Unit> <- ProviderRetry.sleep(Unit, ProviderRetry.SleepInput{delayOf(policy, attempt), signal})
+        retryStep(~Arguments, ~DiagnosticDetails, ~Env, ~produce, rest, env, policy, signal, callbacks, afterSleep(Arguments, DiagnosticDetails, slept, attempt, errorMessage, response))
+    case 1n+rest Resume{+attempt, errorMessage}:
+      do IO<T.AssistantMessage<Arguments, DiagnosticDetails>>:
+        notify(callbacks, RetryAttemptStart{})
+        retryStep(~Arguments, ~DiagnosticDetails, ~Env, ~produce, rest, env, policy, signal, callbacks, Call{attempt, Some{LastRetry{attempt, errorMessage}}})
+
+# upstream retryAssistantCall: produce until a non-retryable outcome or the
+# policy's attempts are spent; an aborted backoff returns an aborted message.
+def retryAssistantCall(~Arguments: Data, ~DiagnosticDetails: Data, ~Env: Data, ~produce: Env -> IO(T.AssistantMessage<Arguments, DiagnosticDetails>), env: Env, +policy: Maybe<&2, RetryPolicy>, signal: Maybe<&2, A.AbortSignal<Unit>>, callbacks: Maybe<&2, RetryCallbacks()>) -> IO(T.AssistantMessage<Arguments, DiagnosticDetails>):
+  retryStep(~Arguments, ~DiagnosticDetails, ~Env, ~produce, Nat.add(Nat.mul(3n, maxAttemptsOf(policy)), 3n), env, policy, signal, callbacks, Call{0n, None{}})

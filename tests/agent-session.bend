@@ -12,8 +12,10 @@ import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/date.bend as Date
+import ../packages/runtime/src/number-string.bend as Numbers
 import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/agent-session.bend as Session
+import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/session-manager.bend as S
 import ../packages/coding-agent/src/core/settings-manager.bend as Settings
@@ -55,10 +57,21 @@ def holdAt(gate: Maybe<&2, Gate>) -> IO(Unit):
 def fauxModel() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"faux-model", "Faux", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Nil{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
 
-def reply(text: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
-  Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text, None{}}} <> Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Stop{}, None{}, None{}, None{}, None{}, now}
+# A scripted response is its text, optionally "text#tokens" to report that
+# much context usage, "~text" to stop at the length limit, or "!message" to
+# fail with that error message.
+type Scripted is Data:
+  Answered{text: String, stop: Ai.StopReason, tokens: F64}
+  Failed{message: String}
 
-# A scripted response starting with "!" fails with the rest as error message.
+def zero() -> F64: U32.to_f64(0)
+
+def usageOf(+tokens: F64) -> Ai.Usage:
+  Ai.Usage{tokens, zero(), zero(), zero(), None{}, None{}, tokens, Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}
+
+def reply(text: String, stop: Ai.StopReason, tokens: F64, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+  Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text, None{}}} <> Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, usageOf(tokens), stop, None{}, None{}, None{}, None{}, now}
+
 def failure(message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
   Ai.AssistantMessage{Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
 
@@ -70,38 +83,53 @@ def popResponse(responses: List<&2, String>) -> List<&2, String> & String:
 def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, Unit>) -> IO(Unit):
   Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, event)
 
-def failureOf(text: String) -> Maybe<&2, String>:
+def withTokens(stop: Ai.StopReason, text: String, parts: List<&2, String>) -> Scripted:
+  match parts:
+    case answer <> tokens <> Nil{}: Answered{answer, stop, Numbers.toNumber(tokens)}
+    case _: Answered{text, stop, zero()}
+
+def answered(stop: Ai.StopReason, +text: String) -> Scripted: withTokens(stop, text, String.split(text, '#'))
+
+def scripted(text: String) -> Scripted:
   match text:
-    case SCon{'!', message}: Some{message}
-    case _: None{}
+    case SCon{'!', message}: Failed{message}
+    case SCon{'~', rest}: answered(Ai.Length{}, rest)
+    case _: answered(Ai.Stop{}, text)
 
-def answerWith(+stream: EventStream(), scripted: Maybe<&2, String>, +text: String, +now: F64) -> IO(Unit):
-  match scripted:
-    case Some{message}:
+def doneReason(stop: Ai.StopReason) -> Ai.DoneReason:
+  match stop:
+    case Ai.Length{}: Ai.DoneLength{}
+    case _: Ai.DoneStop{}
+
+def answer(+stream: EventStream(), script: Scripted, +now: F64) -> IO(Unit):
+  match script:
+    case Failed{message}:
       do IO<Unit>:
-        push(stream, Ai.Start{reply("", now)})
+        push(stream, Ai.Start{reply("", Ai.Stop{}, zero(), now)})
         push(stream, Ai.StreamError{Ai.ErrorError{}, failure(message, now)})
-    case None{}:
+    case Answered{+text, +stop, +tokens}:
       do IO<Unit>:
-        push(stream, Ai.Start{reply("", now)})
-        push(stream, Ai.TextStart{U32.to_f64(0), reply("", now)})
-        push(stream, Ai.TextDelta{U32.to_f64(0), text, reply(text, now)})
-        push(stream, Ai.TextEnd{U32.to_f64(0), text, reply(text, now)})
-        push(stream, Ai.StreamDone{Ai.DoneStop{}, reply(text, now)})
+        push(stream, Ai.Start{reply("", stop, zero(), now)})
+        push(stream, Ai.TextStart{zero(), reply("", stop, zero(), now)})
+        push(stream, Ai.TextDelta{zero(), text, reply(text, stop, zero(), now)})
+        push(stream, Ai.TextEnd{zero(), text, reply(text, stop, zero(), now)})
+        push(stream, Ai.StreamDone{doneReason(stop), reply(text, stop, tokens, now)})
 
-def answer(stream: EventStream(), +text: String, now: F64) -> IO(Unit): answerWith(stream, failureOf(text), text, now)
-
+# A reply takes at least a millisecond, as a real provider's does: the
+# compaction boundary compares millisecond timestamps, so a reply stamped in
+# the compaction's own millisecond would count as pre-compaction.
 def provider(faux: Faux, input: Input()) -> IO(Output()):
   match faux:
     case Faux{responses, streams, gates}:
       do IO<Output()>:
         gate : Maybe<&2, Gate> <- R.modify(List<&2, Gate>, Maybe<&2, Gate>, gates, remaining => popGate(remaining))
         holdAt(gate)
-        +text : String <- R.modify(List<&2, String>, String, responses, remaining => popResponse(remaining))
+        text : String <- R.modify(List<&2, String>, String, responses, remaining => popResponse(remaining))
+        IO.sleep(1)
         +now : F64 <- Date.now()
         +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
-        answer(stream, text, now)
+        answer(stream, scripted(text), now)
         return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
 
 def line(value: V.Value) -> String:
@@ -232,6 +260,7 @@ def entryKinds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value
     case S.ModelChangeEntry{_, provider, model} <> rest: ("model_change:" ++ provider ++ "/" ++ model) <> entryKinds(rest)
     case S.SessionInfoEntry{_, name} <> rest: ("session_info:" ++ Maybe.default(&2, String, name, "")) <> entryKinds(rest)
     case S.SessionMessageEntry{_, _} <> rest: "message" <> entryKinds(rest)
+    case S.Compaction{_} <> rest: "compaction" <> entryKinds(rest)
     case _ <> rest: "other" <> entryKinds(rest)
 
 def quotedAll(values: List<&2, String>) -> List<&2, String>:
@@ -310,12 +339,16 @@ def busyScenario(+dir: String, agentDir: String) -> IO(Unit):
 type RetrySignal is Data:
   RetrySignal{started: Chan(Unit)}
 
+def signalStarted(started: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    sent : Bool <- Chan.send(Unit, started, Unit{})
+    return Unit{}
+
+# Signals when a retry backoff, of the agent or of the summarizer, begins.
 def signalRetry(env: RetrySignal, event: Session.AgentSessionEvent) -> IO(Unit):
   match env event:
-    case RetrySignal{started} Session.AutoRetryStart{_, _, _, _}:
-      do IO<Unit>:
-        sent : Bool <- Chan.send(Unit, started, Unit{})
-        return Unit{}
+    case RetrySignal{started} Session.AutoRetryStart{_, _, _, _}: signalStarted(started)
+    case RetrySignal{started} Session.SummarizationRetryScheduled{_, _, _, _}: signalStarted(started)
     case _ _: IO.pure(Unit, Unit{})
 
 def cancelOnRetry(session: Session.AgentSession, started: Chan(Unit)) -> IO(Unit):
@@ -355,6 +388,81 @@ def retryScenario(+dir: String, agentDir: String, responses: String, cancel: Str
     teardown(value)
     Chan.close(Unit, started)
 
+# compact: prompts run in order, then the action: "manual" compacts, "cancel"
+# compacts and calls abortCompaction once the summarizer's retry backoff
+# starts, "abort" does the same with abort() and prompts again, "none" only
+# lets automatic compaction act on the prompts.
+def reportCompact(result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Unit):
+  match result:
+    case Done{value}: printed(Done{JsonEvent.object(JsonEvent.field("type", JsonEvent.text("compact_result"), JsonEvent.field("result", JsonEvent.compactionResult(value), Nil{})))})
+    case Fail{error}: IO.print("{\"type\":\"compact_failed\",\"error\":" ++ Decode.quote(error) ++ "}")
+
+def reportMessages(session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    current : List<&2, Session.Message()> <- Session.messages(session)
+    printed(Done{JsonEvent.object(JsonEvent.field("type", JsonEvent.text("messages"), JsonEvent.field("messages", V.ArrayValue{JsonEvent.messages(current)}, Nil{})))})
+
+def reportCompacting(session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    compacting : Bool <- Session.isCompacting(session)
+    IO.print("{\"type\":\"compacting\",\"value\":" ++ Bool.pick(String, compacting, "true", "false") ++ "}")
+
+def promptAll(+session: Session.AgentSession, prompts: List<&2, String>) -> IO(Unit):
+  match prompts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case text <> rest:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Session.prompt(session, text, Nil{}, None{})
+        reportPrompt(result)
+        promptAll(session, rest)
+
+def interruptOnRetry(+session: Session.AgentSession, started: Chan(Unit), abortAll: Bool) -> IO(Unit):
+  do IO<Unit>:
+    seen : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    Bool.pick(Unit -> IO(Unit), abortAll, _ => Session.abort(session), _ => Session.abortCompaction(session))(Unit{})
+
+def compactThen(+session: Session.AgentSession, prompts: List<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(session, None{})
+    reportCompact(result)
+    reportCompacting(session)
+    promptAll(session, prompts)
+
+# The interrupt waits for the summarizer's first retry backoff.
+def interrupted(+session: Session.AgentSession, abortAll: Bool, prompts: List<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +signal : Session.Listener() <- C.create(~RetrySignal, ~Session.AgentSessionEvent, ~Unit, ~signalRetry, RetrySignal{started})
+    Session.subscribe(session, signal)
+    IO.spawn(Unit, interruptOnRetry(session, started, abortAll))
+    compactThen(session, prompts)
+    Session.unsubscribe(session, signal)
+    C.dispose(Session.AgentSessionEvent, Unit, signal)
+    Chan.close(Unit, started)
+
+def compactAction(+session: Session.AgentSession, action: String) -> IO(Unit):
+  match action:
+    case "manual": compactThen(session, Nil{})
+    case "cancel": interrupted(session, False{}, Nil{})
+    case "abort": interrupted(session, True{}, "next prompt" <> Nil{})
+    case _: IO.pure(Unit, Unit{})
+
+def promptsOf(+prompts: String) -> List<&2, String>:
+  Bool.pick(List<&2, String>, String.eq(prompts, "-"), Nil{}, String.split(prompts, ';'))
+
+def compactScenario(+dir: String, +agentDir: String, prompts: String, responses: String, action: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
+    promptAll(sessionOf(value), promptsOf(prompts))
+    compactAction(sessionOf(value), action)
+    reportRemaining(responsesOf(value))
+    reportMessages(sessionOf(value))
+    reportEntries(sessionOf(value))
+    reportSession(sessionOf(value))
+    teardown(value)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persist" <> dir <> agentDir <> Nil{}: persistScenario(dir, agentDir)
@@ -362,7 +470,8 @@ def run(args: List<String>) -> IO(Unit):
     case "mutate" <> dir <> agentDir <> Nil{}: mutateScenario(dir, agentDir)
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
-    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run>")
+    case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
+    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|none>")
 
 def main() -> IO(Unit):
   do IO<Unit>:

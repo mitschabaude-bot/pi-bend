@@ -1409,9 +1409,17 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "13520564c4a3b70d0f6bd125d1fab07ae7ca148fbecd12cecc5c0e8651a0a146"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "13520564c4a3b70d0f6bd125d1fab07ae7ca148fbecd12cecc5c0e8651a0a146",
+      "notes": "Manual compact(), valid session state, persisted compaction entry and compaction events run over the faux provider instead of a live model; the --no-session in-memory case is not ported."
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
@@ -1608,9 +1616,15 @@
     },
     {
       "source": "packages/coding-agent/test/compaction-serialization.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "df31e877e71f47217acf1e2e730eab258f849869b1e282eeea567caa03f6ec54"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/coding-agent/src/core/compaction/utils.bend",
+        "tests/compaction.bend",
+        "tests/compaction_check.py"
+      ],
+      "sha256": "df31e877e71f47217acf1e2e730eab258f849869b1e282eeea567caa03f6ec54",
+      "notes": "All three serializeConversation truncation cases."
     },
     {
       "source": "packages/coding-agent/test/compaction-summary-reasoning.test.ts",
@@ -1620,9 +1634,15 @@
     },
     {
       "source": "packages/coding-agent/test/compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a547c4418820637cf891af72659044d8dc904f4f2f6a477cc83189c602adc671"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/coding-agent/src/core/compaction/utils.bend",
+        "tests/compaction.bend",
+        "tests/compaction_check.py"
+      ],
+      "sha256": "a547c4418820637cf891af72659044d8dc904f4f2f6a477cc83189c602adc671",
+      "notes": "Token calculation, getLastAssistantUsage, estimateContextTokens, shouldCompact, findCutPoint, buildSessionContext and prepareCompaction cases pinned to upstream expectations (tests/compaction.md). The large-session fixture and the ANTHROPIC_OAUTH_TOKEN LLM summarization cases are not ported."
     },
     {
       "source": "packages/coding-agent/test/config-value-migration.test.ts",
@@ -2596,9 +2616,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dd06cc2e00be07d4eedaa1ed5993f277b768fdfcf116f7b118e881f9f17ae337"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "dd06cc2e00be07d4eedaa1ed5993f277b768fdfcf116f7b118e881f9f17ae337",
+      "notes": "Faux-provider scenarios cover persisted manual compaction usage, abortCompaction and abort() waiting for idle, one overflow compact-and-retry, the recovery-failed report, threshold compaction, and no compaction below the threshold or when disabled. Extension-provided summaries, system-state checkpoints, queued prompts during compaction, auth/model-override cases, length-stop recovery and the _checkCompaction boundary cases with stale or error usage are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-model-extension.test.ts",
@@ -2802,9 +2830,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5217-compaction-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "376c9329976962af494917b8f066d504391a793653739593738b6303aa9278b5"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "376c9329976962af494917b8f066d504391a793653739593738b6303aa9278b5",
+      "notes": "compaction_start/compaction_end carry manual, threshold and overflow reasons with willRetry; the extension session_before_compact/session_compact events are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5303-bash-output-truncation.test.ts",
@@ -2912,9 +2948,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6647-compaction-retries-transient-stream-drop.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dd9172e0d2d2547a89c8c065e51431a6906d68ce0c6323c6baa732bf90aecb14"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "dd9172e0d2d2547a89c8c065e51431a6906d68ce0c6323c6baa732bf90aecb14",
+      "notes": "All five cases: transient retry and success, non-retryable error, retry disabled, maxRetries exhaustion and abortCompaction during the backoff."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6768-copilot-compaction-base-url.test.ts",
@@ -2948,9 +2992,17 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7048-compaction-truncated-summary.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3db8ba6972e64c5365c48f87250d496d2c71703e717737cd4bb9496bea876f94"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/compaction/compaction.bend",
+        "packages/ai/src/utils/retry.bend",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py",
+        "tests/agent-session.md"
+      ],
+      "sha256": "3db8ba6972e64c5365c48f87250d496d2c71703e717737cd4bb9496bea876f94",
+      "notes": "A length-limited summary fails compaction and leaves no compaction entry."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7150-rpc-prompt-during-compaction.test.ts",

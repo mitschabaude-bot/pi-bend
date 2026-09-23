@@ -7,12 +7,19 @@ import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../ai/src/utils/retry.bend as Retry
 import ../../../ai/src/utils/overflow.bend as Overflow
+import ../../../ai/src/utils/event-stream.bend as Stream
+import ../../../ai/src/utils/estimate.bend as Estimate
+import ../../../ai/src/utils/model-api.bend as ModelApi
+import ../../../ai/src/utils/uuid.bend as Uuid
+import ../../../runtime/src/fetch.bend as Fetch
+import ./compaction/compaction.bend as Compaction
 import ../../../runtime/src/abort.bend as A
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/timer.bend as Sleep
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/ref.bend as R
+import ../../../runtime/src/record.bend as Rec
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/json.bend as Decode
 import ./agent-runtime.bend as Runtime
@@ -26,10 +33,11 @@ import ./tools/index.bend as Tools
 # record. It subscribes to the agent, republishes agent events to its own
 # listeners with the session-level events, persists each finished message
 # through session persistence, queues prompts sent while streaming, and
-# records model, thinking-level and name changes as session entries, and
-# retries transient provider errors with the settings' backoff policy.
-# Compaction, bash execution, extensions, skills, prompt templates and tree
-# navigation are not ported yet.
+# records model, thinking-level and name changes as session entries,
+# retries transient provider errors with the settings' backoff policy, and
+# compacts the context manually or when it overflows or crosses the
+# settings' threshold. Bash execution, extensions, skills, prompt templates,
+# tree navigation and the mid-run threshold check are not ported yet.
 
 # The CLI's session codecs: no diagnostic details, tool details as their
 # JSON shape (restored ones kept raw), extension payloads as JSON values.
@@ -73,6 +81,35 @@ def recordName(session: Session(), name: String) -> IO(Sessions.Outcome(Appended
 def recordThinking(session: Session(), level: Ai.ModelThinkingLevel) -> IO(Sessions.Outcome(Appended())):
   Sessions.appendThinkingLevelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, Levels.name(level))
 
+def textsValue(values: List<&2, String>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: V.Text{value} <> textsValue(rest)
+
+def detailsValue(details: Compaction.CompactionDetails) -> V.Value:
+  match details:
+    case Compaction.CompactionDetails{readFiles, modifiedFiles}: V.ObjectValue{Rec.Record{Rec.Property{"readFiles", V.ArrayValue{textsValue(readFiles)}} <> Rec.Property{"modifiedFiles", V.ArrayValue{textsValue(modifiedFiles)}} <> Nil{}}}
+
+def textsOf(values: List<&2, V.Value>) -> List<&2, String>:
+  match values:
+    case Nil{}: Nil{}
+    case V.Text{text} <> rest: text <> textsOf(rest)
+    case _ <> rest: textsOf(rest)
+
+def textList(value: Maybe<&2, V.Value>) -> List<&2, String>:
+  match value:
+    case Some{V.ArrayValue{values}}: textsOf(values)
+    case _: Nil{}
+
+# Stored compaction details: the read and modified file lists, when present.
+def detailsOf(value: V.Value) -> Maybe<&2, Compaction.CompactionDetails>:
+  match value:
+    case V.ObjectValue{+record}: Some{Compaction.CompactionDetails{textList(Rec.get(V.Value, record, "readFiles")), textList(Rec.get(V.Value, record, "modifiedFiles"))}}
+    case _: None{}
+
+def recordCompaction(session: Session(), summary: String, firstKeptEntryId: String, tokensBefore: Nat, details: Maybe<&2, Compaction.CompactionDetails>, usage: Maybe<&2, Ai.Usage>) -> IO(Sessions.Outcome(Appended())):
+  Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, summary, firstKeptEntryId, tokensBefore, Maybe.map(&2, Compaction.CompactionDetails, V.Value, detailsValue, details), Some{False{}}, usage)
+
 def recordModel(session: Session(), model: Ai.Model<Ai.JsonValue>) -> IO(Sessions.Outcome(Appended())):
   match model:
     case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _}: Sessions.appendModelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, provider, id)
@@ -85,9 +122,33 @@ def stateModel(value: AgentState()) -> Ai.Model<Ai.JsonValue>:
   match value:
     case T.AgentState{model, _, _, _, _, _, _, _}: model
 
+def modelProvider(model: Ai.Model<Ai.JsonValue>) -> String:
+  match model:
+    case Ai.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _}: provider
+
+def modelIdOf(model: Ai.Model<Ai.JsonValue>) -> String:
+  match model:
+    case Ai.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
+
 def modelContextWindow(model: Ai.Model<Ai.JsonValue>) -> F64:
   match model:
     case Ai.Model{_, _, _, _, _, _, _, _, _, contextWindow, _, _, _, _}: contextWindow
+
+def modelMaxTokens(model: Ai.Model<Ai.JsonValue>) -> F64:
+  match model:
+    case Ai.Model{_, _, _, _, _, _, _, _, _, _, maxTokens, _, _, _}: maxTokens
+
+def modelIdentity(model: Ai.Model<Ai.JsonValue>) -> Settings.ModelIdentity:
+  match model:
+    case Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _}: Settings.ModelIdentity{provider, id}
+
+def modelReasoning(model: Ai.Model<Ai.JsonValue>) -> Bool:
+  match model:
+    case Ai.Model{_, _, _, _, _, reasoning, _, _, _, _, _, _, _, _}: reasoning
+
+def stateThinking(value: AgentState()) -> Ai.ModelThinkingLevel:
+  match value:
+    case T.AgentState{_, thinking, _, _, _, _, _, _}: thinking
 
 def lastAssistantIn(messages: List<&2, Message()>, +found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>) -> Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>:
   match messages:
@@ -100,6 +161,15 @@ def lastAssistantIn(messages: List<&2, Message()>, +found: Maybe<&2, Ai.Assistan
 # Agent events are embedded in one constructor (upstream spreads the union);
 # agent_end carries willRetry when the run will continue with a retry.
 
+type CompactionReason is Data:
+  Manual{}
+  Threshold{}
+  Overflow{}
+
+type RetrySource is Data:
+  BranchSummarySource{}
+  CompactionSource{reason: CompactionReason}
+
 type AgentSessionEvent is Data:
   AgentEvent{event: SessionEvent()}
   AgentEnd{messages: List<&2, Message()>, willRetry: Bool}
@@ -109,6 +179,11 @@ type AgentSessionEvent is Data:
   ThinkingLevelChanged{level: Ai.ModelThinkingLevel}
   AutoRetryStart{attempt: Nat, maxAttempts: Nat, delayMs: F64, errorMessage: String}
   AutoRetryEnd{success: Bool, attempt: Nat, finalError: Maybe<&2, String>}
+  CompactionStart{reason: CompactionReason}
+  CompactionEnd{reason: CompactionReason, result: Maybe<&2, Compaction.CompactionResult>, aborted: Bool, willRetry: Bool, errorMessage: Maybe<&2, String>}
+  SummarizationRetryScheduled{attempt: Nat, maxAttempts: Nat, delayMs: F64, errorMessage: String}
+  SummarizationRetryAttemptStart{source: RetrySource}
+  SummarizationRetryFinished{}
 
 def Listener() -> Data: C.Callback<AgentSessionEvent, Unit>
 
@@ -118,24 +193,30 @@ def Listener() -> Data: C.Callback<AgentSessionEvent, Unit>
 type RetryState is Data:
   RetryState{policy: Retry.RetryPolicy, attempt: Nat, contextWindow: F64, sleeping: Maybe<&2, A.AbortController<Unit>>}
 
+# Compaction bookkeeping: whether the one compact-and-retry overflow
+# recovery was spent, and the abort controllers of manual and automatic
+# compactions in progress.
+type CompactionState is Data:
+  CompactionState{overflowRecoveryAttempted: Bool, manual: Maybe<&2, A.AbortController<Unit>>, auto: Maybe<&2, A.AbortController<Unit>>}
+
 # The mutable session state shared with the agent's event handler.
 type Shared is Data:
-  Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: Bool, lastAssistant: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, retry: RetryState}
+  Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: Bool, lastAssistant: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, retry: RetryState, compaction: CompactionState}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), settings: Settings.SettingsManager, cwd: String}
 
 def sharedSession(state: Shared) -> Session():
   match state:
-    case Shared{session, _, _, _, _, _, _}: session
+    case Shared{session, _, _, _, _, _, _, _}: session
 
 def withSession(state: Shared, session: Session()) -> Shared:
   match state:
-    case Shared{_, steering, followUp, listeners, runActive, lastAssistant, retry}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry}
+    case Shared{_, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}
 
 def withRunActive(state: Shared, runActive: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, _, lastAssistant, retry}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry}
+    case Shared{session, steering, followUp, listeners, _, lastAssistant, retry, compaction}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}
 
 def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Unit):
   match listeners:
@@ -147,7 +228,7 @@ def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Un
 
 def listenersOf(state: Shared) -> List<&2, Listener()>:
   match state:
-    case Shared{_, _, _, listeners, _, _, _}: listeners
+    case Shared{_, _, _, listeners, _, _, _, _}: listeners
 
 def emit(shared: R.Ref<Shared>, event: AgentSessionEvent) -> IO(Unit):
   do IO<Unit>:
@@ -156,7 +237,7 @@ def emit(shared: R.Ref<Shared>, event: AgentSessionEvent) -> IO(Unit):
 
 def queueEvent(state: Shared) -> AgentSessionEvent:
   match state:
-    case Shared{_, steering, followUp, _, _, _, _}: QueueUpdate{steering, followUp}
+    case Shared{_, steering, followUp, _, _, _, _, _}: QueueUpdate{steering, followUp}
 
 def emitQueueUpdate(+shared: R.Ref<Shared>) -> IO(Unit):
   do IO<Unit>:
@@ -173,17 +254,17 @@ def removeFirst(values: List<&2, String>, +wanted: String) -> Maybe<&2, List<&2,
     case Nil{}: None{}
     case +value <> +rest: Bool.pick(Unit -> Maybe<&2, List<&2, String>>, String.eq(value, wanted), _ => Some{rest}, _ => Maybe.map(&2, List<&2, String>, List<&2, String>, others => value <> others, removeFirst(rest, wanted)))(Unit{})
 
-def dequeuedFrom(+session: Session(), +steering: List<&2, String>, +followUp: List<&2, String>, listeners: List<&2, Listener()>, +runActive: Bool, +lastAssistant: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, +retry: RetryState, fromSteering: Maybe<&2, List<&2, String>>, fromFollowUp: Maybe<&2, List<&2, String>>) -> Shared & Bool:
+def dequeuedFrom(+session: Session(), +steering: List<&2, String>, +followUp: List<&2, String>, listeners: List<&2, Listener()>, +runActive: Bool, +lastAssistant: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, +retry: RetryState, +compaction: CompactionState, fromSteering: Maybe<&2, List<&2, String>>, fromFollowUp: Maybe<&2, List<&2, String>>) -> Shared & Bool:
   match fromSteering fromFollowUp:
-    case Some{remaining} _: (Shared{session, remaining, followUp, listeners, runActive, lastAssistant, retry}, True{})
-    case None{} Some{remaining}: (Shared{session, steering, remaining, listeners, runActive, lastAssistant, retry}, True{})
-    case None{} None{}: (Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry}, False{})
+    case Some{remaining} _: (Shared{session, remaining, followUp, listeners, runActive, lastAssistant, retry, compaction}, True{})
+    case None{} Some{remaining}: (Shared{session, steering, remaining, listeners, runActive, lastAssistant, retry, compaction}, True{})
+    case None{} None{}: (Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}, False{})
 
 # The steering queue is searched first, then the follow-up queue, as upstream.
 def dequeued(state: Shared, +text: String) -> Shared & Bool:
   match state:
-    case Shared{session, +steering, +followUp, listeners, runActive, lastAssistant, retry}:
-      dequeuedFrom(session, steering, followUp, listeners, runActive, lastAssistant, retry, removeFirst(steering, text), removeFirst(followUp, text))
+    case Shared{session, +steering, +followUp, listeners, runActive, lastAssistant, retry, compaction}:
+      dequeuedFrom(session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, removeFirst(steering, text), removeFirst(followUp, text))
 
 def blockText(blocks: List<&2, Ai.TextImageContent>) -> String:
   match blocks:
@@ -227,7 +308,7 @@ def stored(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO(U
 
 def rememberedAssistant(state: Shared, assistant: Ai.AssistantMessage<V.Value, Unit>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, _, retry}: Shared{session, steering, followUp, listeners, runActive, Some{assistant}, retry}
+    case Shared{session, steering, followUp, listeners, runActive, _, retry, compaction}: Shared{session, steering, followUp, listeners, runActive, Some{assistant}, retry, compaction}
 
 def rememberAssistant(shared: R.Ref<Shared>, message: Message()) -> IO(Unit):
   match message:
@@ -265,28 +346,28 @@ def persist(shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
 
 def retryOf(state: Shared) -> RetryState:
   match state:
-    case Shared{_, _, _, _, _, _, retry}: retry
+    case Shared{_, _, _, _, _, _, retry, _}: retry
 
 def withAttempt(state: Shared, attempt: Nat) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, _, contextWindow, sleeping}}:
-      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, _, contextWindow, sleeping}, compaction}:
+      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction}
 
 # Clears the attempt counter and returns the count it had.
 def resetAttempt(state: Shared) -> Shared & Nat:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, previous, contextWindow, sleeping}}:
-      (Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, 0n, contextWindow, sleeping}}, previous)
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, previous, contextWindow, sleeping}, compaction}:
+      (Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, 0n, contextWindow, sleeping}, compaction}, previous)
 
 def withSleeping(state: Shared, sleeping: Maybe<&2, A.AbortController<Unit>>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, _}}:
-      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, _}, compaction}:
+      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction}
 
 def withContextWindow(state: Shared, contextWindow: F64) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, _, sleeping}}:
-      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, _, sleeping}, compaction}:
+      Shared{session, steering, followUp, listeners, runActive, lastAssistant, RetryState{policy, attempt, contextWindow, sleeping}, compaction}
 
 def retryPolicy(resolved: Settings.ResolvedRetrySettings) -> Retry.RetryPolicy:
   match resolved:
@@ -303,7 +384,7 @@ def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextW
 
 def willRetryAfterAgentEnd(state: Shared, messages: List<&2, Message()>) -> Bool:
   match state:
-    case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}}:
+    case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}, _}:
       Bool.and(enabled, Bool.and(Nat.is_lt(attempt, maxRetries), retryableLast(lastAssistantIn(messages, None{}), contextWindow)))
 
 def sessionEventIn(state: Shared, event: SessionEvent()) -> AgentSessionEvent:
@@ -334,9 +415,23 @@ def succeededRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason) -> IO(Unit
         previous : Nat <- R.modify(Shared, Nat, shared, current => resetAttempt(current))
         retryEnded(shared, previous, True{}, None{})
 
-def settleRetry(shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
+def markOverflow(state: Shared, attempted: Bool) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{_, manual, auto}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}}
+
+# A completed or aborted assistant message re-arms the one overflow recovery.
+def settleOverflow(shared: R.Ref<Shared>, stopReason: Ai.StopReason) -> IO(Unit):
+  match stopReason:
+    case Ai.Error{}: IO.pure(Unit, Unit{})
+    case Ai.Length{}: IO.pure(Unit, Unit{})
+    case _: R.modify(Shared, Unit, shared, current => (markOverflow(current, False{}), Unit{}))
+
+def settleRetry(+shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
   match event:
-    case T.MessageEnd{T.LlmMessage{Ai.Assistant{assistant}}}: succeededRetry(shared, assistantStop(assistant))
+    case T.MessageEnd{T.LlmMessage{Ai.Assistant{+assistant}}}:
+      do IO<Unit>:
+        settleOverflow(shared, assistantStop(assistant))
+        succeededRetry(shared, assistantStop(assistant))
     case _: IO.pure(Unit, Unit{})
 
 def ready() -> Loop.Emission<Runtime.Error()>: Loop.EmissionReady{Done{Unit{}}}
@@ -363,7 +458,7 @@ def handleAgentEvent(shared: R.Ref<Shared>, input: Agent.Input<SessionEvent()>) 
 def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String) -> IO(AgentSession):
   do IO<AgentSession>:
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, modelContextWindow(stateModel(initial)), None{}}})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}})
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
     return AgentSession{agent, shared, subscription, handler, settings, cwd}
@@ -371,7 +466,7 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
 # Listeners are the caller's callbacks: unsubscribe returns them to the caller.
 def addListener(state: Shared, listener: Listener()) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry}: Shared{session, steering, followUp, List.append(&2, Listener(), listeners, listener <> Nil{}), runActive, lastAssistant, retry}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: Shared{session, steering, followUp, List.append(&2, Listener(), listeners, listener <> Nil{}), runActive, lastAssistant, retry, compaction}
 
 def subscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
@@ -384,7 +479,7 @@ def withoutListener(listeners: List<&2, Listener()>, +listener: Listener()) -> L
 
 def removedListener(state: Shared, listener: Listener()) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry}: Shared{session, steering, followUp, withoutListener(listeners, listener), runActive, lastAssistant, retry}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: Shared{session, steering, followUp, withoutListener(listeners, listener), runActive, lastAssistant, retry, compaction}
 
 def unsubscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
@@ -408,12 +503,30 @@ def abortSleeping(shared: R.Ref<Shared>) -> IO(Unit):
     state : Shared <- R.read(Shared, shared)
     abortController(sleepingOf(retryOf(state)))
 
+def abortBoth(compaction: CompactionState) -> IO(Unit):
+  match compaction:
+    case CompactionState{_, manual, auto}:
+      do IO<Unit>:
+        abortController(manual)
+        abortController(auto)
+
+def compactionOf(state: Shared) -> CompactionState:
+  match state:
+    case Shared{_, _, _, _, _, _, _, compaction}: compaction
+
+# upstream abortCompaction: cancel manual and automatic compaction in progress.
+def abortCompactions(shared: R.Ref<Shared>) -> IO(Unit):
+  do IO<Unit>:
+    state : Shared <- R.read(Shared, shared)
+    abortBoth(compactionOf(state))
+
 # Abort the agent and disconnect; the agent itself belongs to the runtime.
 def dispose(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{agent, +shared, subscription, handler, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
+        abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         Agent.unsubscribe(SessionEvent(), Runtime.Error(), subscription)
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
@@ -444,7 +557,7 @@ def messages(session: AgentSession) -> IO(List<&2, Message()>):
 
 def runActiveOf(value: Shared) -> Bool:
   match value:
-    case Shared{_, _, _, _, runActive, _, _}: runActive
+    case Shared{_, _, _, _, runActive, _, _, _}: runActive
 
 def isStreaming(session: AgentSession) -> IO(Bool):
   match session:
@@ -512,11 +625,11 @@ type Step is Data:
 
 def takeLastAssistant(state: Shared) -> Shared & Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry}: (Shared{session, steering, followUp, listeners, runActive, None{}, retry}, lastAssistant)
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction}: (Shared{session, steering, followUp, listeners, runActive, None{}, retry, compaction}, lastAssistant)
 
 def contextWindowOf(state: Shared) -> F64:
   match state:
-    case Shared{_, _, _, _, _, _, RetryState{_, _, contextWindow, _}}: contextWindow
+    case Shared{_, _, _, _, _, _, RetryState{_, _, contextWindow, _}, _}: contextWindow
 
 def errorText(errorMessage: Maybe<&2, String>) -> String:
   match errorMessage:
@@ -580,6 +693,364 @@ def prepareRetry(agent: Runtime.Owner(), +shared: R.Ref<Shared>, assistant: Ai.A
     case RetryState{Retry.RetryPolicy{True{}, +maxRetries, baseDelayMs, maxAgentDelayMs}, +attempt, _, _}:
       Bool.pick(Unit -> IO(Bool), Nat.is_lt(maxRetries, Nat.add(attempt, 1n)), _ => IO.pure(Bool, False{}), _ => startRetry(agent, shared, assistant, Nat.add(attempt, 1n), maxRetries, Retry.retryDelayMs(baseDelayMs, maxAgentDelayMs, Nat.add(attempt, 1n))))(Unit{})
 
+# Compaction
+# ----------
+# upstream _checkCompaction, _runAutoCompaction and compact(): overflow or
+# threshold compaction after a run and before a prompt, manual compaction on
+# request. The summarizer sends each request through the agent's stream
+# function under a fresh request id, the settings' retry policy and
+# per-attempt notices; extension hooks around compaction are not ported.
+
+def setManualController(state: Shared, manual: Maybe<&2, A.AbortController<Unit>>) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, _, auto}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}}
+
+def setAutoController(state: Shared, auto: Maybe<&2, A.AbortController<Unit>>) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, _}}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}}
+
+def overflowAttemptedOf(state: Shared) -> Bool:
+  match state:
+    case Shared{_, _, _, _, _, _, _, CompactionState{attempted, _, _}}: attempted
+
+def policyOf(state: Shared) -> Retry.RetryPolicy:
+  match state:
+    case Shared{_, _, _, _, _, _, RetryState{policy, _, _, _}, _}: policy
+
+def compactionSettingsOf(resolved: Settings.ResolvedCompactionSettings) -> Compaction.CompactionSettings:
+  match resolved:
+    case Settings.ResolvedCompactionSettings{enabled, reserveTokens, keepRecentTokens}: Compaction.CompactionSettings{enabled, F.fromU64(reserveTokens), F.fromU64(keepRecentTokens)}
+
+def compactionSettingsFor(settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>) -> Compaction.CompactionSettings:
+  compactionSettingsOf(Settings.getCompactionSettings(settings, Some{modelIdentity(model)}))
+
+def Entry() -> Data: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>
+
+def branchOf(session: Session()) -> List<&2, Entry()>:
+  Result.default(&2, &2, S.Error, List<&2, Entry()>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session), S.Latest{}), Nil{})
+
+def branchEntries(shared: R.Ref<Shared>) -> IO(List<&2, Entry()>):
+  do IO<List<&2, Entry()>>:
+    state : Shared <- R.read(Shared, shared)
+    return branchOf(sharedSession(state))
+
+def parsedTime(parsed: Result<&2, &2, Date.ParseError, F64>) -> Maybe<&2, F64>:
+  match parsed:
+    case Done{time}: Some{time}
+    case Fail{_}: None{}
+
+def compactionTime(entry: Maybe<&2, S.CompactionEntry<V.Value>>) -> Maybe<&2, F64>:
+  match entry:
+    case Some{S.CompactionEntry{S.SessionEntryBase{_, _, timestamp}, _, _, _, _, _, _, _}}: parsedTime(Date.parseIso(timestamp))
+    case None{}: None{}
+
+# The latest compaction boundary as a millisecond time; messages from before
+# it must not retrigger compaction.
+def compactionTimestamp(entries: List<&2, Entry()>) -> Maybe<&2, F64>:
+  compactionTime(S.getLatestCompactionEntry(Unit, Tools.ToolDetails, V.Value, entries))
+
+def assistantTimestamp(assistant: Ai.AssistantMessage<V.Value, Unit>) -> F64:
+  match assistant:
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, _, _, _, timestamp}: timestamp
+
+def assistantProvider(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String:
+  match assistant:
+    case Ai.AssistantMessage{_, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
+
+def assistantModel(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String:
+  match assistant:
+    case Ai.AssistantMessage{_, _, _, model, _, _, _, _, _, _, _, _, _, _, _}: model
+
+def assistantUsage(assistant: Ai.AssistantMessage<V.Value, Unit>) -> Ai.Usage:
+  match assistant:
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, usage, _, _, _, _, _, _}: usage
+
+def isAborted(stopReason: Ai.StopReason) -> Bool:
+  match stopReason:
+    case Ai.Aborted{}: True{}
+    case _: False{}
+
+def isErrorStop(stopReason: Ai.StopReason) -> Bool:
+  match stopReason:
+    case Ai.Error{}: True{}
+    case _: False{}
+
+def isStop(stopReason: Ai.StopReason) -> Bool:
+  match stopReason:
+    case Ai.Stop{}: True{}
+    case _: False{}
+
+def notAfter(time: F64, boundary: Maybe<&2, F64>) -> Bool:
+  match boundary:
+    case None{}: False{}
+    case Some{value}: F.isAtMost(F.compare(time, value))
+
+def staleAnchor(message: Maybe<&2, Message()>, boundary: Maybe<&2, F64>) -> Bool:
+  match message:
+    case Some{T.LlmMessage{Ai.Assistant{assistant}}}: notAfter(assistantTimestamp(assistant), boundary)
+    case _: False{}
+
+# A usage-backed estimate whose anchor predates the compaction is stale.
+def estimateChecked(messages: List<&2, Message()>, boundary: Maybe<&2, F64>, estimate: Estimate.ContextUsageEstimate) -> Maybe<&2, F64>:
+  match estimate:
+    case Estimate.ContextUsageEstimate{tokens, _, _, None{}}: Some{tokens}
+    case Estimate.ContextUsageEstimate{tokens, _, _, Some{index}}: Bool.pick(Maybe<&2, F64>, staleAnchor(List.get(&2, Message(), messages, index), boundary), None{}, Some{tokens})
+
+def usageOrEstimate(estimated: Bool, direct: F64, +messages: List<&2, Message()>, boundary: Maybe<&2, F64>) -> Maybe<&2, F64>:
+  match estimated:
+    case True{}: estimateChecked(messages, boundary, Compaction.estimateContextTokens(Unit, Tools.ToolDetails, V.Value, messages))
+    case False{}: Some{direct}
+
+# Error or zero-usage messages fall back to the estimate from the context.
+def thresholdTokens(+assistant: Ai.AssistantMessage<V.Value, Unit>, messages: List<&2, Message()>, boundary: Maybe<&2, F64>) -> Maybe<&2, F64>:
+  +direct = Compaction.calculateContextTokens(assistantUsage(assistant))
+  usageOrEstimate(Bool.or(isErrorStop(assistantStop(assistant)), F.isEqual(F.compare(direct, F.fromU32(0)))), direct, messages, boundary)
+
+type CompactionPlan is Data:
+  NoCompaction{}
+  RecoveryExhausted{errorMessage: String}
+  OverflowCompaction{willRetry: Bool}
+  ThresholdCompaction{}
+
+def enabledOf(settings: Compaction.CompactionSettings) -> Bool:
+  match settings:
+    case Compaction.CompactionSettings{enabled, _, _}: enabled
+
+def recoveryMessage(contextOverflow: Bool) -> String:
+  match contextOverflow:
+    case True{}: "Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model."
+    case False{}: "Truncated response recovery failed after one compact-and-retry attempt."
+
+# A completed response compacts without retry; a failed or truncated one
+# gets one compact-and-retry.
+def overflowPlan(attempted: Bool, willRetry: Bool, contextOverflow: Bool) -> CompactionPlan:
+  match attempted willRetry:
+    case _ False{}: OverflowCompaction{False{}}
+    case True{} True{}: RecoveryExhausted{recoveryMessage(contextOverflow)}
+    case False{} True{}: OverflowCompaction{True{}}
+
+def thresholdPlan(settings: Compaction.CompactionSettings, contextWindow: F64, tokens: Maybe<&2, F64>) -> CompactionPlan:
+  match tokens:
+    case None{}: NoCompaction{}
+    case Some{value}: Bool.pick(CompactionPlan, Compaction.shouldCompact(value, contextWindow, settings), ThresholdCompaction{}, NoCompaction{})
+
+# Disabled compaction, a skipped aborted message and a message from before
+# the latest compaction never compact.
+def skipsCheck(settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, boundary: Maybe<&2, F64>) -> Bool:
+  Bool.or(Bool.not(enabledOf(settings)), Bool.or(Bool.and(skipAborted, isAborted(assistantStop(assistant))), notAfter(assistantTimestamp(assistant), boundary)))
+
+def triggeredPlan(overflow: Bool, settings: Compaction.CompactionSettings, assistant: Ai.AssistantMessage<V.Value, Unit>, contextWindow: F64, boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool, contextOverflow: Bool) -> CompactionPlan:
+  match overflow:
+    case True{}: overflowPlan(attempted, Bool.not(isStop(assistantStop(assistant))), contextOverflow)
+    case False{}: thresholdPlan(settings, contextWindow, thresholdTokens(assistant, messages, boundary))
+
+def checkedPlan(skip: Bool, settings: Compaction.CompactionSettings, assistant: Ai.AssistantMessage<V.Value, Unit>, contextWindow: F64, boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool, +contextOverflow: Bool, recoverable: Bool) -> CompactionPlan:
+  match skip:
+    case True{}: NoCompaction{}
+    case False{}: triggeredPlan(Bool.or(contextOverflow, recoverable), settings, assistant, contextWindow, boundary, messages, attempted, contextOverflow)
+
+# upstream _checkCompaction's decision, in its order: skip, overflow, threshold.
+def planCompaction(+settings: Compaction.CompactionSettings, skipAborted: Bool, +assistant: Ai.AssistantMessage<V.Value, Unit>, +model: Ai.Model<Ai.JsonValue>, +boundary: Maybe<&2, F64>, messages: List<&2, Message()>, attempted: Bool) -> CompactionPlan:
+  +sameModel = Bool.and(String.eq(assistantProvider(assistant), modelProvider(model)), String.eq(assistantModel(assistant), modelIdOf(model)))
+  checkedPlan(skipsCheck(settings, skipAborted, assistant, boundary), settings, assistant, modelContextWindow(model), boundary, messages, attempted, Bool.and(sameModel, Overflow.isContextOverflow(V.Value, Unit, assistant, modelContextWindow(model))), Bool.and(sameModel, Overflow.isRecoverableLength(V.Value, Unit, assistant, modelMaxTokens(model))))
+
+# The summarizer: the agent's stream function with fresh options.
+type SummarizerEnv is Data:
+  SummarizerEnv{stream: Runtime.Stream(), config: Runtime.LoopConfig(), model: Ai.Model<Ai.JsonValue>, thinking: Ai.ModelThinkingLevel, signal: A.AbortSignal<Unit>, requestId: String}
+
+def reasoningOption(model: Ai.Model<Ai.JsonValue>, thinking: Ai.ModelThinkingLevel) -> Maybe<&2, Ai.ThinkingLevel>:
+  match thinking:
+    case Ai.Off{}: None{}
+    case Ai.Thinking{level}: Bool.pick(Maybe<&2, Ai.ThinkingLevel>, modelReasoning(model), Some{level}, None{})
+
+def summaryOptions(model: Ai.Model<Ai.JsonValue>, thinking: Ai.ModelThinkingLevel, signal: A.AbortSignal<Unit>, requestId: String, maxTokens: F64) -> Ai.SimpleStreamOptions<Ai.JsonValue, A.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Runtime.Error()>:
+  Ai.SimpleStreamOptions{Some{signal}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{maxTokens}, None{}, Some{Ai.CacheNone{}}, Some{requestId}, None{}, None{}, None{}, reasoningOption(model, thinking), None{}, None{}}
+
+def summaryConfig(config: Runtime.LoopConfig(), model: Ai.Model<Ai.JsonValue>, options: Ai.SimpleStreamOptions<Ai.JsonValue, A.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Runtime.Error()>) -> Runtime.LoopConfig():
+  match config:
+    case T.AgentLoopConfig{_, _, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}:
+      T.AgentLoopConfig{options, model, convertToLlm, transformContext, getApiKey, shouldStopAfterTurn, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall}
+
+def errorReply(model: Ai.Model<Ai.JsonValue>, message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+  match model:
+    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _}: Ai.AssistantMessage{Nil{}, ModelApi.name(api), provider, id, None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
+
+def leaseMessage(model: Ai.Model<Ai.JsonValue>, response: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  match response:
+    case Fail{error}:
+      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+        now : F64 <- Date.now()
+        return errorReply(model, Runtime.render(error), now)
+    case Done{T.StreamLease{events, release}}:
+      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- Stream.resultValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
+        released : Result<&2, &2, Runtime.Error(), Unit> <- release
+        return message
+
+def summarizeWith(env: SummarizerEnv, request: Compaction.SummaryRequest<Unit, Tools.ToolDetails>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  match env request:
+    case SummarizerEnv{stream, config, +model, thinking, signal, requestId} Compaction.SummaryRequest{context, maxTokens}:
+      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+        response : Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>> <- C.call(T.StreamInput<Unit, Tools.ToolDetails, Runtime.LoopConfig()>, Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>, stream, T.StreamInput{model, context, Some{summaryConfig(config, model, summaryOptions(model, thinking, signal, requestId, maxTokens))}})
+        leaseMessage(model, response)
+
+type RetryNotifier is Data:
+  RetryNotifier{shared: R.Ref<Shared>, source: RetrySource}
+
+def notifyRetry(env: RetryNotifier, notice: Retry.RetryNotice) -> IO(Unit):
+  match env notice:
+    case RetryNotifier{shared, _} Retry.RetryScheduled{attempt, maxAttempts, delayMs, errorMessage}: emit(shared, SummarizationRetryScheduled{attempt, maxAttempts, delayMs, errorMessage})
+    case RetryNotifier{shared, source} Retry.RetryAttemptStart{}: emit(shared, SummarizationRetryAttemptStart{source})
+    case RetryNotifier{shared, _} Retry.RetryFinished{_, _, _}: emit(shared, SummarizationRetryFinished{})
+
+def requestIdOf(generated: Result<&2, &2, String, String>) -> String:
+  Result.default(&2, &2, String, String, generated, "compaction")
+
+# upstream _runDefaultCompaction: summarize with the agent's stream function,
+# the session's thinking level, the retry policy and retry notices.
+def runDefaultCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, customInstructions: Maybe<&2, String>, +signal: A.AbortSignal<Unit>, reason: CompactionReason) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+  do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
+    stream : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    config : Runtime.LoopConfig() <- Agent.getConfig(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    generated : Result<&2, &2, String, String> <- Uuid.generate()
+    state : Shared <- R.read(Shared, shared)
+    +summarizer : Compaction.Summarizer(Unit, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<Unit, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, Unit>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
+    +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, CompactionSource{reason}})
+    result : Result<&2, &2, String, Compaction.CompactionResult> <- Compaction.compact(~Unit, ~Tools.ToolDetails, ~V.Value, summarizer, preparation, model, customInstructions, Some{signal}, Some{policyOf(state)}, Some{callbacks})
+    C.dispose(Compaction.SummaryRequest<Unit, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, Unit>, summarizer)
+    C.dispose(Retry.RetryNotice, Unit, callbacks)
+    return result
+
+def tokensNat(value: F64) -> Nat:
+  Result.default(&2, &2, F.Error, Nat, F.convert(F.ceil(value)), 0n)
+
+def contextMessagesOf(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, Message()>:
+  match context:
+    case Done{S.SessionContext{contextMessages, _, _}}: contextMessages
+    case Fail{_}: Nil{}
+
+def sessionMessages(session: Session()) -> List<&2, Message()>:
+  contextMessagesOf(S.sessionContext(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, session)))
+
+def replaceContext(agent: Runtime.Owner(), +messages: List<&2, Message()>) -> IO(F64):
+  do IO<F64>:
+    Agent.replaceMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, messages)
+    return Compaction.estimateMessagesTokens(Unit, Tools.ToolDetails, V.Value, messages, F.fromU32(0))
+
+# Record the compaction, rebuild the context from the session and install it
+# in the agent; the result gains the estimated size afterwards.
+def applyCompaction(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Compaction.CompactionResult) -> IO(Compaction.CompactionResult):
+  match result:
+    case Compaction.CompactionResult{+summary, +firstKeptEntryId, +tokensBefore, _, +usage, +details}:
+      do IO<Compaction.CompactionResult>:
+        state : Shared <- R.read(Shared, shared)
+        outcome : Sessions.Outcome(Appended()) <- recordCompaction(sharedSession(state), summary, firstKeptEntryId, tokensNat(tokensBefore), details, usage)
+        stored(shared, outcome)
+        rebuilt : Shared <- R.read(Shared, shared)
+        estimatedTokensAfter : F64 <- replaceContext(agent, sessionMessages(sharedSession(rebuilt)))
+        return Compaction.CompactionResult{summary, firstKeptEntryId, tokensBefore, Some{estimatedTokensAfter}, usage, details}
+
+def trailingFailed(messages: List<&2, Message()>) -> Bool:
+  match messages:
+    case Nil{}: False{}
+    case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Error{}, _, _, _, _, _}}} <> Nil{}: True{}
+    case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, Ai.Length{}, _, _, _, _, _}}} <> Nil{}: True{}
+    case _ <> rest: trailingFailed(rest)
+
+def dropFailed(agent: Runtime.Owner(), +messages: List<&2, Message()>) -> IO(Unit):
+  replaceIf(agent, Bool.pick(Maybe<&2, List<&2, Message()>>, trailingFailed(messages), withoutTrailingAssistant(messages), None{}))
+
+# After overflow compaction the failed or truncated response leaves the
+# context and the turn is retried; otherwise queued messages decide.
+def continueAfterAuto(+agent: Runtime.Owner(), willRetry: Bool) -> IO(Bool):
+  match willRetry:
+    case True{}:
+      do IO<Bool>:
+        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        dropFailed(agent, stateMessages(current))
+        return True{}
+    case False{}: Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+
+def autoFailure(reason: CompactionReason, message: String) -> String:
+  match reason:
+    case Overflow{}: "Context overflow recovery failed: " ++ message
+    case _: "Auto-compaction failed: " ++ message
+
+def finishAuto(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +reason: CompactionReason, +willRetry: Bool, aborted: Bool, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Bool):
+  match aborted result:
+    case True{} _:
+      do IO<Bool>:
+        emit(shared, CompactionEnd{reason, None{}, True{}, False{}, None{}})
+        return False{}
+    case False{} Fail{message}:
+      do IO<Bool>:
+        emit(shared, CompactionEnd{reason, None{}, False{}, False{}, Some{autoFailure(reason, message)}})
+        return False{}
+    case False{} Done{compacted}:
+      do IO<Bool>:
+        applied : Compaction.CompactionResult <- applyCompaction(agent, shared, compacted)
+        emit(shared, CompactionEnd{reason, Some{applied}, False{}, willRetry, None{}})
+        continueAfterAuto(agent, willRetry)
+
+def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model: Ai.Model<Ai.JsonValue>, +reason: CompactionReason, willRetry: Bool, preparation: Maybe<&2, Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>>) -> IO(Bool):
+  match preparation:
+    case None{}: IO.pure(Bool, False{})
+    case Some{prepared}:
+      do IO<Bool>:
+        emit(shared, CompactionStart{reason})
+        +controller : A.AbortController<Unit> <- A.new(Unit)
+        R.modify(Shared, Unit, shared, current => (setAutoController(current, Some{controller}), Unit{}))
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- runDefaultCompaction(agent, shared, model, prepared, None{}, A.signal(Unit, controller), reason)
+        aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+        R.modify(Shared, Unit, shared, current => (setAutoController(current, None{}), Unit{}))
+        A.dispose(Unit, controller)
+        finishAuto(agent, shared, reason, willRetry, aborted, result)
+
+# upstream _runAutoCompaction: true when the run should continue.
+def runAutoCompaction(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, reason: CompactionReason, willRetry: Bool) -> IO(Bool):
+  do IO<Bool>:
+    entries : List<&2, Entry()> <- branchEntries(shared)
+    autoCompactPrepared(agent, shared, model, reason, willRetry, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
+
+def executePlan(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, model: Ai.Model<Ai.JsonValue>, plan: CompactionPlan) -> IO(Bool):
+  match plan:
+    case NoCompaction{}: IO.pure(Bool, False{})
+    case RecoveryExhausted{errorMessage}:
+      do IO<Bool>:
+        emit(shared, CompactionEnd{Overflow{}, None{}, False{}, False{}, Some{errorMessage}})
+        return False{}
+    case OverflowCompaction{False{}}: runAutoCompaction(agent, shared, settings, model, Overflow{}, False{})
+    case OverflowCompaction{True{}}:
+      do IO<Bool>:
+        R.modify(Shared, Unit, shared, current => (markOverflow(current, True{}), Unit{}))
+        withoutLastAssistant(agent)
+        runAutoCompaction(agent, shared, settings, model, Overflow{}, True{})
+    case ThresholdCompaction{}: runAutoCompaction(agent, shared, settings, model, Threshold{}, False{})
+
+# upstream _checkCompaction: true when the run should continue.
+def checkCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, assistant: Ai.AssistantMessage<V.Value, Unit>, skipAborted: Bool) -> IO(Bool):
+  do IO<Bool>:
+    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    entries : List<&2, Entry()> <- branchEntries(shared)
+    state : Shared <- R.read(Shared, shared)
+    executePlan(agent, shared, settings, stateModel(current), planCompaction(compactionSettingsFor(settings, stateModel(current)), skipAborted, assistant, stateModel(current), compactionTimestamp(entries), stateMessages(current), overflowAttemptedOf(state)))
+
+def checkLastAssistant(agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager, found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{assistant}:
+      do IO<Unit>:
+        continued : Bool <- checkCompaction(agent, shared, settings, assistant, False{})
+        return Unit{}
+
+# upstream prompt(): before a new prompt, the last assistant message (even an
+# aborted one) may trigger compaction.
+def compactBeforePrompt(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager) -> IO(Unit):
+  do IO<Unit>:
+    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    checkLastAssistant(agent, shared, settings, lastAssistantIn(stateMessages(current), None{}))
+
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
   match stopReason:
@@ -589,69 +1060,71 @@ def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: M
         retryEnded(shared, previous, False{}, finalError)
     case _: IO.pure(Unit, Unit{})
 
-def finishFailed(shared: R.Ref<Shared>, +assistant: Ai.AssistantMessage<V.Value, Unit>) -> IO(Bool):
+# Without a retry, a final error is reported and compaction gets its turn.
+def finishFailed(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +assistant: Ai.AssistantMessage<V.Value, Unit>) -> IO(Bool):
   do IO<Bool>:
     failedRetry(shared, assistantStop(assistant), assistantError(assistant))
-    return False{}
+    checkCompaction(agent, shared, settings, assistant, True{})
 
-def retryOrFinish(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +assistant: Ai.AssistantMessage<V.Value, Unit>) -> IO(Bool):
+def retryOrFinish(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +assistant: Ai.AssistantMessage<V.Value, Unit>) -> IO(Bool):
   do IO<Bool>:
     state : Shared <- R.read(Shared, shared)
     prepared : Bool <- prepareRetry(agent, shared, assistant, retryOf(state))
-    Bool.pick(Unit -> IO(Bool), prepared, _ => IO.pure(Bool, True{}), _ => finishFailed(shared, assistant))(Unit{})
+    Bool.pick(Unit -> IO(Bool), prepared, _ => IO.pure(Bool, True{}), _ => finishFailed(agent, shared, settings, assistant))(Unit{})
 
-def afterRun(agent: Runtime.Owner(), +shared: R.Ref<Shared>, taken: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextWindow: F64) -> IO(Bool):
+def afterRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, taken: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextWindow: F64) -> IO(Bool):
   match taken:
     case None{}: IO.pure(Bool, False{})
-    case Some{+assistant}: Bool.pick(Unit -> IO(Bool), isRetryableError(assistant, contextWindow), _ => retryOrFinish(agent, shared, assistant), _ => finishFailed(shared, assistant))(Unit{})
+    case Some{+assistant}: Bool.pick(Unit -> IO(Bool), isRetryableError(assistant, contextWindow), _ => retryOrFinish(agent, shared, settings, assistant), _ => finishFailed(agent, shared, settings, assistant))(Unit{})
 
-# upstream _handlePostAgentRun: retry a transient error (compaction follows later).
-def handlePostAgentRun(agent: Runtime.Owner(), +shared: R.Ref<Shared>) -> IO(Bool):
+# upstream _handlePostAgentRun: retry a transient error, else check compaction.
+def handlePostAgentRun(agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager) -> IO(Bool):
   do IO<Bool>:
     taken : Maybe<&2, Ai.AssistantMessage<V.Value, Unit>> <- R.modify(Shared, Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, shared, current => takeLastAssistant(current))
     state : Shared <- R.read(Shared, shared)
-    afterRun(agent, shared, taken, contextWindowOf(state))
+    afterRun(agent, shared, settings, taken, contextWindowOf(state))
 
-def stepOf(+agent: Runtime.Owner(), shared: R.Ref<Shared>, result: Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit>) -> IO(Step):
+def stepOf(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager, result: Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit>) -> IO(Step):
   match result:
     case Fail{error}: IO.pure(Step, Step{False{}, Fail{promptError(error)}})
     case Done{Unit{}}:
       do IO<Step>:
         Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         drained : Result<&2, &2, String, Unit> <- drainQueued(100000n, agent)
-        again : Bool <- handlePostAgentRun(agent, shared)
+        again : Bool <- handlePostAgentRun(agent, shared, settings)
         return Step{again, drained}
 
 def continueRun(agent: Runtime.Owner()) -> IO(Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit>):
   Agent.continueRun(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent)
 
 # upstream _runAgentPrompt: continue the agent while post-run handling asks for it.
-def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, step: Step) -> IO(Result<&2, &2, String, Unit>):
+def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, step: Step) -> IO(Result<&2, &2, String, Unit>):
   match fuel step:
     case _ Step{False{}, outcome}: IO.pure(Result<&2, &2, String, Unit>, outcome)
     case 0n Step{True{}, outcome}: IO.pure(Result<&2, &2, String, Unit>, outcome)
     case 1n+rest Step{True{}, _}:
       do IO<Result<&2, &2, String, Unit>>:
         result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- continueRun(agent)
-        next : Step <- stepOf(agent, shared, result)
-        runUntilSettled(rest, agent, shared, next)
+        next : Step <- stepOf(agent, shared, settings, result)
+        runUntilSettled(rest, agent, shared, settings, next)
 
 def runAgentPrompt(session: AgentSession, input: Agent.PromptInput<Unit, Runtime.Details(), Runtime.Custom()>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, _, _, _}:
+    case AgentSession{+agent, +shared, _, _, +settings, _}:
       do IO<Result<&2, &2, String, Unit>>:
+        compactBeforePrompt(agent, shared, settings)
         setRunActive(shared, True{})
         result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, input)
-        step : Step <- stepOf(agent, shared, result)
-        outcome : Result<&2, &2, String, Unit> <- runUntilSettled(1000n, agent, shared, step)
+        step : Step <- stepOf(agent, shared, settings, result)
+        outcome : Result<&2, &2, String, Unit> <- runUntilSettled(1000n, agent, shared, settings, step)
         setRunActive(shared, False{})
         emit(shared, AgentSettled{})
         return outcome
 
 def queued(state: Shared, behavior: StreamingBehavior, +text: String) -> Shared:
   match state behavior:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry} Steer{}: Shared{session, List.append(&2, String, steering, text <> Nil{}), followUp, listeners, runActive, lastAssistant, retry}
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry} FollowUp{}: Shared{session, steering, List.append(&2, String, followUp, text <> Nil{}), listeners, runActive, lastAssistant, retry}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction} Steer{}: Shared{session, List.append(&2, String, steering, text <> Nil{}), followUp, listeners, runActive, lastAssistant, retry, compaction}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction} FollowUp{}: Shared{session, steering, List.append(&2, String, followUp, text <> Nil{}), listeners, runActive, lastAssistant, retry, compaction}
 
 def firstMessage(messages: List<&2, Message()>, fallback: Message()) -> Message():
   match messages:
@@ -711,13 +1184,80 @@ def isRetrying(session: AgentSession) -> IO(Bool):
         state : Shared <- R.read(Shared, shared)
         return Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, sleepingOf(retryOf(state))))
 
-# upstream abort: cancel a retry sleep, then abort the agent.
+def abortCompaction(session: AgentSession) -> IO(Unit):
+  match session:
+    case AgentSession{_, shared, _, _, _, _}: abortCompactions(shared)
+
+def hasController(compaction: CompactionState) -> Bool:
+  match compaction:
+    case CompactionState{_, manual, auto}: Bool.or(Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual)), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, auto)))
+
+def isCompacting(session: AgentSession) -> IO(Bool):
+  match session:
+    case AgentSession{_, shared, _, _, _, _}:
+      do IO<Bool>:
+        state : Shared <- R.read(Shared, shared)
+        return hasController(compactionOf(state))
+
+# upstream abort: cancel retry sleeps and compactions, abort the agent and
+# wait until it is idle.
 def abort(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{agent, shared, _, _, _, _}:
+    case AgentSession{+agent, +shared, _, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
+        abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+
+def nothingToCompact(entries: List<&2, Entry()>) -> String:
+  Bool.pick(String, Compaction.lastIsCompaction(Unit, Tools.ToolDetails, V.Value, entries), "Already compacted", "Nothing to compact (session too small)")
+
+def manualPrepared(agent: Runtime.Owner(), shared: R.Ref<Shared>, model: Ai.Model<Ai.JsonValue>, customInstructions: Maybe<&2, String>, signal: A.AbortSignal<Unit>, entries: List<&2, Entry()>, preparation: Maybe<&2, Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+  match preparation:
+    case None{}: IO.pure(Result<&2, &2, String, Compaction.CompactionResult>, Fail{nothingToCompact(entries)})
+    case Some{prepared}: runDefaultCompaction(agent, shared, model, prepared, customInstructions, signal, Manual{})
+
+def compactionOutcome(aborted: Bool, result: Result<&2, &2, String, Compaction.CompactionResult>) -> Result<&2, &2, String, Compaction.CompactionResult>:
+  match aborted:
+    case True{}: Fail{"Compaction cancelled"}
+    case False{}: result
+
+def manualEndEvent(+message: String) -> AgentSessionEvent:
+  Bool.pick(AgentSessionEvent, String.eq(message, "Compaction cancelled"), CompactionEnd{Manual{}, None{}, True{}, False{}, None{}}, CompactionEnd{Manual{}, None{}, False{}, False{}, Some{"Compaction failed: " ++ message}})
+
+def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+  match result:
+    case Fail{+message}:
+      do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
+        emit(shared, manualEndEvent(message))
+        return Fail{message}
+    case Done{compacted}:
+      do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
+        +applied : Compaction.CompactionResult <- applyCompaction(agent, shared, compacted)
+        emit(shared, CompactionEnd{Manual{}, Some{applied}, False{}, False{}, None{}})
+        return Done{applied}
+
+# upstream compact(): abort the agent, then summarize the branch; the result
+# is returned, a failure or cancellation is reported in compaction_end.
+def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+  match session:
+    case AgentSession{+agent, +shared, _, _, +settings, _}:
+      do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
+        abortSleeping(shared)
+        abortCompactions(shared)
+        Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +controller : A.AbortController<Unit> <- A.new(Unit)
+        R.modify(Shared, Unit, shared, current => (setManualController(current, Some{controller}), Unit{}))
+        emit(shared, CompactionStart{Manual{}})
+        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +entries : List<&2, Entry()> <- branchEntries(shared)
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- manualPrepared(agent, shared, stateModel(current), customInstructions, A.signal(Unit, controller), entries, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, stateModel(current))))
+        aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+        R.modify(Shared, Unit, shared, current => (setManualController(current, None{}), Unit{}))
+        A.dispose(Unit, controller)
+        finishManual(agent, shared, compactionOutcome(aborted, result))
 
 def waitForIdle(session: AgentSession) -> IO(Unit):
   Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
@@ -755,10 +1295,6 @@ def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(
 
 # upstream setModel: apply the model, keep the thinking level within its
 # range, record the change (extension model_select events are not ported).
-def stateThinking(value: AgentState()) -> Ai.ModelThinkingLevel:
-  match value:
-    case T.AgentState{_, thinking, _, _, _, _, _, _}: thinking
-
 def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Unit>):
   match session:
     case AgentSession{+agent, +shared, _, _, _, _}:
