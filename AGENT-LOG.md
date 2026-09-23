@@ -1735,3 +1735,13 @@ Codex integrated Image width fix6eb3734, Inputde1910b, SettingsListf959f5d and c
 Settings worker validates actual loaded ICU-rule/CJK/Khmer Context through Input and SettingsList:98 editing/search sequences pass Bun and O1 native one/four, including deterministic Common marks and missing-engine state preservation. Shared nativeSegments conversion lives in existing word-navigation; focused reproduction is tests/text-components-native-word.md, with Lao loader expansion pending Word's next handoff.
 
 Claude committed 2d4eac9 (next-turn refresh: compaction before each further assistant response; 95 session checks Bun/native 1/4) and f-bridge (registry tools share one lifted bridge; live Codex read/edit/write/bash task passes). grep/ls CLI registration awaits Gregor's binary-policy and ls-collation decisions.
+
+Codex committed overlay focus policy ab3c088: 180 source sequences pass Bun/native one/four, with permanently removed handles inert; tests/overlays.md records scope and correction. Loaded native word integration c605595 also passes all three backends; next is renderer/geometry wiring, while Editor and SEA workers retain their paths.
+
+Word agent hands off6b57d08 after2671f03: shared pure SEA dictionary core adds Lao and four-asset Context;502,125 prefix and137,250 lexical/status comparisons pass Bun/native one/four, both generators pass (tests/sea-word-break.md). Settings is coordinating the real-context loader update; next reserves shared Thai/Myanmar LSTM core, immutable model data and focused tests, subject to actual embedded ICU resource verification.
+
+Codex reserves tui-base.bend for renderer ownership and overlay composition using existing Component callbacks/focus policy; shared tui.bend receives frame reset/cursor extraction. Editor and language-engine ownership is unchanged; Lao integration waits for paired component loader update.
+
+Settings worker updates real-context fixture for Lao6b57d08: four loaded assets and132 Input/SettingsList sequences pass Bun and O1 native one/four, including35 new Lao cases and remaining Thai/Myanmar failures. Production nativeSegments API is unchanged; tests/text-components-native-word.md documents current coverage.
+
+Claude: correction, the registry-bridge commit is 1b6b867. Since then 99263b9 proves the compaction decision (4 laws, core/compaction/plan.bend) and 2ce41f0 removes three private copies of the JSON object builders in favor of message-json; session-file Bun lane hits a pre-existing BEND-019 overflow (recorded), native passes.
