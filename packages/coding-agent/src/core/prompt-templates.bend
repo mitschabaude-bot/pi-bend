@@ -16,18 +16,15 @@ import ../../../runtime/src/yaml.bend as Yaml
 type PromptTemplate is Data:
   PromptTemplate{name: String, description: String, argumentHint: Maybe<&2,String>, content: String, sourceInfo: Skills.SourceInfo, filePath: String}
 
-type ArgumentError is Data:
-  UnclosedQuote{quote: Char}
-
 def pushArgument(current: String, reversed: List<&2,String>) -> List<&2,String>:
   match current:
     case SNil{}: reversed
     case value: String.reverse(value) <> reversed
 
-def parseArguments(text: String, quote: Maybe<&2,Char>, +current: String, +reversed: List<&2,String>) -> Result<&2,&2,ArgumentError,List<&2,String>>:
+# An unclosed quote runs to the end of the input, as upstream.
+def parseArguments(text: String, quote: Maybe<&2,Char>, +current: String, +reversed: List<&2,String>) -> List<&2,String>:
   match text quote:
-    case SNil{} None{}: Done{List.reverse(&2,String,pushArgument(current,reversed))}
-    case SNil{} Some{value}: Fail{UnclosedQuote{value}}
+    case SNil{} _: List.reverse(&2,String,pushArgument(current,reversed))
     case SCon{char,rest} Some{value}:
       +char = {char : Char}
       +value = {value : Char}
@@ -38,7 +35,7 @@ def parseArguments(text: String, quote: Maybe<&2,Char>, +current: String, +rever
       +space = Text.whitespace(code)
       parseArguments(rest,None{},Bool.pick(String,space,"",SCon{Chr{code},current}),Bool.pick(List<&2,String>,space,pushArgument(current,reversed),reversed))
 
-def parseCommandArgs(text: String) -> Result<&2,&2,ArgumentError,List<&2,String>>:
+def parseCommandArgs(text: String) -> List<&2,String>:
   parseArguments(text,None{},"",Nil{})
 
 def joinArguments(args: List<&2,String>, +reversed: String, separator: Bool) -> String:
@@ -173,23 +170,23 @@ def commandName(text: String, +reversed: String) -> String & String:
     case SCon{Chr{+code},+rest}:
       Bool.pick(Unit -> String & String,Text.whitespace(code),_ => (String.reverse(reversed),rest),_ => commandName(rest,SCon{Chr{code},reversed}))(Unit{})
 
-def expandNamed(+name: String, +args: String, +original: String, templates: List<&2,PromptTemplate>) -> Result<&2,&2,ArgumentError,String>:
+def expandNamed(+name: String, +args: String, +original: String, templates: List<&2,PromptTemplate>) -> String:
   match templates:
-    case Nil{}: Done{original}
+    case Nil{}: original
     case PromptTemplate{key,_,_,content,_,_} <> rest:
-      Bool.pick(Unit -> Result<&2,&2,ArgumentError,String>,Strings.equal(name,key),
-        _ => Result.map(&2,&2,ArgumentError,List<&2,String>,String,values => substituteArgs(content,values),parseCommandArgs(args)),
+      Bool.pick(Unit -> String,Strings.equal(name,key),
+        _ => substituteArgs(content,parseCommandArgs(args)),
         _ => expandNamed(name,args,original,rest))(Unit{})
 
-def expandCommand(original: String, templates: List<&2,PromptTemplate>, parsed: String & String) -> Result<&2,&2,ArgumentError,String>:
+def expandCommand(original: String, templates: List<&2,PromptTemplate>, parsed: String & String) -> String:
   match parsed:
-    case Tuple{SNil{},_}: Done{original}
+    case Tuple{SNil{},_}: original
     case Tuple{name,args}: expandNamed(name,args,original,templates)
 
-def expandPromptTemplate(+text: String, templates: List<&2,PromptTemplate>) -> Result<&2,&2,ArgumentError,String>:
+def expandPromptTemplate(+text: String, templates: List<&2,PromptTemplate>) -> String:
   match text:
     case SCon{'/',rest}: expandCommand(text,templates,commandName(rest,""))
-    case _: Done{text}
+    case _: text
 
 type LoadPromptTemplatesOptions is Data:
   LoadPromptTemplatesOptions{cwd: String, agentDir: String, promptPaths: List<&2,String>, includeDefaults: Bool}

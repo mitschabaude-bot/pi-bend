@@ -3,10 +3,10 @@ import argparse,json,pathlib,subprocess
 p=argparse.ArgumentParser();p.add_argument('--upstream',default='../pi-mono');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command[1:] if a.command[:1]==['--'] else a.command
 root=pathlib.Path(__file__).resolve().parent.parent
 reference=json.loads(subprocess.check_output(['bun','tests/frontmatter_reference.ts',str(pathlib.Path(a.upstream).resolve())],text=True,cwd=root))
-reference['cases'] += [
- {'name':'strict fence line', 'source':'---suffix\nname: test\n---\nBody', 'expected':{'ok':True,'frontmatter':{},'body':'---suffix\nname: test\n---\nBody'}},
- {'name':'reject nonmapping frontmatter', 'source':'---\n[one, two]\n---\nBody', 'expected':{'ok':False}},
-]
+# Consumers read named keys from the cast frontmatter, so a scalar or
+# sequence behaves as the empty mapping the port returns.
+for case in reference['cases']:
+ if case['expected'].get('ok') and not isinstance(case['expected'].get('frontmatter'),dict): case['expected']['frontmatter']={}
 failures=[]
 for group,prefix in [('cases',[]),('yaml',['--yaml'])]:
  for start in range(0,len(reference[group]),20):

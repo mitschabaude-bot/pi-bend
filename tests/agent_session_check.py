@@ -203,6 +203,21 @@ def bash_checks(runner, threads, work):
     assert [e for e in events if e['type'] == 'entries'][0]['kinds'] == ['message'] * 5
     return 9
 
+def expand_checks(runner, threads, work):
+    project = work / 'expand'; (project / 'skills/demo').mkdir(parents=True)
+    (project / 'skills/demo/SKILL.md').write_text('---\nname: demo\ndescription: Demo skill\n---\n\n# Demo\nDo the thing.\n\n')
+    agent = work / 'expand-agent'; agent.mkdir()
+    command = ['bun', runner] if runner.endswith('.js') else [runner, '--threads', threads, '--']
+    result = subprocess.run(command + ['expand', str(project), str(agent)], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    assert result.returncode == 0, result.stderr[-2000:]
+    events = [json.loads(line) for line in result.stdout.splitlines()]
+    users = [e['message']['content'][0]['text'] for e in events if e['type'] == 'message_start' and e['message']['role'] == 'user']
+    skill = '<skill name="demo" location="%s">\nReferences are relative to %s.\n\n# Demo\nDo the thing.\n</skill>' % (project / 'skills/demo/SKILL.md', project / 'skills/demo')
+    # _expandSkillCommand: the body without frontmatter, trimmed, then the arguments; templates substitute $1/$@; queued input is expanded too
+    assert users == [skill + '\n\nplease help', 'Hello queued (queued)', 'Hello world (world big day)', '/skill:unknown x', '/skill:gone y'], users
+    assert [e for e in events if e['type'] == 'queue_update'][0]['steering'] == ['Hello queued (queued)']
+    return 4
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--runner', default='build/agent-session.js')
@@ -314,6 +329,7 @@ def main():
     assert types(events)[-9:-4] == ['auto_retry_start', 'entry_appended', 'auto_retry_end', 'agent_settled', 'prompt_done'], types(events)
     checks += 4
     checks += bash_checks(runner, args.threads, work)
+    checks += expand_checks(runner, args.threads, work)
     checks += compaction_checks(runner, args.threads, work)
     print('agent-session: %d checks passed' % checks)
 

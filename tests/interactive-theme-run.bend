@@ -52,7 +52,7 @@ def run(args: List<String>) -> IO(Unit):
         candidate : Result<&2,&2,StreamFn.MissingDefault,Runtime.Owner()> <- Agent.new(~Unit,~Tools.ToolDetails,~Runtime.Custom(),~Tools.ToolError,~Unit,options(stream,converter,Sessions.getSessionId(Unit,Tools.ToolDetails,Schema.Value,stored)),registry,validator,Tools.WriteDetails{})
         +agent : Runtime.Owner() <- requireAgent(candidate)
         loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd,agentDir,Settings.options())
-        +session : Session.AgentSession <- Session.create(agent,stored,settings(loaded),cwd,Runtime.Loadout{Record.new(String),Nil{}})
+        +session : Session.AgentSession <- Session.create(agent,stored,settings(loaded),cwd,Runtime.Loadout{Record.new(String),Nil{},Nil{},Nil{}})
         result : Result<&2,&2,Run.Error,Unit> <- Run.run(session,Nil{},cwd,None{},agentDir,assetsRoot,setting(choice),model() <> Nil{})
         Session.dispose(session)
         Agent.dispose(Unit,Tools.ToolDetails,Runtime.Custom(),Tools.ToolError,Unit,agent)

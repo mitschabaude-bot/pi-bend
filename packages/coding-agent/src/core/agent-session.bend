@@ -25,6 +25,12 @@ import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/json.bend as Decode
 import ./agent-runtime.bend as Runtime
 import ./messages.bend as Messages
+import ./skills.bend as Skills
+import ./prompt-templates.bend as Templates
+import ../utils/frontmatter.bend as Frontmatter
+import ../../../runtime/src/yaml.bend as Yaml
+import ../../../runtime/src/utf8.bend as Utf8
+import ../../../runtime/src/text.bend as Text
 import ./session-manager.bend as S
 import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
@@ -1430,7 +1436,7 @@ def sectionPatch(patch: Maybe<&2, Rec.Record<Maybe<&2, String>>>, now: F64) -> M
 
 def prepareLoadout(agent: Runtime.Owner(), loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
   match loadout:
-    case Runtime.Loadout{sections, tools}:
+    case Runtime.Loadout{sections, tools, _, _}:
       do IO<Maybe<&2, Message()>>:
         Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
         return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
@@ -1700,12 +1706,78 @@ def queueAt(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +behavior: Streaming
     deliverQueued(agent, behavior, userMessageAt(text, images, now))
     emitQueueUpdate(shared)
 
-def queue(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
+# Input expansion
+# ---------------
+
+def loadoutOf(session: AgentSession) -> Runtime.Loadout:
+  match session:
+    case AgentSession{_, _, _, _, _, loadout}: loadout
+
+def skillNamed(skills: List<&2, Skills.Skill>, +name: String) -> Maybe<&2, Skills.Skill>:
+  match skills:
+    case Nil{}: None{}
+    case Skills.Skill{+known, description, filePath, baseDir, source, disabled} <> rest:
+      Bool.pick(Unit -> Maybe<&2, Skills.Skill>, String.eq(known, name), _ => Some{Skills.Skill{known, description, filePath, baseDir, source, disabled}}, _ => skillNamed(rest, name))(Unit{})
+
+def skillBlock(skill: Skills.Skill, body: String, +args: String) -> String:
+  match skill:
+    case Skills.Skill{name, _, filePath, baseDir, _, _}:
+      +block = "<skill name=\"" ++ name ++ "\" location=\"" ++ filePath ++ "\">\nReferences are relative to " ++ baseDir ++ ".\n\n" ++ body ++ "\n</skill>"
+      Bool.pick(String, String.is_empty(args), block, block ++ "\n\n" ++ args)
+
+# A skill file that cannot be read or whose frontmatter does not parse leaves
+# the input unchanged (upstream reports it to extensions, not ported).
+def skillRead(+text: String, skill: Skills.Skill, args: String, read: Result<&2, &2, FS.Error, List<&2, U32>>) -> String:
+  match read:
+    case Fail{_}: text
+    case Done{bytes}: Result.default(&2, &2, Yaml.Error, String, Result.map(&2, &2, Yaml.Error, String, String, body => skillBlock(skill, Text.trim(body), args), Frontmatter.stripFrontmatter(Utf8.decodeBuffer(bytes))), text)
+
+def skillFound(+text: String, args: String, found: Maybe<&2, Skills.Skill>) -> IO(String):
+  match found:
+    case None{}: IO.pure(String, text)
+    case Some{+skill}:
+      do IO<String>:
+        read : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(Skills.skillPath(skill))
+        return skillRead(text, skill, args, read)
+
+# The skill name runs to the first space; the rest, trimmed, are its arguments.
+def splitSkill(command: String, +name: String) -> String & String:
+  match command:
+    case SNil{}: (String.reverse(name), "")
+    case SCon{' ', rest}: (String.reverse(name), Text.trim(rest))
+    case SCon{char, rest}: splitSkill(rest, SCon{char, name})
+
+def skillCommand(skills: List<&2, Skills.Skill>, +text: String, parts: String & String) -> IO(String):
+  match parts:
+    case (+name, args): skillFound(text, args, skillNamed(skills, name))
+
+# upstream _expandSkillCommand: "/skill:name args" becomes the skill's body in
+# a <skill> block followed by the arguments; unknown skills pass through.
+def expandSkillCommand(skills: List<&2, Skills.Skill>, +text: String) -> IO(String):
+  Bool.pick(Unit -> IO(String), String.starts_with(text, "/skill:"), _ => skillCommand(skills, text, splitSkill(String.drop(text, 7n), "")), _ => IO.pure(String, text))(Unit{})
+
+def expandWith(loadout: Runtime.Loadout, +text: String) -> IO(String):
+  match loadout:
+    case Runtime.Loadout{_, _, skills, templates}:
+      do IO<String>:
+        expanded : String <- expandSkillCommand(skills, text)
+        return Templates.expandPromptTemplate(expanded, templates)
+
+# Skill commands, then prompt templates.
+def expandInput(session: AgentSession, text: String) -> IO(String): expandWith(loadoutOf(session), text)
+
+def queueExpanded(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
   match session:
     case AgentSession{agent, shared, _, _, _, _}:
       do IO<Unit>:
         now : F64 <- Date.now()
         queueAt(agent, shared, behavior, text, images, now)
+
+# upstream _queueUserInput: queued input is expanded like a prompt.
+def queue(+session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
+  do IO<Unit>:
+    expanded : String <- expandInput(session, text)
+    queueExpanded(session, behavior, expanded, images)
 
 def steer(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, Steer{}, text, images)
 def followUp(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, FollowUp{}, text, images)
@@ -1739,15 +1811,36 @@ def promptWhile(+session: AgentSession, streaming: Bool, +text: String, +images:
     case True{} None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."})
     case True{} Some{chosen}:
       do IO<Result<&2, &2, String, Unit>>:
-        queue(session, chosen, text, images)
+        queueExpanded(session, chosen, text, images)
         return Done{Unit{}}
 
-# upstream prompt(): extension commands, skill and prompt-template expansion
-# are not ported; while streaming the message is queued by streamingBehavior.
+def manualIn(compaction: CompactionState) -> Bool:
+  match compaction:
+    case CompactionState{_, manual, _}: Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual))
+
+def manualCompacting(session: AgentSession) -> IO(Bool):
+  match session:
+    case AgentSession{_, shared, _, _, _, _}:
+      do IO<Bool>:
+        state : Shared <- R.read(Shared, shared)
+        return manualIn(compactionOf(state))
+
+def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    expanded : String <- expandInput(session, text)
+    streaming : Bool <- isStreaming(session)
+    promptWhile(session, streaming, expanded, images, behavior)
+
+# upstream prompt(): no prompt while a manual compaction runs; skill commands
+# and prompt templates are expanded, then the message runs or, while
+# streaming, is queued by streamingBehavior. Extension commands and input
+# handlers are not ported.
 def prompt(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    streaming : Bool <- isStreaming(session)
-    promptWhile(session, streaming, text, images, behavior)
+    compacting : Bool <- manualCompacting(session)
+    Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), compacting,
+      _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry."}),
+      _ => promptExpanded(session, text, images, behavior))(Unit{})
 
 def abortRetry(session: AgentSession) -> IO(Unit):
   match session:

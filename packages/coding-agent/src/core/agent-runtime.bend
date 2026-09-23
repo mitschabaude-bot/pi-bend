@@ -37,6 +37,7 @@ import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
+import ../../../runtime/src/text.bend as Text
 import ../utils/paths.bend as Paths
 import ./auth-storage.bend as Storage
 import ./runtime-credentials.bend as Runtime
@@ -50,6 +51,9 @@ import ../../../runtime/src/u64.bend as W
 import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ./resource-loader.bend as Resources
+import ./package-manager.bend as PackageManager
+import ./skills.bend as Skills
+import ./prompt-templates.bend as Templates
 import ./diagnostics.bend as Diagnostics
 import ./tools/index.bend as Tools
 import ../utils/tools-manager.bend as Manager
@@ -215,17 +219,30 @@ type SessionSeed is Data:
 
 def emptySeed() -> SessionSeed: SessionSeed{"", Nil{}, None{}, None{}}
 
+# Resource flags from the command line: extra skill and prompt template paths
+# (resolved against the process cwd) and the --no-skills/--no-prompt-templates
+# switches.
+type ResourceOptions is Data:
+  ResourceOptions{skillPaths: List<&2, String>, noSkills: Bool, promptPaths: List<&2, String>, noPromptTemplates: Bool}
+
+def noResources() -> ResourceOptions: ResourceOptions{Nil{}, False{}, Nil{}, False{}}
+
 type CreateOptions is Data:
-  CreateOptions{cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, provider: Maybe<&2, String>, model: Maybe<&2, String>, apiKey: Maybe<&2, String>, thinking: Maybe<&2, Ai.ModelThinkingLevel>, systemPrompt: Maybe<&2, String>, appendSystemPrompt: List<&2, String>, tools: List<&2, Tools.ToolName>, contextFiles: Bool, seed: SessionSeed, settings: Settings.SettingsManager}
+  CreateOptions{cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, provider: Maybe<&2, String>, model: Maybe<&2, String>, apiKey: Maybe<&2, String>, thinking: Maybe<&2, Ai.ModelThinkingLevel>, systemPrompt: Maybe<&2, String>, appendSystemPrompt: List<&2, String>, tools: List<&2, Tools.ToolName>, contextFiles: Bool, seed: SessionSeed, settings: Settings.SettingsManager, resources: ResourceOptions}
 
 # The model and thinking level the runtime settled on, for the session record.
 type Selection is Data:
   Selection{model: Models.Model(), thinking: Ai.ModelThinkingLevel}
 
 # What the session declares on each prompt: the system prompt sections and
-# the executable tools (upstream _preparePromptAndToolLoadout's inputs).
+# the executable tools (upstream _preparePromptAndToolLoadout's inputs), with
+# the loaded skills and prompt templates that expand /skill: and /name input.
 type Loadout is Data:
-  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>}
+  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
+
+# The system prompt with the resources it was built from.
+type Prepared is Data:
+  Prepared{sections: Prompt.SystemPromptSections(), skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
 
 type AgentRuntime is Type:
   AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Models.Model(), thinking: Ai.ModelThinkingLevel, loadout: Loadout}
@@ -250,10 +267,10 @@ def nonemptyAppend(parts: List<&2, String>) -> Maybe<&2, String>:
     case Nil{}: None{}
     case values: Some{String.join(values, "\n\n")}
 
-def promptOptions(options: CreateOptions, contextList: List<&2, Prompt.ContextFile>) -> Prompt.BuildSystemPromptOptions:
+def promptOptions(options: CreateOptions, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
   match options:
-    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, +names, _, _, _}:
-      Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, None{}}
+    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, +names, _, _, _, _}:
+      Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, Some{skills}}
 
 def reportContextDiagnostics(issues: List<&2,Diagnostics.ResourceDiagnostic>) -> IO(Unit):
   match issues:
@@ -265,7 +282,7 @@ def reportContextDiagnostics(issues: List<&2,Diagnostics.ResourceDiagnostic>) ->
 
 def contextFilesFor(environment: Paths.Environment, options: CreateOptions) -> IO(Resources.ContextFiles):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, True{}, _, _}: Resources.loadProjectContextFiles(environment,Resources.Options{cwd,agentDir})
+    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, True{}, _, _, _}: Resources.loadProjectContextFiles(environment,Resources.Options{cwd,agentDir})
     case _: IO.pure(Resources.ContextFiles,Resources.ContextFiles{Nil{},Nil{}})
 
 def contextFilesReported(result: Resources.ContextFiles) -> IO(List<&2,Prompt.ContextFile>):
@@ -275,16 +292,146 @@ def contextFilesReported(result: Resources.ContextFiles) -> IO(List<&2,Prompt.Co
         reportContextDiagnostics(diagnostics)
         return loadedFiles
 
+# Skills
+# ------
+
+def canonicalPath(+path: String) -> IO(String):
+  do IO<String>:
+    real : Result<&2, &2, FS.Error, String> <- FS.realpath(path)
+    return Result.default(&2, &2, FS.Error, String, real, path)
+
+def seenPath(seen: List<&2, String>, +path: String) -> Bool:
+  match seen:
+    case Nil{}: False{}
+    case first <> rest: String.eq(first, path) || seenPath(rest, path)
+
+def mergedFrom(+environment: Paths.Environment, +cwd: String, paths: List<&2, String>, +seen: List<&2, String>) -> IO(List<&2, String>):
+  match paths:
+    case Nil{}: IO.pure(List<&2, String>, Nil{})
+    case +path <> +rest:
+      +resolved = Result.default(&2, &2, Paths.Error, String, Paths.resolvePath(environment, path, cwd, Paths.PathInputOptions{True{}, True{}, None{}, False{}, False{}}), path)
+      do IO<List<&2, String>>:
+        +real : String <- canonicalPath(resolved)
+        Bool.pick(Unit -> IO(List<&2, String>), seenPath(seen, real),
+          _ => mergedFrom(environment, cwd, rest, seen),
+          _ => do IO<List<&2, String>>:
+            later : List<&2, String> <- mergedFrom(environment, cwd, rest, real <> seen)
+            return resolved <> later)(Unit{})
+
+def loadedSkills(result: Skills.LoadSkillsResult) -> List<&2, Skills.Skill>:
+  match result:
+    case Skills.LoadSkillsResult{skills, _}: skills
+
+def skillsFrom(+environment: Paths.Environment, +cwd: String, agentDir: String, noSkills: Bool, paths: List<&2, String>) -> IO(List<&2, Skills.Skill>):
+  match noSkills paths:
+    case True{} Nil{}: IO.pure(List<&2, Skills.Skill>, Nil{})
+    case _ _:
+      do IO<List<&2, Skills.Skill>>:
+        result : Skills.LoadSkillsResult <- Skills.loadSkills(environment, Skills.LoadSkillsOptions{cwd, agentDir, paths, False{}})
+        return loadedSkills(result)
+
+def resolvedSkills(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
+  match resolved:
+    case PackageManager.ResolvedPaths{skills, _, _}: PackageManager.enabledPaths(skills)
+
+def nonLocalPrefix(+value: String) -> Bool:
+  String.starts_with(value, "npm:") || String.starts_with(value, "git:") || String.starts_with(value, "github:") || String.starts_with(value, "http:") || String.starts_with(value, "https:") || String.starts_with(value, "ssh:")
+
+# upstream isLocalPath.
+def isLocalPath(value: String) -> Bool: Bool.not(nonLocalPrefix(Text.trim(value)))
+
+def processCwd(environment: Paths.Environment) -> String:
+  match environment:
+    case Paths.Environment{cwd, _, _}: cwd
+
+# upstream resolveCliPaths: local command-line paths against the process cwd.
+def cliPaths(+environment: Paths.Environment, paths: List<&2, String>) -> List<&2, String>:
+  match paths:
+    case Nil{}: Nil{}
+    case +path <> rest:
+      Bool.pick(String, isLocalPath(path), Result.default(&2, &2, Paths.Error, String, Paths.resolvePath(environment, path, processCwd(environment), Paths.defaults()), path), path) <> cliPaths(environment, rest)
+
+def resolvedFor(+environment: Paths.Environment, options: CreateOptions) -> IO(PackageManager.ResolvedPaths):
+  match options:
+    case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, _, _, settings, _}: PackageManager.resolve(environment, settings, cwd, agentDir)
+
+# upstream DefaultResourceLoader skills: the package manager's enabled skills
+# (unless --no-skills) followed by --skill paths, deduplicated by canonical
+# path and loaded without the default directories.
+def skillsFor(+environment: Paths.Environment, options: CreateOptions, resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Skills.Skill>):
+  match options:
+    case CreateOptions{+cwd, +agentDir, _, _, _, _, _, _, _, _, _, _, _, _, _, ResourceOptions{skillPaths, +noSkills, _, _}}:
+      do IO<List<&2, Skills.Skill>>:
+        merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noSkills, Nil{}, resolvedSkills(resolved)), cliPaths(environment, skillPaths)), Nil{})
+        skillsFrom(environment, cwd, agentDir, noSkills, merged)
+
+def resolvedPrompts(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
+  match resolved:
+    case PackageManager.ResolvedPaths{_, prompts, _}: PackageManager.enabledPaths(prompts)
+
+def templateNamed(templates: List<&2, Templates.PromptTemplate>, +name: String) -> Bool:
+  match templates:
+    case Nil{}: False{}
+    case Templates.PromptTemplate{known, _, _, _, _, _} <> rest: String.eq(known, name) || templateNamed(rest, name)
+
+# upstream dedupePrompts: the first template of each name wins.
+def dedupedTemplates(templates: List<&2, Templates.PromptTemplate>, +kept: List<&2, Templates.PromptTemplate>) -> List<&2, Templates.PromptTemplate>:
+  match templates:
+    case Nil{}: List.reverse(&2, Templates.PromptTemplate, kept)
+    case Templates.PromptTemplate{+name, description, hint, content, source, file} <> +rest:
+      Bool.pick(Unit -> List<&2, Templates.PromptTemplate>, templateNamed(kept, name),
+        _ => dedupedTemplates(rest, kept),
+        _ => dedupedTemplates(rest, Templates.PromptTemplate{name, description, hint, content, source, file} <> kept))(Unit{})
+
+def loadedTemplates(result: Result<&2, &2, Paths.Error, Templates.LoadResult>) -> List<&2, Templates.PromptTemplate>:
+  match result:
+    case Fail{_}: Nil{}
+    case Done{Templates.LoadResult{templates, _}}: dedupedTemplates(templates, Nil{})
+
+def templatesFrom(+environment: Paths.Environment, +cwd: String, agentDir: String, noTemplates: Bool, paths: List<&2, String>) -> IO(List<&2, Templates.PromptTemplate>):
+  match noTemplates paths:
+    case True{} Nil{}: IO.pure(List<&2, Templates.PromptTemplate>, Nil{})
+    case _ _:
+      do IO<List<&2, Templates.PromptTemplate>>:
+        result : Result<&2, &2, Paths.Error, Templates.LoadResult> <- Templates.loadPromptTemplates(environment, ".pi", Templates.LoadPromptTemplatesOptions{cwd, agentDir, paths, False{}})
+        return loadedTemplates(result)
+
+# upstream DefaultResourceLoader prompts, as for skills.
+def templatesFor(+environment: Paths.Environment, options: CreateOptions, resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Templates.PromptTemplate>):
+  match options:
+    case CreateOptions{+cwd, +agentDir, _, _, _, _, _, _, _, _, _, _, _, _, _, ResourceOptions{_, _, promptPaths, +noTemplates}}:
+      do IO<List<&2, Templates.PromptTemplate>>:
+        merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noTemplates, Nil{}, resolvedPrompts(resolved)), cliPaths(environment, promptPaths)), Nil{})
+        templatesFrom(environment, cwd, agentDir, noTemplates, merged)
+
 def promptResult(value: Prompt.ResultOf(Prompt.SystemPromptSections())) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match value:
     case Done{sections}: Done{sections}
     case Fail{Prompt.InvalidSectionName{name}}: Fail{"Invalid system prompt section name: " ++ name}
 
-def systemPromptFor(environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prompt.SystemPromptSections()>):
-  do IO<Result<&2, &2, String, Prompt.SystemPromptSections()>>:
+def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, result: Result<&2, &2, String, Prompt.SystemPromptSections()>) -> Result<&2, &2, String, Prepared>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{sections}: Done{Prepared{sections, skills, templates}}
+
+def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prepared>):
+  do IO<Result<&2, &2, String, Prepared>>:
     loaded : Resources.ContextFiles <- contextFilesFor(environment,options)
     contextList : List<&2,Prompt.ContextFile> <- contextFilesReported(loaded)
-    return promptResult(Prompt.buildSystemPromptSections(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList)))
+    +resolved : PackageManager.ResolvedPaths <- resolvedFor(environment, options)
+    +skills : List<&2, Skills.Skill> <- skillsFor(environment, options, resolved)
+    templates : List<&2, Templates.PromptTemplate> <- templatesFor(environment, options, resolved)
+    return preparedWith(skills, templates, promptResult(Prompt.buildSystemPromptSections(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList, skills))))
+
+def sectionsOf(result: Result<&2, &2, String, Prepared>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{Prepared{sections, _, _}}: Done{sections}
+
+def systemPromptFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prompt.SystemPromptSections()>):
+  do IO<Result<&2, &2, String, Prompt.SystemPromptSections()>>:
+    prepared : Result<&2, &2, String, Prepared> <- preparedFor(environment, options, packageDir)
+    return sectionsOf(prepared)
 
 def levelOf(result: Models.ResolveCliModelResult) -> Maybe<&2, Ai.ModelThinkingLevel>:
   match result:
@@ -349,7 +496,7 @@ def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> I
 
 def selectModel(+models: Models.ModelRuntime, options: CreateOptions) -> IO(Result<&2, &2, String, Models.Model()>):
   match options:
-    case CreateOptions{_, _, _, _, _, +provider, +cliModel, _, _, _, _, _, _, seed, settings}:
+    case CreateOptions{_, _, _, _, _, +provider, +cliModel, _, _, _, _, _, _, seed, settings, _}:
       do IO<Result<&2, &2, String, Models.Model()>>:
         restored : Maybe<&2, Models.Model()> <- restoreIf(models, Maybe.is_some(&2, String, provider) || Maybe.is_some(&2, String, cliModel), seed)
         chosen : Result<&2, &2, String, Models.Model()> <- chosenOrRestored(models, settings, provider, cliModel, restored)
@@ -510,14 +657,18 @@ def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cw
         owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, fetch, handle), Tools.defaultOptions())
         return (queue, Tools.borrowTools(owners))
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), sections: Prompt.SystemPromptSections(), +model: Models.Model(), +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
+def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>) -> Loadout:
+  match prepared:
+    case Prepared{sections, skills, templates}: Loadout{sections, tools, skills, templates}
+
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Models.Model(), +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.WriteDetails{})
-        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, Loadout{sections, tools}, result)
+        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools), result)
 
-def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prompt.SystemPromptSections()>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
@@ -538,9 +689,9 @@ def withModelFields(+cwd: String, +agentDir: String, apiKey: Maybe<&2, String>, 
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
         return Fail{error}
 
-def withModel(options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, Prompt.SystemPromptSections()>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
+def withModel(options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, _, _, _, apiKey, thinking, _, _, names, _, seed, settings}: withModelFields(cwd, agentDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
+    case CreateOptions{cwd, agentDir, _, _, _, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
 def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Unit):
   match apiKey selected:
@@ -559,7 +710,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
         +selected : Result<&2, &2, String, Models.Model()> <- selectModel(models, options)
         applyKey(credentials, apiKey, selected)
-        prompt : Result<&2, &2, String, Prompt.SystemPromptSections()> <- systemPromptFor(paths, options, packageDir)
+        prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
         withModel(options, Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment) -> IO(Outcome(AgentRuntime)):
@@ -573,7 +724,7 @@ def withPaths(options: CreateOptions, transport: Transport, +paths: Result<&2, &
       do IO<Outcome(AgentRuntime)>:
         disposeTransport(transport)
         return Fail{pathsError(error)}
-    case CreateOptions{cwd, agentDir, +authPath, bundlePath, +packageDir, provider, model, +apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings} Done{paths}: withPathsFields(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings}, authPath, packageDir, apiKey, transport, paths)
+    case CreateOptions{cwd, agentDir, +authPath, bundlePath, +packageDir, provider, model, +apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources} Done{paths}: withPathsFields(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, authPath, packageDir, apiKey, transport, paths)
 
 # --api-key applies to the selected model's provider for this process only.
 def withTransport(+options: CreateOptions, transport: Outcome(Transport)) -> IO(Outcome(AgentRuntime)):
@@ -586,10 +737,10 @@ def withTransport(+options: CreateOptions, transport: Outcome(Transport)) -> IO(
 
 def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings}:
+    case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}:
       do IO<Outcome(AgentRuntime)>:
         transport : Outcome(Transport) <- createTransport(bundlePath)
-        withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings}, transport)
+        withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, transport)
 
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
   match runtime:

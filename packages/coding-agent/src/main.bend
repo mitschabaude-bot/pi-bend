@@ -626,8 +626,8 @@ def rpcCatalog(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.M
       (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
-    case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, _, _, _, _, _, _, _, _, _, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
-      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), selectedTools(noTools, tools, excludeTools, Settings.getDefaultTools(settings)), Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings}
+    case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, _, _, _, _, _, noSkills, skills, promptTemplates, noPromptTemplates, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
+      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), selectedTools(noTools, tools, excludeTools, Settings.getDefaultTools(settings)), Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings, Runtime.ResourceOptions{Maybe.default(&2, List<&2, String>, skills, Nil{}), Maybe.default(&2, Bool, noSkills, False{}), Maybe.default(&2, List<&2, String>, promptTemplates, Nil{}), Maybe.default(&2, Bool, noPromptTemplates, False{})}}
 
 type ScopeFlags is Data: ScopeFlags{patterns: List<&2,String>,explicitModel: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>}
 def scopeFlags(parsed: Args.Args,settings: Settings.SettingsManager) -> ScopeFlags:

@@ -25,6 +25,9 @@ def main():
  templates=[dict(name='test',content='$1|$@|${2:-fallback}'),dict(name='test',content='must not select second'),dict(name='é',content='${@:2}')]
  for text in ['/test','/test\nfirst second','/test   \n x y',' /test x','/unknown "unfinished','/testx','/','/ test','/é a b','plain /test']:
   cases.append(dict(kind='expandPromptTemplate',args=[text,templates]))
+ for text in ['"unfinished',"'unfinished",'a "b','"a"\'b']:
+  cases.append(dict(kind='parseCommandArgs',args=[text]))
+  cases.append(dict(kind='expandPromptTemplate',args=['/test '+text,[dict(name='test',content='$@')]]))
  with tempfile.TemporaryDirectory() as directory:
   path=Path(directory)/'cases.json';path.write_text(json.dumps(cases))
   reference=json.loads(subprocess.check_output(['bun',str(ROOT/'tests/prompt_templates_reference.ts'),str(a.reference),str(path)],text=True))
@@ -33,9 +36,6 @@ def main():
   want=[expected(c) for c in batch]
   assert r.returncode==0 and not r.stderr,(r.returncode,r.stderr)
   assert r.stdout.splitlines()==want,[(c,g,w) for c,g,w in zip(batch,r.stdout.splitlines(),want) if g!=w][:3]
- malformed=['"unfinished',"'unfinished",'a "b','"a"\'b']
- commands=['p|'+wire(x) for x in malformed]+['e|'+wire('/test '+x)+'|'+wire('test')+'|'+wire('$@') for x in malformed]
- result=subprocess.check_output([*cmd,'--',*commands],text=True).splitlines();assert result==['error']*len(commands),result
  assert subprocess.check_output([*cmd,'--','long'],text=True,timeout=60).strip()=='long-ok'
- print(f'{len(reference)} pinned public-call comparisons ({sum(c['origin']=='original' for c in reference)} from original assertions), {len(commands)} unclosed-quote rejections, 200KB replacement and unfinished-default scans passed')
+ print(f'{len(reference)} pinned public-call comparisons ({sum(c['origin']=='original' for c in reference)} from original assertions), 200KB replacement and unfinished-default scans passed')
 if __name__=='__main__':main()

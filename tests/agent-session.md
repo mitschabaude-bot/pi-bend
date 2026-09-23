@@ -10,6 +10,7 @@
 - `mutate` sets the thinking level, the model and the session name. `setThinkingLevel("high")` on a model without reasoning clamps to `off` and emits `thinking_level_changed`; `setModel` records a `model_change` entry; `setSessionName` emits `session_info_changed` and records a `session_info` entry.
 - `bash` records a result while idle (appended at once), runs `printf 'hello'` through the local shell (native lanes; the JS lane has no process spawning and reports the spawn error), runs custom operations that write `hello ` and `world` (the `onChunk` callback and `bash_execution_update` events with the given id receive both deltas), then starts two held executions: after the first finishes `isBashRunning` stays true, `abortBash` aborts the second's signal and its result is `cancelled`. Every result becomes a `bashExecution` message.
 - `bash_deferred` records a result while a gated prompt streams: it stays pending and out of the context until the run settles, then precedes the next prompt's user message.
+- `expand` gives the session a skill, a skill whose file is missing and a `greet` template: `/skill:demo please help` becomes the skill body (frontmatter stripped, trimmed) in a `<skill name location>` block with its base directory, followed by the arguments; `/greet world "big day"` substitutes `$1` and `$@`; unknown or unreadable skills pass through unchanged; a steering message queued before the prompt is expanded too.
 
 ## Upstream cases implied
 

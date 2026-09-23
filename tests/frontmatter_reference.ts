@@ -14,6 +14,8 @@ new Function('describe','it','expect','parseFrontmatter','stripFrontmatter',new 
 name='supplemental BOM/newline and body preservation';
 parseFrontmatter('\uFEFF---\rname: test\rdescription: desc\r---\r\rBody\rsecond');
 parseFrontmatter('---\n---\nBody');
+name='supplemental fence prefixes and nonmapping frontmatter';
+for(const source of ['---suffix\nname: test\n---\nBody','----\nname: x\n---\nB','---\nname: x\n----y\nBody','---\n---\n---\nBody','---\n[one, two]\n---\nBody','---\nhello\n---\nBody','---\n42\n---\nBody','--- \nname: x\n---\nBody','x---\nname: y\n---\nB']){try{parseFrontmatter(source)}catch{}}
 const yaml:any[]=[];
 function record(source:string){try{yaml.push({source,expected:{ok:true,value:parse(source)}})}catch(e:any){yaml.push({source,expected:{ok:false},referenceError:e.message})}}
 for(const style of ['|','|-','|+','>','>-','>+','|2','>2-']) for(const content of ['', '\n','\n\n','  one','  one\n','  one\n\n','  one\n  two','  one\n\n  two','  one\n    extra\n  two','\n  one\n  two\n\n']) record('value: '+style+'\n'+content);

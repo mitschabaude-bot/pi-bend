@@ -25,15 +25,9 @@ def shown(values: List<&2,String>, reversed: List<&2,String>) -> String:
     case Nil{}: "ok|" ++ String.join(List.reverse(&2,String,reversed),";")
     case value <> rest: shown(rest,W.showText(value) <> reversed)
 
-def parsed(result: Result<&2,&2,P.ArgumentError,List<&2,String>>) -> String:
-  match result:
-    case Fail{_}: "error"
-    case Done{values}: shown(values,Nil{})
+def parsed(values: List<&2,String>) -> String: shown(values,Nil{})
 
-def expanded(result: Result<&2,&2,P.ArgumentError,String>) -> String:
-  match result:
-    case Fail{_}: "error"
-    case Done{value}: "ok|" ++ W.showText(value)
+def expanded(value: String) -> String: "ok|" ++ W.showText(value)
 
 def template(+name: String, content: String) -> P.PromptTemplate:
   P.PromptTemplate{name,"",None{},content,Skills.SourceInfo{"/test.md","local",Skills.Temporary{},Skills.TopLevel{},None{}},"/test.md"}

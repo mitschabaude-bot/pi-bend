@@ -27,6 +27,8 @@ import ../packages/coding-agent/src/core/bash-executor.bend as BashExec
 import ../packages/coding-agent/src/core/tools/bash.bend as Bash
 import ../packages/runtime/src/child-process.bend as Child
 import ../packages/runtime/src/utf8.bend as Utf8
+import ../packages/coding-agent/src/core/skills.bend as Skills
+import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
 
 # AgentSession scenarios over a faux provider that answers each request with
 # the next scripted text, as upstream's registerFauxProvider does. The
@@ -169,7 +171,7 @@ def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) ->
   match pair:
     case Tuple{_, manager}: manager
 
-def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
+def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout) -> IO(Fixture):
   do IO<Fixture>:
     +responseRef : R.Ref<List<&2, String>> <- R.new(List<&2, String>, responses)
     +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
@@ -181,10 +183,13 @@ def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, response
     created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored)), registry, validator, Tools.WriteDetails{})
     +agent : Runtime.Owner() <- requireAgent(created)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
-    +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, Runtime.Loadout{Rec.new(String), Nil{}})
+    +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, loadout)
     +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
     Session.subscribe(session, listener)
     return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef}}
+
+def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
+  fixtureWith(stored, cwd, agentDir, responses, gates, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}})
 
 def disposeStreams(streams: List<&2, EventStream()>) -> IO(Unit):
   match streams:
@@ -724,6 +729,30 @@ def bashDeferredScenario(+dir: String, agentDir: String) -> IO(Unit):
     Chan.close(Unit, release)
     Chan.close(Result<&2, &2, String, Unit>, done)
 
+# expand: /skill: commands and prompt templates are expanded before the
+# prompt runs or is queued (agent-session skill command and template tests).
+def sourceIn(dir: String) -> Skills.SourceInfo: Skills.SourceInfo{dir, "local", Skills.Temporary{}, Skills.TopLevel{}, None{}}
+
+def expandLoadout(+dir: String) -> Runtime.Loadout:
+  +source = sourceIn(dir)
+  Runtime.Loadout{Rec.new(String), Nil{}, Skills.Skill{"demo", "Demo skill", dir ++ "/skills/demo/SKILL.md", dir ++ "/skills/demo", source, False{}} <> Skills.Skill{"gone", "Missing file", dir ++ "/skills/gone/SKILL.md", dir ++ "/skills/gone", source, False{}} <> Nil{}, Templates.PromptTemplate{"greet", "", None{}, "Hello $1 ($@)", source, dir ++ "/prompts/greet.md"} <> Nil{}}
+
+def expandScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixtureWith(stored, dir, agentDir, "a1" <> "a2" <> "a3" <> "a4" <> "a5" <> Nil{}, Nil{}, expandLoadout(dir))
+    Session.steer(sessionOf(value), "/greet queued", Nil{})
+    first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "/skill:demo please help", Nil{}, None{})
+    reportPrompt(first)
+    second : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "/greet world \"big day\"", Nil{}, None{})
+    reportPrompt(second)
+    third : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "/skill:unknown x", Nil{}, None{})
+    reportPrompt(third)
+    fourth : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "/skill:gone y", Nil{}, None{})
+    reportPrompt(fourth)
+    teardown(value)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persist" <> dir <> agentDir <> Nil{}: persistScenario(dir, agentDir)
@@ -737,7 +766,8 @@ def run(args: List<String>) -> IO(Unit):
     case "fork_persisted" <> dir <> agentDir <> Nil{}: forkScenario(dir, agentDir, True{})
     case "bash" <> dir <> agentDir <> Nil{}: bashScenario(dir, agentDir)
     case "bash_deferred" <> dir <> agentDir <> Nil{}: bashDeferredScenario(dir, agentDir)
-    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy|navigate|fork|fork_persisted|bash|bash_deferred> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
+    case "expand" <> dir <> agentDir <> Nil{}: expandScenario(dir, agentDir)
+    case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy|navigate|fork|fork_persisted|bash|bash_deferred|expand> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
 
 def main() -> IO(Unit):
   do IO<Unit>:
