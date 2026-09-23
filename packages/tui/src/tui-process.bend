@@ -5,6 +5,7 @@ import ../../runtime/src/serial-resource.bend as Serial
 import ./component.bend as Component
 import ./overlays.bend as O
 import ./terminal.bend as Terminal
+import ./terminal-query.bend as Query
 import ./tui-base.bend as Tui
 import ./tui-main-screen.bend as Screen
 
@@ -23,7 +24,7 @@ type Input is Data: Input{outcome: Draw,handled: Bool}
 def initial() -> Session: Session{Tui.newTui(),Screen.initial()}
 def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
   match tui:
-    case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,Tui.RenderSchedule{_,_,_,_,_,stopped},show,clear}:
+    case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,Tui.RenderSchedule{_,_,_,_,_,stopped},show,clear,_}:
       Screen.Options{termux,clear,Bool.not(List.is_empty(&2,O.Entry,entries)),show,stopped}
 def frame(prepared: Tui.PreparedFrame,width: Nat,height: Nat) -> Screen.Frame:
   match prepared:
@@ -102,7 +103,11 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
 type Active is Data:
   Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>}
 type EventSink is Data:
-  EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,termux: Bool}
+  EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,queries: Query.Handle,termux: Bool}
+type QueryReady is Data:
+  QueryReady{queries: Query.Handle,terminal: Terminal.Handle,write: Callback.Callback<String,Unit>,requestRender: Callback.Callback<Unit,Unit>}
+type QueryWriter is Data:
+  QueryWriter{terminal: Terminal.Handle,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>}
 def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
   Active{session,components,mounted,None{}}
 def afterDraw(outcome: Draw,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>) -> Active:
@@ -124,15 +129,20 @@ def resizeOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(
       do IO<Active & Unit>:
         outcome : Draw <- draw(session,handle,termux)
         return (afterDraw(outcome,components,mounted,previous),Unit{})
-def onInput(listener: EventSink,data: String) -> IO(Unit):
+def dispatchInput(listener: EventSink,+data: String) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,termux}:
+    case EventSink{state,ready,queries,termux}:
       do IO<Unit>:
-        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
-        Serial.run(Active,Unit,state,current => inputOperation(current,data,handle,termux))
+        consumed : Bool <- Query.consume(queries,data)
+        Bool.pick(Unit -> IO(Unit),consumed,
+          _ => IO.pure(Unit,Unit{}),
+          _ => do IO<Unit>:
+            handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+            Serial.run(Active,Unit,state,current => inputOperation(current,data,handle,termux)))(Unit{})
+def onInput(listener: EventSink,data: String) -> IO(Unit): dispatchInput(listener,data)
 def onResize(listener: EventSink,value: Unit) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,termux}:
+    case EventSink{state,ready,_,termux}:
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,Unit,state,current => resizeOperation(current,handle,termux))
@@ -144,39 +154,82 @@ def completed(closed: Result<&2,&2,Terminal.Error,Unit>,state: Active) -> Result
   match closed:
     case Done{_}: Done{state}
     case Fail{error}: Fail{error}
-def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def matchWrite(result: Result<&2,&2,Terminal.Error,Unit>,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{error}:
+      do IO<Unit>:
+        recorded : Bool <- Deferred.resolve(Terminal.Error,failure,error)
+        settled : Bool <- Deferred.resolve(Unit,stopped,Unit{})
+        return Unit{}
+def queryWrite(writer: QueryWriter,text: String) -> IO(Unit):
+  match writer:
+    case QueryWriter{terminal,stopped,failure}:
+      do IO<Unit>:
+        result : Result<&2,&2,Terminal.Error,Unit> <- Terminal.write(terminal,text)
+        matchWrite(result,stopped,failure)
+def notifyReady(callback: Maybe<&2,Callback.Callback<QueryReady,Unit>>,value: QueryReady) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{listener}: Callback.call(QueryReady,Unit,listener,value)
+def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Terminal.Error>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
+  match failure:
+    case Some{error}: Fail{error}
+    case None{}: completed(closed,state)
+# The callback receives borrowed handles while the terminal is live. It may
+# await queries here; any forked query must finish before the stop signal.
+def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (terminal,+terminalHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         settled : Bool <- Deferred.resolve(Terminal.Handle,ready,terminalHandle)
+        +failure : Deferred.Deferred<Terminal.Error> <- Deferred.new(Terminal.Error)
+        +writer : Callback.Callback<String,Unit> <- Callback.create(~QueryWriter,~String,~Unit,~queryWrite,QueryWriter{terminalHandle,stopped,failure})
+        Query.setRunning(queries,writer,True{})
+        notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender})
         initial : Unit <- Serial.run(Active,Unit,handle,current => resizeOperation(current,terminalHandle,termux))
         finished : Unit <- Deferred.result(Unit,stopped)
         drained : Unit <- Serial.run(Active,Unit,handle,unchanged)
+        Query.setRunning(queries,writer,False{})
         closed : Result<&2,&2,Terminal.Error,Unit> <- Terminal.stop(terminal)
         final : Active <- Serial.retire(Active,owner)
-        return completed(closed,final)
-def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+        failed : Maybe<&2,Terminal.Error> <- Deferred.peek(Terminal.Error,failure)
+        Callback.dispose(String,Unit,writer)
+        Deferred.dispose(Terminal.Error,failure)
+        return queryResult(closed,failed,final)
+def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match started:
     case Fail{error}:
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         old : Active <- Serial.retire(Active,owner)
         return Fail{error}
-    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,stopped,termux)
+    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,queries,onReady,requestRender,stopped,termux)
 
-def runOwner(pair: Serial.Owner<Active> & Serial.Handle<Active>,stopped: Deferred.Deferred<Unit>,+termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+state: Serial.Handle<Active>,+ready: Deferred.Deferred<Terminal.Handle>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match pair:
+    case (queries,+queryHandle):
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,queryHandle,termux})
+        +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,queryHandle,termux})
+        started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize)
+        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,resize,stopped,termux)
+        Callback.dispose(String,Unit,input)
+        Callback.dispose(Unit,Unit,resize)
+        Deferred.dispose(Terminal.Handle,ready)
+        Query.close(queries)
+        return result
+def runOwner(pair: Serial.Owner<Active> & Serial.Handle<Active>,stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (owner,+state):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         +ready : Deferred.Deferred<Terminal.Handle> <- Deferred.new(Terminal.Handle)
-        +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,termux})
-        +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,termux})
-        started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize)
-        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,stopped,termux)
-        Callback.dispose(String,Unit,input)
-        Callback.dispose(Unit,Unit,resize)
-        Deferred.dispose(Terminal.Handle,ready)
-        return result
+        queries : Query.Owner <- Query.create()
+        runQueries(Query.borrow(queries),owner,state,ready,stopped,termux,onReady)
+def runProcessWithQueries(initial: Active,stopped: Deferred.Deferred<Unit>,termux: Bool,onReady: Callback.Callback<QueryReady,Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  do IO<Result<&2,&2,Terminal.Error,Active>>:
+    owner : Serial.Owner<Active> <- Serial.create(Active,initial)
+    runOwner(Serial.borrow(Active,owner),stopped,termux,Some{onReady})
 def runProcess(initial: Active,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   do IO<Result<&2,&2,Terminal.Error,Active>>:
     owner : Serial.Owner<Active> <- Serial.create(Active,initial)
-    runOwner(Serial.borrow(Active,owner),stopped,termux)
+    runOwner(Serial.borrow(Active,owner),stopped,termux,None{})

@@ -3901,10 +3901,12 @@
         "tests/scroll-layout.bend",
         "tests/scroll_layout_check.py",
         "tests/layout-tree.bend",
-        "tests/layout_tree_check.py"
+        "tests/layout_tree_check.py",
+        "tests/tui-layout.bend",
+        "tests/tui_layout_check.py"
       ],
       "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb",
-      "notes": "Direct stack sizing/rendering, nested minimum sizing, HStack allocation, ScrollView inside VStack, ScrollView state/follow and direct viewport scrollbar glyph geometry match source-pinned Bun/native one/four; see tests/stack.md and tests/scroll-layout.md. Kitty cropping, styled/background-preserving scrollbar overlays, nested ScrollView content, huge sparse content, arbitrary tree caching/invalidation and full source suite remain pending."
+      "notes": "Direct stack sizing/rendering, nested minimum sizing, HStack allocation, ScrollView inside VStack, ScrollView state/follow, direct viewport scrollbar glyph geometry, and TuiBase commit/scroll/resize frames match source-pinned Bun/native one/four; see tests/stack.md and tests/scroll-layout.md. Kitty cropping, styled/background-preserving scrollbar overlays, nested ScrollView content, huge sparse content, arbitrary tree caching/invalidation and full source suite remain pending."
     },
     {
       "source": "packages/tui/test/markdown.test.ts",
