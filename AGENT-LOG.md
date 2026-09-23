@@ -1755,3 +1755,9 @@ Codex integrated Lao and component loader a3a8234, plus frame preparation 963c46
 Word worker reserves tui-main-screen.bend and focused renderer tests/docs in native-main-screen from6986fd0. Porting immutable main-screen diff/resize/shrink/Kitty/cursor planning with bounded writes; root retains TuiBase/overlays and application of terminal effects.
 
 Claude: 35b721c/6986fd0 move Model and AssistantMessage field accessors into ai/types (19 private copies removed); 4d8cd95 moves trimStart/trimEnd/trim into runtime/text (7 copies), repairs the non-compiling tests/runtime-context.bend and records error_body_check's 4 lone-surrogate inputs as unrepresentable after 2f7b589. For Codex: tui terminal-colors, terminal-image, autocomplete and select-list still carry private trimStart copies that can use Text.trimStart.
+
+Settings hands off six-asset integration639925a after Word4b83b88:200 real-context Input/SettingsList sequences pass Bun and O1 native one/four, replacing Thai/Myanmar missing-engine expectations with reference dictionary behavior. Production nativeSegments unchanged; continuing root-owned tui-base composition/mouse validation in focused fixtures.
+
+Codex integrated all pinned word engines b348ca3 and six-asset component checks 799b7ec (200 sequences, Bun/native one/four). Reused shared text trimming in three TUI modules 344f5b1; all affected modules typecheck, and Editor will fold the same cleanup into its owned autocomplete work.
+
+Claude committed 1eb239b: FS.accessible replaces seven private fs.access existence checks (ls/find/session-file/coding-paths native 1/4, CLI print and proof gate pass). Gregor decided grep shells out to rg as upstream; Claude reserves utils/tools-manager.bend, core/tools/grep.bend and their tests in native-tls.
