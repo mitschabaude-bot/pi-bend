@@ -1,5 +1,9 @@
 # Bend compiler patches
 
+## One toolchain
+
+Since 2026-09-23 there is exactly one patched compiler: `build/bend-native-toolchain/bend2` in the main checkout, which `scripts/build-pure.sh` and the proof scripts use by default. Other paths that earlier work used (`build/bend-process-files`, `build/bend-system-identity`, and the second checkout's `build/bend-native-toolchain`) are symbolic links to it; the previous copies remain beside them as `*.old-2026-09-23` for a while. It contains every installed patch below plus `bend-process-clock.patch`, `bend-terminal-effects.patch` and the `experimental/system-identity` effect (applied with `scripts/prepare-system-identity-candidate.py`). Each of the last three only adds Base declarations and effect files; the session-context-edit fixture compiles to byte-identical C with and without them. New effects are installed into this toolchain after the same checks, not into another copy.
+
 Keep patches minimal and check relevant performance against an otherwise identical baseline before installing them. Correctness tests alone are insufficient. Memory experiments must measure time as well as memory; see the limitations and pending performance work in [the Bend issue log](../docs/bend-issues.md).
 
 `bend-compiler-literal-memory.patch` is installed in both the ordinary Bend 2.0.7 compiler and `build/bend-native-toolchain/bend2`, which the build and proof scripts use by default. Explicit `BEND` overrides remain supported; telemetry and automatic updates remain enabled. The [latest full-provider comparison](../docs/bend-issues/2026-09-21-layout-equality.json) measured **124 seconds/7.29 GiB**, versus 191 seconds/7.47 GiB, with byte-identical C and passing runtime/proof checks. Current compiler work prioritizes speed over further RSS reductions.
