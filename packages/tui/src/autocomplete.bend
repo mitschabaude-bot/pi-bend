@@ -61,11 +61,7 @@ def replaceLine(lines: List<&2,String>,index: Nat,value: String,reversed: List<&
     case Nil{} _: Nil{}
 def delimiter(+char: Char) -> Bool:
   Char.is_eq(char,' ') || Char.is_eq(char,'\t') || Char.is_eq(char,'"') || Char.is_eq(char,'\'') || Char.is_eq(char,'=')
-def trimStart(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{+char,+rest}: Bool.pick(Unit -> String,Text.whitespace(Char.to_u32(char)),_ => trimStart(rest),_ => SCon{char,rest})(Unit{})
-def blank(text: String) -> Bool: String.is_empty(trimStart(text))
+def blank(text: String) -> Bool: String.is_empty(Text.trimStart(text))
 def starts(text: String,prefix: String) -> Bool:
   match text prefix:
     case _ SNil{}: True{}
@@ -128,7 +124,7 @@ def shouldTrigger(parts: ResultOf(LineParts)) -> ResultOf(Bool):
   match parts:
     case Fail{error}: Fail{error}
     case Done{LineParts{before,_}}:
-      +text = trimStart(before)
+      +text = Text.trimStart(before)
       Done{Bool.not(starts(text,"/") && Bool.not(contains(text,' ')))}
 def shouldTriggerFileCompletion(lines: List<&2,String>,cursorLine: Nat,cursorCol: Nat) -> ResultOf(Bool):
   shouldTrigger(view(lines,cursorLine,cursorCol))
@@ -515,3 +511,42 @@ def suggestionsView(provider: CombinedAutocompleteProvider,options: Options,part
     case Done{LineParts{+before,_}}: suggestionsBefore(provider,before,options,extractAtPrefix(before))
 def getSuggestions(provider: CombinedAutocompleteProvider,lines: List<&2,String>,cursorLine: Nat,cursorCol: Nat,options: Options) -> IO(ResultOf(Maybe<&2,AutocompleteSuggestions>)):
   suggestionsView(provider,options,view(lines,cursorLine,cursorCol))
+
+# Native providers borrow typed callbacks. Their creator owns the callbacks and
+# retires them only after all requests have returned (including aborted ones).
+type SuggestionRequest is Data:
+  SuggestionRequest{lines: List<&2,String>,cursorLine: Nat,cursorCol: Nat,options: Options}
+type CompletionRequest is Data:
+  CompletionRequest{lines: List<&2,String>,cursorLine: Nat,cursorCol: Nat,item: AutocompleteItem,prefix: String}
+type CursorRequest is Data:
+  CursorRequest{lines: List<&2,String>,cursorLine: Nat,cursorCol: Nat}
+type AutocompleteProvider is Data:
+  AutocompleteProvider{getSuggestions: Callback.Callback<SuggestionRequest,ResultOf(Maybe<&2,AutocompleteSuggestions>)>,applyCompletion: Callback.Callback<CompletionRequest,ResultOf(Completion)>,shouldTriggerFileCompletion: Maybe<&2,Callback.Callback<CursorRequest,ResultOf(Bool)>>,triggerCharacters: List<&2,Char>}
+
+def combinedSuggestions(provider: CombinedAutocompleteProvider,request: SuggestionRequest) -> IO(ResultOf(Maybe<&2,AutocompleteSuggestions>)):
+  match request:
+    case SuggestionRequest{lines,line,column,options}: getSuggestions(provider,lines,line,column,options)
+def combinedCompletion(unused: Unit,request: CompletionRequest) -> IO(ResultOf(Completion)):
+  match request:
+    case CompletionRequest{lines,line,column,item,prefix}: IO.pure(ResultOf(Completion),applyCompletion(lines,line,column,item,prefix))
+def combinedTrigger(unused: Unit,request: CursorRequest) -> IO(ResultOf(Bool)):
+  match request:
+    case CursorRequest{lines,line,column}: IO.pure(ResultOf(Bool),shouldTriggerFileCompletion(lines,line,column))
+def asProvider(provider: CombinedAutocompleteProvider) -> IO(AutocompleteProvider):
+  do IO<AutocompleteProvider>:
+    get : Callback.Callback<SuggestionRequest,ResultOf(Maybe<&2,AutocompleteSuggestions>)> <- Callback.create(~CombinedAutocompleteProvider,~SuggestionRequest,~ResultOf(Maybe<&2,AutocompleteSuggestions>),~combinedSuggestions,provider)
+    apply : Callback.Callback<CompletionRequest,ResultOf(Completion)> <- Callback.create(~Unit,~CompletionRequest,~ResultOf(Completion),~combinedCompletion,Unit{})
+    trigger : Callback.Callback<CursorRequest,ResultOf(Bool)> <- Callback.create(~Unit,~CursorRequest,~ResultOf(Bool),~combinedTrigger,Unit{})
+    return AutocompleteProvider{get,apply,Some{trigger},Nil{}}
+# Only the owner of an asProvider result calls this; editors borrow the provider.
+def disposeTrigger(value: Maybe<&2,Callback.Callback<CursorRequest,ResultOf(Bool)>>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: Callback.dispose(CursorRequest,ResultOf(Bool),callback)
+def disposeProvider(provider: AutocompleteProvider) -> IO(Unit):
+  match provider:
+    case AutocompleteProvider{get,apply,trigger,_}:
+      do IO<Unit>:
+        Callback.dispose(SuggestionRequest,ResultOf(Maybe<&2,AutocompleteSuggestions>),get)
+        Callback.dispose(CompletionRequest,ResultOf(Completion),apply)
+        disposeTrigger(trigger)
