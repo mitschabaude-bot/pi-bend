@@ -1,5 +1,6 @@
 import Base
 import ../packages/coding-agent/src/utils/shell.bend as Shell
+import ../packages/runtime/src/child-process.bend as Child
 import ../packages/runtime/src/string.bend as Strings
 import ../packages/runtime/test/utf8-runner.bend as Wire
 import ./tool-truncate.bend as Text
@@ -77,7 +78,7 @@ def run(parts: List<&2,String>) -> IO(Unit):
         IO.print(config(result))
     case "f" <> name <> paths <> Nil{}:
       do IO<Unit>:
-        result : Maybe<&2,String> <- Shell.findExecutableOnPath(Text.text(name),Strings.split(Text.text(paths),':'),None{})
+        result : Maybe<&2,String> <- Child.findExecutableOnPath(Text.text(name),Strings.split(Text.text(paths),':'),None{})
         IO.print(search(result))
     case _: IO.print("invalid-command")
 

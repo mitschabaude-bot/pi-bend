@@ -78,6 +78,26 @@ for threads in [1, 4]:
         assert run('pwd', cwd=folder)[:2] == ((folder + '\n').encode(), ['exit:0'])
         assert run('', shell='/missing/shell')[1][0].startswith('failed:spawn:2:')
         assert run('', cwd=Path(folder) / 'missing')[1][0].startswith('failed:spawn:2:')
+
+    # Direct spawn: PATH lookup of a bare name, stderr to its own consumer,
+    # and either of two signals interrupts the process.
+    def spawn(command, mode='spawn', abort_ms=0, shell='sh', cwd='/tmp'):
+        global cases
+        start = time.monotonic()
+        result = subprocess.run(prefix + [mode, 'none', str(abort_ms), shell, str(cwd), command, '1'],
+                                capture_output=True, text=True, timeout=8)
+        assert result.returncode == 0 and not result.stderr, (result.stdout[-3000:], result.stderr)
+        lines = result.stdout.splitlines()
+        stream = lambda tag: b''.join(base64.b64decode(line.split(' ', 1)[1], validate=True) for line in lines if line.startswith(tag + ' '))
+        cases += 1
+        return stream('data'), stream('error'), [line[7:] for line in lines if line.startswith('result ')], time.monotonic() - start
+
+    assert spawn('printf out; printf err >&2; exit 3')[:3] == (b'out', b'err', ['exit:3'])
+    assert spawn('head -c 131072 /dev/zero & head -c 70000 /dev/zero >&2 & wait')[:3] == (bytes(131072), bytes(70000), ['exit:0'])
+    output, errors, outcomes, elapsed = spawn('printf early; sleep 5', 'spawn-abort', 20)
+    assert (output, errors, outcomes) == (b'early', b'', ['aborted']) and elapsed < 1, (output, outcomes, elapsed)
+    assert spawn('true', shell='pi-bend-missing-command')[2][0].startswith('failed:spawn:2:')
+    assert spawn('printf direct', shell='/bin/sh')[:3] == (b'direct', b'', ['exit:0'])
     # Observers and timers must retire on normal completion: repetition must
     # neither hang the runtime nor accumulate descriptors/deferred waiters.
     output, outcomes, _ = run('ls /proc/$PPID/fd | wc -l', timeout='60', count=48)

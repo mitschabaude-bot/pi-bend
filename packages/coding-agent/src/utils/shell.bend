@@ -1,6 +1,7 @@
 import Base
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/filesystem.bend as FS
+import ../../../runtime/src/child-process.bend as Child
 
 type CommandTransport is Data:
   Argv{}
@@ -16,33 +17,6 @@ type Error is Data:
 
 def bash(shell: String) -> ShellConfig: ShellConfig{shell,"-c" <> Nil{},None{}}
 
-# X_OK alone also accepts directories and executable special files. stat's
-# regular-file predicate follows symlinks without opening their content.
-def executableFile(+path: String, accessible: Bool) -> IO(Bool):
-  match accessible:
-    case False{}: IO.pure(Bool,False{})
-    case True{}:
-      do IO<Bool>:
-        regular : Result<&1,&1,U32 & String,Bool> <- File.is_file(path)
-        return Result.default(&1,&1,U32 & String,Bool,regular,False{})
-
-def executable(+path: String) -> IO(Bool):
-  do IO<Bool>:
-    accessible : Bool <- FS.accessible(path,1)
-    executableFile(path,accessible)
-
-# PATH is ordered, and an empty component denotes the current directory.
-# Candidates remain paths, never strings interpolated into a shell command.
-def findExecutableOnPath(+name: String, entries: List<&2,String>, previous: Maybe<&2,String>) -> IO(Maybe<&2,String>):
-  match entries previous:
-    case _ Some{path}: IO.pure(Maybe<&2,String>,Some{path})
-    case Nil{} None{}: IO.pure(Maybe<&2,String>,None{})
-    case +directory <> rest None{}:
-      +path = FS.child(Bool.pick(String,Strings.equal(directory,""),".",directory),name)
-      do IO<Maybe<&2,String>>:
-        allowed : Bool <- executable(path)
-        findExecutableOnPath(name,rest,Bool.pick(Maybe<&2,String>,allowed,Some{path},None{}))
-
 def fallback(path: Maybe<&2,String>) -> ShellConfig:
   match path:
     case Some{value}: bash(value)
@@ -53,7 +27,7 @@ def defaultShell(defaultBash: String, paths: List<&2,String>, found: Bool) -> IO
     case True{}: IO.pure(Result<&2,&2,Error,ShellConfig>,Done{bash(defaultBash)})
     case False{}:
       do IO<Result<&2,&2,Error,ShellConfig>>:
-        found : Maybe<&2,String> <- findExecutableOnPath("bash",paths,None{})
+        found : Maybe<&2,String> <- Child.findExecutableOnPath("bash",paths,None{})
         return Done{fallback(found)}
 
 # This is the shared POSIX selection algorithm. Explicit paths and /bin/bash
