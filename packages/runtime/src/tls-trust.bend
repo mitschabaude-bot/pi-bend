@@ -3,6 +3,7 @@ import ./x509.bend as X509
 import ./pem.bend as PEM
 import ./bounded.bend as File
 import ./utf8.bend as UTF8
+import ./text.bend as Text
 import ./url.bend as URL
 import ./string.bend as Split
 import ./rsa-sha256.bend as RSA
@@ -60,12 +61,6 @@ def load(path: String, byteLimit: Nat) -> IO(Result<&2,&2,Error,List<&2,X509.Cer
 # Explicit SAN-only HTTPS identity policy. It does not select a platform policy
 # or validate the certificate chain. Reference DNS names must already be ASCII
 # A-labels from URL normalization; an IP reference matches only an IP SAN.
-def asciiLower(text: String) -> String:
-  match text:
-    case SNil{}: ""
-    case SCon{Chr{+code}, rest}:
-      SCon{Chr{Bool.pick(U32, U32.is_ge(code, 65) && U32.is_le(code, 90), (code + 32 : U32), code)}, asciiLower(rest)}
-
 def alphanumeric(+code: U32) -> Bool:
   (U32.is_ge(code, 97) && U32.is_le(code, 122)) || (U32.is_ge(code, 48) && U32.is_le(code, 57))
 
@@ -92,7 +87,7 @@ def withoutRoot(reversed: List<&2, String>) -> List<&2, String>:
     case values: List.reverse(&2, String, values)
 
 def dnsLabels(text: String) -> List<&2, String>:
-  withoutRoot(List.reverse(&2, String, Split.split(asciiLower(text), '.')))
+  withoutRoot(List.reverse(&2, String, Split.split(Text.asciiLower(text), '.')))
 
 def sameLabels(left: List<&2, String>, right: List<&2, String>) -> Bool:
   match left right:

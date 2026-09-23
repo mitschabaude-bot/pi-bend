@@ -32,18 +32,11 @@ type Error is Data:
   InvalidArguments{}
   Aborted{}
 
-def filesystemMessage(cause: FS.Error) -> String:
-  match cause:
-    case FS.System{code,message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FS.InvalidPathEncoding{_}: "Invalid UTF-8 path"
-    case FS.ReadAndClose{_,read,_,close}: read ++ "; close: " ++ close
-    case FS.WriteAndClose{_,write,_,close}: write ++ "; close: " ++ close
-
 def errorMessage(error: Error) -> String:
   match error:
     case OffsetBeyondEnd{offset, total}:
       "Offset " ++ Nat.show(offset) ++ " is beyond end of file (" ++ Nat.show(total) ++ " lines total)"
-    case Filesystem{cause}: filesystemMessage(cause)
+    case Filesystem{cause}: FS.errorMessage(cause)
     case Operation{message}: message
     case InvalidEncoding{_}: "File contains invalid UTF-8"
     case InvalidPath{_}: "Invalid file path"

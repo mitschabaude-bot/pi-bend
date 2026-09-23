@@ -192,12 +192,12 @@ def nonblankHeader(value: T.Nullable<String>) -> Bool:
 def matchingHeader(entries: List<&2, R.Property<T.Nullable<String>>>, +name: String) -> Bool:
   match entries:
     case Nil{}: False{}
-    case R.Property{key, value} <> rest: (String.eq(Header.lowercase(key), name) && nonblankHeader(value)) || matchingHeader(rest, name)
+    case R.Property{key, value} <> rest: (String.eq(Space.asciiLower(key), name) && nonblankHeader(value)) || matchingHeader(rest, name)
 
 def hasHeader(headers: Maybe<&2, T.ProviderHeaders()>, name: String) -> Bool:
   match headers:
     case None{}: False{}
-    case Some{R.Record{entries}}: matchingHeader(entries, Header.lowercase(name))
+    case Some{R.Record{entries}}: matchingHeader(entries, Space.asciiLower(name))
 
 def headerCredential(provider: String, +headers: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, String, String>:
   Bool.pick(Result<&2, &2, String, String>, hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization"), Done{"unused"}, Fail{provider})

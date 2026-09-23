@@ -45,16 +45,9 @@ type Invocation is Data:
 type ToolOwner is Type:
   ToolOwner{tool: Agent.AgentTool<Maybe<&2,LsToolDetails>,Error>, ownedOperations: Maybe<&2,LsOperations>}
 
-def filesystemMessage(error: FS.Error) -> String:
-  match error:
-    case FS.System{code,message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FS.InvalidPathEncoding{_}: "Invalid UTF-8 path"
-    case FS.ReadAndClose{_,read,_,close}: read ++ "; close: " ++ close
-    case FS.WriteAndClose{_,write,_,close}: write ++ "; close: " ++ close
-
 def errorMessage(error: Error) -> String:
   match error:
-    case Filesystem{cause}: filesystemMessage(cause)
+    case Filesystem{cause}: FS.errorMessage(cause)
     case Operation{message}: message
     case Aborted{}: "Operation aborted"
     case InvalidArguments{}: "Ls tool input is invalid. Expected an optional path and natural limit."

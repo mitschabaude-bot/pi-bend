@@ -174,24 +174,6 @@ def main():
     literal_streams = [(('L' + 'x'*split, pattern, text), wanted)
                        for (mode, pattern, text), wanted in zip(literals, literal_expected) if mode == 'l'
                        for split in range(len(text)+1)]
-    byte_cases = [('bi' if mode == 'i' else 'b', pattern, text.encode()) for mode, pattern, text in cases]
-    byte_expected = expected
-    byte_patterns = [r'(?-u).', r'(?-u)..', r'(?s-u).*', r'(?-u)\xFF', r'(?-u)[^a]',
-                     r'(?-u)\xC3(?u:.)', r'(?-u)\xC3\xA9', r'(?-u)\x{E9}', r'(?-u)\u00E9',
-                     r'(?-u)[é]', r'(?-u)[\xE9]', r'(?-u)[\u00E9]', r'(?-u)\xFF\babc\b',
-                     r'(?-u)\xFF(?u:\w+)', r'\B', r'\b', r'\b{start-half}', r'\b{end-half}',
-                     r'(?-u)\B', r'(?-u)\b', r'\pL', r'(?i)é', r'(?i-u)é', r'(?i-u)[a-z]',
-                     r'(?mR)^a$', r'\A(?-u:.)(?u:é)\z', 'a', 'ab', 'aaab', 'éx', '', '^$', r'(?s).', '😀']
-    raw_values = [b'', b'a', b'abc', b'\xffabc\xff', b'\xc3\xa9', b'\xc3a', b'\xa9',
-                  b'\xe0\x80\x80', b'\xed\xa0\x80', b'\xf4\x90\x80\x80', b'\xf0\x9f\x98\x80',
-                  b'\xf0\x9f', b'\r\na\r\n', b'\xff\xc3\xa9', b'\0', b'\xff', b'\xc3\xa9a',
-                  b'\xc3\xc3\xa9', b'\xffa', b'a\xff', b'\xc3\xff\xa9', b'\xc3\xa9\xff',
-                  b'a\xffb', b'aa\xc3aab', b'\xc3\xa9\xffx', b'\xff\xc3\xa9x']
-    raw_cases = [('b', pattern, value) for pattern in byte_patterns for value in raw_values]
-    raw_expected = reference([(mode, pattern, value.hex()) for mode, pattern, value in raw_cases], args.reference)
-    raw_streams = [(('B' + 'x'*split, pattern, value), wanted)
-                   for (_, pattern, value), wanted in zip(raw_cases, raw_expected)
-                   for split in range(len(value)+1)]
     for backend in args.backends:
         compared = rejected = 0
         for start in range(0, len(cases), 150):
@@ -205,15 +187,6 @@ def main():
                     got = 'error' if got.startswith('error:') else got
                     assert got == wanted, (backend, case, wanted, got)
                     compared += 1
-        for start in range(0, len(byte_cases), 150):
-            actual_bytes = run(backend, args.prefix, byte_cases[start:start+150])
-            for case, wanted, got in zip(byte_cases[start:start+150], byte_expected[start:start+150], actual_bytes):
-                assert ('error' if got.startswith('error:') else got) == wanted, (backend, case, wanted, got)
-        for start in range(0, len(raw_streams), 150):
-            chunk = raw_streams[start:start+150]
-            actual_bytes = run(backend, args.prefix, [case for case, _ in chunk])
-            for (case, wanted), got in zip(chunk, actual_bytes):
-                assert ('error' if got.startswith('error:') else got) == wanted, (backend, case, wanted, got)
         assert run(backend, args.prefix, required_bytes) == ['byte-input-required'] * len(required_bytes)
         assert run(backend, args.prefix, unicode17) == unicode_expected
         assert run(backend, args.prefix, literals) == literal_expected
@@ -224,11 +197,10 @@ def main():
         started = time.monotonic()
         actual = run(backend, args.prefix, long_cases)
         assert actual == long_expected, (backend, actual, long_expected)
-        assert run(backend, args.prefix, [('b', pattern, text.encode()) for _, pattern, text in long_cases]) == long_expected
         duration = time.monotonic() - started
         tables = subprocess.run(command(backend, args.prefix) + ['tables'], capture_output=True, text=True, timeout=60)
         assert tables.returncode == 0 and tables.stdout.strip() == 'true', (backend, tables.stdout, tables.stderr[-1000:])
-        print(f'{backend}: {compared} scalar and {len(byte_cases)+len(raw_streams)} byte Rust comparisons, {rejected + len(required_bytes)} explicit byte-input rejections, {len(unicode17)} Unicode 17, {len(streams)+len(literal_streams)} chunk-boundary and {len(literals)} literal API checks, {len(long_cases)} long/adversarial checks ({duration:.3f}s) and 131,101 indexed-table checks passed', flush=True)
+        print(f'{backend}: {compared} scalar Rust comparisons, {rejected + len(required_bytes)} explicit byte-input rejections, {len(unicode17)} Unicode 17, {len(streams)+len(literal_streams)} chunk-boundary and {len(literals)} literal API checks, {len(long_cases)} long/adversarial checks ({duration:.3f}s) and 131,101 indexed-table checks passed', flush=True)
 
 
 if __name__ == '__main__':

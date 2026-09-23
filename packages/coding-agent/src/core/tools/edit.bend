@@ -39,16 +39,9 @@ type Invocation is Data:
 type ToolOwner is Type:
   ToolOwner{tool: Agent.AgentTool<EditToolDetails, Error>, ownedOperations: Maybe<&2, EditOperations>}
 
-def filesystemMessage(cause: FS.Error) -> String:
-  match cause:
-    case FS.System{code, message}: "Error " ++ U32.show(code) ++ ": " ++ message
-    case FS.InvalidPathEncoding{_}: "Invalid UTF-8 path"
-    case FS.WriteAndClose{_, write, _, close}: write ++ "; close: " ++ close
-    case FS.ReadAndClose{_, read, _, close}: read ++ "; close: " ++ close
-
 def errorMessage(error: Error) -> String:
   match error:
-    case Filesystem{cause}: filesystemMessage(cause)
+    case Filesystem{cause}: FS.errorMessage(cause)
     case Operation{message}: message
     case Access{path, message}: "Could not edit file: " ++ path ++ ". " ++ message ++ "."
     case Matching{cause, path, count}: Edits.errorMessage(cause, path, count)
