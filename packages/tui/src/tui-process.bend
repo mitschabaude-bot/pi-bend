@@ -1,4 +1,5 @@
 import Base
+import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/deferred.bend as Deferred
 import ../../runtime/src/serial-resource.bend as Serial
 import ./component.bend as Component
@@ -135,3 +136,47 @@ def onResize(listener: EventSink,value: Unit) -> IO(Unit):
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,Unit,state,current => resizeOperation(current,handle,termux))
+
+# The caller's stop signal is settled by its input/application callbacks. The
+# terminal and serialized TUI state remain owned here until all listeners stop.
+def unchanged(current: Active) -> IO(Active & Unit): IO.pure(Active & Unit,(current,Unit{}))
+def completed(closed: Result<&2,&2,Terminal.Error,Unit>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
+  match closed:
+    case Done{_}: Done{state}
+    case Fail{error}: Fail{error}
+def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match pair:
+    case (terminal,+terminalHandle):
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        settled : Bool <- Deferred.resolve(Terminal.Handle,ready,terminalHandle)
+        initial : Unit <- Serial.run(Active,Unit,handle,current => resizeOperation(current,terminalHandle,termux))
+        finished : Unit <- Deferred.result(Unit,stopped)
+        drained : Unit <- Serial.run(Active,Unit,handle,unchanged)
+        closed : Result<&2,&2,Terminal.Error,Unit> <- Terminal.stop(terminal)
+        final : Active <- Serial.retire(Active,owner)
+        return completed(closed,final)
+def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match started:
+    case Fail{error}:
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        old : Active <- Serial.retire(Active,owner)
+        return Fail{error}
+    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,stopped,termux)
+
+def runOwner(pair: Serial.Owner<Active> & Serial.Handle<Active>,stopped: Deferred.Deferred<Unit>,+termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match pair:
+    case (owner,+state):
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        +ready : Deferred.Deferred<Terminal.Handle> <- Deferred.new(Terminal.Handle)
+        +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,termux})
+        +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,termux})
+        started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize)
+        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,stopped,termux)
+        Callback.dispose(String,Unit,input)
+        Callback.dispose(Unit,Unit,resize)
+        Deferred.dispose(Terminal.Handle,ready)
+        return result
+def runProcess(initial: Active,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  do IO<Result<&2,&2,Terminal.Error,Active>>:
+    owner : Serial.Owner<Active> <- Serial.create(Active,initial)
+    runOwner(Serial.borrow(Active,owner),stopped,termux)
