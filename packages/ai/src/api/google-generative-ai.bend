@@ -1,6 +1,7 @@
 import Base
 import ../types.bend as T
 import ../utils/schema-json.bend as Schema
+import ./constrained-sampling.bend as Constrained
 import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
 import ../utils/sanitize-unicode.bend as Unicode
@@ -118,9 +119,15 @@ def supportsThinking(model: T.Model<T.JsonValue>) -> Bool:
 def sameAssistant(-G: Data, +message: T.AssistantMessage<V.Value, G>, +model: T.Model<T.JsonValue>) -> Bool:
   String.eq(T.assistantModel(V.Value, G, message), modelId(model)) && String.eq(T.assistantProvider(V.Value, G, message), modelProvider(model))
 
+def supportsStrictId(+id: String) -> Bool:
+  String.starts_with(id, "gemini-3") || String.starts_with(id, "gemini-4") || String.starts_with(id, "gemini-live-3") || String.starts_with(id, "gemini-live-4")
+
+def supportsStrictMode(model: T.Model<T.JsonValue>) -> Bool:
+  supportsStrictId(modelId(model))
+
 def requiresToolId(model: T.Model<T.JsonValue>) -> Bool:
   +id = modelId(model)
-  String.contains(id, "gemini-3") || String.contains(id, "gemini-4")
+  String.starts_with(id, "claude-") || String.starts_with(id, "gpt-oss-") || supportsStrictId(id)
 
 def resultTexts(items: List<&2, T.TextImageContent>) -> List<&2, String>:
   match items:
@@ -128,24 +135,73 @@ def resultTexts(items: List<&2, T.TextImageContent>) -> List<&2, String>:
     case T.TextImageText{T.TextContent{text, _}} <> rest: text <> resultTexts(rest)
     case _ <> rest: resultTexts(rest)
 
-def toolResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool) -> J():
+def imageParts(items: List<&2, T.TextImageContent>) -> List<&2, J()>:
+  match items:
+    case Nil{}: Nil{}
+    case T.TextImageImage{T.ImageContent{data, mime}} <> rest:
+      obj(R.Record{field("inlineData", obj(R.Record{field("mimeType", str(mime)) <> field("data", str(data)) <> Nil{}})) <> Nil{}}) <> imageParts(rest)
+    case _ <> rest: imageParts(rest)
+
+def hasImageInput(inputs: List<&2, T.ModelInput>) -> Bool:
+  match inputs:
+    case Nil{}: False{}
+    case T.InputImage{} <> _: True{}
+    case _ <> rest: hasImageInput(rest)
+
+def supportedImages(model: T.Model<T.JsonValue>) -> Bool:
+  match model:
+    case T.Model{_, _, _, _, _, _, _, inputs, _, _, _, _, _, _, _, _}: hasImageInput(inputs)
+
+def multimodalResponse(model: T.Model<T.JsonValue>) -> Bool:
+  +id = modelId(model)
+  Bool.not(String.starts_with(id, "gemini-2") || String.starts_with(id, "gemini-live-2"))
+
+def responseText(items: List<&2, T.TextImageContent>, hasImages: Bool) -> String:
+  +value = String.join(resultTexts(items), "\n")
+  Bool.pick(String, Bool.not(String.is_empty(value)), value, Bool.pick(String, hasImages, "(see attached image)", ""))
+
+def imageResultParts(model: T.Model<T.JsonValue>, items: List<&2, T.TextImageContent>) -> List<&2, J()>:
+  Bool.pick(List<&2, J()>, supportedImages(model), imageParts(items), Nil{})
+
+def toolResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool, +images: List<&2, J()>, multimodal: Bool) -> J():
   match result:
-    case T.ToolResultMessage{id, name, items, _, _, error, _}:
-      +value = String.join(resultTexts(items), "\n")
+    case T.ToolResultMessage{id, name, +items, _, _, error, _}:
+      +value = responseText(items, Bool.not(List.is_empty(&2, J(), images)))
       +response = {obj(R.Record{field(Bool.pick(String, error, "error", "output"), str(Unicode.sanitizeSurrogates(value))) <> Nil{}}) : J()}
       +fields = {R.Record{field("name", str(name)) <> field("response", response) <> Nil{}} : Fields()}
-      obj(R.Record{field("functionResponse", obj(Bool.pick(Fields(), includeId, add(fields, "id", str(id)), fields))) <> Nil{}})
+      +withId = Bool.pick(Fields(), includeId, add(fields, "id", str(id)), fields)
+      +withImages = Bool.pick(Fields(), multimodal && Bool.not(List.is_empty(&2, J(), images)), add(withId, "parts", T.JsonArray{images}), withId)
+      obj(R.Record{field("functionResponse", obj(withImages)) <> Nil{}})
+
+def syntheticImageTurn(images: List<&2, J()>) -> J():
+  content("user", obj(R.Record{field("text", str("Tool result image:")) <> Nil{}}) <> images)
 
 def flush(reversed: List<&2, J()>, pending: List<&2, J()>) -> List<&2, J()>:
   match pending:
     case Nil{}: reversed
     case values: content("user", values) <> reversed
 
+def appendedImageResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool, +images: List<&2, J()>, reversed: List<&2, J()>, pending: List<&2, J()>) -> List<&2, J()>:
+  syntheticImageTurn(images) <> flush(reversed, List.append(&2, J(), pending, toolResult(D, result, includeId, images, False{}) <> Nil{}))
+
+def ordinaryResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool, images: List<&2, J()>, multimodal: Bool, pending: List<&2, J()>) -> List<&2, J()>:
+  List.append(&2, J(), pending, toolResult(D, result, includeId, images, multimodal) <> Nil{})
+
+def resultItems(-D: Data, result: T.ToolResultMessage<D>) -> List<&2, T.TextImageContent>:
+  match result:
+    case T.ToolResultMessage{_, _, items, _, _, _, _}: items
+
 def messages(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, values: List<&2, T.Message<V.Value, V.Value, G, D>>, +reversed: List<&2, J()>, +pending: List<&2, J()>) -> List<&2, J()>:
   match values:
     case Nil{}: List.reverse(&2, J(), flush(reversed, pending))
     case T.System{_} <> rest: messages(G, D, model, rest, flush(reversed, pending), Nil{})
-    case T.ToolResult{result} <> rest: messages(G, D, model, rest, reversed, List.append(&2, J(), pending, toolResult(D, result, requiresToolId(model)) <> Nil{}))
+    case T.ToolResult{+result} <> rest:
+      +images = imageResultParts(model, resultItems(D, result))
+      +multimodal = multimodalResponse(model)
+      +legacyImage = Bool.not(multimodal) && Bool.not(List.is_empty(&2, J(), images))
+      +nextReversed = Bool.pick(List<&2, J()>, legacyImage, appendedImageResult(D, result, requiresToolId(model), images, reversed, pending), reversed)
+      +nextPending = Bool.pick(List<&2, J()>, legacyImage, Nil{}, ordinaryResult(D, result, requiresToolId(model), images, multimodal, pending))
+      messages(G, D, model, rest, nextReversed, nextPending)
     case T.User{T.UserMessage{value, _}} <> rest:
       +parts = userContent(value)
       +next = Bool.pick(List<&2, J()>, List.is_empty(&2, J(), parts), flush(reversed, pending), content("user", parts) <> flush(reversed, pending))
@@ -160,31 +216,67 @@ def dropInitial(-G: Data, -D: Data, values: List<&2, T.Message<V.Value, V.Value,
     case T.System{_} <> rest: rest
     case other: other
 
-def tool(tool: T.Tool<V.Value>) -> J():
-  match tool:
-    case T.Tool{name, description, schema, _}:
-      obj(R.Record{field("name", str(name)) <> field("description", str(description)) <> field("parametersJsonSchema", Schema.toJson(schema)) <> Nil{}})
+type ToolEntry is Data:
+  ToolEntry{declaration: J(), strict: Bool}
 
-def tools(values: List<&2, T.Tool<V.Value>>) -> List<&2, J()>:
-  match values:
-    case Nil{}: Nil{}
-    case value <> rest: tool(value) <> tools(rest)
+type ToolList is Data:
+  ToolList{declarations: List<&2, J()>, strict: Bool}
 
-def mode(value: ToolChoice) -> String:
+def isStrict(value: Maybe<&2, Bool>) -> Bool:
   match value:
-    case Auto{}: "AUTO"
-    case Any{}: "ANY"
-    case NoneChoice{}: "NONE"
+    case Some{True{}}: True{}
+    case _: False{}
 
-def toolConfig(choice: Maybe<&2, ToolChoice>, hasTools: Bool) -> Maybe<&2, J()>:
-  match choice hasTools:
-    case Some{selected} True{}: Some{obj(R.Record{field("functionCallingConfig", obj(R.Record{field("mode", str(mode(selected))) <> Nil{}})) <> Nil{}})}
-    case _ _: None{}
+def declared(name: String, description: String, strict: Bool, result: Result<&2, &2, Constrained.Error, V.Value>) -> Result<&2, &2, Constrained.Error, ToolEntry>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{schema}:
+      Done{ToolEntry{obj(R.Record{field("name", str(name)) <> field("description", str(description)) <> field("parametersJsonSchema", Schema.toJson(schema)) <> Nil{}}), strict}}
 
-def toolDeclarations(values: List<&2, T.Tool<V.Value>>) -> Maybe<&2, J()>:
+def selectedToolWith(+tool: T.Tool<V.Value>, +strict: Maybe<&2, Bool>) -> Result<&2, &2, Constrained.Error, ToolEntry>:
+  match tool:
+    case T.Tool{name, description, _, _}: declared(name, description, isStrict(strict), Constrained.getJsonSchemaToolParameters(tool, strict))
+
+def selectedTool(tool: T.Tool<V.Value>, result: Result<&2, &2, Constrained.Error, Maybe<&2, Bool>>) -> Result<&2, &2, Constrained.Error, ToolEntry>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{strict}: selectedToolWith(tool, strict)
+
+def checkedTool(+tool: T.Tool<V.Value>, supportsStrict: Bool) -> Result<&2, &2, Constrained.Error, ToolEntry>:
+  selectedTool(tool, Constrained.resolveJsonSchemaStrictSampling(tool, supportsStrict))
+
+def prependTool(head: Result<&2, &2, Constrained.Error, ToolEntry>, tail: Result<&2, &2, Constrained.Error, ToolList>) -> Result<&2, &2, Constrained.Error, ToolList>:
+  match head tail:
+    case Fail{error} _: Fail{error}
+    case _ Fail{error}: Fail{error}
+    case Done{ToolEntry{item, strict}} Done{ToolList{items, later}}: Done{ToolList{item <> items, strict || later}}
+
+def tools(values: List<&2, T.Tool<V.Value>>, +supportsStrict: Bool) -> Result<&2, &2, Constrained.Error, ToolList>:
+  match values:
+    case Nil{}: Done{ToolList{Nil{}, False{}}}
+    case value <> rest: prependTool(checkedTool(value, supportsStrict), tools(rest, supportsStrict))
+
+def callingMode(choice: Maybe<&2, ToolChoice>, strict: Bool) -> Maybe<&2, String>:
+  match choice:
+    case Some{NoneChoice{}}: Some{"NONE"}
+    case Some{Any{}}: Some{"ANY"}
+    case Some{Auto{}}: Some{Bool.pick(String, strict, "VALIDATED", "AUTO")}
+    case None{}: Bool.pick(Maybe<&2, String>, strict, Some{"VALIDATED"}, None{})
+
+def callingConfig(value: Maybe<&2, String>) -> Maybe<&2, J()>:
+  match value:
+    case None{}: None{}
+    case Some{selected}: Some{obj(R.Record{field("functionCallingConfig", obj(R.Record{field("mode", str(selected)) <> Nil{}})) <> Nil{}})}
+
+def toolConfig(choice: Maybe<&2, ToolChoice>, hasTools: Bool, strict: Bool) -> Maybe<&2, J()>:
+  match hasTools:
+    case False{}: None{}
+    case True{}: callingConfig(callingMode(choice, strict))
+
+def toolDeclarations(values: List<&2, J()>) -> Maybe<&2, J()>:
   match values:
     case Nil{}: None{}
-    case list: Some{T.JsonArray{obj(R.Record{field("functionDeclarations", T.JsonArray{tools(list)}) <> Nil{}}) <> Nil{}}}
+    case list: Some{T.JsonArray{obj(R.Record{field("functionDeclarations", T.JsonArray{list}) <> Nil{}}) <> Nil{}}}
 
 def thinking(value: Thinking) -> Maybe<&2, J()>:
   match value:
@@ -217,14 +309,20 @@ def selectedChoice(value: Options) -> Maybe<&2, ToolChoice>:
   match value:
     case Options{_, _, _, choice}: choice
 
-def buildNormalized(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options) -> J():
+def withDeclaredTools(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, +values: List<&2, T.Message<V.Value, V.Value, G, D>>, +options: Options, declaration: Result<&2, &2, Constrained.Error, ToolList>) -> Result<&2, &2, Constrained.Error, J()>:
+  match declaration:
+    case Fail{error}: Fail{error}
+    case Done{ToolList{+items, strict}}:
+      +base = {R.Record{field("contents", T.JsonArray{messages(G, D, model, dropInitial(G, D, values), Nil{}, Nil{})}) <> field("generationConfig", config(G, D, T.TranscriptContext{values}, options, supportsThinking(model))) <> Nil{}} : Fields()}
+      +a = maybe(base, "systemInstruction", system(G, D, values))
+      +b = maybe(a, "tools", toolDeclarations(items))
+      Done{obj(maybe(b, "toolConfig", toolConfig(selectedChoice(options), Bool.not(List.is_empty(&2, J(), items)), strict)))}
+
+def buildNormalized(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options) -> Result<&2, &2, Constrained.Error, J()>:
   match context:
     case T.TranscriptContext{+values}:
       +currentTools = Transcript.getCurrentTools(V.Value, V.Value, G, D, values)
-      +base = {R.Record{field("contents", T.JsonArray{messages(G, D, model, dropInitial(G, D, values), Nil{}, Nil{})}) <> field("generationConfig", config(G, D, T.TranscriptContext{values}, options, supportsThinking(model))) <> Nil{}} : Fields()}
-      +a = maybe(base, "systemInstruction", system(G, D, values))
-      +b = maybe(a, "tools", toolDeclarations(currentTools))
-      obj(maybe(b, "toolConfig", toolConfig(selectedChoice(options), Bool.not(List.is_empty(&2, T.Tool<V.Value>, currentTools)))))
+      withDeclaredTools(G, D, model, values, options, tools(currentTools, supportsStrictMode(model)))
 
-def buildParams(-G: Data, -D: Data, model: T.Model<T.JsonValue>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options) -> J():
+def buildParams(-G: Data, -D: Data, model: T.Model<T.JsonValue>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options) -> Result<&2, &2, Constrained.Error, J()>:
   buildNormalized(G, D, model, Transcript.collapseSystemMessages(V.Value, V.Value, G, D, context), options)

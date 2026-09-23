@@ -100,9 +100,12 @@ def main():
 
         for kind, name, command in commands:
             if kind == "signed":
-                result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=True)
-                assert json.loads(result.stdout) == oracle("signed"), result.stdout
-                print(f"{kind} {name}: signed thinking and empty text replay match upstream")
+                for mode in ("signed", "strict", "strict-prefer", "legacy-image", "modern-image"):
+                    result = subprocess.run([*command, mode], capture_output=True, text=True, timeout=30, check=True)
+                    assert json.loads(result.stdout) == oracle(mode), (mode, result.stdout)
+                result = subprocess.run([*command, "strict-unsupported"], capture_output=True, text=True, timeout=30, check=True)
+                assert result.stdout.strip() == "error: " + oracle("strict-unsupported")["error"]
+                print(f"{kind} {name}: signed replay, strict schema, unsupported mode, and image result routing match upstream")
             if kind == "catalog":
                 result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=True)
                 expected = list(json.loads((UPSTREAM / "packages/ai/src/providers/data/google.json").read_text())["google-generative-ai"].values())

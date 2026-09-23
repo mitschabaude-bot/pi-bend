@@ -147,6 +147,7 @@ def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
 
 def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), model: Ai.Model<Ai.JsonValue>, timestamp: F64, value: Result<&2, &2, Client.Error<Unit>, Client.Request>) -> IO(Unit):
   match value:
+    case Fail{Client.InvalidToolConfig{message}}: pushFailure(stream, model, timestamp, message)
     case Fail{_}: pushFailure(stream, model, timestamp, "Could not prepare Google request")
     case Done{request}:
       do IO<Unit>:

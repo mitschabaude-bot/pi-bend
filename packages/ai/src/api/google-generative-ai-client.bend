@@ -4,6 +4,7 @@ import ../utils/json.bend as JsonWire
 import ../utils/json-parse.bend as JsonRepair
 import ../utils/headers.bend as HeaderUtils
 import ./google-generative-ai.bend as Google
+import ./constrained-sampling.bend as Constrained
 import ./google-generative-ai-stream.bend as Stream
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/deadline.bend as Deadline
@@ -26,6 +27,7 @@ type Error<-Reason: Data> is Data:
   InvalidURL{cause: URL.Error}
   InvalidHeader{cause: Headers.HeaderSyntaxError}
   InvalidPayload{}
+  InvalidToolConfig{message: String}
   MissingAuth{}
   FetchFailure{cause: Fetch.Error<Reason>}
   HTTPFailure{status: U32}
@@ -75,10 +77,15 @@ def validURL(-Reason: Data, body: Maybe<&2, String>, headers: Result<&2, &2, Hea
     case Fail{cause}: Fail{InvalidURL{cause}}
     case Done{parsedUrl}: validHeaders(Reason, parsedUrl, body, headers)
 
+def encodedPayload(-Reason: Data, urlContext: URL.Context, base: String, id: String, key: String, headers: Maybe<&2, R.Record<String>>, custom: Maybe<&2, T.ProviderHeaders()>, result: Result<&2, &2, Constrained.Error, T.JsonValue>) -> Result<&2, &2, Error<Reason>, Request>:
+  match result:
+    case Fail{cause}: Fail{InvalidToolConfig{Constrained.errorMessage(cause)}}
+    case Done{payload}: validURL(Reason, JsonWire.stringify(payload), withHeaders(baseHeaders(key), headers, custom), URL.parse(urlContext, address(base, id)))
+
 def keyValue(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: String, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Request>:
   match model:
     case T.Model{id, _, _, _, base, _, _, _, _, _, _, _, _, _, headers, _}:
-      validURL(Reason, JsonWire.stringify(Google.buildParams(G, D, model, context, options)), withHeaders(baseHeaders(key), headers, custom), URL.parse(urlContext, address(base, id)))
+      encodedPayload(Reason, urlContext, base, id, key, headers, custom, Google.buildParams(G, D, model, context, options))
 
 def prepare(-Reason: Data, -G: Data, -D: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Google.Options, key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Request>:
   match key:
