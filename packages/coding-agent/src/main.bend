@@ -34,6 +34,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json.bend as Decode
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/abort.bend as Abort
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. Extensions
@@ -874,6 +875,13 @@ def rebindInteractive(binding: InteractiveRebind,live: AgentSession.AgentSession
   rebindInteractiveCopied(binding,live)
 def newInteractive(host: Host(),_: Unit) -> IO(Result<&2,&2,String,Unit>):
   SessionRuntime.newSession(Services,host,None{})
+def loginInteractive(_: Unit,request: InteractiveRun.LoginRequest) -> IO(AuthLogin.Outcome()):
+  match request:
+    case InteractiveRun.LoginRequest{signal,notice}: AuthLogin.authenticate(CodexOAuth.deviceEndpoints(),signal,notice)
+def refreshInteractive(host: Host(),_: Unit) -> IO(List<&2,Models.Model()>):
+  do IO<List<&2,Models.Model()>>:
+    catalog : Catalog <- SessionRuntime.withServices(Services,Catalog,host,catalogOf,Catalog{Nil{},Nil{}})
+    return catalogModels(catalog)
 
 def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
@@ -886,9 +894,13 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +onRebind : Ref.Ref<Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,None{})
     +rebinder : Callback.Callback<AgentSession.AgentSession,Unit> <- Callback.create(~InteractiveRebind,~AgentSession.AgentSession,~Unit,~rebindInteractive,InteractiveRebind{current,onRebind})
     +startNew : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Unit,~Result<&2,&2,String,Unit>,~newInteractive,host)
+    +login : Callback.Callback<InteractiveRun.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~InteractiveRun.LoginRequest,~AuthLogin.Outcome(),~loginInteractive,Unit{})
+    +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,startNew,onRebind},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,startNew,onRebind,login,refresh},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
     SessionRuntime.setRebindSession(Services,host,None{})
+    Callback.dispose(InteractiveRun.LoginRequest,AuthLogin.Outcome(),login)
+    Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
     Callback.dispose(Unit,Result<&2,&2,String,Unit>,startNew)
     Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
     oldHook : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,onRebind)

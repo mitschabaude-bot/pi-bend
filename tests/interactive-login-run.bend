@@ -8,6 +8,8 @@ import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/interactive/run.bend as Run
 import ../packages/coding-agent/src/cli/auth-login.bend as AuthLogin
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/ai/src/auth/oauth/openai-codex.bend as Codex
+import ../packages/ai/src/providers/openai-codex.models.bend as CodexModels
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/schema-value.bend as Schema
@@ -29,8 +31,11 @@ def reboundCopied(binding: Binding,+live: Session.AgentSession) -> IO(Unit):
         notify(observer,live)
 def rebound(binding: Binding,live: Session.AgentSession) -> IO(Unit): reboundCopied(binding,live)
 def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.newSession(Services(),runtime,None{})
-def noLogin(_: Unit,_: Run.LoginRequest) -> IO(AuthLogin.Outcome()): IO.pure(AuthLogin.Outcome(),Fail{"Login fixture is unavailable"})
-def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> Nil{})
+def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
+  match request:
+    case Run.LoginRequest{signal,notice}: AuthLogin.authenticate(Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"},signal,notice)
+def login(base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()): loginCopied(base,request)
+def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> CodexModels.OPENAI_CODEX_MODELS())
 def requireSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
   match result:
     case Done{session}: IO.pure(Session.Session(),session)
@@ -49,7 +54,7 @@ def checked(result: Result<&2,&2,Run.Error,Unit>) -> IO(Unit):
     case Fail{error}: IO.die(Unit,1,Run.errorMessage(error))
 def run(args: List<String>) -> IO(Unit):
   match args:
-    case assetsRoot <> +cwd <> +agentDir <> Nil{}:
+    case assetsRoot <> +cwd <> +agentDir <> +base <> Nil{}:
       do IO<Unit>:
         created : Sessions.Outcome(Session.Session()) <- Session.createSession(cwd,Some{cwd},agentDir,Sessions.noOptions())
         stored : Session.Session() <- requireSession(created)
@@ -63,7 +68,7 @@ def run(args: List<String>) -> IO(Unit):
         +hook : Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,None{})
         +rebinder : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~Binding,~Session.AgentSession,~Unit,~rebound,Binding{current,hook})
         +new : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Runtime(),~Unit,~Result<&2,&2,String,Unit>,~startNew,runtime)
-        +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~Run.LoginRequest,~AuthLogin.Outcome(),~noLogin,Unit{})
+        +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~String,~Run.LoginRequest,~AuthLogin.Outcome(),~login,base)
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
         Host.setRebindSession(Services(),runtime,Some{rebinder})
         result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
@@ -78,7 +83,7 @@ def run(args: List<String>) -> IO(Unit):
         Callback.dispose(Host.Request,Result<&1,&1,String,Host.Created<Services()>>,factory)
         Callback.dispose(Services(),Unit,release)
         checked(result)
-    case _: IO.die(Unit,1,"expected assetsRoot cwd agentDir")
+    case _: IO.die(Unit,1,"expected assetsRoot cwd agentDir base")
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
