@@ -3592,9 +3592,10 @@
     },
     {
       "source": "packages/tui/test/layout.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb"
+      "status": "partial",
+      "ports": ["tests/stack.bend", "tests/stack_reference.ts", "tests/stack_check.py"],
+      "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb",
+      "notes": "Direct-child viewport growth, shrink, visibility gaps, horizontal widths, zero-width painting and hit geometry match pinned upstream on Bun and native one/four. Weighted size allocation, max cap redistribution and standalone V/H rendering are differential checks. Nested layout, scrolling, Kitty images, scrollbar, render cache and later layout tests remain pending; see tests/stack.md."
     },
     {
       "source": "packages/tui/test/markdown.test.ts",
