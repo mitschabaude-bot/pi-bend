@@ -3,9 +3,11 @@ import errno
 import fcntl
 import os
 import pty
+import select
 import struct
 import subprocess
 import termios
+import time
 
 master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
@@ -15,8 +17,19 @@ process = subprocess.Popen(
 )
 os.close(slave)
 try:
-    stderr = process.communicate(timeout=20)[1]
     output = bytearray()
+    deadline = time.monotonic() + 20
+    while b"hello" not in output and time.monotonic() < deadline:
+        if select.select([master], [], [], 0.2)[0]:
+            try:
+                output.extend(os.read(master, 65536))
+            except OSError as error:
+                if error.errno != errno.EIO:
+                    raise
+                break
+    assert b"hello" in output, output
+    os.write(master, b"x")
+    stderr = process.communicate(timeout=20)[1]
     while True:
         try:
             chunk = os.read(master, 65536)
@@ -32,5 +45,5 @@ finally:
 assert process.returncode == 0, stderr.decode(errors="replace")
 assert output.find(b"hello") >= 0, output
 assert output.find(b"world") > output.find(b"hello"), output
-assert b"two TUI frames committed" in stderr, stderr
-print("native owner → planner → PTY writes two committed frames")
+assert b"terminal input rendered two frames" in stderr, stderr
+print("native PTY input → focused component → immediate committed redraw")

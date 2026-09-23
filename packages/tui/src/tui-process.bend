@@ -1,4 +1,6 @@
 import Base
+import ../../runtime/src/deferred.bend as Deferred
+import ../../runtime/src/serial-resource.bend as Serial
 import ./component.bend as Component
 import ./overlays.bend as O
 import ./terminal.bend as Terminal
@@ -92,3 +94,44 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
       do IO<Input>:
         result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)
         afterInput(result,session,handle,termux)
+
+# The application owns the terminal and serial state. Its listener callbacks
+# share this context, so input, resize and application updates cannot interleave
+# between a component callback and the frame it produces.
+type Active is Data:
+  Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>}
+type EventSink is Data:
+  EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,termux: Bool}
+def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
+  Active{session,components,mounted,None{}}
+def afterDraw(outcome: Draw,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>) -> Active:
+  match outcome:
+    case Drawn{session}: Active{session,components,mounted,previous}
+    case Rejected{session,error}: Active{session,components,mounted,Some{error}}
+def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>) -> Active & Unit:
+  match event:
+    case Input{outcome,_}: (afterDraw(outcome,components,mounted,previous),Unit{})
+def inputOperation(current: Active,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+  match current:
+    case Active{session,+components,+mounted,previous}:
+      do IO<Active & Unit>:
+        event : Input <- input(session,components,mounted,data,handle,termux)
+        return inputFinished(event,components,mounted,previous)
+def resizeOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+  match current:
+    case Active{session,components,mounted,previous}:
+      do IO<Active & Unit>:
+        outcome : Draw <- draw(session,handle,termux)
+        return (afterDraw(outcome,components,mounted,previous),Unit{})
+def onInput(listener: EventSink,data: String) -> IO(Unit):
+  match listener:
+    case EventSink{state,ready,termux}:
+      do IO<Unit>:
+        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,Unit,state,current => inputOperation(current,data,handle,termux))
+def onResize(listener: EventSink,value: Unit) -> IO(Unit):
+  match listener:
+    case EventSink{state,ready,termux}:
+      do IO<Unit>:
+        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,Unit,state,current => resizeOperation(current,handle,termux))
