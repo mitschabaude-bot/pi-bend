@@ -49,9 +49,13 @@ def run(command):
     return subprocess.run(command, cwd=root, capture_output=True)
 
 with tempfile.TemporaryDirectory() as temporary:
+    builtin_dir = root / 'packages/coding-agent/src/modes/interactive/theme'
+    (Path(temporary) / 'dark.json').write_text('{"invalid":true}')
     for i, document in enumerate([*originals.values(), *variants]):
         path = Path(temporary) / f'{i}.json'
         path.write_text(('\ufeff' if i == 4 else '') + json.dumps(document))
+        if i >= 2:
+            (Path(temporary) / f"{document['name']}.json").write_text(path.read_text())
         content = path.read_text()
         for mode in ('truecolor', '256color'):
             expected = run(['bun', 'tests/theme-document-reference.ts', str(path), mode])
@@ -63,6 +67,9 @@ with tempfile.TemporaryDirectory() as temporary:
                 loaded = run([*command, 'file', str(path), mode])
                 assert loaded.returncode == 0, (backend, loaded.stderr)
                 assert loaded.stdout == expected.stdout, (backend, document['name'], mode, 'file')
+                by_name = run([*command, 'lookup', str(builtin_dir), temporary, document['name'], mode])
+                assert by_name.returncode == 0, (backend, by_name.stderr)
+                assert by_name.stdout == expected.stdout, (backend, document['name'], mode, 'lookup')
     invalid = []
     for edit in (
         lambda doc: doc['colors'].pop('accent'),
@@ -86,4 +93,6 @@ with tempfile.TemporaryDirectory() as temporary:
             actual = run([*command, content, 'truecolor'])
             assert actual.returncode != 0, (backend, content)
         assert run([*command, 'file', str(invalid_path), 'truecolor']).returncode != 0
-        print(f'{backend}: 10 parsed and file-loaded theme palettes match pi; {len(invalid)+1} invalid themes rejected')
+        assert run([*command, 'lookup', str(builtin_dir), temporary, 'missing', 'truecolor']).returncode != 0
+        assert run([*command, 'lookup', str(builtin_dir), temporary, '../dark', 'truecolor']).returncode != 0
+        print(f'{backend}: 10 parsed, file-loaded, and named palettes match pi; {len(invalid)+3} invalid themes rejected')

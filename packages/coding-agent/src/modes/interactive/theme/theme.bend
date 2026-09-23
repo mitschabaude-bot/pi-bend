@@ -6,6 +6,7 @@ import ../../../../../runtime/src/record.bend as R
 import ../../../../../runtime/src/f64.bend as F
 import ../../../../../runtime/src/filesystem.bend as FS
 import ../../../../../runtime/src/utf8.bend as Utf8
+import ../../../../../runtime/src/posix-path.bend as Path
 
 # Theme documents are immutable data. Variables are resolved once when a theme
 # is loaded, so rendering never depends on JSON or mutable global state.
@@ -24,6 +25,7 @@ type LoadError is Data:
   Read{cause: FS.Error}
   Decode{cause: Utf8.Error}
   Invalid{cause: Error}
+  NotFound{name: String}
 
 def bind(-A: Data,-B: Data,result: Result<&2,&2,Error,A>,next: A -> Result<&2,&2,Error,B>) -> Result<&2,&2,Error,B>:
   match result:
@@ -180,3 +182,15 @@ def loadFromPath(path: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>)
   do IO<Result<&2,&2,LoadError,Theme>>:
     bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
     return read(bytes,mode)
+def customTheme(+path: String,themeName: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+  do IO<Result<&2,&2,LoadError,Theme>>:
+    present : Bool <- FS.accessible(path,0)
+    Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),present,
+      _ => loadFromPath(path,mode),
+      _ => IO.pure(Result<&2,&2,LoadError,Theme>,Fail{NotFound{themeName}}))(Unit{})
+def loadByName(+themeName: String,builtinDir: String,customDir: String,+mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+  Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),String.contains(themeName,"/"),
+    _ => IO.pure(Result<&2,&2,LoadError,Theme>,Fail{Invalid{InvalidName{themeName}}}),
+    _ => Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),String.eq(themeName,"dark") || String.eq(themeName,"light"),
+      _ => loadFromPath(Path.join(builtinDir,themeName ++ ".json"),mode),
+      _ => customTheme(Path.join(customDir,themeName ++ ".json"),themeName,mode))(Unit{}))(Unit{})

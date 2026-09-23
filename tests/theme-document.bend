@@ -29,8 +29,14 @@ def load(path: String,mode: Color.Mode) -> IO(Unit):
   do IO<Unit>:
     result : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath(path,mode)
     reportLoaded(result)
+def lookup(builtinDir: String,customDir: String,name: String,mode: Color.Mode) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName(name,builtinDir,customDir,mode)
+    reportLoaded(result)
 def run(args: List<String>) -> IO(Unit):
   match args:
+    case "lookup" <> builtinDir <> customDir <> name <> "truecolor" <> Nil{}: lookup(builtinDir,customDir,name,Color.TrueColor{})
+    case "lookup" <> builtinDir <> customDir <> name <> "256color" <> Nil{}: lookup(builtinDir,customDir,name,Color.Palette256{})
     case "file" <> path <> "truecolor" <> Nil{}: load(path,Color.TrueColor{})
     case "file" <> path <> "256color" <> Nil{}: load(path,Color.Palette256{})
     case content <> "truecolor" <> Nil{}: report(Theme.parse(content,Color.TrueColor{}))
