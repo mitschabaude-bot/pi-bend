@@ -73,10 +73,10 @@ def inputText(value: B.InputResult) -> String:
 def inputState(value: B.InputResult) -> B.TuiBase:
   match value:
     case B.InputResult{tui,_,_}: tui
-def hideFocused(value: B.TuiBase) -> B.TuiBase:
-  match value:
-    case B.TuiBase{root,O.State{entries,focus,restore,order,next},bindings,shown,schedule,hardware,clear}:
-      B.TuiBase{root,O.State{O.Entry{O.OverlayHandle{3n},C.ComponentId{3n},Some{C.ComponentId{1n}},False{},False{},False{},1n} <> Nil{},focus,restore,order,next},bindings,shown,schedule,hardware,clear}
+def snapshot(value: B.TuiBase,journal: Ref.Ref<String>,shown: Bool) -> IO(B.TuiBase):
+  do IO<B.TuiBase>:
+    append(journal,"V3/8x3")
+    return B.withVisibility(value,B.Visibility{O.OverlayHandle{3n},shown} <> Nil{})
 def run() -> IO(Unit):
   do IO<Unit>:
     +journal : Ref.Ref<String> <- Ref.new(String,"")
@@ -86,19 +86,30 @@ def run() -> IO(Unit):
     +old : C.Component <- component(9n,"old" <> Nil{},journal,False{})
     +base : B.TuiBase = B.TuiBase{C.Container{a <> b <> Nil{},None{}},O.State{O.Entry{O.OverlayHandle{3n},C.ComponentId{3n},Some{C.ComponentId{1n}},False{},True{},False{},1n} <> Nil{},Some{C.ComponentId{3n}},O.Eligible{O.OverlayHandle{3n}},1n,4n},B.Overlay{O.OverlayHandle{3n},overlay,T.OverlayGeometry{Some{T.Cells{2n}},0n,None{},T.TopLeft{},T.Forward{0n},T.Forward{0n},Some{T.Cells{0n}},Some{T.Cells{1n}},T.OverlayMargin{0n,0n,0n,0n}}} <> Nil{},B.Frame{"old" <> Nil{},B.OverlayBounds{O.OverlayHandle{9n},old,C.TuiMouseDispatchTarget{C.ComponentId{9n},T.Forward{0n},T.Forward{0n},3n,1n}} <> Nil{}},B.newRenderSchedule(),False{},False{}}
     +before : String = displayed(base)
-    made : B.ResultOf(B.PreparedFrame) <- B.renderRoot(base,8n,3n)
+    visibleBase : B.TuiBase <- snapshot(base,journal,True{})
+    made : B.ResultOf(B.PreparedFrame) <- B.renderRoot(visibleBase,8n,3n)
     +ready : B.PreparedFrame <- success(made)
     +stage : String = prepared(ready)
     +stillOld : String = stagedDisplayed(ready)
     +after : B.TuiBase = committed(ready)
     +published : String = displayed(after)
-    release : B.ResultOf(B.InputResult) <- B.dispatchInput(after,a <> b <> overlay <> Nil{},C.ComponentId{1n} <> C.ComponentId{2n} <> Nil{},"\u{1b}[97;1:3u")
+    releaseBase : B.TuiBase <- snapshot(after,journal,True{})
+    release : B.ResultOf(B.InputResult) <- B.dispatchInput(releaseBase,a <> b <> overlay <> Nil{},C.ComponentId{1n} <> C.ComponentId{2n} <> Nil{},"\u{1b}[97;1:3u")
     +released : B.InputResult <- inputSuccess(release)
     +releaseText : String = inputText(released)
-    press : B.ResultOf(B.InputResult) <- B.dispatchInput(inputState(released),a <> b <> overlay <> Nil{},C.ComponentId{1n} <> C.ComponentId{2n} <> Nil{},"a")
+    pressBase : B.TuiBase <- snapshot(inputState(released),journal,True{})
+    press : B.ResultOf(B.InputResult) <- B.dispatchInput(pressBase,a <> b <> overlay <> Nil{},C.ComponentId{1n} <> C.ComponentId{2n} <> Nil{},"a")
     +pressed : B.InputResult <- inputSuccess(press)
     +pressText : String = inputText(pressed)
-    hidden : B.ResultOf(B.InputResult) <- B.dispatchInput(hideFocused(inputState(pressed)),a <> b <> overlay <> Nil{},C.ComponentId{1n} <> C.ComponentId{2n} <> Nil{},"b")
+    hiddenBase : B.TuiBase <- snapshot(inputState(pressed),journal,False{})
+    hiddenMade : B.ResultOf(B.PreparedFrame) <- B.renderRoot(hiddenBase,8n,3n)
+    +hiddenReady : B.PreparedFrame <- success(hiddenMade)
+    +hiddenStage : String = prepared(hiddenReady)
+    +hiddenStillOld : String = stagedDisplayed(hiddenReady)
+    +hiddenCommitted : B.TuiBase = committed(hiddenReady)
+    +hiddenPublished : String = displayed(hiddenCommitted)
+    hiddenInputBase : B.TuiBase <- snapshot(hiddenCommitted,journal,False{})
+    hidden : B.ResultOf(B.InputResult) <- B.dispatchInput(hiddenInputBase,a <> b <> overlay <> Nil{},C.ComponentId{1n} <> C.ComponentId{2n} <> Nil{},"b")
     +hiddenResult : B.InputResult <- inputSuccess(hidden)
     +hiddenText : String = inputText(hiddenResult)
     +entries : String <- Ref.dispose(String,journal)
@@ -106,5 +117,5 @@ def run() -> IO(Unit):
     dispose(b)
     dispose(overlay)
     dispose(old)
-    IO.print(before ++ "\u{1e}" ++ stillOld ++ "\u{1e}" ++ stage ++ "\u{1e}" ++ published ++ "\u{1e}" ++ releaseText ++ "\u{1e}" ++ pressText ++ "\u{1e}" ++ hiddenText ++ "\u{1e}" ++ entries)
+    IO.print(before ++ "\u{1e}" ++ stillOld ++ "\u{1e}" ++ stage ++ "\u{1e}" ++ published ++ "\u{1e}" ++ releaseText ++ "\u{1e}" ++ pressText ++ "\u{1e}" ++ hiddenStillOld ++ "\u{1e}" ++ hiddenStage ++ "\u{1e}" ++ hiddenPublished ++ "\u{1e}" ++ hiddenText ++ "\u{1e}" ++ entries)
 def main() -> IO(Unit): run()
