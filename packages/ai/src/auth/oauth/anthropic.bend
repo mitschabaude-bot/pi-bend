@@ -3,6 +3,7 @@ import ../types.bend as Auth
 import ../../types.bend as T
 import ../../utils/json.bend as Wire
 import ../../../../runtime/src/abort.bend as Abort
+import ../../../../runtime/src/base64.bend as Base64
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/date.bend as Date
 import ../../../../runtime/src/deadline.bend as Deadline
@@ -14,12 +15,19 @@ import ../../../../runtime/src/http-response.bend as Response
 import ../../../../runtime/src/json.bend as Json
 import ../../../../runtime/src/record.bend as R
 import ../../../../runtime/src/schema-value.bend as V
+import ../../../../runtime/src/sha256.bend as SHA
+import ../../../../runtime/src/string.bend as Strings
+import ../../../../runtime/src/text.bend as Text
 import ../../../../runtime/src/url.bend as URL
+import ../../../../runtime/src/utf8.bend as Utf8
 
-# Refresh existing pi Anthropic OAuth credentials through the native transport.
-# Browser login is separate; this handler neither reads nor logs token values.
+# Native Anthropic OAuth refresh and authorization-code exchange.
 def CLIENT_ID() -> String: "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 def TOKEN_URL() -> String: "https://platform.claude.com/v1/oauth/token"
+def AUTHORIZE_URL() -> String: "https://claude.ai/oauth/authorize"
+def REDIRECT_URI() -> String: "http://localhost:53692/callback"
+def SCOPES() -> String: "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
+type Authorization is Data: Authorization{url: String, verifier: String}
 type Request is Data:
   Request{url: URL.URL, headers: Headers.Headers, body: String}
 
@@ -28,6 +36,84 @@ type Flow is Data:
 
 type Token is Data:
   Token{access: String, refresh: String, expires: F64}
+
+def removePadding(reversed: String) -> String:
+  match reversed:
+    case SCon{'=',rest}: removePadding(rest)
+    case _: String.reverse(reversed)
+def unpadded(text: String) -> String: removePadding(String.reverse(text))
+def urlAlphabet(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{'+',rest}: SCon{'-',urlAlphabet(rest)}
+    case SCon{'/',rest}: SCon{'_',urlAlphabet(rest)}
+    case SCon{first,rest}: SCon{first,urlAlphabet(rest)}
+def encodedBase64(result: Result<&2,&2,Base64.Error,String>) -> Result<&2,&2,String,String>:
+  match result:
+    case Fail{_}: Fail{"Could not encode OAuth verifier"}
+    case Done{value}: Done{urlAlphabet(unpadded(value))}
+def base64url(bytes: List<&2,U32>) -> Result<&2,&2,String,String>: encodedBase64(Base64.encode(bytes))
+def hashedChallenge(result: Result<&2,&2,SHA.Error,SHA.Digest>) -> Result<&2,&2,String,String>:
+  match result:
+    case Fail{_}: Fail{"Could not hash OAuth verifier"}
+    case Done{digest}: base64url(SHA.toBytes(digest))
+def challenge(verifier: String) -> Result<&2,&2,String,String>: hashedChallenge(SHA.digest(Utf8.encode(verifier)))
+def authorizationUrl(verifier: String, hashed: String) -> String:
+  +params = URL.fromEntries(URL.Entry{"code","true"} <> URL.Entry{"client_id",CLIENT_ID()} <> URL.Entry{"response_type","code"} <> URL.Entry{"redirect_uri",REDIRECT_URI()} <> URL.Entry{"scope",SCOPES()} <> URL.Entry{"code_challenge",hashed} <> URL.Entry{"code_challenge_method","S256"} <> URL.Entry{"state",verifier} <> Nil{})
+  AUTHORIZE_URL() ++ "?" ++ URL.toString(params)
+def authorizationWith(+verifier: String, result: Result<&2,&2,String,String>) -> Result<&2,&2,String,Authorization>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{hashed}: Done{Authorization{authorizationUrl(verifier,hashed),verifier}}
+def authorization(+verifier: String) -> Result<&2,&2,String,Authorization>: authorizationWith(verifier,challenge(verifier))
+def randomEncoded(result: Result<&2,&2,String,String>) -> Result<&2,&2,String,Authorization>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{verifier}: authorization(verifier)
+def randomAuthorization(result: Result<&1,&1,U32 & String,List<&2,U32>>) -> Result<&2,&2,String,Authorization>:
+  match result:
+    case Fail{_}: Fail{"Could not obtain secure OAuth randomness"}
+    case Done{+bytes}:
+      Bool.pick(Unit -> Result<&2,&2,String,Authorization>,Nat.is_eq(List.length(&2,U32,bytes),32n),_ => randomEncoded(base64url(bytes)),_ => Fail{"OAuth randomness was incomplete"})(Unit{})
+def closeRandom(pair: File & Result<&1,&1,U32 & String,List<&2,U32>>) -> IO(Result<&2,&2,String,Authorization>):
+  match pair:
+    case (file,result):
+      do IO<Result<&2,&2,String,Authorization>>:
+        File.close(file)
+        return randomAuthorization(result)
+def openRandom(result: Result<&1,&1,U32 & String,File>) -> IO(Result<&2,&2,String,Authorization>):
+  match result:
+    case Fail{_}: IO.pure(Result<&2,&2,String,Authorization>,Fail{"Could not open secure OAuth randomness"})
+    case Done{file}:
+      do IO<Result<&2,&2,String,Authorization>>:
+        pair : File & Result<&1,&1,U32 & String,List<&2,U32>> <- File.read_bytes(file,32)
+        closeRandom(pair)
+def beginAuthorization() -> IO(Result<&2,&2,String,Authorization>):
+  do IO<Result<&2,&2,String,Authorization>>:
+    opened : Result<&1,&1,U32 & String,File> <- File.open("/dev/urandom","r")
+    openRandom(opened)
+
+def codeWithState(+code: String, state: Maybe<&2,String>, verifier: String) -> Result<&2,&2,String,String>:
+  match state:
+    case Some{received}:
+      Bool.pick(Result<&2,&2,String,String>,String.eq(received,verifier) && Bool.not(String.is_empty(code)),Done{code},Fail{"OAuth state mismatch or missing authorization code"})
+    case None{}:
+      Bool.pick(Result<&2,&2,String,String>,String.is_empty(code),Fail{"Missing authorization code"},Done{code})
+def queryValue(code: Maybe<&2,String>, state: Maybe<&2,String>, verifier: String) -> Result<&2,&2,String,String>:
+  match code state:
+    case Some{value} Some{received}: codeWithState(value,Some{received},verifier)
+    case _ _: Fail{"OAuth callback needs a code and state"}
+def queryCode(+params: URL.URLSearchParams, verifier: String) -> Result<&2,&2,String,String>:
+  queryValue(URL.get(params,"code"),URL.get(params,"state"),verifier)
+def inputParts(parts: List<&2,String>, +value: String, +verifier: String) -> Result<&2,&2,String,String>:
+  match parts:
+    case code <> state <> Nil{}: codeWithState(code,Some{state},verifier)
+    case _:
+      +prefix = REDIRECT_URI() ++ "?"
+      Bool.pick(Unit -> Result<&2,&2,String,String>,String.starts_with(value,prefix),_ => queryCode(URL.parseSearchParams(String.drop(value,String.length(prefix))),verifier),_ => Bool.pick(Result<&2,&2,String,String>,String.starts_with(value,"http://") || String.starts_with(value,"https://"),Fail{"Unexpected OAuth redirect URL"},codeWithState(value,None{},verifier)))(Unit{})
+def authorizationInput(input: String, verifier: String) -> Result<&2,&2,String,String>:
+  +value = Text.trim(input)
+  inputParts(Strings.split(value,'#'),value,verifier)
 
 def nonempty(value: Maybe<&2, V.Value>) -> Maybe<&2, String>:
   match value:
@@ -55,6 +141,10 @@ def encoded(value: Maybe<&2, String>, url: Result<&2, &2, URL.Error, URL.URL>, h
 def request(url: URL.Context, tokenUrl: String, refresh: String) -> Result<&2, &2, String, Request>:
   +body = {T.JsonObject{R.Record{R.Property{"grant_type", T.JsonString{"refresh_token"}} <> R.Property{"client_id", T.JsonString{CLIENT_ID()}} <> R.Property{"refresh_token", T.JsonString{refresh}} <> Nil{}}} : T.JsonValue}
   encoded(Wire.stringify(body), URL.parse(url, tokenUrl), Headers.set(Headers.new(), "content-type", "application/json"))
+
+def authorizationRequest(url: URL.Context, tokenUrl: String, code: String, +verifier: String) -> Result<&2,&2,String,Request>:
+  +body = {T.JsonObject{R.Record{R.Property{"grant_type",T.JsonString{"authorization_code"}} <> R.Property{"client_id",T.JsonString{CLIENT_ID()}} <> R.Property{"code",T.JsonString{code}} <> R.Property{"state",T.JsonString{verifier}} <> R.Property{"redirect_uri",T.JsonString{REDIRECT_URI()}} <> R.Property{"code_verifier",T.JsonString{verifier}} <> Nil{}}} : T.JsonValue}
+  encoded(Wire.stringify(body),URL.parse(url,tokenUrl),Headers.set(Headers.new(),"content-type","application/json"))
 
 def readResult(result: Result<&2, &2, Response.TextError<Exchange.ReadError<Deadline.Cause<Unit>>>, String>) -> Result<&2, &2, String, String>:
   match result:
@@ -99,7 +189,7 @@ def scoped(fetch: Fetch.Fetch(Unit), ready: Request, pair: Deadline.Scope<Unit> 
         closed : Maybe<&2, Abort.AbortReason<Deadline.Cause<Unit>>> <- Deadline.close(Unit, scope)
         return result
 
-def sent(flow: Flow, refresh: String, signal: Abort.AbortSignal<Unit>, prepared: Result<&2, &2, String, Request>) -> IO(Result<&2, &2, String, Token>):
+def sent(flow: Flow, signal: Abort.AbortSignal<Unit>, prepared: Result<&2, &2, String, Request>) -> IO(Result<&2, &2, String, Token>):
   match flow prepared:
     case _ Fail{error}: IO.pure(Result<&2, &2, String, Token>, Fail{error})
     case Flow{fetch, _, _} Done{ready}:
@@ -111,12 +201,19 @@ def sent(flow: Flow, refresh: String, signal: Abort.AbortSignal<Unit>, prepared:
 
 def refreshToken(flow: Flow, +refresh: String, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, Token>):
   match flow:
-    case Flow{fetch, +url, +tokenUrl}: sent(Flow{fetch, url, tokenUrl}, refresh, signal, request(url, tokenUrl, refresh))
+    case Flow{fetch, +url, +tokenUrl}: sent(Flow{fetch, url, tokenUrl}, signal, request(url, tokenUrl, refresh))
 
 def credential(value: Result<&2, &2, String, Token>) -> Result<&2, &2, String, Auth.Credential>:
   match value:
     case Fail{error}: Fail{error}
     case Done{Token{access, refresh, expires}}: Done{Auth.OAuthCredential{refresh, access, expires, R.new(V.Value)}}
+
+def exchangeCode(flow: Flow, code: String, verifier: String, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2,&2,String,Auth.Credential>):
+  match flow:
+    case Flow{fetch,+url,+tokenUrl}:
+      do IO<Result<&2,&2,String,Auth.Credential>>:
+        token : Result<&2,&2,String,Token> <- sent(Flow{fetch,url,tokenUrl},signal,authorizationRequest(url,tokenUrl,code,verifier))
+        return credential(token)
 
 def refresh(flow: Flow, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
   match input:
