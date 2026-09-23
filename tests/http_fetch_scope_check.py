@@ -1,5 +1,5 @@
 """Check fetch-to-response scope transfer and cleanup with injected transports."""
-import hashlib
+import re, hashlib
 import json
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN
@@ -7,6 +7,20 @@ import subprocess
 import sys
 import tempfile
 import time
+
+
+def emitted_effect(source, generated):
+    """The effect file as the compiler emitted it: from its first line to the
+    end of its last top-level block (the translation-unit patch prefixes
+    statics and definitions)."""
+    if source in generated: return source
+    first = source.splitlines()[0]
+    start = generated.index(first)
+    lines = source.rstrip().splitlines()
+    last = max(i for i, line in enumerate(lines) if 'io_eff(' in line)
+    tail = '\n'.join(lines[last:])
+    end = generated.index(tail, start) + len(tail)
+    return generated[start:end]
 
 root = Path(__file__).resolve().parents[1]
 candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve()
@@ -34,6 +48,7 @@ with tempfile.TemporaryDirectory(dir=root / 'build', prefix='http-fetch-scope-')
             results.append(dict(backend=label,mode=mode,instrumented=False))
     c = folder / 'run.c'
     original = (candidate / 'effs/timer.c').read_text()
+    original = emitted_effect(original, c.read_text())
     assert original in c.read_text()
     instrumented = 'static unsigned long long audit_created, audit_closed, audit_live, audit_peak, audit_parked;\n' + original
     instrumented = instrumented.replace('  row->gen += 1;', '  audit_created++; audit_live++; if (audit_live > audit_peak) audit_peak = audit_live;\n  row->gen += 1;')

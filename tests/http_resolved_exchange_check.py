@@ -3,7 +3,7 @@
 A clean checkout excludes pending form drafts. Numeric/hosts paths trap DNS
 ID draws. Peers verify request target, logical Host and body before replying.
 """
-import argparse
+import re, argparse
 from concurrent.futures import ThreadPoolExecutor
 import errno
 import hashlib
@@ -15,6 +15,20 @@ import socket
 import struct
 import subprocess
 from channel_audit import instrument
+
+
+def emitted_effect(source, generated):
+    """The effect file as the compiler emitted it: from its first line to the
+    end of its last top-level block (the translation-unit patch prefixes
+    statics and definitions)."""
+    if source in generated: return source
+    first = source.splitlines()[0]
+    start = generated.index(first)
+    lines = source.rstrip().splitlines()
+    last = max(i for i, line in enumerate(lines) if 'io_eff(' in line)
+    tail = '\n'.join(lines[last:])
+    end = generated.index(tail, start) + len(tail)
+    return generated[start:end]
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -45,6 +59,7 @@ else:
 
     c = Path(f'{prefix}.c').read_text()
     original = (candidate / 'effs/timer.c').read_text()
+    original = emitted_effect(original, c)
     changed = 'static unsigned probe_created,probe_live,probe_peak;\n' + original
     changed = replace_once(changed, '  row->gen += 1;', '  probe_created++; probe_live++; if(probe_live>probe_peak)probe_peak=probe_live;\n  row->gen += 1;')
     changed = replace_once(changed, '  row->live = 0;', '  probe_live--;\n  row->live = 0;')

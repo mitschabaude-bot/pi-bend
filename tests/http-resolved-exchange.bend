@@ -145,6 +145,10 @@ def checked(flow: U32, controller: Abort.AbortController<String>, value: HTTP.Re
         resolution(original)
         Show.history(entries)
         consumed(flow, controller, outcome)
+    case HTTP.Reused{outcome}:
+      do IO<Unit>:
+        IO.print("reused")
+        consumed(flow, controller, outcome)
 
 def prepared(value: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Request.URLPrepared):
   match value:
