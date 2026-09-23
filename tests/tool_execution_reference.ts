@@ -4,6 +4,10 @@ import {strict as assert} from 'node:assert';
 import {ToolExecutionComponent} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/components/tool-execution.ts';
 import {initTheme} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
 import {Text} from '/home/agent/code/pi-mono/packages/tui/src/components/text.ts';
+import {readRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/read.ts';
+import {createShellRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/bash.ts';
+import {editRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/edit.ts';
+import {writeRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/write.ts';
 for (const [file,digest] of [
  ['packages/coding-agent/src/modes/interactive/components/tool-execution.ts','1463e89622b305847fd129ea81a5f8d969778a650daf5357bd3771c79aef349f'],
  ['packages/coding-agent/src/core/tools/render-utils.ts','38913e15575b7c314687c1a7d53b2763eecb8e7a86b0b58d7b5532c900503cf3'],
@@ -11,6 +15,10 @@ for (const [file,digest] of [
  ['packages/coding-agent/src/modes/interactive/components/keybinding-hints.ts','76b13ee8bfc6e49d5b2b5496eac13523bd9aad95770cbfa4a239336131f94aae'],
  ['packages/tui/src/components/box.ts','f79d30c9c263064df656dc55674b5d951bf765ffbbf658f400f449c44f6dab98'],
  ['packages/tui/src/components/text.ts','3042e09dd8dcb870c23506e6fafb2dfcc095e7e375adad2fb62e447da17e5e3b'],
+ ['packages/coding-agent/src/core/tools/renderers/read.ts','93699c267fc824c0016ac182b68c01c45feeb621c64fc44a814a96e3c951f106'],
+ ['packages/coding-agent/src/core/tools/renderers/bash.ts','f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764'],
+ ['packages/coding-agent/src/core/tools/renderers/edit.ts','0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731'],
+ ['packages/coding-agent/src/core/tools/renderers/write.ts','84d715671a72c77821ab81aef79b39f5022082c78568683ab643d38ee735d07f'],
 ] as const) assert.equal(createHash('sha256').update(readFileSync('/home/agent/code/pi-mono/'+file)).digest('hex'),digest);
 initTheme('dark');
 const ui:any={requestRender(){}};
@@ -38,3 +46,18 @@ const emptySelf=new ToolExecutionComponent('custom_tool','e2',{}, {}, {renderShe
 out('self-empty',emptySelf);emptySelf.updateResult({content:[],isError:false},false);out('self-empty-result',emptySelf);
 const adapter=new ToolExecutionComponent('custom_tool','a1',{}, {}, undefined,ui,process.cwd());
 adapter.updateResult({content:[{type:'text',text:'from agent'}],isError:false},false);out('agent-adapter',adapter);
+
+const builtins:any={read:readRenderers,bash:createShellRenderers('$'),edit:{...editRenderers,renderShell:'self'},write:writeRenderers};
+for (const [name,args] of Object.entries({read:{path:'notes.txt'},bash:{command:'printf hello'},edit:{path:'notes.txt'},write:{path:'notes.txt',content:'one\ntwo'}})) {
+ const component=new ToolExecutionComponent(name,name,args,{},builtins[name],ui,process.cwd());
+ out(name+'-pending',component);
+ component.updateResult({content:[{type:'text',text:'one\ntwo\nthree'}],isError:false},true);out(name+'-partial',component);
+ component.updateResult({content:[{type:'text',text:'one\ntwo\nthree'}],isError:false},false);out(name+'-final',component);
+ component.updateResult({content:[{type:'text',text:'bad input'}],isError:true},false);out(name+'-error',component);
+}
+const range=new ToolExecutionComponent('read','range',{path:'notes.txt',offset:4,limit:2},{},readRenderers,ui,process.cwd());
+out('read-range',range,80);range.updateResult({content:[{type:'text',text:'one\ntwo'}],isError:false},false);range.setExpanded(true);out('read-expanded',range,80);
+const longBash=new ToolExecutionComponent('bash','long',{command:'seq 7'},{},builtins.bash,ui,process.cwd());
+longBash.updateResult({content:[{type:'text',text:Array.from({length:7},(_,i)=>`line-${i+1}`).join('\n')}],isError:false},false);out('bash-preview',longBash,80);
+const longWrite=new ToolExecutionComponent('write','long',{path:'notes.txt',content:Array.from({length:12},(_,i)=>`line-${i+1}`).join('\n')},{},writeRenderers,ui,process.cwd());
+out('write-preview',longWrite,80);longWrite.setExpanded(true);out('write-expanded',longWrite,80);

@@ -3545,7 +3545,7 @@
         "tests/tool_execution_check.py"
       ],
       "sha256": "84f8301e4effa29bc10f0db865b7e9b8a6e798da9160986a5ff9e2ff785de1c9",
-      "notes": "18 source-hash-pinned raw ANSI snapshots cover generic pending/args/start/partial/success/error updates, boxed fallback preview/expanded/error, custom boxed/self render slots, empty shells, and Ai/Agent adapters on Bun/native1/native4. Built-in tool renderers, renderer state/exception recovery, image conversion/display, mouse expansion and full named suite remain pending; see tests/tool-execution.md."
+      "notes": "39 source-hash-pinned raw ANSI snapshots cover generic/custom tool displays plus read/bash/edit/write pending/partial/final/error frames, read range/expansion, bash tail preview and write content preview/expansion on Bun/native1/native4. Syntax highlighting, edit diff/details, visual wrapping, durations, images, mouse expansion and the full named suite remain pending; see tests/tool-execution.md."
     },
     {
       "source": "packages/coding-agent/test/tool-result-images.test.ts",

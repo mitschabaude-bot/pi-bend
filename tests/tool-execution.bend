@@ -16,8 +16,26 @@ def show(label: String,state: Tool.ToolExecution) -> IO(Unit):
   do IO<Unit>:
     lines : List<&2,String> <- Tool.render(state,28n)
     output(label,lines)
+def showWide(label: String,state: Tool.ToolExecution) -> IO(Unit):
+  do IO<Unit>:
+    lines : List<&2,String> <- Tool.render(state,80n)
+    output(label,lines)
 def text(value: String) -> Ai.TextImageContent: Ai.TextImageText{Ai.TextContent{value,None{}}}
 def result(value: String,error: Bool) -> Tool.ToolResult: Tool.ToolResult{text(value) <> Nil{},error}
+def builtinArgs(name: String) -> Value.Value:
+  match name:
+    case "bash": Value.ObjectValue{R.Record{R.Property{"command",Value.Text{"printf hello"}} <> Nil{}}}
+    case "write": Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"content",Value.Text{"one\ntwo"}} <> Nil{}}}
+    case _: Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> Nil{}}}
+def builtin(+name: String,+theme: Theme.Theme) -> IO(Unit):
+  do IO<Unit>:
+    +pending : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new(name,name,builtinArgs(name),theme,Tool.Generic{}))
+    show(name ++ "-pending",pending)
+    +partial : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(pending,result("one\ntwo\nthree",False{}),True{}))
+    show(name ++ "-partial",partial)
+    +final : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(partial,result("one\ntwo\nthree",False{}),False{}))
+    show(name ++ "-final",final)
+    show(name ++ "-error",Tool.updateResult(final,result("bad input",True{}),False{}))
 def args1() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> Nil{}}}
 def args2() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"limit",Value.Number{F64{1073741824,0}}} <> Nil{}}}
 @unsafe def lines(+from: Nat,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
@@ -70,6 +88,18 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     +adapter : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.fromAiToolCall(callValue,theme,Tool.Generic{}))
     +agentResult : Agent.AgentToolResult<Value.Value> <- IO.pure(Agent.AgentToolResult<Value.Value>,Agent.AgentToolResult{text("from agent") <> Nil{},Value.Null{},None{},None{}})
     show("agent-adapter",Tool.updateFromAgent(Value.Value,adapter,agentResult,False{},False{}))
+    builtin("read",theme)
+    builtin("bash",theme)
+    builtin("edit",theme)
+    builtin("write",theme)
+    +ranged : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("read","range",Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"offset",Value.Number{F64{1074790400,0}}} <> R.Property{"limit",Value.Number{F64{1073741824,0}}} <> Nil{}}},theme,Tool.Generic{}))
+    showWide("read-range",ranged)
+    showWide("read-expanded",Tool.setExpanded(Tool.updateResult(ranged,result("one\ntwo",False{}),False{}),True{}))
+    +longBash : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("bash","long",Value.ObjectValue{R.Record{R.Property{"command",Value.Text{"seq 7"}} <> Nil{}}},theme,Tool.Generic{}))
+    showWide("bash-preview",Tool.updateResult(longBash,result(String.join(lines(1n,7n,Nil{}),"\n"),False{}),False{}))
+    +longWrite : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("write","long",Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"content",Value.Text{String.join(lines(1n,12n,Nil{}),"\n")}} <> Nil{}}},theme,Tool.Generic{}))
+    showWide("write-preview",longWrite)
+    showWide("write-expanded",Tool.setExpanded(longWrite,True{}))
     Callback.dispose(Tool.RenderContext,List<&2,String>,call)
     Callback.dispose(Tool.RenderContext,List<&2,String>,resultCall)
     Callback.dispose(Tool.RenderContext,List<&2,String>,ownCall)
