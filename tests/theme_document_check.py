@@ -60,6 +60,9 @@ with tempfile.TemporaryDirectory() as temporary:
                 actual = run([*command, content, mode])
                 assert actual.returncode == 0, (backend, actual.stderr)
                 assert actual.stdout == expected.stdout, (backend, document['name'], mode)
+                loaded = run([*command, 'file', str(path), mode])
+                assert loaded.returncode == 0, (backend, loaded.stderr)
+                assert loaded.stdout == expected.stdout, (backend, document['name'], mode, 'file')
     invalid = []
     for edit in (
         lambda doc: doc['colors'].pop('accent'),
@@ -76,8 +79,11 @@ with tempfile.TemporaryDirectory() as temporary:
         edit(document)
         invalid.append(json.dumps(document))
     invalid.append('{"broken":')
+    invalid_path = Path(temporary) / 'invalid-utf8.json'
+    invalid_path.write_bytes(b'\xff')
     for backend, command in backends:
         for content in invalid:
             actual = run([*command, content, 'truecolor'])
             assert actual.returncode != 0, (backend, content)
-        print(f'{backend}: 10 complete theme palettes match pi; {len(invalid)} invalid themes rejected')
+        assert run([*command, 'file', str(invalid_path), 'truecolor']).returncode != 0
+        print(f'{backend}: 10 parsed and file-loaded theme palettes match pi; {len(invalid)+1} invalid themes rejected')

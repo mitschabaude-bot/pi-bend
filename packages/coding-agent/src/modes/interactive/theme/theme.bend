@@ -4,6 +4,8 @@ import ../../../../../runtime/src/json.bend as Json
 import ../../../../../runtime/src/schema-value.bend as V
 import ../../../../../runtime/src/record.bend as R
 import ../../../../../runtime/src/f64.bend as F
+import ../../../../../runtime/src/filesystem.bend as FS
+import ../../../../../runtime/src/utf8.bend as Utf8
 
 # Theme documents are immutable data. Variables are resolved once when a theme
 # is loaded, so rendering never depends on JSON or mutable global state.
@@ -18,6 +20,10 @@ type Error is Data:
   MissingVariable{name: String}
   CircularVariable{name: String}
   InvalidHex{name: String}
+type LoadError is Data:
+  Read{cause: FS.Error}
+  Decode{cause: Utf8.Error}
+  Invalid{cause: Error}
 
 def bind(-A: Data,-B: Data,result: Result<&2,&2,Error,A>,next: A -> Result<&2,&2,Error,B>) -> Result<&2,&2,Error,B>:
   match result:
@@ -157,3 +163,20 @@ def foreground(theme: Theme,+key: String,text: String) -> Result<&2,&2,Error,Str
 def background(theme: Theme,+key: String,text: String) -> Result<&2,&2,Error,String>:
   match theme:
     case Theme{_,mode,_,colors}: wrapped(R.get(C.Color,colors,key),mode,key,text,True{})
+
+def loaded(result: Result<&2,&2,Error,Theme>) -> Result<&2,&2,LoadError,Theme>:
+  match result:
+    case Done{theme}: Done{theme}
+    case Fail{cause}: Fail{Invalid{cause}}
+def decoded(result: Result<&2,&2,Utf8.Error,String>,mode: C.Mode) -> Result<&2,&2,LoadError,Theme>:
+  match result:
+    case Done{content}: loaded(parse(content,mode))
+    case Fail{cause}: Fail{Decode{cause}}
+def read(result: Result<&2,&2,FS.Error,List<&2,U32>>,mode: C.Mode) -> Result<&2,&2,LoadError,Theme>:
+  match result:
+    case Done{bytes}: decoded(Utf8.decodeStrict(bytes),mode)
+    case Fail{cause}: Fail{Read{cause}}
+def loadFromPath(path: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+  do IO<Result<&2,&2,LoadError,Theme>>:
+    bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
+    return read(bytes,mode)

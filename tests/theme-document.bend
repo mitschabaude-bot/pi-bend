@@ -21,8 +21,18 @@ def report(result: Result<&2,&2,Theme.Error,Theme.Theme>) -> IO(Unit):
   match result:
     case Fail{_}: IO.die(Unit,1,"invalid theme")
     case Done{theme}: display(theme)
+def reportLoaded(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Unit):
+  match result:
+    case Fail{_}: IO.die(Unit,1,"could not load theme")
+    case Done{theme}: display(theme)
+def load(path: String,mode: Color.Mode) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath(path,mode)
+    reportLoaded(result)
 def run(args: List<String>) -> IO(Unit):
   match args:
+    case "file" <> path <> "truecolor" <> Nil{}: load(path,Color.TrueColor{})
+    case "file" <> path <> "256color" <> Nil{}: load(path,Color.Palette256{})
     case content <> "truecolor" <> Nil{}: report(Theme.parse(content,Color.TrueColor{}))
     case content <> "256color" <> Nil{}: report(Theme.parse(content,Color.Palette256{}))
     case _: IO.die(Unit,1,"expected theme JSON and color mode")
