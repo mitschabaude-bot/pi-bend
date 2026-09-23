@@ -22,4 +22,4 @@ python3 tests/settings_list_check.py
 
 The checker defaults to Bun and O1 native with one/four threads. Positional backend names and `--prefix` select isolated artifacts. Shared inventory and integration documentation are maintained by the integrating agent.
 
-Actual native-context integration is validated by [text-components-native-word.md](text-components-native-word.md): 132 sequences feed loaded ICU rule/CJK/Khmer/Lao assets through both Input and SettingsList using `Word.nativeSegments`, checking search cursor/text, selection, deterministic Common marks and missing-engine state preservation.
+Actual native-context integration is validated by [text-components-native-word.md](text-components-native-word.md): 200 source-compared sequences feed six loaded native ICU assets through both Input and SettingsList using `Word.nativeSegments`, covering all reference dictionary languages, search cursor/text, selection and deterministic Common marks.
