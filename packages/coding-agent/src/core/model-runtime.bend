@@ -153,10 +153,30 @@ def configured(resolution: Resolve.Resolution()) -> Bool:
     case Done{Some{_}}: True{}
     case _: False{}
 
-def hasConfiguredAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
+def resolvesAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
   do IO<Bool>:
     resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
     return configured(resolution)
+
+def supportsOAuth(provider: Maybe<&2, Provider>) -> Bool:
+  match provider:
+    case Some{Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _}}: True{}
+    case _: False{}
+
+def checkedStored(+runtime: ModelRuntime, +id: String, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
+  match runtime stored:
+    case ModelRuntime{providers, _, _} Done{Some{Auth.OAuthCredential{_, _, _, _}}}: IO.pure(Bool, supportsOAuth(findProvider(providers, id)))
+    case _ _: resolvesAuth(runtime, id)
+
+# upstream Models.checkProviderAuth: a stored OAuth credential counts when the
+# provider supports OAuth, without refreshing it; otherwise the provider's
+# API key must resolve.
+def hasConfiguredAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
+  match runtime:
+    case ModelRuntime{_, +credentials, _}:
+      do IO<Bool>:
+        stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentials, id, None{})
+        checkedStored(runtime, id, stored)
 
 def availableProviders(+runtime: ModelRuntime, providers: List<&2, Provider>) -> IO(List<&2, Provider>):
   match providers:
