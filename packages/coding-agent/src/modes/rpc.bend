@@ -9,7 +9,10 @@ import ../../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../../ai/src/utils/message-json.bend as MessageJson
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../ai/src/types.bend as Ai
+import ../../../agent/src/agent.bend as Agent
+import ../../../agent/src/types.bend as AgentTypes
 import ../core/agent-session.bend as Session
+import ../core/agent-runtime.bend as Runtime
 import ../core/session-manager.bend as S
 import ../core/session-json.bend as SessionJson
 import ../core/tools/index.bend as Tools
@@ -274,6 +277,57 @@ def getEntries(handle: Handle,id: Maybe<&2,String>,since: Result<&2,&2,String,Ma
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
         output(sink,entriesResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),selectedEntries(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),since)))
+type TreeTask is Data:
+  RenderNode{value: S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>}
+  RenderNodes{values: List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>,built: List<&2,V.Value>}
+  AppendNode{remaining: List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>,built: List<&2,V.Value>}
+  CompleteNode{entry: V.Value,label: Maybe<&2,String>,labelTimestamp: Maybe<&2,String>}
+@unsafe def renderTree(tasks: List<&2,TreeTask>,completed: V.Value) -> V.Value:
+  match tasks:
+    case Nil{}: completed
+    case RenderNode{S.SessionTreeNode{entry,children,label,labelTimestamp}} <> rest:
+      renderTree(RenderNodes{children,Nil{}} <> CompleteNode{entryValue(entry),label,labelTimestamp} <> rest,completed)
+    case RenderNodes{Nil{},built} <> rest:
+      renderTree(rest,V.ArrayValue{List.reverse(&2,V.Value,built)})
+    case RenderNodes{head <> tail,built} <> rest:
+      renderTree(RenderNode{head} <> AppendNode{tail,built} <> rest,completed)
+    case AppendNode{remaining,built} <> rest:
+      renderTree(RenderNodes{remaining,completed <> built} <> rest,V.Null{})
+    case CompleteNode{entry,label,labelTimestamp} <> rest:
+      renderTree(rest,MessageJson.object(MessageJson.field("entry",entry,MessageJson.field("children",completed,MessageJson.optionalText("label",label,MessageJson.optionalText("labelTimestamp",labelTimestamp,Nil{}))))))
+def treeResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,result: Result<&2,&2,S.Error,List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>>) -> V.Value:
+  match result:
+    case Fail{_}: failure(id,"get_tree","Session tree is invalid")
+    case Done{tree}: data(id,"get_tree",MessageJson.object(MessageJson.field("tree",renderTree(RenderNodes{tree,Nil{}} <> Nil{},V.Null{}),MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
+def getTree(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{session,sink,_,_,_}:
+      do IO<Unit>:
+        +stored : Session.Session() <- Session.sessionOf(session)
+        output(sink,treeResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),S.getTree(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))))
+def forkText(id: String,text: Maybe<&2,String>) -> Maybe<&2,V.Value>:
+  match text:
+    case None{}: None{}
+    case Some{""}: None{}
+    case Some{content}: Some{MessageJson.object(MessageJson.field("entryId",V.Text{id},MessageJson.field("text",V.Text{content},Nil{})))}
+def forkItem(entry: Session.Entry()) -> Maybe<&2,V.Value>:
+  match entry:
+    case S.SessionMessageEntry{S.SessionEntryBase{id,_,_},message}: forkText(id,Session.userText(message))
+    case _: None{}
+def includeFork(item: Maybe<&2,V.Value>,rest: List<&2,V.Value>) -> List<&2,V.Value>:
+  match item:
+    case None{}: rest
+    case Some{value}: value <> rest
+def forkItems(entries: List<&2,Session.Entry()>) -> List<&2,V.Value>:
+  match entries:
+    case Nil{}: Nil{}
+    case entry <> rest: includeFork(forkItem(entry),forkItems(rest))
+def getForkMessages(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{session,sink,_,_,_}:
+      do IO<Unit>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        output(sink,data(id,"get_fork_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{forkItems(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)))},Nil{}))))
 def compactResponse(id: Maybe<&2,String>,result: Result<&2,&2,String,Compaction.CompactionResult>) -> V.Value:
   match result:
     case Fail{reason}: failure(id,"compact",reason)
@@ -291,6 +345,83 @@ def lastText(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
       do IO<Unit>:
         last : Maybe<&2,String> <- Session.getLastAssistantText(session)
         output(sink,data(id,"get_last_assistant_text",MessageJson.object(MessageJson.field("text",optionalValue(last),Nil{}))))
+type Cleared is Data: Cleared{steering: List<&2,String>,followUp: List<&2,String>}
+def clearState(current: Session.Shared) -> Session.Shared & Cleared:
+  match current:
+    case Session.Shared{stored,steering,followUp,listeners,active,last,retry,compaction}:
+      (Session.Shared{stored,Nil{},Nil{},listeners,active,last,retry,compaction},Cleared{steering,followUp})
+def clearedValue(value: Cleared) -> V.Value:
+  match value:
+    case Cleared{steering,followUp}: MessageJson.object(MessageJson.field("steering",V.ArrayValue{Events.texts(steering)},MessageJson.field("followUp",V.ArrayValue{Events.texts(followUp)},Nil{})))
+def clearQueue(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{Session.AgentSession{agent,+shared,_,_,_,_},sink,_,_,_}:
+      do IO<Unit>:
+        Agent.clearAllQueues(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
+        removed : Cleared <- Ref.modify(Session.Shared,Cleared,shared,clearState)
+        Session.emitQueueUpdate(shared)
+        output(sink,data(id,"clear_queue",clearedValue(removed)))
+def mode(value: String) -> Maybe<&2,AgentTypes.QueueMode>:
+  match value:
+    case "all": Some{AgentTypes.All{}}
+    case "one-at-a-time": Some{AgentTypes.OneAtATime{}}
+    case _: None{}
+def modeResponse(handle: Handle,id: Maybe<&2,String>,+command: String,value: Maybe<&2,AgentTypes.QueueMode>) -> IO(Unit):
+  match handle value:
+    case Handle{_,sink,_,_,_} None{}: output(sink,failure(id,command,"Invalid command: mode must be 'all' or 'one-at-a-time'"))
+    case Handle{Session.AgentSession{+agent,_,_,_,_,_},sink,_,_,_} Some{+chosen}:
+      do IO<Unit>:
+        Bool.pick(Unit -> IO(Unit),String.eq(command,"set_steering_mode"),_ => Agent.setSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent,chosen),_ => Agent.setFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent,chosen))(Unit{})
+        output(sink,ok(id,command))
+def setMode(handle: Handle,id: Maybe<&2,String>,command: String,value: Result<&2,&2,String,String>) -> IO(Unit):
+  match value:
+    case Fail{reason}: commandFailure(handle,id,command,reason)
+    case Done{text}: modeResponse(handle,id,command,mode(text))
+def levelValues(values: List<&2,Ai.ModelThinkingLevel>) -> List<&2,V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: V.Text{Levels.name(value)} <> levelValues(rest)
+def levelsOf(model: Ai.Model<Ai.JsonValue>) -> List<&2,Ai.ModelThinkingLevel>:
+  match model:
+    case Ai.Model{_,_,_,_,_,reasoning,mapping,_,_,_,_,_,_,_,_,_}: Levels.available(reasoning,mapping)
+def availableLevels(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{session,sink,_,_,_}:
+      do IO<Unit>:
+        current : Session.AgentState() <- Session.state(session)
+        output(sink,data(id,"get_available_thinking_levels",MessageJson.object(MessageJson.field("levels",V.ArrayValue{levelValues(levelsOf(Session.stateModel(current)))},Nil{}))))
+def following(values: List<&2,Ai.ModelThinkingLevel>,+current: Ai.ModelThinkingLevel) -> Maybe<&2,Ai.ModelThinkingLevel>:
+  match values:
+    case Nil{}: None{}
+    case _ <> Nil{}: None{}
+    case value <> +next <> rest:
+      Bool.pick(Maybe<&2,Ai.ModelThinkingLevel>,U32.is_eq(Levels.rank(value),Levels.rank(current)),Some{next},following(next <> rest,current))
+def firstLevel(values: List<&2,Ai.ModelThinkingLevel>) -> Ai.ModelThinkingLevel:
+  match values:
+    case Nil{}: Ai.Off{}
+    case value <> _: value
+def nextLevel(+values: List<&2,Ai.ModelThinkingLevel>,current: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
+  Maybe.default(&2,Ai.ModelThinkingLevel,following(values,current),firstLevel(values))
+def cycleOutcome(sink: Sink(),id: Maybe<&2,String>,level: Ai.ModelThinkingLevel,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Fail{reason}: output(sink,failure(id,"cycle_thinking_level",reason))
+    case Done{_}: output(sink,data(id,"cycle_thinking_level",MessageJson.object(MessageJson.field("level",V.Text{Levels.name(level)},Nil{}))))
+def cycleModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,state: Session.AgentState(),model: Ai.Model<Ai.JsonValue>) -> IO(Unit):
+  match model:
+    case Ai.Model{_,_,_,_,_,False{},_,_,_,_,_,_,_,_,_,_}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
+    case model:
+      do IO<Unit>:
+        +level : Ai.ModelThinkingLevel <- IO.pure(Ai.ModelThinkingLevel,nextLevel(levelsOf(model),Session.stateThinking(state)))
+        result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level)
+        cycleOutcome(sink,id,level,result)
+def cycleState(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+state: Session.AgentState()) -> IO(Unit):
+  cycleModel(session,sink,id,state,Session.stateModel(state))
+def cycleThinking(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Handle{+session,sink,_,_,_}:
+      do IO<Unit>:
+        current : Session.AgentState() <- Session.state(session)
+        cycleState(session,sink,id,current)
 def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "prompt": prompt(handle,id,object)
@@ -298,12 +429,19 @@ def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Rec
     case "follow_up": queued(handle,id,"follow_up",requiredText(object,"message"),imagesOf(object))
     case "abort": abortCommand(handle,id,False{})
     case "abort_retry": abortCommand(handle,id,True{})
+    case "clear_queue": clearQueue(handle,id)
     case "get_messages": currentMessages(handle,id)
     case "get_entries": getEntries(handle,id,optionalText(field(object,"since")))
+    case "get_tree": getTree(handle,id)
+    case "get_fork_messages": getForkMessages(handle,id)
     case "get_last_assistant_text": lastText(handle,id)
     case "compact": compactCommand(handle,id,optionalText(field(object,"customInstructions")))
     case "set_session_name": setName(handle,id,requiredText(object,"name"))
     case "set_thinking_level": setThinking(handle,id,requiredText(object,"level"))
+    case "get_available_thinking_levels": availableLevels(handle,id)
+    case "cycle_thinking_level": cycleThinking(handle,id)
+    case "set_steering_mode": setMode(handle,id,"set_steering_mode",requiredText(object,"mode"))
+    case "set_follow_up_mode": setMode(handle,id,"set_follow_up_mode",requiredText(object,"mode"))
     case _: reply(handle,failure(id,command,"Unknown command: " ++ command))
 def identified(handle: Handle,object: R.Record<V.Value>,id: Result<&2,&2,String,Maybe<&2,String>>,kind: Result<&2,&2,String,String>) -> IO(Unit):
   match handle id kind:

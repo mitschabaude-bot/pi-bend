@@ -19,8 +19,19 @@ def check(label, executable, threads=None):
     records = [json.loads(line) for line in output.splitlines()]
     responses = [r for r in records if r.get("type") == "response"]
     expected = [
+        ("levels", "get_available_thinking_levels", True),
+        ("cycle", "cycle_thinking_level", True),
+        ("steering-mode", "set_steering_mode", True),
+        ("follow-mode", "set_follow_up_mode", True),
+        ("steered", "steer", True),
+        ("followed", "follow_up", True),
+        ("queue", "clear_queue", True),
         ("e", "get_entries", True),
         ("missing", "get_entries", False),
+        ("name", "set_session_name", True),
+        ("name2", "set_session_name", True),
+        ("tree", "get_tree", True),
+        ("forks", "get_fork_messages", True),
         ("p", "prompt", True),
         ("u", "unknown", False),
         ("bad", "prompt", False),
@@ -28,10 +39,19 @@ def check(label, executable, threads=None):
         ("tail", "unknown", False),
     ]
     assert [(r.get("id"), r["command"], r["success"]) for r in responses] == expected, (label, responses)
-    assert responses[0]["data"] == {"entries": [], "leafId": None}
-    assert responses[1]["error"] == "Entry not found: nowhere"
-    assert responses[4]["error"] == "Invalid command: message must be a string"
-    assert responses[5]["error"] == "Invalid command: data must be a string"
+    assert responses[0]["data"] == {"levels": ["off"]}
+    assert responses[1]["data"] is None
+    assert responses[6]["data"] == {"steering": ["queued steer"], "followUp": ["queued follow"]}
+    assert responses[7]["data"] == {"entries": [], "leafId": None}
+    assert responses[8]["error"] == "Entry not found: nowhere"
+    tree = responses[11]["data"]["tree"]
+    assert tree[0]["entry"]["type"] == "session_info"
+    assert tree[0]["entry"]["name"] == "rpc tree"
+    assert tree[0]["children"][0]["entry"]["name"] == "rpc nested"
+    assert tree[0]["children"][0]["children"] == []
+    assert responses[12]["data"] == {"messages": []}
+    assert responses[15]["error"] == "Invalid command: message must be a string"
+    assert responses[16]["error"] == "Invalid command: data must be a string"
     prompt_index = next(i for i, r in enumerate(records) if r.get("id") == "p")
     start_index = next(i for i, r in enumerate(records) if r.get("type") == "agent_start")
     settled_index = next(i for i, r in enumerate(records) if r.get("type") == "agent_settled")

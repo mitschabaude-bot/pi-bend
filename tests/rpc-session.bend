@@ -22,8 +22,19 @@ def execute(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
   match pair:
     case Tuple{owner,+handle}:
       do IO<Unit>:
+        Rpc.feed(handle,"{\"id\":\"levels\",\"type\":\"get_available_thinking_levels\"}\n")
+        Rpc.feed(handle,"{\"id\":\"cycle\",\"type\":\"cycle_thinking_level\"}\n")
+        Rpc.feed(handle,"{\"id\":\"steering-mode\",\"type\":\"set_steering_mode\",\"mode\":\"all\"}\n")
+        Rpc.feed(handle,"{\"id\":\"follow-mode\",\"type\":\"set_follow_up_mode\",\"mode\":\"one-at-a-time\"}\n")
+        Rpc.feed(handle,"{\"id\":\"steered\",\"type\":\"steer\",\"message\":\"queued steer\"}\n")
+        Rpc.feed(handle,"{\"id\":\"followed\",\"type\":\"follow_up\",\"message\":\"queued follow\"}\n")
+        Rpc.feed(handle,"{\"id\":\"queue\",\"type\":\"clear_queue\"}\n")
         Rpc.feed(handle,"{\"id\":\"e\",\"type\":\"get_entries\"}\n")
         Rpc.feed(handle,"{\"id\":\"missing\",\"type\":\"get_entries\",\"since\":\"nowhere\"}\n")
+        Rpc.feed(handle,"{\"id\":\"name\",\"type\":\"set_session_name\",\"name\":\"rpc tree\"}\n")
+        Rpc.feed(handle,"{\"id\":\"name2\",\"type\":\"set_session_name\",\"name\":\"rpc nested\"}\n")
+        Rpc.feed(handle,"{\"id\":\"tree\",\"type\":\"get_tree\"}\n")
+        Rpc.feed(handle,"{\"id\":\"forks\",\"type\":\"get_fork_messages\"}\n")
         Rpc.feed(handle,"{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello\",\"images\":[{\"type\":\"image\",\"data\":\"AA==\",\"mimeType\":\"image/png\"}]}\n")
         Rpc.feed(handle,"{\"id\":\"u\",\"type\":\"unknown\"}\n")
         Rpc.feed(handle,"{\"id\":\"bad\",\"type\":\"prompt\",\"message\":17}\n")
