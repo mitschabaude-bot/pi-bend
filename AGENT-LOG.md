@@ -1661,3 +1661,5 @@ Field handoff `a22a065` moves completed-line reversal/trimming and style continu
 AgentSession differential harness: tests/agent-session.bend + tests/agent_session_check.py run a scripted faux provider through core/agent-session.bend; 21 checks (persist, steering/follow-up queues, thinking/model/name mutations) pass Bun and native one/four. Committing the harness, tests/agent-session.md and inventory/parity notes to native-tls now; next is the AgentSession busy path and compaction/retry scope.
 
 AgentSession harness committed as f5b8599 on native-tls. Next: the streaming busy path (prompt during a run) with a blocking faux tool, then compaction/retry scope.
+
+AgentSession busy scenario: a channel-gated faux request holds the run open while prompt() is refused with the upstream message and steer/followUp queue; 29 checks pass Bun and native one/four. Committing to native-tls now; next is the compaction/retry scope of AgentSession.
