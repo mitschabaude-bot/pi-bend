@@ -58,7 +58,7 @@ def main():
     source = (UPSTREAM / 'packages/ai/src/api/openai-completions.ts').read_text()
     for contract in ['chat.completions.create(params', 'stream_options = { include_usage: true }', 'case "tool_calls":', 'Provider finish_reason: ${reason}']:
         assert contract in source, contract
-    baselines = {mode: oracle(mode) for mode in ('basic', 'tool', 'compat', 'reasoning')}
+    baselines = {mode: oracle(mode) for mode in ('basic', 'tool', 'tool_image', 'compat', 'reasoning')}
     fixture = ROOT / 'packages/coding-agent/test/completions-provider-loopback.bend'
     with tempfile.TemporaryDirectory(prefix='completions-loopback-') as directory:
         commands = []
@@ -95,6 +95,13 @@ def main():
                 assert first == baselines['tool']['payloads'][0], (first, baselines['tool']['payloads'][0])
                 assert second == baselines['tool']['payloads'][1], (second, baselines['tool']['payloads'][1])
                 print(f'{backend}: two-turn streamed tool replay')
+                Handler.requests.clear()
+                run(command, base, 'tool_image', baselines['tool_image']['eventTypes'])
+                assert len(Handler.requests) == 2, Handler.requests
+                first, second = (item[2] for item in Handler.requests)
+                assert first == baselines['tool_image']['payloads'][0], (first, baselines['tool_image']['payloads'][0])
+                assert second == baselines['tool_image']['payloads'][1], (second, baselines['tool_image']['payloads'][1])
+                print(f'{backend}: multimodal tool-result image replay')
                 Handler.tool = False
                 Handler.requests.clear()
                 Handler.response = ERROR_STOP

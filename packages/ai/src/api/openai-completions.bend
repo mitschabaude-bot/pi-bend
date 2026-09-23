@@ -156,6 +156,25 @@ def hasImage(parts: List<&2, T.TextImageContent>) -> Bool:
     case T.TextImageImage{_} <> _: True{}
     case _ <> rest: hasImage(rest)
 
+def imageParts(parts: List<&2, T.TextImageContent>) -> List<&2, J()>:
+  match parts:
+    case Nil{}: Nil{}
+    case T.TextImageImage{image} <> rest: userPart(T.TextImageImage{image}) <> imageParts(rest)
+    case _ <> rest: imageParts(rest)
+
+def imageInput(values: List<&2, T.ModelInput>) -> Bool:
+  match values:
+    case Nil{}: False{}
+    case T.InputImage{} <> _: True{}
+    case _ <> rest: imageInput(rest)
+
+def imageAttachment(images: List<&2, J()>) -> Maybe<&2, J()>:
+  match images:
+    case Nil{}: None{}
+    case _:
+      +heading = obj(R.Record{field("type", str("text")) <> field("text", str("Attached image(s) from tool result:")) <> Nil{}})
+      Some{obj(R.Record{field("role", str("user")) <> field("content", T.JsonArray{heading <> images}) <> Nil{}})}
+
 def toolResult(-D: Data, value: T.ToolResultMessage<D>) -> J():
   match value:
     case T.ToolResultMessage{id, _, +content, _, _, _, _}:
@@ -163,22 +182,31 @@ def toolResult(-D: Data, value: T.ToolResultMessage<D>) -> J():
       +rendered = Bool.pick(String, String.is_empty(text), Bool.pick(String, hasImage(content), "(see attached image)", "(no tool output)"), text)
       obj(R.Record{field("role", str("tool")) <> field("content", str(Unicode.sanitizeSurrogates(rendered))) <> field("tool_call_id", str(id)) <> Nil{}})
 
+def resultImages(-D: Data, value: T.ToolResultMessage<D>) -> List<&2, J()>:
+  match value:
+    case T.ToolResultMessage{_, _, content, _, _, _, _}: imageParts(content)
+
 def prepend(value: Maybe<&2, J()>, rest: List<&2, J()>) -> List<&2, J()>:
   match value:
     case None{}: rest
     case Some{item}: item <> rest
 
-def messages(-G: Data, -D: Data, values: List<&2, T.Message<V.Value, V.Value, G, D>>, initial: Bool, +developer: Bool) -> List<&2, J()>:
+def messages(-G: Data, -D: Data, values: List<&2, T.Message<V.Value, V.Value, G, D>>, initial: Bool, +developer: Bool, +images: Bool, pending: List<&2, J()>) -> List<&2, J()>:
   match values:
-    case Nil{}: Nil{}
+    case Nil{}: prepend(imageAttachment(pending), Nil{})
     case T.System{+system} <> rest:
       +content = Bool.pick(String, initial, Text.renderComplete(V.Value, system), Text.renderUpdate(V.Value, system))
       +role = Bool.pick(String, developer, "developer", "system")
-      +tail = messages(G, D, rest, False{}, developer)
-      Bool.pick(List<&2, J()>, String.is_empty(content), tail, obj(R.Record{field("role", str(role)) <> field("content", str(Unicode.sanitizeSurrogates(content))) <> Nil{}}) <> tail)
-    case T.User{T.UserMessage{content, _}} <> rest: prepend(user(content), messages(G, D, rest, False{}, developer))
-    case T.Assistant{T.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}} <> rest: prepend(assistant(content), messages(G, D, rest, False{}, developer))
-    case T.ToolResult{result} <> rest: toolResult(D, result) <> messages(G, D, rest, False{}, developer)
+      +tail = messages(G, D, rest, False{}, developer, images, Nil{})
+      +updated = Bool.pick(List<&2, J()>, String.is_empty(content), tail, obj(R.Record{field("role", str(role)) <> field("content", str(Unicode.sanitizeSurrogates(content))) <> Nil{}}) <> tail)
+      prepend(imageAttachment(pending), updated)
+    case T.User{T.UserMessage{content, _}} <> rest:
+      prepend(imageAttachment(pending), prepend(user(content), messages(G, D, rest, False{}, developer, images, Nil{})))
+    case T.Assistant{T.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}} <> rest:
+      prepend(imageAttachment(pending), prepend(assistant(content), messages(G, D, rest, False{}, developer, images, Nil{})))
+    case T.ToolResult{+result} <> rest:
+      +additional = Bool.pick(List<&2, J()>, images, resultImages(D, result), Nil{})
+      toolResult(D, result) <> messages(G, D, rest, False{}, developer, images, List.append(&2, J(), pending, additional))
 
 def tool(value: T.Tool<V.Value>) -> J():
   match value:
@@ -207,11 +235,11 @@ def maxField(value: Maybe<&2, F64>, legacy: Bool, fields: Fields()) -> Fields():
     case None{}: fields
     case Some{tokens}: put(fields, Bool.pick(String, legacy, "max_tokens", "max_completion_tokens"), T.JsonNumber{tokens})
 
-def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool) -> J():
+def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool, images: Bool) -> J():
   match context options:
     case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, toolChoice, reasoningEffort}:
       +declared = requestedTools(G, D, normalizedMessages)
-      +base = {R.Record{field("model", str(id)) <> field("messages", T.JsonArray{messages(G, D, normalizedMessages, True{}, developer)}) <> field("stream", T.JsonBoolean{True{}}) <> Nil{}} : Fields()}
+      +base = {R.Record{field("model", str(id)) <> field("messages", T.JsonArray{messages(G, D, normalizedMessages, True{}, developer, images, Nil{})}) <> field("stream", T.JsonBoolean{True{}}) <> Nil{}} : Fields()}
       +withUsage = Bool.pick(Fields(), usage, put(base, "stream_options", obj(R.Record{field("include_usage", T.JsonBoolean{True{}}) <> Nil{}})), base)
       +withStore = Bool.pick(Fields(), store, put(withUsage, "store", T.JsonBoolean{False{}}), withUsage)
       +withMax = maxField(maxTokens, legacy, withStore)
@@ -222,5 +250,5 @@ def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContex
 
 def params(-G: Data, -D: Data, model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, selected: Behavior) -> J():
   match model context options selected:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} _ _ Behavior{legacy, store, developer, usage, _}:
-      normalizedParams(G, D, id, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{False{}}), options, legacy, store, developer, usage)
+    case T.Model{id, _, _, _, _, _, _, input, _, _, _, _, _, _, _, _} _ _ Behavior{legacy, store, developer, usage, _}:
+      normalizedParams(G, D, id, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{False{}}), options, legacy, store, developer, usage, imageInput(input))

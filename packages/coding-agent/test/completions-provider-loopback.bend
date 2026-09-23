@@ -26,6 +26,13 @@ def reasoningOf(selected: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
 
 def reasoningModel(base: String) -> Ai.Model<Ai.JsonValue>: reasoningOf(model(base))
 
+def imageOf(selected: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
+  match selected:
+    case Ai.Model{id, name, api, provider, url, reasoning, mapping, _, limits, cost, cache, window, maximum, sampling, headers, compat}:
+      Ai.Model{id, name, api, provider, url, reasoning, mapping, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, limits, cost, cache, window, maximum, sampling, headers, compat}
+
+def imageModel(base: String) -> Ai.Model<Ai.JsonValue>: imageOf(model(base))
+
 def withCompat(value: Ai.Model<Ai.JsonValue>, compat: Ai.OpenAICompletionsCompat) -> Ai.Model<Ai.JsonValue>:
   match value:
     case Ai.Model{id, name, _, provider, url, reasoning, mapping, inputs, limits, cost, cache, window, maximum, sampling, headers, _}:
@@ -51,6 +58,9 @@ def toolContext() -> Completions.Context():
 
 def continued(first: Ai.AssistantMessage<V.Value, Unit>) -> Completions.Context():
   Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Ai.Assistant{first} <> Ai.ToolResult{Ai.ToolResultMessage{"call-1", "lookup", Ai.TextImageText{Ai.TextContent{"found 42", None{}}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}}
+
+def continuedImage(first: Ai.AssistantMessage<V.Value, Unit>) -> Completions.Context():
+  Ai.TranscriptContext{Ai.System{system()} <> Ai.User{Ai.UserMessage{Ai.UserText{"lookup 42"}, F.fromU32(2)}} <> Ai.Assistant{first} <> Ai.ToolResult{Ai.ToolResultMessage{"call-1", "lookup", Ai.TextImageText{Ai.TextContent{"found 42", None{}}} <> Ai.TextImageImage{Ai.ImageContent{"ZmFrZQ==", "image/png"}} <> Nil{}, None{}, None{}, False{}, F.fromU32(3)}} <> Nil{}}
 
 def options() -> Completions.Options():
   Ai.withApiKey(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Completions.Error(), Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Completions.Error()), Some{"test-completions-key"})
@@ -117,6 +127,11 @@ def request(fetch: Fetch.Fetch(Unit), base: String, context: Completions.Context
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), model(base), context, Some{options()})
     opened(result)
 
+def imageRequest(fetch: Fetch.Fetch(Unit), base: String, context: Completions.Context()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), imageModel(base), context, Some{options()})
+    opened(result)
+
 def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   do IO<Ai.AssistantMessage<V.Value, Unit>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), model(base), context(), Some{retryOptions()})
@@ -142,6 +157,11 @@ def compatRequest(fetch: Fetch.Fetch(Unit), base: String, unsupported: Bool) -> 
 
 def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit):
   match mode:
+    case "tool_image":
+      do IO<Unit>:
+        first : Ai.AssistantMessage<V.Value, Unit> <- imageRequest(fetch, base, toolContext())
+        second : Ai.AssistantMessage<V.Value, Unit> <- imageRequest(fetch, base, continuedImage(first))
+        return Unit{}
     case "reasoning":
       do IO<Unit>:
         message : Ai.AssistantMessage<V.Value, Unit> <- reasoningRequest(fetch, base)

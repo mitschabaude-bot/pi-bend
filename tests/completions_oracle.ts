@@ -11,17 +11,18 @@ const payloads: any[] = [];
 const eventTypes: string[] = [];
 let call = 0;
 const mode = process.argv[2] ?? "basic";
-const fakeFetch = async () => new Response(mode === "tool" ? (call++ === 0 ? tool : reply) : text, { status: 200, headers: { "content-type": "text/event-stream" } });
+const fakeFetch = async () => new Response((mode === "tool" || mode === "tool_image") ? (call++ === 0 ? tool : reply) : text, { status: 200, headers: { "content-type": "text/event-stream" } });
 async function request(context: any, extra: any = {}) {
   const events = streamSimple(model, context, { apiKey: "test-completions-key", fetch: fakeFetch as any, onPayload: (params: any) => { payloads.push(params); }, ...extra });
   for await (const event of events) eventTypes.push(event.type);
   return events.result();
 }
-if (mode === "tool") {
+if (mode === "tool" || mode === "tool_image") {
+  if (mode === "tool_image") model.input = ["text", "image"];
   const system: any = { role: "system", content: "Use the lookup tool.", toolsAdded: [{ name: "lookup", description: "Look up a value", parameters: Type.Object({ value: Type.String() }) }], timestamp: 1 };
   const user: any = { role: "user", content: "lookup 42", timestamp: 2 };
   const first = await request(normalizeContext({ messages: [system, user] }));
-  const result: any = { role: "toolResult", toolCallId: "call-1", toolName: "lookup", content: [{ type: "text", text: "found 42" }], isError: false, timestamp: 3 };
+  const result: any = { role: "toolResult", toolCallId: "call-1", toolName: "lookup", content: [{ type: "text", text: "found 42" }, ...(mode === "tool_image" ? [{ type: "image", data: "ZmFrZQ==", mimeType: "image/png" }] : [])], isError: false, timestamp: 3 };
   await request(normalizeContext({ messages: [system, user, first, result] }));
 } else if (mode === "compat") {
   model.compat = { supportsStore: false, supportsUsageInStreaming: false, maxTokensField: "max_tokens" };
