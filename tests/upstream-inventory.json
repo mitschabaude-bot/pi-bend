@@ -1076,9 +1076,14 @@
     },
     {
       "source": "packages/ai/test/overflow.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "079fa15d056a6187d3a1507f1f4a67d88e6b686e1d380ec4fe2b3f6c650bd219"
+      "status": "ported",
+      "ports": [
+        "tests/retry-classify.bend",
+        "tests/retry_classify_check.py"
+      ],
+      "sha256": "079fa15d056a6187d3a1507f1f4a67d88e6b686e1d380ec4fe2b3f6c650bd219",
+      "implementation": "packages/ai/src/utils/overflow.bend",
+      "notes": "All isContextOverflow and isRecoverableLength cases are in the differential corpus of tests/retry_classify_check.py, compared with the pinned overflow.ts."
     },
     {
       "source": "packages/ai/test/pi-messages.test.ts",
@@ -1159,9 +1164,14 @@
     },
     {
       "source": "packages/ai/test/retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3b94867dcfc5f363927dd28838ccb8b4da87fadfab2dd145b71a520a60c5b3a8"
+      "status": "partial",
+      "ports": [
+        "tests/retry-classify.bend",
+        "tests/retry_classify_check.py"
+      ],
+      "sha256": "3b94867dcfc5f363927dd28838ccb8b4da87fadfab2dd145b71a520a60c5b3a8",
+      "implementation": "packages/ai/src/utils/retry.bend",
+      "notes": "Every classification message and the retryDelayMs cases are in the differential corpus of tests/retry_classify_check.py (upstream oracle plus pinned expectations). retryAssistantCall (the summarization retry loop) is not ported yet."
     },
     {
       "source": "packages/ai/test/sampling-options.test.ts",
@@ -1428,9 +1438,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1f366be0938adbf8aaba0469fb1acc3b8b9b33ffdd2a4b7d66530e799ac6c900"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "1f366be0938adbf8aaba0469fb1acc3b8b9b33ffdd2a4b7d66530e799ac6c900",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'retries after a transient error and succeeds' and 'exhausts max retries and emits failure' are retry scenarios of tests/agent_session_check.py; 'caps agent retry delay' is covered on retryDelayMs by tests/retry_classify_check.py. Delayed message_end handling, provider network_error failures and tool-call recovery remain pending."
     },
     {
       "source": "packages/coding-agent/test/agent-session-runtime-events.test.ts",
@@ -2620,9 +2635,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-retry-events.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f7c0c98ad81307cadf89b57643e63aa75dc2cd29ef35d59925ae18dde58e65a7"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "f7c0c98ad81307cadf89b57643e63aa75dc2cd29ef35d59925ae18dde58e65a7",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "The six retry cases (transient success, multiple failures, exhausted budget, disabled, non-retryable, abortRetry cancellation) are the retry scenarios of tests/agent_session_check.py over a faux provider. Delayed message_end handling, tool-call recovery, extension event ordering, the event-order characterizations, message_update deltas and aborted runs remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",

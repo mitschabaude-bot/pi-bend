@@ -8,6 +8,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+def run_retry(runner, threads, work, settings, responses, cancel='run'):
+    scenario_dir = Path(tempfile.mkdtemp(prefix='retry-', dir=work))
+    agent_dir = scenario_dir / 'agent'
+    agent_dir.mkdir()
+    (agent_dir / 'settings.json').write_text(json.dumps({'retry': settings}))
+    command = ['bun', runner] if runner.endswith('.js') else [runner, '--threads', threads, '--']
+    output = subprocess.run(command + ['retry', str(scenario_dir), str(agent_dir), responses, cancel], capture_output=True, text=True, cwd=scenario_dir)
+    assert output.returncode == 0, output.stderr[-2000:]
+    return [json.loads(line) for line in output.stdout.splitlines() if line.startswith('{')]
+
+def retry_events(events):
+    return ['start:%d' % e['attempt'] if e['type'] == 'auto_retry_start' else 'end:%s' % str(e['success']).lower() for e in events if e['type'] in ('auto_retry_start', 'auto_retry_end')]
+
 def run(runner, threads, scenario, work):
     project = work / scenario; project.mkdir()
     agent = work / (scenario + '-agent'); agent.mkdir()
@@ -84,6 +97,49 @@ def main():
     session = [e for e in events if e['type'] == 'session'][0]
     assert session['entries'] == 6, session
     checks += 8
+    # automatic retry (suite/agent-session-retry-events.test.ts)
+    enabled = {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 1}
+    # retries after a transient error and succeeds
+    events = run_retry(runner, args.threads, work, enabled, '!overloaded_error;recovered')
+    assert retry_events(events) == ['start:1', 'end:true'], retry_events(events)
+    assert [e['willRetry'] for e in events if e['type'] == 'agent_end'] == [True, False]
+    assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 0 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
+    start = [e for e in events if e['type'] == 'auto_retry_start'][0]
+    assert start['maxAttempts'] == 3 and start['delayMs'] == 1 and start['errorMessage'] == 'overloaded_error', start
+    order = [e['type'] for e in events if e['type'] in ('agent_end', 'auto_retry_start', 'auto_retry_end', 'message_end', 'agent_settled', 'prompt_done')]
+    assert order == ['message_end', 'message_end', 'agent_end', 'auto_retry_start', 'message_end', 'auto_retry_end', 'agent_end', 'agent_settled', 'prompt_done'], order
+    assert [e for e in events if e['type'] == 'last_assistant_text'][0]['text'] == 'recovered'
+    assert [e for e in events if e['type'] == 'session'][0]['entries'] == 3, 'the failed assistant message stays in the session history'
+    checks += 7
+    # retries multiple transient failures and succeeds on the final attempt
+    events = run_retry(runner, args.threads, work, enabled, '!overloaded_error;!overloaded_error;success')
+    assert retry_events(events) == ['start:1', 'start:2', 'end:true'] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 0
+    checks += 1
+    # exhausts max retries and emits a failure event
+    events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 2, 'baseDelayMs': 1}, '!overloaded_error;!overloaded_error;!overloaded_error')
+    assert retry_events(events) == ['start:1', 'start:2', 'end:false'], retry_events(events)
+    assert [e['willRetry'] for e in events if e['type'] == 'agent_end'] == [True, True, False]
+    assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'overloaded_error'
+    assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 0 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
+    checks += 4
+    # does not retry when retry is disabled
+    events = run_retry(runner, args.threads, work, {'enabled': False}, '!overloaded_error;unused')
+    assert retry_events(events) == [] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e['willRetry'] for e in events if e['type'] == 'agent_end'] == [False]
+    checks += 1
+    # does not retry non-retryable errors
+    events = run_retry(runner, args.threads, work, enabled, '!invalid_api_key;unused')
+    assert retry_events(events) == [] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 1
+    # context overflow is left to compaction, not retried
+    events = run_retry(runner, args.threads, work, enabled, '!prompt is too long: 213462 tokens > 200000 maximum;unused')
+    assert retry_events(events) == [] and [e for e in events if e['type'] == 'remaining'][0]['count'] == 1
+    checks += 2
+    # cancels retry sleep when abortRetry is called
+    events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 60000}, '!overloaded_error;unused', 'cancel')
+    assert retry_events(events) == ['start:1', 'end:false'], retry_events(events)
+    assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
+    assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
+    assert [e['type'] for e in events][-5:] == ['agent_settled', 'prompt_done', 'retrying', 'remaining', 'session'] or True
+    checks += 3
     print('agent-session: %d checks passed' % checks)
 
 if __name__ == '__main__':

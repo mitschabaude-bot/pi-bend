@@ -1,6 +1,5 @@
 import Base
 import ../../../runtime/src/abort.bend as A
-import ../../../runtime/src/socket.bend as S
 import ../../../runtime/src/calendar.bend as Calendar
 import ../../../runtime/src/calendar.bend as Inverse
 import ../../../runtime/src/callback.bend as C
@@ -363,7 +362,7 @@ def valid(-Reason: Data, milliseconds: U32, signal: Maybe<&2, A.AbortSignal<Reas
         waitBare(timer)
     case Some{signal}:
       do IO<Result<&2, &2, SleepError, Unit>>:
-        result : Result<&2, &2, A.AbortReason<Reason>, Unit> <- S.sleep(Reason, milliseconds, signal)
+        result : Result<&2, &2, A.AbortReason<Reason>, Unit> <- Delay.sleep(Reason, milliseconds, signal)
         return slept(Reason, result)
 
 def converted(-Reason: Data, result: Result<&2, &2, Delay.Error, U32>, signal: Maybe<&2, A.AbortSignal<Reason>>) -> IO(Result<&2, &2, SleepError, Unit>):

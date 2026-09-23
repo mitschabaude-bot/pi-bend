@@ -136,4 +136,6 @@ def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, Strin
     case Session.QueueUpdate{steering, followUp}: Done{object(field("type", text("queue_update"), field("steering", V.ArrayValue{texts(steering)}, field("followUp", V.ArrayValue{texts(followUp)}, Nil{}))))}
     case Session.SessionInfoChanged{name}: Done{object(field("type", text("session_info_changed"), Json.optionalText("name", name, Nil{})))}
     case Session.ThinkingLevelChanged{level}: Done{object(field("type", text("thinking_level_changed"), field("level", text(Levels.name(level)), Nil{})))}
+    case Session.AutoRetryStart{attempt, maxAttempts, delayMs, errorMessage}: Done{object(field("type", text("auto_retry_start"), field("attempt", natural(attempt), field("maxAttempts", natural(maxAttempts), field("delayMs", V.Number{delayMs}, field("errorMessage", text(errorMessage), Nil{}))))))}
+    case Session.AutoRetryEnd{success, attempt, finalError}: Done{object(field("type", text("auto_retry_end"), field("success", V.Boolean{success}, field("attempt", natural(attempt), Json.optionalText("finalError", finalError, Nil{})))))}
 
