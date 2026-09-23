@@ -597,6 +597,15 @@ def loadoutOf(runtime: AgentRuntime) -> AgentRuntime & Loadout:
   match runtime:
     case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, +loadout}: (AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, loadout)
 
+# Adjust the startup selection before any SessionManager model entry is written.
+def selectStartup(runtime: AgentRuntime,+chosen: Models.Model(),+level: Ai.ModelThinkingLevel) -> IO(AgentRuntime):
+  match runtime:
+    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, _, _, loadout}:
+      do IO<AgentRuntime>:
+        Agent.setModel(Unit,Details(),Custom(),Error(),Unit,agent,chosen)
+        Agent.setThinkingLevel(Unit,Details(),Custom(),Error(),Unit,agent,level)
+        return AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, chosen, level, loadout}
+
 def dispose(runtime: AgentRuntime) -> IO(Unit):
   match runtime:
     case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, _, _, _}:

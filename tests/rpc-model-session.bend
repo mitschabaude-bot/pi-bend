@@ -2,6 +2,7 @@ import Base
 import ./agent-session.bend as Faux
 import ../packages/ai/src/types.bend as Ai
 import ../packages/coding-agent/src/core/agent-session.bend as Session
+import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/core/session-persistence.bend as Stored
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
 import ../packages/runtime/src/ref.bend as Ref
@@ -39,6 +40,13 @@ def oneModel(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
       do IO<Unit>:
         Rpc.feed(handle,"{\"id\":\"single\",\"type\":\"cycle_model\"}\n")
         Rpc.stop(owner)
+def scopedCommands(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case Tuple{owner,+handle}:
+      do IO<Unit>:
+        Rpc.feed(handle,"{\"id\":\"scoped\",\"type\":\"cycle_model\"}\n")
+        Rpc.feed(handle,"{\"id\":\"state-scoped\",\"type\":\"get_state\"}\n")
+        Rpc.stop(owner)
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -50,10 +58,12 @@ def run(args: List<String>) -> IO(Unit):
         +session : Session.AgentSession <- IO.pure(Session.AgentSession,Faux.sessionOf(fixture))
         +lines : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~capture,lines)
-        first : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},[Faux.fauxModel(),secondModel()])
+        first : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},[Faux.fauxModel(),secondModel()],Nil{})
         modelCommands(first)
-        single : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},[Faux.fauxModel()])
+        single : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},[Faux.fauxModel()],Nil{})
         oneModel(single)
+        scoped : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},[Faux.fauxModel(),secondModel()],[Models.ScopedModel{Faux.fauxModel(),None{}},Models.ScopedModel{secondModel(),Some{Ai.Thinking{Ai.Low{}}}}])
+        scopedCommands(scoped)
         captured : List<&2,String> <- Ref.dispose(List<&2,String>,lines)
         output(captured)
         Callback.dispose(String,Unit,sink)

@@ -9,6 +9,7 @@ import ../../../ai/src/providers/openai-codex.models.bend as Codex
 import ../../../ai/src/providers/anthropic.models.bend as Anthropic
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/string.bend as Strings
+import ../../../runtime/src/glob.bend as Glob
 
 # The provider catalog with auth resolution: pi-ai's Models collection and the
 # coding agent's ModelRuntime, without models.json custom providers, dynamic
@@ -363,6 +364,60 @@ def parseLoop(fuel: Nat, step: PatternStep, +models: List<&2, Model()>, +allowFa
 
 def parsePattern(+pattern: String, +models: List<&2, Model()>, allowFallback: Bool) -> ParsedModelResult:
   parseLoop(1n + String.length(pattern), stepOf(pattern, models), models, allowFallback)
+
+# Resolve the authenticated --models scope in CLI order. An invalid pattern
+# fails startup rather than silently widening the cycling set.
+type ScopedModel is Data: ScopedModel{model: Model(), thinking: Maybe<&2,Ai.ModelThinkingLevel>}
+
+def scopedContains(items: List<&2,ScopedModel>,+model: Model()) -> Bool:
+  match items:
+    case Nil{}: False{}
+    case ScopedModel{+previous,_} <> rest:
+      (String.eq(modelProvider(previous),modelProvider(model)) && String.eq(modelId(previous),modelId(model))) || scopedContains(rest,model)
+def addScoped(+items: List<&2,ScopedModel>,+model: Model(),thinking: Maybe<&2,Ai.ModelThinkingLevel>) -> List<&2,ScopedModel>:
+  Bool.pick(List<&2,ScopedModel>,scopedContains(items,model),items,List.append(&2,ScopedModel,items,ScopedModel{model,thinking} <> Nil{}))
+def globMatches(models: List<&2,Model()>,+pattern: Glob.Pattern) -> List<&2,Model()>:
+  match models:
+    case Nil{}: Nil{}
+    case +model <> rest:
+      +tail = globMatches(rest,pattern)
+      +id = String.to_lower(modelId(model))
+      +full = String.to_lower(reference(model))
+      Bool.pick(List<&2,Model()>,Glob.matches(pattern,id) || Glob.matches(pattern,full),model <> tail,tail)
+def addGlobMatches(models: List<&2,Model()>,+thinking: Maybe<&2,Ai.ModelThinkingLevel>,items: List<&2,ScopedModel>) -> List<&2,ScopedModel>:
+  match models:
+    case Nil{}: items
+    case model <> rest: addGlobMatches(rest,thinking,addScoped(items,model,thinking))
+def scopedGlobResult(pattern: String,thinking: Maybe<&2,Ai.ModelThinkingLevel>,models: List<&2,Model()>,items: List<&2,ScopedModel>,compiled: Result<&2,&2,Glob.Error,Glob.Pattern>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  match compiled:
+    case Fail{_}: Fail{"Invalid model glob pattern: " ++ pattern}
+    case Done{glob}:
+      +matches = globMatches(models,glob)
+      Bool.pick(Result<&2,&2,String,List<&2,ScopedModel>>,List.is_empty(&2,Model(),matches),Fail{"No models match pattern: " ++ pattern},Done{addGlobMatches(matches,thinking,items)})
+def scopedGlob(pattern: String,globText: String,thinking: Maybe<&2,Ai.ModelThinkingLevel>,models: List<&2,Model()>,items: List<&2,ScopedModel>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  scopedGlobResult(pattern,thinking,models,items,Glob.compile(String.to_lower(globText)))
+def scopedGlobLevel(+pattern: String,prefix: String,level: Maybe<&2,Ai.ModelThinkingLevel>,models: List<&2,Model()>,items: List<&2,ScopedModel>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  match level:
+    case Some{chosen}: scopedGlob(pattern,prefix,Some{chosen},models,items)
+    case None{}: scopedGlob(pattern,pattern,None{},models,items)
+def scopedGlobSuffix(+pattern: String,split: Maybe<&2,Split>,models: List<&2,Model()>,items: List<&2,ScopedModel>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  match split:
+    case Some{Split{prefix,suffix}}: scopedGlobLevel(pattern,prefix,thinkingLevel(suffix),models,items)
+    case None{}: scopedGlob(pattern,pattern,None{},models,items)
+def scopedParsed(pattern: String,items: List<&2,ScopedModel>,parsed: ParsedModelResult) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  match parsed:
+    case ParsedModelResult{Some{model},thinking,None{}}: Done{addScoped(items,model,thinking)}
+    case ParsedModelResult{_,_,Some{_}}: Fail{"Invalid thinking level in model pattern: " ++ pattern}
+    case _: Fail{"No models match pattern: " ++ pattern}
+def scopedPlain(+pattern: String,models: List<&2,Model()>,items: List<&2,ScopedModel>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  scopedParsed(pattern,items,parsePattern(pattern,models,True{}))
+def scopedOne(+pattern: String,+models: List<&2,Model()>,+items: List<&2,ScopedModel>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  Bool.pick(Unit -> Result<&2,&2,String,List<&2,ScopedModel>>,String.contains(pattern,"*") || String.contains(pattern,"?") || String.contains(pattern,"["),_ => scopedGlobSuffix(pattern,lastColonSplit(pattern),models,items),_ => scopedPlain(pattern,models,items))(Unit{})
+def resolveScope(patterns: List<&2,String>,+models: List<&2,Model()>,items: List<&2,ScopedModel>) -> Result<&2,&2,String,List<&2,ScopedModel>>:
+  match patterns:
+    case Nil{}: Done{items}
+    case pattern <> rest:
+      Result.bind(&2,&2,String,List<&2,ScopedModel>,List<&2,ScopedModel>,scopedOne(pattern,models,items),next => resolveScope(rest,models,next))
 
 type ResolveCliModelResult is Data:
   ResolveCliModelResult{model: Maybe<&2, Model()>, thinkingLevel: Maybe<&2, Ai.ModelThinkingLevel>, warning: Maybe<&2, String>, error: Maybe<&2, String>}

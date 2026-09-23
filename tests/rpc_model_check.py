@@ -20,8 +20,9 @@ def check(label, executable, threads=None):
     agent_dir = ROOT / "build" / f"rpc-model-{label}-agent"
     cwd.mkdir(parents=True, exist_ok=True)
     agent_dir.mkdir(parents=True, exist_ok=True)
-    records = [json.loads(line) for line in subprocess.check_output(executable + [str(cwd), str(agent_dir)], cwd=ROOT, env=env).splitlines()]
-    assert len(records) == 8, (label, records)
+    all_records = [json.loads(line) for line in subprocess.check_output(executable + [str(cwd), str(agent_dir)], cwd=ROOT, env=env).splitlines()]
+    records = [record for record in all_records if record.get("type") == "response"]
+    assert len(records) == 10, (label, all_records)
     by_id = {record["id"]: record for record in records}
     assert [(r["id"], r["command"], r["success"]) for r in records] == [
         ("available", "get_available_models", True),
@@ -32,6 +33,8 @@ def check(label, executable, threads=None):
         ("cycle", "cycle_model", True),
         ("state-cycle", "get_state", True),
         ("single", "cycle_model", True),
+        ("scoped", "cycle_model", True),
+        ("state-scoped", "get_state", True),
     ], (label, records)
     models = by_id["available"]["data"]["models"]
     assert [(m["provider"], m["id"]) for m in models] == [("faux", "faux-model"), ("faux", "faux-two")]
@@ -44,8 +47,11 @@ def check(label, executable, threads=None):
     assert by_id["cycle"]["data"] == {"model": models[0], "thinkingLevel": "off", "isScoped": False}
     assert by_id["state-cycle"]["data"]["model"] == models[0]
     assert by_id["single"]["data"] is None
+    assert by_id["scoped"]["data"] == {"model": models[1], "thinkingLevel": "low", "isScoped": True}
+    assert by_id["state-scoped"]["data"]["model"] == models[1]
+    assert by_id["state-scoped"]["data"]["thinkingLevel"] == "low"
     assert by_id["state-set"]["data"]["sessionId"] == by_id["state-cycle"]["data"]["sessionId"]
-    print(f"{label}: catalog, validation, set/cycle state, and single-model null")
+    print(f"{label}: catalog, validation, scoped/unscoped cycles, and single-model null")
 
 check("Bun", ["bun", "build/rpc-model-session.js"])
 check("native1", ["build/rpc-model-session-native"], "1")

@@ -700,26 +700,26 @@ def rpcCatalog(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.M
   match runtime:
     case Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,+models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
       (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
-def rpcWithCatalog(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),loadout: Runtime.Loadout,pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Unit):
+def rpcWithCatalog(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),loadout: Runtime.Loadout,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Unit):
   match pair:
     case (runtime,models):
       do IO<Unit>:
         +live : AgentSession.AgentSession <- AgentSession.create(agent,stored,settings,cwd,loadout)
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
         available : List<&2,Models.Model()> <- Models.getAvailable(models)
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},available)
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},available,scope)
         result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
         Callback.dispose(String,Unit,sink)
         AgentSession.dispose(live)
         Runtime.dispose(runtime)
         rpcFinished(result)
-def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
+def rpcWith(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,agent: Runtime.Owner(),scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Unit):
   match pair:
-    case (runtime,loadout): rpcWithCatalog(stored,settings,cwd,assetsRoot,agent,loadout,rpcCatalog(runtime))
-def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
+    case (runtime,loadout): rpcWithCatalog(stored,settings,cwd,assetsRoot,agent,loadout,scope,rpcCatalog(runtime))
+def rpcLoaded(stored: Session(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Unit):
   match pair:
-    case (runtime,agent): rpcWith(stored,settings,cwd,assetsRoot,agent,Runtime.loadoutOf(runtime))
-def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,runtime: Runtime.AgentRuntime) -> IO(Unit):
+    case (runtime,agent): rpcWith(stored,settings,cwd,assetsRoot,agent,scope,Runtime.loadoutOf(runtime))
+def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,runtime: Runtime.AgentRuntime) -> IO(Unit):
   match recorded:
     case Fail{Failed{message}}:
       do IO<Unit>:
@@ -729,28 +729,63 @@ def rpcRecorded(recorded: Selected(),settings: Settings.SettingsManager,cwd: Str
       do IO<Unit>:
         Runtime.dispose(runtime)
         IO.print(note)
-    case Done{+session}: rpcLoaded(session,settings,cwd,assetsRoot,Runtime.agentOf(runtime))
-def rpcSelection(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
+    case Done{+session}: rpcLoaded(session,settings,cwd,assetsRoot,scope,Runtime.agentOf(runtime))
+def rpcSelection(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Unit):
   match pair:
     case (runtime,selection):
       do IO<Unit>:
         recorded : Selected() <- recordSelection(session,hasExisting,hasThinking,selection)
-        rpcRecorded(recorded,settings,cwd,assetsRoot,runtime)
-def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+        rpcRecorded(recorded,settings,cwd,assetsRoot,scope,runtime)
+def rpcSelected(session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,cwd: String,assetsRoot: String,scope: List<&2,Models.ScopedModel>,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match created:
     case Fail{error}: fail(error)
-    case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,assetsRoot,Runtime.selectionOf(runtime))
+    case Done{runtime}: rpcSelection(session,hasExisting,hasThinking,settings,cwd,assetsRoot,scope,Runtime.selectionOf(runtime))
 
-def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+def runCreated(mode: AppMode, initial: InitialMessage, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, scope: List<&2,Models.ScopedModel>, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
   match mode:
     case Interactive{}: interactiveSelected(initial,session,hasExisting,hasThinking,settings,themeOverride,cwd,agentDir,packageDir,created)
-    case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,packageDir,created)
+    case Rpc{}: rpcSelected(session,hasExisting,hasThinking,settings,cwd,packageDir,scope,created)
     case _: printSelected(outputMode(mode),initial,session,hasExisting,hasThinking,settings,cwd,created)
 
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
     case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, _, _, _, _, _, _, _, _, _, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
       Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), selectedTools(noTools, tools, excludeTools, Settings.getDefaultTools(settings)), Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings}
+
+type ScopeFlags is Data: ScopeFlags{patterns: List<&2,String>,explicitModel: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>}
+def scopeFlags(parsed: Args.Args,settings: Settings.SettingsManager) -> ScopeFlags:
+  match parsed:
+    case Args.Args{_, model, _, _, _, thinking, _, _, _, _, _, _, _, _, _, _, _, patterns, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      ScopeFlags{Maybe.default(&2,List<&2,String>,Maybe.or(&2,List<&2,String>,patterns,Settings.getEnabledModels(settings)),Nil{}),Maybe.is_some(&2,String,model),thinking}
+def sameScopeModel(+left: Models.Model(),+right: Models.Model()) -> Bool:
+  String.eq(Models.modelProvider(left),Models.modelProvider(right)) && String.eq(Models.modelId(left),Models.modelId(right))
+def scopeEntry(items: List<&2,Models.ScopedModel>,+model: Models.Model()) -> Maybe<&2,Models.ScopedModel>:
+  match items:
+    case Nil{}: None{}
+    case Models.ScopedModel{+candidate,+level} <> rest:
+      Bool.pick(Maybe<&2,Models.ScopedModel>,sameScopeModel(candidate,model),Some{Models.ScopedModel{candidate,level}},scopeEntry(rest,model))
+def preferredScope(+items: List<&2,Models.ScopedModel>,model: Models.Model()) -> Maybe<&2,Models.ScopedModel>:
+  Maybe.or(&2,Models.ScopedModel,scopeEntry(items,model),List.get(&2,Models.ScopedModel,items,0n))
+def startupScopeChosen(runtime: Runtime.AgentRuntime,seed: Runtime.SessionSeed,settings: Settings.SettingsManager,requested: Maybe<&2,Ai.ModelThinkingLevel>,entry: Maybe<&2,Models.ScopedModel>) -> IO(Runtime.AgentRuntime):
+  match entry:
+    case None{}: IO.pure(Runtime.AgentRuntime,runtime)
+    case Some{Models.ScopedModel{+model,level}}:
+      Runtime.selectStartup(runtime,model,Runtime.thinkingLevel(Maybe.or(&2,Ai.ModelThinkingLevel,requested,level),seed,model,settings))
+def startupSelected(seed: Runtime.SessionSeed,settings: Settings.SettingsManager,requested: Maybe<&2,Ai.ModelThinkingLevel>,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Runtime.AgentRuntime):
+  match pair:
+    case (runtime,Runtime.Selection{model,_}): startupScopeChosen(runtime,seed,settings,requested,preferredScope(scope,model))
+def startupDecision(runtime: Runtime.AgentRuntime,scope: List<&2,Models.ScopedModel>,seed: Runtime.SessionSeed,settings: Settings.SettingsManager,thinking: Maybe<&2,Ai.ModelThinkingLevel>,named: Bool,hasExisting: Bool) -> IO(Runtime.AgentRuntime):
+  match named hasExisting:
+    case True{} _: IO.pure(Runtime.AgentRuntime,runtime)
+    case _ True{}: IO.pure(Runtime.AgentRuntime,runtime)
+    case False{} False{}: startupSelected(seed,settings,thinking,scope,Runtime.selectionOf(runtime))
+def startupWithScope(runtime: Runtime.AgentRuntime,scope: List<&2,Models.ScopedModel>,seed: Runtime.SessionSeed,settings: Settings.SettingsManager,flags: ScopeFlags,hasExisting: Bool) -> IO(Runtime.AgentRuntime):
+  match flags:
+    case ScopeFlags{_,named,thinking}: startupDecision(runtime,scope,seed,settings,thinking,named,hasExisting)
+def startupScope(runtime: Runtime.AgentRuntime,scope: List<&2,Models.ScopedModel>,seed: Runtime.SessionSeed,settings: Settings.SettingsManager,flags: ScopeFlags,hasExisting: Bool) -> IO(Runtime.AgentRuntime):
+  match scope:
+    case Nil{}: IO.pure(Runtime.AgentRuntime,runtime)
+    case items: startupWithScope(runtime,items,seed,settings,flags,hasExisting)
 
 # Settings
 # --------
@@ -827,6 +862,31 @@ def themeOverride(parsed: Args.Args) -> Maybe<&2,String>:
   match parsed:
     case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, useTheme, _, _, _, _, _, _, _, _, _, _, _}: useTheme
 
+def scopedRun(mode: AppMode,initial: InitialMessage,session: Session(),+hasExisting: Bool,hasThinking: Bool,+settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,flags: ScopeFlags,+scope: List<&2,Models.ScopedModel>,runtime: Runtime.AgentRuntime) -> IO(Unit):
+  do IO<Unit>:
+    selected : Runtime.AgentRuntime <- startupScope(runtime,scope,seed,settings,flags,hasExisting)
+    runCreated(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,scope,Done{selected})
+def scopedResult(mode: AppMode,initial: InitialMessage,session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,flags: ScopeFlags,runtime: Runtime.AgentRuntime,result: Result<&2,&2,String,List<&2,Models.ScopedModel>>) -> IO(Unit):
+  match result:
+    case Fail{message}:
+      do IO<Unit>:
+        Runtime.dispose(runtime)
+        fail(message)
+    case Done{scope}: scopedRun(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,seed,flags,scope,runtime)
+def resolveFlags(flags: ScopeFlags,available: List<&2,Models.Model()>) -> Result<&2,&2,String,List<&2,Models.ScopedModel>>:
+  match flags:
+    case ScopeFlags{patterns,_,_}: Models.resolveScope(patterns,available,Nil{})
+def scopedCatalog(mode: AppMode,initial: InitialMessage,session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,+flags: ScopeFlags,pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Unit):
+  match pair:
+    case (runtime,models):
+      do IO<Unit>:
+        available : List<&2,Models.Model()> <- Models.getAvailable(models)
+        scopedResult(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,seed,flags,runtime,resolveFlags(flags,available))
+def scopedCreated(mode: AppMode,initial: InitialMessage,session: Session(),hasExisting: Bool,hasThinking: Bool,settings: Settings.SettingsManager,theme: Maybe<&2,String>,cwd: String,agentDir: String,packageDir: String,seed: Runtime.SessionSeed,flags: ScopeFlags,created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Unit):
+  match created:
+    case Fail{error}: runCreated(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,Nil{},Fail{error})
+    case Done{runtime}: scopedCatalog(mode,initial,session,hasExisting,hasThinking,settings,theme,cwd,agentDir,packageDir,seed,flags,rpcCatalog(runtime))
+
 def runSeeded(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Unit):
   match seed:
     case Fail{Failed{message}}: fail(message)
@@ -836,7 +896,7 @@ def runSeeded(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +sessi
       do IO<Unit>:
         +settings : Settings.SettingsManager <- loadSettings(sessionCwd, agentDir)
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, sessionCwd, agentDir, authPath, bundlePath, packageDir, value, settings))
-        runCreated(mode, initial, session, seedMessages(value), seedThinking(value), settings, themeOverride(parsed), sessionCwd, agentDir, packageDir, created)
+        scopedCreated(mode,initial,session,seedMessages(value),seedThinking(value),settings,themeOverride(parsed),sessionCwd,agentDir,packageDir,value,scopeFlags(parsed,settings),created)
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:
