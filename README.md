@@ -10,7 +10,7 @@ The modular OpenAI Responses provider runs over native DNS, TLS 1.3, certificate
 
 The coding-agent libraries also include CLI argument parsing, typed messages, [session context reconstruction](tests/session-context.md) and [immutable session state](tests/session-state.md), system-prompt construction and [project-context loading](tests/project-context.md), Bash execution, prompt template loading and expansion, and native image handling. Native [skill discovery](tests/skills.md) includes filesystem metadata, frontmatter parsing, Unicode-aware ignore rules, deduplication and collision diagnostics. The [ls tool](tests/ls-public.md) has native execution with explicit ordering; its default collation policy remains pending. Component records describe exact scope and approved differences: [CLI arguments](tests/cli-args.md), [system prompts](tests/system-prompt.md), [prompt templates](tests/prompt-templates.md), [directory metadata](tests/filesystem-directory.md), and [ignore matching](tests/ignore.md).
 
-The modular CLI supports noninteractive text/JSON output and an interactive terminal loop through the native libraries, with OpenAI API-key authentication, stored Codex OAuth credentials, session persistence, and read/write/edit/Bash tools; see [CLI validation](tests/print-cli.md). The interactive loop mounts the editor, streams messages and tool calls, restores saved tool results, updates its footer from session events, and restores the terminal on exit. A live native run received an OpenAI answer and executed Bash through the tool loop. Remaining work includes RPC mode, full interactive commands and terminal parity, complete provider coverage, resource-loading integration, native extensions, and complete OAuth flows. The prototype's libcurl/ICU adapters remain migration liabilities and are not dependencies of the pure library build.
+The modular CLI supports noninteractive text/JSON output, an interactive terminal loop, and a native JSONL RPC endpoint, with OpenAI API-key authentication, stored Codex OAuth credentials, session persistence, and read/write/edit/Bash tools; see [CLI validation](tests/print-cli.md). The interactive loop mounts the editor, streams messages and tool calls, restores saved tool results, updates its footer from session events, and restores the terminal on exit. Live native runs received an OpenAI answer and executed Bash; one long-lived RPC process handled two model turns and retained their context. Remaining work includes full RPC command coverage, interactive commands and terminal parity, complete provider coverage, resource-loading integration, native extensions, and complete OAuth flows. The prototype's libcurl/ICU adapters remain migration liabilities and are not dependencies of the pure library build.
 
 ## Build and validation
 
@@ -34,6 +34,8 @@ BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi
 ./build/pi-cli -- --model gpt-4.1-mini -p "Summarize this directory"
 ./build/pi-cli -- --model gpt-4.1-mini
 python3 tests/interactive_run_check.py
+printf '%s\n' '{"id":"state","type":"get_messages"}' | ./build/pi-cli -- --mode rpc
+python3 tests/rpc_cli_check.py
 ```
 
 The first `--` passes the remaining arguments through Bend's runtime to pi. The interactive check runs on one and four native threads from a separate project directory and verifies terminal restoration.
