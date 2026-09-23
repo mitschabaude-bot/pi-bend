@@ -29,6 +29,7 @@ import ./theme/markdown-theme.bend as MarkdownTheme
 import ./theme/theme.bend as Theme
 import ./theme/theme-controller.bend as ThemeController
 import ./interactive-mode.bend as Interactive
+import ./commands.bend as Commands
 import ./session-controller.bend as Controller
 import ./transcript.bend as Transcript
 import ./viewport.bend as View
@@ -159,6 +160,9 @@ def appendedFailure(lines: List<&2,String>,plain: String,painted: Result<&2,&2,T
 def withFailure(lines: List<&2,String>,failure: Maybe<&2,Interactive.SubmissionFailure>,theme: Theme.Theme,width: Nat) -> List<&2,String>:
   match failure:
     case None{}: lines
+    case Some{Interactive.CommandNotice{message}}:
+      +plain = Utils.truncateToWidth(message,width,"...",False{})
+      appendedFailure(lines,plain,Theme.foreground(theme,"accent",plain))
     case Some{value}:
       +plain = Utils.truncateToWidth("Error: " ++ Interactive.failureText(value),width,"...",False{})
       appendedFailure(lines,plain,Theme.foreground(theme,"error",plain))
@@ -357,7 +361,7 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,contr
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
         runLive(Live.borrow(live),view,foot,controller,queue,transcript,submitted,paint,styles,rows,redraw,stopped,initial,context)
-def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (controller,+queue):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -376,7 +380,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot)})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{footerFailure(foot),redraw})
-        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~Interactive.CommandSink,~Commands.Action,~Unit,~Interactive.commandResult,Interactive.CommandSink{footerFailure(foot),redraw})
+        controllerPair : Controller.Controller & Controller.Handle <- Controller.start(session,listener,32n,Some{failureObserver},Some{commandObserver})
         startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,setting,builtinDir,customDir})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String) -> IO(Result<&2,&2,Error,Unit>):
   match styles:

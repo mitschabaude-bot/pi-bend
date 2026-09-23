@@ -8,6 +8,7 @@ import ../../../../tui/src/tui-process.bend as Process
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
 import ./session-controller.bend as Controller
+import ./commands.bend as Commands
 import ./transcript.bend as Transcript
 
 # Model work runs in SessionController's worker. These callbacks only publish
@@ -17,8 +18,12 @@ type Events is Data:
 type SubmissionFailure is Data:
   QueueFailure{cause: Controller.SubmitError}
   PromptFailure{message: String}
+  CommandFailure{message: String}
+  CommandNotice{message: String}
 type SubmissionInput is Data:
   SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
+type CommandSink is Data:
+  CommandSink{failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type Startup is Data:
   Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
 
@@ -27,6 +32,8 @@ def failureText(failure: SubmissionFailure) -> String:
     case QueueFailure{Controller.Full{}}: "Submission queue is full"
     case QueueFailure{Controller.Closed{}}: "Session is closed"
     case PromptFailure{message}: message
+    case CommandFailure{message}: message
+    case CommandNotice{message}: message
 def submittedResult(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,result: Result<&2,&2,Controller.SubmitError,Unit>) -> IO(Unit):
   match result:
     case Done{_}: Ref.write(Maybe<&2,SubmissionFailure>,failure,None{})
@@ -50,15 +57,39 @@ def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.AgentEvent{value}: observed(events,value)
     case _: IO.pure(Unit,Unit{})
-def submitted(input: SubmissionInput,text: String) -> IO(Unit):
+def commandStatus(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,status: SubmissionFailure) -> IO(Unit):
+  Ref.write(Maybe<&2,SubmissionFailure>,failure,Some{status})
+def commandResult(sink: CommandSink,result: Commands.Action) -> IO(Unit):
+  match sink result:
+    case CommandSink{failure,redraw} Commands.Notice{message}:
+      do IO<Unit>:
+        commandStatus(failure,CommandNotice{message})
+        requestRender(redraw)
+    case CommandSink{failure,redraw} Commands.CommandError{message}:
+      do IO<Unit>:
+        commandStatus(failure,CommandFailure{message})
+        requestRender(redraw)
+    case _ _: IO.pure(Unit,Unit{})
+def act(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,command: Commands.Command) -> IO(Unit):
+  match command:
+    case Commands.Stop{}:
+      do IO<Unit>:
+        settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
+        return Unit{}
+    case Commands.Send{message}:
+      do IO<Unit>:
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitText(queue,message)
+        submittedResult(failure,result)
+    case other:
+      do IO<Unit>:
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitCommand(queue,other)
+        submittedResult(failure,result)
+def submitOwned(input: SubmissionInput,+text: String) -> IO(Unit):
   match input:
     case SubmissionInput{queue,stop,failure}:
-      +clean = Text.trim(text)
-      Bool.pick(Unit -> IO(Unit),String.eq(clean,"/exit"),_ => do IO<Unit>:
-        settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
-        return Unit{},_ => Bool.pick(Unit -> IO(Unit),String.is_empty(clean),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
-        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitText(queue,clean)
-        submittedResult(failure,result))(Unit{}))(Unit{})
+      Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
+        act(queue,stop,failure,Commands.parse(text)))(Unit{})
+def submitted(input: SubmissionInput,text: String) -> IO(Unit): submitOwned(input,text)
 def queueInitial(+queue: Controller.Handle,+failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,initial: List<&2,Controller.Submission>) -> IO(Unit):
   match initial:
     case Nil{}: IO.pure(Unit,Unit{})
