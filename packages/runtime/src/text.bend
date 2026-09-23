@@ -10,7 +10,7 @@ def whitespace(+code: U32) -> Bool:
 def blank(text: String) -> Bool:
   match text:
     case SNil{}: True{}
-    case SCon{Chr{code}, rest}: whitespace(code) && blank(rest)
+    case SCon{Chr{code}, rest}: Bool.pick(Unit -> Bool,whitespace(code),_ => blank(rest),_ => False{})(Unit{})
 
 
 # UTF-16 code-unit budgets over native characters. No surrogate characters are
