@@ -1021,8 +1021,8 @@
     },
     {
       "source": "packages/ai/test/openai-codex-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": ["tests/oauth-device-login.bend", "tests/oauth_device_login_check.py"],
       "sha256": "82d9746892b5e8a8b8bef1037dd6cca40f37427a3a317a43d8028f5cb7031f8e"
     },
     {

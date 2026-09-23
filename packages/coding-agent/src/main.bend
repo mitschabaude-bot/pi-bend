@@ -1,5 +1,6 @@
 import Base
 import ./cli/args.bend as Args
+import ./cli/auth-login.bend as AuthLogin
 import ./cli/file-processor.bend as Files
 import ./cli/list-models.bend as ModelList
 import ./cli/session-picker.bend as Picker
@@ -1148,7 +1149,14 @@ def shared(values: List<&1, String>) -> List<&2, String>:
     case Nil{}: Nil{}
     case value <> rest: value <> shared(rest)
 
+def runValues(values: List<&2, String>) -> IO(Unit):
+  match values:
+    case "auth" <> "login" <> Nil{}: AuthLogin.run()
+    case "auth" <> "login" <> "--provider" <> "openai-codex" <> Nil{}: AuthLogin.run()
+    case "auth" <> "login" <> _: fail("Usage: pi auth login [--provider openai-codex]")
+    case other: run(Args.parseArgs(other))
+
 def main() -> IO(Unit):
   do IO<Unit>:
     values : List<String> <- IO.args()
-    run(Args.parseArgs(shared(values)))
+    runValues(shared(values))
