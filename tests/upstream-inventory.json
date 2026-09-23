@@ -1690,9 +1690,15 @@
     },
     {
       "source": "packages/coding-agent/test/assistant-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "115f5f8261312edb53325023f1b221f210c0eddcae38aa1003867eda49f92d20"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "tests/interactive-messages.bend",
+        "tests/interactive_messages_reference.ts",
+        "tests/interactive_messages_check.py"
+      ],
+      "sha256": "115f5f8261312edb53325023f1b221f210c0eddcae38aa1003867eda49f92d20",
+      "notes": "Byte-exact colored-terminal snapshots for text, adjacent/hidden thinking, streaming content replacement, length/aborted/error stops and tool-call error suppression pass Bun/native1/native4; Ai.AssistantMessage projection is exercised. Per-run mouse toggle, Markdown transformer context/chaining/exception recovery, invalidation and full named suite remain pending; see tests/interactive-messages.md."
     },
     {
       "source": "packages/coding-agent/test/auth-check.test.ts",
@@ -3617,9 +3623,15 @@
     },
     {
       "source": "packages/coding-agent/test/user-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0bcfcb88a1fdbcee065acd15f0bbc8b3d3bcfa23420743777aa154e6b2f0d831"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "tests/interactive-messages.bend",
+        "tests/interactive_messages_reference.ts",
+        "tests/interactive_messages_check.py"
+      ],
+      "sha256": "0bcfcb88a1fdbcee065acd15f0bbc8b3d3bcfa23420743777aa154e6b2f0d831",
+      "notes": "Byte-exact colored-terminal user background, padding, OSC 133 markers pass Bun/native1/native4. Markdown transformer context/chaining/invalidation and full named suite remain pending; see tests/interactive-messages.md."
     },
     {
       "source": "packages/coding-agent/test/version-check.test.ts",

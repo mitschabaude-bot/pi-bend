@@ -1,0 +1,7 @@
+# Interactive message display
+
+`packages/coding-agent/src/modes/interactive/components/messages.bend` owns immutable `UserMessage` and `AssistantMessage` display state. It uses native Markdown, Text, Box background painting and parsed theme colors. `updateFromAi` projects an `Ai.AssistantMessage` into text, thinking and tool-call blocks, replacing the prior assistant content for streaming updates. Consecutive thinking blocks render as one run; hide/show defaults, output padding, OSC 133 zones and stop error rules follow upstream.
+
+`tests/interactive_messages_check.py` compares eleven raw-byte snapshots with upstream `f07218c4d` under a controlled colored terminal (`FORCE_COLOR=1`, `TERM=xterm-256color`, `NO_COLOR` unset). The oracle hashes both upstream message components, the dark theme, and the Markdown/Box/Text implementations. Snapshots cover user background and padding; assistant Markdown, adjacent and hidden thinking, partial and complete updates, length, abort, error, tool-call suppression, and the `Ai.AssistantMessage` adapter. Bun and native one/four threads must match exactly after building `tests/interactive-messages.bend` with the File.rename-capable compiler.
+
+The state API does not yet implement Markdown transformer callbacks or their streaming/width context, per-run mouse collapse, invalidation-triggered transforms, or component callback mounting in TuiBase. It pins colored-terminal output; respecting `NO_COLOR` at runtime remains separate. These gaps leave the upstream named tests partial.
