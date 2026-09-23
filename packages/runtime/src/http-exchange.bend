@@ -13,6 +13,10 @@ import ./dns-message.bend as Id
 import ./serial-resource.bend as Resource
 import ./callback.bend as C
 import ./schema-value.bend as Value
+import ./ref.bend as R
+import ./clock.bend as Clock
+import ./f64.bend as F
+import ./text.bend as Text
 
 type Plan is Data:
   Numeric{address: Connect.Address}
@@ -135,8 +139,29 @@ type Lease<-Reason: Data> is Type:
   Lease{connection: Connect.Owner<Reason>, upload: Maybe<&1, Connect.UploadOwner<Reason>>}
   Secure{connection: TLS.Connection<Reason>, upload: Chan(Result<&2, &2, TLS.Error<Reason>, Unit>), control: TLS.Writer<Reason>, reported: Bool}
 
+# Keep-alive (undici's Agent as bundled with Node 24): idle connections by
+# origin, each running under its own abort controller that the request in
+# flight links its signal to. A response read to completion on a persistent
+# HTTP/1.1 connection parks the connection instead of closing it.
+type Origin is Data:
+  Origin{secure: Bool, host: String, port: U32}
+
+type Parked<-Reason: Data> is Type:
+  ParkedPlain{connection: Connect.Owner<Reason>}
+  ParkedSecure{connection: TLS.Connection<Reason>, control: TLS.Writer<Reason>}
+
+type Idle<-Reason: Data> is Type:
+  Idle{origin: Origin, parked: Parked<Reason>, controller: Abort.AbortController<Reason>, expires: F64}
+
+type Pool<-Reason: Data> is Data:
+  Pool{idle: R.Ref<List<&1, Idle<Reason>>>, clock: Clock.Clock}
+
+# How a response returns its connection to the pool.
+type Keep<-Reason: Data> is Data:
+  Keep{pool: Pool<Reason>, origin: Origin, controller: Abort.AbortController<Reason>, link: R.Ref<Maybe<&1, Abort.Link<Reason>>>, method: String}
+
 type Environment<-Reason: Data> is Data:
-  Environment{resource: Resource.Handle<Maybe<&1, Lease<Reason>>>, maximum: U32}
+  Environment{resource: Resource.Handle<Maybe<&1, Lease<Reason>>>, maximum: U32, keep: Maybe<&2, Keep<Reason>>}
 
 type Owner<-Reason: Data> is Type:
   Owner{resource: Resource.Owner<Maybe<&1, Lease<Reason>>>, source: Response.Source<SocketSourceError<Reason>>}
@@ -212,7 +237,7 @@ def classify(-Reason: Data, result: Result<&2, &2, SocketSourceError<Reason>, Ma
 
 def readCallback(-Reason: Data, environment: Environment<Reason>, unused: Unit) -> IO(Response.ReadResult<SocketSourceError<Reason>>):
   match environment:
-    case Environment{resource, maximum}:
+    case Environment{resource, maximum, _}:
       do IO<Response.ReadResult<SocketSourceError<Reason>>>:
         result : Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>> <- Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, SocketSourceError<Reason>, Maybe<&2, List<&2, U32>>>, resource, value => readOwned(Reason, maximum, value))
         classify(Reason, result)
@@ -271,29 +296,225 @@ def releaseOwned(-Reason: Data, value: Maybe<&1, Lease<Reason>>) -> IO(Maybe<&1,
     result : Result<&2, &2, SocketSourceError<Reason>, Unit> <- closeOwned(Reason, value)
     return (None{}, result)
 
-def releaseCallback(-Reason: Data, environment: Environment<Reason>, unused: Response.Release) -> IO(Result<&2, &2, SocketSourceError<Reason>, Unit>):
-  match environment:
-    case Environment{resource, _}: Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, SocketSourceError<Reason>, Unit>, resource, value => releaseOwned(Reason, value))
+# Pool bookkeeping
+# ----------------
 
-def callbacks(~Reason: Data, +maximum: U32, pair: Resource.Owner<Maybe<&1, Lease<Reason>>> & Resource.Handle<Maybe<&1, Lease<Reason>>>) -> IO(Owner<Reason>):
+def disposeParked(-Reason: Data, parked: Parked<Reason>) -> IO(Unit):
+  match parked:
+    case ParkedPlain{connection}:
+      do IO<Unit>:
+        closed : Result<&2, &2, Connect.InterruptError, Unit> <- Connect.close(Reason, connection)
+        return Unit{}
+    case ParkedSecure{connection, control}:
+      do IO<Unit>:
+        stopped : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.cancel(Reason, control)
+        disposed : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.dispose(Reason, connection)
+        return Unit{}
+
+def disposeIdle(-Reason: Data, idle: Idle<Reason>) -> IO(Unit):
+  match idle:
+    case Idle{_, parked, controller, _}:
+      do IO<Unit>:
+        disposeParked(Reason, parked)
+        Abort.dispose(Reason, controller)
+
+def disposeAllIdle(-Reason: Data, idle: List<&1, Idle<Reason>>) -> IO(Unit):
+  match idle:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case first <> rest:
+      do IO<Unit>:
+        disposeIdle(Reason, first)
+        disposeAllIdle(Reason, rest)
+
+def newPool(-Reason: Data) -> IO(Pool<Reason>):
+  do IO<Pool<Reason>>:
+    clock : Clock.Clock <- Clock.new()
+    idle : R.Ref<List<&1, Idle<Reason>>> <- R.new(List<&1, Idle<Reason>>, Nil{})
+    return Pool{idle, clock}
+
+# Close every idle connection. Callers first finish all exchanges started
+# from the pool.
+def disposePool(-Reason: Data, pool: Pool<Reason>) -> IO(Unit):
+  match pool:
+    case Pool{idle, _}:
+      do IO<Unit>:
+        remaining : List<&1, Idle<Reason>> <- R.dispose(List<&1, Idle<Reason>>, idle)
+        disposeAllIdle(Reason, remaining)
+
+def takeLink(-Reason: Data, value: Maybe<&1, Abort.Link<Reason>>) -> Maybe<&1, Abort.Link<Reason>> & Maybe<&1, Abort.Link<Reason>>:
+  match value:
+    case taken: (None{}, taken)
+
+def unlinkTaken(-Reason: Data, link: Maybe<&1, Abort.Link<Reason>>) -> IO(Unit):
+  match link:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{value}: Abort.unlink(Reason, value)
+
+# Stop forwarding the request's signal to the connection controller.
+def unlinkKeep(-Reason: Data, keep: Keep<Reason>) -> IO(Unit):
+  match keep:
+    case Keep{_, _, _, link, _}:
+      do IO<Unit>:
+        taken : Maybe<&1, Abort.Link<Reason>> <- R.modify(Maybe<&1, Abort.Link<Reason>>, Maybe<&1, Abort.Link<Reason>>, link, value => takeLink(Reason, value))
+        unlinkTaken(Reason, taken)
+
+# The request ended without parking: its link and the controller go.
+def retireKeep(-Reason: Data, keep: Keep<Reason>) -> IO(Unit):
+  match keep:
+    case Keep{_, _, controller, link, _}:
+      do IO<Unit>:
+        remaining : Maybe<&1, Abort.Link<Reason>> <- R.dispose(Maybe<&1, Abort.Link<Reason>>, link)
+        unlinkTaken(Reason, remaining)
+        Abort.dispose(Reason, controller)
+
+def retireMaybe(-Reason: Data, keep: Maybe<&2, Keep<Reason>>) -> IO(Unit):
+  match keep:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{value}: retireKeep(Reason, value)
+
+# undici util.parseKeepAliveTimeout: the digits after the first "timeout=".
+def digitsValue(chars: String, +value: Nat, +seen: Bool) -> Maybe<&2, Nat>:
+  match chars:
+    case SCon{Chr{+code}, rest}:
+      Bool.pick(Unit -> Maybe<&2, Nat>, U32.is_ge(code, 48) && U32.is_le(code, 57), _ => digitsValue(rest, value * 10n + U32.to_nat((code - 48 : U32)), True{}), _ => Bool.pick(Maybe<&2, Nat>, seen, Some{value}, None{}))(Unit{})
+    case SNil{}: Bool.pick(Maybe<&2, Nat>, seen, Some{value}, None{})
+
+def timeoutSeconds(value: String) -> Maybe<&2, Nat>:
+  match value:
+    case SNil{}: None{}
+    case SCon{+char, +rest}:
+      Bool.pick(Unit -> Maybe<&2, Nat>, String.starts_with(SCon{char, rest}, "timeout="), _ => digitsValue(String.drop(SCon{char, rest}, 8n), 0n, False{}), _ => timeoutSeconds(rest))(Unit{})
+
+def keepAliveField(fields: List<&2, Request.Header>) -> Maybe<&2, String>:
+  match fields:
+    case Nil{}: None{}
+    case Request.Header{name, value} <> rest: Bool.pick(Unit -> Maybe<&2, String>, String.eq(Text.asciiLower(name), "keep-alive"), _ => Some{value}, _ => keepAliveField(rest))(Unit{})
+
+# undici's client: a Keep-Alive timeout hint minus the 2 s threshold, capped
+# at 10 minutes (no reuse when it is not positive); otherwise 4 s.
+def hintedTimeout(seconds: Maybe<&2, Nat>) -> Maybe<&2, F64>:
+  match seconds:
+    case None{}: Some{F.fromU32(4000)}
+    case Some{+value}: Bool.pick(Unit -> Maybe<&2, F64>, Nat.is_le(value * 1000n, 2000n), _ => None{}, _ => Some{F.fromNat(Nat.min(Nat.sub(value * 1000n, 2000n), 600000n))})(Unit{})
+
+def idleTimeout(fields: List<&2, Request.Header>) -> Maybe<&2, F64>:
+  hintedTimeout(Maybe.bind(&2, String, Nat, keepAliveField(fields), timeoutSeconds))
+
+def modernVersion(+major: U32, minor: U32) -> Bool: U32.is_gt(major, 1) || (U32.is_eq(major, 1) && U32.is_ge(minor, 1))
+
+def persistentHead(head: Request.ResponseHead) -> Maybe<&2, F64>:
+  match head:
+    case Request.ResponseHead{Request.StatusLine{major, minor, _, _}, +fields}:
+      Bool.pick(Unit -> Maybe<&2, F64>, Response.persistent(modernVersion(major, minor), Response.terminationFields(fields, Response.Connection{False{}, False{}})), _ => idleTimeout(fields), _ => None{})(Unit{})
+
+# A response is reusable once its message completed with nothing left over
+# on a persistent connection; undici never reuses after HEAD.
+def reusableTimeout(+method: String, release: Response.Release) -> Maybe<&2, F64>:
+  match release:
+    case Response.Release{Response.MessageComplete{Nil{}}, Some{head}}: Bool.pick(Unit -> Maybe<&2, F64>, String.eq(method, "HEAD"), _ => None{}, _ => persistentHead(head))(Unit{})
+    case _: None{}
+
+def parkedIn(-Reason: Data, keep: Keep<Reason>, parked: Parked<Reason>, milliseconds: F64) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match keep:
+    case Keep{Pool{idle, clock}, origin, controller, link, _}:
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        now : F64 <- Clock.now(clock)
+        R.modify(List<&1, Idle<Reason>>, Unit, idle, previous => (List.append(&1, Idle<Reason>, previous, Idle{origin, parked, controller, F.add(now, milliseconds)} <> Nil{}), Unit{}))
+        remaining : Maybe<&1, Abort.Link<Reason>> <- R.dispose(Maybe<&1, Abort.Link<Reason>>, link)
+        unlinkTaken(Reason, remaining)
+        return (None{}, Done{Unit{}})
+
+def closedKept(-Reason: Data, keep: Keep<Reason>, result: Result<&2, &2, SocketSourceError<Reason>, Unit>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+    retireKeep(Reason, keep)
+    return (None{}, result)
+
+def closeKept(-Reason: Data, keep: Keep<Reason>, lease: Lease<Reason>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+    result : Result<&2, &2, SocketSourceError<Reason>, Unit> <- closeOwned(Reason, Some{lease})
+    closedKept(Reason, keep, result)
+
+def plainUploaded(-Reason: Data, keep: Keep<Reason>, connection: Connect.Owner<Reason>, milliseconds: F64, stopped: Result<&2, &2, Connect.UploadError<Reason>, Unit>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match stopped:
+    case Done{_}: parkedIn(Reason, keep, ParkedPlain{connection}, milliseconds)
+    case Fail{_}: closeKept(Reason, keep, Lease{connection, None{}})
+
+def plainSettled(-Reason: Data, keep: Keep<Reason>, connection: Connect.Owner<Reason>, milliseconds: F64, pair: Connect.UploadOwner<Reason> & Bool) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match pair:
+    case (upload, False{}): closeKept(Reason, keep, Lease{connection, Some{upload}})
+    case (upload, True{}):
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        stopped : Result<&2, &2, Connect.UploadError<Reason>, Unit> <- Connect.stop(Reason, upload)
+        plainUploaded(Reason, keep, connection, milliseconds, stopped)
+
+def secureUploaded(-Reason: Data, keep: Keep<Reason>, connection: TLS.Connection<Reason>, control: TLS.Writer<Reason>, milliseconds: F64, joined: Result<&2, &2, TLS.Error<Reason>, Unit>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match joined:
+    case Done{_}: parkedIn(Reason, keep, ParkedSecure{connection, control}, milliseconds)
+    case Fail{_}:
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        stopped : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.cancel(Reason, control)
+        disposed : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.dispose(Reason, connection)
+        closedKept(Reason, keep, closedTLS(Reason, Done{Unit{}}, tlsCleanup(Reason, stopped, disposed)))
+
+# The request's upload must have finished before the connection is parked.
+def parkLease(-Reason: Data, keep: Keep<Reason>, lease: Lease<Reason>, milliseconds: F64) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match lease:
+    case Lease{connection, None{}}: parkedIn(Reason, keep, ParkedPlain{connection}, milliseconds)
+    case Lease{connection, Some{upload}}:
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        pair : Connect.UploadOwner<Reason> & Bool <- Connect.uploadSettled(Reason, upload)
+        plainSettled(Reason, keep, connection, milliseconds, pair)
+    case Secure{connection, upload, control, _}:
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        joined : Result<&2, &2, TLS.Error<Reason>, Unit> <- IO.join(Result<&2, &2, TLS.Error<Reason>, Unit>, upload)
+        secureUploaded(Reason, keep, connection, control, milliseconds, joined)
+
+def parkChecked(-Reason: Data, keep: Keep<Reason>, lease: Lease<Reason>, aborted: Bool, timeout: Maybe<&2, F64>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match aborted timeout:
+    case False{} Some{milliseconds}: parkLease(Reason, keep, lease, milliseconds)
+    case _ _: closeKept(Reason, keep, lease)
+
+def controllerOf(-Reason: Data, keep: Keep<Reason>) -> Abort.AbortController<Reason>:
+  match keep:
+    case Keep{_, _, controller, _, _}: controller
+
+def methodOf(-Reason: Data, keep: Keep<Reason>) -> String:
+  match keep:
+    case Keep{_, _, _, _, method}: method
+
+def releaseKept(-Reason: Data, +keep: Keep<Reason>, +release: Response.Release, value: Maybe<&1, Lease<Reason>>) -> IO(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match value:
+    case None{}: IO.pure(Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>, (None{}, Done{Unit{}}))
+    case Some{lease}:
+      do IO<Maybe<&1, Lease<Reason>> & Result<&2, &2, SocketSourceError<Reason>, Unit>>:
+        unlinkKeep(Reason, keep)
+        aborted : Bool <- Abort.aborted(Reason, Abort.signal(Reason, controllerOf(Reason, keep)))
+        parkChecked(Reason, keep, lease, aborted, reusableTimeout(methodOf(Reason, keep), release))
+
+def releaseCallback(-Reason: Data, environment: Environment<Reason>, release: Response.Release) -> IO(Result<&2, &2, SocketSourceError<Reason>, Unit>):
+  match environment:
+    case Environment{resource, _, None{}}: Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, SocketSourceError<Reason>, Unit>, resource, value => releaseOwned(Reason, value))
+    case Environment{resource, _, Some{keep}}: Resource.run(Maybe<&1, Lease<Reason>>, Result<&2, &2, SocketSourceError<Reason>, Unit>, resource, value => releaseKept(Reason, keep, release, value))
+
+def callbacks(~Reason: Data, +maximum: U32, +keep: Maybe<&2, Keep<Reason>>, pair: Resource.Owner<Maybe<&1, Lease<Reason>>> & Resource.Handle<Maybe<&1, Lease<Reason>>>) -> IO(Owner<Reason>):
   match pair:
     case (resource, +handle):
       do IO<Owner<Reason>>:
-        reader : C.Callback<Unit, Response.ReadResult<SocketSourceError<Reason>>> <- C.create(~Environment<Reason>, ~Unit, ~Response.ReadResult<SocketSourceError<Reason>>, ~readCallback(Reason), Environment{handle, maximum})
-        release : C.Callback<Response.Release, Result<&2, &2, SocketSourceError<Reason>, Unit>> <- C.create(~Environment<Reason>, ~Response.Release, ~Result<&2, &2, SocketSourceError<Reason>, Unit>, ~releaseCallback(Reason), Environment{handle, maximum})
+        reader : C.Callback<Unit, Response.ReadResult<SocketSourceError<Reason>>> <- C.create(~Environment<Reason>, ~Unit, ~Response.ReadResult<SocketSourceError<Reason>>, ~readCallback(Reason), Environment{handle, maximum, keep})
+        release : C.Callback<Response.Release, Result<&2, &2, SocketSourceError<Reason>, Unit>> <- C.create(~Environment<Reason>, ~Response.Release, ~Result<&2, &2, SocketSourceError<Reason>, Unit>, ~releaseCallback(Reason), Environment{handle, maximum, keep})
         return Owner{resource, Response.TransportSource{reader, release}}
 
-def adoptLease(~Reason: Data, maximum: U32, lease: Lease<Reason>) -> IO(Owner<Reason>):
+def adoptLease(~Reason: Data, maximum: U32, keep: Maybe<&2, Keep<Reason>>, lease: Lease<Reason>) -> IO(Owner<Reason>):
   do IO<Owner<Reason>>:
     resource : Resource.Owner<Maybe<&1, Lease<Reason>>> <- Resource.create(Maybe<&1, Lease<Reason>>, Some{lease})
-    callbacks(~Reason, maximum, Resource.borrow(Maybe<&1, Lease<Reason>>, resource))
+    callbacks(~Reason, maximum, keep, Resource.borrow(Maybe<&1, Lease<Reason>>, resource))
 
 def adoptedSource(~Reason: Data, maximum: U32, result: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>, Fail{SocketSourceSocketFailure{error}})
     case Done{owner}:
       do IO<Result<&2, &1, SocketSourceError<Reason>, Owner<Reason>>>:
-        result : Owner<Reason> <- adoptLease(~Reason, maximum, Lease{owner, None{}})
+        result : Owner<Reason> <- adoptLease(~Reason, maximum, None{}, Lease{owner, None{}})
         return Done{result}
 
 # Transfers the connected socket on every path. A zero-size read would look
@@ -372,7 +593,7 @@ def cleanupError(result: Result<&2, &2, Connect.InterruptError, Unit>) -> Maybe<
     case Done{_}: None{}
     case Fail{error}: Some{error}
 
-def uploading(~Reason: Data, method: String, maximum: U32, limits: Response.Limits, pair: Connect.Owner<Reason> & Result<&2, &1, Connect.Error<Reason>, Connect.UploadOwner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def uploading(~Reason: Data, method: String, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, pair: Connect.Owner<Reason> & Result<&2, &1, Connect.Error<Reason>, Connect.UploadOwner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match pair:
     case (owner, Fail{error}):
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
@@ -380,20 +601,20 @@ def uploading(~Reason: Data, method: String, maximum: U32, limits: Response.Limi
         return Fail{WriteFailure{error, cleanupError(cleanup)}}
     case (owner, Done{upload}):
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
-        source : Owner<Reason> <- adoptLease(~Reason, maximum, Lease{owner, Some{upload}})
+        source : Owner<Reason> <- adoptLease(~Reason, maximum, keep, Lease{owner, Some{upload}})
         return Done{opened(Reason, method, limits, borrow(Reason, source))}
 
-def connectedSocketExchange(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, result: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def connectedSocketExchange(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, result: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match request result:
     case _ Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{SocketFailure{error}})
     case Request.BufferedRequestPrepared{Request.Head{method, head}, body} Done{owner}:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         result : Connect.Owner<Reason> & Result<&2, &1, Connect.Error<Reason>, Connect.UploadOwner<Reason>> <- Connect.startUpload(Reason, owner, head, Request.wireBody(body))
-        uploading(~Reason, method, maximum, limits, result)
+        uploading(~Reason, method, maximum, limits, keep, result)
 
 # Takes ownership on every path. The read-size guard precedes any request IO.
 # Writes share the connection-wide AbortSignal observation with response reads.
-def startSocketExchange(~Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def startSocketExchangeKept(~Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match maximum:
     case 0:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
@@ -402,7 +623,10 @@ def startSocketExchange(~Reason: Data, socket: Socket, signal: Abort.AbortSignal
     case size:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         result : Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
-        connectedSocketExchange(~Reason, request, size, limits, result)
+        connectedSocketExchange(~Reason, request, size, limits, keep, result)
+
+def startSocketExchange(~Reason: Data, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  startSocketExchangeKept(~Reason, socket, signal, request, maximum, limits, None{})
 
 def sendTLSBody(-Reason: Data, writer: TLS.Writer<Reason>, body: List<&2, U32>, headResult: Result<&2, &2, TLS.Error<Reason>, Unit>) -> IO(Result<&2, &2, TLS.Error<Reason>, Unit>):
   match headResult:
@@ -414,23 +638,23 @@ def sendTLSRequest(-Reason: Data, +writer: TLS.Writer<Reason>, head: List<&2, U3
     sent : Result<&2, &2, TLS.Error<Reason>, Unit> <- TLS.send(Reason, writer, head)
     sendTLSBody(Reason, writer, body, sent)
 
-def uploadTLS(~Reason: Data, method: String, maximum: U32, limits: Response.Limits, head: List<&2, U32>, body: List<&2, U32>, pair: TLS.Connection<Reason> & TLS.Writer<Reason>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def uploadTLS(~Reason: Data, method: String, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, head: List<&2, U32>, body: List<&2, U32>, pair: TLS.Connection<Reason> & TLS.Writer<Reason>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match pair:
     case (connection, +writer):
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         upload : Chan(Result<&2, &2, TLS.Error<Reason>, Unit>) <- IO.fork(Result<&2, &2, TLS.Error<Reason>, Unit>, sendTLSRequest(Reason, writer, head, body))
-        owner : Owner<Reason> <- adoptLease(~Reason, maximum, Secure{connection, upload, writer, False{}})
+        owner : Owner<Reason> <- adoptLease(~Reason, maximum, keep, Secure{connection, upload, writer, False{}})
         return Done{opened(Reason, method, limits, borrow(Reason, owner))}
 
-def authenticatedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, result: Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def authenticatedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, result: Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match request result:
     case _ Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{TLSStartFailure{error}})
     case Request.BufferedRequestPrepared{Request.Head{method, head}, body} Done{connection}:
-      uploadTLS(~Reason, method, maximum, limits, head, Request.wireBody(body), TLS.borrowWriter(Reason, connection))
+      uploadTLS(~Reason, method, maximum, limits, keep, head, Request.wireBody(body), TLS.borrowWriter(Reason, connection))
 
 # Consumes a started TLS connection on every path and authenticates it before
 # sending HTTP bytes. Both transports share the response parser and body API.
-def startTLSExchange(~Reason: Data, connection: TLS.Connection<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def startTLSExchangeKept(~Reason: Data, connection: TLS.Connection<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match maximum:
     case 0:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
@@ -439,7 +663,10 @@ def startTLSExchange(~Reason: Data, connection: TLS.Connection<Reason>, request:
     case size:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         result : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.awaitHandshake(Reason, connection)
-        authenticatedTLS(~Reason, request, size, limits, result)
+        authenticatedTLS(~Reason, request, size, limits, keep, result)
+
+def startTLSExchange(~Reason: Data, connection: TLS.Connection<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  startTLSExchangeKept(~Reason, connection, request, maximum, limits, None{})
 
 def outcome(-Reason: Data, primary: Result<&2, &2, Response.ReadError<SocketSourceError<Reason>>, Unit>, disposal: Result<&2, &2, SocketSourceError<Reason>, Unit>) -> Result<&2, &2, ReadError<Reason>, Unit>:
   match primary disposal:
@@ -558,6 +785,7 @@ type Report<-Reason: Data, -SourceError: Data> is Type:
   Rejected{error: Request.ExchangePlanError}
   Unresolved{resolution: Resolution(Reason, SourceError)}
   Attempted{resolution: Resolution(Reason, SourceError), attempts: List<&2, Dispatch.Entry<Reason>>, result: Result<&2, &1, ResolvedExchangeError<Reason>, Exchange<Reason>>}
+  Reused{result: Result<&2, &1, ResolvedExchangeError<Reason>, Exchange<Reason>>}
 
 type Options is Data:
   Options{priority: Pair.Priority, preference: Dispatch.Preference, attemptMilliseconds: U32, maximum: U32, limits: Response.Limits}
@@ -588,47 +816,47 @@ def protocol(security: Security, transport: Request.Transport, host: Host.Host) 
     case NoTLS{} Request.TLS{}: Fail{Request.TLSRequired{}}
     case WithTLS{authorize, options} Request.TLS{}: Done{Encrypted{host, authorize, options}}
 
-def openedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, initial: Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def openedTLS(~Reason: Data, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, initial: Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match initial:
     case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{TLSStartFailure{error}})
-    case Done{connection}: startTLSExchange(~Reason, connection, request, maximum, limits)
+    case Done{connection}: startTLSExchangeKept(~Reason, connection, request, maximum, limits, keep)
 
-def adoptedTLS(~Reason: Data, +host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, adoption: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def adoptedTLS(~Reason: Data, +host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, adoption: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match adoption:
     case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{SocketFailure{error}})
     case Done{owner}:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         authorization : TLSClient.Authorization <- C.call(Host.Host, TLSClient.Authorization, authorize, host)
         initial : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.start(Reason, owner, serverName(host), authorization, options)
-        openedTLS(~Reason, request, maximum, limits, initial)
+        openedTLS(~Reason, request, maximum, limits, keep, initial)
 
-def startProtocol(~Reason: Data, selected: Protocol, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+def startProtocol(~Reason: Data, selected: Protocol, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match selected:
-    case Cleartext{}: startSocketExchange(~Reason, socket, signal, request, maximum, limits)
+    case Cleartext{}: startSocketExchangeKept(~Reason, socket, signal, request, maximum, limits, keep)
     case Encrypted{host, authorize, options}:
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         adoption : Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
-        adoptedTLS(~Reason, host, authorize, options, request, maximum, limits, adoption)
+        adoptedTLS(~Reason, host, authorize, options, request, maximum, limits, keep, adoption)
 
 # Socket adoption consumes the socket on all paths and rechecks the retained
 # signal. Only then create the verifier, so time-dependent policy is fresh
 # after DNS and connection attempts. The full connection log survives.
-def connectedResolvedExchange(~Reason: Data, ~SourceError: Data, selected: Protocol, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, report: Dispatch.PlanReport<Resolution(Reason, SourceError), Reason, Socket>) -> IO(Report<Reason, SourceError>):
+def connectedResolvedExchange(~Reason: Data, ~SourceError: Data, selected: Protocol, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, report: Dispatch.PlanReport<Resolution(Reason, SourceError), Reason, Socket>) -> IO(Report<Reason, SourceError>):
   match report:
     case Dispatch.Unresolved{resolution}: IO.pure(Report<Reason, SourceError>, Unresolved{resolution})
     case Dispatch.Attempted{resolution, Dispatch.Report{Fail{error}, attempts}}: IO.pure(Report<Reason, SourceError>, Attempted{resolution, attempts, Fail{ResolvedExchangeConnectionFailure{error}}})
     case Dispatch.Attempted{resolution, Dispatch.Report{Done{socket}, attempts}}:
       do IO<Report<Reason, SourceError>>:
-        result : Result<&2, &1, StartError<Reason>, Exchange<Reason>> <- startProtocol(~Reason, selected, socket, signal, request, maximum, limits)
+        result : Result<&2, &1, StartError<Reason>, Exchange<Reason>> <- startProtocol(~Reason, selected, socket, signal, request, maximum, limits, keep)
         return Attempted{resolution, attempts, startedResolvedExchange(Reason, result)}
 
-def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~SourceError: Data, selected: Protocol, environment: Environment, resolver: Pair.Resolver, +signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, plan: Request.Plan<Request.BufferedRequestPrepared>) -> IO(Report<Reason, SourceError>):
+def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~SourceError: Data, selected: Protocol, environment: Environment, resolver: Pair.Resolver, +signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, keep: Maybe<&2, Keep<Reason>>, plan: Request.Plan<Request.BufferedRequestPrepared>) -> IO(Report<Reason, SourceError>):
   match options plan:
     case _ Request.Rejected{error}: IO.pure(Report<Reason, SourceError>, Rejected{error})
     case Options{priority, preference, duration, _, limits} Request.Start{host, port, +request, +maximum}:
       do IO<Report<Reason, SourceError>>:
         report : Dispatch.PlanReport<Resolution(Reason, SourceError), Reason, Socket> <- openWith(~Environment, ~draw, ~Reason, ~SourceError, environment, resolver, signal, priority, preference, Dispatch.Options{port, duration}, host, hosts)
-        connectedResolvedExchange(~Reason, ~SourceError, selected, signal, request, maximum, limits, report)
+        connectedResolvedExchange(~Reason, ~SourceError, selected, signal, request, maximum, limits, keep, report)
 
 # A caller retains resolver and signal ownership. On success it must consume
 # or close the exchange before disposing the signal; upload/read tasks belong
@@ -636,7 +864,7 @@ def planned(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdErr
 def startWith(~Environment: Data, ~draw: Environment -> IO(Result<&2, &2, Id.IdError, U32>), ~Reason: Data, ~SourceError: Data, environment: Environment, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   match options request:
     case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{endpoint, prepared}:
-      planned(~Environment, ~draw, ~Reason, ~SourceError, Cleartext{}, environment, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, Request.prepareExchangePlan(Request.BufferedRequestPrepared, endpoint, prepared, maximum))
+      planned(~Environment, ~draw, ~Reason, ~SourceError, Cleartext{}, environment, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, None{}, Request.prepareExchangePlan(Request.BufferedRequestPrepared, endpoint, prepared, maximum))
 
 def startResolvedExchange(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   startWith(~Unit, ~Id.random, ~Reason, ~SourceError, Unit{}, resolver, signal, hosts, options, request)
@@ -648,12 +876,190 @@ def routedPlan(host: Host.Host, port: U32, request: Request.BufferedRequestPrepa
     case 0: Request.Rejected{Request.InvalidReadSize{}}
     case size: Request.Start{host, port, request, size}
 
-def configuredRoute(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, plan: Request.Plan<Request.BufferedRequestPrepared>, selected: Result<&2, &2, Request.ExchangePlanError, Protocol>) -> IO(Report<Reason, SourceError>):
+def configuredRoute(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, keep: Maybe<&2, Keep<Reason>>, plan: Request.Plan<Request.BufferedRequestPrepared>, selected: Result<&2, &2, Request.ExchangePlanError, Protocol>) -> IO(Report<Reason, SourceError>):
   match selected:
     case Fail{error}: IO.pure(Report<Reason, SourceError>, Rejected{error})
-    case Done{selected}: planned(~Unit, ~Id.random, ~Reason, ~SourceError, selected, Unit{}, resolver, signal, hosts, options, plan)
+    case Done{selected}: planned(~Unit, ~Id.random, ~Reason, ~SourceError, selected, Unit{}, resolver, signal, hosts, options, keep, plan)
 
 def startResolvedWithSecurity(~Reason: Data, ~SourceError: Data, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   match options request:
     case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, prepared}:
-      configuredRoute(~Reason, ~SourceError, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, routedPlan(host, port, prepared, maximum), protocol(security, transport, host))
+      configuredRoute(~Reason, ~SourceError, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, None{}, routedPlan(host, port, prepared, maximum), protocol(security, transport, host))
+
+# Pooled exchanges
+# ----------------
+
+def isTLS(transport: Request.Transport) -> Bool:
+  match transport:
+    case Request.TLS{}: True{}
+    case _: False{}
+
+def sameBool(left: Bool, right: Bool) -> Bool:
+  match left right:
+    case True{} True{}: True{}
+    case False{} False{}: True{}
+    case _ _: False{}
+
+def originOf(transport: Request.Transport, host: Host.Host, port: U32) -> Origin: Origin{isTLS(transport), Host.serializeHost(host), port}
+
+def sameOrigin(left: Origin, right: Origin) -> Bool:
+  match left right:
+    case Origin{a, host, port} Origin{b, other, number}: sameBool(a, b) && String.eq(host, other) && U32.is_eq(port, number)
+
+type Place is Data:
+  ExpiredIdle{}
+  MatchingIdle{}
+  OtherIdle{}
+
+def placeOf(origin: Origin, wanted: Origin, expires: F64, now: F64) -> Place:
+  Bool.pick(Place, Bool.not(F64.is_lt(now, expires)), ExpiredIdle{}, Bool.pick(Place, sameOrigin(origin, wanted), MatchingIdle{}, OtherIdle{}))
+
+# The oldest live connection to the origin, the expired ones and the rest.
+type Taken<-Reason: Data> is Type:
+  Taken{remaining: List<&1, Idle<Reason>>, found: Maybe<&1, Idle<Reason>>, expired: List<&1, Idle<Reason>>}
+
+def withFound(-Reason: Data, idle: Idle<Reason>, taken: Taken<Reason>) -> Taken<Reason>:
+  match taken:
+    case Taken{remaining, None{}, expired}: Taken{remaining, Some{idle}, expired}
+    case Taken{remaining, Some{found}, expired}: Taken{idle <> remaining, Some{found}, expired}
+
+def placed(-Reason: Data, place: Place, idle: Idle<Reason>, taken: Taken<Reason>) -> Taken<Reason>:
+  match place taken:
+    case ExpiredIdle{} Taken{remaining, found, expired}: Taken{remaining, found, idle <> expired}
+    case MatchingIdle{} taken: withFound(Reason, idle, taken)
+    case OtherIdle{} Taken{remaining, found, expired}: Taken{idle <> remaining, found, expired}
+
+def placeIdle(-Reason: Data, idle: Idle<Reason>, +wanted: Origin, +now: F64, taken: Taken<Reason>) -> Taken<Reason>:
+  match idle:
+    case Idle{+origin, parked, controller, +expires}: placed(Reason, placeOf(origin, wanted, expires, now), Idle{origin, parked, controller, expires}, taken)
+
+def partition(-Reason: Data, idle: List<&1, Idle<Reason>>, +wanted: Origin, +now: F64, taken: Taken<Reason>) -> Taken<Reason>:
+  match idle:
+    case Nil{}: taken
+    case first <> rest: partition(Reason, rest, wanted, now, placeIdle(Reason, first, wanted, now, taken))
+
+def splitTaken(-Reason: Data, taken: Taken<Reason>) -> List<&1, Idle<Reason>> & (Maybe<&1, Idle<Reason>> & List<&1, Idle<Reason>>):
+  match taken:
+    case Taken{remaining, found, expired}: (List.reverse(&1, Idle<Reason>, remaining), (found, expired))
+
+def plainReadable(-Reason: Data, pair: Connect.Owner<Reason> & Bool) -> Parked<Reason> & Bool:
+  match pair:
+    case (connection, ready): (ParkedPlain{connection}, ready)
+
+def secureReadable(-Reason: Data, control: TLS.Writer<Reason>, pair: TLS.Connection<Reason> & Bool) -> Parked<Reason> & Bool:
+  match pair:
+    case (connection, ready): (ParkedSecure{connection, control}, ready)
+
+# undici validates an idle socket before reuse: pending data or a peer close
+# means the server gave up on it, so it is closed instead.
+def readableParked(-Reason: Data, parked: Parked<Reason>) -> IO(Parked<Reason> & Bool):
+  match parked:
+    case ParkedPlain{connection}:
+      do IO<Parked<Reason> & Bool>:
+        pair : Connect.Owner<Reason> & Bool <- Connect.readable(Reason, connection)
+        return plainReadable(Reason, pair)
+    case ParkedSecure{connection, control}:
+      do IO<Parked<Reason> & Bool>:
+        pair : TLS.Connection<Reason> & Bool <- TLS.readable(Reason, connection)
+        return secureReadable(Reason, control, pair)
+
+def validIdle(-Reason: Data, +origin: Origin, controller: Abort.AbortController<Reason>, +expires: F64, pair: Parked<Reason> & Bool) -> IO(Maybe<&1, Idle<Reason>>):
+  match pair:
+    case (parked, False{}): IO.pure(Maybe<&1, Idle<Reason>>, Some{Idle{origin, parked, controller, expires}})
+    case (parked, True{}):
+      do IO<Maybe<&1, Idle<Reason>>>:
+        disposeIdle(Reason, Idle{origin, parked, controller, expires})
+        return None{}
+
+def validated(-Reason: Data, found: Maybe<&1, Idle<Reason>>) -> IO(Maybe<&1, Idle<Reason>>):
+  match found:
+    case None{}: IO.pure(Maybe<&1, Idle<Reason>>, None{})
+    case Some{Idle{origin, parked, controller, expires}}:
+      do IO<Maybe<&1, Idle<Reason>>>:
+        pair : Parked<Reason> & Bool <- readableParked(Reason, parked)
+        validIdle(Reason, origin, controller, expires, pair)
+
+def takenIdle(-Reason: Data, pair: Maybe<&1, Idle<Reason>> & List<&1, Idle<Reason>>) -> IO(Maybe<&1, Idle<Reason>>):
+  match pair:
+    case (found, expired):
+      do IO<Maybe<&1, Idle<Reason>>>:
+        disposeAllIdle(Reason, expired)
+        validated(Reason, found)
+
+def takeIdle(-Reason: Data, pool: Pool<Reason>, +origin: Origin) -> IO(Maybe<&1, Idle<Reason>>):
+  match pool:
+    case Pool{idle, clock}:
+      do IO<Maybe<&1, Idle<Reason>>>:
+        +now : F64 <- Clock.now(clock)
+        pair : Maybe<&1, Idle<Reason>> & List<&1, Idle<Reason>> <- R.modify(List<&1, Idle<Reason>>, Maybe<&1, Idle<Reason>> & List<&1, Idle<Reason>>, idle, list => splitTaken(Reason, partition(Reason, list, origin, now, Taken{Nil{}, None{}, Nil{}})))
+        takenIdle(Reason, pair)
+
+def preparedMethod(request: Request.BufferedRequestPrepared) -> String:
+  match request:
+    case Request.BufferedRequestPrepared{Request.Head{method, _}, _}: method
+
+def startParked(~Reason: Data, parked: Parked<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Keep<Reason>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match parked request:
+    case ParkedPlain{connection} Request.BufferedRequestPrepared{Request.Head{method, head}, body}:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        result : Connect.Owner<Reason> & Result<&2, &1, Connect.Error<Reason>, Connect.UploadOwner<Reason>> <- Connect.startUpload(Reason, connection, head, Request.wireBody(body))
+        uploading(~Reason, method, maximum, limits, Some{keep}, result)
+    case ParkedSecure{connection, control} Request.BufferedRequestPrepared{Request.Head{method, head}, body}:
+      uploadTLS(~Reason, method, maximum, limits, Some{keep}, head, Request.wireBody(body), (connection, control))
+
+def reusedReport(-Reason: Data, -SourceError: Data, keep: Keep<Reason>, result: Result<&2, &1, StartError<Reason>, Exchange<Reason>>) -> IO(Report<Reason, SourceError>):
+  match result:
+    case Done{exchange}: IO.pure(Report<Reason, SourceError>, Reused{Done{exchange}})
+    case Fail{error}:
+      do IO<Report<Reason, SourceError>>:
+        retireKeep(Reason, keep)
+        return Reused{Fail{ResolvedExchangeFailure{error}}}
+
+def keepFor(-Reason: Data, pool: Pool<Reason>, origin: Origin, +controller: Abort.AbortController<Reason>, signal: Abort.AbortSignal<Reason>, method: String) -> IO(Keep<Reason>):
+  do IO<Keep<Reason>>:
+    link : Abort.Link<Reason> <- Abort.link(Reason, signal, controller)
+    reference : R.Ref<Maybe<&1, Abort.Link<Reason>>> <- R.new(Maybe<&1, Abort.Link<Reason>>, Some{link})
+    return Keep{pool, origin, controller, reference, method}
+
+def reuse(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, parked: Parked<Reason>, controller: Abort.AbortController<Reason>, signal: Abort.AbortSignal<Reason>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+  match options request:
+    case Options{_, _, _, maximum, limits} Request.URLPrepared{_, +prepared}:
+      do IO<Report<Reason, SourceError>>:
+        +keep : Keep<Reason> <- keepFor(Reason, pool, origin, controller, signal, preparedMethod(prepared))
+        result : Result<&2, &1, StartError<Reason>, Exchange<Reason>> <- startParked(~Reason, parked, prepared, maximum, limits, keep)
+        reusedReport(Reason, SourceError, keep, result)
+
+def settledReport(-Reason: Data, -SourceError: Data, keep: Keep<Reason>, report: Report<Reason, SourceError>) -> IO(Report<Reason, SourceError>):
+  match report:
+    case Attempted{resolution, attempts, Done{exchange}}: IO.pure(Report<Reason, SourceError>, Attempted{resolution, attempts, Done{exchange}})
+    case other:
+      do IO<Report<Reason, SourceError>>:
+        retireKeep(Reason, keep)
+        return other
+
+def fresh(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+  match options request:
+    case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, +prepared}:
+      do IO<Report<Reason, SourceError>>:
+        +controller : Abort.AbortController<Reason> <- Abort.new(Reason)
+        +keep : Keep<Reason> <- keepFor(Reason, pool, origin, controller, signal, preparedMethod(prepared))
+        report : Report<Reason, SourceError> <- configuredRoute(~Reason, ~SourceError, resolver, Abort.signal(Reason, controller), hosts, Options{priority, preference, duration, maximum, limits}, Some{keep}, routedPlan(host, port, prepared, maximum), protocol(security, transport, host))
+        settledReport(Reason, SourceError, keep, report)
+
+def startFrom(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared, idle: Maybe<&1, Idle<Reason>>) -> IO(Report<Reason, SourceError>):
+  match idle:
+    case None{}: fresh(~Reason, ~SourceError, pool, origin, security, resolver, signal, hosts, options, request)
+    case Some{Idle{_, parked, controller, _}}: reuse(~Reason, ~SourceError, pool, origin, parked, controller, signal, options, request)
+
+# undici's Agent: reuse the oldest idle connection to the origin unless it
+# expired or the server closed it, otherwise open a new one. Either way the
+# connection runs under its own controller; the request's signal is linked
+# to it until the response is released, and a completed persistent response
+# parks the connection again.
+def startPooled(~Reason: Data, ~SourceError: Data, +pool: Pool<Reason>, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, +request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+  match request:
+    case Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, _}:
+      +origin = originOf(transport, host, port)
+      do IO<Report<Reason, SourceError>>:
+        idle : Maybe<&1, Idle<Reason>> <- takeIdle(Reason, pool, origin)
+        startFrom(~Reason, ~SourceError, pool, origin, security, resolver, signal, hosts, options, request, idle)

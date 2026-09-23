@@ -723,6 +723,8 @@ def describeFetch(-Reason: Data, error: Fetch.Error<Reason>) -> String:
     case Fetch.Unresolved{_}: "Could not resolve the request host"
     case Fetch.ExchangeFailure{_, _, _}: "Connection error."
     case Fetch.HeaderFailure{_, _, _}: "Connection error."
+    case Fetch.ReusedExchangeFailure{_}: "Connection error."
+    case Fetch.ReusedHeaderFailure{_}: "Connection error."
 
 def describeCategory(-Reason: Data, cause: Fetch.Error<Reason>, category: Fetch.Category) -> String:
   match category:

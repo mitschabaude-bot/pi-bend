@@ -441,3 +441,16 @@ def sendParts(-Reason: Data, fuel: Nat, +handle: Writer<Reason>, fragment: Recor
 
 def send(-Reason: Data, handle: Writer<Reason>, +bytes: List<&2, U32>) -> IO(Result<&2, &2, Error<Reason>, Unit>):
   sendParts(Reason, Record.length(bytes, 0n), handle, split(bytes, 16384n, Nil{}), Done{Unit{}})
+
+def readableConnection(-Reason: Data, owner: Resource.Owner<State<Reason>>, shared: Resource.Handle<State<Reason>>, interrupt: Socket.Handle, task: Chan(Unit), +pending: List<&2, U32>, readSize: U32, pair: Socket.Owner<Reason> & Bool) -> Connection<Reason> & Bool:
+  match pair:
+    case (socket, ready): (Connection{socket, owner, shared, interrupt, task, pending, readSize}, ready || Bool.not(List.is_empty(&2, U32, pending)))
+
+# Keep-alive support: whether decrypted bytes are buffered or the socket has
+# data, a close or an error pending.
+def readable(-Reason: Data, connection: Connection<Reason>) -> IO(Connection<Reason> & Bool):
+  match connection:
+    case Connection{socket, owner, shared, interrupt, task, pending, readSize}:
+      do IO<Connection<Reason> & Bool>:
+        pair : Socket.Owner<Reason> & Bool <- Socket.readable(Reason, socket)
+        return readableConnection(Reason, owner, shared, interrupt, task, pending, readSize, pair)

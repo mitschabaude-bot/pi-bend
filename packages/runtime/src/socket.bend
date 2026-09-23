@@ -619,3 +619,34 @@ def stop(-Reason: Data, owner: UploadOwner<Reason>) -> IO(Result<&2, &2, UploadE
         joined : Result<&2, &2, InterruptError, Unit> <- IO.join(Result<&2, &2, InterruptError, Unit>, task)
         value : State<Reason> <- R.dispose(State<Reason>, state)
         return uploadOutcome(Reason, value, combined(stopped, joined))
+
+# Keep-alive support: whether a read would not block (data, a peer close or an
+# error is pending), and whether an upload finished successfully. An error
+# from the check counts as readable so the caller discards the connection.
+def readableResult(result: Result<&1, &1, U32 & String, Bool>) -> Bool:
+  match result:
+    case Done{value}: value
+    case Fail{_}: True{}
+
+def readableOwned(-Reason: Data, lifetime: Lifetime<Reason>, pair: Socket & Result<&1, &1, U32 & String, Bool>) -> Owner<Reason> & Bool:
+  match pair:
+    case (socket, result): (Owner{socket, lifetime}, readableResult(result))
+
+def readable(-Reason: Data, owner: Owner<Reason>) -> IO(Owner<Reason> & Bool):
+  match owner:
+    case Owner{socket, lifetime}:
+      do IO<Owner<Reason> & Bool>:
+        pair : Socket & Result<&1, &1, U32 & String, Bool> <- TCP.readable(socket)
+        return readableOwned(Reason, lifetime, pair)
+
+def settledDone(-Reason: Data, state: State<Reason>) -> Bool:
+  match state:
+    case Settled{Done{_}, _}: True{}
+    case _: False{}
+
+def uploadSettled(-Reason: Data, owner: UploadOwner<Reason>) -> IO(UploadOwner<Reason> & Bool):
+  match owner:
+    case UploadOwner{+state, interrupt, task}:
+      do IO<UploadOwner<Reason> & Bool>:
+        current : State<Reason> <- R.read(State<Reason>, state)
+        return (UploadOwner{state, interrupt, task}, settledDone(Reason, current))

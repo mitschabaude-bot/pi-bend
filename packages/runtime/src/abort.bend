@@ -75,3 +75,47 @@ def choose(-Reason: Data, -Failure: Data, -Value: Data, observed: Maybe<&2, Abor
     case Some{why} _: Aborted{why}
     case None{} Some{result}: Completed{result}
     case None{} None{}: Cancelled{}
+
+# A parent signal forwarded to another controller until unlinked: the child
+# aborts with the parent's reason. A pooled connection runs under its own
+# controller, and each request links its signal to it while in flight.
+type Link<-Reason: Data> is Type:
+  Link{cancellation: D.Cancellation<AbortReason<Reason>>, watcher: Chan(Unit)}
+
+def forwardedReason(-Reason: Data, controller: AbortController<Reason>, reason: AbortReason<Reason>) -> IO(Unit):
+  match controller reason:
+    case AbortController{AbortSignal{settlement}} why:
+      do IO<Unit>:
+        won : Bool <- D.resolve(AbortReason<Reason>, settlement, why)
+        return Unit{}
+
+def forwarded(-Reason: Data, controller: AbortController<Reason>, reason: Maybe<&2, AbortReason<Reason>>) -> IO(Unit):
+  match reason:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{why}: forwardedReason(Reason, controller, why)
+
+def forward(-Reason: Data, controller: AbortController<Reason>, ticket: D.Ticket<Maybe<&2, AbortReason<Reason>>>) -> IO(Unit):
+  do IO<Unit>:
+    reason : Maybe<&2, AbortReason<Reason>> <- D.wait(Maybe<&2, AbortReason<Reason>>, ticket)
+    forwarded(Reason, controller, reason)
+
+def linked(-Reason: Data, controller: AbortController<Reason>, observation: D.Observation<AbortReason<Reason>>) -> IO(Link<Reason>):
+  match observation:
+    case D.Observation{ticket, cancellation}:
+      do IO<Link<Reason>>:
+        watcher : Chan(Unit) <- IO.fork(Unit, forward(Reason, controller, ticket))
+        return Link{cancellation, watcher}
+
+def link(-Reason: Data, parent: AbortSignal<Reason>, child: AbortController<Reason>) -> IO(Link<Reason>):
+  do IO<Link<Reason>>:
+    observation : D.Observation<AbortReason<Reason>> <- observe(Reason, parent)
+    linked(Reason, child, observation)
+
+# Stop forwarding and join the watcher; an abort that already reached the child
+# stays there.
+def unlink(-Reason: Data, value: Link<Reason>) -> IO(Unit):
+  match value:
+    case Link{cancellation, watcher}:
+      do IO<Unit>:
+        removed : Bool <- D.cancel(AbortReason<Reason>, cancellation)
+        IO.join(Unit, watcher)

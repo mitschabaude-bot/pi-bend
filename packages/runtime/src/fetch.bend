@@ -53,6 +53,8 @@ type Error<-Reason: Data> is Data:
   Unresolved{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError())}
   ExchangeFailure{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, cause: HTTP.ResolvedExchangeError<Deadline.Cause<Reason>>}
   HeaderFailure{resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, cause: Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>}
+  ReusedExchangeFailure{cause: HTTP.ResolvedExchangeError<Deadline.Cause<Reason>>}
+  ReusedHeaderFailure{cause: Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>}
 
 def Result_(-Reason: Data) -> Type: Result<&2, &1, Error<Reason>, Response.Response<Transport(Reason)>>
 def Fetch(-Reason: Data) -> Data: C.Callback<Input<Reason>, Result_(Reason)>
@@ -73,13 +75,14 @@ type InitError is Data:
 
 # A hosts-file failure only affects named resolution; numeric addresses never
 # consult that source, so it is retained as a per-lookup error, not an init error.
+# Each fetch callback's keep-alive pool is closed with the runtime.
 type Runtime is Type:
-  Runtime{resolver: Resolver.Owner, hosts: HostsResult(), options: HTTP.Options}
+  Runtime{resolver: Resolver.Owner, hosts: HostsResult(), options: HTTP.Options, pools: List<&2, C.Callback<Unit, Unit>>}
 
 def created(hosts: HostsResult(), options: HTTP.Options, result: Result<&2, &1, Index.Error, Resolver.Owner>) -> Result<&2, &1, InitError, Runtime>:
   match result:
     case Fail{cause}: Fail{EntropyFailure{cause}}
-    case Done{resolver}: Done{Runtime{resolver, hosts, options}}
+    case Done{resolver}: Done{Runtime{resolver, hosts, options, Nil{}}}
 
 def configured(files: Files, options: HTTP.Options, result: Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared>) -> IO(Result<&2, &1, InitError, Runtime>):
   match files result:
@@ -97,23 +100,47 @@ def create(+files: Files, options: HTTP.Options) -> IO(Result<&2, &1, InitError,
         settings : Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared> <- System.loadWith(~UTF8.Error, ~UTF8.decodeStrict, path, chunkSize, byteLimit, milliseconds, maximum)
         configured(files, options, settings)
 
+def closePools(pools: List<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
+  match pools:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case +closer <> rest:
+      do IO<Unit>:
+        C.call(Unit, Unit, closer, Unit{})
+        C.dispose(Unit, Unit, closer)
+        closePools(rest)
+
+# Retire every fetch callback first: their idle keep-alive connections close
+# here, before the resolver.
 def dispose(runtime: Runtime) -> IO(Unit):
   match runtime:
-    case Runtime{resolver, _, _}: Resolver.close(resolver)
+    case Runtime{resolver, _, _, pools}:
+      do IO<Unit>:
+        closePools(pools)
+        Resolver.close(resolver)
 
 # Requests
 # --------
 
-type Context is Data:
-  Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options, security: HTTP.Security}
+type Context<-Reason: Data> is Data:
+  Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options, security: HTTP.Security, pool: HTTP.Pool<Deadline.Cause<Reason>>}
 
 def headed(-Reason: Data, resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, result: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>>) -> Result_(Reason):
   match result:
     case Fail{cause}: Fail{HeaderFailure{resolution, attempts, cause}}
     case Done{response}: Done{response}
 
+def reusedHead(-Reason: Data, result: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>>) -> Result_(Reason):
+  match result:
+    case Fail{cause}: Fail{ReusedHeaderFailure{cause}}
+    case Done{response}: Done{response}
+
 def reported(~Reason: Data, report: HTTP.Report<Deadline.Cause<Reason>, SourceError()>) -> IO(Result_(Reason)):
   match report:
+    case HTTP.Reused{Fail{cause}}: IO.pure(Result_(Reason), Fail{ReusedExchangeFailure{cause}})
+    case HTTP.Reused{Done{exchange}}:
+      do IO<Result_(Reason)>:
+        result : Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>> <- Head.startExchangeResponse(~Deadline.Cause<Reason>, exchange)
+        return reusedHead(Reason, result)
     case HTTP.Rejected{cause}: IO.pure(Result_(Reason), Fail{Rejected{cause}})
     case HTTP.Unresolved{resolution}: IO.pure(Result_(Reason), Fail{Unresolved{resolution}})
     case HTTP.Attempted{resolution, attempts, Fail{cause}}: IO.pure(Result_(Reason), Fail{ExchangeFailure{resolution, attempts, cause}})
@@ -122,35 +149,39 @@ def reported(~Reason: Data, report: HTTP.Report<Deadline.Cause<Reason>, SourceEr
         result : Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>> <- Head.startExchangeResponse(~Deadline.Cause<Reason>, exchange)
         return headed(Reason, resolution, attempts, result)
 
-def prepared(~Reason: Data, context: Context, signal: Signal(Reason), request: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Result_(Reason)):
+def prepared(~Reason: Data, context: Context<Reason>, signal: Signal(Reason), request: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Result_(Reason)):
   match context request:
     case _ Fail{cause}: IO.pure(Result_(Reason), Fail{InvalidRequest{cause}})
-    case Context{resolver, hosts, options, security} Done{request}:
+    case Context{resolver, hosts, options, security, pool} Done{request}:
       do IO<Result_(Reason)>:
-        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startResolvedWithSecurity(~Deadline.Cause<Reason>, ~(SourceError()), security, resolver, signal, hosts, options, request)
+        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startPooled(~Deadline.Cause<Reason>, ~(SourceError()), pool, security, resolver, signal, hosts, options, request)
         reported(~Reason, report)
 
-def invoke(~Reason: Data, context: Context, input: Input<Reason>) -> IO(Result_(Reason)):
+def invoke(~Reason: Data, context: Context<Reason>, input: Input<Reason>) -> IO(Result_(Reason)):
   match input:
     case Input{url, method, headers, body, signal}: prepared(~Reason, context, signal, Request.prepareURL(url, method, headers, body))
 
-def borrowed(~Reason: Data, security: HTTP.Security, +hosts: HostsResult(), +options: HTTP.Options, pair: Resolver.Owner & Resolver.Resolver) -> IO(Runtime & Fetch(Reason)):
+def closePool(-Reason: Data, pool: HTTP.Pool<Deadline.Cause<Reason>>, unused: Unit) -> IO(Unit): HTTP.disposePool(Deadline.Cause<Reason>, pool)
+
+def borrowed(~Reason: Data, security: HTTP.Security, +hosts: HostsResult(), +options: HTTP.Options, pools: List<&2, C.Callback<Unit, Unit>>, pair: Resolver.Owner & Resolver.Resolver) -> IO(Runtime & Fetch(Reason)):
   match pair:
     case Tuple{owner, resolver}:
       do IO<Runtime & Fetch(Reason)>:
-        fetch : Fetch(Reason) <- C.create(~Context, ~Input<Reason>, ~(Result_(Reason)), ~(invoke(~Reason)), Context{resolver, hosts, options, security})
-        return (Runtime{owner, hosts, options}, fetch)
+        +pool : HTTP.Pool<Deadline.Cause<Reason>> <- HTTP.newPool(Deadline.Cause<Reason>)
+        closer : C.Callback<Unit, Unit> <- C.create(~HTTP.Pool<Deadline.Cause<Reason>>, ~Unit, ~Unit, ~closePool(Reason), pool)
+        fetch : Fetch(Reason) <- C.create(~Context<Reason>, ~Input<Reason>, ~(Result_(Reason)), ~(invoke(~Reason)), Context{resolver, hosts, options, security, pool})
+        return (Runtime{owner, hosts, options, closer <> pools}, fetch)
 
 # The callback borrows the runtime's resolver: retire it before the runtime.
 def callback(~Reason: Data, runtime: Runtime) -> IO(Runtime & Fetch(Reason)):
   match runtime:
-    case Runtime{resolver, hosts, options}: borrowed(~Reason, HTTP.NoTLS{}, hosts, options, Resolver.borrow(resolver))
+    case Runtime{resolver, hosts, options, pools}: borrowed(~Reason, HTTP.NoTLS{}, hosts, options, pools, Resolver.borrow(resolver))
 
 # The fetch callback borrows the supplied authorizer factory as well as the
 # resolver. Retire fetch callbacks before disposing either owner.
 def callbackWithSecurity(~Reason: Data, runtime: Runtime, security: HTTP.Security) -> IO(Runtime & Fetch(Reason)):
   match runtime:
-    case Runtime{resolver, hosts, options}: borrowed(~Reason, security, hosts, options, Resolver.borrow(resolver))
+    case Runtime{resolver, hosts, options, pools}: borrowed(~Reason, security, hosts, options, pools, Resolver.borrow(resolver))
 
 def retire(-Reason: Data, fetch: Fetch(Reason)) -> IO(Unit):
   C.dispose(Input<Reason>, Result_(Reason), fetch)
@@ -254,6 +285,8 @@ def classify(-Reason: Data, error: Error<Reason>) -> Category:
     case Unresolved{report}: resolutionCategory(Reason, report)
     case ExchangeFailure{_, _, cause}: exchangeCategory(Reason, cause)
     case HeaderFailure{_, _, cause}: header(Reason, cause)
+    case ReusedExchangeFailure{cause}: exchangeCategory(Reason, cause)
+    case ReusedHeaderFailure{cause}: header(Reason, cause)
 
 # Initialization diagnostics
 # --------------------------

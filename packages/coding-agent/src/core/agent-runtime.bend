@@ -17,6 +17,7 @@ import ../../../agent/src/providers.bend as Providers
 import ../../../agent/src/stream-fn.bend as StreamFn
 import ../../../agent/src/types.bend as T
 import ../../../runtime/src/fetch.bend as Fetch
+import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../runtime/src/http-exchange.bend as HTTP
 import ../../../runtime/src/http-message.bend as Message
@@ -169,12 +170,24 @@ type ProviderStreams is Data:
 def selectedOptions(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Responses.SimpleStreamOptions(Unit, Unit, Error())>:
   Maybe.map(&2, LoopConfig(), Responses.SimpleStreamOptions(Unit, Unit, Error()), project, options)
 
+def withFetch(fetch: Fetch.Fetch(Unit), options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>) -> Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>:
+  match options:
+    case Ai.SimpleStreamOptions{signal, telemetry, apiKey, None{}, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, apiKey, Some{fetch}, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}
+    case other: other
+
+# Like upstream's global fetch, the Responses API shares the runtime's fetch,
+# so its keep-alive connections carry over between turns.
+def sharedFetch(fetch: Fetch.Fetch(Unit), config: LoopConfig()) -> LoopConfig():
+  match config:
+    case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withFetch(fetch, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
+
 def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, urlContext(), model, context, selectedOptions(options))
-    case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, options})
+    case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), config => sharedFetch(fetch, config), options)})
 
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
   match config input:
