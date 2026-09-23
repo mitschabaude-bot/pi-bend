@@ -731,6 +731,7 @@ type EditorAction is Data:
   Exit{}
   FollowUp{text: String}
   Dequeue{text: String}
+  ExpandTools{}
 type EditorCallbacks is Data:
   EditorCallbacks{onChange: Maybe<&2,C.Callback<String,Unit>>,onSubmit: Maybe<&2,C.Callback<String,Unit>>,requestRender: Maybe<&2,C.Callback<Unit,Unit>>,onAction: Maybe<&2,C.Callback<EditorAction,Unit>>}
 type EditorSettings is Data: EditorSettings{theme: EditorTheme,options: EditorOptions,callbacks: EditorCallbacks,focused: Bool,disableSubmit: Bool}
@@ -1398,15 +1399,17 @@ def regularSelected(~Context: Data,~segment: Context -> String -> Word.ResultOf(
     case Copy{}: IO.pure(ResultOf(Editor),Done{value})
     case UndoCommand{}: executeCommand(~Context,~segment,context,value,manager,keyboard,data,terminalRows,UndoCommand{})
     case selected: menuInput(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected)
-type AppInput is Data: AppInterrupt{} AppClear{} AppExit{} AppFollowUp{} AppDequeue{} AppNone{}
+type AppInput is Data: AppInterrupt{} AppClear{} AppExit{} AppFollowUp{} AppDequeue{} AppExpand{} AppNone{}
 def appInput(+manager: KB.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> AppInput:
-  Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.interrupt"),AppInterrupt{},
+  Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.tools.expand"),AppExpand{},
+    Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.interrupt"),AppInterrupt{},
     Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.clear"),AppClear{},
       Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.exit"),AppExit{},
         Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.followUp"),AppFollowUp{},
-          Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.dequeue"),AppDequeue{},AppNone{})))))
+          Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.dequeue"),AppDequeue{},AppNone{}))))))
 def runAppInput(~Context: Data,~segment: Context -> String -> Word.ResultOf(List<&2,Word.Segment>),context: Context,+value: Editor,manager: KB.KeybindingsManager,keyboard: Keys.Context,data: String,terminalRows: Nat,selected: Command,app: AppInput) -> IO(ResultOf(Editor)):
   match app:
+    case AppExpand{}: editorAction(value,ExpandTools{},False{})
     case AppInterrupt{}: editorAction(value,Interrupt{getText(value)},False{})
     case AppClear{}: editorAction(value,Clear{},True{})
     case AppExit{}:
