@@ -23,3 +23,5 @@ python3 tests/input_check.py
 ```
 
 The checker defaults to Bun and O1 native with one/four threads; positional backend names and `--prefix` select isolated artifacts. Component adapter ownership and default lexical-engine integration are separate from this fixture.
+
+Actual native-context integration is validated by [text-components-native-word.md](text-components-native-word.md): the shared `Word.nativeSegments` adapter feeds loaded ICU rule/CJK/Khmer assets through Input and SettingsList for 98 source-compared or independently specified sequences, including deterministic Common marks and missing-engine state preservation.

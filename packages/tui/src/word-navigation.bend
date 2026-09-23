@@ -1,5 +1,6 @@
 import Base
 import ../../runtime/src/text.bend as Text
+import ../../runtime/src/word-segmenter.bend as Native
 
 # A segmenter supplies lexical status; Unicode default word boundaries alone do
 # not provide Intl's dictionary/LSTM segmentation. There is no implicit default.
@@ -105,3 +106,17 @@ def findWordBackwardChecked(~Context: Data,~segment: Context -> String -> Result
   findChecked(~Context,~segment,~isAtomic,context,Backward{},cursor,slice(text,cursor,""))
 def findWordForwardChecked(~Context: Data,~segment: Context -> String -> ResultOf(List<&2,Segment>),~isAtomic: Context -> String -> Bool,context: Context,text: String,+cursor: Nat) -> ResultOf(Nat):
   findChecked(~Context,~segment,~isAtomic,context,Forward{},cursor,slice(text,cursor,""))
+
+# Adapt the explicitly loaded native runtime context for all TUI editors.
+# Loading/assets remain caller-owned; custom checked segmenters remain valid.
+def nativeParts(values: List<&2,Native.Segment>,reversed: List<&2,Segment>) -> List<&2,Segment>:
+  match values:
+    case Nil{}: List.reverse(&2,Segment,reversed)
+    case Native.Segment{text,word,_} <> rest: nativeParts(rest,Segment{text,word} <> reversed)
+def nativeResult(value: Native.ResultOf(List<&2,Native.Segment>)) -> ResultOf(List<&2,Segment>):
+  match value:
+    case Done{values}: Done{nativeParts(values,Nil{})}
+    case Fail{Native.MissingEngine{language}}: Fail{MissingWordEngine{language}}
+    case Fail{Native.InvalidState{}}: Fail{InvalidSegments{}}
+def nativeSegments(context: Native.Context,text: String) -> ResultOf(List<&2,Segment>):
+  nativeResult(Native.segments(context,text))
