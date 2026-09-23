@@ -147,3 +147,6 @@ Validation with the patched compiler, all passing:
 - agent-session (95, 1 and 4 threads);
 - grep (112) and find (84), native 1/4;
 - tools-manager, including the live GitHub download on 4 threads.
+
+`bend-process-clock.patch` and `bend-terminal-effects.patch` (2026-09-23) are installed in the shared toolchain `build/bend-process-files`, which builds the full CLI including the interactive terminal. `bend-terminal-effects.patch` was regenerated to apply after `bend-process-clock.patch` on the current default. Both only add Base declarations and effect files: `tests/session-context-edit.bend` compiles to byte-identical C with and without them, with equal peak memory (1.36 vs 1.33 GB) and compile times within the host's noise (13-20 s for both).
+
