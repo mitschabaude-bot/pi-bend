@@ -4,10 +4,11 @@ import ../../../../../tui/src/components/text.bend as TuiText
 import ../../../../../tui/src/components/box.bend as Box
 import ../../../../../tui/src/utils.bend as U
 import ../theme/theme.bend as Theme
-import ../theme/markdown-theme.bend as Styles
 import ../../../../../runtime/src/callback.bend as Callback
+import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/text.bend as Text
 import ../../../../../ai/src/types.bend as Ai
+import ../../../../../tui/src/component.bend as Component
 
 type Paint is Data: Paint{theme: Theme.Theme,key: String,background: Bool}
 type Content is Data: TextBlock{text: String} ThinkingBlock{text: String} ToolCall{}
@@ -182,3 +183,43 @@ def renderAssistant(state: AssistantMessage,+width: Nat) -> IO(List<&2,String>):
         +started : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,anyVisible(content),"" <> body,body))
         +complete : List<&2,String> <- withError(started,errorText(stop,error,hasTool(content)),pad,width,theme)
         return Bool.pick(List<&2,String>,hasTool(content),complete,zone(complete))
+
+# A mounted message renders the latest immutable snapshot. The transcript owns
+# the callback lifetime; stream updates replace only this message's snapshot.
+type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage}
+type Owner is Type:
+  Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{state: Ref.Ref<Body>}
+def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
+  match body:
+    case UserBody{value}: renderUser(value,width)
+    case AssistantBody{value}: renderAssistant(value,width)
+def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
+  match handle:
+    case Handle{state}:
+      do IO<List<&2,String>>:
+        body : Body <- Ref.read(Body,state)
+        renderBody(body,width)
+def noInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def create(id: Component.ComponentId,body: Body) -> IO(Owner):
+  do IO<Owner>:
+    +state : Ref.Ref<Body> <- Ref.new(Body,body)
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state})
+    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~noInvalidate,Unit{})
+    return Owner{state,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
+def borrow(owner: Owner) -> Owner & Component.Component & Handle:
+  match owner:
+    case Owner{+state,+component,render,invalidate}: (Owner{state,component,render,invalidate},component,Handle{state})
+def set(handle: Handle,body: Body) -> IO(Unit):
+  match handle:
+    case Handle{state}: Ref.write(Body,state,body)
+def current(handle: Handle) -> IO(Body):
+  match handle:
+    case Handle{state}: Ref.read(Body,state)
+def dispose(owner: Owner) -> IO(Unit):
+  match owner:
+    case Owner{state,_,render,invalidate}:
+      do IO<Unit>:
+        old : Body <- Ref.dispose(Body,state)
+        Callback.dispose(Nat,List<&2,String>,render)
+        Callback.dispose(Unit,Unit,invalidate)
