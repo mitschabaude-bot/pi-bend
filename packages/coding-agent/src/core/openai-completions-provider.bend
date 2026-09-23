@@ -61,7 +61,7 @@ def reasoningFor(+model: Ai.Model<Ai.JsonValue>, level: Ai.ThinkingLevel) -> May
   match model:
     case Ai.Model{_, _, _, _, _, reasoning, mapping, _, _, _, _, _, _, _, _, _}:
       +selected = Levels.closest(Levels.available(reasoning, mapping), Levels.rank(Ai.Thinking{level}), Ai.Off{})
-      Bool.pick(Maybe<&2, String>, Request.reasoningSupported(Request.behavior(model)), effortFor(model, selected), None{})
+      effortFor(model, selected)
 
 def reasoningEffort(model: Ai.Model<Ai.JsonValue>, requested: Maybe<&2, Ai.ThinkingLevel>) -> Maybe<&2, String>:
   match requested:
@@ -69,8 +69,8 @@ def reasoningEffort(model: Ai.Model<Ai.JsonValue>, requested: Maybe<&2, Ai.Think
     case Some{level}: reasoningFor(model, level)
 def requestOptions(+model: Ai.Model<Ai.JsonValue>, context: Context(), value: Options()) -> Request.Options:
   match value:
-    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, _, maxTokens, _, _, _, _, _, choice, level, _, _}:
-      Request.Options{outputTokens(model, context, maxTokens), temperature, choice, reasoningEffort(model, level)}
+    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, _, maxTokens, _, _, _, _, _, choice, +level, _, _}:
+      Request.Options{outputTokens(model, context, maxTokens), temperature, choice, reasoningEffort(model, level), Maybe.is_some(&2, Ai.ThinkingLevel, level)}
 
 def requestKey(value: Options()) -> Maybe<&2, String>:
   match value:

@@ -30,6 +30,13 @@ if (mode === "tool" || mode === "tool_image") {
 } else if (mode === "reasoning") {
   model.reasoning = true;
   await request(normalizeContext({ messages: [{ role: "user", content: "ping", timestamp: 1 }] }), { reasoning: "low" });
+} else if (mode === "reasoning_off") {
+  model.reasoning = true;
+  await request(normalizeContext({ messages: [{ role: "user", content: "ping", timestamp: 1 }] }));
+} else if (mode === "openrouter" || mode === "openrouter_off" || mode === "together" || mode === "together_off") {
+  model.provider = mode.startsWith("openrouter") ? "openrouter" : "together";
+  model.reasoning = true;
+  await request(normalizeContext({ messages: [{ role: "user", content: "ping", timestamp: 1 }] }), mode.endsWith("_off") ? {} : { reasoning: "low" });
 } else {
   await request(normalizeContext({ messages: [{ role: "user", content: "ping", timestamp: 1 }] }));
 }

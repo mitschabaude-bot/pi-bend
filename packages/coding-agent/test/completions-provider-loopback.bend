@@ -26,6 +26,14 @@ def reasoningOf(selected: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
 
 def reasoningModel(base: String) -> Ai.Model<Ai.JsonValue>: reasoningOf(model(base))
 
+def providerOf(selected: Ai.Model<Ai.JsonValue>, named: String) -> Ai.Model<Ai.JsonValue>:
+  match selected:
+    case Ai.Model{id, name, api, _, url, reasoning, mapping, input, limits, cost, cache, window, maximum, sampling, headers, compat}:
+      Ai.Model{id, name, api, named, url, reasoning, mapping, input, limits, cost, cache, window, maximum, sampling, headers, compat}
+
+def providerModel(base: String, named: String) -> Ai.Model<Ai.JsonValue>:
+  providerOf(reasoningModel(base), named)
+
 def imageOf(selected: Ai.Model<Ai.JsonValue>) -> Ai.Model<Ai.JsonValue>:
   match selected:
     case Ai.Model{id, name, api, provider, url, reasoning, mapping, _, limits, cost, cache, window, maximum, sampling, headers, compat}:
@@ -142,6 +150,14 @@ def reasoningRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantM
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), reasoningModel(base), context(), Some{reasoningOptions(options())})
     opened(result)
 
+def providerOptions(enabled: Bool) -> Completions.Options():
+  Bool.pick(Completions.Options(), enabled, reasoningOptions(options()), options())
+
+def providerRequest(fetch: Fetch.Fetch(Unit), base: String, named: String, enabled: Bool) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), providerModel(base, named), context(), Some{providerOptions(enabled)})
+    opened(result)
+
 def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   do IO<Ai.AssistantMessage<V.Value, Unit>>:
     result : Completions.Output() <- Completions.open(fetch, TestClient.urlContext(), model(base), context(), Some{headerOptions()})
@@ -157,6 +173,30 @@ def compatRequest(fetch: Fetch.Fetch(Unit), base: String, unsupported: Bool) -> 
 
 def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit):
   match mode:
+    case "deepseek_unsupported":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "deepseek", True{})
+        return Unit{}
+    case "reasoning_off":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "openai", False{})
+        return Unit{}
+    case "openrouter":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "openrouter", True{})
+        return Unit{}
+    case "openrouter_off":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "openrouter", False{})
+        return Unit{}
+    case "together":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "together", True{})
+        return Unit{}
+    case "together_off":
+      do IO<Unit>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "together", False{})
+        return Unit{}
     case "tool_image":
       do IO<Unit>:
         first : Ai.AssistantMessage<V.Value, Unit> <- imageRequest(fetch, base, toolContext())

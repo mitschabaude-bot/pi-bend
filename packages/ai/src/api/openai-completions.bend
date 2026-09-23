@@ -4,6 +4,7 @@ import ../utils/json.bend as Wire
 import ../utils/schema-json.bend as Schema
 import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
+import ../utils/thinking-levels.bend as Levels
 import ../utils/sanitize-unicode.bend as Unicode
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
@@ -26,10 +27,28 @@ def number(value: Maybe<&2, F64>) -> Maybe<&2, J()>:
     case Some{item}: Some{T.JsonNumber{item}}
 
 type Options is Data:
-  Options{maxTokens: Maybe<&2, F64>, temperature: Maybe<&2, F64>, toolChoice: Maybe<&2, T.ToolChoice>, reasoningEffort: Maybe<&2, String>}
+  Options{maxTokens: Maybe<&2, F64>, temperature: Maybe<&2, F64>, toolChoice: Maybe<&2, T.ToolChoice>, reasoningEffort: Maybe<&2, String>, reasoningRequested: Bool}
+
+type ThinkingWire is Data:
+  StandardThinking{}
+  OpenRouterWire{}
+  TogetherWire{}
 
 type Behavior is Data:
-  Behavior{legacyMaxTokens: Bool, supportsStore: Bool, supportsDeveloperRole: Bool, supportsUsageInStreaming: Bool, supportsReasoningEffort: Bool}
+  Behavior{legacyMaxTokens: Bool, supportsStore: Bool, supportsDeveloperRole: Bool, supportsUsageInStreaming: Bool, supportsReasoningEffort: Bool, thinkingWire: ThinkingWire}
+
+def detectedWire(provider: String, +base: String) -> ThinkingWire:
+  match provider:
+    case "openrouter": OpenRouterWire{}
+    case "together": TogetherWire{}
+    case _: Bool.pick(ThinkingWire, String.contains(base, "openrouter.ai"), OpenRouterWire{}, Bool.pick(ThinkingWire, String.contains(base, "api.together.ai") || String.contains(base, "api.together.xyz"), TogetherWire{}, StandardThinking{}))
+
+def selectedWire(value: Maybe<&2, T.ThinkingFormat>, fallback: ThinkingWire) -> ThinkingWire:
+  match value:
+    case Some{T.OpenRouterThinking{}}: OpenRouterWire{}
+    case Some{T.TogetherThinking{}}: TogetherWire{}
+    case Some{T.OpenAIThinking{}}: StandardThinking{}
+    case _: fallback
 
 def boolean(value: Maybe<&2, Bool>, fallback: Bool) -> Bool: Maybe.default(&2, Bool, value, fallback)
 def legacyField(value: Maybe<&2, T.MaxTokensField>, fallback: Bool) -> Bool:
@@ -44,21 +63,17 @@ def detected(+provider: String, +base: String, +id: String, reasoning: Bool) -> 
   +router = String.eq(provider, "openrouter") || String.contains(base, "openrouter.ai")
   +developer = reasoning && ((Bool.not(nonStandard) && Bool.not(router)) || (router && (String.starts_with(id, "openai/") || String.starts_with(id, "anthropic/"))))
   +effort = Bool.not(String.eq(provider, "xai") || String.eq(provider, "zai") || String.eq(provider, "zai-coding-cn") || String.eq(provider, "moonshotai") || String.eq(provider, "moonshotai-cn") || String.eq(provider, "together") || String.eq(provider, "cloudflare-ai-gateway") || String.eq(provider, "nvidia") || String.eq(provider, "ant-ling"))
-  Behavior{legacy, Bool.not(nonStandard), developer, True{}, effort}
+  Behavior{legacy, Bool.not(nonStandard), developer, True{}, effort, detectedWire(provider, base)}
 
 def overrides(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(api)>, default: Behavior, reasoning: Bool) -> Behavior:
   match api compat default:
-    case T.OpenAICompletionsApi{} Some{T.OpenAICompletionsCompat{store, developer, effort, usage, _, selectedField, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}} Behavior{legacy, defaultStore, defaultDeveloper, defaultUsage, defaultEffort}:
-      Behavior{legacyField(selectedField, legacy), boolean(store, defaultStore), reasoning && boolean(developer, defaultDeveloper), boolean(usage, defaultUsage), boolean(effort, defaultEffort)}
+    case T.OpenAICompletionsApi{} Some{T.OpenAICompletionsCompat{store, developer, effort, usage, _, selectedField, _, _, _, _, format, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}} Behavior{legacy, defaultStore, defaultDeveloper, defaultUsage, defaultEffort, wire}:
+      Behavior{legacyField(selectedField, legacy), boolean(store, defaultStore), reasoning && boolean(developer, defaultDeveloper), boolean(usage, defaultUsage), boolean(effort, defaultEffort), selectedWire(format, wire)}
     case _ _ fallback: fallback
 
 def behavior(model: T.Model<J()>) -> Behavior:
   match model:
     case T.Model{id, _, api, provider, base, +reasoning, _, _, _, _, _, _, _, _, _, compat}: overrides(api, compat, detected(provider, base, id, reasoning), reasoning)
-
-def reasoningSupported(selected: Behavior) -> Bool:
-  match selected:
-    case Behavior{_, _, _, _, enabled}: enabled
 
 def enabled(value: Maybe<&2, Bool>) -> Bool:
   match value:
@@ -70,6 +85,8 @@ def defaultThinking(value: Maybe<&2, T.ThinkingFormat>) -> Bool:
   match value:
     case None{}: True{}
     case Some{T.OpenAIThinking{}}: True{}
+    case Some{T.OpenRouterThinking{}}: True{}
+    case Some{T.TogetherThinking{}}: True{}
     case _: False{}
 
 # Do not silently drop model-specific compatibility requirements that this
@@ -95,9 +112,30 @@ def compatibilityIssue(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(a
       issue(Bool.not(boolean(finish, True{})), "missing finish_reason fallback", o)
     case _ _: None{}
 
+def automaticThinkingIssue(+provider: String, +base: String, reasoning: Bool) -> Maybe<&2, String>:
+  match reasoning:
+    case False{}: None{}
+    case True{}:
+      +deepseek = String.eq(provider, "deepseek") || String.contains(base, "deepseek.com")
+      +zai = String.eq(provider, "zai") || String.eq(provider, "zai-coding-cn") || String.contains(base, "api.z.ai") || String.contains(base, "open.bigmodel.cn")
+      +antLing = String.eq(provider, "ant-ling") || String.contains(base, "api.ant-ling.com")
+      issue(deepseek || zai || antLing, "auto-detected provider thinking format", None{})
+
+def automaticIssue(provider: String, base: String, reasoning: Bool, compat: Maybe<&2, T.OpenAICompletionsCompat>) -> Maybe<&2, String>:
+  match compat:
+    case Some{T.OpenAICompletionsCompat{_, _, _, _, _, _, _, _, _, _, Some{_}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: None{}
+    case _: automaticThinkingIssue(provider, base, reasoning)
+
+def combinedIssue(explicit: Maybe<&2, String>, automatic: Maybe<&2, String>) -> Maybe<&2, String>:
+  match explicit:
+    case Some{message}: Some{message}
+    case None{}: automatic
+
 def modelIssue(model: T.Model<J()>) -> Maybe<&2, String>:
   match model:
-    case T.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _, _, compat}: compatibilityIssue(api, compat)
+    case T.Model{_, _, T.OpenAICompletionsApi{}, provider, base, reasoning, _, _, _, _, _, _, _, _, _, +compat}:
+      combinedIssue(compatibilityIssue(T.OpenAICompletionsApi{}, compat), automaticIssue(provider, base, reasoning, compat))
+    case _: None{}
 
 def userPart(part: T.TextImageContent) -> J():
   match part:
@@ -235,9 +273,38 @@ def maxField(value: Maybe<&2, F64>, legacy: Bool, fields: Fields()) -> Fields():
     case None{}: fields
     case Some{tokens}: put(fields, Bool.pick(String, legacy, "max_tokens", "max_completion_tokens"), T.JsonNumber{tokens})
 
-def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool, images: Bool) -> J():
+def offEffortOf(value: Maybe<&2, T.Nullable<String>>, fallback: String) -> Maybe<&2, String>:
+  match value:
+    case Some{T.NullValue{}}: None{}
+    case Some{T.PresentValue{value}}: Some{value}
+    case None{}: Some{fallback}
+
+def offEffort(mapping: Maybe<&2, T.ThinkingLevelMap>, fallback: String) -> Maybe<&2, String>:
+  offEffortOf(Levels.mapped(mapping, T.Off{}), fallback)
+
+def mappedOff(value: Maybe<&2, T.Nullable<String>>) -> Maybe<&2, String>:
+  match value:
+    case Some{T.PresentValue{selected}}: Some{selected}
+    case _: None{}
+
+def effortObject(value: String) -> J(): obj(R.Record{field("effort", str(value)) <> Nil{}})
+
+def withReasoning(+fields: Fields(), wire: ThinkingWire, reasoning: Bool, enabled: Bool, supported: Bool, effort: Maybe<&2, String>, mapping: Maybe<&2, T.ThinkingLevelMap>) -> Fields():
+  match wire reasoning enabled:
+    case _ False{} _: fields
+    case StandardThinking{} True{} True{}: Bool.pick(Fields(), supported, maybe(fields, "reasoning_effort", Maybe.map(&2, String, J(), str, effort)), fields)
+    case StandardThinking{} True{} False{}: Bool.pick(Fields(), supported, maybe(fields, "reasoning_effort", Maybe.map(&2, String, J(), str, mappedOff(Levels.mapped(mapping, T.Off{})))), fields)
+    case OpenRouterWire{} True{} True{}: maybe(fields, "reasoning", Maybe.map(&2, String, J(), effortObject, effort))
+    case OpenRouterWire{} True{} False{}: maybe(fields, "reasoning", Maybe.map(&2, String, J(), effortObject, offEffort(mapping, "none")))
+    case TogetherWire{} True{} True{}:
+      +withFlag = put(fields, "reasoning", obj(R.Record{field("enabled", T.JsonBoolean{True{}}) <> Nil{}}))
+      Bool.pick(Fields(), supported, maybe(withFlag, "reasoning_effort", Maybe.map(&2, String, J(), str, effort)), withFlag)
+    case TogetherWire{} True{} False{}:
+      put(fields, "reasoning", obj(R.Record{field("enabled", T.JsonBoolean{False{}}) <> Nil{}}))
+
+def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool, images: Bool, reasoning: Bool, supported: Bool, wire: ThinkingWire, mapping: Maybe<&2, T.ThinkingLevelMap>) -> J():
   match context options:
-    case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, toolChoice, reasoningEffort}:
+    case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, toolChoice, reasoningEffort, requested}:
       +declared = requestedTools(G, D, normalizedMessages)
       +base = {R.Record{field("model", str(id)) <> field("messages", T.JsonArray{messages(G, D, normalizedMessages, True{}, developer, images, Nil{})}) <> field("stream", T.JsonBoolean{True{}}) <> Nil{}} : Fields()}
       +withUsage = Bool.pick(Fields(), usage, put(base, "stream_options", obj(R.Record{field("include_usage", T.JsonBoolean{True{}}) <> Nil{}})), base)
@@ -246,9 +313,9 @@ def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContex
       +withTemp = maybe(withMax, "temperature", number(temperature))
       +withTools = Bool.pick(Fields(), List.is_empty(&2, J(), declared), withTemp, put(withTemp, "tools", T.JsonArray{declared}))
       +withChoice = maybe(withTools, "tool_choice", Maybe.map(&2, T.ToolChoice, J(), choice, toolChoice))
-      obj(maybe(withChoice, "reasoning_effort", Maybe.map(&2, String, J(), str, reasoningEffort)))
+      obj(withReasoning(withChoice, wire, reasoning, requested, supported, reasoningEffort, mapping))
 
 def params(-G: Data, -D: Data, model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, selected: Behavior) -> J():
   match model context options selected:
-    case T.Model{id, _, _, _, _, _, _, input, _, _, _, _, _, _, _, _} _ _ Behavior{legacy, store, developer, usage, _}:
-      normalizedParams(G, D, id, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{False{}}), options, legacy, store, developer, usage, imageInput(input))
+    case T.Model{id, _, _, _, _, reasoning, mapping, input, _, _, _, _, _, _, _, _} _ _ Behavior{legacy, store, developer, usage, supported, wire}:
+      normalizedParams(G, D, id, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{False{}}), options, legacy, store, developer, usage, imageInput(input), reasoning, supported, wire, mapping)
