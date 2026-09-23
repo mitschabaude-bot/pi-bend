@@ -31,7 +31,7 @@ def insertedState(state: State,owner: Messages.Owner,component: Component.Compon
     case State{entries,_,id,+view,theme,styles}:
       do IO<State & Bool>:
         View.append(view,component)
-        return (State{List.append(&1,Messages.Owner,entries,owner <> Nil{}),Bool.pick(Maybe<&2,Messages.Handle>,assistant,Some{handle},None{}),id + 1n,view,theme,styles},True{})
+        return (State{owner <> entries,Bool.pick(Maybe<&2,Messages.Handle>,assistant,Some{handle},None{}),id + 1n,view,theme,styles},True{})
 def inserted(state: State,pair: Messages.Owner & Component.Component & Messages.Handle,assistant: Bool) -> IO(State & Bool):
   match pair:
     case (owner,component,handle): insertedState(state,owner,component,handle,assistant)
@@ -88,6 +88,14 @@ def transition(-G: Data,-D: Data,-C: Data,-P: Data,-E: Data,state: State,event: 
 def accept(-G: Data,-D: Data,-C: Data,-P: Data,-E: Data,handle: Handle,event: Agent.AgentEvent<G,D,C,P,E>) -> IO(Bool):
   match handle:
     case Handle{resource}: Serial.run(State,Bool,resource,state => transition(G,D,C,P,E,state,event))
+def seed(-G: Data,-D: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.AgentMessage<G,D,C>>) -> IO(Unit):
+  match messages:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case +message <> rest:
+      do IO<Unit>:
+        begun : Bool <- accept(G,D,C,Unit,Unit,handle,Agent.MessageStart{message})
+        ended : Bool <- accept(G,D,C,Unit,Unit,handle,Agent.MessageEnd{message})
+        seed(G,D,C,handle,rest)
 def disposeEntries(entries: List<&1,Messages.Owner>) -> IO(Unit):
   match entries:
     case Nil{}: IO.pure(Unit,Unit{})
