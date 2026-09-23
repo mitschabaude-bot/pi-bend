@@ -13,6 +13,17 @@ type SizeValue is Data:
 type Offset is Data:
   Forward{cells: Nat}
   Backward{cells: Nat}
+
+type TuiMouseEventType is Data:
+  MousePress{} MouseRelease{} MouseMove{} MouseDrag{} MouseClick{} MouseWheel{}
+type TuiMouseButton is Data:
+  MouseLeft{} MouseMiddle{} MouseRight{} NoButton{}
+# Coordinates stay signed when captured input is retargeted outside a component.
+type TuiMouseEvent is Data:
+  TuiMouseEvent{eventType: TuiMouseEventType,button: TuiMouseButton,x: Offset,y: Offset,screenX: Offset,screenY: Offset,width: Nat,height: Nat,shift: Bool,alt: Bool,ctrl: Bool,wheelDelta: Maybe<&2,Offset>,clickCount: Maybe<&2,Nat>}
+type TuiMouseEventResult is Data:
+  TuiMouseEventResult{handled: Bool,capture: Bool,focus: Bool,render: Maybe<&2,Bool>}
+
 type OverlayMargin is Data:
   OverlayMargin{top: Nat,right: Nat,bottom: Nat,left: Nat}
 type OverlayGeometry is Data:
