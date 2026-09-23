@@ -201,9 +201,9 @@ def themeHeading(theme: MarkdownTheme) -> Style():
   match theme: case MarkdownTheme{heading,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: heading
 def styledHeading(text: String,level: Nat,+theme: MarkdownTheme) -> IO(String):
   do IO<String>:
-    +bold : String <- C.call(String,String,themeBold(theme),text)
-    underlined : String <- applyIf(bold,Nat.is_eq(level,1n),themeUnderline(theme))
-    C.call(String,String,themeHeading(theme),underlined)
+    underlined : String <- applyIf(text,Nat.is_eq(level,1n),themeUnderline(theme))
+    bold : String <- C.call(String,String,themeBold(theme),underlined)
+    C.call(String,String,themeHeading(theme),bold)
 type BlockLine is Data:
   HeadingLine{level: Nat,content: String}
   BulletLine{depth: Nat,marker: String,content: String}
