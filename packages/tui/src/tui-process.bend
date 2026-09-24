@@ -98,7 +98,7 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
 # share this context, so input, resize and application updates cannot interleave
 # between a component callback and the frame it produces.
 type Active is Data:
-  Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>,owed: Bool}
+  Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>,owed: Bool,ticks: Nat}
 type EventSink is Data:
   EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,queries: Query.Handle,termux: Bool}
 type QueryReady is Data:
@@ -106,31 +106,72 @@ type QueryReady is Data:
 type QueryWriter is Data:
   QueryWriter{terminal: Terminal.Handle,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>}
 def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
-  Active{session,components,mounted,None{},False{}}
-def afterDraw(outcome: Draw,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>) -> Active:
-  match outcome:
-    case Drawn{session}: Active{session,components,mounted,previous,False{}}
-    case Rejected{session,error}: Active{session,components,mounted,Some{error},False{}}
-def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,+owed: Bool) -> Active & Unit:
+  Active{session,components,mounted,None{},False{},0n}
+def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,+owed: Bool,ticks: Nat) -> Active & Unit:
   match event:
-    case Input{Drawn{session},_,now}: (Active{session,components,mounted,previous,owed || now},Unit{})
-    case Input{Rejected{session,error},_,_}: (Active{session,components,mounted,Some{error},owed},Unit{})
+    case Input{Drawn{session},_,now}: (Active{session,components,mounted,previous,owed || now,ticks},Unit{})
+    case Input{Rejected{session,error},_,_}: (Active{session,components,mounted,Some{error},owed,ticks},Unit{})
 def inputOperation(current: Active,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
   match current:
-    case Active{session,+components,+mounted,previous,owed}:
+    case Active{session,+components,+mounted,previous,owed,ticks}:
       do IO<Active & Unit>:
         event : Input <- input(session,components,mounted,data,handle,termux)
-        return inputFinished(event,components,mounted,previous,owed)
-def resizeOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+        return inputFinished(event,components,mounted,previous,owed,ticks)
+# Render scheduling follows upstream TUI: requestRender queues a scheduling
+# step (process.nextTick), which starts a timer honouring the 16 ms minimum
+# frame interval; input and resize draw at once and cancel a pending timer.
+# `ticks` counts spawned scheduling tasks so shutdown can wait for them.
+def spawned(effects: List<&2,Tui.RenderEffect>) -> Nat:
+  match effects:
+    case Nil{}: 0n
+    case Tui.QueueSchedule{} <> rest: 1n + spawned(rest)
+    case Tui.QueueImmediate{} <> rest: 1n + spawned(rest)
+    case Tui.StartTimer{_,_} <> rest: 1n + spawned(rest)
+    case _ <> rest: spawned(rest)
+def completes(event: Tui.RenderEvent) -> Nat:
+  match event:
+    case Tui.ScheduleRender{}: 1n
+    case Tui.ImmediateRender{}: 1n
+    case Tui.TimerFired{_}: 1n
+    case _: 0n
+def drawsFrame(effects: List<&2,Tui.RenderEffect>) -> Bool:
+  match effects:
+    case Nil{}: False{}
+    case Tui.DrawFrame{} <> _: True{}
+    case _ <> rest: drawsFrame(rest)
+def drawIf(frame: Bool,session: Session,handle: Terminal.Handle,termux: Bool) -> IO(Draw):
+  match frame:
+    case True{}: draw(session,handle,termux)
+    case False{}: IO.pure(Draw,Drawn{session})
+def scheduledActive(outcome: Draw,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,+owed: Bool,drew: Bool,ticks: Nat) -> Active:
+  match outcome:
+    case Drawn{session}: Active{session,components,mounted,previous,owed && Bool.not(drew),ticks}
+    case Rejected{session,error}: Active{session,components,mounted,Some{error},False{},ticks}
+def afterSchedule(pair: Tui.TuiBase & List<&2,Tui.RenderEffect>,screen: Screen.State,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,owed: Bool,ticks: Nat,handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
+  match pair:
+    case (tui,+effects):
+      do IO<Active & List<&2,Tui.RenderEffect>>:
+        +drew : Bool <- IO.pure(Bool,drawsFrame(effects))
+        outcome : Draw <- drawIf(drew,Session{tui,screen},handle,termux)
+        return (scheduledActive(outcome,components,mounted,previous,owed,drew,ticks + spawned(effects)),effects)
+def scheduledOperation(+event: Tui.RenderEvent,current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
   match current:
-    case Active{session,components,mounted,previous,_}:
-      do IO<Active & Unit>:
-        outcome : Draw <- draw(session,handle,termux)
-        return (afterDraw(outcome,components,mounted,previous),Unit{})
+    case Active{Session{tui,screen},components,mounted,previous,owed,ticks}:
+      do IO<Active & List<&2,Tui.RenderEffect>>:
+        now : Nat <- IO.now()
+        afterSchedule(Tui.scheduleRender(tui,event,now),screen,components,mounted,previous,owed,ticks - completes(event),handle,termux)
+def withoutEffects(pair: Active & List<&2,Tui.RenderEffect>) -> Active & Unit:
+  match pair:
+    case (value,_): (value,Unit{})
+def drawNow(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+  do IO<Active & Unit>:
+    pair : Active & List<&2,Tui.RenderEffect> <- scheduledOperation(Tui.RenderNow{False{}},current,handle,termux)
+    return withoutEffects(pair)
+def resizeOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit): drawNow(current,handle,termux)
 def settledOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
   match current:
-    case Active{_,_,_,_,False{}}: IO.pure(Active & Unit,(current,Unit{}))
-    case current: resizeOperation(current,handle,termux)
+    case Active{_,_,_,_,False{},_}: IO.pure(Active & Unit,(current,Unit{}))
+    case current: drawNow(current,handle,termux)
 def dispatchInput(listener: EventSink,+data: String) -> IO(Unit):
   match listener:
     case EventSink{state,ready,queries,termux}:
@@ -154,10 +195,84 @@ def onSettled(listener: EventSink,value: Unit) -> IO(Unit):
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,Unit,state,current => settledOperation(current,handle,termux))
+def closedTimer(pair: Timer & Bool) -> IO(Unit):
+  match pair:
+    case (owner,_): Timer.close(owner)
+def slept(pair: Timer & TimerCancel) -> IO(Unit):
+  match pair:
+    case (owner,_):
+      do IO<Unit>:
+        waited : Timer & Bool <- Timer.wait(owner)
+        closedTimer(waited)
+def scheduled(listener: EventSink,event: Tui.RenderEvent) -> IO(List<&2,Tui.RenderEffect>):
+  match listener:
+    case EventSink{state,ready,_,termux}:
+      do IO<List<&2,Tui.RenderEffect>>:
+        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,List<&2,Tui.RenderEffect>,state,current => scheduledOperation(event,current,handle,termux))
+def timerFired(+listener: EventSink,id: Nat,delay: Nat) -> IO(Unit):
+  do IO<Unit>:
+    timer : Timer & TimerCancel <- Timer.new(U32.from_nat(delay))
+    slept(timer)
+    effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.TimerFired{id})
+    return Unit{}
+def startTimers(+listener: EventSink,effects: List<&2,Tui.RenderEffect>) -> IO(Unit):
+  match effects:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case Tui.StartTimer{id,delay} <> rest:
+      do IO<Unit>:
+        IO.spawn(Unit,timerFired(listener,id,delay))
+        startTimers(listener,rest)
+    case _ <> rest: startTimers(listener,rest)
+def scheduleTick(+listener: EventSink) -> IO(Unit):
+  do IO<Unit>:
+    effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.ScheduleRender{})
+    startTimers(listener,effects)
+def immediateTick(listener: EventSink) -> IO(Unit):
+  do IO<Unit>:
+    effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.ImmediateRender{})
+    return Unit{}
+def queueTicks(+listener: EventSink,effects: List<&2,Tui.RenderEffect>) -> IO(Unit):
+  match effects:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case Tui.QueueSchedule{} <> rest:
+      do IO<Unit>:
+        IO.spawn(Unit,scheduleTick(listener))
+        queueTicks(listener,rest)
+    case Tui.QueueImmediate{} <> rest:
+      do IO<Unit>:
+        IO.spawn(Unit,immediateTick(listener))
+        queueTicks(listener,rest)
+    case _ <> rest: queueTicks(listener,rest)
+# The application's requestRender (upstream TUI.requestRender()).
+def requested(+listener: EventSink) -> IO(Unit):
+  do IO<Unit>:
+    effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.RequestRender{False{}})
+    queueTicks(listener,effects)
+def onRequest(listener: EventSink,value: Unit) -> IO(Unit): requested(listener)
 
 # The caller's stop signal is settled by its input/application callbacks. The
 # terminal and serialized TUI state remain owned here until all listeners stop.
 def unchanged(current: Active) -> IO(Active & Unit): IO.pure(Active & Unit,(current,Unit{}))
+def pendingTicks(current: Active) -> IO(Active & Nat):
+  match current:
+    case Active{session,components,mounted,error,owed,+ticks}: IO.pure(Active & Nat,(Active{session,components,mounted,error,owed,ticks},ticks))
+def ticksDrained(+handle: Serial.Handle<Active>,fuel: Nat,pending: Nat) -> IO(Unit):
+  match fuel pending:
+    case _ Zero{}: IO.pure(Unit,Unit{})
+    case Zero{} _: IO.pure(Unit,Unit{})
+    case Succ{left} _:
+      do IO<Unit>:
+        timer : Timer & TimerCancel <- Timer.new(1)
+        slept(timer)
+        remaining : Nat <- Serial.run(Active,Nat,handle,pendingTicks)
+        ticksDrained(handle,left,remaining)
+# Scheduled renders stop at shutdown; their in-flight tasks (at most one frame
+# interval) finish before the state is retired. `fuel` bounds the wait in ms.
+def waitTicks(+handle: Serial.Handle<Active>,fuel: Nat) -> IO(Unit):
+  do IO<Unit>:
+    pending : Nat <- Serial.run(Active,Nat,handle,pendingTicks)
+    ticksDrained(handle,fuel,pending)
 def completed(closed: Result<&2,&2,Terminal.Error,Unit>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
   match closed:
     case Done{_}: Done{state}
@@ -190,15 +305,15 @@ def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Term
     case None{}: completed(closed,state)
 def beforeStop(current: Active) -> IO(Active & Screen.Stream):
   match current:
-    case Active{Session{tui,+screen},components,mounted,error,owed}:
-      IO.pure(Active & Screen.Stream,(Active{Session{tui,screen},components,mounted,error,owed},Screen.beforeTerminalStop(screen,False{})))
+    case Active{Session{tui,+screen},components,mounted,error,owed,ticks}:
+      IO.pure(Active & Screen.Stream,(Active{Session{tui,screen},components,mounted,error,owed,ticks},Screen.beforeTerminalStop(screen,False{})))
 def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Terminal.Error>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
   match cleanup:
     case Done{_}: queryResult(closed,failure,state)
     case Fail{error}: Fail{error}
 # The callback receives borrowed handles while the terminal is live. It may
 # await queries here; any forked query must finish before the stop signal.
-def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,+termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (terminal,+terminalHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
@@ -211,6 +326,8 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         finished : Unit <- Deferred.result(Unit,stopped)
         notifyStopping(onStopping)
         drained : Unit <- Serial.run(Active,Unit,handle,unchanged)
+        stopRendering : List<&2,Tui.RenderEffect> <- Serial.run(Active,List<&2,Tui.RenderEffect>,handle,current => scheduledOperation(Tui.StopRendering{},current,terminalHandle,termux))
+        waitTicks(handle,1000n)
         Query.setRunning(queries,writer,False{})
         cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,beforeStop)
         written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(terminalHandle,cleanup)
@@ -235,11 +352,13 @@ def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+sta
         +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,queryHandle,termux})
         +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,queryHandle,termux})
         +settled : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onSettled,EventSink{state,ready,queryHandle,termux})
+        +request : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onRequest,EventSink{state,ready,queryHandle,termux})
         started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize,settled)
-        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,resize,stopped,termux)
+        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,request,stopped,termux)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Unit,Unit,resize)
         Callback.dispose(Unit,Unit,settled)
+        Callback.dispose(Unit,Unit,request)
         Deferred.dispose(Terminal.Handle,ready)
         Query.close(queries)
         return result

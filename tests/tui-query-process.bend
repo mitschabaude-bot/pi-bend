@@ -65,7 +65,7 @@ def prepare(+component: Component.Component) -> IO(Process.Active):
     return Process.active(Process.Session{tui,Screen.initial()},component <> Nil{},Component.id(component) <> Nil{})
 def requireRun(value: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
   match value:
-    case Done{Process.Active{_,_,_,None{},_}}: IO.print_err("done")
+    case Done{Process.Active{_,_,_,None{},_,_}}: IO.print_err("done")
     case _: IO.die(Unit,1,"query process failed")
 def main() -> IO(Unit):
   do IO<Unit>:

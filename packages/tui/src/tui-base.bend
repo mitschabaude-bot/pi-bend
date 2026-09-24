@@ -225,6 +225,16 @@ def schedule(event: RenderEvent,state: RenderSchedule,now: Nat) -> Scheduled:
 # the owner installs it only after its terminal renderer accepts the frame.
 type TuiBase is Data:
   TuiBase{root: C.Container,focus: O.State,bindings: List<&2,Overlay>,displayed: Frame,renderSchedule: RenderSchedule,showHardwareCursor: Bool,clearOnShrink: Bool,layoutRoot: Maybe<&2,N.LayoutNode>}
+def scheduledTui(tui: TuiBase,scheduled: Scheduled) -> TuiBase & List<&2,RenderEffect>:
+  match tui scheduled:
+    case TuiBase{root,focus,bindings,displayed,_,show,clear,layout} Scheduled{next,effects}: (TuiBase{root,focus,bindings,displayed,next,show,clear,layout},effects)
+# Applies a render event to the owner's schedule; the caller carries out the
+# returned effects (upstream TUI.requestRender/scheduleRender/doRender).
+def scheduleOf(tui: TuiBase) -> RenderSchedule:
+  match tui:
+    case TuiBase{_,_,_,_,current,_,_,_}: current
+def scheduleRender(+tui: TuiBase,event: RenderEvent,now: Nat) -> TuiBase & List<&2,RenderEffect>:
+  scheduledTui(tui,schedule(event,scheduleOf(tui),now))
 type PreparedFrame is Data:
   PreparedFrame{tui: TuiBase,frame: Frame,lines: List<&2,String>,cursor: Maybe<&2,T.CursorPosition>}
 type OverlayChange is Data:
