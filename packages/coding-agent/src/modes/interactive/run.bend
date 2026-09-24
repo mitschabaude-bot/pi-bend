@@ -63,15 +63,10 @@ import ./transcript.bend as Transcript
 import ./viewport.bend as View
 
 type Error is Data:
-  WordData{cause: Words.LoadError}
   ThemeData{cause: Theme.LoadError}
   Layout{cause: Tui.Error}
   TerminalStart{cause: Terminal.Error}
 
-def wordError(error: Words.LoadError) -> String:
-  match error:
-    case Words.ReadFailed{path,cause}: "Cannot load word data " ++ path ++ ": " ++ Filesystem.errorMessage(cause)
-    case Words.InvalidAsset{path}: "Invalid word data: " ++ path
 def themeError(error: Theme.LoadError) -> String:
   match error:
     case Theme.Read{cause}: "Cannot load theme: " ++ Filesystem.errorMessage(cause)
@@ -80,7 +75,6 @@ def themeError(error: Theme.LoadError) -> String:
     case Theme.NotFound{name}: "Theme not found: " ++ name
 def errorMessage(error: Error) -> String:
   match error:
-    case WordData{cause}: wordError(cause)
     case ThemeData{cause}: themeError(cause)
     case Layout{_}: "Cannot mount interactive layout"
     case TerminalStart{Terminal.System{operation,_,message}}: "Terminal " ++ operation ++ ": " ++ message
@@ -1507,7 +1501,7 @@ def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,view: View.
         +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~SelectInput,~Selector.Choice,~Unit,~chosenSelection,SelectInput{queue,footerFailure(foot),redraw})
         host : Selector.Owner <- Selector.createHost(component,contextTheme(context),Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),chosen)
         runHosted(Selector.borrowHost(host),live,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
-def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (+paint,uiTheme):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -1519,14 +1513,14 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,contr
         setupWorking(working,paint,redraw)
         live : Live.Owner <- Live.createWithWorking(Component.ComponentId{2n},configured,words,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows,workingActive(working))
         runLive(Live.borrow(live),view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
-def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Context,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (controller,+queue):
       do IO<Result<&2,&2,Error,Unit>>:
         submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,footerFailure(foot)})
         paintPair : Callback.Callback<String,String> & Editor.EditorTheme <- editorTheme(contextTheme(context))
         startPaint(paintPair,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw,context)
-def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Context,setting: Maybe<&2,String>,+builtinDir: String,customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -1564,13 +1558,13 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
         startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,View.headerHandle(viewHandle),bashActivity,working},modelsRef,mode,loginState,resumeState})
-def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live}:
       do IO<Result<&2,&2,Error,Unit>>:
         transcript : Transcript.Owner <- Transcript.create(viewHandle,theme,markdown)
         startTranscript(Transcript.borrow(transcript),view,viewHandle,MarkdownTheme.Styles{markdown,callbacks,live},live,session,initial,cwd,home,words,setting,builtinDir,customDir,models,mode)
-def startView(borrowed: View.View & Component.Component & View.Handle,styles: MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def startView(borrowed: View.View & Component.Component & View.Handle,styles: MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (view,_,viewHandle):
       startStyles(styles,view,viewHandle,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
@@ -1580,33 +1574,28 @@ def withHeader(styles: MarkdownTheme.Styles,quiet: Bool,+session: Session.AgentS
       do IO<View.View & MarkdownTheme.Styles>:
         view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet,cwd,home,Session.getAgentsFiles(session),Session.getSkills(session))
         return (view,MarkdownTheme.Styles{markdown,callbacks,live})
-def prepared(pair: View.View & MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def prepared(pair: View.View & MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (view,styles): startView(View.borrow(view),styles,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
     styles : MarkdownTheme.Styles <- MarkdownTheme.create(theme)
     settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(session))
     pair : View.View & MarkdownTheme.Styles <- withHeader(styles,Settings.getQuietStartup(settings),session,cwd,home)
     prepared(pair,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Context,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Source,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match loaded:
     case Fail{cause}: IO.pure(Result<&2,&2,Error,Unit>,Fail{ThemeData{cause}})
     case Done{theme}: started(session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def withWords(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,assetsRoot: String,setting: Maybe<&2,String>,loaded: Words.Loaded(Words.Context),models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
-  match loaded:
-    case Fail{cause}: IO.pure(Result<&2,&2,Error,Unit>,Fail{WordData{cause}})
-    case Done{words}:
-      do IO<Result<&2,&2,Error,Unit>>:
-        +builtinDir : String <- IO.pure(String,Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"))
-        +customDir : String <- IO.pure(String,Path.join(agentDir,"themes"))
-        theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",builtinDir,customDir,Color.TrueColor{})
-        themed(session,initial,cwd,home,words,theme,setting,builtinDir,customDir,models,mode)
+def withWords(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,assetsRoot: String,setting: Maybe<&2,String>,words: Words.Source,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+  do IO<Result<&2,&2,Error,Unit>>:
+    +builtinDir : String <- IO.pure(String,Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"))
+    +customDir : String <- IO.pure(String,Path.join(agentDir,"themes"))
+    theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",builtinDir,customDir,Color.TrueColor{})
+    themed(session,initial,cwd,home,words,theme,setting,builtinDir,customDir,models,mode)
 def run(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,+assetsRoot: String,themeSetting: Maybe<&2,String>,models: List<&2,Models.Model()>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
-    words : Words.Loaded(Words.Context) <- Words.loadDefault(Path.join(assetsRoot,"packages/runtime/data"))
-    withWords(session,initial,cwd,home,agentDir,assetsRoot,themeSetting,words,models,None{})
+    withWords(session,initial,cwd,home,agentDir,assetsRoot,themeSetting,Words.Pending{Path.join(assetsRoot,"packages/runtime/data")},models,None{})
 def runBound(session: Session.AgentSession,binding: Binding,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,+assetsRoot: String,themeSetting: Maybe<&2,String>,models: List<&2,Models.Model()>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
-    words : Words.Loaded(Words.Context) <- Words.loadDefault(Path.join(assetsRoot,"packages/runtime/data"))
-    withWords(session,initial,cwd,home,agentDir,assetsRoot,themeSetting,words,models,Some{binding})
+    withWords(session,initial,cwd,home,agentDir,assetsRoot,themeSetting,Words.Pending{Path.join(assetsRoot,"packages/runtime/data")},models,Some{binding})

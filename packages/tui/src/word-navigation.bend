@@ -5,7 +5,7 @@ import ../../runtime/src/word-segmenter.bend as Native
 # A segmenter supplies lexical status; Unicode default word boundaries alone do
 # not provide Intl's dictionary/LSTM segmentation. There is no implicit default.
 type Segment is Data: Segment{text: String,isWordLike: Bool}
-type Error is Data: InvalidCursor{} InvalidSegments{} MissingWordEngine{language: String}
+type Error is Data: InvalidCursor{} InvalidSegments{} MissingWordEngine{language: String} WordData{cause: Native.LoadError} WordDataPending{}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
 type Slice is Data: Slice{before: String,after: String}
 type Direction is Data: Forward{} Backward{}
@@ -120,3 +120,9 @@ def nativeResult(value: Native.ResultOf(List<&2,Native.Segment>)) -> ResultOf(Li
     case Fail{Native.InvalidState{}}: Fail{InvalidSegments{}}
 def nativeSegments(context: Native.Context,text: String) -> ResultOf(List<&2,Segment>):
   nativeResult(Native.segments(context,text))
+# Callers make the source ready before a word command.
+def sourceSegments(source: Native.Source,text: String) -> ResultOf(List<&2,Segment>):
+  match source:
+    case Native.Ready{context}: nativeSegments(context,text)
+    case Native.Unavailable{error}: Fail{WordData{error}}
+    case Native.Pending{_}: Fail{WordDataPending{}}

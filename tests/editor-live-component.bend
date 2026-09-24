@@ -25,34 +25,31 @@ def run(owner: Live.Owner,+component: Component.Component,+handle: Live.Handle,r
     Component.handleInput(component,"i")
     current : String <- Live.text(handle)
     check(String.eq(current,"hi"),"editor input was not retained")
+    # Ctrl+Left is a word command: the pending word data loads for it.
+    Component.handleInput(component,"\u{1b}[1;5D")
+    Component.handleInput(component,"x")
+    moved : String <- Live.text(handle)
+    check(String.eq(moved,"xhi"),"word navigation did not move to the word start")
     Component.handleInput(component,"\r")
     values : List<&2,String> <- Ref.read(List<&2,String>,output)
-    check(String.eq(Maybe.default(&2,String,List.get(&2,String,values,0n),""),"hi"),"submit callback was not delivered")
+    check(String.eq(Maybe.default(&2,String,List.get(&2,String,values,0n),""),"xhi"),"submit callback was not delivered")
     error : Maybe<&2,Editor.Error> <- Live.lastError(handle)
     check(Maybe.is_none(&2,Editor.Error,error),"editor input returned an error")
     Live.dispose(owner)
 def borrowed(pair: Live.Owner & Component.Component & Live.Handle,rows: Ref.Ref<Nat>,output: Ref.Ref<List<&2,String>>) -> IO(Unit):
   match pair:
     case (owner,component,handle): run(owner,component,handle,rows,output)
-def runLoaded(words: Segmenter.Context) -> IO(Unit):
+def main() -> IO(Unit):
   do IO<Unit>:
     +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
     +output : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
     +paint : Callback.Callback<String,String> <- Callback.create(~Unit,~String,~String,~identity,Unit{})
     +submit : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~submitted,output)
     editor : Editor.Editor <- Editor.new(Editor.EditorTheme{paint,Select.SelectListTheme{paint,paint,paint,paint,paint}},None{})
-    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{},None{}}),words,Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
+    owner : Live.Owner <- Live.create(Component.ComponentId{1n},Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submit},None{},None{}}),Segmenter.Pending{"packages/runtime/data"},Keybindings.create(Keybindings.TUI_KEYBINDINGS(),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)
     borrowed(Live.borrow(owner),rows,output)
     Callback.dispose(String,String,paint)
     Callback.dispose(String,Unit,submit)
     oldRows : Nat <- Ref.dispose(Nat,rows)
     oldOutput : List<&2,String> <- Ref.dispose(List<&2,String>,output)
-    IO.print("editor component rendered, accepted input and submitted")
-def loaded(result: Segmenter.Loaded(Segmenter.Context)) -> IO(Unit):
-  match result:
-    case Done{words}: runLoaded(words)
-    case Fail{_}: IO.die(Unit,1,"word assets did not load")
-def main() -> IO(Unit):
-  do IO<Unit>:
-    words : Segmenter.Loaded(Segmenter.Context) <- Segmenter.loadDefault("packages/runtime/data")
-    loaded(words)
+    IO.print("editor component rendered, accepted input, loaded word data for word navigation and submitted")

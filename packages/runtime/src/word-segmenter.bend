@@ -64,6 +64,24 @@ def loadDefault(+directory: String) -> IO(Loaded(Context)):
     rules : Loaded(Rules.Rules) <- loadRules(directory ++ "/icu78-word-rules.bin")
     return assembled(cjk,khmer,lao,thai,myanmar,rules)
 
+# Word data is read when a word command first needs it, as ICU loads its data
+# lazily: decoding the dictionaries costs about as much as the rest of startup.
+type Source is Data:
+  Pending{directory: String}
+  Ready{context: Context}
+  Unavailable{error: LoadError}
+def sourceOf(loaded: Loaded(Context)) -> Source:
+  match loaded:
+    case Done{context}: Ready{context}
+    case Fail{error}: Unavailable{error}
+def ready(source: Source) -> IO(Source):
+  match source:
+    case Pending{directory}:
+      do IO<Source>:
+        loaded : Loaded(Context) <- loadDefault(directory)
+        return sourceOf(loaded)
+    case source: IO.pure(Source,source)
+
 type Mode is Data: Outside{} CjkRange{} KoreanRange{} KhmerRange{} LaoRange{} ThaiRange{} MyanmarRange{}
 type DictionaryScan is Data:
   Active{position: Nat,start: Nat,mode: Mode,reversed: String,breaks: List<&2,Nat>}
