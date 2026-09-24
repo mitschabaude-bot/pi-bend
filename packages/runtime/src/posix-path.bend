@@ -8,6 +8,14 @@ def isAbsolute(path: String) -> Bool:
     case SCon{'/', _}: True{}
     case _: False{}
 
+def basenameParts(parts: List<&2,String>,last: String) -> String:
+  match parts:
+    case Nil{}: last
+    case "" <> rest: basenameParts(rest,last)
+    case part <> rest: basenameParts(rest,part)
+def basename(path: String) -> String:
+  basenameParts(Strings.split(path,'/'),"")
+
 def components(parts: List<&2, String>, reversed: List<&2, String>, +root: Bool) -> List<&2, String>:
   match parts reversed:
     case Nil{} previous: previous

@@ -72,12 +72,6 @@ type LoadSkillsOptions is Data:
 def emptyResult() -> LoadSkillsResult: LoadSkillsResult{Nil{},Nil{}}
 def warning(path: String,message: String) -> LoadSkillsResult:
   LoadSkillsResult{Nil{},D.warning(message,path) <> Nil{}}
-def basenameParts(parts: List<&2,String>,last: String) -> String:
-  match parts:
-    case Nil{}: last
-    case "" <> rest: basenameParts(rest,last)
-    case name <> rest: basenameParts(rest,name)
-def basename(path: String) -> String: basenameParts(Strings.split(path,'/'),"")
 def parentReversed(path: String) -> String:
   match path:
     case SNil{}: "."
@@ -141,7 +135,7 @@ def validatedSkill(value: SkillFrontmatter,+path: String,source: String,declared
   match value:
     case SkillFrontmatter{givenName,+description,disabled}:
       +directory = parent(path)
-      +name = chosenName(givenName,basename(directory))
+      +name = chosenName(givenName,Path.basename(directory))
       +text = Maybe.default(&2,String,description,"")
       +hasDescription = Bool.not(String.is_empty(Text.trim(text)))
       Bool.pick(Unit -> LoadSkillsResult,Bool.not(declared) && Bool.not(hasDescription),_ => emptyResult(),_ =>
@@ -153,8 +147,8 @@ def parsedMetadata(value: Result<&2,&2,String,SkillFrontmatter>,+path: String,so
     case Done{fields}: validatedSkill(fields,path,source,declared)
 def parsedSkill(result: Yaml.ResultOf(Frontmatter.Frontmatter),+path: String,source: String) -> LoadSkillsResult:
   match result:
-    case Fail{cause}: Bool.pick(LoadSkillsResult,Strings.equal(basename(path),"SKILL.md"),warning(path,Yaml.errorMessage(cause)),emptyResult())
-    case Done{Frontmatter.Frontmatter{fields,_}}: parsedMetadata(metadata(fields),path,source,Strings.equal(basename(path),"SKILL.md"))
+    case Fail{cause}: Bool.pick(LoadSkillsResult,Strings.equal(Path.basename(path),"SKILL.md"),warning(path,Yaml.errorMessage(cause)),emptyResult())
+    case Done{Frontmatter.Frontmatter{fields,_}}: parsedMetadata(metadata(fields),path,source,Strings.equal(Path.basename(path),"SKILL.md"))
 def decodedSkill(value: Result<&2,&2,Utf8.Error,String>,path: String,source: String) -> LoadSkillsResult:
   match value:
     case Fail{_}: warning(path,"Invalid UTF-8 in skill file")

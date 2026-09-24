@@ -23,7 +23,7 @@ BINARY = Path(os.environ.get("PI_BEND_COMMAND_RUN", ROOT / "build/interactive-co
 
 def scenario(threads):
     master, slave = pty.openpty()
-    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 160, 0, 0))
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 200, 0, 0))
     original = termios.tcgetattr(slave)
     with tempfile.TemporaryDirectory(prefix="pi-commands-run-") as cwd:
         process = subprocess.Popen(
@@ -48,7 +48,7 @@ def scenario(threads):
         try:
             until(b"theme-fixture")
             cases = [
-                ("/help", b"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /exit"),
+                ("/help", b"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /import <path>, /exit"),
                 ("/thinking", b"Thinking level: off. Available: off"),
                 ("/thinking OFF", b"Thinking level: off"),
                 ("/thinking medium", b'Unknown thinking level "medium". Available levels: off.'),

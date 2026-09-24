@@ -7,6 +7,9 @@ import ./tools/index.bend as Tools
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/ref.bend as R
 import ../../../runtime/src/schema-value.bend as V
+import ../../../runtime/src/filesystem.bend as FS
+import ../../../runtime/src/posix-path.bend as Path
+import ../../../runtime/src/utf8.bend as Utf8
 
 # upstream AgentSessionRuntime: owns the current AgentSession and the services
 # it was created with. Replacing the session tears the current one down first
@@ -234,6 +237,89 @@ def switchSession(-S: Type, +runtime: AgentSessionRuntime<S>, sessionPath: Strin
   do IO<Result<&2, &2, String, Unit>>:
     found : Maybe<&2, Snapshot> <- snapshot(S, runtime)
     switchFrom(S, runtime, sessionPath, cwdOverride, found)
+
+type ImportOutcome is Data:
+  Imported{path: String}
+  ImportNeedsCwd{issue: SessionCwd.SessionCwdIssue}
+  ImportFailed{message: String}
+
+def importSwitched(path: String,result: Result<&2,&2,String,Unit>) -> ImportOutcome:
+  match result:
+    case Done{_}: Imported{path}
+    case Fail{message}: ImportFailed{message}
+def importSelected(-S: Type,runtime: AgentSessionRuntime<S>,+path: String,cwdOverride: Maybe<&2,String>) -> IO(ImportOutcome):
+  do IO<ImportOutcome>:
+    result : Result<&2,&2,String,Unit> <- switchSession(S,runtime,path,cwdOverride)
+    return importSwitched(path,result)
+def importName(+base: String,+suffix: Nat) -> String:
+  Bool.pick(String,String.ends_with(base,".jsonl"),String.take(base,String.length(base) - 6n) ++ "-" ++ Nat.show(suffix) ++ ".jsonl",base ++ "-" ++ Nat.show(suffix))
+@unsafe def importTarget(+directory: String,+base: String,+suffix: Nat) -> IO(String):
+  +candidate = Path.join(directory,Bool.pick(String,Nat.is_eq(suffix,0n),base,importName(base,suffix)))
+  do IO<String>:
+    exists : Bool <- FS.accessible(candidate,0)
+    Bool.pick(Unit -> IO(String),exists,_ => importTarget(directory,base,suffix + 1n),_ => IO.pure(String,candidate))(Unit{})
+def importedCopy(-S: Type,runtime: AgentSessionRuntime<S>,target: String,cwdOverride: Maybe<&2,String>,written: Result<&2,&2,FS.Error,Unit>) -> IO(ImportOutcome):
+  match written:
+    case Fail{error}: IO.pure(ImportOutcome,ImportFailed{FS.errorMessage(error)})
+    case Done{_}: importSelected(S,runtime,target,cwdOverride)
+def importCopied(-S: Type,runtime: AgentSessionRuntime<S>,+target: String,cwdOverride: Maybe<&2,String>,read: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(ImportOutcome):
+  match read:
+    case Fail{error}: IO.pure(ImportOutcome,ImportFailed{FS.errorMessage(error)})
+    case Done{bytes}:
+      do IO<ImportOutcome>:
+        written : Result<&2,&2,FS.Error,Unit> <- FS.writeFileExclusive(target,Utf8.decodeBytes(bytes))
+        importedCopy(S,runtime,target,cwdOverride,written)
+def importLocated(-S: Type,+runtime: AgentSessionRuntime<S>,+source: String,directory: String,cwdOverride: Maybe<&2,String>,alreadyStored: Bool) -> IO(ImportOutcome):
+  match alreadyStored:
+    case True{}: importSelected(S,runtime,source,cwdOverride)
+    case False{}:
+      do IO<ImportOutcome>:
+        target : String <- importTarget(directory,Path.basename(source),0n)
+        read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(source)
+        importCopied(S,runtime,target,cwdOverride,read)
+def importDestination(-S: Type,+runtime: AgentSessionRuntime<S>,+source: String,+directory: String,cwdOverride: Maybe<&2,String>,created: Result<&2,&2,FS.Error,Unit>) -> IO(ImportOutcome):
+  match created:
+    case Fail{error}: IO.pure(ImportOutcome,ImportFailed{FS.errorMessage(error)})
+    case Done{_}:
+      do IO<ImportOutcome>:
+        importLocated(S,runtime,source,directory,cwdOverride,String.eq(Path.join(directory,Path.basename(source)),source))
+def importCwdChecked(-S: Type,runtime: AgentSessionRuntime<S>,source: String,+directory: String,cwdOverride: Maybe<&2,String>,issue: Maybe<&2,SessionCwd.SessionCwdIssue>) -> IO(ImportOutcome):
+  match issue:
+    case Some{found}: IO.pure(ImportOutcome,ImportNeedsCwd{found})
+    case None{}:
+      do IO<ImportOutcome>:
+        created : Result<&2,&2,FS.Error,Unit> <- FS.mkdir(directory)
+        importDestination(S,runtime,source,directory,cwdOverride,created)
+def importOpened(-S: Type,runtime: AgentSessionRuntime<S>,+source: String,directory: String,fallbackCwd: String,cwdOverride: Maybe<&2,String>,opened: Sessions.Outcome(Session.Session())) -> IO(ImportOutcome):
+  match opened:
+    case Fail{error}: IO.pure(ImportOutcome,ImportFailed{Sessions.message(error)})
+    case Done{stored}:
+      do IO<ImportOutcome>:
+        issue : Maybe<&2,SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Some{source},Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored),fallbackCwd)
+        importCwdChecked(S,runtime,source,directory,cwdOverride,issue)
+def importFromSnapshot(-S: Type,runtime: AgentSessionRuntime<S>,+source: String,+cwdOverride: Maybe<&2,String>,found: Maybe<&2,Snapshot>) -> IO(ImportOutcome):
+  match found:
+    case None{}: IO.pure(ImportOutcome,ImportFailed{noSession()})
+    case Some{Snapshot{+directory,stored}}:
+      do IO<ImportOutcome>:
+        +sessionDir : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,source,Some{sessionDir},cwdOverride,directory)
+        importOpened(S,runtime,source,sessionDir,directory,cwdOverride,opened)
+def importSourceError(path: String,error: FS.Error) -> String:
+  match error:
+    case FS.System{2,_}: "File not found: " ++ path
+    case other: FS.errorMessage(other)
+def importResolved(-S: Type,+runtime: AgentSessionRuntime<S>,inputPath: String,cwdOverride: Maybe<&2,String>,found: Result<&2,&2,FS.Error,String>) -> IO(ImportOutcome):
+  match found:
+    case Fail{error}: IO.pure(ImportOutcome,ImportFailed{importSourceError(inputPath,error)})
+    case Done{source}:
+      do IO<ImportOutcome>:
+        current : Maybe<&2,Snapshot> <- snapshot(S,runtime)
+        importFromSnapshot(S,runtime,source,cwdOverride,current)
+def importFromJsonl(-S: Type,runtime: AgentSessionRuntime<S>,+inputPath: String,cwdOverride: Maybe<&2,String>) -> IO(ImportOutcome):
+  do IO<ImportOutcome>:
+    found : Result<&2,&2,FS.Error,String> <- FS.realpath(inputPath)
+    importResolved(S,runtime,inputPath,cwdOverride,found)
 
 
 # Fork

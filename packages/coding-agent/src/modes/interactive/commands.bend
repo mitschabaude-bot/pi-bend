@@ -20,6 +20,7 @@ type Action is Data:
   OpenModelPicker{search: Maybe<&2,String>}
   ModelSelected{model: Ai.Model<Ai.JsonValue>}
   ExportSession{path: Maybe<&2,String>}
+  ImportSession{path: Maybe<&2,String>}
 type CredentialCommand is Data:
   BeginLogin{provider: Maybe<&2,String>}
   BeginLogout{}
@@ -36,6 +37,7 @@ type Command is Data:
   Login{provider: Maybe<&2,String>}
   Logout{}
   Export{path: Maybe<&2,String>}
+  Import{path: Maybe<&2,String>}
   Unsupported{text: String}
 
 def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
@@ -55,6 +57,7 @@ def classify(+text: String,parts: List<&2,String>) -> Command:
     case "/login" <> _: Login{argument(text,6n)}
     case "/logout" <> Nil{}: Logout{}
     case "/export" <> _: Export{argument(text,7n)}
+    case "/import" <> _: Import{argument(text,7n)}
     case _:
       Bool.pick(Command,String.starts_with(text,"/") || String.starts_with(text,"!"),Unsupported{text},Send{text})
 def names(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,String>:
@@ -164,7 +167,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
   match command:
     case Send{text}: IO.pure(Action,Prompt{text})
     case Stop{}: IO.pure(Action,Exit{})
-    case Help{}: IO.pure(Action,Notice{"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /exit"})
+    case Help{}: IO.pure(Action,Notice{"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /import <path>, /exit"})
     case ShowModel{requested}: showModel(session,models,requested)
     case SwitchModel{model}: switchModel(session,model)
     case SetThinking{requested}: thinking(session,requested)
@@ -174,6 +177,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Login{_}: IO.pure(Action,CommandError{"Login is available in interactive mode only"})
     case Logout{}: IO.pure(Action,CommandError{"Logout is available in interactive mode only"})
     case Export{path}: IO.pure(Action,ExportSession{path})
+    case Import{path}: IO.pure(Action,ImportSession{path})
     case Unsupported{text}: IO.pure(Action,CommandError{"Unknown command: " ++ text})
 def parse(text: String) -> Command:
   +clean = Text.trim(text)

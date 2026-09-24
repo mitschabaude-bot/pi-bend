@@ -28,6 +28,8 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../core/agent-session-runtime.bend as SessionHost
+import ../../core/session-cwd.bend as SessionCwd
 import ../../core/session-persistence.bend as Persistence
 import ../../core/export-html/index.bend as Export
 import ../../core/prompt-templates.bend as Templates
@@ -162,8 +164,11 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
   observeCopied(input,event)
+type ImportRequest is Data: ImportRequest{path: String,cwdOverride: Maybe<&2,String>}
+type ImportState is Data:
+  ImportState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState}
 def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
   match args:
     case Nil{}: None{}
@@ -236,15 +241,82 @@ def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionF
     case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
 def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{exportNotice(result)})
         Interactive.requestRender(redraw)
+def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO(Unit):
+  match state:
+    case ImportState{_,_,failure,redraw}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{status})
+        Interactive.requestRender(redraw)
+def importAnswer(target: Maybe<&2,LoginDialog.Host>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,title: String,choices: List<&2,LoginDialog.Choice>) -> IO(String):
+  match target:
+    case None{}: IO.pure(String,"")
+    case Some{+dialog}:
+      do IO<String>:
+        +pending : Deferred.Deferred<String> <- LoginDialog.openChoices(dialog,title,choices)
+        Interactive.requestRender(redraw)
+        answer : String <- Deferred.result(String,pending)
+        Deferred.dispose(String,pending)
+        LoginDialog.close(dialog)
+        Interactive.requestRender(redraw)
+        return answer
+def importConfirm(state: ImportState,title: String,yes: LoginDialog.Choice,no: LoginDialog.Choice) -> IO(String):
+  match state:
+    case ImportState{host,_,_,redraw}:
+      do IO<String>:
+        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
+        importAnswer(target,redraw,title,yes <> no <> Nil{})
+def importInvoked(state: ImportState,path: String,cwdOverride: Maybe<&2,String>) -> IO(SessionHost.ImportOutcome):
+  match state:
+    case ImportState{_,None{},_,_}: IO.pure(SessionHost.ImportOutcome,SessionHost.ImportFailed{"Import is unavailable"})
+    case ImportState{_,Some{backend},_,_}: Callback.call(ImportRequest,SessionHost.ImportOutcome,backend,ImportRequest{path,cwdOverride})
+def importReported(state: ImportState,path: String,result: SessionHost.ImportOutcome) -> IO(Unit):
+  match result:
+    case SessionHost.Imported{_}: importStatus(state,Interactive.CommandNotice{"Session imported from: " ++ path})
+    case SessionHost.ImportFailed{message}: importStatus(state,Interactive.CommandFailure{"Failed to import session: " ++ message})
+    case SessionHost.ImportNeedsCwd{issue}: importStatus(state,Interactive.CommandFailure{"Failed to import session: " ++ SessionCwd.formatMissingSessionCwdError(issue)})
+def importFallbackChosen(+state: ImportState,+path: String,fallback: String,answer: String) -> IO(Unit):
+  match answer:
+    case "yes":
+      do IO<Unit>:
+        result : SessionHost.ImportOutcome <- importInvoked(state,path,Some{fallback})
+        importReported(state,path,result)
+    case _: importStatus(state,Interactive.CommandNotice{"Import cancelled"})
+def importFallback(+state: ImportState,path: String,issue: SessionCwd.SessionCwdIssue) -> IO(Unit):
+  match issue:
+    case SessionCwd.SessionCwdIssue{_,missing,+fallback}:
+      do IO<Unit>:
+        answer : String <- importConfirm(state," Session cwd not found · " ++ missing,LoginDialog.Choice{"yes","Continue in current cwd",fallback},LoginDialog.Choice{"no","Cancel import",""})
+        importFallbackChosen(state,path,fallback,answer)
+def importFirstResult(state: ImportState,path: String,result: SessionHost.ImportOutcome) -> IO(Unit):
+  match result:
+    case SessionHost.ImportNeedsCwd{issue}: importFallback(state,path,issue)
+    case other: importReported(state,path,other)
+def importConfirmed(+state: ImportState,+path: String,answer: String) -> IO(Unit):
+  match answer:
+    case "yes":
+      do IO<Unit>:
+        result : SessionHost.ImportOutcome <- importInvoked(state,path,None{})
+        importFirstResult(state,path,result)
+    case _: importStatus(state,Interactive.CommandNotice{"Import cancelled"})
+def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
+  match path:
+    case None{}: importStatus(state,Interactive.CommandFailure{"Usage: /import <path.jsonl>"})
+    case Some{+input}:
+      do IO<Unit>:
+        answer : String <- importConfirm(state," Import session · Replace current session with " ++ input ++ "?",LoginDialog.Choice{"yes","Yes","Replace current session"},LoginDialog.Choice{"no","No","Keep current session"})
+        importConfirmed(state,input,answer)
+def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
+  match input:
+    case CommandObservation{_,_,_,_,_,_,_,state}: importRequested(state,exportPath(requested))
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_}:
+    case CommandObservation{sink,session,footer,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
@@ -254,6 +326,7 @@ def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.ExportSession{path}: exportObserved(input,path)
+    case Commands.ImportSession{path}: importObserved(input,path)
     case other: ordinaryCommandObserved(input,other)
 type WorkerFailure is Data:
   WorkerFailure{failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
@@ -334,7 +407,7 @@ type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,header: Maybe<&2,Header.Handle>}
 type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
 type Binding is Data:
-  Binding{current: Ref.Ref<Session.AgentSession>,newSession: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>}
+  Binding{current: Ref.Ref<Session.AgentSession>,newSession: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>}
 type LoginState is Data:
   LoginState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>}
 def showLoginCode(target: Maybe<&2,LoginDialog.Host>,url: String,code: String) -> IO(Unit):
@@ -687,7 +760,11 @@ def contextBinding(context: ThemeContext) -> Maybe<&2,Binding>:
 def loginStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>) -> LoginState:
   match mode:
     case None{}: LoginState{host,abort,None{},None{},models,failure,redraw,session}
-    case Some{Binding{_,_,_,backend,refresh}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session}
+    case Some{Binding{_,_,_,backend,refresh,_}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session}
+def importStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ImportState:
+  match mode:
+    case None{}: ImportState{host,None{},failure,redraw}
+    case Some{Binding{_,_,_,_,_,backend}}: ImportState{host,Some{backend},failure,redraw}
 def disposeLoginState(state: LoginState) -> IO(Unit):
   match state:
     case LoginState{host,abort,_,_,models,_,_,_}:
@@ -838,7 +915,7 @@ def rebound(sink: RebindSink,session: Session.AgentSession) -> IO(Unit):
   reboundCopied(sink,session)
 def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>) -> IO(Unit):
   match binding:
-    case Binding{_,_,hook,_,_}:
+    case Binding{_,_,hook,_,_,_}:
       do IO<Unit>:
         callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,editor,footer,failure,redraw,cwd,home})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
@@ -853,7 +930,7 @@ def disposeRebindCallback(value: Maybe<&2,Callback.Callback<Session.AgentSession
 def unbind(mode: Maybe<&2,Binding>) -> IO(Unit):
   match mode:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{Binding{_,_,hook,_,_}}:
+    case Some{Binding{_,_,hook,_,_,_}}:
       do IO<Unit>:
         callback : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.swap(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,None{})
         disposeRebindCallback(callback)
@@ -867,7 +944,7 @@ def finishSessionRef(session: Ref.Ref<Session.AgentSession>,mode: Maybe<&2,Bindi
 def modeCurrent(mode: Maybe<&2,Binding>,session: Session.AgentSession) -> IO(Ref.Ref<Session.AgentSession>):
   match mode:
     case None{}: Ref.new(Session.AgentSession,session)
-    case Some{Binding{current,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
+    case Some{Binding{current,_,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
 def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>,session: Session.AgentSession,listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<Controller.PromptFailure,Unit>>,command: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,control: Maybe<&2,Callback.Callback<Controller.ControlResult,Unit>>,selection: Maybe<&2,Callback.Callback<Controller.SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,login: Callback.Callback<Commands.CredentialCommand,Unit>) -> IO(Controller.Controller & Controller.Handle):
   match mode:
     case None{}:
@@ -875,7 +952,7 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
         Callback.dispose(Commands.CredentialCommand,Unit,login)
         Controller.start(session,listener,limit,failure,command,control,selection,available)
-    case Some{Binding{_,newSession,_,_,_}}: Controller.startBound(current,listener,newSession,limit,failure,command,control,selection,models,Some{login})
+    case Some{Binding{_,newSession,_,_,_,_}}: Controller.startBound(current,listener,newSession,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
     case Interaction{editor,lastClear,lastEscape,selector,modelSelector,_}:
@@ -1098,7 +1175,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +loginState : LoginState <- IO.pure(LoginState,loginStateOf(mode,loginHost,loginAbort,modelsRef,footerFailure(foot),redraw,current))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw)})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})

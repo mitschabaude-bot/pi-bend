@@ -29,6 +29,9 @@ def reboundCopied(binding: Binding,+live: Session.AgentSession) -> IO(Unit):
         notify(observer,live)
 def rebound(binding: Binding,live: Session.AgentSession) -> IO(Unit): reboundCopied(binding,live)
 def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.newSession(Services(),runtime,None{})
+def importSession(runtime: Runtime(),request: Run.ImportRequest) -> IO(Host.ImportOutcome):
+  match request:
+    case Run.ImportRequest{path,cwdOverride}: Host.importFromJsonl(Services(),runtime,path,cwdOverride)
 def noLogin(_: Unit,_: Run.LoginRequest) -> IO(AuthLogin.Outcome()): IO.pure(AuthLogin.Outcome(),Fail{"Login fixture is unavailable"})
 def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> Nil{})
 def requireSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
@@ -65,11 +68,13 @@ def run(args: List<String>) -> IO(Unit):
         +new : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Runtime(),~Unit,~Result<&2,&2,String,Unit>,~startNew,runtime)
         +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~Run.LoginRequest,~AuthLogin.Outcome(),~noLogin,Unit{})
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
+        +importer : Callback.Callback<Run.ImportRequest,Host.ImportOutcome> <- Callback.create(~Runtime(),~Run.ImportRequest,~Host.ImportOutcome,~importSession,runtime)
         Host.setRebindSession(Services(),runtime,Some{rebinder})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
+        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh,importer},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
         Host.setRebindSession(Services(),runtime,None{})
         Callback.dispose(Run.LoginRequest,AuthLogin.Outcome(),login)
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
+        Callback.dispose(Run.ImportRequest,Host.ImportOutcome,importer)
         Callback.dispose(Unit,Result<&2,&2,String,Unit>,new)
         Callback.dispose(Session.AgentSession,Unit,rebinder)
         oldHook : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook)

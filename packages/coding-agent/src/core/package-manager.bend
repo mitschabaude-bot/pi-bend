@@ -50,7 +50,7 @@ def hasGlob(+entry: String) -> Bool:
 
 def isPattern(+entry: String) -> Bool: isOverridePattern(entry) || hasGlob(entry)
 
-def isSkillFile(path: String) -> Bool: String.eq(Skills.basename(path), "SKILL.md")
+def isSkillFile(path: String) -> Bool: String.eq(Path.basename(path), "SKILL.md")
 
 def anyGlob(+path: String, patterns: List<&2, String>) -> Bool:
   match patterns:
@@ -62,8 +62,8 @@ def anyGlob(+path: String, patterns: List<&2, String>) -> Bool:
 def candidates(+filePath: String, +baseDir: String) -> List<&2, String>:
   +parent = Skills.parent(filePath)
   Bool.pick(List<&2, String>, isSkillFile(filePath),
-    Path.relative(baseDir, filePath) <> Skills.basename(filePath) <> filePath <> Path.relative(baseDir, parent) <> Skills.basename(parent) <> parent <> Nil{},
-    Path.relative(baseDir, filePath) <> Skills.basename(filePath) <> filePath <> Nil{})
+    Path.relative(baseDir, filePath) <> Path.basename(filePath) <> filePath <> Path.relative(baseDir, parent) <> Path.basename(parent) <> parent <> Nil{},
+    Path.relative(baseDir, filePath) <> Path.basename(filePath) <> filePath <> Nil{})
 
 def anyCandidate(candidates: List<&2, String>, +patterns: List<&2, String>) -> Bool:
   match candidates:
