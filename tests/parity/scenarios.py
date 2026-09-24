@@ -174,6 +174,15 @@ SCENARIOS = [
                   ("wait", "Listed.", "turn"), ("settle", 0.5), ("snap", "limited")],
     },
     {
+        "name": "edit-preview",
+        "args": MODEL,
+        "files": {"project/note.txt": "alpha\nbeta\n"},
+        "turns": [{"tool": {"name": "edit", "arguments": {"path": "note.txt", "edits": [{"oldText": "beta", "newText": "gamma"}]}}},
+                  {"text": "Updated."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "update"), ("key", "Enter"),
+                  ("wait", "Updated.", "turn"), ("settle", 0.5), ("snap", "edited")],
+    },
+    {
         "name": "typing",
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.5), *typed("parity"), ("settle", 0.3), ("snap", "typed")],
@@ -311,6 +320,7 @@ SCENARIOS = [
     {"name": "cli-list-models", "process": True, "args": ["--list-models"], "steps": []},
     {"name": "cli-list-models-search", "process": True, "args": ["--list-models", "gpt-5"], "steps": []},
     {"name": "cli-unknown-model", "process": True, "args": ["--provider", "openai", "--model", "nope", "-p", "hi"], "steps": []},
+    {"name": "cli-unknown-provider", "process": True, "args": ["--provider", "nosuch", "--model", "x", "-p", "hi"], "steps": []},
     {"name": "cli-no-prompt-print", "process": True, "args": MODEL + ["-p"], "steps": []},
     {"name": "print-thinking-high", "process": True, "args": MODEL + ["--thinking", "high", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
     {"name": "print-model-suffix", "process": True, "args": ["--provider", "openai", "--model", "gpt-5:low", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},

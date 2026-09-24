@@ -19,6 +19,7 @@ import ../../../utils/shell.bend as Shell
 import ../../../core/tools/renderers/find.bend as FindRenderer
 import ../../../core/tools/renderers/grep.bend as GrepRenderer
 import ../../../core/tools/renderers/ls.bend as LsRenderer
+import ../../../core/tools/renderers/edit.bend as EditRenderer
 import ../../../../../agent/src/types.bend as Agent
 
 type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isError: Bool,details: Maybe<&2,Value.Value>}
@@ -321,27 +322,10 @@ def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>) -> IO
         +bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
         Callback.dispose(String,String,bg)
         return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom))
-def editBuiltin(+state: ToolExecution,+width: Nat) -> IO(List<&2,String>):
-  match state:
-    case ToolExecution{_,_,args,result,expanded,_,_,_,_,+theme,_}:
-      do IO<List<&2,String>>:
-        call : String <- pathCall(theme,"edit",args)
-        +bg : Callback.Callback<String,String> <- Messages.color(theme,Bool.pick(String,errorOutput(result),"toolErrorBg","toolPendingBg"),True{})
-        lines : List<&2,String> <- textLines(call,0n,0n,Nat.max(1n,width - 2n),None{})
-        +body : List<&2,String> <- Box.paintContent(Box.prependMargin(lines," ",Nil{}),width,Some{bg},Nil{})
-        +top : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
-        +bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
-        Callback.dispose(String,String,bg)
-        +error : String <- IO.pure(String,textOutput(result))
-        Bool.pick(Unit -> IO(List<&2,String>),errorOutput(result) && Bool.not(String.is_empty(error)),
-          _ => do IO<List<&2,String>>:
-            colored : String <- Messages.foregroundText(theme,"error",error)
-            resultLines : List<&2,String> <- textLines(colored,1n,0n,width,None{})
-            return "" <> List.append(&2,String,top,List.append(&2,String,body,List.append(&2,String,bottom,"" <> resultLines))),
-          _ => IO.pure(List<&2,String>,"" <> List.append(&2,String,top,List.append(&2,String,body,bottom))))(Unit{})
 def builtinWithDuration(+state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
-    case ToolExecution{"edit",_,_,_,_,_,_,_,_,_,_}: editBuiltin(state,width)
+    case ToolExecution{"edit",_,args,+result,_,_,partial,_,_,theme,_}:
+      EditRenderer.render(args,textOutput(result),resultDetails(result),Bool.not(partial) && Maybe.is_some(&2,ToolResult,result),errorOutput(result),theme,width)
     case _: boxedBuiltin(state,width,elapsed)
 def builtin(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
   builtinWithDuration(state,width,None{})
