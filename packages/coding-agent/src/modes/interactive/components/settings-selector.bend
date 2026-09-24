@@ -6,6 +6,7 @@ import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/word-segmenter.bend as Segmenter
 import ../../../../../tui/src/component.bend as Component
+import ../../../../../tui/src/components/editor-component.bend as Live
 import ../../../../../tui/src/tui.bend as Tui
 import ../../../../../tui/src/keybindings.bend as Keybindings
 import ../../../../../tui/src/keys.bend as Keys
@@ -160,7 +161,7 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
 type Modal is Data: Closed{} Open{list: ListUI.SettingsList}
 type Paint is Data: Paint{theme: Ref.Ref<Theme.Theme>,ordinary: String,selected: String}
 type ChangeContext is Data:
-  ChangeContext{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
+  ChangeContext{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>}
 type CancelContext is Data:
   CancelContext{modal: Ref.Ref<Modal>}
 type Host is Data:
@@ -204,21 +205,42 @@ def applied(id: String,value: String,session: Session.AgentSession) -> IO(Result
     case "transport" "websocket-cached": Session.setTransport(session,Ai.WebSocketCached{})
     case "transport" "auto": Session.setTransport(session,Ai.AutoTransport{})
     case _ _: Session.changeSettings(session,settings => change(id,value,settings))
-def liveEffectDone(id: String,value: String,transcript: Transcript.Handle) -> IO(Unit):
+def editorChoice(current: Maybe<&2,Live.Handle>,id: String,value: String) -> IO(Unit):
+  match current id value:
+    case Some{handle} "editor-padding" "0": Live.setPaddingX(handle,0n)
+    case Some{handle} "editor-padding" "1": Live.setPaddingX(handle,1n)
+    case Some{handle} "editor-padding" "2": Live.setPaddingX(handle,2n)
+    case Some{handle} "editor-padding" "3": Live.setPaddingX(handle,3n)
+    case Some{handle} "autocomplete-max-visible" "3": Live.setAutocompleteMaxVisible(handle,3n)
+    case Some{handle} "autocomplete-max-visible" "5": Live.setAutocompleteMaxVisible(handle,5n)
+    case Some{handle} "autocomplete-max-visible" "7": Live.setAutocompleteMaxVisible(handle,7n)
+    case Some{handle} "autocomplete-max-visible" "10": Live.setAutocompleteMaxVisible(handle,10n)
+    case Some{handle} "autocomplete-max-visible" "15": Live.setAutocompleteMaxVisible(handle,15n)
+    case Some{handle} "autocomplete-max-visible" "20": Live.setAutocompleteMaxVisible(handle,20n)
+    case _ _ _: IO.pure(Unit,Unit{})
+def editorEffect(id: String,value: String,editor: Ref.Ref<Maybe<&2,Live.Handle>>) -> IO(Unit):
+  do IO<Unit>:
+    current : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+    editorChoice(current,id,value)
+def thinkingEffect(id: String,value: String,transcript: Transcript.Handle) -> IO(Unit):
   match id:
     case "hide-thinking": Transcript.setHideThinking(transcript,boolValue(value))
     case _: IO.pure(Unit,Unit{})
-def liveEffect(id: String,value: String,transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+def liveEffectDone(+id: String,+value: String,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>) -> IO(Unit):
+  do IO<Unit>:
+    thinkingEffect(id,value,transcript)
+    editorEffect(id,value,editor)
+def liveEffect(id: String,value: String,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
     case Fail{message}: Transcript.showError(transcript,message)
-    case Done{_}: liveEffectDone(id,value,transcript)
+    case Done{_}: liveEffectDone(id,value,transcript,editor)
 def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
   match context selection:
-    case ChangeContext{session,+transcript} ListUI.Change{+id,+newValue}:
+    case ChangeContext{session,+transcript,editor} ListUI.Change{+id,+newValue}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,Unit> <- applied(id,newValue,current)
-        liveEffect(id,newValue,transcript,result)
+        liveEffect(id,newValue,transcript,editor,result)
 def cancelPanel(context: CancelContext,_: Unit) -> IO(Unit):
   match context:
     case CancelContext{modal}: Ref.write(Modal,modal,Closed{})
@@ -317,7 +339,7 @@ def invalidated(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def focused(host: Host,value: Bool) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Owner):
+def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editorHandle: Ref.Ref<Maybe<&2,Live.Handle>>,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Owner):
   do IO<Owner>:
     +modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     source : Ref.Ref<Segmenter.Source> <- Ref.new(Segmenter.Source,words)
@@ -325,7 +347,7 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
     +value : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"muted","accent"})
     +description : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
     +hint : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
-    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript})
+    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript,editorHandle})
     +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal})
     +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~Unit,~ListUI.Completion,~Unit,~noCompletion,Unit{})
     currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)

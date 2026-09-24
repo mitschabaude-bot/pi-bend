@@ -139,6 +139,26 @@ def setText(handle: Handle,value: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => setTextState(state,value))
 
+def paddingState(state: State,padding: Nat) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      do IO<State & Unit>:
+        next : Editor.Editor <- Editor.setPaddingX(editor,padding)
+        return (State{next,words,bindings,keyboard,rows,error},Unit{})
+def setPaddingX(handle: Handle,padding: Nat) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => paddingState(state,padding))
+
+def autocompleteState(state: State,maximum: Nat) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      do IO<State & Unit>:
+        next : Editor.Editor <- Editor.setAutocompleteMaxVisible(editor,maximum)
+        return (State{next,words,bindings,keyboard,rows,error},Unit{})
+def setAutocompleteMaxVisible(handle: Handle,maximum: Nat) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => autocompleteState(state,maximum))
+
 def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<State>,working: Maybe<&2,Ref.Ref<Maybe<&2,Loader.Handle>>>) -> IO(Owner):
   match pair:
     case (resource,+handle):

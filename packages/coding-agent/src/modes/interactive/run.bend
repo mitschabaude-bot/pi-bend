@@ -7,6 +7,7 @@ import ../../../../runtime/src/deferred.bend as Deferred
 import ../../../../runtime/src/date.bend as Date
 import ../../../../runtime/src/filesystem.bend as Filesystem
 import ../../../../runtime/src/f64.bend as F
+import ../../../../runtime/src/u64.bend as W
 import ../../../../runtime/src/posix-path.bend as Path
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/text.bend as Text
@@ -1221,6 +1222,8 @@ def modelSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ModelPicker
   match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_}: selector
 def settingsSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,SettingsPicker.Host>>:
   match interaction: case Interaction{_,_,_,_,_,settings,_,_,_,_}: settings
+def editorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Live.Handle>>:
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_}: editor
 def trustSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,TrustPicker.Host>>:
   match interaction: case Interaction{_,_,_,_,_,_,trust,_,_,_}: trust
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
@@ -1841,7 +1844,7 @@ def runModelHosted(borrowed: ModelPicker.Owner & ModelPicker.Host & Component.Co
         Ref.write(Maybe<&2,Selector.Host>,selectorRefOf(contextInteraction(context)),Some{treeHandle})
         Ref.write(Maybe<&2,ModelPicker.Host>,modelSelectorRefOf(contextInteraction(context)),Some{modelHandle})
         +resumeChosen : Callback.Callback<String,Unit> <- Callback.create(~ResumeState,~String,~Unit,~resumePicked,contextResume(context))
-        settings : SettingsPicker.Owner <- SettingsPicker.createHost(modal,contextTheme(context),contextSession(context),contextTranscript(context),words,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),redraw)
+        settings : SettingsPicker.Owner <- SettingsPicker.createHost(modal,contextTheme(context),contextSession(context),contextTranscript(context),editorRefOf(contextInteraction(context)),words,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),redraw)
         runSettingsHosted(SettingsPicker.borrowHost(settings),retained,tree,live,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
 def runHosted(borrowed: Selector.Owner & Selector.Host & Component.Component,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,chosen: Callback.Callback<Selector.Choice,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
@@ -1867,13 +1870,19 @@ def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,words: Word
         recordEditor(contextInteraction(context),editor)
         custom : CustomEditor.Owner <- CustomEditor.create(CustomEditor.Host{editor,editorComponent,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),APP_ACTIONS(),keys})
         withCustomEditor(CustomEditor.borrow(custom),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
+def smallCount(value: W.U64) -> Nat:
+  match value: case W.U64{_,low}: U32.to_nat(low)
 def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,changed: Callback.Callback<String,Unit>,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,+words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (+paint,uiTheme):
       do IO<Result<&2,&2,Error,Unit>>:
         editor : Editor.Editor <- Editor.new(uiTheme,None{})
+        session : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
+        +settings : Settings.SettingsManager <- Session.getSettings(session)
+        padded : Editor.Editor <- Editor.setPaddingX(editor,smallCount(Settings.getEditorPaddingX(settings)))
+        configuredEditor : Editor.Editor <- Editor.setAutocompleteMaxVisible(padded,smallCount(Settings.getAutocompleteMaxVisible(settings)))
         +keys : Callback.Callback<CustomEditor.AppAction,Unit> <- Callback.create(~KeyInput,~CustomEditor.AppAction,~Unit,~keyAction,keyInput(queue,stopped,footerFailure(foot),contextInteraction(context),contextSession(context),redraw,contextTranscript(context),contextModels(context)))
-        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(editor,Editor.EditorCallbacks{Some{changed},Some{submitted},None{}}))
+        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(configuredEditor,Editor.EditorCallbacks{Some{changed},Some{submitted},None{}}))
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         +working : Working <- IO.pure(Working,workingOf(contextInteraction(context)))
         setupWorking(working,paint,redraw)
